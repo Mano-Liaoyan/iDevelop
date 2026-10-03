@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IDevelop.Core/IDevelop.Core.csproj" />
+    <Project Path="src/IDevelop.Desktop/IDevelop.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IDevelop.Core.Tests/IDevelop.Core.Tests.csproj" />
+    <Project Path="tests/IDevelop.Desktop.Tests/IDevelop.Desktop.Tests.csproj" />
+  </Folder>
+</Solution>

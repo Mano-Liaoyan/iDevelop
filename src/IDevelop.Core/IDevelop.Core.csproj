@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <InternalsVisibleTo Include="IDevelop.Core.Tests" />  </ItemGroup>
+</Project>
