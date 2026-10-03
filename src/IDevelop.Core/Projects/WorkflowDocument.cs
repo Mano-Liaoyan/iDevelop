@@ -8,11 +8,11 @@ namespace IDevelop.Projects;
 
 /// <summary>
 /// The open workflow of a project folder. A project keeps each workflow in
-/// <c>.idevelop/workflows/&lt;workflow id&gt;.json</c>. This version opens one workflow per project.
+/// <c>.idp/workflows/&lt;workflow id&gt;.json</c>. This version opens one workflow per project.
 /// </summary>
 public sealed class WorkflowDocument
 {
-    private const string DataFolderName = ".idevelop";
+    private const string DataFolderName = ".idp";
 
     private Workflow _saved;
 

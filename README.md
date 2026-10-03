@@ -25,7 +25,7 @@ A submodule keeps upstream changes to a version pointer in this repository's com
 
 ## Build and run the application
 
-Install the .NET 10 SDK that [`global.json`](global.json) pins, version `10.0.203` or a later patch in the same feature band.
+Install the .NET 10 SDK that [`global.json`](global.json) pins, version `10.0.401` or a later patch in the same feature band.
 
 Avalonia's `Avalonia.BuildServices` package sends anonymous usage data when a project builds. Its `AvaloniaStats` build target runs before each compile. According to the package's own README, it sends the build timestamp, the hashed project and machine names, an anonymous machine identifier, the output type, target framework, runtime identifier, Avalonia version, and license tier, the development environment, the operating system and architecture, and the detected CI system. The same README says it sends no source code, file paths, or personal information. CI opts out with `AVALONIA_TELEMETRY_OPTOUT=1`. To opt out locally, set that variable in your shell before you build, or set it once in your user environment.
 
@@ -53,7 +53,7 @@ dotnet run --project src/IDevelop.Desktop
 
 The solution is [`iDevelop.slnx`](iDevelop.slnx). `src/IDevelop.Core` holds the workflow model, its edit rules, and the project file format. It has no UI dependency. `src/IDevelop.Desktop` is the Avalonia application with the NodifyAvalonia canvas. The tests in `tests/IDevelop.Desktop.Tests` drive the real main window headlessly with pointer and keyboard input.
 
-Choose **Open folder** in the toolbar, or name a folder after `--` in the run command to open it at start. Any existing folder opens, including a repository. Its workflow is saved to `.idevelop/workflows/<workflow-id>.json`, which travels with the repository and reviews as an ordinary diff. The first save creates that folder. [`samples/storage-change`](samples/storage-change) is a three-task example. Copy it to a scratch folder and open the copy, or open a folder of your own. Saving rewrites the opened folder's workflow file, and the tests compare the sample byte for byte.
+Choose **Open folder** in the toolbar, or name a folder after `--` in the run command to open it at start. Any existing folder opens, including a repository. Its workflow is saved to `.idp/workflows/<workflow-id>.json`, which travels with the repository and reviews as an ordinary diff. The first save creates that folder. Earlier builds wrote the same file format to a differently named data folder, so renaming that folder to `.idp` by hand is enough to open it. [`samples/storage-change`](samples/storage-change) is a three-task example. Copy it to a scratch folder and open the copy, or open a folder of your own. Saving rewrites the opened folder's workflow file, and the tests compare the sample byte for byte.
 
 On the canvas, **Add task** or the canvas menu adds a task. Drag a task's output onto another task's input to make the second task depend on the first. Click a connection to change its kind in the inspector, or right-click it. Dependency and review connections cannot form a cycle. Context connections can. Delete removes the selected tasks and connections. Ctrl+S, or Cmd+S on macOS, saves.
 

@@ -27,7 +27,7 @@ public sealed class MainWindowTests : IDisposable
         var folder = _temp.Create("plan");
         var shell = Shell.Open(folder);
         shell.Click(shell.Find<Button>("AddTask"));
-        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(folder, ".idevelop", "workflows")).FullName, "other.json");
+        var other = Path.Combine(Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName, "other.json");
         File.WriteAllText(other, "{}");
 
         shell.Press(Key.S, RawInputModifiers.Control);

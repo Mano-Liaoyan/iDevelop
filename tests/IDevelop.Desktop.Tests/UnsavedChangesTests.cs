@@ -23,7 +23,7 @@ public sealed class UnsavedChangesTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private string Blocker => Path.Combine(_seed, ".idevelop", "workflows", "other.json");
+    private string Blocker => Path.Combine(_seed, ".idp", "workflows", "other.json");
 
     private Shell OpenWithCountingPicker()
     {
