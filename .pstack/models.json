@@ -7,7 +7,7 @@
     "allowImplicit": false
   },
   "reviewPolicy": {
-    "crossProvider": true,
+    "crossProvider": false,
     "onUnavailable": "block"
   },
   "models": {
@@ -40,12 +40,12 @@
     }
   },
   "roles": {
-    "backend-implementation": ["astra"],
+    "backend-implementation": ["opus"],
     "frontend-implementation": ["opus"],
     "backend-review": ["opus"],
-    "frontend-review": ["gemini", "astra"],
-    "judgment": ["astra", "opus"],
-    "difficult-task-review": ["astra", "opus"],
-    "exploration": ["astra"]
+    "frontend-review": ["opus"],
+    "judgment": ["opus"],
+    "difficult-task-review": ["opus"],
+    "exploration": ["opus"]
   }
 }

@@ -12,7 +12,7 @@ function requestedPolicy() {
     policy: 'quality-first',
     budget: 'large',
     reasoningPolicy: { ceiling: 'xhigh', allowImplicit: false },
-    reviewPolicy: { crossProvider: true, onUnavailable: 'block' },
+    reviewPolicy: { crossProvider: false, onUnavailable: 'block' },
     models: {
       astra: {
         provider: 'openai', client: 'codex', requestedName: 'GPT-6 Astra',
@@ -21,23 +21,23 @@ function requestedPolicy() {
       },
       opus: {
         provider: 'anthropic', client: 'claude', requestedName: 'Claude Opus 5.5',
-        requestedModel: 'claude-opus-5-5', model: null,
-        reasoningEffort: 'xhigh', verification: 'pending-client',
+        requestedModel: 'claude-opus-5-5', model: 'claude-opus-5-5',
+        reasoningEffort: 'xhigh', verification: 'client-catalog',
       },
       gemini: {
         provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
-        requestedModel: 'gemini-3.8-flash', model: null,
-        reasoningEffort: 'high', verification: 'pending-client',
+        requestedModel: 'gemini-3.8-flash', model: 'gemini-3.8-flash',
+        reasoningEffort: 'high', verification: 'client-catalog',
       },
     },
     roles: {
-      'backend-implementation': ['astra'],
+      'backend-implementation': ['opus'],
       'frontend-implementation': ['opus'],
       'backend-review': ['opus'],
-      'frontend-review': ['gemini', 'astra'],
-      judgment: ['astra', 'opus'],
-      'difficult-task-review': ['astra', 'opus'],
-      exploration: ['astra'],
+      'frontend-review': ['opus'],
+      judgment: ['opus'],
+      'difficult-task-review': ['opus'],
+      exploration: ['opus'],
     },
   };
 }
@@ -56,89 +56,59 @@ function cli(args, config = requestedPolicy()) {
   }
 }
 
-test('the requested policy validates while external clients remain pending', () => {
+test('the interim policy validates', () => {
   assert.equal(validateModelPolicy(requestedPolicy()), true);
 });
 
-test('backend implementation resolves to the exact explicit native participant', () => {
+test('every role resolves to Opus while Claude owns all prototype work', () => {
   const config = requestedPolicy();
   const before = structuredClone(config);
-  assert.deepEqual(resolveRole(config, 'backend-implementation'), {
-    status: 'ready', role: 'backend-implementation',
-    participants: [{ key: 'astra', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'xhigh' }],
-  });
+  for (const role of Object.keys(config.roles)) {
+    assert.deepEqual(resolveRole(config, role), {
+      status: 'ready', role,
+      participants: [{ key: 'opus', provider: 'anthropic', client: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' }],
+    });
+  }
   assert.deepEqual(config, before);
 });
 
-test('frontend review reports missing Gemini without returning the runnable Astra participant', () => {
-  assert.deepEqual(resolveRole(requestedPolicy(), 'frontend-review'), {
-    status: 'blocked', role: 'frontend-review',
-    missing: [{
-      key: 'gemini', provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
-      requestedModel: 'gemini-3.8-flash', reasoningEffort: 'high', verification: 'pending-client',
-    }],
-  });
-});
-
-test('a blocked panel reports every missing participant', () => {
+test('a pending Opus route blocks every role without substitution', () => {
   const config = requestedPolicy();
-  config.models.astra.model = null;
-  config.models.astra.verification = 'pending-client';
-  assert.deepEqual(resolveRole(config, 'judgment'), {
-    status: 'blocked', role: 'judgment',
-    missing: [
-      { key: 'astra', provider: 'openai', client: 'codex', requestedName: 'GPT-6 Astra',
-        requestedModel: 'gpt-6-astra', reasoningEffort: 'xhigh', verification: 'pending-client' },
-      { key: 'opus', provider: 'anthropic', client: 'claude', requestedName: 'Claude Opus 5.5',
-        requestedModel: 'claude-opus-5-5', reasoningEffort: 'xhigh', verification: 'pending-client' },
-    ],
-  });
-});
-
-test('a fixture declaring external client verification resolves the complete frontend panel', () => {
-  const config = requestedPolicy();
-  // This fixture exercises declared verification; it is not evidence of provider access.
-  config.models.gemini.model = 'gemini-3.8-flash';
-  config.models.gemini.verification = 'client-catalog';
-  assert.deepEqual(resolveRole(config, 'frontend-review'), {
-    status: 'ready', role: 'frontend-review',
-    participants: [
-      { key: 'gemini', provider: 'google', client: 'agy', model: 'gemini-3.8-flash', reasoningEffort: 'high' },
-      { key: 'astra', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'xhigh' },
-    ],
-  });
+  config.models.opus.model = null;
+  config.models.opus.verification = 'pending-client';
+  for (const role of Object.keys(config.roles)) {
+    assert.deepEqual(resolveRole(config, role), {
+      status: 'blocked', role,
+      missing: [{ key: 'opus', provider: 'anthropic', client: 'claude', requestedName: 'Claude Opus 5.5',
+        requestedModel: 'claude-opus-5-5', reasoningEffort: 'xhigh', verification: 'pending-client' }],
+    });
+  }
 });
 
 test('registry keys may be renamed without changing selected model identities', () => {
   const config = requestedPolicy();
-  config.models.backend = config.models.astra;
-  delete config.models.astra;
+  config.models.claude = config.models.opus;
+  delete config.models.opus;
   for (const [role, participants] of Object.entries(config.roles)) {
-    config.roles[role] = participants.map(key => key === 'astra' ? 'backend' : key);
+    config.roles[role] = participants.map(key => key === 'opus' ? 'claude' : key);
   }
   assert.deepEqual(resolveRole(config, 'backend-implementation'), {
     status: 'ready', role: 'backend-implementation',
-    participants: [{ key: 'backend', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'xhigh' }],
+    participants: [{ key: 'claude', provider: 'anthropic', client: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' }],
   });
 });
 
 test('an explicit model change remains a configuration edit', () => {
   const config = requestedPolicy();
-  config.models.astra.requestedName = 'Replacement OpenAI model';
-  config.models.astra.requestedModel = 'replacement-openai-model';
-  config.models.astra.model = 'replacement-openai-model';
+  config.models.opus.requestedName = 'Replacement Anthropic model';
+  config.models.opus.requestedModel = 'replacement-anthropic-model';
+  config.models.opus.model = 'replacement-anthropic-model';
   assert.deepEqual(resolveRole(config, 'backend-implementation'), {
     status: 'ready', role: 'backend-implementation',
-    participants: [{ key: 'astra', provider: 'openai', client: 'codex', model: 'replacement-openai-model', reasoningEffort: 'xhigh' }],
+    participants: [{ key: 'opus', provider: 'anthropic', client: 'claude', model: 'replacement-anthropic-model', reasoningEffort: 'xhigh' }],
   });
 });
 
-test('a distinct model from the author provider cannot satisfy backend review', () => {
-  const config = requestedPolicy();
-  config.models.second = { ...config.models.astra, requestedModel: 'second-model', model: 'second-model' };
-  config.roles['backend-review'] = ['second'];
-  assert.throws(() => validateModelPolicy(config), /review must use providers different from its author/);
-});
 
 for (const value of ['max', 'ultra', 'auto', 'inherit-parent', 'unknown', null, undefined]) {
   test(`rejects model reasoning effort ${String(value)}`, () => {
@@ -170,7 +140,7 @@ test('accepts explicit lower efforts within the lowered ceiling', () => {
   config.models.gemini.reasoningEffort = 'medium';
   assert.deepEqual(resolveRole(config, 'backend-implementation'), {
     status: 'ready', role: 'backend-implementation',
-    participants: [{ key: 'astra', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'medium' }],
+    participants: [{ key: 'opus', provider: 'anthropic', client: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'low' }],
   });
 });
 
@@ -182,9 +152,9 @@ test('rejects Gemini xhigh even though the global ceiling permits it', () => {
 
 for (const [name, mutate, message] of [
   ['implicit selection', config => { config.reasoningPolicy.allowImplicit = true; }, /allowImplicit must be false/],
-  ['same-provider fallback', config => { config.reviewPolicy.crossProvider = false; }, /crossProvider must be true/],
+  ['cross-provider review while every role requires anthropic', config => { config.reviewPolicy.crossProvider = true; }, /crossProvider must be false/],
   ['unavailable fallback', config => { config.reviewPolicy.onUnavailable = 'continue'; }, /onUnavailable must be block/],
-  ['pending model activation', config => { config.models.opus.model = 'claude-opus-5-5'; }, /model must be null/],
+  ['pending model activation', config => { config.models.opus.verification = 'pending-client'; }, /model must be null/],
   ['verified identity mismatch', config => { config.models.astra.model = 'gpt-6.1-sol'; }, /model must match/],
   ['unknown verification', config => { config.models.opus.verification = 'ready'; }, /verification must be/],
   ['wrong verification source', config => { config.models.opus.verification = 'native-catalog'; }, /verification must be/],
@@ -194,16 +164,16 @@ for (const [name, mutate, message] of [
   ['unknown client', config => { config.models.opus.client = 'other'; }, /client must be/],
   ['implicit requested identity', config => { config.models.astra.requestedModel = 'auto'; }, /requestedModel must name an explicit model/],
   ['duplicate model identity', config => { config.models.alias = { ...config.models.astra }; }, /duplicates a model identity/],
-  ['duplicate panel participant', config => { config.roles.judgment.push('astra'); }, /duplicate participants/],
+  ['duplicate panel participant', config => { config.roles.judgment.push('opus'); }, /duplicate participants/],
   ['unknown registry reference', config => { config.roles.exploration = ['missing']; }, /references unknown model/],
   ['empty registry', config => { config.models = {}; }, /references unknown model/],
   ['missing role', config => { delete config.roles['backend-review']; }, /roles must contain exactly/],
   ['empty reviewer list', config => { config.roles['backend-review'] = []; }, /must be a nonempty array/],
-  ['missing frontend reviewer', config => { config.roles['frontend-review'] = ['astra']; }, /frontend-review must select exactly/],
-  ['backend author reviewing own work', config => { config.roles['backend-review'] = ['astra']; }, /review must exclude its author/],
-  ['frontend author reviewing own work', config => { config.roles['frontend-review'] = ['gemini', 'opus']; }, /review must exclude its author/],
-  ['multiple implementation owners', config => { config.roles['backend-implementation'].push('opus'); }, /implementation must have a single owner/],
-  ['missing judgment provider', config => { config.roles.judgment = ['astra']; }, /judgment must select exactly/],
+  ['non-Claude frontend reviewer', config => { config.roles['frontend-review'] = ['astra']; }, /frontend-review must select exactly/],
+  ['non-Claude backend implementer', config => { config.roles['backend-implementation'] = ['astra']; }, /backend-implementation must select exactly/],
+  ['multiple backend implementation owners', config => { config.roles['backend-implementation'].push('astra'); }, /backend implementation must have a single owner/],
+  ['multiple frontend implementation owners', config => { config.roles['frontend-implementation'].push('astra'); }, /frontend implementation must have a single owner/],
+  ['non-Claude judgment', config => { config.roles.judgment = ['astra']; }, /judgment must select exactly/],
   ['wrong difficult-task provider', config => { config.roles['difficult-task-review'] = ['astra', 'gemini']; }, /difficult-task-review must select exactly/],
   ['retired Gemini CLI client', config => { config.models.gemini.client = 'gemini'; }, /client must be codex, claude, or agy/],
   ['obsolete client block', config => { config.codex = { implementation: { model: 'gpt-6-astra' } }; }, /config must contain exactly/],
@@ -234,17 +204,20 @@ test('CLI emits the literal ready backend route', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
     status: 'ready', role: 'backend-implementation',
-    participants: [{ key: 'astra', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'xhigh' }],
+    participants: [{ key: 'opus', provider: 'anthropic', client: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' }],
   });
 });
 
 test('CLI exits 2 with the complete blocked frontend result', () => {
-  const result = cli(['resolve', 'frontend-review']);
+  const config = requestedPolicy();
+  config.models.opus.model = null;
+  config.models.opus.verification = 'pending-client';
+  const result = cli(['resolve', 'frontend-review'], config);
   assert.equal(result.status, 2, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
     status: 'blocked', role: 'frontend-review',
-    missing: [{ key: 'gemini', provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
-      requestedModel: 'gemini-3.8-flash', reasoningEffort: 'high', verification: 'pending-client' }],
+    missing: [{ key: 'opus', provider: 'anthropic', client: 'claude', requestedName: 'Claude Opus 5.5',
+      requestedModel: 'claude-opus-5-5', reasoningEffort: 'xhigh', verification: 'pending-client' }],
   });
 });
 

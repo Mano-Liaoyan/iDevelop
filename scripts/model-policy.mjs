@@ -6,13 +6,13 @@ import { fileURLToPath } from 'node:url';
 const efforts = ['low', 'medium', 'high', 'xhigh'];
 const clientProviders = { codex: 'openai', claude: 'anthropic', agy: 'google' };
 const requiredRoles = {
-  'backend-implementation': ['openai'],
+  'backend-implementation': ['anthropic'],
   'frontend-implementation': ['anthropic'],
   'backend-review': ['anthropic'],
-  'frontend-review': ['google', 'openai'],
-  judgment: ['openai', 'anthropic'],
-  'difficult-task-review': ['openai', 'anthropic'],
-  exploration: ['openai'],
+  'frontend-review': ['anthropic'],
+  judgment: ['anthropic'],
+  'difficult-task-review': ['anthropic'],
+  exploration: ['anthropic'],
 };
 
 function object(value, label) {
@@ -41,7 +41,7 @@ export function validateModelPolicy(config) {
   assert.ok(ceiling >= 0, 'reasoningPolicy.ceiling must be low, medium, high, or xhigh');
   assert.equal(config.reasoningPolicy.allowImplicit, false, 'reasoningPolicy.allowImplicit must be false');
   fields(config.reviewPolicy, ['crossProvider', 'onUnavailable'], 'reviewPolicy');
-  assert.equal(config.reviewPolicy.crossProvider, true, 'reviewPolicy.crossProvider must be true');
+  assert.equal(config.reviewPolicy.crossProvider, false, 'reviewPolicy.crossProvider must be false while every role requires anthropic');
   assert.equal(config.reviewPolicy.onUnavailable, 'block', 'reviewPolicy.onUnavailable must be block');
   object(config.models, 'models');
   const seenModels = new Set();
@@ -82,12 +82,6 @@ export function validateModelPolicy(config) {
   }
   for (const scope of ['backend', 'frontend']) {
     assert.equal(config.roles[`${scope}-implementation`].length, 1, `${scope} implementation must have a single owner`);
-    const [author] = config.roles[`${scope}-implementation`];
-    for (const reviewer of config.roles[`${scope}-review`]) {
-      assert.notEqual(reviewer, author, `${scope} review must exclude its author`);
-      assert.notEqual(config.models[reviewer].provider, config.models[author].provider,
-        `${scope} review must use providers different from its author`);
-    }
   }
   for (const [role, providers] of Object.entries(requiredRoles)) {
     const entries = config.roles[role].map(key => config.models[key]);

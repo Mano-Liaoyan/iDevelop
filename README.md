@@ -1,6 +1,6 @@
 # iDevelop
 
-A project for building a graphical interface that coordinates multiple coding agents. The development environment is ready. Product requirements, the interface, and the technology stack remain undecided.
+A project for building a graphical interface that coordinates multiple coding agents. The development environment is ready. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). No application code exists yet.
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
@@ -79,23 +79,21 @@ These versioned records support handoffs. They do not provide live messaging, cr
 
 ## Configure models for quality
 
-Edit [`.pstack/models.json`](.pstack/models.json). The version 2 policy records these user-selected development assignments.
+Edit [`.pstack/models.json`](.pstack/models.json). Until the app prototype works, the user assigned every development role to one model.
 
 | Work | Required model | Reasoning |
 | --- | --- | --- |
-| Backend implementation | GPT-6 Astra | xhigh |
-| Avalonia UI implementation | Claude Opus 5.5 | xhigh |
-| Backend review | Claude Opus 5.5 | xhigh |
-| Frontend review | Gemini 3.8 Flash and GPT-6 Astra | high and xhigh |
-| Judgment and difficult-task review | GPT-6 Astra and Claude Opus 5.5 | xhigh |
+| Frontend and backend implementation, review, judgment, and exploration | Claude Opus 5.5 | xhigh |
+
+Each review runs in a fresh Opus session that did not write the change. After the prototype works, the user will choose each part's owner inside the app. Reassigning a role also changes `requiredRoles` in `scripts/model-policy.mjs` and its tests.
 
 Every dispatch needs an explicit supported effort at or below xhigh. Max, higher levels, and inherited effort are prohibited. Provider effort names do not imply identical token budgets. The policy overrides upstream skill defaults.
 
 Run `node scripts/model-policy.mjs validate` to check the policy. Run `node scripts/model-policy.mjs resolve backend-implementation` to inspect a route. Missing participants produce a blocked result and exit code 2. A partially available panel does not run, and a missing provider is not replaced automatically. The resolver prepares instructions; it does not launch clients or authenticate accounts.
 
-Astra is available through the native Codex catalog. Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`. Its stream output and log identified Gemini 3.8 Flash (High) as the served model, so the Gemini route is active. Frontend and backend review now resolve. A ready route does not mean the review has run.
+Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. The registry keeps two verified routes that no role selects yet. Astra is available through the native Codex catalog. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`, and its stream output and log identified Gemini 3.8 Flash (High) as the served model. A ready route does not mean any review has run.
 
-[`.codex/config.toml`](.codex/config.toml) sets new project launches to Astra at xhigh. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
+[`.codex/config.toml`](.codex/config.toml) sets new project launches to Astra at xhigh. No role uses this default until the user reassigns work. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
 
 These settings govern the agents developing iDevelop. The application's provider connections and a programmatic dispatcher across providers remain separate product work.
 
