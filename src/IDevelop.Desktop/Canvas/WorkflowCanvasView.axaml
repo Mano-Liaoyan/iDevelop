@@ -1,0 +1,181 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nodify="https://miroiu.github.io/nodify"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:workflows="using:IDevelop.Workflows"
+             x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
+             x:DataType="canvas:WorkflowCanvasViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="nodify|PendingConnection.rejected">
+      <Setter Property="Stroke" Value="IndianRed" />
+    </Style>
+    <Style Selector="nodify|Connection[(nodify|BaseConnection.IsSelected)=true]">
+      <Setter Property="StrokeThickness" Value="5" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid ColumnDefinitions="*,Auto,320">
+    <nodify:NodifyEditor x:Name="Editor"
+                         ItemsSource="{Binding Nodes}"
+                         SelectedItem="{Binding SelectedNode}"
+                         SelectedItems="{Binding SelectedNodes}"
+                         Connections="{Binding Connections}"
+                         SelectedConnection="{Binding SelectedConnection}"
+                         SelectedConnections="{Binding SelectedConnections}"
+                         PendingConnection="{Binding PendingConnection}"
+                         ViewportLocation="{Binding ViewportLocation}"
+                         ConnectionCompletedCommand="{Binding ConnectCommand}"
+                         RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
+                         ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
+                         GridCellSize="15">
+
+      <nodify:NodifyEditor.KeyBindings>
+        <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectionCommand}" />
+        <KeyBinding Gesture="Back" Command="{Binding DeleteSelectionCommand}" />
+      </nodify:NodifyEditor.KeyBindings>
+
+      <nodify:NodifyEditor.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="Add task"
+                    Command="{Binding AddTaskAtCommand}"
+                    CommandParameter="{Binding #Editor.MouseLocation}" />
+          <MenuItem Header="Delete" InputGesture="Delete" Command="{Binding DeleteSelectionCommand}" />
+        </ContextMenu>
+      </nodify:NodifyEditor.ContextMenu>
+
+      <nodify:NodifyEditor.ItemContainerTheme>
+        <ControlTheme TargetType="nodify:ItemContainer"
+                      BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
+                      x:DataType="canvas:TaskNodeViewModel">
+          <Setter Property="Location" Value="{Binding Location}" />
+        </ControlTheme>
+      </nodify:NodifyEditor.ItemContainerTheme>
+
+      <nodify:NodifyEditor.ItemTemplate>
+        <DataTemplate DataType="canvas:TaskNodeViewModel">
+          <nodify:Node Input="{Binding Inputs}"
+                       Output="{Binding Outputs}"
+                       MinWidth="180"
+                       MaxWidth="{x:Static canvas:WorkflowCanvasViewModel.MaxTaskWidth}"
+                       ToolTip.Tip="{Binding Title}">
+            <nodify:Node.Header>
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+            </nodify:Node.Header>
+            <nodify:Node.InputConnectorTemplate>
+              <DataTemplate DataType="canvas:PortViewModel">
+                <nodify:NodeInput Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                  IsConnected="{Binding IsConnected}"
+                                  AutomationProperties.Name="Task input" />
+              </DataTemplate>
+            </nodify:Node.InputConnectorTemplate>
+            <nodify:Node.OutputConnectorTemplate>
+              <DataTemplate DataType="canvas:PortViewModel">
+                <nodify:NodeOutput Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                   IsConnected="{Binding IsConnected}"
+                                   AutomationProperties.Name="Task output" />
+              </DataTemplate>
+            </nodify:Node.OutputConnectorTemplate>
+          </nodify:Node>
+        </DataTemplate>
+      </nodify:NodifyEditor.ItemTemplate>
+
+      <nodify:NodifyEditor.ConnectionTemplate>
+        <DataTemplate DataType="canvas:ConnectionViewModel">
+          <nodify:Connection Source="{Binding From.Output.Anchor}"
+                             Target="{Binding To.Input.Anchor}"
+                             Stroke="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Stroke}}"
+                             Fill="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Stroke}}"
+                             StrokeDashArray="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Dashes}}"
+                             nodify:BaseConnection.IsSelectable="True">
+            <nodify:Connection.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Dependency"
+                          Command="{Binding SetKindCommand}"
+                          CommandParameter="{x:Static workflows:ConnectionKind.Dependency}" />
+                <MenuItem Header="Context"
+                          Command="{Binding SetKindCommand}"
+                          CommandParameter="{x:Static workflows:ConnectionKind.Context}" />
+                <MenuItem Header="Review"
+                          Command="{Binding SetKindCommand}"
+                          CommandParameter="{x:Static workflows:ConnectionKind.Review}" />
+                <Separator />
+                <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+              </ContextMenu>
+            </nodify:Connection.ContextMenu>
+          </nodify:Connection>
+        </DataTemplate>
+      </nodify:NodifyEditor.ConnectionTemplate>
+
+      <nodify:NodifyEditor.PendingConnectionTemplate>
+        <DataTemplate DataType="canvas:PendingConnectionViewModel">
+          <nodify:PendingConnection Source="{Binding Source, Mode=OneWayToSource}"
+                                    PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
+                                    EnablePreview="True"
+                                    Content="{Binding PreviewText}"
+                                    Classes.rejected="{Binding IsRejected}" />
+        </DataTemplate>
+      </nodify:NodifyEditor.PendingConnectionTemplate>
+    </nodify:NodifyEditor>
+
+    <GridSplitter Grid.Column="1" Width="4" />
+
+    <TextBlock Grid.Column="2" Margin="12"
+               Text="Select a task or connection to edit it."
+               TextWrapping="Wrap"
+               IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
+               AutomationProperties.AutomationId="InspectorHint" />
+
+    <ContentControl Grid.Column="2" Content="{Binding Inspected}" Margin="12">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="canvas:TaskNodeViewModel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Title" />
+            <TextBox Text="{Binding Title}"
+                     AutomationProperties.AutomationId="TaskTitle"
+                     AutomationProperties.Name="Title" />
+            <TextBlock Text="Instructions" />
+            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
+            <TextBox Text="{Binding Instructions}"
+                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="140"
+                     AutomationProperties.AutomationId="TaskInstructions"
+                     AutomationProperties.Name="Instructions" />
+            <TextBlock Text="Acceptance criteria" />
+            <TextBox Text="{Binding AcceptanceCriteria}"
+                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
+                     AutomationProperties.AutomationId="TaskAcceptanceCriteria"
+                     AutomationProperties.Name="Acceptance criteria" />
+          </StackPanel>
+        </DataTemplate>
+        <DataTemplate DataType="canvas:ConnectionViewModel">
+          <StackPanel Spacing="6">
+            <TextBlock TextWrapping="Wrap">
+              <Run Text="{Binding From.Title, Mode=OneWay}" />
+              <Run Text="→" />
+              <Run Text="{Binding To.Title, Mode=OneWay}" />
+            </TextBlock>
+            <TextBlock Text="Kind" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="Dependency"
+                      Command="{Binding SetKindCommand}"
+                      CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
+                      AutomationProperties.AutomationId="KindDependency"
+                      AutomationProperties.Name="Dependency" />
+              <Button Content="Context"
+                      Command="{Binding SetKindCommand}"
+                      CommandParameter="{x:Static workflows:ConnectionKind.Context}"
+                      AutomationProperties.AutomationId="KindContext"
+                      AutomationProperties.Name="Context" />
+              <Button Content="Review"
+                      Command="{Binding SetKindCommand}"
+                      CommandParameter="{x:Static workflows:ConnectionKind.Review}"
+                      AutomationProperties.AutomationId="KindReview"
+                      AutomationProperties.Name="Review" />
+            </StackPanel>
+            <Button Content="Delete connection" Command="{Binding DeleteCommand}" />
+          </StackPanel>
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
+  </Grid>
+</UserControl>

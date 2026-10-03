@@ -1,5 +1,52 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:IDevelop.Desktop"
+        xmlns:canvas="using:IDevelop.Desktop.Canvas"
         x:Class="IDevelop.Desktop.MainWindow"
-        Title="iDevelop" Width="1280" Height="800">
+        x:DataType="local:MainWindowViewModel"
+        Title="{Binding Title}" Width="1280" Height="800">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="8">
+      <Button Content="Open folder"
+              Click="OnOpenFolder"
+              AutomationProperties.AutomationId="OpenFolder"
+              AutomationProperties.Name="Open folder" />
+      <Button Content="Add task"
+              Command="{Binding AddTaskCommand}"
+              AutomationProperties.AutomationId="AddTask"
+              AutomationProperties.Name="Add task" />
+      <Button Content="Save"
+              Command="{Binding SaveCommand}"
+              AutomationProperties.AutomationId="Save"
+              AutomationProperties.Name="Save" />
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="16" Margin="8,4">
+      <TextBlock Text="Unsaved changes"
+                 IsVisible="{Binding HasUnsavedChanges}"
+                 AutomationProperties.AutomationId="UnsavedChanges" />
+      <TextBlock Text="{Binding Status}"
+                 AutomationProperties.AutomationId="Status"
+                 AutomationProperties.Name="Status" />
+    </StackPanel>
+
+    <Panel>
+      <TextBlock Text="Open a project folder to start."
+                 IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+      <ContentControl Content="{Binding Canvas}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+            <canvas:WorkflowCanvasView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Panel>
+  </DockPanel>
 </Window>
