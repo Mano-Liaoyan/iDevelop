@@ -10,4 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IDevelop.Core\IDevelop.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\samples\storage-change\**\*" LinkBase="sample-project" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
