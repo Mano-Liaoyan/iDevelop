@@ -23,6 +23,7 @@ The user wants these capabilities:
 - Prefer an implementation without a JavaScript or TypeScript application stack.
 - Use C# and .NET for iDevelop's application code, Avalonia for the desktop UI, and NodifyAvalonia for the initial node canvas. The user declined further framework comparisons.
 - Prefer permissively licensed dependencies that allow commercial distribution and company use without mandatory framework fees. Preserve the option of distributing a proprietary product.
+- Restyle the interface to look like PlanWeave's desktop app, as recorded in [The interface follows the PlanWeave look](#the-interface-follows-the-planweave-look).
 
 The shared server synchronizes workflow information. It does not host coding agents, model calls, terminals, or repositories. Provider authentication and execution stay on the local machine.
 
@@ -169,6 +170,24 @@ Avalonia documents accessibility and IME facilities. The custom graph still need
 A log viewer is not an interactive terminal. Prefer structured agent events for the main interface. If a client requires an interactive terminal, select and validate a suitable .NET integration separately, including process control, escape sequences, selection, and keyboard behavior.
 
 The [selection record](handoffs/2026-10-03-avalonia-selection.md) supersedes the earlier [language comparison](handoffs/2026-10-03-language-and-node-editors.md). Earlier alternatives are historical research, not active prototype tasks.
+
+## The interface follows the PlanWeave look
+
+The user wants iDevelop restyled to look like PlanWeave's desktop app, built with Avalonia and NodifyAvalonia. The current dark Fluent shell is a placeholder. The references are the [PlanWeave repository](https://github.com/GaosCode/PlanWeave/tree/8647d015ac562e8fda148415b84ee77e3b3ada89) at the commit inspected above and the user's screenshot of its canvas.
+
+![PlanWeave canvas reference](design/planweave-canvas-reference.png)
+
+The screenshot shows these visual traits:
+
+- A light theme with a light gray left sidebar and a near-white canvas.
+- A sidebar with navigation entries, a project tree with count badges, and a reset-layout command. The sidebar reaches into the title bar, next to the window controls.
+- A breadcrumb bar above the canvas, with undo and redo beside it.
+- Rounded task cards with a title, a status pill, an agent picker, a prompt preview, and a stack of work items. The card fill follows the status, for example green for implemented, cyan for in progress, and white for planned.
+- Orthogonal connection lines with arrowheads.
+- A right panel that lists components to drag onto the canvas.
+- Zoom and fit controls at the lower left, a minimap at the lower right, and a floating run bar at the bottom center.
+
+Adopt the visual language: the theme, colors, typography, spacing, corner radii, layout regions, and card and connection styles. Do not adopt PlanWeave's domain through its UI. Its implementation and review blocks, run controls, statistics, and todo views stand for PlanWeave features. A control appears in iDevelop only when iDevelop has the matching feature. Study the repository's styles and components before choosing exact values, and check their licenses before reusing any asset. PlanWeave is MIT licensed.
 
 ## Dependency licensing preference
 

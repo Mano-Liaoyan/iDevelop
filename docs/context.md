@@ -6,7 +6,7 @@ Build a graphical interface for coordinating multiple coding agents, including C
 
 ## Current scope
 
-The repository contains the PStack development environment, product research, and the first application slice. The slice is a C# desktop editor on Avalonia 11.3.22 and NodifyAvalonia 6.6.0. It opens a project folder, edits tasks and typed connections on a node canvas, and saves the workflow to `.idevelop/workflows/<workflow-id>.json` inside that folder without a server. Team storage, the synchronization protocol, and scheduling remain open.
+The repository contains the PStack development environment, product research, and the first application slice. The slice is a C# desktop editor on Avalonia 11.3.22 and NodifyAvalonia 6.6.0. It opens a project folder, edits tasks and typed connections on a node canvas, and saves the workflow to `.idp/workflows/<workflow-id>.json` inside that folder without a server. Team storage, the synchronization protocol, and scheduling remain open.
 
 ## Confirmed product direction
 
@@ -19,6 +19,7 @@ The repository contains the PStack development environment, product research, an
 - Windows, macOS, and Linux are required. The user prefers a responsive modern UI without a JavaScript or TypeScript application stack.
 - Use C# and Avalonia. The user is familiar with both and explicitly declined further framework comparisons. Use BAndysc's `NodifyAvalonia` as the starting node-editor component. Keep the local runner and optional synchronization service in C# and .NET.
 - Prefer permissive dependencies such as MIT, Apache-2.0, and BSD for commercial distribution and company use without mandatory framework fees. Preserve the option of a proprietary product. No product license has been chosen.
+- The interface must look like PlanWeave's desktop app: a light theme, a sidebar with a project tree, rounded status-colored task cards, and floating canvas controls. It stays in Avalonia and NodifyAvalonia. The [product direction](product-direction.md#the-interface-follows-the-planweave-look) records the reference screenshot and what to adopt.
 
 The [product direction](product-direction.md) records the selected stack, proposed runtime design, and acceptance cases. Framework selection is settled. Runtime design details remain provisional.
 
@@ -40,4 +41,4 @@ The [product direction](product-direction.md) records the selected stack, propos
 
 ## Next product step
 
-The editable local canvas is complete on Windows. CI covers Linux and macOS builds and headless tests. The next milestone is shared graph review. Two desktop clients edit one workflow through the optional synchronization service, with defined behavior for conflicts, reconnects, and approval of a specific version. Execution, provider integrations, and GitHub review gates follow in the complete execution loop. Validate each against the product direction's acceptance cases without comparing other frameworks.
+The editable local canvas is complete. CI builds it and runs its headless tests on Linux, Windows, and macOS. The next step first restyles the current shell and canvas to the PlanWeave look, so later features are built in the final style. Shared graph review then follows as planned. Two desktop clients edit one workflow through the optional synchronization service, with defined behavior for conflicts, reconnects, and approval of a specific version. Execution, provider integrations, and GitHub review gates follow in the complete execution loop. Validate each against the product direction's acceptance cases without comparing other frameworks.
