@@ -1,16 +1,51 @@
 {
+  "schemaVersion": 2,
   "policy": "quality-first",
-  "budget": "unlimited",
-  "selection": "Explicit per-role models after checking this host's available model catalog. Independent reviewers; prefer different model families when supported.",
-  "codex": {
-    "implementation": { "model": "gpt-6.1-sol", "reasoningEffort": "max" },
-    "judgment": { "model": "gpt-6-astra", "reasoningEffort": "max" },
-    "reviewers": [
-      { "model": "gpt-6-astra", "reasoningEffort": "max" },
-      { "model": "gpt-6.1-sol", "reasoningEffort": "max" }
-    ]
+  "budget": "large",
+  "reasoningPolicy": {
+    "ceiling": "xhigh",
+    "allowImplicit": false
   },
-  "claude": null,
-  "gemini": null,
-  "pi": null
+  "reviewPolicy": {
+    "crossProvider": true,
+    "onUnavailable": "block"
+  },
+  "models": {
+    "astra": {
+      "provider": "openai",
+      "client": "codex",
+      "requestedName": "GPT-6 Astra",
+      "requestedModel": "gpt-6-astra",
+      "model": "gpt-6-astra",
+      "reasoningEffort": "xhigh",
+      "verification": "native-catalog"
+    },
+    "opus": {
+      "provider": "anthropic",
+      "client": "claude",
+      "requestedName": "Claude Opus 5.5",
+      "requestedModel": "claude-opus-5-5",
+      "model": "claude-opus-5-5",
+      "reasoningEffort": "xhigh",
+      "verification": "client-catalog"
+    },
+    "gemini": {
+      "provider": "google",
+      "client": "agy",
+      "requestedName": "Gemini 3.8 Flash",
+      "requestedModel": "gemini-3.8-flash",
+      "model": "gemini-3.8-flash",
+      "reasoningEffort": "high",
+      "verification": "client-catalog"
+    }
+  },
+  "roles": {
+    "backend-implementation": ["astra"],
+    "frontend-implementation": ["opus"],
+    "backend-review": ["opus"],
+    "frontend-review": ["gemini", "astra"],
+    "judgment": ["astra", "opus"],
+    "difficult-task-review": ["astra", "opus"],
+    "exploration": ["astra"]
+  }
 }

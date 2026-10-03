@@ -1,24 +1,19 @@
 ---
-description: Project-local PStack model choices; .pstack/models.json takes precedence for the active client
+description: Project model ownership, cross-provider reviews, and explicit reasoning ceiling
 alwaysApply: true
 ---
-# budget: unlimited (max)
-# Native model IDs and reasoning effort are separate fields in .pstack/models.json.
-# These portable aliases are fallbacks only, not the quality-first role selection.
-feature, refactoring: inherit-parent
-bug-fix: inherit-parent
-perf-issue: inherit-parent
-hillclimb: inherit-parent
-judgment and prose: inherit-parent
-hardest tasks: inherit-parent
-how explorer: inherit-parent
-how explainer: inherit-parent
-why investigators: inherit-parent
-why synthesizer: inherit-parent
-reflect tooling: inherit-parent
-reflect judgment, divergent, synthesizer: inherit-parent
-arena runners: inherit-parent, inherit-parent, inherit-parent
-arena cross-judge pool: inherit-parent
-swarm workers: inherit-parent
-architect runners: inherit-parent, inherit-parent, inherit-parent
-interrogate reviewers: inherit-parent, inherit-parent, inherit-parent
+# budget: large (xhigh ceiling)
+
+Read `.pstack/compatibility.md` and `.pstack/models.json` before delegating. The version 2 JSON policy is authoritative. Run `node scripts/model-policy.mjs resolve <role>` and dispatch only a ready result. The following names refer to policy roles, not model slugs.
+
+| Workflow roles | Resolve |
+| --- | --- |
+| feature, refactoring; bug-fix; perf-issue; hillclimb | `frontend-implementation` or `backend-implementation` |
+| judgment and prose; how explainer; why synthesizer; reflect judgment, divergent, synthesizer | `judgment` |
+| hardest tasks | Scope-specific implementation and `difficult-task-review` |
+| how explorer; why investigators; reflect tooling | `exploration` for reads, scope-specific implementation for edits |
+| arena runners; architect runners | `judgment` for design; scope-specific implementation for code |
+| arena cross-judge pool; interrogate reviewers | `frontend-review` or `backend-review`, excluding the author |
+| swarm workers | The worker's explicit exploration, implementation, or review role |
+
+Set the returned model and effort explicitly. Do not inherit effort, use max or higher, substitute missing providers, or run only the available members of a blocked panel. Upstream default slugs and fallback instructions do not override this policy.

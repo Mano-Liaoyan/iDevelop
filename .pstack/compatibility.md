@@ -4,11 +4,27 @@ This is a local adaptation of Lauren Tan's official Cursor PStack, not an offici
 
 ## Models
 
-`.pstack/models.json` is the editable source for this project's role choices. It is instruction data, not a cross-provider execution engine. Use the current client's block. The implementation role covers feature/refactoring, bug-fix, perf-issue, hillclimb, how explorer, why investigators, reflect tooling, and swarm workers. Judgment covers prose, hardest tasks, how explainer, why synthesizer, and reflect judgment/divergent/synthesizer. Reviewer entries supply arena, architect, and interrogate panels and the arena cross-judge pool.
+`.pstack/models.json` is the canonical version 2 model policy. It separates a model registry from explicit role assignments. `scripts/model-policy.mjs` validates the policy and resolves a role into a ready or blocked result. It does not launch clients or bridge provider subscriptions. Run `node scripts/model-policy.mjs resolve <role>` before delegation. A blocked result prevents dispatch of that role, including a partially available panel.
 
-Check selected IDs and reasoning levels against the current host before dispatch. Codex's initial IDs were available at setup. Set the model and reasoning effort as separate native fields; do not invent Cursor-style combined IDs. Preserve explicit user edits. A null client block means its catalog has not been inspected: discover its available models and establish quality-first roles before the first delegation. If a host cannot vary subagent models or expose multiple providers, report that limitation and use its strongest available model for independent passes. Do not call same-family reviewers a cross-provider review. Model changes need no skill edits.
+The user chose GPT-6 Astra for backend implementation and Claude Opus 5.5 for frontend implementation. Backend review requires Opus. Frontend review requires Gemini 3.8 Flash and Astra. Judgment and difficult-task review require both Astra and Opus. Keep implementation ownership by frontend or backend scope even when the work is difficult. Split mixed changes by scope and apply both review requirements. Do not replace missing providers with same-provider reviewers.
 
-`.cursor/rules/pstack-models.mdc` supplies safe portable aliases for upstream parsers. The current client's explicit JSON choices take precedence. `/setup-pstack` updates project files only, including the relevant JSON block. It never writes to the user's home directory.
+| PStack role | Canonical policy role |
+| --- | --- |
+| feature, refactoring; bug-fix; perf-issue; hillclimb | `frontend-implementation` or `backend-implementation`, based on scope |
+| hardest tasks | Scope-specific implementation plus `difficult-task-review` |
+| judgment and prose; how explainer; why synthesizer; reflect judgment, divergent, synthesizer | `judgment` |
+| how explorer; why investigators; reflect tooling | `exploration` for read-only work; scope-specific implementation for edits |
+| swarm workers | Resolve each worker's purpose as exploration, implementation, or scope-specific review |
+| arena runners; architect runners | `judgment` for design panels; retain scope-specific implementation ownership for coding |
+| arena cross-judge pool; interrogate reviewers | `frontend-review` or `backend-review`; exclude the author from independent review |
+
+Every invocation must set an explicit supported reasoning level at or below `xhigh`. `max`, `ultra`, higher levels, and implicit effort are prohibited. Astra uses `xhigh`, the requested Opus route uses `xhigh`, and Gemini uses `high` because its documented scale does not include `xhigh`. These names are provider-specific settings, not equal token budgets. This policy overrides upstream skill defaults and fallback instructions. Never use `inherit-parent` or `auto` to bypass the effort ceiling or a missing role participant.
+
+A registry entry's `requestedModel` records the user's intended model. It is not dispatchable until the entry has a verified executable `model`. Claude Opus 5.5 passed a subscription-authenticated request with explicit xhigh through Claude Code. Gemini 3.8 Flash runs through Antigravity CLI (`agy`), which replaced Gemini CLI for individual Google accounts. `agy models` lists only combined IDs such as `gemini-3.8-flash-high`. A signed-in request with `--model gemini-3.8-flash --effort high` reached the backend as Gemini 3.8 Flash (High), and `--effort low` changed it to the Low variant. Use the bare ID with a separate `--effort`. Confirm the served model from the `init` event of `--output-format stream-json` or the model override line in `--log-file`, not from a success status. Version 1.1.8 silently fell back to a default model when a headless `--model` override failed to resolve ([issue 710](https://github.com/google-antigravity/antigravity-cli/issues/710)). Version 1.2.16 rejects an unknown ID with exit code 1. Check exact model availability and explicit effort controls through a supported client before activation. Do not infer account access from public documentation, a binary on PATH, or the presence of credentials. Set model IDs and effort as separate native fields. Do not invent combined model-effort slugs.
+
+`.cursor/rules/pstack-models.mdc` points every workflow role to this policy and provides no inherited fallback. `.codex/config.toml` sets project launch defaults to Astra at `xhigh`. Explicit app or CLI overrides can supersede those defaults, and editing the file does not change an already-running conversation. Verify the active setting when starting work. The role resolver enforces policy for prepared dispatches; it is not a runtime interceptor for arbitrary manual client use.
+
+`/setup-pstack` updates project files only. It never changes personal account configuration or files in the user's home directory. Preserve explicit user choices and do not rewrite generated or upstream skills to change model policy.
 
 ## Tool mapping
 

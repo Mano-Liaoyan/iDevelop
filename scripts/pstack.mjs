@@ -5,6 +5,7 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { listSkills } from './codex-skills.mjs';
+import { validateModelPolicy } from './model-policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const upstream = path.join(root, '.pstack/upstream');
@@ -147,9 +148,7 @@ function check() {
     assert.equal(fs.realpathSync(path.join(root, directory, 'skills')), fs.realpathSync(active));
   }
   const models = JSON.parse(fs.readFileSync(path.join(root, '.pstack/models.json'), 'utf8'));
-  assert.equal(models.policy, 'quality-first');
-  assert.ok(models.codex.implementation.model && models.codex.judgment.model);
-  assert.ok(models.codex.reviewers.length >= 2);
+  validateModelPolicy(models);
   console.log(`PASS: ${names.length} skills, clean upstream ${git(['rev-parse', '--short', 'HEAD'], upstream)}, generated adapters, shared links, and model configuration.`);
 }
 

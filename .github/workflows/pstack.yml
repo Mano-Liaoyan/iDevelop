@@ -19,6 +19,9 @@ jobs:
         with:
           node-version: '22'
       - run: node --check scripts/codex-skills.mjs
+      - run: node --check scripts/model-policy.mjs
+      - run: node --check scripts/model-policy.test.mjs
+      - run: node --test scripts/model-policy.test.mjs
       - run: node scripts/pstack.mjs setup
       - run: node scripts/pstack.mjs setup
       - run: node scripts/pstack.mjs check
