@@ -2,16 +2,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { listSkills } from './codex-skills.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const source = path.join(root, 'vendor/pstack');
+const upstream = path.join(root, '.pstack/upstream');
+const source = path.join(upstream, 'pstack');
 const active = path.join(root, '.agents/skills');
-const lock = JSON.parse(fs.readFileSync(path.join(root, '.pstack/upstream.json'), 'utf8'));
-const names = fs.readdirSync(path.join(source, 'skills')).filter(name =>
-  fs.existsSync(path.join(source, 'skills', name, 'SKILL.md'))).sort();
+const command = process.argv[2] ?? 'check';
+const adapterNotice = 'Project adapter: read `.pstack/compatibility.md` and `.pstack/models.json` from the repository root before executing this skill.';
+
+function git(args, cwd = root) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8', windowsHide: true }).trim();
+}
+
+if (command === 'setup') {
+  if (!fs.existsSync(path.join(upstream, '.git'))) {
+    git(['submodule', 'update', '--init', '--checkout', '--', '.pstack/upstream']);
+  }
+  git(['sparse-checkout', 'set', 'pstack'], upstream);
+}
+assert.ok(fs.existsSync(path.join(source, 'skills')), 'PStack submodule is missing. Run node scripts/pstack.mjs setup.');
+const sourceFiles = git(['ls-files', '-z', '--', 'skills'], source).split('\0').filter(Boolean)
+  .map(file => path.join(source, file));
+const names = sourceFiles.map(file => path.relative(path.join(source, 'skills'), file).replaceAll('\\', '/'))
+  .filter(relative => /^[^/]+\/SKILL\.md$/.test(relative)).map(relative => relative.split('/')[0]).sort();
 const local = path.join(root, '.pstack/local');
 
 function files(directory) {
@@ -32,17 +48,34 @@ function adapt(content, relative) {
   if (/^[^/]+\/SKILL\.md$/.test(relative)) {
     result = result.replace(/^name:.*$/m, `name: ${relative.split('/')[0]}`);
     const end = result.indexOf('\n---', 3) + 4;
-    result = result.slice(0, end) + '\n\nProject adapter: read `.pstack/compatibility.md` and `.pstack/models.json` from the repository root before executing this skill.\n' + result.slice(end);
+    result = result.slice(0, end) + '\n\n' + adapterNotice + '\n' + result.slice(end);
   }
   return result;
 }
 
 function checkSource() {
-  const actual = files(source).map(file => path.relative(source, file).replaceAll('\\', '/')).sort();
-  assert.deepEqual(actual, Object.keys(lock.files).sort(), 'Upstream file inventory changed');
-  for (const relative of actual) {
-    const digest = createHash('sha256').update(fs.readFileSync(path.join(source, relative))).digest('hex');
-    assert.equal(digest, lock.files[relative], `Upstream changed: ${relative}`);
+  const recorded = git(['ls-files', '--stage', '--', '.pstack/upstream']).match(/^160000 ([0-9a-f]+) 0\t/);
+  assert.ok(recorded, 'PStack must be a registered submodule.');
+  assert.equal(git(['rev-parse', 'HEAD'], upstream), recorded[1],
+    'PStack differs from the recorded submodule commit. Run git submodule update --init --checkout, or stage an intentional upgrade before setup.');
+  assert.equal(git(['status', '--porcelain', '--untracked-files=normal'], upstream), '',
+    'PStack submodule has local changes. Preserve or commit them before regenerating skills.');
+}
+
+function render(input, relative) {
+  const bytes = fs.readFileSync(input);
+  const text = bytes.toString('utf8');
+  if (bytes.includes(0) || !Buffer.from(text).equals(bytes)) return bytes;
+  const normalized = text.replaceAll('\r\n', '\n');
+  return Buffer.from(input.endsWith('.md') ? adapt(normalized, relative) : normalized);
+}
+
+function pruneEmptyDirectories(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const child = path.join(directory, entry.name);
+    pruneEmptyDirectories(child);
+    if (fs.readdirSync(child).length === 0) fs.rmdirSync(child);
   }
 }
 
@@ -96,9 +129,12 @@ async function auditCodex() {
 
 function check() {
   checkSource();
-  for (const input of files(path.join(source, 'skills'))) {
+  const expectedFiles = sourceFiles.map(file => path.relative(path.join(source, 'skills'), file)).sort();
+  assert.deepEqual(files(active).map(file => path.relative(active, file)).sort(), expectedFiles,
+    'Generated skill file inventory drifted. Run setup to synchronize it.');
+  for (const input of sourceFiles) {
     const relative = path.relative(path.join(source, 'skills'), input).replaceAll('\\', '/');
-    const expected = input.endsWith('.md') ? Buffer.from(adapt(fs.readFileSync(input, 'utf8'), relative)) : fs.readFileSync(input);
+    const expected = render(input, relative);
     assert.deepEqual(fs.readFileSync(path.join(active, relative)), expected, `Generated file drift: ${relative}`);
   }
   assert.deepEqual(fs.readdirSync(active).sort(), names, 'Unexpected active skills');
@@ -114,17 +150,32 @@ function check() {
   assert.equal(models.policy, 'quality-first');
   assert.ok(models.codex.implementation.model && models.codex.judgment.model);
   assert.ok(models.codex.reviewers.length >= 2);
-  console.log(`PASS: ${names.length} skills, upstream hashes, generated adapters, shared links, and model configuration.`);
+  console.log(`PASS: ${names.length} skills, clean upstream ${git(['rev-parse', '--short', 'HEAD'], upstream)}, generated adapters, shared links, and model configuration.`);
 }
 
-const command = process.argv[2] ?? 'check';
 if (command === 'setup') {
   checkSource();
-  for (const input of files(path.join(source, 'skills'))) {
-    const relative = path.relative(path.join(source, 'skills'), input).replaceAll('\\', '/');
-    write(path.join(active, relative), input.endsWith('.md')
-      ? adapt(fs.readFileSync(input, 'utf8'), relative) : fs.readFileSync(input));
+  if (fs.existsSync(active)) {
+    assert.equal(fs.realpathSync(active), active, 'Generated skills must be a real directory inside this checkout.');
+    pruneEmptyDirectories(active);
+    for (const entry of fs.readdirSync(active, { withFileTypes: true })) {
+      assert.ok(entry.isDirectory(), `Unexpected generated skill entry: ${entry.name}`);
+      const entrypoint = path.join(active, entry.name, 'SKILL.md');
+      assert.ok(fs.existsSync(entrypoint) ? fs.readFileSync(entrypoint, 'utf8').includes(adapterNotice) : names.includes(entry.name),
+        `Refusing to overwrite a non-generated skill: ${entry.name}`);
+    }
   }
+  const expectedFiles = new Set();
+  for (const input of sourceFiles) {
+    const relative = path.relative(path.join(source, 'skills'), input).replaceAll('\\', '/');
+    expectedFiles.add(path.join(active, relative));
+    write(path.join(active, relative), render(input, relative));
+  }
+  const obsoleteFiles = files(active).filter(file => !expectedFiles.has(file));
+  // Keep ownership notices until the other stale files are gone, so interrupted cleanup can resume.
+  obsoleteFiles.sort((a, b) => Number(path.basename(a) === 'SKILL.md') - Number(path.basename(b) === 'SKILL.md'));
+  for (const file of obsoleteFiles) fs.unlinkSync(file);
+  pruneEmptyDirectories(active);
   link('.claude');
   link('.cursor');
   check();

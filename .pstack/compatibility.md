@@ -1,6 +1,6 @@
 # Project-local PStack adapter
 
-This is a local adaptation of Lauren Tan's official Cursor PStack, not an official cross-client port. The immutable source is `vendor/pstack`; `.pstack/upstream.json` pins its revision and file hashes. `scripts/pstack.mjs` generates the active skill tree from it. Change the adapter or pinned source deliberately, then regenerate; do not hand-edit generated skills.
+This is a local adaptation of Lauren Tan's official Cursor PStack, not an official cross-client port. `.pstack/upstream` is a Git submodule of `cursor/plugins`, and the parent repository's gitlink pins its revision. Sparse checkout exposes `pstack` and upstream root files. `scripts/pstack.mjs setup` initializes a missing submodule and generates the active skill tree from `.pstack/upstream/pstack`. An existing checkout must match the gitlink in the index; stage an intentional upgrade before regenerating. Change the adapter or submodule revision deliberately, then regenerate; do not hand-edit generated skills.
 
 ## Models
 
@@ -12,7 +12,7 @@ Check selected IDs and reasoning levels against the current host before dispatch
 
 ## Tool mapping
 
-- Cursor `Task` means the host's native subagent tool. If `poteto-agent` is not a registered type, give a fresh native delegate `vendor/pstack/agents/poteto-agent.md`, `AGENTS.md`, and the active `poteto-mode` skill to read. Preserve specialized reviewer roles. Honor the host's concurrency limit.
+- Cursor `Task` means the host's native subagent tool. If `poteto-agent` is not a registered type, give a fresh native delegate `.pstack/upstream/pstack/agents/poteto-agent.md`, `AGENTS.md`, and the active `poteto-mode` skill to read. Preserve specialized reviewer roles. Honor the host's concurrency limit.
 - Worktrees isolate concurrent writers. Use the host's managed worktrees when supported, otherwise ordinary Git worktrees. Read-only workers can share a checkout. Read the full result and verify the diff before integrating.
 - Cursor `TodoWrite`, `AskQuestion`, and browser controls map to the host's corresponding tools. If no todo tool exists, keep a concise task checklist in the task's handoff document, including evidenced skips.
 - Skill invocation uses the native mechanism where available. Otherwise read the named project's `SKILL.md` and execute it. Cross-skill references still mean the same local PStack skill, including user-invoked skills reached explicitly by the active workflow.

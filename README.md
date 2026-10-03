@@ -15,7 +15,23 @@ node scripts/pstack.mjs setup
 node scripts/pstack.mjs check
 ```
 
-`vendor/pstack` 保留上游源文件和 MIT 许可证。初始化只在项目里生成 `.agents/skills`，Claude 和 Cursor 的技能目录链接到它，Gemini 原生识别它，Pi 启动入口显式加载它。重新克隆、创建新 worktree 后运行初始化。生成目录和个人设置不提交。
+初始化会自动下载主仓库记录的 PStack submodule 版本，在项目里生成 `.agents/skills`。Claude 和 Cursor 的技能目录链接到它，Gemini 原生识别它，Pi 启动入口显式加载它。重新克隆、创建新 worktree 后运行初始化。首次初始化需要网络；生成目录和个人设置不提交。
+
+上游放在 `.pstack/upstream`，主仓库只记录官方仓库地址和提交版本。官方 PStack 位于 `cursor/plugins` 多插件仓库中，因此 submodule 指向整个仓库；初始化通过 sparse checkout 只展开 `pstack` 及上游根目录文件，不展开其他插件目录。源码位于 `.pstack/upstream/pstack`，许可证也保留在其中。
+
+这里选择 submodule 而非 subtree。Subtree 会继续把上游文件作为主仓库普通文件提交；submodule 让项目提交和代码审查只显示一个版本指针。它不会安装全局插件，也不会从已有 Git 历史中删除旧的源文件快照。
+
+## 在 Codex 桌面端调用 skills
+
+在输入框的 `@` 菜单搜索 `poteto-mode`，或直接在消息中写 `$poteto-mode`。例如：
+
+```text
+$poteto-mode 检查这个项目的开发环境，并说明下一步需要做什么。
+```
+
+PStack 上游文档中的 `/poteto-mode` 是 Cursor 的调用写法，不能用 Codex 的斜杠菜单判断技能是否安装。Codex 已在 2026 年 3 月将 skills 加入 [`@` 菜单](https://learn.chatgpt.com/docs/changelog)。本项目的 49 个 PStack skills 已通过实际发现接口验证；若初始化前就打开了会话，可在此项目新开会话后重新搜索。
+
+能调用项目技能与隐藏其他技能是两件事。下面的表格说明桌面端当前的隔离限制；没有为隐藏它们而修改全局技能配置。
 
 ## 启动客户端
 
@@ -70,7 +86,34 @@ Pi、Claude、Gemini 尚未在本机验证，配置为 `null`，表示首次使�
 
 完整适配边界见 [`.pstack/compatibility.md`](.pstack/compatibility.md)。上游提到的 `cursor-team-kit`、Cursor 云端调度、Bun 和 Bash 辅助程序没有被全局安装。缺失能力必须明确报告；不能声称某个未安装的工具已经运行。目前没有应用可驱动，因此先验证配置，应用确定后再用 PStack 创建真实的项目验证流程。
 
-升级 PStack 时，在单独的变更中审查新版本、更新 vendored 文件与 `.pstack/upstream.json` 的哈希、重跑 setup/check 和客户端验证。不要在功能开发中无提示追随上游 `main`。
+## 更新 PStack
+
+只有显式升级才跟随上游 `main`。下面的命令下载上游最新版本，暂存新的版本指针，再生成并检查 skills。暂存不等于提交，检查失败时先解决问题。
+
+```powershell
+git submodule update --remote --checkout -- .pstack/upstream
+git add .pstack/upstream
+node scripts/pstack.mjs setup
+node scripts/pstack.mjs check
+git diff --cached --submodule=log
+```
+
+安装了 Codex 时，再运行 `node scripts/pstack.mjs isolate-codex` 验证新的技能列表。审查上游改动和跨客户端适配，通过后将版本指针提交到主仓库：
+
+```powershell
+git commit -m "Update PStack"
+git push
+```
+
+其他机器拉取主仓库后，按记录的版本同步：
+
+```powershell
+git pull
+git submodule update --init --checkout -- .pstack/upstream
+node scripts/pstack.mjs setup
+```
+
+普通 `setup` 不追随上游最新版本；已初始化的 submodule 如果与暂存区记录不同，会提示先同步或暂存有意的升级。上游工作目录有改动时会拒绝生成。生成目录由脚本管理，重新生成会移除上游已删除的文件和技能；项目自己的改动应放在适配脚本或共享配置中。
 
 ## 参考资料
 
@@ -80,4 +123,4 @@ Pi、Claude、Gemini 尚未在本机验证，配置为 `null`，表示首次使�
 - [Pi 资源加载参数](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md#resources)。
 - [Gemini skills](https://geminicli.com/docs/cli/skills/)、[配置](https://geminicli.com/docs/reference/configuration/) 与 [列表实现](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/commands/skills/list.ts)。
 
-PStack 上游的许可见 [`vendor/pstack/LICENSE`](vendor/pstack/LICENSE)。新增项目文件的开源许可证尚未选定。
+PStack 上游使用 [MIT 许可证](https://github.com/cursor/plugins/blob/23e4138daa01c42d4969f7a5465f82704e64f798/pstack/LICENSE)。新增项目文件的开源许可证尚未选定。
