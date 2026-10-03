@@ -15,7 +15,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel()
     {
-        _save = new RelayCommand(Save, () => _document is not null);
+        _save = new RelayCommand(() => TrySave(), () => _document is not null);
         _addTask = new RelayCommand(() => Canvas?.AddTaskCommand.Execute(null), () => Canvas is not null);
     }
 
@@ -25,13 +25,12 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _canvas, value);
     }
 
-    public string Title => _document is null
-        ? "iDevelop"
-        : $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(_document.ProjectFolder))}{(HasUnsavedChanges ? "*" : "")} - iDevelop";
+    public string? ProjectName => _document is null ? null : Path.GetFileName(Path.TrimEndingDirectorySeparator(_document.ProjectFolder));
+
+    public string Title => ProjectName is null ? "iDevelop" : $"{ProjectName}{(HasUnsavedChanges ? "*" : "")} - iDevelop";
 
     public bool HasUnsavedChanges => _document?.HasUnsavedChanges ?? false;
 
-    /// <summary>The latest open or save error, or the reason the latest edit was rejected.</summary>
     public string? Status
     {
         get => _status;
@@ -64,21 +63,23 @@ public sealed class MainWindowViewModel : ObservableObject
         _addTask.NotifyCanExecuteChanged();
     }
 
-    public void Save()
+    public bool TrySave()
     {
         if (_document is null)
         {
-            return;
+            return true;
         }
 
         try
         {
             _document.Save();
             Status = null;
+            return true;
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {
             Status = e is ProjectException ? e.Message : $"Couldn't save: {e.Message}";
+            return false;
         }
     }
 

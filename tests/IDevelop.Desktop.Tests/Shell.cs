@@ -11,7 +11,6 @@ using Nodify;
 
 namespace IDevelop.Desktop.Tests;
 
-/// <summary>A real <see cref="MainWindow"/> driven through headless pointer and keyboard input.</summary>
 internal sealed class Shell
 {
     private Shell(MainWindow window)
@@ -25,7 +24,6 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
-    /// <summary>Opens the folder the way the folder picker does.</summary>
     public static Shell Open(string folder)
     {
         var window = new MainWindow();
@@ -57,17 +55,13 @@ internal sealed class Shell
 
     public Point Center(Visual visual) => At(visual, new Point(visual.Bounds.Width / 2, visual.Bounds.Height / 2));
 
-    /// <summary>The middle of a node's header, where a click selects it and a press starts a move.</summary>
     public Point Header(ItemContainer node) => At(node, new Point(node.Bounds.Width / 2, 10));
 
-    /// <summary>The center of a connector's round thumb, where a connection line should end.</summary>
     public Point Thumb(Connector connector) =>
         Center(connector.GetVisualDescendants().OfType<TemplatedControl>().Single(control => control.Name == "PART_Connector"));
 
-    /// <summary>The window points where a connection line starts and ends.</summary>
     public (Point Source, Point Target) Ends(Connection connection) => (At(connection, connection.Source), At(connection, connection.Target));
 
-    /// <summary>Halfway between two tasks' visible connector thumbs, where a line between them passes.</summary>
     public Point Between(string from, string to)
     {
         var (source, target) = (Thumb(Output(from)), Thumb(Input(to)));
@@ -84,6 +78,26 @@ internal sealed class Shell
 
     public void Click(Visual visual) => Click(Center(visual));
 
+    public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
+
+    public void Choose(string automationId)
+    {
+        var dialog = Dialog ?? throw new InvalidOperationException("No dialog is open.");
+        var button = dialog.GetVisualDescendants().OfType<Button>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+        var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), dialog)!.Value;
+        dialog.MouseMove(point);
+        dialog.MouseDown(point, MouseButton.Left);
+        dialog.MouseUp(point, MouseButton.Left);
+        Render();
+    }
+
+    public void PressInDialog(Key key)
+    {
+        var dialog = Dialog ?? throw new InvalidOperationException("No dialog is open.");
+        dialog.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, null);
+        Render();
+    }
+
     public void RightClick(Point point)
     {
         Window.MouseMove(point);
@@ -92,7 +106,6 @@ internal sealed class Shell
         Render();
     }
 
-    /// <summary>Presses at <paramref name="from"/>, moves in two steps, and releases at <paramref name="to"/>.</summary>
     public void Drag(Point from, Point to, Action? beforeRelease = null)
     {
         var start = from + new Vector(1, 1);

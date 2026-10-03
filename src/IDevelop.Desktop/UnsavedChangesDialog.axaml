@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="IDevelop.Desktop.UnsavedChangesDialog"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="24" Spacing="20">
+    <TextBlock x:Name="Question" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="SaveButton"
+              Content="Save"
+              IsDefault="True"
+              Click="OnSave"
+              AutomationProperties.AutomationId="SaveChanges"
+              AutomationProperties.Name="Save" />
+      <Button Content="Don't save"
+              Click="OnDiscard"
+              AutomationProperties.AutomationId="DiscardChanges"
+              AutomationProperties.Name="Don't save" />
+      <Button Content="Cancel"
+              IsCancel="True"
+              Click="OnCancel"
+              AutomationProperties.AutomationId="CancelChanges"
+              AutomationProperties.Name="Cancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

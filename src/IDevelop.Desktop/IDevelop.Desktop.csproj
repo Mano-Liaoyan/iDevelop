@@ -12,4 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\IDevelop.Core\IDevelop.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="IDevelop.Desktop.Tests" />
+  </ItemGroup>
 </Project>
