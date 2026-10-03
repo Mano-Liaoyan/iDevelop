@@ -25,6 +25,31 @@
               Command="{Binding SaveCommand}"
               AutomationProperties.AutomationId="Save"
               AutomationProperties.Name="Save" />
+      <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="2">
+          <RadioButton Classes="segment" GroupName="Theme" Content="System"
+                       Tag="{x:Static ThemeVariant.Default}"
+                       IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                   Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Default}}"
+                       IsCheckedChanged="OnThemeChecked"
+                       AutomationProperties.AutomationId="ThemeSystem"
+                       AutomationProperties.Name="System theme" />
+          <RadioButton Classes="segment" GroupName="Theme" Content="Light"
+                       Tag="{x:Static ThemeVariant.Light}"
+                       IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                   Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Light}}"
+                       IsCheckedChanged="OnThemeChecked"
+                       AutomationProperties.AutomationId="ThemeLight"
+                       AutomationProperties.Name="Light theme" />
+          <RadioButton Classes="segment" GroupName="Theme" Content="Dark"
+                       Tag="{x:Static ThemeVariant.Dark}"
+                       IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                   Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Dark}}"
+                       IsCheckedChanged="OnThemeChecked"
+                       AutomationProperties.AutomationId="ThemeDark"
+                       AutomationProperties.Name="Dark theme" />
+        </StackPanel>
+      </Border>
     </StackPanel>
 
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="16" Margin="8,4">

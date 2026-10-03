@@ -48,6 +48,7 @@ dotnet restore --locked-mode
 dotnet build -c Release
 dotnet test -c Release
 node scripts/check-licenses.mjs
+node scripts/planweave-tokens.mjs --check
 dotnet run --project src/IDevelop.Desktop
 ```
 
@@ -57,7 +58,11 @@ Choose **Open folder** in the toolbar, or name a folder after `--` in the run co
 
 On the canvas, **Add task** or the canvas menu adds a task. Drag a task's output onto another task's input to make the second task depend on the first. Click a connection to change its kind in the inspector, or right-click it. Dependency and review connections cannot form a cycle. Context connections can. Delete removes the selected tasks and connections. Ctrl+S, or Cmd+S on macOS, saves.
 
-Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, build, and tests on Linux, Windows, and macOS.
+The **System**, **Light**, and **Dark** switch in the toolbar sets the theme. **System** follows the operating system and is the default. The app remembers the choice per user in `iDevelop/settings.json` under `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, and `$XDG_CONFIG_HOME` or `~/.config` on Linux. A project folder holds no theme setting.
+
+PlanWeave's colors come from `src/IDevelop.Desktop/Theme/Tokens.axaml`. `scripts/planweave-tokens.mjs` generates that file from PlanWeave's `oklch` color tokens, converted to sRGB. To change a color, edit the tables in the script and run `node scripts/planweave-tokens.mjs`. The `--check` option fails when the generated file is stale or when another `.axaml`, `.xaml`, or `.cs` file under `src/IDevelop.Desktop` holds a hex color in the `#RGB`, `#ARGB`, `#RRGGBB`, or `#AARRGGBB` form. A character reference such as `&#160;` is not a hex color.
+
+Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, token check, build, and tests on Linux, Windows, and macOS.
 
 ## Invoke skills in Codex desktop
 

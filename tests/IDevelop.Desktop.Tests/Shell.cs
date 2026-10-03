@@ -1,9 +1,12 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
@@ -39,6 +42,24 @@ internal sealed class Shell
 
     public bool Has<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+    public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
+
+    public Color ColorAt(Visual visual, Point local)
+    {
+        var point = At(visual, local);
+        using var frame = Window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var pixels = frame.Lock();
+        var pixel = pixels.Address + (int)point.Y * pixels.RowBytes + (int)point.X * 4;
+        byte Channel(int index) => Marshal.ReadByte(pixel, index);
+        if (pixels.Format == PixelFormat.Rgba8888)
+        {
+            return Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2));
+        }
+
+        Assert.Equal(PixelFormat.Bgra8888, pixels.Format);
+        return Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
+    }
 
     public ItemContainer Node(string title) =>
         Nodes().Single(container => ((TaskNodeViewModel)container.DataContext!).Title == title);

@@ -30,6 +30,30 @@
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
                          GridCellSize="15">
 
+      <nodify:NodifyEditor.Background>
+        <!-- A DrawingBrush keeps drawing the brush objects of its first frame, so these two brushes stay the same
+             objects and take their colors from theme Color keys. The transform keeps the dots fixed to the canvas. -->
+        <DrawingBrush TileMode="Tile" DestinationRect="0,0,24,24" Transform="{Binding #Editor.DpiScaledViewportTransform}">
+          <DrawingBrush.Drawing>
+            <DrawingGroup>
+              <GeometryDrawing Geometry="M0,0 H24 V24 H0 Z">
+                <GeometryDrawing.Brush>
+                  <SolidColorBrush Color="{DynamicResource CanvasGrid.BackgroundColor}" />
+                </GeometryDrawing.Brush>
+              </GeometryDrawing>
+              <GeometryDrawing>
+                <GeometryDrawing.Brush>
+                  <SolidColorBrush Color="{DynamicResource CanvasGrid.DotColor}" />
+                </GeometryDrawing.Brush>
+                <GeometryDrawing.Geometry>
+                  <EllipseGeometry Rect="0,0,1,1" />
+                </GeometryDrawing.Geometry>
+              </GeometryDrawing>
+            </DrawingGroup>
+          </DrawingBrush.Drawing>
+        </DrawingBrush>
+      </nodify:NodifyEditor.Background>
+
       <nodify:NodifyEditor.KeyBindings>
         <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectionCommand}" />
         <KeyBinding Gesture="Back" Command="{Binding DeleteSelectionCommand}" />

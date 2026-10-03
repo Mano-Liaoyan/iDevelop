@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 
 namespace IDevelop.Desktop;
 
@@ -48,6 +50,15 @@ public partial class MainWindow : Window
         {
             _closeConfirmed = true;
             Close();
+        }
+    }
+
+    // A click, a key, and UI Automation each check a segment their own way, so the checked segment is the choice.
+    private void OnThemeChecked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { IsChecked: true, Tag: ThemeVariant variant })
+        {
+            ((App)Application.Current!).Choose(variant);
         }
     }
 

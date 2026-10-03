@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
@@ -94,6 +95,22 @@ public sealed class CanvasTests : IDisposable
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
         Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Node>().Single()));
+    }
+
+    [AvaloniaFact]
+    public void The_dot_grid_moves_with_the_canvas_when_it_pans()
+    {
+        var shell = Shell.Open(_temp.Create("plan"));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        // The 1 px dot is antialiased, so its pixel is the #E5E5E5 border color blended into the canvas.
+        var (canvas, dot) = (Color.Parse("#FBFBF9"), Color.Parse("#E8E8E8"));
+        Assert.Equal(dot, shell.ColorAt(shell.Editor, new Point(240, 240)));
+        Assert.Equal(canvas, shell.ColorAt(shell.Editor, new Point(230, 240)));
+
+        shell.Pan(shell.Editor.TranslatePoint(new Point(400, 300), shell.Window)!.Value, new Vector(-10, 0));
+
+        Assert.Equal(dot, shell.ColorAt(shell.Editor, new Point(230, 240)));
+        Assert.Equal(canvas, shell.ColorAt(shell.Editor, new Point(240, 240)));
     }
 
     [AvaloniaFact]
