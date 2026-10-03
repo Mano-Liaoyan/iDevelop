@@ -66,7 +66,9 @@ internal sealed class Shell
 
     public IEnumerable<ItemContainer> Nodes() => Window.GetVisualDescendants().OfType<ItemContainer>();
 
-    public IEnumerable<Connection> Connections() => Window.GetVisualDescendants().OfType<Connection>();
+    // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
+    public IEnumerable<BaseConnection> Connections() =>
+        Window.GetVisualDescendants().OfType<BaseConnection>().Where(connection => connection.DataContext is ConnectionViewModel);
 
     public NodeOutput Output(string title) =>
         Window.GetVisualDescendants().OfType<NodeOutput>().Single(output => ((PortViewModel)output.DataContext!).Node.Title == title);
@@ -81,12 +83,14 @@ internal sealed class Shell
     public Point Thumb(Connector connector) =>
         Center(connector.GetVisualDescendants().OfType<TemplatedControl>().Single(control => control.Name == "PART_Connector"));
 
-    public (Point Source, Point Target) Ends(Connection connection) => (At(connection, connection.Source), At(connection, connection.Target));
+    public (Point Source, Point Target) Ends(BaseConnection connection) => (At(connection, connection.Source), At(connection, connection.Target));
 
-    public Point Between(string from, string to)
+    // Step connections from one output share their first runs. Only the run that enters the target is unique to one
+    // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
+    public Point ConnectionInto(string to)
     {
-        var (source, target) = (Thumb(Output(from)), Thumb(Input(to)));
-        return new Point((source.X + target.X) / 2, (source.Y + target.Y) / 2);
+        var target = Thumb(Input(to));
+        return new Point(target.X - 19, target.Y);
     }
 
     public void Click(Point point, RawInputModifiers modifiers = RawInputModifiers.None)

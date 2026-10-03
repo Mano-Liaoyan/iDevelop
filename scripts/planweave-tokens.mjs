@@ -166,6 +166,36 @@ function generate() {
   ].join('\n');
 }
 
+// Avalonia's named colors, which it parses without regard to case. Transparent paints nothing, so it may appear anywhere.
+const namedColors = new Set(
+  `AliceBlue AntiqueWhite Aqua Aquamarine Azure Beige Bisque Black BlanchedAlmond Blue BlueViolet Brown BurlyWood CadetBlue
+  Chartreuse Chocolate Coral CornflowerBlue Cornsilk Crimson Cyan DarkBlue DarkCyan DarkGoldenrod DarkGray DarkGreen DarkKhaki
+  DarkMagenta DarkOliveGreen DarkOrange DarkOrchid DarkRed DarkSalmon DarkSeaGreen DarkSlateBlue DarkSlateGray DarkTurquoise
+  DarkViolet DeepPink DeepSkyBlue DimGray DodgerBlue Firebrick FloralWhite ForestGreen Fuchsia Gainsboro GhostWhite Gold Goldenrod
+  Gray Green GreenYellow Honeydew HotPink IndianRed Indigo Ivory Khaki Lavender LavenderBlush LawnGreen LemonChiffon LightBlue
+  LightCoral LightCyan LightGoldenrodYellow LightGray LightGreen LightPink LightSalmon LightSeaGreen LightSkyBlue LightSlateGray
+  LightSteelBlue LightYellow Lime LimeGreen Linen Magenta Maroon MediumAquamarine MediumBlue MediumOrchid MediumPurple
+  MediumSeaGreen MediumSlateBlue MediumSpringGreen MediumTurquoise MediumVioletRed MidnightBlue MintCream MistyRose Moccasin
+  NavajoWhite Navy OldLace Olive OliveDrab Orange OrangeRed Orchid PaleGoldenrod PaleGreen PaleTurquoise PaleVioletRed PapayaWhip
+  PeachPuff Peru Pink Plum PowderBlue Purple Red RosyBrown RoyalBlue SaddleBrown Salmon SandyBrown SeaGreen SeaShell Sienna
+  Silver SkyBlue SlateBlue SlateGray Snow SpringGreen SteelBlue Tan Teal Thistle Tomato Turquoise Violet Wheat White WhiteSmoke
+  Yellow YellowGreen`
+    .split(/\s+/)
+    .map((name) => name.toLowerCase()),
+);
+
+// Each pattern finds colors in one kind of file. A character reference such as &#160; is not a hex color. A XAML
+// value or element that is only a color name is a named color, except a font weight, because Black is also a weight.
+const colorPatterns = [
+  [/\.(axaml|xaml|cs)$/, /(?<!&)#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b/gi, () => true],
+  [
+    /\.(axaml|xaml)$/,
+    /(?<=(?:=\s*["']|>)\s*)(?<!(?:FontWeight|Property\s*=\s*["']FontWeight["']\s+Value)\s*=\s*["']\s*)[a-z]+(?=\s*["'<])/gi,
+    (name) => namedColors.has(name.toLowerCase()),
+  ],
+  [/\.cs$/, /\b(?:Brushes|Colors)\.\w+|\bColor\.(?:Parse|From\w*)/g, () => true],
+];
+
 function* files(folder) {
   for (const entry of readdirSync(folder, { withFileTypes: true })) {
     const path = join(folder, entry.name);
@@ -182,12 +212,16 @@ function* files(folder) {
 function strayColors() {
   const found = [];
   for (const path of files(desktop)) {
+    const patterns = colorPatterns.filter(([kind]) => kind.test(path));
     readFileSync(path, 'utf8')
       .split('\n')
       .forEach((line, index) => {
-        // A character reference such as &#160; is not a hex color.
-        for (const match of line.matchAll(/(?<!&)#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})\b/gi)) {
-          found.push(`${relative(root, path).replaceAll('\\', '/')}:${index + 1}: ${match[0]}`);
+        for (const [, pattern, isColor] of patterns) {
+          for (const [match] of line.matchAll(pattern)) {
+            if (isColor(match)) {
+              found.push(`${relative(root, path).replaceAll('\\', '/')}:${index + 1}: ${match}`);
+            }
+          }
         }
       });
   }
@@ -210,14 +244,14 @@ if (args.length === 0) {
   }
   const stray = strayColors();
   if (stray.length > 0) {
-    console.error('Colors belong in the generated Tokens.axaml. Found hex colors in:');
+    console.error('Colors belong in the generated Tokens.axaml. Found colors in:');
     stray.forEach((line) => console.error(`  ${line}`));
     failed = true;
   }
   if (failed) {
     process.exit(1);
   }
-  console.log('Tokens.axaml is current, and no other desktop XAML or C# file holds a hex color.');
+  console.log('Tokens.axaml is current, and no other desktop XAML or C# file sets a color.');
 } else {
   console.error('Usage: node scripts/planweave-tokens.mjs [--check]');
   process.exit(2);

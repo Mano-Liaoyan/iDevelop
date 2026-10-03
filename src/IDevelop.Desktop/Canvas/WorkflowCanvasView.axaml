@@ -69,11 +69,50 @@
     <Style Selector="Border.prompt TextBlock.placeholder">
       <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
     </Style>
-    <Style Selector="nodify|PendingConnection.rejected">
-      <Setter Property="Stroke" Value="IndianRed" />
+    <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
+    <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
+      <Setter Property="ZIndex" Value="-1" />
     </Style>
-    <Style Selector="nodify|Connection[(nodify|BaseConnection.IsSelected)=true]">
-      <Setter Property="StrokeThickness" Value="5" />
+    <Style Selector="nodify|StepConnection">
+      <Setter Property="Stroke" Value="{DynamicResource ConnectionDependencyBrush}" />
+      <Setter Property="Fill" Value="{DynamicResource ConnectionDependencyBrush}" />
+      <Setter Property="StrokeThickness" Value="2.2" />
+      <Setter Property="Opacity" Value="0.56" />
+      <Setter Property="Spacing" Value="20" />
+      <Setter Property="CornerRadius" Value="5" />
+      <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->
+      <Setter Property="SourceOffset" Value="6,0" />
+      <Setter Property="TargetOffset" Value="6,0" />
+      <Setter Property="ArrowSize" Value="9,9" />
+      <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
+      <Setter Property="OutlineBrush" Value="Transparent" />
+      <Setter Property="OutlineThickness" Value="5" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="StrokeThickness" Duration="0:0:0.12" />
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="nodify|StepConnection.context">
+      <Setter Property="Stroke" Value="{DynamicResource ConnectionContextBrush}" />
+      <Setter Property="Fill" Value="{DynamicResource ConnectionContextBrush}" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+    </Style>
+    <Style Selector="nodify|StepConnection.review">
+      <Setter Property="Stroke" Value="{DynamicResource ConnectionReviewBrush}" />
+      <Setter Property="Fill" Value="{DynamicResource ConnectionReviewBrush}" />
+    </Style>
+    <Style Selector="nodify|StepConnection:pointerover">
+      <Setter Property="StrokeThickness" Value="3.2" />
+      <Setter Property="Opacity" Value="0.96" />
+    </Style>
+    <Style Selector="nodify|StepConnection[(nodify|BaseConnection.IsSelected)=true]">
+      <Setter Property="StrokeThickness" Value="3.2" />
+      <Setter Property="Opacity" Value="0.96" />
+    </Style>
+    <Style Selector="nodify|PendingConnection.rejected">
+      <Setter Property="Stroke" Value="{DynamicResource StateFailedBrush}" />
     </Style>
   </UserControl.Styles>
 
@@ -194,13 +233,12 @@
 
       <nodify:NodifyEditor.ConnectionTemplate>
         <DataTemplate DataType="canvas:ConnectionViewModel">
-          <nodify:Connection Source="{Binding From.Output.Anchor}"
-                             Target="{Binding To.Input.Anchor}"
-                             Stroke="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Stroke}}"
-                             Fill="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Stroke}}"
-                             StrokeDashArray="{Binding Kind, Converter={x:Static canvas:ConnectionKindStyles.Dashes}}"
-                             nodify:BaseConnection.IsSelectable="True">
-            <nodify:Connection.ContextMenu>
+          <nodify:StepConnection Source="{Binding From.Output.Anchor}"
+                                 Target="{Binding To.Input.Anchor}"
+                                 Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                                 Classes.review="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Review}}"
+                                 nodify:BaseConnection.IsSelectable="True">
+            <nodify:StepConnection.ContextMenu>
               <ContextMenu>
                 <MenuItem Header="Dependency"
                           Command="{Binding SetKindCommand}"
@@ -214,8 +252,8 @@
                 <Separator />
                 <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
               </ContextMenu>
-            </nodify:Connection.ContextMenu>
-          </nodify:Connection>
+            </nodify:StepConnection.ContextMenu>
+          </nodify:StepConnection>
         </DataTemplate>
       </nodify:NodifyEditor.ConnectionTemplate>
 

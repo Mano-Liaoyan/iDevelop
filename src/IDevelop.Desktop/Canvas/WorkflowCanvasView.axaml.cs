@@ -17,7 +17,7 @@ public partial class WorkflowCanvasView : UserControl
 
     private static void OpenConnectionMenu(object? sender, PointerReleasedEventArgs e)
     {
-        if (e.InitialPressMouseButton == MouseButton.Right && e.Source is Connection { ContextMenu: { } menu } connection)
+        if (e.InitialPressMouseButton == MouseButton.Right && e.Source is BaseConnection { ContextMenu: { } menu } connection)
         {
             menu.Open(connection);
             e.Handled = true;

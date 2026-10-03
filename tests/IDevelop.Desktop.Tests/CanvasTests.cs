@@ -224,7 +224,7 @@ public sealed class CanvasTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
 
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
 
         Assert.False(shell.Has<TextBox>("TaskTitle"));
         Assert.False(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
@@ -245,7 +245,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
         Assert.True(shell.Has<Button>("KindDependency"));
 
         shell.Click(shell.Header(shell.Node("Build")));
@@ -253,6 +253,74 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal("Build", shell.Find<TextBox>("TaskTitle").Text);
         Assert.False(shell.Has<Button>("KindDependency"));
         Assert.False(BaseConnection.GetIsSelected(Assert.Single(shell.Connections())));
+    }
+
+    [AvaloniaTheory]
+    [InlineData("ThemeLight", "#5A6168")]
+    [InlineData("ThemeDark", "#999893")]
+    public void Each_connection_kind_draws_in_its_theme_color(string theme, string context)
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            Task(Review, "Review", 705, 250),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
+            new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
+            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review)));
+        shell.Click(shell.Find<RadioButton>(theme));
+        var (dependency, review, contextColor) = (Color.Parse("#2563EB"), Color.Parse("#EA580C"), Color.Parse(context));
+        (string From, string To, Color Stroke, Color Arrow, bool Dashed)[] Strokes() =>
+        [
+            .. shell.Connections()
+                .Select(connection => (Model: (ConnectionViewModel)connection.DataContext!, Connection: connection))
+                .OrderBy(drawn => drawn.Model.From.Title)
+                .ThenBy(drawn => drawn.Model.To.Title)
+                .Select(drawn => (
+                    drawn.Model.From.Title,
+                    drawn.Model.To.Title,
+                    ((ISolidColorBrush)drawn.Connection.Stroke!).Color,
+                    ((ISolidColorBrush)drawn.Connection.Fill!).Color,
+                    drawn.Connection.StrokeDashArray is { Count: > 0 })),
+        ];
+
+        Assert.Equal(
+            [("Build", "Review", review, review, false), ("Design", "Build", dependency, dependency, false), ("Design", "Review", contextColor, contextColor, true)],
+            Strokes());
+
+        shell.Click(shell.ConnectionInto("Build"));
+        shell.Click(shell.Find<Button>("KindContext"));
+
+        Assert.Contains(("Design", "Build", contextColor, contextColor, true), Strokes());
+    }
+
+    [AvaloniaFact]
+    public void A_connection_runs_under_the_cards_it_crosses()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            Task(Review, "Review", 705, 250),
+            new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+
+        // The connection turns down at x = 535, halfway between its ends, and passes under Build's instructions box.
+        // On the open canvas it is #2563EB at 56% opacity over #FBFBF9.
+        Assert.Equal(Color.Parse("#83A6F1"), shell.ColorAt(shell.Editor, new Point(535, 280)));
+        Assert.Equal(Color.Parse("#FCFCFA"), shell.ColorAt(shell.Editor, new Point(535, 200)));
+    }
+
+    [AvaloniaFact]
+    public void Clicking_just_beside_a_connection_selects_it()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+
+        shell.Click(shell.ConnectionInto("Build") + new Vector(0, 4));
+
+        Assert.True(BaseConnection.GetIsSelected(Assert.Single(shell.Connections())));
+        Assert.False(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
@@ -265,7 +333,7 @@ public sealed class CanvasTests : IDisposable
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Review, Design), ConnectionKind.Context)));
-        shell.Click(shell.Between("Review", "Design"));
+        shell.Click(shell.ConnectionInto("Design"));
         Assert.False(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
 
         shell.Click(shell.Find<Button>("KindReview"));
@@ -301,7 +369,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.RightClick(shell.Between("Design", "Build"));
+        shell.RightClick(shell.ConnectionInto("Build"));
         shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(item => (string?)item.Header == "Context"));
 
         Assert.Equal([("Design", "Build", ConnectionKind.Context)], Drawn(shell));
@@ -350,7 +418,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
 
         shell.Press(Key.Delete);
 
@@ -368,7 +436,7 @@ public sealed class CanvasTests : IDisposable
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
 
-        shell.Click(shell.Between("Design", "Build"), RawInputModifiers.Alt);
+        shell.Click(shell.ConnectionInto("Build"), RawInputModifiers.Alt);
 
         Assert.Equal([("Design", "Review", ConnectionKind.Context)], Drawn(shell));
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
