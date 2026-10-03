@@ -14,7 +14,7 @@ Build the first C# implementation slice. Open a project, create and connect task
   - [x] Shared mutable state. One worktree, one branch, one writer. Design runners wrote to separate scratch directories. The judge and reviewers are read-only.
   - [x] Smallest safe decomposition. One implementation owner and five sequenced commits. Splitting the code-coupled slice would serialize on the same contract and double review work.
 - [x] 4. Delegate code-writing to a subagent using your configured feature model. Three fresh Opus 5.5 sessions at xhigh effort wrote the code: the implementer and two fix rounds. Each ran headless through `scripts/agent.ps1 claude` in accept-edits mode with an explicit Bash allowlist. A first launch in auto permission mode was blocked by the host's safety classifier and stopped before it changed anything.
-- [x] 5. Verify on the matching surface. "Inconclusive" or wrong-surface is not a pass. Flag it. Headless tests drive the real `MainWindow`. The coordinator also drove the built executable's real window on Windows through UI Automation and inspected its screenshots. Linux and macOS are covered only by CI.
+- [x] 5. Verify on the matching surface. "Inconclusive" or wrong-surface is not a pass. Flag it. Headless tests drive the real `MainWindow`. The coordinator also drove the built executable's real window on Windows through UI Automation and inspected its screenshots. CI run 37154066325 passed on Linux, Windows, and macOS, each with 38 Core and 37 Desktop tests.
 - [x] 6. Rebase into small, ordered commits. Stack follow-ups. Fixups were autosquashed into seven commits, and `git rebase --exec` built and tested each one.
 - [x] 7. If the design is contested, `interrogate` before shipping. Skip, because the design was not contested. Two runners converged on it independently, and the cross-judge's synthesis matched it.
 - [x] 8. Run **Opening a PR**.
@@ -87,4 +87,4 @@ The real-window script lived in the session scratchpad and is not committed. It 
 
 ## Next action
 
-Watch the pull request's CI on Linux and macOS, and fix anything it finds. After the user settles the open product questions, merge and start the shared graph review milestone.
+Pull request 2 is open with every check passing. It waits for the user to review and merge it, and to settle the open product questions. Then start the shared graph review milestone.
