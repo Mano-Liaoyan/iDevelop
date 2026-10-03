@@ -1,6 +1,6 @@
 # iDevelop
 
-A project for building a graphical interface that coordinates multiple coding agents. The development environment is ready. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). No application code exists yet.
+A project for building a graphical interface that coordinates multiple coding agents. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). The first application slice is a desktop editor for one project's workflow. It opens a project folder, edits tasks and their connections on a node canvas, and saves the workflow inside the folder without a server.
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
@@ -8,7 +8,7 @@ This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugi
 
 ## Initialize the project
 
-Install Node.js 22 or later, Git, and the agent client you want to use. There are no application dependencies to install yet.
+Install Node.js 22 or later, Git, and the agent client you want to use. Building the application also needs the .NET SDK described in [Build and run the application](#build-and-run-the-application).
 
 ```powershell
 git clone https://github.com/Mano-Liaoyan/iDevelop.git
@@ -22,6 +22,42 @@ Setup downloads the recorded PStack submodule revision and generates `.agents/sk
 The upstream repository lives at `.pstack/upstream`. The main repository records its URL and commit. PStack belongs to the official `cursor/plugins` monorepo, so the submodule points to that repository. Setup uses sparse checkout to expose `pstack` and upstream root files without expanding other plugin directories. The source and license are under `.pstack/upstream/pstack`.
 
 A submodule keeps upstream changes to a version pointer in this repository's commits and reviews. A subtree would keep upstream files as ordinary tracked files. Setup installs no global plugin. Earlier source snapshots remain in Git history.
+
+## Build and run the application
+
+Install the .NET 10 SDK that [`global.json`](global.json) pins, version `10.0.203` or a later patch in the same feature band.
+
+Avalonia's `Avalonia.BuildServices` package sends anonymous usage data when a project builds. Its `AvaloniaStats` build target runs before each compile. According to the package's own README, it sends the build timestamp, the hashed project and machine names, an anonymous machine identifier, the output type, target framework, runtime identifier, Avalonia version, and license tier, the development environment, the operating system and architecture, and the detected CI system. The same README says it sends no source code, file paths, or personal information. CI opts out with `AVALONIA_TELEMETRY_OPTOUT=1`. To opt out locally, set that variable in your shell before you build, or set it once in your user environment.
+
+In PowerShell:
+
+```powershell
+$env:AVALONIA_TELEMETRY_OPTOUT = '1'
+```
+
+In bash or zsh:
+
+```bash
+export AVALONIA_TELEMETRY_OPTOUT=1
+```
+
+Run these commands from the repository root:
+
+```powershell
+dotnet restore --locked-mode
+dotnet build -c Release
+dotnet test -c Release
+node scripts/check-licenses.mjs
+dotnet run --project src/IDevelop.Desktop
+```
+
+The solution is [`iDevelop.slnx`](iDevelop.slnx). `src/IDevelop.Core` holds the workflow model, its edit rules, and the project file format. It has no UI dependency. `src/IDevelop.Desktop` is the Avalonia application with the NodifyAvalonia canvas. The tests in `tests/IDevelop.Desktop.Tests` drive the real main window headlessly with pointer and keyboard input.
+
+Choose **Open folder** in the toolbar, or name a folder after `--` in the run command to open it at start. Any existing folder opens, including a repository. Its workflow is saved to `.idevelop/workflows/<workflow-id>.json`, which travels with the repository and reviews as an ordinary diff. The first save creates that folder. [`samples/storage-change`](samples/storage-change) is a three-task example. Copy it to a scratch folder and open the copy, or open a folder of your own. Saving rewrites the opened folder's workflow file, and the tests compare the sample byte for byte.
+
+On the canvas, **Add task** or the canvas menu adds a task. Drag a task's output onto another task's input to make the second task depend on the first. Click a connection to change its kind in the inspector, or right-click it. Dependency and review connections cannot form a cycle. Context connections can. Delete removes the selected tasks and connections. Ctrl+S, or Cmd+S on macOS, saves.
+
+Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, build, and tests on Linux, Windows, and macOS.
 
 ## Invoke skills in Codex desktop
 
@@ -101,7 +137,7 @@ These settings govern the agents developing iDevelop. The application's provider
 
 The setup follows the official guide's task routing, on-demand principle loading, reproduction before repair, verification through real behavior, independent review, separate worktrees for concurrent writers, and recorded handoffs. PStack's Build the Lever and Prove It Works principles informed the repeatable setup and discovery checks.
 
-See [`.pstack/compatibility.md`](.pstack/compatibility.md) for adaptation boundaries. Upstream references to `cursor-team-kit`, Cursor cloud orchestration, Bun, and Bash helpers do not imply global installation. Agents must report missing capabilities and distinguish substitutions from tools they actually ran. There is no application to drive yet. Once an application exists, use PStack to create its verification workflow.
+See [`.pstack/compatibility.md`](.pstack/compatibility.md) for adaptation boundaries. Upstream references to `cursor-team-kit`, Cursor cloud orchestration, Bun, and Bash helpers do not imply global installation. Agents must report missing capabilities and distinguish substitutions from tools they actually ran. The application's headless tests drive its real main window with pointer and keyboard input.
 
 ## Update PStack
 
