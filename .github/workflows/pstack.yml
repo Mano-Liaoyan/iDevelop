@@ -39,16 +39,16 @@ jobs:
           Set-Content (Join-Path $fakeClients 'argv.js') 'console.log(JSON.stringify(process.argv.slice(2)))'
           Set-Content (Join-Path $fakeClients 'claude.cmd') '@node "%~dp0argv.js" %*'
           $env:PATH = "$fakeClients;$env:PATH"
-          $expected = '["--setting-sources","project,local","-p","Reply OK","-c","--model","m"]'
+          $expected = '["--setting-sources","project,local","-p","Reply OK","-c","--allowedTools","Read,Edit"]'
           foreach ($shell in 'pwsh', 'powershell') {
-              $fileOutput = @(& $shell -NoProfile -NonInteractive -File scripts/agent.ps1 claude -p 'Reply OK' -c --model m)
-              if ($LASTEXITCODE -ne 0 -or $fileOutput[-1] -ne $expected) { throw "$shell -File forwarded: $fileOutput" }
-              $commandOutput = @(& $shell -NoProfile -NonInteractive -Command "& ./scripts/agent.ps1 claude -p 'Reply OK' -c --model m")
-              if ($LASTEXITCODE -ne 0 -or $commandOutput[-1] -ne $expected) { throw "$shell -Command forwarded: $commandOutput" }
-              & $shell -NoProfile -NonInteractive -File scripts/agent.ps1 unknown
-              if ($LASTEXITCODE -eq 0) { throw "$shell accepted an unknown client" }
-              & $shell -NoProfile -NonInteractive -File scripts/agent.ps1
-              if ($LASTEXITCODE -eq 0) { throw "$shell accepted a missing client" }
+              $fileOutput = @(& $shell -NoProfile -NonInteractive -File scripts/agent.ps1 claude -p 'Reply OK' -c --allowedTools Read,Edit)
+              if ($LASTEXITCODE -ne 0 -or $fileOutput[-1] -cne $expected) { throw "$shell -File forwarded: $fileOutput" }
+              $commandOutput = @(& $shell -NoProfile -NonInteractive -Command "& ./scripts/agent.ps1 claude -p 'Reply OK' -c --allowedTools Read,Edit")
+              if ($LASTEXITCODE -ne 0 -or $commandOutput[-1] -cne $expected) { throw "$shell -Command forwarded: $commandOutput" }
+              $unknownOutput = & $shell -NoProfile -NonInteractive -File scripts/agent.ps1 unknown 2>&1 | Out-String
+              if ($LASTEXITCODE -eq 0 -or $unknownOutput -notmatch "Unknown client 'unknown'") { throw "$shell did not reject an unknown client: $unknownOutput" }
+              $missingOutput = & $shell -NoProfile -NonInteractive -File scripts/agent.ps1 2>&1 | Out-String
+              if ($LASTEXITCODE -eq 0 -or $missingOutput -notmatch 'Missing client') { throw "$shell did not reject a missing client: $missingOutput" }
           }
           # The runner exits with LASTEXITCODE, which the expected rejection above left nonzero.
           exit 0

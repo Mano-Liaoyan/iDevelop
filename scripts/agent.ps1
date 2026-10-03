@@ -5,7 +5,8 @@ $usage = "Usage: scripts/agent.ps1 <$($clients -join '|')> [client arguments]"
 if ($args.Count -eq 0) { throw "Missing client. $usage" }
 if ($args[0] -notin $clients) { throw "Unknown client '$($args[0])'. $usage" }
 $Client = $args[0]
-[string[]]$ClientArguments = @($args | Select-Object -Skip 1)
+# PowerShell parses a bare a,b argument as an array. Join it with commas, as a direct native call does.
+[string[]]$ClientArguments = @($args | Select-Object -Skip 1 | ForEach-Object { $_ -join ',' })
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 $previousGeminiHome = $env:GEMINI_CLI_HOME
