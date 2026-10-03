@@ -13,3 +13,8 @@ node_modules/
 *.key
 .DS_Store
 Thumbs.db
+bin/
+obj/
+TestResults/
+.vs/
+*.user
