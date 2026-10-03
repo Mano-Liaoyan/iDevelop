@@ -10,6 +10,7 @@ Only the repository and PStack development environment are being established. No
 
 ## Working decisions
 
+- The project's working language is English, as defined in `AGENTS.md`.
 - PStack is installed within this project from the official `cursor/plugins/pstack` source.
 - The official upstream is a Git submodule at `.pstack/upstream`. Sparse checkout excludes the other plugin directories. Upgrades are explicit, reviewed changes to its recorded commit.
 - All clients follow the same PStack workflow and shared handoff convention.

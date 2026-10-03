@@ -1,12 +1,14 @@
 # iDevelop
 
-用于协作开发多 agent 图形界面的项目。目前完成的是开发环境；产品需求、界面和技术栈尚未设计。
+A project for building a graphical interface that coordinates multiple coding agents. The development environment is ready. Product requirements, the interface, and the technology stack remain undecided.
 
-本项目使用 [Lauren Tan（@poteto）的 PStack](https://github.com/cursor/plugins/tree/main/pstack)，版本 `0.15.6`，固定提交 `23e4138daa01c42d4969f7a5465f82704e64f798`。49 个 skills、24 个原则和 23 个 playbooks 来自官方源。这里增加的是项目级跨客户端适配，不是官方的 Codex/Pi/Claude/Gemini 移植版本。
+English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
-## 初始化
+This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugins/tree/main/pstack), version `0.15.6`, pinned to commit `23e4138daa01c42d4969f7a5465f82704e64f798`. Its 49 skills, 24 principles, and 23 playbooks come from the official source. This repository adds local adapters for Codex, Pi, Claude Code, and Gemini CLI. These adapters are maintained by this project and are not an official PStack port.
 
-需要 Node.js 22 或更新版本、Git，以及你要使用的 agent 客户端。没有应用依赖需要安装。
+## Initialize the project
+
+Install Node.js 22 or later, Git, and the agent client you want to use. There are no application dependencies to install yet.
 
 ```powershell
 git clone https://github.com/Mano-Liaoyan/iDevelop.git
@@ -15,27 +17,27 @@ node scripts/pstack.mjs setup
 node scripts/pstack.mjs check
 ```
 
-初始化会自动下载主仓库记录的 PStack submodule 版本，在项目里生成 `.agents/skills`。Claude 和 Cursor 的技能目录链接到它，Gemini 原生识别它，Pi 启动入口显式加载它。重新克隆、创建新 worktree 后运行初始化。首次初始化需要网络；生成目录和个人设置不提交。
+Setup downloads the recorded PStack submodule revision and generates `.agents/skills` inside the project. Claude and Cursor link to that directory. Gemini discovers it natively, and the Pi launcher loads it explicitly. Run setup after cloning or creating a worktree. Initial setup needs network access. Generated files and personal settings are excluded from commits.
 
-上游放在 `.pstack/upstream`，主仓库只记录官方仓库地址和提交版本。官方 PStack 位于 `cursor/plugins` 多插件仓库中，因此 submodule 指向整个仓库；初始化通过 sparse checkout 只展开 `pstack` 及上游根目录文件，不展开其他插件目录。源码位于 `.pstack/upstream/pstack`，许可证也保留在其中。
+The upstream repository lives at `.pstack/upstream`. The main repository records its URL and commit. PStack belongs to the official `cursor/plugins` monorepo, so the submodule points to that repository. Setup uses sparse checkout to expose `pstack` and upstream root files without expanding other plugin directories. The source and license are under `.pstack/upstream/pstack`.
 
-这里选择 submodule 而非 subtree。Subtree 会继续把上游文件作为主仓库普通文件提交；submodule 让项目提交和代码审查只显示一个版本指针。它不会安装全局插件，也不会从已有 Git 历史中删除旧的源文件快照。
+A submodule keeps upstream changes to a version pointer in this repository's commits and reviews. A subtree would keep upstream files as ordinary tracked files. Setup installs no global plugin. Earlier source snapshots remain in Git history.
 
-## 在 Codex 桌面端调用 skills
+## Invoke skills in Codex desktop
 
-在输入框的 `@` 菜单搜索 `poteto-mode`，或直接在消息中写 `$poteto-mode`。例如：
+Search for `poteto-mode` in the composer's `@` menu, or include `$poteto-mode` in a message:
 
 ```text
-$poteto-mode 检查这个项目的开发环境，并说明下一步需要做什么。
+$poteto-mode Check this project's development environment and explain the next step.
 ```
 
-PStack 上游文档中的 `/poteto-mode` 是 Cursor 的调用写法，不能用 Codex 的斜杠菜单判断技能是否安装。Codex 已在 2026 年 3 月将 skills 加入 [`@` 菜单](https://learn.chatgpt.com/docs/changelog)。本项目的 49 个 PStack skills 已通过实际发现接口验证；若初始化前就打开了会话，可在此项目新开会话后重新搜索。
+The upstream `/poteto-mode` examples use Cursor's invocation syntax. Codex's slash menu is not the installation check. Codex added skills to the [`@` menu in March 2026](https://learn.chatgpt.com/docs/changelog). This project's 49 PStack skills have been verified through its discovery API. If you opened a conversation before setup, start a new conversation in this project and search again.
 
-能调用项目技能与隐藏其他技能是两件事。下面的表格说明桌面端当前的隔离限制；没有为隐藏它们而修改全局技能配置。
+Invoking project skills and hiding other skills are separate capabilities. The table below records the desktop isolation limit. Global skill settings have not been changed to hide them.
 
-## 启动客户端
+## Launch a client
 
-在 Windows PowerShell 中使用项目入口，避免普通启动命令重新加载全局技能。
+Use the project launcher in Windows PowerShell to apply the client's skill isolation settings:
 
 ```powershell
 .\scripts\agent.ps1 codex
@@ -44,51 +46,55 @@ PStack 上游文档中的 `/poteto-mode` 是 Cursor 的调用写法，不能用 
 .\scripts\agent.ps1 gemini
 ```
 
-脚本不安装客户端，不复制凭据，不更改其他项目的配置。启动参数可附在客户端名之后。技能过滤依赖客户端版本和组织策略；启动时不要用参数重新引入其他插件或技能源。
+The launcher does not install clients, copy credentials, or change other projects. Append client arguments after its name. Skill filtering depends on the client version and organization policy. Arguments that add other plugins or skill sources can bypass the intended isolation.
 
-| 客户端 | 项目隔离方式 | 验证和限制 |
+| Client | Project isolation | Verification and limits |
 | --- | --- | --- |
-| Codex CLI | 启动入口按实际 `SKILL.md` 路径生成会话级 `-c skills.config=...` 参数；保留工具连接 | `node scripts/pstack.mjs isolate-codex` 生成过滤，`audit-codex` 用同一参数调用真实 `skills/list`，检查启用项恰好是 49 个 PStack skills，并检查普通父目录会话仍可使用其他 skills。实际模型提示词也已验证只含这 49 项。 |
-| Codex 桌面版 | 读取项目 PStack 和 `AGENTS.md` | 当前 `0.160.0` 忽略项目层的 `skills.config` 过滤；未找到受支持的桌面项目级技能隐藏方式。普通桌面聊天仍可能显示其他 skills。必须使用上述 CLI 入口才能得到已验证的严格隔离。 |
-| Claude Code | `--setting-sources project,local` 排除个人技能和同步来源；关闭 bundled skills，隐藏 doctor | 共享 `.claude/skills`。组织管理配置仍可能生效。安装客户端后核实 `/skills` 和 `/plugin`。 |
-| Pi | `--no-extensions --no-skills --skill <项目目录> --no-prompt-templates` | 仅显式加载 PStack。关闭全局 extensions 也会关闭由这些 extensions 提供的子 agent/MCP 功能；后续如需它们，先审核再显式加载项目内扩展。普通 `pi` 不保证隔离。 |
-| Gemini CLI | 独立的项目内 `GEMINI_CLI_HOME`；启动时枚举并禁用非 PStack skills，再检查启用列表 | 需要在此独立 profile 登录并认可项目。管理列表可能仍显示 Disabled 的内置技能；官方没有完整的“只显示白名单”开关。列表输出格式改变时入口会停止，而不是假装验证通过。 |
+| Codex CLI | Generates session-level `-c skills.config=...` overrides from discovered `SKILL.md` paths. Tool connections remain available. | `node scripts/pstack.mjs isolate-codex` generates the filter. `audit-codex` uses the same override with the real `skills/list` API. It verifies exactly 49 enabled PStack skills and confirms that an ordinary parent-directory session retains its other skills. The model's actual prompt was also checked for the same 49 entries. |
+| Codex desktop | Reads project PStack skills and `AGENTS.md`. | Version `0.160.0` ignores project-layer `skills.config` filters. No supported desktop setting for project-only skill hiding was found. Ordinary desktop conversations may display other skills. Use the CLI launcher for the verified isolation. |
+| Claude Code | Uses `--setting-sources project,local` to exclude personal and synced skill sources. Disables bundled skills and hides doctor. | Shares `.claude/skills`. Organization-managed settings may still apply. After installing the client, inspect `/skills` and `/plugin`. |
+| Pi | Uses `--no-extensions --no-skills --skill <project-directory> --no-prompt-templates`. | Explicitly loads only PStack. Disabling extensions also disables subagent and MCP capabilities supplied by those extensions. Review any required extension before explicitly loading it from the project. An ordinary `pi` launch does not guarantee isolation. |
+| Gemini CLI | Uses a project-local `GEMINI_CLI_HOME`. Lists skills, disables non-PStack skills, and verifies the enabled list at launch. | Requires login and project trust in this separate profile. Management lists may still show disabled built-in skills. No complete display allowlist is available. The launcher stops if the list format changes and verification cannot complete. |
 
-Gemini 首次登录/信任设置需要进入它的原生界面。在新开的 PowerShell 窗口中，从本项目目录执行以下命令，完成界面提示后退出。此首次引导尚未执行技能过滤，不用于开发。关闭窗口即可恢复普通环境；之后使用项目入口。
+For Gemini's initial login and trust setup, open a new PowerShell window in this project. Run the following commands, complete the native prompts, and exit. This initial session has not applied skill filtering, so use it only for account setup. Close the window to restore the ordinary environment, then use the project launcher.
 
 ```powershell
 $env:GEMINI_CLI_HOME = Join-Path (Get-Location) '.pstack/runtime/gemini-home'
 gemini
 ```
 
-Codex 入口每次启动前刷新过滤并验证；直接运行普通 `codex` 不会携带这些参数。路径过滤是当前安装的快照，不是未来所有插件的通配禁令。客户端的技能管理页面可能仍列出 disabled 项；验证的严格条件是会话中启用的技能仅来自 PStack。本机仅 Codex 已实测，Claude、Pi、Gemini 的配置按官方文档准备，尚未进行真实客户端验收。
+The Codex launcher refreshes and verifies its filter before each launch. Running plain `codex` does not include these overrides. The path filter reflects the current installation, not a wildcard prohibition on future plugins. A client's management page may still list disabled entries. Verification checks that only PStack skills are enabled in the session.
 
-## 工作流与共享记录
+Only Codex has been tested on this machine. The Claude, Pi, and Gemini adapters follow official documentation but have not been verified in their actual clients.
 
-工程任务默认遵循 PStack。给出目标、约束和可验证的完成条件即可，`poteto-mode` 负责选择 playbook。也可以明确调用：Codex `$poteto-mode`，Claude `/poteto-mode`，Pi `/skill:poteto-mode`；Gemini 可要求“使用 poteto-mode skill”。
+## Follow the workflow and share records
 
-- [`AGENTS.md`](AGENTS.md) 是共享入口，`CLAUDE.md` 和 `GEMINI.md` 导入它。
-- [`docs/context.md`](docs/context.md) 存放稳定事实和已确认的项目方向。
-- `docs/handoffs/YYYY-MM-DD-<task>.md` 存放每次任务的决定、证据、未完成事项和接续步骤。不同任务各写自己的文件。
-- 并行写代码的 agent 使用独立分支和 worktree。协调者检查证据，再集成变更。
+Engineering tasks follow PStack by default. State the goal, constraints, and a verifiable completion condition. `poteto-mode` selects the playbook. Explicit invocation is also available: `$poteto-mode` in Codex, `/poteto-mode` in Claude, and `/skill:poteto-mode` in Pi. In Gemini, ask the agent to use the poteto-mode skill.
 
-这些文件是可版本化的交接记录，并不构成实时消息总线、跨工具调度器或完整聊天同步服务。
+- [`AGENTS.md`](AGENTS.md) is the shared entry point. `CLAUDE.md` and `GEMINI.md` import it.
+- [`docs/context.md`](docs/context.md) stores stable facts and the agreed project direction.
+- `docs/handoffs/YYYY-MM-DD-<task>.md` records each task's decisions, evidence, unfinished work, and continuation steps. Each task writes its own file.
+- Agents that write code concurrently use separate branches and worktrees. The coordinator checks their evidence before integrating changes.
 
-## 质量优先的模型配置
+These versioned records support handoffs. They do not provide live messaging, cross-client scheduling, or complete conversation synchronization.
 
-手动修改 [`.pstack/models.json`](.pstack/models.json)。初始 Codex 实现角色为 `gpt-6.1-sol`，判断和复杂任务为 `gpt-6-astra`，推理预算均为 `max`；独立审查使用两者。这些 ID 在本次设置会话中可用，每次换客户端仍需检查可用目录。
+## Configure models for quality
 
-Pi、Claude、Gemini 尚未在本机验证，配置为 `null`，表示首次使用时发现可用模型并按角色配置，不能照搬 Codex 或 Cursor 的模型 ID。用户修改优先于默认策略。配置是供 agent 读取的角色选择约定，尚无程序化跨提供商派发器，也尚未实现“一句话生成配置”的产品功能。
+Edit [`.pstack/models.json`](.pstack/models.json). The initial Codex implementation model is `gpt-6.1-sol`. Judgment and complex tasks use `gpt-6-astra`. Both use `max` reasoning, and independent reviews use both models. These IDs were available during setup. Check the available catalog when switching clients.
 
-## 上游实践与适配
+The Pi, Claude, and Gemini entries remain `null` because their catalogs have not been verified locally. Discover available models and configure their roles on first use. Codex and Cursor model IDs are not interchangeable with another client's IDs. Explicit user edits take precedence over the default policy.
 
-采用官方指南中的目标驱动路由、按需读取原则、先复现再修复、真实行为验证、独立审查、每个并行写入者独立 worktree、可追溯交接记录。按 PStack 的 **Build the Lever** 和 **Prove It Works** 原则，安装与发现验证均有可重跑脚本。
+This configuration tells agents which models to choose for each role. A programmatic dispatcher across providers and natural-language configuration generation remain future product work.
 
-完整适配边界见 [`.pstack/compatibility.md`](.pstack/compatibility.md)。上游提到的 `cursor-team-kit`、Cursor 云端调度、Bun 和 Bash 辅助程序没有被全局安装。缺失能力必须明确报告；不能声称某个未安装的工具已经运行。目前没有应用可驱动，因此先验证配置，应用确定后再用 PStack 创建真实的项目验证流程。
+## Upstream practices and adaptations
 
-## 更新 PStack
+The setup follows the official guide's task routing, on-demand principle loading, reproduction before repair, verification through real behavior, independent review, separate worktrees for concurrent writers, and recorded handoffs. PStack's Build the Lever and Prove It Works principles informed the repeatable setup and discovery checks.
 
-只有显式升级才跟随上游 `main`。下面的命令下载上游最新版本，暂存新的版本指针，再生成并检查 skills。暂存不等于提交，检查失败时先解决问题。
+See [`.pstack/compatibility.md`](.pstack/compatibility.md) for adaptation boundaries. Upstream references to `cursor-team-kit`, Cursor cloud orchestration, Bun, and Bash helpers do not imply global installation. Agents must report missing capabilities and distinguish substitutions from tools they actually ran. There is no application to drive yet. Once an application exists, use PStack to create its verification workflow.
+
+## Update PStack
+
+Only an explicit upgrade follows upstream `main`. Fetch its latest revision, stage the new version pointer, then regenerate and check the skills. Staging does not commit the upgrade. Resolve any failures before committing.
 
 ```powershell
 git submodule update --remote --checkout -- .pstack/upstream
@@ -98,14 +104,14 @@ node scripts/pstack.mjs check
 git diff --cached --submodule=log
 ```
 
-安装了 Codex 时，再运行 `node scripts/pstack.mjs isolate-codex` 验证新的技能列表。审查上游改动和跨客户端适配，通过后将版本指针提交到主仓库：
+If Codex is installed, run `node scripts/pstack.mjs isolate-codex` to verify the updated skill list. Review the upstream changes and client adapters. After verification, commit the version pointer:
 
 ```powershell
 git commit -m "Update PStack"
 git push
 ```
 
-其他机器拉取主仓库后，按记录的版本同步：
+On another machine, pull the main repository and synchronize its recorded version:
 
 ```powershell
 git pull
@@ -113,14 +119,16 @@ git submodule update --init --checkout -- .pstack/upstream
 node scripts/pstack.mjs setup
 ```
 
-普通 `setup` 不追随上游最新版本；已初始化的 submodule 如果与暂存区记录不同，会提示先同步或暂存有意的升级。上游工作目录有改动时会拒绝生成。生成目录由脚本管理，重新生成会移除上游已删除的文件和技能；项目自己的改动应放在适配脚本或共享配置中。
+Ordinary setup does not follow the latest upstream version. If an initialized submodule differs from the index, setup asks you to synchronize it or stage an intentional upgrade. Generation also rejects upstream working-tree changes.
 
-## 参考资料
+The script owns the generated directory. Regeneration removes files and skills deleted upstream. Put project customizations in the adapter script or shared configuration.
 
-- [作者的 PStack README](https://github.com/cursor/plugins/blob/main/pstack/README.md) 与 [官方指南](https://github.com/cursor/plugins/tree/main/pstack/docs/guide)。作者是 Lauren Tan（@poteto），不是 Pedro；没有用无法核实的视频内容补充配置要求。
-- [Codex skills](https://learn.chatgpt.com/docs/build-skills)、[项目配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)、[项目过滤限制](https://github.com/openai/codex/issues/20210) 与 [实际过滤来源](https://github.com/openai/codex/blob/main/codex-rs/config/src/skills_config.rs)。
-- [Claude 设置源范围](https://code.claude.com/docs/en/agent-sdk/claude-code-features#control-filesystem-settings-with-settingsources) 与 [skills 可见性](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings)。
-- [Pi 资源加载参数](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md#resources)。
-- [Gemini skills](https://geminicli.com/docs/cli/skills/)、[配置](https://geminicli.com/docs/reference/configuration/) 与 [列表实现](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/commands/skills/list.ts)。
+## References
 
-PStack 上游使用 [MIT 许可证](https://github.com/cursor/plugins/blob/23e4138daa01c42d4969f7a5465f82704e64f798/pstack/LICENSE)。新增项目文件的开源许可证尚未选定。
+- [Lauren Tan's PStack README](https://github.com/cursor/plugins/blob/main/pstack/README.md) and [official guide](https://github.com/cursor/plugins/tree/main/pstack/docs/guide). The author is Lauren Tan, @poteto. The setup requirements come from verified sources rather than unverified video claims.
+- [Codex skills](https://learn.chatgpt.com/docs/build-skills), [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference), [project filtering limitation](https://github.com/openai/codex/issues/20210), and [filter configuration sources](https://github.com/openai/codex/blob/main/codex-rs/config/src/skills_config.rs).
+- [Claude setting-source scope](https://code.claude.com/docs/en/agent-sdk/claude-code-features#control-filesystem-settings-with-settingsources) and [skill visibility](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings).
+- [Pi resource loading flags](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md#resources).
+- [Gemini skills](https://geminicli.com/docs/cli/skills/), [configuration](https://geminicli.com/docs/reference/configuration/), and [list implementation](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/commands/skills/list.ts).
+
+Upstream PStack uses the [MIT license](https://github.com/cursor/plugins/blob/23e4138daa01c42d4969f7a5465f82704e64f798/pstack/LICENSE). A license for this project's original files has not yet been selected.
