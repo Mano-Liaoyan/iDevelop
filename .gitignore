@@ -1,7 +1,6 @@
 .agents/skills/
 .claude/skills
 .cursor/skills
-.gemini/settings.json
 .claude/settings.local.json
 .pstack/local/
 .pstack/runtime/

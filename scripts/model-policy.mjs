@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const efforts = ['low', 'medium', 'high', 'xhigh'];
-const clientProviders = { codex: 'openai', claude: 'anthropic', gemini: 'google' };
+const clientProviders = { codex: 'openai', claude: 'anthropic', agy: 'google' };
 const requiredRoles = {
   'backend-implementation': ['openai'],
   'frontend-implementation': ['anthropic'],
@@ -54,7 +54,7 @@ export function validateModelPolicy(config) {
     assert.ok(!['auto', 'default', 'inherit', 'inherit-parent'].includes(entry.requestedModel),
       `${label}.requestedModel must name an explicit model`);
     assert.ok(typeof entry.client === 'string' && Object.hasOwn(clientProviders, entry.client),
-      `${label}.client must be codex, claude, or gemini`);
+      `${label}.client must be codex, claude, or agy`);
     assert.equal(entry.provider, clientProviders[entry.client], `${label}.provider must match client`);
     const identity = JSON.stringify([entry.provider, entry.requestedModel]);
     assert.ok(!seenModels.has(identity), `${label} duplicates a model identity`);

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Build a graphical interface for coordinating multiple coding agents, including Codex, Pi, Claude Code, and Gemini CLI. Shared project records should let agents continue each other's work. The product should eventually support generating a usable multi-model configuration from a natural-language request and manually editing it afterward.
+Build a graphical interface for coordinating multiple coding agents, including Codex, Pi, Claude Code, and Antigravity CLI. Shared project records should let agents continue each other's work. The product should eventually support generating a usable multi-model configuration from a natural-language request and manually editing it afterward.
 
 ## Current scope
 
@@ -29,7 +29,7 @@ The [product direction](product-direction.md) records the selected stack, propos
 - The official upstream is a Git submodule at `.pstack/upstream`. Sparse checkout excludes the other plugin directories. Upgrades are explicit, reviewed changes to its recorded commit.
 - All clients follow the same PStack workflow and shared handoff convention.
 - Development model assignments are explicit in `.pstack/models.json`. GPT-6 Astra implements backend work. Claude Opus 5.5 implements the Avalonia UI and reviews backend work. Gemini 3.8 Flash and Astra review frontend work. Astra and Opus jointly review judgment and difficult tasks. Missing required providers block the role without substitution.
-- Development invocations use explicit effort below max. Astra and Opus use xhigh, and Gemini uses high. The ceiling overrides upstream skill defaults. Claude Opus 5.5 passed a subscription-authenticated request with explicit xhigh through Claude Code 2.1.288. Gemini CLI 0.62.0 is installed, but its isolated project profile needs login and model verification. Project configuration does not change an existing chat's app-level setting.
+- Development invocations use explicit effort below max. Astra and Opus use xhigh, and Gemini uses high. The ceiling overrides upstream skill defaults. Claude Opus 5.5 passed a subscription-authenticated request with explicit xhigh through Claude Code 2.1.288. Gemini CLI was uninstalled after it stopped serving individual Google accounts. Antigravity CLI 1.2.16 (`agy`) replaces it. A signed-in request with `--model gemini-3.8-flash --effort high` reached Gemini 3.8 Flash (High). Project configuration does not change an existing chat's app-level setting.
 - Other projects retain their existing skills and settings. Isolation changes belong to this checkout.
 - Concurrent code writers use separate worktrees. Durable history belongs in task-specific handoff records, not copied private chat transcripts.
 

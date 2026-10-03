@@ -31,12 +31,12 @@
     },
     "gemini": {
       "provider": "google",
-      "client": "gemini",
+      "client": "agy",
       "requestedName": "Gemini 3.8 Flash",
       "requestedModel": "gemini-3.8-flash",
-      "model": null,
+      "model": "gemini-3.8-flash",
       "reasoningEffort": "high",
-      "verification": "pending-client"
+      "verification": "client-catalog"
     }
   },
   "roles": {

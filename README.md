@@ -4,7 +4,7 @@ A project for building a graphical interface that coordinates multiple coding ag
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
-This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugins/tree/main/pstack), version `0.15.6`, pinned to commit `23e4138daa01c42d4969f7a5465f82704e64f798`. Its 49 skills, 24 principles, and 23 playbooks come from the official source. This repository adds local adapters for Codex, Pi, Claude Code, and Gemini CLI. These adapters are maintained by this project and are not an official PStack port.
+This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugins/tree/main/pstack), version `0.15.6`, pinned to commit `23e4138daa01c42d4969f7a5465f82704e64f798`. Its 49 skills, 24 principles, and 23 playbooks come from the official source. This repository adds local adapters for Codex, Pi, Claude Code, and Antigravity CLI. These adapters are maintained by this project and are not an official PStack port.
 
 ## Initialize the project
 
@@ -17,7 +17,7 @@ node scripts/pstack.mjs setup
 node scripts/pstack.mjs check
 ```
 
-Setup downloads the recorded PStack submodule revision and generates `.agents/skills` inside the project. Claude and Cursor link to that directory. Gemini discovers it natively, and the Pi launcher loads it explicitly. Run setup after cloning or creating a worktree. Initial setup needs network access. Generated files and personal settings are excluded from commits.
+Setup downloads the recorded PStack submodule revision and generates `.agents/skills` inside the project. Claude and Cursor link to that directory. Antigravity CLI discovers it natively, and the Pi launcher loads it explicitly. Run setup after cloning or creating a worktree. Initial setup needs network access. Generated files and personal settings are excluded from commits.
 
 The upstream repository lives at `.pstack/upstream`. The main repository records its URL and commit. PStack belongs to the official `cursor/plugins` monorepo, so the submodule points to that repository. Setup uses sparse checkout to expose `pstack` and upstream root files without expanding other plugin directories. The source and license are under `.pstack/upstream/pstack`.
 
@@ -43,7 +43,7 @@ Use the project launcher in Windows PowerShell to apply the client's skill isola
 .\scripts\agent.ps1 codex
 .\scripts\agent.ps1 claude
 .\scripts\agent.ps1 pi
-.\scripts\agent.ps1 gemini
+.\scripts\agent.ps1 agy
 ```
 
 The launcher does not install clients, copy credentials, or change other projects. Append client arguments after its name. Skill filtering depends on the client version and organization policy. Arguments that add other plugins or skill sources can bypass the intended isolation.
@@ -54,24 +54,23 @@ The launcher does not install clients, copy credentials, or change other project
 | Codex desktop | Reads project PStack skills and `AGENTS.md`. | Version `0.160.0` ignores project-layer `skills.config` filters. No supported desktop setting for project-only skill hiding was found. Ordinary desktop conversations may display other skills. Use the CLI launcher for the verified isolation. |
 | Claude Code | Uses `--setting-sources project,local` to exclude personal and synced skill sources. Disables bundled skills and hides doctor. | Shares `.claude/skills`. Organization-managed settings may still apply. After installing the client, inspect `/skills` and `/plugin`. |
 | Pi | Uses `--no-extensions --no-skills --skill <project-directory> --no-prompt-templates`. | Explicitly loads only PStack. Disabling extensions also disables subagent and MCP capabilities supplied by those extensions. Review any required extension before explicitly loading it from the project. An ordinary `pi` launch does not guarantee isolation. |
-| Gemini CLI | Uses a project-local `GEMINI_CLI_HOME`. Lists skills, disables non-PStack skills, and verifies the enabled list at launch. | Requires login and project trust in this separate profile. Management lists may still show disabled built-in skills. No complete display allowlist is available. The launcher stops if the list format changes and verification cannot complete. |
+| Antigravity CLI | Discovers `.agents/skills` and reads `AGENTS.md` natively. The launcher stops if personal skill or plugin sources under `~/.gemini` contain anything. | `agy` has no isolated profile and no setting that hides personal or bundled skills. Its eight bundled skills, such as `agy-customizations` and `antigravity_guide`, stay available. Inspect `/skills` after sign-in. |
 
-For Gemini's initial login and trust setup, open a new PowerShell window in this project. Run the following commands, complete the native prompts, and exit. This initial session has not applied skill filtering, so use it only for account setup. Close the window to restore the ordinary environment, then use the project launcher.
+Install Antigravity CLI with Google's installer, then open a new terminal so `PATH` includes `agy`. The first `.\scripts\agent.ps1 agy` launch opens Google sign-in. Gemini CLI no longer serves individual Google accounts, so this project no longer uses it.
 
 ```powershell
-$env:GEMINI_CLI_HOME = Join-Path (Get-Location) '.pstack/runtime/gemini-home'
-gemini
+irm https://antigravity.google/cli/install.ps1 | iex
 ```
 
 The Codex launcher refreshes and verifies its filter before each launch. Running plain `codex` does not include these overrides. The path filter reflects the current installation, not a wildcard prohibition on future plugins. A client's management page may still list disabled entries. Verification checks that only PStack skills are enabled in the session.
 
-Codex skill isolation has been tested on this machine. Claude Code's subscription authentication and exact Opus model access have also been verified. Claude's complete skill catalog and the Pi and Gemini isolation adapters remain unverified in their actual clients.
+Codex skill isolation has been tested on this machine. Claude Code's subscription authentication and exact Opus model access have also been verified. Claude's complete skill catalog and the Pi and Antigravity isolation adapters remain unverified in their actual clients.
 
 ## Follow the workflow and share records
 
-Engineering tasks follow PStack by default. State the goal, constraints, and a verifiable completion condition. `poteto-mode` selects the playbook. Explicit invocation is also available: `$poteto-mode` in Codex, `/poteto-mode` in Claude, and `/skill:poteto-mode` in Pi. In Gemini, ask the agent to use the poteto-mode skill.
+Engineering tasks follow PStack by default. State the goal, constraints, and a verifiable completion condition. `poteto-mode` selects the playbook. Explicit invocation is also available: `$poteto-mode` in Codex, `/poteto-mode` in Claude, and `/skill:poteto-mode` in Pi. In Antigravity CLI, ask the agent to use the poteto-mode skill.
 
-- [`AGENTS.md`](AGENTS.md) is the shared entry point. `CLAUDE.md` and `GEMINI.md` import it.
+- [`AGENTS.md`](AGENTS.md) is the shared entry point. `CLAUDE.md` imports it, and Antigravity CLI reads it directly.
 - [`docs/context.md`](docs/context.md) stores stable facts and the agreed project direction.
 - `docs/handoffs/YYYY-MM-DD-<task>.md` records each task's decisions, evidence, unfinished work, and continuation steps. Each task writes its own file.
 - Agents that write code concurrently use separate branches and worktrees. The coordinator checks their evidence before integrating changes.
@@ -94,7 +93,7 @@ Every dispatch needs an explicit supported effort at or below xhigh. Max, higher
 
 Run `node scripts/model-policy.mjs validate` to check the policy. Run `node scripts/model-policy.mjs resolve backend-implementation` to inspect a route. Missing participants produce a blocked result and exit code 2. A partially available panel does not run, and a missing provider is not replaced automatically. The resolver prepares instructions; it does not launch clients or authenticate accounts.
 
-Astra is available through the native Codex catalog. Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. Gemini CLI 0.62.0 is installed, but its isolated project profile needs login and model verification. Gemini's executable `model` field remains null, and frontend review remains blocked. Backend review can now resolve to Opus; a ready route does not mean the review has run.
+Astra is available through the native Codex catalog. Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`. Its stream output and log identified Gemini 3.8 Flash (High) as the served model, so the Gemini route is active. Frontend and backend review now resolve. A ready route does not mean the review has run.
 
 [`.codex/config.toml`](.codex/config.toml) sets new project launches to Astra at xhigh. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
 
@@ -143,6 +142,6 @@ The script owns the generated directory. Regeneration removes files and skills d
 - [Codex skills](https://learn.chatgpt.com/docs/build-skills), [configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference), [project filtering limitation](https://github.com/openai/codex/issues/20210), and [filter configuration sources](https://github.com/openai/codex/blob/main/codex-rs/config/src/skills_config.rs).
 - [Claude setting-source scope](https://code.claude.com/docs/en/agent-sdk/claude-code-features#control-filesystem-settings-with-settingsources) and [skill visibility](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings).
 - [Pi resource loading flags](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md#resources).
-- [Gemini skills](https://geminicli.com/docs/cli/skills/), [configuration](https://geminicli.com/docs/reference/configuration/), and [list implementation](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/commands/skills/list.ts).
+- [Antigravity skills](https://antigravity.google/docs/skills/), [Antigravity CLI](https://github.com/google-antigravity/antigravity-cli), and the [Gemini CLI transition notice](https://github.com/google-gemini/gemini-cli/discussions/27274).
 
 Upstream PStack uses the [MIT license](https://github.com/cursor/plugins/blob/23e4138daa01c42d4969f7a5465f82704e64f798/pstack/LICENSE). A license for this project's original files has not yet been selected.

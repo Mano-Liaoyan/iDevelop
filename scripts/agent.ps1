@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('codex', 'claude', 'pi', 'gemini')]
+    [ValidateSet('codex', 'claude', 'pi', 'agy')]
     [string]$Client,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ClientArguments
@@ -8,7 +8,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
-$previousGeminiHome = $env:GEMINI_CLI_HOME
 try {
     if (!(Get-Command $Client -ErrorAction SilentlyContinue)) {
         throw "$Client is not installed or is not on PATH. See README.md."
@@ -28,40 +27,19 @@ try {
         'pi' {
             & pi --no-extensions --no-skills --skill (Join-Path $projectRoot '.agents/skills') --no-prompt-templates @ClientArguments
         }
-        'gemini' {
-            $env:GEMINI_CLI_HOME = Join-Path $projectRoot '.pstack/runtime/gemini-home'
-            New-Item -ItemType Directory -Force -Path $env:GEMINI_CLI_HOME | Out-Null
-            $listing = (& gemini skills list --all | Out-String) -replace "`e\[[0-9;]*m", ''
-            if ($LASTEXITCODE -ne 0) { throw 'Gemini skill discovery failed.' }
-            $found = [regex]::Matches($listing, '(?m)^([a-z0-9][a-z0-9-]*) \[(Enabled|Disabled)\]')
-            $expected = @(Get-ChildItem (Join-Path $projectRoot '.agents/skills') -Directory | ForEach-Object Name)
-            $discovered = @($found | ForEach-Object { $_.Groups[1].Value })
-            if (@($expected | Where-Object { $_ -notin $discovered }).Count -gt 0) {
-                throw 'Gemini did not discover all PStack skills. Complete its project trust/onboarding in this isolated profile first; see README.md.'
+        'agy' {
+            $personalSources = @('config/skills', 'config/plugins', 'config/skills.json', 'config/plugins.json',
+                'antigravity-cli/skills', 'antigravity-cli/plugins', 'skills') |
+                ForEach-Object { Join-Path $env:USERPROFILE ".gemini/$_" } |
+                Where-Object { (Test-Path $_ -PathType Leaf) -or @(Get-ChildItem $_ -Force -ErrorAction SilentlyContinue).Count -gt 0 }
+            if ($personalSources) {
+                throw "Antigravity CLI would load personal skills or plugins from $($personalSources -join ', '). It has no isolated profile; see README.md."
             }
-            foreach ($item in $found) {
-                $skillName = $item.Groups[1].Value
-                if ($skillName -notin $expected -and $item.Groups[2].Value -eq 'Enabled') {
-                    & gemini skills disable $skillName --scope workspace
-                    if ($LASTEXITCODE -ne 0) { throw "Could not disable $skillName for this workspace." }
-                }
-                if ($skillName -in $expected -and $item.Groups[2].Value -eq 'Disabled') {
-                    throw "PStack skill $skillName is disabled. Enable it in this workspace before starting."
-                }
-            }
-            $verifiedListing = (& gemini skills list --all | Out-String) -replace "`e\[[0-9;]*m", ''
-            if ($LASTEXITCODE -ne 0) { throw 'Gemini verification failed.' }
-            $enabledNames = @([regex]::Matches($verifiedListing, '(?m)^([a-z0-9][a-z0-9-]*) \[Enabled\]') | ForEach-Object { $_.Groups[1].Value })
-            if (Compare-Object ($expected | Sort-Object) ($enabledNames | Sort-Object)) {
-                throw 'Gemini enabled skills do not match PStack. Inspect gemini skills list --all.'
-            }
-            Write-Host 'Only PStack skills are enabled. Gemini management lists can still display disabled built-ins.'
-            & gemini @ClientArguments
+            & agy @ClientArguments
         }
     }
     $clientExit = $LASTEXITCODE
 } finally {
-    $env:GEMINI_CLI_HOME = $previousGeminiHome
     Pop-Location
 }
 exit $clientExit

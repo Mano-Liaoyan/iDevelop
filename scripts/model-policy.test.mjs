@@ -25,7 +25,7 @@ function requestedPolicy() {
         reasoningEffort: 'xhigh', verification: 'pending-client',
       },
       gemini: {
-        provider: 'google', client: 'gemini', requestedName: 'Gemini 3.8 Flash',
+        provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
         requestedModel: 'gemini-3.8-flash', model: null,
         reasoningEffort: 'high', verification: 'pending-client',
       },
@@ -74,7 +74,7 @@ test('frontend review reports missing Gemini without returning the runnable Astr
   assert.deepEqual(resolveRole(requestedPolicy(), 'frontend-review'), {
     status: 'blocked', role: 'frontend-review',
     missing: [{
-      key: 'gemini', provider: 'google', client: 'gemini', requestedName: 'Gemini 3.8 Flash',
+      key: 'gemini', provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
       requestedModel: 'gemini-3.8-flash', reasoningEffort: 'high', verification: 'pending-client',
     }],
   });
@@ -103,7 +103,7 @@ test('a fixture declaring external client verification resolves the complete fro
   assert.deepEqual(resolveRole(config, 'frontend-review'), {
     status: 'ready', role: 'frontend-review',
     participants: [
-      { key: 'gemini', provider: 'google', client: 'gemini', model: 'gemini-3.8-flash', reasoningEffort: 'high' },
+      { key: 'gemini', provider: 'google', client: 'agy', model: 'gemini-3.8-flash', reasoningEffort: 'high' },
       { key: 'astra', provider: 'openai', client: 'codex', model: 'gpt-6-astra', reasoningEffort: 'xhigh' },
     ],
   });
@@ -205,6 +205,7 @@ for (const [name, mutate, message] of [
   ['multiple implementation owners', config => { config.roles['backend-implementation'].push('opus'); }, /implementation must have a single owner/],
   ['missing judgment provider', config => { config.roles.judgment = ['astra']; }, /judgment must select exactly/],
   ['wrong difficult-task provider', config => { config.roles['difficult-task-review'] = ['astra', 'gemini']; }, /difficult-task-review must select exactly/],
+  ['retired Gemini CLI client', config => { config.models.gemini.client = 'gemini'; }, /client must be codex, claude, or agy/],
   ['obsolete client block', config => { config.codex = { implementation: { model: 'gpt-6-astra' } }; }, /config must contain exactly/],
   ['ignored model field', config => { config.models.astra.effort = 'max'; }, /models.astra must contain exactly/],
   ['unknown role definition', config => { config.roles.fallback = ['astra']; }, /roles must contain exactly/],
@@ -242,7 +243,7 @@ test('CLI exits 2 with the complete blocked frontend result', () => {
   assert.equal(result.status, 2, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
     status: 'blocked', role: 'frontend-review',
-    missing: [{ key: 'gemini', provider: 'google', client: 'gemini', requestedName: 'Gemini 3.8 Flash',
+    missing: [{ key: 'gemini', provider: 'google', client: 'agy', requestedName: 'Gemini 3.8 Flash',
       requestedModel: 'gemini-3.8-flash', reasoningEffort: 'high', verification: 'pending-client' }],
   });
 });
