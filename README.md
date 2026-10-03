@@ -65,7 +65,7 @@ gemini
 
 The Codex launcher refreshes and verifies its filter before each launch. Running plain `codex` does not include these overrides. The path filter reflects the current installation, not a wildcard prohibition on future plugins. A client's management page may still list disabled entries. Verification checks that only PStack skills are enabled in the session.
 
-Only Codex has been tested on this machine. The Claude, Pi, and Gemini adapters follow official documentation but have not been verified in their actual clients.
+Codex skill isolation has been tested on this machine. Claude Code's subscription authentication and exact Opus model access have also been verified. Claude's complete skill catalog and the Pi and Gemini isolation adapters remain unverified in their actual clients.
 
 ## Follow the workflow and share records
 
@@ -80,11 +80,25 @@ These versioned records support handoffs. They do not provide live messaging, cr
 
 ## Configure models for quality
 
-Edit [`.pstack/models.json`](.pstack/models.json). The initial Codex implementation model is `gpt-6.1-sol`. Judgment and complex tasks use `gpt-6-astra`. Both use `max` reasoning, and independent reviews use both models. These IDs were available during setup. Check the available catalog when switching clients.
+Edit [`.pstack/models.json`](.pstack/models.json). The version 2 policy records these user-selected development assignments.
 
-The Pi, Claude, and Gemini entries remain `null` because their catalogs have not been verified locally. Discover available models and configure their roles on first use. Codex and Cursor model IDs are not interchangeable with another client's IDs. Explicit user edits take precedence over the default policy.
+| Work | Required model | Reasoning |
+| --- | --- | --- |
+| Backend implementation | GPT-6 Astra | xhigh |
+| Avalonia UI implementation | Claude Opus 5.5 | xhigh |
+| Backend review | Claude Opus 5.5 | xhigh |
+| Frontend review | Gemini 3.8 Flash and GPT-6 Astra | high and xhigh |
+| Judgment and difficult-task review | GPT-6 Astra and Claude Opus 5.5 | xhigh |
 
-This configuration tells agents which models to choose for each role. A programmatic dispatcher across providers and natural-language configuration generation remain future product work.
+Every dispatch needs an explicit supported effort at or below xhigh. Max, higher levels, and inherited effort are prohibited. Provider effort names do not imply identical token budgets. The policy overrides upstream skill defaults.
+
+Run `node scripts/model-policy.mjs validate` to check the policy. Run `node scripts/model-policy.mjs resolve backend-implementation` to inspect a route. Missing participants produce a blocked result and exit code 2. A partially available panel does not run, and a missing provider is not replaced automatically. The resolver prepares instructions; it does not launch clients or authenticate accounts.
+
+Astra is available through the native Codex catalog. Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. Gemini CLI 0.62.0 is installed, but its isolated project profile needs login and model verification. Gemini's executable `model` field remains null, and frontend review remains blocked. Backend review can now resolve to Opus; a ready route does not mean the review has run.
+
+[`.codex/config.toml`](.codex/config.toml) sets new project launches to Astra at xhigh. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
+
+These settings govern the agents developing iDevelop. The application's provider connections and a programmatic dispatcher across providers remain separate product work.
 
 ## Upstream practices and adaptations
 
