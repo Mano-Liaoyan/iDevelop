@@ -6,7 +6,7 @@ Build a graphical interface for coordinating multiple coding agents, including C
 
 ## Current scope
 
-The repository contains the PStack development environment and initial product research. No application has been implemented. The user selected C# and .NET for iDevelop's application code, Avalonia for the desktop UI, and the proposed NodifyAvalonia canvas option. Storage, protocol, scheduling details, and exact dependency versions remain open.
+The repository contains the PStack development environment, product research, and the first application slice. The slice is a C# desktop editor on Avalonia 11.3.22 and NodifyAvalonia 6.6.0. It opens a project folder, edits tasks and typed connections on a node canvas, and saves the workflow to `.idevelop/workflows/<workflow-id>.json` inside that folder without a server. Team storage, the synchronization protocol, and scheduling remain open.
 
 ## Confirmed product direction
 
@@ -32,7 +32,12 @@ The [product direction](product-direction.md) records the selected stack, propos
 - Development invocations use explicit effort below max. Opus runs at xhigh. The unselected Astra and Gemini entries keep xhigh and high. The ceiling overrides upstream skill defaults. Claude Opus 5.5 passed a subscription-authenticated request with explicit xhigh through Claude Code 2.1.288. Gemini CLI was uninstalled after it stopped serving individual Google accounts. Antigravity CLI 1.2.16 (`agy`) replaces it. A signed-in request with `--model gemini-3.8-flash --effort high` reached Gemini 3.8 Flash (High). Project configuration does not change an existing chat's app-level setting.
 - Other projects retain their existing skills and settings. Isolation changes belong to this checkout.
 - Concurrent code writers use separate worktrees. Durable history belongs in task-specific handoff records, not copied private chat transcripts.
+- An immutable `Workflow` value holds tasks, connections, and layout in separate collections. One pure `Workflow.Apply` owns every graph rule, and the file loader replays edits through it. A move never changes the semantic collections, so a later approval can ignore layout. The [canvas handoff](handoffs/2026-10-03-editable-local-canvas.md) records the design and its alternatives.
+- Dependency and review connections are acyclic together, and context connections may form cycles. This is provisional until the user confirms what a review connection blocks.
+- Central package management and committed lock files pin every package. `scripts/check-licenses.mjs` fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, and on a bundled notice file without a reviewed entry.
+- The SkiaSharp and HarfBuzzSharp native packages that Avalonia renders through ship one third-party notice. It names terms outside the permissive list, including Skia's GIF decoder under MPL-1.1, GPL-2.0, or LGPL-2.1. Distributing a build needs a license decision on those terms.
+- `Avalonia.BuildServices` sends anonymous build telemetry. CI sets `AVALONIA_TELEMETRY_OPTOUT=1`, and the README explains the local opt-out.
 
 ## Next product step
 
-Implement the Avalonia application shell and editable NodifyAvalonia canvas in C#. Validate the selected implementation against the product direction's acceptance cases without comparing other frameworks. Include solo use without a server, two-client collaboration, one supported local subscription integration, and one API integration as the first working slice develops. Pin compatible dependency versions and check their licenses before packaging.
+The editable local canvas is complete on Windows. CI covers Linux and macOS builds and headless tests. The next milestone is shared graph review. Two desktop clients edit one workflow through the optional synchronization service, with defined behavior for conflicts, reconnects, and approval of a specific version. Execution, provider integrations, and GitHub review gates follow in the complete execution loop. Validate each against the product direction's acceptance cases without comparing other frameworks.
