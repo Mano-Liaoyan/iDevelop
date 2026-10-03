@@ -58,6 +58,7 @@ public sealed class MainWindowViewModel : ObservableObject
         document.Changed += (_, _) => OnDocumentChanged();
         Canvas = new WorkflowCanvasViewModel(document, notice => Status = notice);
         Status = null;
+        OnPropertyChanged(nameof(ProjectName));
         OnDocumentChanged();
         _save.NotifyCanExecuteChanged();
         _addTask.NotifyCanExecuteChanged();

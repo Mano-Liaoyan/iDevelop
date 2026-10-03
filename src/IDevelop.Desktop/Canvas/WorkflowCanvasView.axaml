@@ -116,7 +116,7 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid ColumnDefinitions="*,Auto,320">
+  <Panel>
     <nodify:NodifyEditor x:Name="Editor"
                          ItemsSource="{Binding Nodes}"
                          SelectedItem="{Binding SelectedNode}"
@@ -267,65 +267,5 @@
         </DataTemplate>
       </nodify:NodifyEditor.PendingConnectionTemplate>
     </nodify:NodifyEditor>
-
-    <GridSplitter Grid.Column="1" Width="4" />
-
-    <TextBlock Grid.Column="2" Margin="12"
-               Text="Select a task or connection to edit it."
-               TextWrapping="Wrap"
-               IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
-               AutomationProperties.AutomationId="InspectorHint" />
-
-    <ContentControl Grid.Column="2" Content="{Binding Inspected}" Margin="12">
-      <ContentControl.DataTemplates>
-        <DataTemplate DataType="canvas:TaskNodeViewModel">
-          <StackPanel Spacing="6">
-            <TextBlock Text="Title" />
-            <TextBox Text="{Binding Title}"
-                     AutomationProperties.AutomationId="TaskTitle"
-                     AutomationProperties.Name="Title" />
-            <TextBlock Text="Instructions" />
-            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
-            <TextBox Text="{Binding Instructions}"
-                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="140"
-                     AutomationProperties.AutomationId="TaskInstructions"
-                     AutomationProperties.Name="Instructions" />
-            <TextBlock Text="Acceptance criteria" />
-            <TextBox Text="{Binding AcceptanceCriteria}"
-                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
-                     AutomationProperties.AutomationId="TaskAcceptanceCriteria"
-                     AutomationProperties.Name="Acceptance criteria" />
-          </StackPanel>
-        </DataTemplate>
-        <DataTemplate DataType="canvas:ConnectionViewModel">
-          <StackPanel Spacing="6">
-            <TextBlock TextWrapping="Wrap">
-              <Run Text="{Binding From.Title, Mode=OneWay}" />
-              <Run Text="→" />
-              <Run Text="{Binding To.Title, Mode=OneWay}" />
-            </TextBlock>
-            <TextBlock Text="Kind" />
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <Button Content="Dependency"
-                      Command="{Binding SetKindCommand}"
-                      CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
-                      AutomationProperties.AutomationId="KindDependency"
-                      AutomationProperties.Name="Dependency" />
-              <Button Content="Context"
-                      Command="{Binding SetKindCommand}"
-                      CommandParameter="{x:Static workflows:ConnectionKind.Context}"
-                      AutomationProperties.AutomationId="KindContext"
-                      AutomationProperties.Name="Context" />
-              <Button Content="Review"
-                      Command="{Binding SetKindCommand}"
-                      CommandParameter="{x:Static workflows:ConnectionKind.Review}"
-                      AutomationProperties.AutomationId="KindReview"
-                      AutomationProperties.Name="Review" />
-            </StackPanel>
-            <Button Content="Delete connection" Command="{Binding DeleteCommand}" />
-          </StackPanel>
-        </DataTemplate>
-      </ContentControl.DataTemplates>
-    </ContentControl>
-  </Grid>
+  </Panel>
 </UserControl>

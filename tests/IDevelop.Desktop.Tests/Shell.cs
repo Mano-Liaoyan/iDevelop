@@ -27,6 +27,15 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
+    public static Shell Show()
+    {
+        var window = new MainWindow();
+        window.Show();
+        var shell = new Shell(window);
+        shell.Render();
+        return shell;
+    }
+
     public static Shell Open(string folder)
     {
         var window = new MainWindow();
