@@ -37,8 +37,6 @@
       <Color x:Key="PendingConnection.ForegroundColor">#25292E</Color>
       <Color x:Key="PendingConnection.BorderColor">#E5E5E5</Color>
       <Color x:Key="Minimap.BackgroundColor">#EDEFF2</Color>
-      <Color x:Key="Minimap.ViewportBackgroundColor">#F8FAFD</Color>
-      <Color x:Key="Minimap.ViewportStrokeColor">#E5E5E5</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#90969C</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1A0A0A0A, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 12 28 0 #1F000000</BoxShadows>
@@ -78,8 +76,6 @@
       <Color x:Key="PendingConnection.ForegroundColor">#D2D1CD</Color>
       <Color x:Key="PendingConnection.BorderColor">#1AFFFFFF</Color>
       <Color x:Key="Minimap.BackgroundColor">#222629</Color>
-      <Color x:Key="Minimap.ViewportBackgroundColor">#26292D</Color>
-      <Color x:Key="Minimap.ViewportStrokeColor">#1AFFFFFF</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#64635D</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1AFAFAFA, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 14 32 0 #52000000</BoxShadows>

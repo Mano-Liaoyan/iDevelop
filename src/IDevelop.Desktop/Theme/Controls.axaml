@@ -20,6 +20,18 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlay95Brush}" />
     <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
   </Style>
+  <!-- A shadow outside a clipped border is cut off, so floating panels clip their content in an inner border. -->
+  <Style Selector="Border.floating">
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource FloatingShadow}" />
+  </Style>
+  <Style Selector="Border.floating > Border">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
   <Style Selector="Border.badge">
     <Setter Property="Height" Value="20" />
     <Setter Property="CornerRadius" Value="10" />

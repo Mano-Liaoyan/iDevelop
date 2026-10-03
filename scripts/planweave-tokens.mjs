@@ -74,8 +74,6 @@ const colorKeys = [
   ['PendingConnection.ForegroundColor', 'text'],
   ['PendingConnection.BorderColor', 'border'],
   ['Minimap.BackgroundColor', 'surface-muted'],
-  ['Minimap.ViewportBackgroundColor', 'surface-overlay'],
-  ['Minimap.ViewportStrokeColor', 'border'],
   ['MinimapItem.BackgroundColor', 'text-faint'],
 ];
 

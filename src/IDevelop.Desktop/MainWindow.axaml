@@ -188,8 +188,8 @@
               </StackPanel>
             </Border>
 
-            <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it inside
-                 the smallest window, and the tooltip holds the whole message. -->
+            <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it above
+                 the zoom panel and the minimap at the window's minimum height, and the tooltip holds the whole message. -->
             <Border Classes="breadcrumb" HorizontalAlignment="Left" Padding="12,9" MaxWidth="420"
                     IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
               <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="10"

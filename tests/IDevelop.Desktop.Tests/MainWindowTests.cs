@@ -119,6 +119,7 @@ public sealed class MainWindowTests : IDisposable
 
         Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(Card()), $"{Card()} is outside {shell.Editor.Bounds.Size}");
         Assert.Equal(new Point(2161, 1272), shell.Editor.ViewportLocation);
+        Assert.Equal(new Point(2161, 1272), shell.Find<Minimap>("Minimap").ViewportLocation);
     }
 
     [AvaloniaFact]
@@ -254,7 +255,7 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_long_status_in_the_smallest_window_does_not_cover_the_breadcrumb()
+    public void A_long_status_in_the_smallest_window_covers_neither_the_breadcrumb_nor_the_canvas_controls()
     {
         var (design, build) = ($"Design {LongTitle}", $"Build {LongTitle}");
         var shell = Shell.Open(_temp.Seed(
@@ -270,9 +271,11 @@ public sealed class MainWindowTests : IDisposable
 
         Rect Bounds(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.Bounds.Size);
         Border Around(Visual visual, string kind) => visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains(kind));
-        var (status, breadcrumb) = (Bounds(Around(shell.Find<TextBlock>("Status"), "breadcrumb")), Bounds(shell.Find<Border>("Breadcrumb")));
+        var status = Bounds(Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
         Assert.Equal(new Size(900, 600), shell.Window.ClientSize);
-        Assert.False(status.Intersects(breadcrumb), $"The status at {status} covers the breadcrumb at {breadcrumb}");
+        Assert.All(
+            [Bounds(shell.Find<Border>("Breadcrumb")), Bounds(Around(shell.Find<Button>("ZoomIn"), "floating")), Bounds(Around(shell.Find<Minimap>("Minimap"), "floating"))],
+            other => Assert.False(status.Intersects(other), $"The status at {status} covers {other}"));
     }
 
     [AvaloniaFact]

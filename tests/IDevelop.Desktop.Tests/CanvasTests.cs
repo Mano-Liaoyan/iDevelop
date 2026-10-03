@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -147,6 +148,73 @@ public sealed class CanvasTests : IDisposable
 
         Assert.Equal(dot, shell.ColorAt(shell.Editor, new Point(230, 240)));
         Assert.Equal(canvas, shell.ColorAt(shell.Editor, new Point(240, 240)));
+    }
+
+    [AvaloniaFact]
+    public void Zoom_in_then_zoom_out_steps_the_canvas_zoom_and_back()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+
+        shell.Click(shell.Find<Button>("ZoomIn"));
+        Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
+
+        shell.Click(shell.Find<Button>("ZoomOut"));
+        Assert.Equal(1, Math.Round(shell.Editor.ViewportZoom, 2));
+    }
+
+    [AvaloniaFact]
+    public void Fit_to_screen_brings_a_distant_task_into_view()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        Rect Card(string title) => new(shell.Node(title).TranslatePoint(default, shell.Editor)!.Value, shell.Node(title).Bounds.Size * shell.Editor.ViewportZoom);
+        var editor = new Rect(shell.Editor.Bounds.Size);
+        Assert.False(editor.Intersects(Card("Build")));
+
+        shell.Click(shell.Find<Button>("FitToScreen"));
+
+        Assert.True(editor.Contains(Card("Design")), $"{Card("Design")} is outside {editor}");
+        Assert.True(editor.Contains(Card("Build")), $"{Card("Build")} is outside {editor}");
+    }
+
+    [AvaloniaFact]
+    public void Dragging_a_task_moves_its_minimap_item()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
+            .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
+        Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
+
+        var from = shell.Header(shell.Node("Design"));
+        shell.Drag(from, from + new Vector(150, 75));
+
+        Assert.Equal((new Point(0, 75), new Point(150, 0)), (Item("Design"), Item("Build")));
+    }
+
+    [AvaloniaFact]
+    public void Turning_the_wheel_over_the_minimap_zooms_the_canvas_one_step_per_notch()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var minimap = shell.Center(shell.Find<Minimap>("Minimap"));
+
+        shell.Window.MouseWheel(minimap, new Vector(0, 1));
+        Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
+
+        shell.Window.MouseWheel(minimap, new Vector(0, -1));
+        shell.Window.MouseWheel(minimap, new Vector(0, -1));
+        Assert.Equal(0.79, Math.Round(shell.Editor.ViewportZoom, 2));
+    }
+
+    [AvaloniaFact]
+    public void Clicking_the_minimap_centers_the_canvas_on_that_point()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var build = shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
+            .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == "Build");
+
+        shell.Click(build);
+
+        var editor = shell.Editor;
+        Assert.Equal(new Point(2530, 1672), Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
     }
 
     [AvaloniaFact]

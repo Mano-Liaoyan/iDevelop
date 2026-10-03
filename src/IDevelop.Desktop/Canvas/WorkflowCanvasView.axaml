@@ -33,6 +33,10 @@
         <Setter Property="Background" Value="{DynamicResource StateSelectedBrush}" />
       </Style>
     </ControlTheme>
+    <!-- The minimap's background is PlanWeave's muted mask, and the opaque viewport is the clear window in it. -->
+    <ControlTheme x:Key="MinimapViewportTheme" TargetType="Rectangle">
+      <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
+    </ControlTheme>
   </UserControl.Resources>
 
   <UserControl.Styles>
@@ -113,6 +117,21 @@
     </Style>
     <Style Selector="nodify|PendingConnection.rejected">
       <Setter Property="Stroke" Value="{DynamicResource StateFailedBrush}" />
+    </Style>
+    <!-- Nodify draws the viewport over the items, and this viewport is opaque. -->
+    <Style Selector="nodify|Minimap /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="ZIndex" Value="1" />
+    </Style>
+    <Style Selector="Button.zoom">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+    <Style Selector="Button.zoom:nth-last-child(1)">
+      <Setter Property="BorderThickness" Value="0" />
     </Style>
   </UserControl.Styles>
 
@@ -267,5 +286,52 @@
         </DataTemplate>
       </nodify:NodifyEditor.PendingConnectionTemplate>
     </nodify:NodifyEditor>
+
+    <Border Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12">
+      <Border>
+        <StackPanel>
+          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in"
+                  AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
+            <PathIcon Data="{StaticResource PlusIcon}" Width="12" Height="12" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out"
+                  AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
+            <PathIcon Data="{StaticResource MinusIcon}" Width="12" Height="12" />
+          </Button>
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to screen"
+                  AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
+            <PathIcon Data="{StaticResource FitIcon}" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
+      </Border>
+    </Border>
+
+    <Border Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Width="200" Height="150">
+      <Border>
+        <nodify:Minimap x:Name="Minimap"
+                        ItemsSource="{Binding Nodes}"
+                        ViewportLocation="{Binding ViewportLocation}"
+                        ViewportSize="{Binding #Editor.ViewportSize}"
+                        ViewportStyle="{StaticResource MinimapViewportTheme}"
+                        AutomationProperties.AutomationId="Minimap"
+                        AutomationProperties.Name="Minimap">
+          <nodify:Minimap.ItemContainerTheme>
+            <ControlTheme TargetType="nodify:MinimapItem"
+                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}"
+                          x:DataType="canvas:TaskNodeViewModel">
+              <Setter Property="Location" Value="{Binding Location, Mode=OneWay}" />
+              <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
+              <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
+            </ControlTheme>
+          </nodify:Minimap.ItemContainerTheme>
+          <!-- An empty template, or each item would show its view model's type name. -->
+          <nodify:Minimap.ItemTemplate>
+            <DataTemplate DataType="canvas:TaskNodeViewModel">
+              <Panel />
+            </DataTemplate>
+          </nodify:Minimap.ItemTemplate>
+        </nodify:Minimap>
+      </Border>
+    </Border>
   </Panel>
 </UserControl>
