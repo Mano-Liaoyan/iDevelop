@@ -50,3 +50,5 @@ jobs:
               & $shell -NoProfile -NonInteractive -File scripts/agent.ps1
               if ($LASTEXITCODE -eq 0) { throw "$shell accepted a missing client" }
           }
+          # The runner exits with LASTEXITCODE, which the expected rejection above left nonzero.
+          exit 0

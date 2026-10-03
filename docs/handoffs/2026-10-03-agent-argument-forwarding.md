@@ -29,12 +29,13 @@ Run on Linux with PowerShell 7.6.2 installed from packages.microsoft.com. Fake `
 - New launcher, in-process `& ./scripts/agent.ps1 claude -p 'Reply OK' -c --model m`: same argv as `-File`. Exit 0.
 - New launcher, `agent.ps1 nope -p`: `Unknown client 'nope'. Usage: scripts/agent.ps1 <codex|claude|pi|gemini> [client arguments]`. Exit 1.
 - New launcher with no arguments: `Missing client. Usage: ...`. Exit 1.
-- The CI step body, run locally under `pwsh` with a Linux shim, failed on the old launcher and passed on the new one.
+- The CI step body, run locally under `pwsh` with a Linux shim and GitHub's pwsh wrapper, exited 1 on the old launcher and 0 on the new one.
+- Windows CI run [37137560447](https://github.com/Mano-Liaoyan/iDevelop/actions/runs/37137560447) passed every forwarding assertion under `pwsh` and Windows PowerShell 5.1, through both `-File` and `-Command`. Both shells printed the unknown and missing client errors. The step still failed, because GitHub's pwsh wrapper ends with `exit $LASTEXITCODE` and the last expected rejection left it at 1. The step now ends with `exit 0`.
 - The CI parse step snippet accepted the new launcher. `node scripts/pstack.mjs check` passed for 49 skills. `node --check scripts/codex-skills.mjs` and `git diff --check` passed.
 
 ## Open issues
 
-- Windows PowerShell 5.1 and the Windows `.cmd` path were not run locally. The CI step covers them on `windows-latest`. Check its result on the pushed branch.
+- Windows PowerShell 5.1 and the Windows `.cmd` path ran only in CI on `windows-latest`, not on the user's machine.
 - The `agy` checks (`agy --version`, the `gemini-3.8-flash` prompt, and the personal-source check) need the `antigravity-cli` branch and a signed-in `agy` on Windows.
 - PowerShell splits `-name:value` before any script sees it. `-File` delivers `-p` and `val`, and an in-process call delivers `-p:` and `val`. An in-process call also drops a bare `--`. `-File` keeps `--`. No script can change this host behavior.
 
