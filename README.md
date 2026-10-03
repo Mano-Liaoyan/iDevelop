@@ -46,7 +46,7 @@ Use the project launcher in Windows PowerShell to apply the client's skill isola
 .\scripts\agent.ps1 gemini
 ```
 
-The launcher does not install clients, copy credentials, or change other projects. Append client arguments after its name. Skill filtering depends on the client version and organization policy. Arguments that add other plugins or skill sources can bypass the intended isolation.
+The launcher does not install clients, copy credentials, or change other projects. Append client arguments after its name. The launcher declares no PowerShell parameters, so short flags such as `-p` and `-c` reach the client unchanged. PowerShell itself still splits `-name:value` into two arguments, and a call from a PowerShell prompt drops a bare `--`. Skill filtering depends on the client version and organization policy. Arguments that add other plugins or skill sources can bypass the intended isolation.
 
 | Client | Project isolation | Verification and limits |
 | --- | --- | --- |

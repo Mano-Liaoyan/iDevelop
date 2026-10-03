@@ -1,11 +1,11 @@
-param(
-    [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('codex', 'claude', 'pi', 'gemini')]
-    [string]$Client,
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$ClientArguments
-)
+# A param block would bind client flags such as -p or -c to launcher or common parameters by prefix, so arguments come from $args.
 $ErrorActionPreference = 'Stop'
+$clients = 'codex', 'claude', 'pi', 'gemini'
+$usage = "Usage: scripts/agent.ps1 <$($clients -join '|')> [client arguments]"
+if ($args.Count -eq 0) { throw "Missing client. $usage" }
+if ($args[0] -notin $clients) { throw "Unknown client '$($args[0])'. $usage" }
+$Client = $args[0]
+[string[]]$ClientArguments = @($args | Select-Object -Skip 1)
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 $previousGeminiHome = $env:GEMINI_CLI_HOME
