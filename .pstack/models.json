@@ -1,0 +1,16 @@
+{
+  "policy": "quality-first",
+  "budget": "unlimited",
+  "selection": "Explicit per-role models after checking this host's available model catalog. Independent reviewers; prefer different model families when supported.",
+  "codex": {
+    "implementation": { "model": "gpt-6.1-sol", "reasoningEffort": "max" },
+    "judgment": { "model": "gpt-6-astra", "reasoningEffort": "max" },
+    "reviewers": [
+      { "model": "gpt-6-astra", "reasoningEffort": "max" },
+      { "model": "gpt-6.1-sol", "reasoningEffort": "max" }
+    ]
+  },
+  "claude": null,
+  "gemini": null,
+  "pi": null
+}

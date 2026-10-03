@@ -1,0 +1,17 @@
+.agents/skills/
+.claude/skills
+.cursor/skills
+.codex/config.toml
+.gemini/settings.json
+.claude/settings.local.json
+.pstack/local/
+.pstack/runtime/
+.worktrees/
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+Thumbs.db

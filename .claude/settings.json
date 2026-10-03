@@ -1,0 +1,4 @@
+{
+  "disableBundledSkills": true,
+  "skillOverrides": { "doctor": "off" }
+}

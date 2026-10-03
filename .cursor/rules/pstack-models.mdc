@@ -1,0 +1,24 @@
+---
+description: Project-local PStack model choices; .pstack/models.json takes precedence for the active client
+alwaysApply: true
+---
+# budget: unlimited (max)
+# Native model IDs and reasoning effort are separate fields in .pstack/models.json.
+# These portable aliases are fallbacks only, not the quality-first role selection.
+feature, refactoring: inherit-parent
+bug-fix: inherit-parent
+perf-issue: inherit-parent
+hillclimb: inherit-parent
+judgment and prose: inherit-parent
+hardest tasks: inherit-parent
+how explorer: inherit-parent
+how explainer: inherit-parent
+why investigators: inherit-parent
+why synthesizer: inherit-parent
+reflect tooling: inherit-parent
+reflect judgment, divergent, synthesizer: inherit-parent
+arena runners: inherit-parent, inherit-parent, inherit-parent
+arena cross-judge pool: inherit-parent
+swarm workers: inherit-parent
+architect runners: inherit-parent, inherit-parent, inherit-parent
+interrogate reviewers: inherit-parent, inherit-parent, inherit-parent
