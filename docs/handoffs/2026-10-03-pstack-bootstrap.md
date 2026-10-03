@@ -26,6 +26,8 @@ Initialize iDevelop as a public personal GitHub repository. Install PStack withi
 - `scripts/agent.ps1 codex --version`: launcher completed its preflight and ran Codex 0.160.0.
 - PowerShell parser accepted the launcher. Node syntax checks passed. Relative Markdown link inspection found only the upstream example `[...](url)` placeholder, not a missing real reference.
 - Independent review found Windows npm-shim launching and an ineffective Claude setting. Both were corrected before publication. Claude's user-source exclusion is supplied by the launcher, not a global mutation.
+- A fresh local Git clone regenerated and verified all skills successfully, with no tracked changes afterward.
+- The public repository was created at https://github.com/Mano-Liaoyan/iDevelop and its main branch was pushed using the configured personal Git identity.
 
 ## Limits and next action
 
