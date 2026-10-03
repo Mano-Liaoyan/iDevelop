@@ -12,7 +12,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     private const string B = "019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22";
 
     private static readonly string Sample = Path.Combine(AppContext.BaseDirectory, "sample-project");
-    private static readonly string SampleFile = Path.Combine(Sample, ".idevelop", "workflows", SampleFileName);
+    private static readonly string SampleFile = Path.Combine(Sample, ".idp", "workflows", SampleFileName);
     private static readonly TaskId Design = new(Guid.Parse(A));
     private static readonly TaskId Build = new(Guid.Parse(B));
     private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
@@ -75,7 +75,7 @@ public sealed class WorkflowDocumentTests : IDisposable
 
         Assert.Empty(document.Current.Tasks);
         Assert.False(document.HasUnsavedChanges);
-        Assert.Equal(Path.Combine(folder, ".idevelop", "workflows", $"{document.Current.Id}.json"), document.FilePath);
+        Assert.Equal(Path.Combine(folder, ".idp", "workflows", $"{document.Current.Id}.json"), document.FilePath);
         Assert.Equal(new[] { "README.md" }, Directory.EnumerateFileSystemEntries(folder).Select(Path.GetFileName));
     }
 
@@ -90,10 +90,10 @@ public sealed class WorkflowDocumentTests : IDisposable
         document.Save();
 
         Assert.False(document.HasUnsavedChanges);
-        Assert.Equal("*.tmp\n", File.ReadAllText(Path.Combine(folder, ".idevelop", ".gitignore")));
+        Assert.Equal("*.tmp\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
         Assert.Equal(
             new[] { $"{document.Current.Id}.json" },
-            Directory.EnumerateFiles(Path.Combine(folder, ".idevelop", "workflows")).Select(Path.GetFileName));
+            Directory.EnumerateFiles(Path.Combine(folder, ".idp", "workflows")).Select(Path.GetFileName));
         var reopened = WorkflowDocument.Open(folder).Current;
         Assert.Equal(document.Current.Id, reopened.Id);
         Assert.Equal("Plan release", reopened.Tasks[Design].Title);
@@ -128,7 +128,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void A_leftover_temp_file_from_a_crashed_save_is_ignored_and_kept()
     {
         var folder = _temp.CopyOf(Sample);
-        var leftover = Path.Combine(folder, ".idevelop", "workflows", $"{SampleFileName}.5f0c9b7d1a01.tmp");
+        var leftover = Path.Combine(folder, ".idp", "workflows", $"{SampleFileName}.5f0c9b7d1a01.tmp");
         File.WriteAllText(leftover, "{\"form");
 
         var document = WorkflowDocument.Open(folder);
@@ -141,7 +141,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void A_file_that_starts_with_a_utf8_byte_order_mark_opens_and_saves_without_it()
     {
         var folder = _temp.CopyOf(Sample);
-        var file = Path.Combine(folder, ".idevelop", "workflows", SampleFileName);
+        var file = Path.Combine(folder, ".idp", "workflows", SampleFileName);
         File.WriteAllBytes(file, [0xEF, 0xBB, 0xBF, .. File.ReadAllBytes(SampleFile)]);
 
         var document = WorkflowDocument.Open(folder);
@@ -158,7 +158,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var folder = _temp.Create("repository");
         var document = WorkflowDocument.Open(folder);
         document.Apply(new CreateTask(new TaskDefinition(Design) { Title = "Plan release" }, new CanvasPoint(40, 60)));
-        var workflows = Directory.CreateDirectory(Path.Combine(folder, ".idevelop", "workflows")).FullName;
+        var workflows = Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName;
         var other = Path.Combine(workflows, SampleFileName);
         File.Copy(SampleFile, other);
 
@@ -174,7 +174,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void A_project_with_two_workflow_files_is_refused()
     {
         var folder = _temp.CopyOf(Sample);
-        var workflows = Path.Combine(folder, ".idevelop", "workflows");
+        var workflows = Path.Combine(folder, ".idp", "workflows");
         File.Copy(Path.Combine(workflows, SampleFileName), Path.Combine(workflows, "019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a02.json"));
 
         var error = Assert.Throws<ProjectException>(() => WorkflowDocument.Open(folder));
@@ -273,7 +273,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     private string OpenFailure(string json)
     {
         var folder = _temp.Create("invalid");
-        var file = Path.Combine(folder, ".idevelop", "workflows", SampleFileName);
+        var file = Path.Combine(folder, ".idp", "workflows", SampleFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, json.Replace('\'', '"'));
 
