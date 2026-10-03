@@ -18,8 +18,6 @@ public sealed class TaskNodeViewModel : ObservableObject
         _location = WorkflowCanvasViewModel.ToPoint(position);
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
-        Inputs = [Input];
-        Outputs = [Output];
     }
 
     public TaskId Id => _task.Id;
@@ -27,10 +25,6 @@ public sealed class TaskNodeViewModel : ObservableObject
     public PortViewModel Input { get; }
 
     public PortViewModel Output { get; }
-
-    public IReadOnlyList<PortViewModel> Inputs { get; }
-
-    public IReadOnlyList<PortViewModel> Outputs { get; }
 
     public Point Location
     {

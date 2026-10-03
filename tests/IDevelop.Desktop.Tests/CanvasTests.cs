@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -94,7 +95,42 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
-        Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Node>().Single()));
+        Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "TaskCard")));
+    }
+
+    [AvaloniaFact]
+    public void A_selected_card_shows_its_ring_in_the_selection_color()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        // The ring is 2 px wide and sits 2 px outside the card, so this pixel is on its straight top edge.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
+        Assert.Equal(Color.Parse("#FBFBF9"), Ring());
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        Assert.Equal(Color.Parse("#2B7EC9"), Ring());
+
+        shell.Click(shell.Find<RadioButton>("ThemeDark"));
+        Assert.Equal(Color.Parse("#60AAF3"), Ring());
+    }
+
+    [AvaloniaFact]
+    public void A_card_previews_its_instructions_and_says_when_there_are_none()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Build, "Build", 405, 90)));
+        string[] CardTexts() =>
+        [
+            .. shell.Node("Build").GetVisualDescendants().OfType<TextBlock>()
+                .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
+                .Select(text => text.Text!),
+        ];
+        Assert.Equal(["Build", "Instructions", "No instructions yet."], CardTexts());
+
+        shell.Click(shell.Header(shell.Node("Build")));
+        shell.Click(shell.Find<TextBox>("TaskInstructions"));
+        shell.Type("Compile");
+
+        Assert.Equal(["Build", "Instructions", "Compile"], CardTexts());
     }
 
     [AvaloniaFact]
