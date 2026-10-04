@@ -151,12 +151,12 @@ public static class RunText
 
     public static string HandedOff(string command) => $"Copied {command}. Paste it in a terminal to continue this session there.";
 
-    /// <summary>What happened to a turn before the latest one, when it did not succeed.</summary>
-    public static string? EarlierTurnNote(TurnOutcome outcome) => outcome switch
+    /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
+    public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
     {
         TurnOutcome.Stopped => "You stopped this turn.",
-        TurnOutcome.Failed => "This turn failed.",
-        TurnOutcome.Interrupted => "This turn was interrupted.",
+        TurnOutcome.Failed => Sentences("This turn failed.", turn.Detail),
+        TurnOutcome.Interrupted => Sentences("This turn was interrupted.", turn.Detail),
         TurnOutcome.Running or TurnOutcome.Succeeded => null,
     };
 
@@ -199,6 +199,9 @@ public static class RunText
     };
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    /// <summary>The sentences that are present, joined by spaces.</summary>
+    private static string Sentences(params string?[] sentences) => string.Join(" ", sentences.OfType<string>());
 
     /// <summary>The parts that are present, joined by middle dots.</summary>
     private static string Dotted(params string?[] parts) => string.Join(" · ", parts.OfType<string>());

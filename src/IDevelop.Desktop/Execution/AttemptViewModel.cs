@@ -41,7 +41,7 @@ public sealed class TurnViewModel(TurnRecord turn, bool latest)
 
     public string? Reply => turn.FinalText;
 
-    public string? Note => latest ? null : RunText.EarlierTurnNote(turn.Outcome);
+    public string? Note => latest ? null : RunText.EarlierTurnNote(turn);
 
     public string ReplyId => latest ? "LastRunResult" : $"TurnReply{turn.Number}";
 

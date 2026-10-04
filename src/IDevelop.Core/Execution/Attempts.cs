@@ -26,8 +26,9 @@ public sealed record ActivityLine(DateTimeOffset At, string Text);
 /// <summary>
 /// One client process of an attempt. <see cref="Message"/> is what the person sent, which is the turn's whole prompt,
 /// and null for a first turn whose prompt is the task. <see cref="FinalText"/> is null while the turn runs.
+/// <see cref="Detail"/> says why the turn failed or was interrupted, in the client's words when it gave any.
 /// </summary>
-public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome, string? FinalText);
+public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome, string? FinalText, string? Detail = null);
 
 /// <summary>The settled attempt whose client session an attempt resumes, and that session's id.</summary>
 public sealed record Continuation(AttemptId Attempt, string Session);
@@ -194,7 +195,7 @@ internal static class AttemptReducer
         (_, { Status: not AttemptStatus.Running }) => record,
         (AttemptEvent.Requested, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
-        (AttemptEvent.LaunchFailed failed, _) => Settle(EndTurn(record, TurnOutcome.Failed), AttemptStatus.Failed, failed.Reason, failed.At),
+        (AttemptEvent.LaunchFailed failed, _) => EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed, failed.Reason, failed.At),
         (AttemptEvent.Agent agent, _) => ApplyAgent(record, agent.Event, agent.At),
         (AttemptEvent.CancelRequested cancel, { BetweenTurns: true }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
         (AttemptEvent.CancelRequested, _) => record with { CancelRequested = true, Stopping = true },
@@ -216,13 +217,13 @@ internal static class AttemptReducer
         },
         (AttemptEvent.Exited exited, _) => AtExit(record, exited),
         (AttemptEvent.Reconciled reconciled, _) =>
-            Settle(EndTurn(record, TurnOutcome.Interrupted), AttemptStatus.Interrupted, Reconciliation(record, reconciled.Process), reconciled.At),
+            EndAttempt(record, TurnOutcome.Interrupted, AttemptStatus.Interrupted, Reconciliation(record, reconciled.Process), reconciled.At),
         _ => throw new UnreachableException($"Unhandled attempt event {e.GetType().Name}"),
     };
 
     /// <summary>Ends an attempt whose log can no longer be written. Only the record in memory changes.</summary>
     public static AttemptRecord Abandon(AttemptRecord record, string reason, DateTimeOffset at) =>
-        record.Status == AttemptStatus.Running ? Settle(EndTurn(record, TurnOutcome.Failed), AttemptStatus.Failed, reason, at) : record;
+        record.Status == AttemptStatus.Running ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed, reason, at) : record;
 
     private static AttemptRecord ApplyAgent(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
     {
@@ -246,10 +247,9 @@ internal static class AttemptReducer
     private static AttemptRecord AtExit(AttemptRecord record, AttemptEvent.Exited exited)
     {
         var (turn, status, detail) = ExitPolicy(record, exited);
-        var ended = EndTurn(record, turn);
         return record is { Queued.IsEmpty: false, CancelRequested: false, InterruptReason: null, SessionId: not null }
-            ? ended
-            : Settle(ended, status, detail, exited.At);
+            ? EndTurn(record, turn, detail)
+            : EndAttempt(record, turn, status, detail, exited.At);
     }
 
     /// <summary>
@@ -291,10 +291,25 @@ internal static class AttemptReducer
         return cause + found;
     }
 
-    /// <summary>Ends the running turn with its final text. Between turns there is none to end.</summary>
-    private static AttemptRecord EndTurn(AttemptRecord record, TurnOutcome outcome) => record.BetweenTurns
+    /// <summary>
+    /// Ends the running turn with its final text, and with the detail if it failed or was interrupted. Between turns there
+    /// is none to end.
+    /// </summary>
+    private static AttemptRecord EndTurn(AttemptRecord record, TurnOutcome outcome, string? detail) => record.BetweenTurns
         ? record
-        : record with { Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with { Outcome = outcome, FinalText = FinalText(record) }) };
+        : record with
+        {
+            Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with
+            {
+                Outcome = outcome,
+                FinalText = FinalText(record),
+                Detail = outcome is TurnOutcome.Failed or TurnOutcome.Interrupted ? detail : null,
+            }),
+        };
+
+    /// <summary>Ends the running turn, if one runs, and settles the attempt, both for the same reason.</summary>
+    private static AttemptRecord EndAttempt(AttemptRecord record, TurnOutcome turn, AttemptStatus status, string? detail, DateTimeOffset at) =>
+        Settle(EndTurn(record, turn, detail), status, detail, at);
 
     private static AttemptRecord Settle(AttemptRecord record, AttemptStatus status, string? detail, DateTimeOffset at) => record with
     {

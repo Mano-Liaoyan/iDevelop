@@ -46,7 +46,7 @@ public class Phase3LogTests
         var record = AttemptReducer.Replay(AttemptLog.Read(folder))!;
 
         Assert.Equal(File.ReadAllText(Path.Combine(folder, "record.json")).Replace("\r\n", "\n"), Phase3Fields(record));
-        Assert.Equal([new TurnRecord(1, null, Outcomes[log], record.Result)], record.Turns);
+        Assert.Equal([new TurnRecord(1, null, Outcomes[log], record.Result, record.Detail)], record.Turns);
         Assert.Equal((0, null, null), (record.Queued.Count, record.Continues, record.Terminal));
     }
 

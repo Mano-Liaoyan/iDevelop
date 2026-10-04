@@ -98,6 +98,27 @@ public sealed class ConversationTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_turn_that_failed_before_the_next_one_says_why()
+    {
+        Install(_fakes, ClientId.Codex, Answers("Tried again."), Asks().WaitForFile(_gate).Stderr("error: model not found").Exit(1));
+        var shell = OpenSayHi();
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.Find<Button>("StopAndSend").IsEffectivelyVisible && string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
+        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Type("Try again.");
+        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.WaitUntil(() => shell.Find<StackPanel>("Waiting").IsEffectivelyVisible, "the message waits");
+
+        File.WriteAllText(_gate, "");
+
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the next turn succeeds");
+        Assert.Equal(
+            ["This turn failed. Codex exited with code 1: error: model not found", "You", "Try again."],
+            Shell.Texts(shell.Find<ItemsControl>("Conversation")));
+        Assert.Equal("Tried again.", shell.Find<TextBox>("LastRunResult").Text);
+    }
+
+    [AvaloniaFact]
     public void Ctrl_Enter_in_the_composer_continues_a_finished_run_in_a_new_attempt_and_Enter_starts_a_new_line()
     {
         Install(_fakes, ClientId.Codex, Answers("Added a test."), Asks().Print(ReplyLines(ClientId.Codex, "Wrote hello.txt.")));

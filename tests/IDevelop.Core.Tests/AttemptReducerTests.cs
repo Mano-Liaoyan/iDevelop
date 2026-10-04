@@ -168,6 +168,23 @@ public class AttemptReducerTests
     }
 
     [Fact]
+    public void A_turn_that_fails_while_a_message_waits_keeps_its_reason_and_the_attempt_goes_on()
+    {
+        var record = Replay(LaunchedAt1s, Said(2, new SessionStarted("thread-1")), Sent(3, "Use another model."), Exit(4, 1, "error: model not found\n"));
+
+        Assert.Equal((AttemptStatus.Running, (string?)null), (record.Status, record.Detail));
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Failed, null, "Codex exited with code 1: error: model not found")], record.Turns);
+    }
+
+    [Fact]
+    public void A_stopped_turn_that_goes_on_has_no_reason()
+    {
+        var record = Replay(LaunchedAt1s, Said(2, new SessionStarted("thread-1")), Sent(3, "Stop testing.", stopsTurn: true), Exit(4, 137));
+
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Stopped, null)], record.Turns);
+    }
+
+    [Fact]
     public void Cancel_during_a_later_turn_cancels_the_whole_attempt()
     {
         var record = Replay([.. SecondTurnRunning, new CancelRequested(T0.AddSeconds(7)), Exit(8, 137)]);
