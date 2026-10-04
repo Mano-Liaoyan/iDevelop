@@ -95,9 +95,9 @@ public partial class MainWindow : Window
         }
     }
 
-    // The inspector's pickers take a choice the same way, and their bindings only show the task's agent. A picker that
-    // moves to another task, or whose list is replaced, keeps an equal entry from its old list selected, so only a change
-    // in the open list or by a key on the focused picker is a choice.
+    // The inspector's pickers take a choice the same way, and their bindings only show the task's agent. A picker whose
+    // list is replaced keeps an equal entry from its old list selected, such as the old level when the new client's model
+    // also offers it, so only a change in the open list or by a key on the focused picker is a choice.
     private static bool IsChoice(ComboBox picker) => picker.IsDropDownOpen || picker.IsKeyboardFocusWithin;
 
     private void OnClientChosen(object? sender, SelectionChangedEventArgs e)

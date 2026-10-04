@@ -8,16 +8,18 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
-// A picker's UI Automation value is its chosen entry's text, so each entry's text is its label.
+// A picker's UI Automation value is its chosen entry's text, so each entry's text is its label. The inspector reuses
+// its pickers for every task, and a picker keeps its selected entry when the new list holds an equal one, so an entry
+// names its task.
 
 /// <summary>An entry in the inspector's client picker. A null client is "None".</summary>
-public sealed record ClientChoice(ClientId? Id, string Label)
+public sealed record ClientChoice(TaskId Task, ClientId? Id, string Label)
 {
     public override string ToString() => Label;
 }
 
 /// <summary>An entry in the model or reasoning picker: the client's own id and what the picker shows.</summary>
-public sealed record Choice(string Id, string Label)
+public sealed record Choice(TaskId Task, string Id, string Label)
 {
     public override string ToString() => Label;
 }
@@ -85,7 +87,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     public string AgentLabel => RunText.AgentLabel(_task.Execution, Status);
 
     public IReadOnlyList<ClientChoice> ClientChoices =>
-        [new(null, "None"), .. Clients.All.Select(id => new ClientChoice(id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
+        [new(Id, null, "None"), .. Clients.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
 
     public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
 
@@ -93,7 +95,7 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     /// <summary>The models this machine offers, then the task's model when it is not one of them, marked.</summary>
     public IReadOnlyList<Choice> ModelChoices => _task.Execution is { } settings
-        ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
+        ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
         : [];
 
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
@@ -109,10 +111,10 @@ public sealed class TaskNodeViewModel : ObservableObject
             }
 
             var model = RunText.Offered(Status).FirstOrDefault(option => option.Id == settings.Model);
-            List<Choice> choices = [.. (model?.ReasoningLevels ?? []).Select(level => new Choice(level, level))];
+            List<Choice> choices = [.. (model?.ReasoningLevels ?? []).Select(level => new Choice(Id, level, level))];
             if (settings.Reasoning is { } stored && !choices.Any(choice => choice.Id == stored))
             {
-                choices.Add(new Choice(stored, model is null ? stored : $"{stored} (not offered)"));
+                choices.Add(new Choice(Id, stored, model is null ? stored : $"{stored} (not offered)"));
             }
 
             return choices;

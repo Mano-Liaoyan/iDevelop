@@ -214,6 +214,31 @@ public sealed class AgentPickerTests : IDisposable
         }
     }
 
+    // A screen reader's select command selects a row through UI Automation, which leaves the keyboard focus on the picker
+    // the user last chose in.
+    [AvaloniaFact]
+    public void Selecting_a_task_while_a_picker_keeps_the_focus_changes_no_tasks_agent()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, PiAtHigh),
+            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" })), WithPi());
+        shell.Click(shell.Header(shell.Node("Design")));
+        var reasoning = shell.Find<ComboBox>("TaskReasoning");
+        reasoning.Focus();
+        var build = shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
+            .Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == "Build");
+
+        ControlAutomationPeer.CreatePeerForElement(build).GetProvider<ISelectionItemProvider>()!.Select();
+        shell.Render();
+
+        Assert.True(reasoning.IsKeyboardFocusWithin);
+        Assert.Equal(["Codex", "GPT-5.5", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+        Assert.Equal(
+            ["Pi · DeepSeek V4 Pro (deepseek) · high", "Codex · GPT-5.5 · low"],
+            new[] { "Design", "Build" }.Select(task => CardAgent(shell, task)));
+        Assert.Equal("seed - iDevelop", shell.Window.Title);
+    }
+
     // The reasoning picker still holds Pi's high when Codex's levels replace Pi's, and Codex's first model offers high.
     [AvaloniaFact]
     public void Choosing_another_client_takes_its_first_model_at_that_models_default_level()
