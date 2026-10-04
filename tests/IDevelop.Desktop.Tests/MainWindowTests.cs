@@ -251,7 +251,7 @@ public sealed class MainWindowTests : IDisposable
             };
         }
 
-        Assert.Equal(["OpenFolder", "Design", "ThemeSystem", "ThemeLight", "ThemeDark"], [Tab(), Tab(), Tab(), Tab(), Tab()]);
+        Assert.Equal(["OpenFolder", "Design", "RefreshAgents", "ThemeSystem", "ThemeLight", "ThemeDark"], [Tab(), Tab(), Tab(), Tab(), Tab(), Tab()]);
     }
 
     [AvaloniaFact]

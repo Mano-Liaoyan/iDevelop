@@ -1,22 +1,31 @@
 using System.Windows.Input;
+using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
 using IDevelop.Projects;
 
 namespace IDevelop.Desktop;
 
 public sealed class MainWindowViewModel : ObservableObject
 {
+    private readonly ClientDirectory _clients;
     private readonly RelayCommand _save;
     private readonly RelayCommand _addTask;
+    private readonly RelayCommand _refreshAgents;
     private WorkflowDocument? _document;
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
+    private bool _refreshingAgents;
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(ClientDirectory clients)
     {
+        _clients = clients;
         _save = new RelayCommand(() => TrySave(), () => _document is not null);
         _addTask = new RelayCommand(() => Canvas?.AddTaskCommand.Execute(null), () => Canvas is not null);
+        _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
+        clients.Changed += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Agents)));
     }
 
     public WorkflowCanvasViewModel? Canvas
@@ -40,6 +49,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICommand SaveCommand => _save;
 
     public ICommand AddTaskCommand => _addTask;
+
+    public IReadOnlyList<AgentRow> Agents => [.. Clients.All.Select(id => new AgentRow(id, _clients.Current[id]))];
+
+    /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
+    public ICommand RefreshAgentsCommand => _refreshAgents;
 
     public void Open(string folder)
     {
@@ -81,6 +95,21 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             Status = e is ProjectException ? e.Message : $"Couldn't save: {e.Message}";
             return false;
+        }
+    }
+
+    private async void RefreshAgents()
+    {
+        _refreshingAgents = true;
+        _refreshAgents.NotifyCanExecuteChanged();
+        try
+        {
+            await _clients.RefreshAsync();
+        }
+        finally
+        {
+            _refreshingAgents = false;
+            _refreshAgents.NotifyCanExecuteChanged();
         }
     }
 

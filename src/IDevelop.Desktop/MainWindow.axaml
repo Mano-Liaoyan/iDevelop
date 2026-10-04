@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
+        xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:workflows="using:IDevelop.Workflows"
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
@@ -27,7 +28,7 @@
 
     <!-- The sidebar has no fill of its own. The window's sidebar color shows through it.
          Its rows are in the order they appear, which is also the Tab order. -->
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
       <!-- Linux ignores the request to draw into the title bar, so the bands that stand in for it collapse there. -->
       <Border Height="44" Background="Transparent"
               IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
@@ -103,6 +104,50 @@
       </Grid>
 
       <Border Grid.Row="3" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="AGENTS" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="icon"
+                    Command="{Binding RefreshAgentsCommand}"
+                    ToolTip.Tip="Check agents again"
+                    AutomationProperties.AutomationId="RefreshAgents"
+                    AutomationProperties.Name="Check agents again">
+              <PathIcon Data="{StaticResource RefreshIcon}" Width="16" Height="16" />
+            </Button>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Agents}"
+                        AutomationProperties.AutomationId="Agents"
+                        AutomationProperties.Name="Agents">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="execution:AgentRow">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
+                      Background="Transparent"
+                      ToolTip.Tip="{Binding Detail}"
+                      AutomationProperties.AutomationId="{Binding AutomationId}"
+                      AutomationProperties.Name="{Binding AccessibleName}">
+                  <Ellipse Classes="status" VerticalAlignment="Center"
+                           Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                           Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                           Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                             FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding Detail}"
+                             TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
+                             IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Row="4" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="8">
           <TextBlock Classes="section" Text="APPEARANCE" />
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">

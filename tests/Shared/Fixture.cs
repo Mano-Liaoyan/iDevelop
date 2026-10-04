@@ -1,5 +1,6 @@
-namespace IDevelop.Core.Tests;
+namespace IDevelop.TestSupport;
 
+/// <summary>The recorded client output in tests/IDevelop.Core.Tests/Fixtures, which each test project copies to its output.</summary>
 internal static class Fixture
 {
     public static string Path(string name) => System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", name);

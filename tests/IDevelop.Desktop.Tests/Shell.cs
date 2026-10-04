@@ -10,6 +10,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Execution;
 using Nodify;
 
 namespace IDevelop.Desktop.Tests;
@@ -27,18 +28,19 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
-    public static Shell Show()
+    /// <summary>Without <paramref name="clients"/> the window finds no client, so no test probes this machine's clients.</summary>
+    public static Shell Show(ClientDirectory? clients = null)
     {
-        var window = new MainWindow();
+        var window = clients is null ? new MainWindow() : new MainWindow(clients);
         window.Show();
         var shell = new Shell(window);
         shell.Render();
         return shell;
     }
 
-    public static Shell Open(string folder)
+    public static Shell Open(string folder, ClientDirectory? clients = null)
     {
-        var window = new MainWindow();
+        var window = clients is null ? new MainWindow() : new MainWindow(clients);
         window.Show();
         window.ViewModel.Open(folder);
         var shell = new Shell(window);
@@ -177,6 +179,18 @@ internal sealed class Shell
         Window.KeyPress(key, modifiers, PhysicalKey.None, null);
         Window.KeyRelease(key, modifiers, PhysicalKey.None, null);
         Render();
+    }
+
+    /// <summary>Runs the UI thread's jobs until the condition holds, for work that ends on another thread.</summary>
+    public void WaitUntil(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            Thread.Sleep(20);
+            Render();
+        }
     }
 
     public void Render()

@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Execution;
 
 namespace IDevelop.Desktop;
 
@@ -14,14 +15,21 @@ public partial class MainWindow : Window
     private bool _waitingForUser;
     private bool _closeConfirmed;
 
-    public MainWindow()
+    /// <summary>For the XAML loader and the designer. Its directory searches no folder, so it finds no client.</summary>
+    public MainWindow() : this(new ClientDirectory(CommandResolver.Create([], [])))
     {
+    }
+
+    /// <param name="clients">The app's one directory. The app starts its first refresh.</param>
+    public MainWindow(ClientDirectory clients)
+    {
+        ViewModel = new MainWindowViewModel(clients);
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
     }
 
-    public MainWindowViewModel ViewModel { get; } = new();
+    public MainWindowViewModel ViewModel { get; }
 
     /// <summary>Asks for a project folder and returns its path, or null when the user cancels.</summary>
     internal Func<Task<string?>> PickFolder { get; set; }

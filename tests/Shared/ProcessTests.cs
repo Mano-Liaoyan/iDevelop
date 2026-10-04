@@ -1,4 +1,4 @@
-namespace IDevelop.Core.Tests;
+namespace IDevelop.TestSupport;
 
 /// <summary>
 /// Test classes that write shims and start processes run one at a time. On Linux, a process forked by another test while

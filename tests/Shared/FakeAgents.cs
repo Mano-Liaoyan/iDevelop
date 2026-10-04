@@ -1,9 +1,8 @@
 using IDevelop.Execution;
-using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
 
-namespace IDevelop.Core.Tests;
+namespace IDevelop.TestSupport;
 
 /// <summary>Fake answers to each client's list and sign-in commands, from the recorded probes.</summary>
 internal static class FakeAgents

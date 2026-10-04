@@ -6,5 +6,7 @@
   <StreamGeometry x:Key="FitIcon">M2.5,2.5 H6 V4 H4 V6 H2.5 Z M10,2.5 H13.5 V6 H12 V4 H10 Z M2.5,10 H4 V12 H6 V13.5 H2.5 Z M12,10 H13.5 V13.5 H10 V12 H12 Z</StreamGeometry>
   <StreamGeometry x:Key="ChevronRightIcon">M5.5,3.5 L10,8 L5.5,12.5 L4.44,11.44 L7.88,8 L4.44,4.56 Z</StreamGeometry>
   <StreamGeometry x:Key="FolderIcon">F0 M1.5,4.25 C1.5,3.28 2.28,2.5 3.25,2.5 H6.31 L7.81,4 H12.75 C13.72,4 14.5,4.78 14.5,5.75 V11.75 C14.5,12.72 13.72,13.5 12.75,13.5 H3.25 C2.28,13.5 1.5,12.72 1.5,11.75 Z M3,4 V12 H13 V5.5 H7.19 L5.69,4 Z</StreamGeometry>
+  <!-- F1 fills nonzero, so the arrowhead and the arc it overlaps both stay filled. -->
+  <StreamGeometry x:Key="RefreshIcon">F1 M13.5,8 A5.5,5.5 0 1 1 8,2.5 L8,4 A4,4 0 1 0 12,8 Z M8,0.75 L10.75,3.25 L8,5.75 Z</StreamGeometry>
   <StreamGeometry x:Key="SaveIcon">F0 M3.25,1.5 H10.69 L14.5,5.31 V12.75 C14.5,13.72 13.72,14.5 12.75,14.5 H3.25 C2.28,14.5 1.5,13.72 1.5,12.75 V3.25 C1.5,2.28 2.28,1.5 3.25,1.5 Z M3,3 V13 H4.5 V9.25 C4.5,8.84 4.84,8.5 5.25,8.5 H10.75 C11.16,8.5 11.5,8.84 11.5,9.25 V13 H13 V5.93 L10.07,3 H10 V5.25 C10,5.66 9.66,6 9.25,6 H5.75 C5.34,6 5,5.66 5,5.25 V3 Z M6,10 V13 H10 V10 Z</StreamGeometry>
 </ResourceDictionary>

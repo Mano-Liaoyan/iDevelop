@@ -46,6 +46,21 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <Style Selector="Ellipse.status">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.running">
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.complete">
+    <Setter Property="Fill" Value="{DynamicResource StateSuccessBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.problem">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+
   <!-- Buttons without a fill until the pointer is over them. Fluent's own state styles set the template's colors,
        so each state is restated here. -->
   <Style Selector="Button.nav, Button.icon, Button.ghost">
