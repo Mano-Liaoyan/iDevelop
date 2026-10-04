@@ -17,9 +17,13 @@ internal sealed class ChildProcess : IDisposable
 {
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
+    private static readonly TimeSpan OutputGrace = TimeSpan.FromSeconds(5);
+
     private readonly Lock _gate = new();
     private readonly Process _process;
     private readonly ProcessJob? _job;
+    private Task _stdout = Task.CompletedTask;
+    private Task _stderr = Task.CompletedTask;
     private bool _disposed;
 
     private ChildProcess(Process process)
@@ -99,16 +103,22 @@ internal sealed class ChildProcess : IDisposable
         }
     }
 
-    /// <summary>Completes at the end of stdout. Lines can be large, so there is no length cap.</summary>
-    public Task ReadStdoutAsync(Action<string> onLine) => ReadLinesAsync(_process.StandardOutput, onLine);
+    /// <summary>Reads stdout in the background, one call per line. Lines can be large, so there is no length cap.</summary>
+    public void ReadStdout(Action<string> onLine) => _stdout = ReadLinesAsync(_process.StandardOutput, onLine);
 
-    public Task ReadStderrAsync(Action<string> onLine) => ReadLinesAsync(_process.StandardError, onLine);
+    public void ReadStderr(Action<string> onLine) => _stderr = ReadLinesAsync(_process.StandardError, onLine);
 
     public async Task<int> WaitForExitAsync()
     {
         await _process.WaitForExitAsync();
         return _process.ExitCode;
     }
+
+    /// <summary>
+    /// Completes at the end of stdout and stderr, or 5 seconds after the call, whichever comes first. After the process
+    /// exits or is stopped, a process it started may still hold the pipes open.
+    /// </summary>
+    public Task WaitForOutputAsync() => Task.WhenAny(Task.WhenAll(_stdout, _stderr), Task.Delay(OutputGrace));
 
     /// <summary>
     /// Stops the process and every process it started. A process that already exited is not an error. After

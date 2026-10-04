@@ -18,10 +18,6 @@ public sealed partial class ProjectRuns
     /// </summary>
     private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
     {
-        // A process the client started can hold the pipes open after the client exits. The attempt settles without the
-        // rest of its output, which the closed log ignores.
-        private static readonly TimeSpan ExitGrace = TimeSpan.FromSeconds(5);
-
         private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -50,13 +46,13 @@ public sealed partial class ProjectRuns
             {
                 var stderrTail = new Tail();
                 _ = process.WriteStdinAsync(plan.Launch.Stdin, close: true);
-                var stdout = process.ReadStdoutAsync(Interpret);
-                var stderr = process.ReadStderrAsync(line =>
+                process.ReadStdout(Interpret);
+                process.ReadStderr(line =>
                 {
                     log.AppendStderr(line);
                     stderrTail.Add(line);
                 });
-                _ = WatchExitAsync(stdout, stderr, stderrTail);
+                _ = WatchExitAsync(stderrTail);
                 await DrainAsync();
             }
             finally
@@ -131,12 +127,13 @@ public sealed partial class ProjectRuns
             }
         }
 
-        private async Task WatchExitAsync(Task stdout, Task stderr, Tail stderrTail)
+        private async Task WatchExitAsync(Tail stderrTail)
         {
             try
             {
                 var code = await process.WaitForExitAsync();
-                await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(ExitGrace));
+                // The attempt settles without output that comes later, which the closed log ignores.
+                await process.WaitForOutputAsync();
                 Request(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
             }
             finally

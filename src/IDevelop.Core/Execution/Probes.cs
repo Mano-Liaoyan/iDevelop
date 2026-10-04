@@ -19,9 +19,6 @@ internal sealed record ProbeOutput(int? ExitCode, string Stdout, string Stderr, 
 
 internal static class Probes
 {
-    // After the probe exits, a process it started may still hold the pipes open.
-    private static readonly TimeSpan OutputGrace = TimeSpan.FromSeconds(5);
-
     private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(5);
 
     /// <summary>
@@ -38,7 +35,7 @@ internal static class Probes
         var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         // Pi's RPC mode may stop at the end of its input before it answers, so a probe that waits for an answer keeps stdin open.
         var input = child.WriteStdinAsync(probe.Stdin ?? "", close: probe.DoneWhen is null);
-        var output = child.ReadStdoutAsync(line =>
+        child.ReadStdout(line =>
         {
             lock (stdout)
             {
@@ -50,7 +47,7 @@ internal static class Probes
                 answered.TrySetResult();
             }
         });
-        var errors = child.ReadStderrAsync(line =>
+        child.ReadStderr(line =>
         {
             lock (stderr)
             {
@@ -76,7 +73,7 @@ internal static class Probes
             child.StopTree();
         }
 
-        await Task.WhenAny(Task.WhenAll(output, errors), Task.Delay(OutputGrace));
+        await child.WaitForOutputAsync();
         int? exitCode = ended ? await exit : null;
         return new ProbeOutput(exitCode, Snapshot(stdout), Snapshot(stderr), TimedOut: first != exit && first != answered.Task);
     }
