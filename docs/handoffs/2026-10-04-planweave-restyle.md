@@ -2,7 +2,7 @@
 
 ## Task
 
-Restyle the shell and canvas to look like PlanWeave's desktop app. The user accepted the scope in `2026-10-03-restyle-next-step.md` and added a requirement: a light theme and a dark theme that the user can switch between. The coordinator read "两个可以切换" as that pair, because PlanWeave's stylesheet defines both token sets. The user accepted the platform system font in place of Geist.
+Restyle the shell and canvas to look like PlanWeave's desktop app. The scope adopts PlanWeave's look and shows a control only when iDevelop has its feature, as `docs/product-direction.md` records. The user added a requirement: a light theme and a dark theme that the user can switch between. The coordinator read "两个可以切换" as that pair, because PlanWeave's stylesheet defines both token sets. The user accepted the platform system font in place of Geist.
 
 ## Checklist
 

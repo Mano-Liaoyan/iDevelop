@@ -121,7 +121,7 @@ Engineering tasks follow PStack by default. State the goal, constraints, and a v
 
 - [`AGENTS.md`](AGENTS.md) is the shared entry point. `CLAUDE.md` imports it, and Antigravity CLI reads it directly.
 - [`docs/context.md`](docs/context.md) stores stable facts and the agreed project direction.
-- `docs/handoffs/YYYY-MM-DD-<task>.md` records each task's decisions, evidence, unfinished work, and continuation steps. Each task writes its own file.
+- `docs/handoffs/YYYY-MM-DD-<task>.md` records a decision or design together with its rejected alternatives, evidence, and open issues. Only tasks that settle such a decision write one. Other tasks keep their evidence in the pull request. `node scripts/check-handoffs.mjs` fails when a record is not linked from `docs/context.md` or `docs/product-direction.md`, or when a link names a missing record. CI runs it.
 - Agents that write code concurrently use separate branches and worktrees. The coordinator checks their evidence before integrating changes.
 
 These versioned records support handoffs. They do not provide live messaging, cross-client scheduling, or complete conversation synchronization.

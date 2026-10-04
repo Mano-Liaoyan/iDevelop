@@ -64,7 +64,7 @@ Every build in this session before the second fix round ran without `AVALONIA_TE
 - `tests/IDevelop.Core.Tests` and `tests/IDevelop.Desktop.Tests` hold 38 and 37 tests. `samples/storage-change` is the golden workflow file.
 - `scripts/check-licenses.mjs` checks every restored package's license and every bundled notice by hash.
 - `.github/workflows/dotnet.yml` restores in locked mode, checks licenses, builds, and tests on Linux, Windows, and macOS, with Avalonia telemetry turned off.
-- `README.md`, `AGENTS.md`, and `docs/context.md` describe the slice. This record and `2026-10-03-next-step.md` record the task.
+- `README.md`, `AGENTS.md`, and `docs/context.md` describe the slice. This record holds its design.
 
 ## Commands and observed results
 
