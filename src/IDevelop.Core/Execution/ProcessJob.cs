@@ -6,9 +6,9 @@ namespace IDevelop.Execution;
 
 /// <summary>
 /// A Windows job object that holds one child and every process it starts, including one whose parent has exited, which
-/// Process.Kill(entireProcessTree) cannot find. Closing the job stops them all, and Windows closes it when iDevelop exits.
-/// No process may leave the job, because Git Bash, which Pi runs its commands in, starts each command outside a job that
-/// allows it.
+/// Process.Kill(entireProcessTree) cannot find. Closing the job stops them all, unless <see cref="KeepProcessesOnClose"/>
+/// came first, and Windows closes it when iDevelop exits. No process may leave the job, because Git Bash, which Pi runs
+/// its commands in, starts each command outside a job that allows it.
 /// </summary>
 internal sealed class ProcessJob : IDisposable
 {
@@ -28,9 +28,7 @@ internal sealed class ProcessJob : IDisposable
             return null;
         }
 
-        var limits = new ExtendedLimits { Basic = new BasicLimits { LimitFlags = KillOnJobClose } };
-        if (SetInformationJobObject(handle, ExtendedLimitInformation, ref limits, (uint)Marshal.SizeOf<ExtendedLimits>())
-            && AssignProcessToJobObject(handle, process.SafeHandle))
+        if (SetLimits(handle, KillOnJobClose) && AssignProcessToJobObject(handle, process.SafeHandle))
         {
             return new ProcessJob(handle);
         }
@@ -40,6 +38,15 @@ internal sealed class ProcessJob : IDisposable
     }
 
     public void Terminate() => TerminateJobObject(_handle, uint.MaxValue);
+
+    /// <summary>Closing the job then leaves its processes running.</summary>
+    public void KeepProcessesOnClose() => SetLimits(_handle, 0);
+
+    private static bool SetLimits(nint job, uint flags)
+    {
+        var limits = new ExtendedLimits { Basic = new BasicLimits { LimitFlags = flags } };
+        return SetInformationJobObject(job, ExtendedLimitInformation, ref limits, (uint)Marshal.SizeOf<ExtendedLimits>());
+    }
 
     public void Dispose() => CloseHandle(_handle);
 

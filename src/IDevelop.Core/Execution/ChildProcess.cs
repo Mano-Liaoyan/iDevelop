@@ -13,7 +13,8 @@ internal sealed class LaunchException(string message, Exception? inner = null) :
 /// <summary>
 /// A started command with redirected pipes. It knows nothing about any client: runs and probes both use it.
 /// Text crosses the pipes as UTF-8 without a byte order mark on every platform. On Windows the process and everything
-/// it starts share a job, so disposing it, or iDevelop exiting, stops whatever is still running.
+/// it starts share a job, so disposing it, or iDevelop exiting, stops whatever is still running, unless
+/// <see cref="LeaveDescendantsRunning"/> came first.
 /// </summary>
 internal sealed class ChildProcess : IDisposable
 {
@@ -131,6 +132,18 @@ internal sealed class ChildProcess : IDisposable
             catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
             {
                 // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+            }
+        }
+    }
+
+    /// <summary>Lets the processes it started outlive <see cref="Dispose"/> and iDevelop.</summary>
+    public void LeaveDescendantsRunning()
+    {
+        lock (_gate)
+        {
+            if (!_disposed)
+            {
+                _job?.KeepProcessesOnClose();
             }
         }
     }

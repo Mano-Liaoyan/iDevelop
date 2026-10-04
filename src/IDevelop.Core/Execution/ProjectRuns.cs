@@ -393,12 +393,14 @@ public sealed class ProjectRuns : IAsyncDisposable
     /// each event to the log, folds it, and publishes the record, in that order. A stop request enqueued before the kill
     /// therefore always precedes the exit the kill causes. The lock is released only after the last event is on disk,
     /// or after the drain stops and the log is closed, so nothing appends after another instance could take over.
-    /// The run disposes its process just before it releases the lock, which on Windows stops whatever the client left
-    /// running. A late stop then does nothing.
+    /// The run disposes its process just before it releases the lock, so a late stop does nothing. While the client runs,
+    /// Cancel and leaving stop everything it started, and so does a crash on Windows. What it leaves running when it exits
+    /// on its own keeps running, as after a command in a terminal.
     /// </summary>
     private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
     {
-        // A process the client started can hold the pipes open after the client exits.
+        // A process the client started can hold the pipes open after the client exits. The attempt settles without the
+        // rest of its output, which the closed log ignores.
         private static readonly TimeSpan ExitGrace = TimeSpan.FromSeconds(5);
 
         private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
@@ -469,7 +471,12 @@ public sealed class ProjectRuns : IAsyncDisposable
             finally
             {
                 // Whatever ended the drain early, including a Changed handler that threw, no client runs on unobserved.
-                if (!exited)
+                // After its exit, whatever the client started for the user, such as a dev server, keeps running.
+                if (exited)
+                {
+                    process.LeaveDescendantsRunning();
+                }
+                else
                 {
                     process.StopTree();
                 }
@@ -510,13 +517,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             try
             {
                 var code = await process.WaitForExitAsync();
-                var output = Task.WhenAll(stdout, stderr);
-                if (await Task.WhenAny(output, Task.Delay(ExitGrace)) != output)
-                {
-                    // On Linux and macOS this finds nothing, because the processes of a client that exited have a new parent.
-                    process.StopTree();
-                }
-
+                await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(ExitGrace));
                 Request(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
             }
             finally

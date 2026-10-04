@@ -236,8 +236,10 @@ public sealed class ProjectRunsTests : IDisposable
         AssertGone(sleeperId);
     }
 
-    [WindowsFact]
-    public async Task A_process_the_client_leaves_running_is_stopped_when_the_attempt_settles()
+    // A dev server the agent started or a browser it opened is the user's now. This one also holds the client's output
+    // open, as a server that inherits it does.
+    [Fact]
+    public async Task A_process_the_client_leaves_running_keeps_running_after_the_attempt_settles()
     {
         var sleeper = Evidence("sleeper.pid");
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnSleepingChild(sleeper).Replay(Fixture.Path("codex-success.jsonl")).Exit(0));
@@ -247,8 +249,10 @@ public sealed class ProjectRunsTests : IDisposable
         runs.Start(SayHi(Runs[ClientId.Codex].Settings));
         var sleeperId = await PidAsync(sleeper);
 
-        Assert.Equal((AttemptStatus.Succeeded, "DONE"), ((await settled).Status, (await settled).Result));
-        AssertGone(sleeperId);
+        var record = await settled;
+        Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
+        using var survivor = Process.GetProcessById(sleeperId);
+        Assert.False(survivor.WaitForExit(TimeSpan.FromSeconds(1)), "the process the client left running was stopped");
     }
 
     [GitBashFact]
