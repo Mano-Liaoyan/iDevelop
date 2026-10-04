@@ -183,6 +183,8 @@ internal sealed class Shell
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
 
+    public string[] DialogTexts() => Texts(Dialog ?? throw new InvalidOperationException("No dialog is open."));
+
     public void Choose(string automationId)
     {
         var dialog = Dialog ?? throw new InvalidOperationException("No dialog is open.");

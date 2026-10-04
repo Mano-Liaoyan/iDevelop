@@ -63,8 +63,6 @@ public sealed class RunTests : IDisposable
         return (shell, folder, clients);
     }
 
-    private static string[] Texts(Window? dialog) => [.. Assert.IsAssignableFrom<Window>(dialog).GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text ?? "")];
-
     [AvaloniaFact]
     public void Running_a_task_whose_client_is_not_ready_shows_why_and_launches_nothing()
     {
@@ -146,7 +144,7 @@ public sealed class RunTests : IDisposable
         shell.Window.Close();
         shell.Render();
 
-        Assert.Equal(["\"Say hi\" is running. Stop it and leave?", "Stop and leave", "Keep running"], Texts(shell.Dialog));
+        Assert.Equal(["\"Say hi\" is running. Stop it and leave?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
         var reopened = Shell.Open(folder, clients);
@@ -171,7 +169,7 @@ public sealed class RunTests : IDisposable
         Assert.Equal("Review and 1 more", shell.Find<TextBlock>("RunBarTask").Text);
         shell.Window.Close();
         shell.Render();
-        Assert.Equal(["2 tasks are running. Stop them and leave?", "Stop and leave", "Keep running"], Texts(shell.Dialog));
+        Assert.Equal(["2 tasks are running. Stop them and leave?", "Stop and leave", "Keep running"], shell.DialogTexts());
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
 
@@ -204,7 +202,7 @@ public sealed class RunTests : IDisposable
         shell.Render();
         Assert.IsType<RunningTaskDialog>(shell.Dialog);
         shell.Choose("StopAndLeave");
-        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], Texts(shell.Dialog));
+        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
 
         shell.Choose("CancelChanges");
 
