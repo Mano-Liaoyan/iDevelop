@@ -76,8 +76,8 @@ public class AttemptReducerTests
         Assert.Equal(("deepseek/deepseek-v4-pro", "high"), (record.ReportedModel, record.ReportedReasoning));
         Assert.Equal(
             [
-                new ActivityLine(T0.AddSeconds(4), ActivityKind.Tool, "command: dotnet test"),
-                new ActivityLine(T0.AddSeconds(5), ActivityKind.Message, "All tests pass."),
+                new ActivityLine(T0.AddSeconds(4), "command: dotnet test"),
+                new ActivityLine(T0.AddSeconds(5), "All tests pass."),
             ],
             record.Activity.ToArray());
         Assert.Equal((First, Build, "Implement atomic save", CodexHigh, T0), (record.Id, record.Task, record.TaskTitle, record.Requested, record.RequestedAt));

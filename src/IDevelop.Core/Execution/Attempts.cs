@@ -17,9 +17,7 @@ public readonly record struct AttemptId(Guid Value) : IComparable<AttemptId>
 
 public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted }
 
-public enum ActivityKind { Tool, Message, Notice }
-
-public sealed record ActivityLine(DateTimeOffset At, ActivityKind Kind, string Text);
+public sealed record ActivityLine(DateTimeOffset At, string Text);
 
 /// <summary>The attempt log's vocabulary. Only the record folded from it is public.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
@@ -166,9 +164,9 @@ internal static class AttemptReducer
             ReportedModel = reported.Model ?? record.ReportedModel,
             ReportedReasoning = reported.Reasoning ?? record.ReportedReasoning,
         },
-        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, ActivityKind.Message, FirstLine(message.Text)),
-        AgentEvent.ToolStarted tool => Log(record, at, ActivityKind.Tool, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}"),
-        AgentEvent.Notice notice => Log(record, at, ActivityKind.Notice, notice.Text),
+        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, FirstLine(message.Text)),
+        AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}"),
+        AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
         _ => throw new UnreachableException($"Unhandled agent event {e.GetType().Name}"),
     };
@@ -220,10 +218,10 @@ internal static class AttemptReducer
         Result = (record.Verdict as AgentEvent.Succeeded)?.Result ?? record.LastMessage,
     };
 
-    private static AttemptRecord Log(AttemptRecord record, DateTimeOffset at, ActivityKind kind, string text)
+    private static AttemptRecord Log(AttemptRecord record, DateTimeOffset at, string text)
     {
         var activity = record.Activity.Count < ActivityLimit ? record.Activity : record.Activity.RemoveAt(0);
-        return record with { Activity = activity.Add(new ActivityLine(at, kind, text)) };
+        return record with { Activity = activity.Add(new ActivityLine(at, text)) };
     }
 
     private static string FirstLine(string text) => text.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
