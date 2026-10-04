@@ -169,8 +169,6 @@ Avalonia documents accessibility and IME facilities. The custom graph still need
 
 A log viewer is not an interactive terminal. Prefer structured agent events for the main interface. If a client requires an interactive terminal, select and validate a suitable .NET integration separately, including process control, escape sequences, selection, and keyboard behavior.
 
-This decision closes the earlier framework comparisons. They are historical research in Git history, not active prototype tasks.
-
 ## The interface follows the PlanWeave look
 
 The user wants iDevelop restyled to look like PlanWeave's desktop app, built with Avalonia and NodifyAvalonia. The user also wants a light theme and a dark theme to switch between. PlanWeave defines both palettes. The references are the [PlanWeave repository](https://github.com/GaosCode/PlanWeave/tree/8647d015ac562e8fda148415b84ee77e3b3ada89) at the commit inspected above and the user's screenshot of its canvas.
@@ -231,7 +229,7 @@ On 2026-10-04 the user ordered phases 3, 4, and 5 and set the completion conditi
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
 | 3. Single-task execution | Next | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
 | 4. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
-| 5. Team synchronization | Planned | Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
+| 5. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
 ### Single-task execution comes next
 
@@ -267,7 +265,7 @@ The current proposal comes from [The target workflow](#the-target-workflow) and 
 
 ### Team synchronization comes after execution
 
-Synchronization then shares a workflow that already carries execution configuration and run state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
+The current proposal is that synchronization shares a workflow that already carries execution configuration and run state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
 
 ### Later work
 

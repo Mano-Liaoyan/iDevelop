@@ -1,6 +1,6 @@
 # Provider access reference
 
-Checked on 2026-10-03. These findings describe source code and provider documentation. No account login, subscription quota, paid request, or live provider integration was tested.
+Checked on 2026-10-03. These findings describe source code and provider documentation. Apart from the observed client behavior below, no account login, subscription quota, paid request, or live provider integration was tested.
 
 ## Pi AI source snapshot
 
@@ -85,10 +85,10 @@ The proposed iDevelop handoff therefore relies on task instructions, observed ac
 
 These observations come from running Antigravity CLI 1.2.16 (`agy`) on Windows on 2026-10-03 while setting up this project.
 
-- Print mode (`-p`) cannot ask for permission. It refused to read files in an untrusted folder, and it read them in a repository the user's `agy` settings trust. Commands and file writes stayed blocked unless `--dangerously-skip-permissions` was passed, and that flag was not used.
+- Print mode (`-p`) cannot ask for permission. It refused to read files in an untrusted folder, and it read them in a repository the user's `agy` settings trust. Commands and file writes stayed blocked. No run passed `--dangerously-skip-permissions`, so its effect is unverified.
 - `agy models` lists combined IDs such as `gemini-3.8-flash-high`. The bare ID `gemini-3.8-flash` with a separate `--effort high` or `--effort low` reached the matching backend variant. An unknown model ID failed with exit code 1, with no silent fallback.
 - With `--output-format stream-json`, the `init` event reports the requested model ID, and `--log-file` records the backend label. The `json` output reports no model.
-- `agy` has no documented profile override. Pointing `USERPROFILE` at a project folder was rejected, because every tool the agent starts, Git included, would inherit the fake home folder. Its eight bundled skills cannot be turned off.
+- `agy` has no documented profile override. The project chose not to point `USERPROFILE` at a project folder, because every tool the agent starts, Git included, would inherit the fake home folder. Its eight bundled skills cannot be turned off.
 
 ## Unverified items
 

@@ -122,4 +122,4 @@ The round 2 code fixes and the coordinator's script and documentation fixes were
 
 ## Next action
 
-Pull request 4 merged as `12a24f5` after an independent verification on the real window. The [delivery order](../product-direction.md#delivery-order) names the next phase.
+Pull request 4 merged as `12a24f5`. Before the merge, a fresh session that wrote none of the code ran the gates and the real-window script at the head and posted its verdict, PASS with notes, on the [pull request](https://github.com/Mano-Liaoyan/iDevelop/pull/4#issuecomment-5975612894). The [delivery order](../product-direction.md#delivery-order) names the next phase.

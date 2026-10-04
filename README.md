@@ -121,7 +121,7 @@ Engineering tasks follow PStack by default. State the goal, constraints, and a v
 
 - [`AGENTS.md`](AGENTS.md) is the shared entry point. `CLAUDE.md` imports it, and Antigravity CLI reads it directly.
 - [`docs/context.md`](docs/context.md) stores stable facts and the agreed project direction.
-- `docs/handoffs/YYYY-MM-DD-<task>.md` records a decision or design together with its rejected alternatives, evidence, and open issues. Only tasks that settle such a decision write one. Other tasks keep their evidence in the pull request. `node scripts/check-handoffs.mjs` fails when a record is not linked from `docs/context.md` or `docs/product-direction.md`, or when a link names a missing record. CI runs it.
+- `docs/handoffs/YYYY-MM-DD-<task>.md` records a decision or design together with its rejected alternatives, evidence, and open issues. Only tasks that settle such a decision write one. Other tasks keep their evidence in the pull request. `node scripts/check-handoffs.mjs` fails when a record is not linked from `docs/context.md` or `docs/product-direction.md`, or when an inline link in either names a missing record. CI runs it.
 - Agents that write code concurrently use separate branches and worktrees. The coordinator checks their evidence before integrating changes.
 
 These versioned records support handoffs. They do not provide live messaging, cross-client scheduling, or complete conversation synchronization.
@@ -140,7 +140,7 @@ Every dispatch needs an explicit supported effort at or below xhigh. Max, higher
 
 Run `node scripts/model-policy.mjs validate` to check the policy. Run `node scripts/model-policy.mjs resolve backend-implementation` to inspect a route. Missing participants produce a blocked result and exit code 2. A partially available panel does not run, and a missing provider is not replaced automatically. The resolver prepares instructions; it does not launch clients or authenticate accounts.
 
-Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. The registry keeps two verified routes that no role selects yet. Astra is available through the native Codex catalog. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`, and its stream output and log identified Gemini 3.8 Flash (High) as the served model. A ready route does not mean any review has run.
+Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. The registry keeps two verified routes that no role selects yet. Astra is available through the native Codex catalog. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`, and its log identified Gemini 3.8 Flash (High) as the served model. A ready route does not mean any review has run.
 
 [`.codex/config.toml`](.codex/config.toml) sets new project launches to Astra at xhigh. No role uses this default until the user reassigns work. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
 
