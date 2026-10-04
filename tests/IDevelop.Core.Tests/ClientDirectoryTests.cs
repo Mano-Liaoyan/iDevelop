@@ -5,6 +5,7 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests;
 
+[Collection(ProcessTests.Name)]
 public sealed class ClientDirectoryTests : IDisposable
 {
     private const string PiCodexSignedOut = "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again.";
@@ -85,9 +86,18 @@ public sealed class ClientDirectoryTests : IDisposable
         _fakes.Install("claude", FakeAgents.ClaudeSignedIn);
         var directory = new ClientDirectory(_fakes.Resolver);
         await directory.RefreshAsync();
-        _fakes.Install("claude", On("auth", "status").Sleep(500).Print("""{"loggedIn":false}"""));
+        var asked = Path.Combine(_temp.Create("evidence"), "asked.json");
+        _fakes.Install("claude", On("auth", "status").RecordArguments(asked).Sleep(3000).Print("""{"loggedIn":false}"""));
 
         var refresh = directory.RefreshAsync();
+
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60)))
+        {
+            while (!File.Exists(asked))
+            {
+                await Task.Delay(20, timeout.Token);
+            }
+        }
 
         Assert.IsType<ClientStatus.Ready>(directory.Current[ClientId.ClaudeCode]);
         await refresh;

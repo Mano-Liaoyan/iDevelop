@@ -8,6 +8,7 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Core.Tests;
 
 /// <summary>Runs go through real child processes: the fake agent behind on-disk shims, resolved like a real client.</summary>
+[Collection(ProcessTests.Name)]
 public sealed class ProjectRunsTests : IDisposable
 {
     private static readonly TaskId SayHiId = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
@@ -171,6 +172,9 @@ public sealed class ProjectRunsTests : IDisposable
 
         await runs.DisposeAsync();
 
+        var events = Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl");
+        Assert.StartsWith("{\"type\":\"exited\"", File.ReadLines(events).Last());
+        Assert.Null(runs.Active);
         var record = await settled;
         Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (record.Status, record.Detail));
         AssertGone(started.Attempt.Process!.Value.Id);
@@ -265,6 +269,39 @@ public sealed class ProjectRunsTests : IDisposable
         {
             client.StopTree();
         }
+    }
+
+    [Fact]
+    public async Task A_Changed_handler_that_throws_stops_the_client_and_frees_the_folder()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")).Hang());
+        var clients = await DiscoverAsync();
+        var runs = ProjectRuns.Open(_project, clients);
+        var calls = 0;
+        var freed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.Changed += (_, _) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                return;
+            }
+
+            if (runs.Active is null)
+            {
+                freed.TrySetResult();
+            }
+
+            throw new InvalidOperationException("The handler failed.");
+        };
+
+        var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
+        _spawned.Add(started.Attempt.Process!.Value.Id);
+
+        await freed.Task.WaitAsync(Patience);
+        AssertGone(started.Attempt.Process!.Value.Id);
+        await runs.DisposeAsync();
+        await using var next = ProjectRuns.Open(_project, clients);
+        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped while this task ran."), (next.Latest[SayHiId].Status, next.Latest[SayHiId].Detail));
     }
 
     [Fact]

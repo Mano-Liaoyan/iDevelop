@@ -99,8 +99,9 @@ internal sealed class ChildProcess : IDisposable
         {
             _process.Kill(entireProcessTree: true);
         }
-        catch (InvalidOperationException)
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
+            // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
         }
     }
 
@@ -134,9 +135,9 @@ internal static class ProcessCheck
         {
             return new ProcessIdentity(process.Id, new DateTimeOffset(process.StartTime.ToUniversalTime()));
         }
-        catch (InvalidOperationException)
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
         {
-            // It already exited, so no later process can be mistaken for it while this one runs.
+            // It already exited, so the identity only has to tell it apart from a later process with the same id.
             return new ProcessIdentity(process.Id, DateTimeOffset.UtcNow);
         }
     }
@@ -161,7 +162,7 @@ internal static class ProcessCheck
             process.Kill(entireProcessTree: true);
             process.WaitForExit(TimeSpan.FromSeconds(5));
         }
-        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
         }
     }

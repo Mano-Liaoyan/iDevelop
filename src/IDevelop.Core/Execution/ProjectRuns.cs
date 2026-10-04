@@ -83,8 +83,9 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// Raised with each new state of an attempt this window starts. The first comes from <see cref="Start"/> on its caller's
-    /// thread and the rest from a worker thread, in order. The last one has a settled status, and by then <see cref="Active"/>
-    /// is null and the folder is free.
+    /// thread and the rest from a worker thread, in order. By the last one, <see cref="Active"/> is null and the folder is
+    /// free. Its status is settled, unless leaving gave up on a client that did not end; that attempt stays on record as
+    /// running, and the next open settles it.
     /// </summary>
     public event EventHandler<AttemptRecord>? Changed;
 
@@ -106,6 +107,9 @@ public sealed class ProjectRuns : IAsyncDisposable
                 using var held = RunLock.TryTake(attempts);
                 if (held is not null)
                 {
+                    // The run may have ended between the first read and the lock, so settle what the logs say now.
+                    (latest, warnings) = AttemptLog.ReadLatest(attempts);
+                    notes = warnings.ToBuilder();
                     latest = Reconcile(attempts, latest, notes);
                 }
             }
@@ -195,8 +199,15 @@ public sealed class ProjectRuns : IAsyncDisposable
             Latest = Latest.SetItem(task.Id, record);
         }
 
-        Changed?.Invoke(this, record);
-        run?.Start();
+        try
+        {
+            Changed?.Invoke(this, record);
+        }
+        finally
+        {
+            run?.Start();
+        }
+
         return new StartResult.Started(record);
     }
 
@@ -305,6 +316,8 @@ public sealed class ProjectRuns : IAsyncDisposable
             return (AttemptReducer.Apply(record, failed), null);
         }
 
+        // Known gap: a crash before this line is on disk leaves a client that reconciliation cannot identify.
+        // A Windows Job Object that kills its processes on close could cover it later.
         var launched = new AttemptEvent.Launched(DateTimeOffset.UtcNow, process.Identity.Id, process.Identity.StartedAt);
         try
         {
@@ -365,6 +378,7 @@ public sealed class ProjectRuns : IAsyncDisposable
     /// each event to the log, folds it, and publishes the record, in that order. A stop request enqueued before the kill
     /// therefore always precedes the exit the kill causes. The lock is released only after the last event is on disk,
     /// or after the drain stops and the log is closed, so nothing appends after another instance could take over.
+    /// The run never disposes its process: the open handle keeps a late stop from reaching a process that reused the id.
     /// </summary>
     private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
     {
@@ -395,20 +409,34 @@ public sealed class ProjectRuns : IAsyncDisposable
 
         private async Task RunAsync()
         {
-            var stderrTail = new Tail();
-            _ = process.WriteStdinAsync(plan.Launch.Stdin, close: true);
-            var stdout = process.ReadStdoutAsync(Interpret);
-            var stderr = process.ReadStderrAsync(line =>
+            try
             {
-                log.AppendStderr(line);
-                stderrTail.Add(line);
-            });
-            _ = WatchExitAsync(stdout, stderr, stderrTail);
+                var stderrTail = new Tail();
+                _ = process.WriteStdinAsync(plan.Launch.Stdin, close: true);
+                var stdout = process.ReadStdoutAsync(Interpret);
+                var stderr = process.ReadStderrAsync(line =>
+                {
+                    log.AppendStderr(line);
+                    stderrTail.Add(line);
+                });
+                _ = WatchExitAsync(stdout, stderr, stderrTail);
+                await DrainAsync();
+            }
+            finally
+            {
+                _finished.TrySetResult();
+            }
+        }
+
+        private async Task DrainAsync()
+        {
+            var exited = false;
             try
             {
                 await foreach (var e in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
                     log.Append(e);
+                    exited |= e is AttemptEvent.Exited;
                     Record = AttemptReducer.Apply(Record, e);
                     owner.Publish(Record);
                 }
@@ -418,15 +446,19 @@ public sealed class ProjectRuns : IAsyncDisposable
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                process.StopTree();
                 Record = AttemptReducer.Abandon(Record, CannotWriteLog(e), DateTimeOffset.UtcNow);
             }
             finally
             {
+                // Whatever ended the drain early, including a Changed handler that threw, no client runs on unobserved.
+                if (!exited)
+                {
+                    process.StopTree();
+                }
+
                 log.Dispose();
                 held.Dispose();
                 owner.Finish(this);
-                _finished.SetResult();
             }
         }
 
@@ -465,7 +497,6 @@ public sealed class ProjectRuns : IAsyncDisposable
             finally
             {
                 _events.Writer.TryComplete();
-                process.Dispose();
             }
         }
     }
