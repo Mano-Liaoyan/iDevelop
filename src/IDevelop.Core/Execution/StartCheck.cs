@@ -33,10 +33,10 @@ public abstract record StartProblem
     /// <summary>The client is a batch shim, and cmd.exe cannot work in the project's network folder.</summary>
     public sealed record UncProjectFolder(ClientId Client) : StartProblem;
 
-    /// <summary>A task of this project is running, in this window or another one.</summary>
+    /// <summary>This task is already running, in this window or another one.</summary>
     public sealed record AlreadyRunning(TaskId Task, string Title) : StartProblem;
 
-    /// <summary>Another window holds the project's run but has not recorded its attempt yet.</summary>
+    /// <summary>Another window holds this task's run but has not recorded its attempt yet.</summary>
     public sealed record RunInAnotherWindow : StartProblem;
 
     /// <summary>The attempt could not be recorded, so nothing was launched. The reason is for the user.</summary>

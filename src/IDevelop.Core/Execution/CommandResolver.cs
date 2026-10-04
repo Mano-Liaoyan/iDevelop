@@ -34,18 +34,29 @@ public sealed class CommandResolver
 {
     private const string PathMarker = "__IDEVELOP_PATH__";
 
-    private readonly Lazy<Task<ImmutableArray<string>>> _searchPath;
+    private readonly Func<Task<ImmutableArray<string>>> _load;
     private readonly ImmutableArray<string> _extensions;
+    private Lazy<Task<ImmutableArray<string>>> _searchPath;
 
-    private CommandResolver(Func<Task<ImmutableArray<string>>> searchPath, ImmutableArray<string> extensions)
+    internal CommandResolver(Func<Task<ImmutableArray<string>>> searchPath, ImmutableArray<string> extensions)
     {
-        // A relative folder would point into the current folder, so neither the search nor the command's PATH keeps one.
-        _searchPath = new Lazy<Task<ImmutableArray<string>>>(async () => [.. (await searchPath()).Where(Path.IsPathFullyQualified)]);
+        _load = searchPath;
         _extensions = extensions;
+        _searchPath = Load();
     }
 
-    /// <summary>Completes once the search path is known. Discovery awaits it, so no lookup blocks on the login shell.</summary>
-    internal Task Ready => _searchPath.Value;
+    /// <summary>
+    /// Reads the search path again and completes once it is known. Each refresh of the clients calls it, so a client
+    /// installed after the app started is found, and no lookup blocks on the login shell.
+    /// </summary>
+    internal Task ReloadAsync()
+    {
+        _searchPath = Load();
+        return _searchPath.Value;
+    }
+
+    // A relative folder would point into the current folder, so neither the search nor the command's PATH keeps one.
+    private Lazy<Task<ImmutableArray<string>>> Load() => new(async () => [.. (await _load()).Where(Path.IsPathFullyQualified)]);
 
     /// <param name="extensions">Windows' PATHEXT entries, tried in order. Empty elsewhere, where a file needs an execute bit.</param>
     public static CommandResolver Create(IReadOnlyList<string> searchPath, IReadOnlyList<string> extensions)
@@ -55,8 +66,10 @@ public sealed class CommandResolver
     }
 
     /// <summary>
-    /// PATH, with PATHEXT on Windows. On macOS and Linux it also merges in the login shell's PATH, because an app started
-    /// from Finder or a desktop launcher gets a minimal PATH. That costs a shell start, so it happens at the first lookup.
+    /// PATH, with PATHEXT on Windows. An app inherits PATH from whatever started it, which can be older than the user's
+    /// last install, so the current PATH is merged in too. On Windows that is the machine and user PATH in the registry.
+    /// On macOS and Linux it is the login shell's PATH, because an app started from Finder or a desktop launcher gets a
+    /// minimal one. That costs a shell start, so it happens at the first lookup and at each refresh.
     /// </summary>
     public static CommandResolver FromEnvironment()
     {
@@ -67,8 +80,16 @@ public sealed class CommandResolver
         }
 
         var pathext = Environment.GetEnvironmentVariable("PATHEXT") is { Length: > 0 } value ? value : ".COM;.EXE;.BAT;.CMD";
-        return new CommandResolver(() => Task.FromResult(path), [.. pathext.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]);
+        return new CommandResolver(
+            () => Task.FromResult(MergeSearchPath(path, RegistryPath())),
+            [.. pathext.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]);
     }
+
+    /// <summary>The machine PATH and then the user PATH, as Windows builds a new process's PATH, with variables expanded.</summary>
+    private static ImmutableArray<string> RegistryPath() =>
+        [.. new[] { EnvironmentVariableTarget.Machine, EnvironmentVariableTarget.User }
+            .SelectMany(target => Split(Environment.GetEnvironmentVariable("Path", target)))
+            .Select(Environment.ExpandEnvironmentVariables)];
 
     public ResolvedCommand? Resolve(string command)
     {

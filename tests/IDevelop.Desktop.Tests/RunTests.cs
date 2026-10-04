@@ -170,6 +170,31 @@ public sealed class RunTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Two_tasks_run_at_once_and_closing_asks_about_both_and_stops_both()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
+            new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+        var clients = Discover();
+        var shell = Shell.Open(folder, clients);
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.Click(shell.Header(shell.Node("Review")));
+        shell.Click(shell.InView<Button>("RunTask"));
+
+        Assert.Equal(["Running", "Running"], new[] { "Say hi", "Review" }.Select(title => CardStatus(shell, title)));
+        Assert.Equal("Review and 1 more", shell.Find<TextBlock>("RunBarTask").Text);
+        shell.Window.Close();
+        shell.Render();
+        Assert.Equal(["2 tasks are running. Stop them and leave?", "Stop and leave", "Keep running"], Texts(shell.Dialog));
+        shell.Choose("StopAndLeave");
+        shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
+
+        var reopened = Shell.Open(folder, clients);
+        Assert.Equal(["Interrupted", "Interrupted"], new[] { "Say hi", "Review" }.Select(title => CardStatus(reopened, title)));
+    }
+
+    [AvaloniaFact]
     public void Keep_running_cancels_the_close_and_leaves_the_run_going()
     {
         var (shell, _, _) = StartWaitingRun();
@@ -237,7 +262,7 @@ public sealed class RunTests : IDisposable
         Assert.Equal(("Running in another window", "Running in another window"), (CardStatus(second), second.InView<TextBlock>("LastRunStatus").Text));
         Assert.Equal((true, false), (second.Find<Button>("RunTask").IsEffectivelyEnabled, second.Find<Button>("CancelRun").IsEffectivelyEnabled));
         second.Click(second.InView<Button>("RunTask"));
-        Assert.Equal("\"Say hi\" is running, and a project runs one task at a time.", second.Status);
+        Assert.Equal("\"Say hi\" is already running.", second.Status);
 
         first.Click(first.Find<Button>("RunBarCancel"));
         first.WaitUntil(() => CardStatus(first) == "Cancelled", "the first window's run is cancelled");
@@ -245,14 +270,10 @@ public sealed class RunTests : IDisposable
         first.Click(first.InView<Button>("RunTask"));
         second.Click(second.InView<Button>("RunTask"));
 
-        Assert.Equal("\"Review\" is running, and a project runs one task at a time.", second.Status);
-        Assert.Equal(["Cancelled", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
+        Assert.Equal(["Running", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
 
         first.Click(first.Find<Button>("RunBarCancel"));
         first.WaitUntil(() => CardStatus(first, "Review") == "Cancelled", "the first window's second run is cancelled");
-        second.Click(second.InView<Button>("RunTask"));
-
-        Assert.Equal(["Running", "Cancelled"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
         second.Click(second.Find<Button>("RunBarCancel"));
         second.WaitUntil(() => CardStatus(second) == "Cancelled", "the second window's run is cancelled");
     }

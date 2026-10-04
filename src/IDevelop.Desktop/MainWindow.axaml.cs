@@ -48,7 +48,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!ViewModel.HasUnsavedChanges && ViewModel.ActiveRun is null)
+        if (!ViewModel.HasUnsavedChanges && ViewModel.ActiveRuns.IsEmpty)
         {
             return;
         }
@@ -181,12 +181,18 @@ public partial class MainWindow : Window
 
     private async Task<bool> ConfirmStoppingRun()
     {
-        if (ViewModel.ActiveRun is not { } run)
+        var question = ViewModel.ActiveRuns switch
+        {
+            [] => null,
+            [var run] => $"\"{run.TaskTitle}\" is running. Stop it and leave?",
+            var runs => $"{runs.Length} tasks are running. Stop them and leave?",
+        };
+        if (question is null)
         {
             return true;
         }
 
-        return await new RunningTaskDialog(run.TaskTitle).ShowDialog<RunningTaskChoice?>(this) == RunningTaskChoice.StopAndLeave;
+        return await new RunningTaskDialog(question).ShowDialog<RunningTaskChoice?>(this) == RunningTaskChoice.StopAndLeave;
     }
 
     private async Task<bool> ConfirmLeavingDocument()

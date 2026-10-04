@@ -51,7 +51,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         _run = new RelayCommand(Run, () => !RunsHere);
         _cancel = new RelayCommand(
             () => _canvas.Runs.Cancel(Id),
-            () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active?.Id == attempt.Id);
+            () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
     }
 
     public TaskId Id => _task.Id;

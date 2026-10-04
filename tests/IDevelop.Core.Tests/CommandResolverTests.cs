@@ -28,6 +28,27 @@ public sealed class CommandResolverTests : IDisposable
         Assert.Null(CommandResolver.Create([first, second], [".exe", ".cmd"]).Resolve("codex"));
     }
 
+    // An app started from an IDE or an older terminal keeps the PATH it started with, so a client installed since then is
+    // found only when a refresh reads the user's PATH again.
+    [Fact]
+    public async Task A_refresh_finds_a_client_whose_folder_joined_the_path_after_the_app_started()
+    {
+        var old = _temp.Create("old");
+        var installed = _temp.Create("installed");
+        File.WriteAllText(Path.Combine(installed, "pi.cmd"), "@echo off\r\n");
+        List<string> userPath = [old];
+        var resolver = new CommandResolver(() => Task.FromResult<System.Collections.Immutable.ImmutableArray<string>>([.. userPath]), [".cmd"]);
+        await resolver.ReloadAsync();
+        Assert.Null(resolver.Resolve("pi"));
+
+        userPath.Add(installed);
+        await resolver.ReloadAsync();
+
+        Assert.Equal(
+            new ResolvedCommand(Path.Combine(installed, "pi.cmd"), IsBatchShim: true) { SearchPath = $"{old}{Path.PathSeparator}{installed}" },
+            resolver.Resolve("pi"));
+    }
+
     // A relative folder in the child's PATH would make it look in its current folder, which for a run is the project.
     [Fact]
     public void The_path_a_command_gets_holds_only_the_fully_qualified_folders_it_was_searched_in()
