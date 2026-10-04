@@ -5,7 +5,7 @@ using static IDevelop.Execution.AgentEvent;
 
 namespace IDevelop.Core.Tests;
 
-public class ClientRowTests
+public class ClientDefinitionTests
 {
     private const string BadCodexModel = "The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account.";
 
