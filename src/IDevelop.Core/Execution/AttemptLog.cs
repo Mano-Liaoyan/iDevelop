@@ -78,7 +78,7 @@ internal sealed class AttemptLog : IDisposable
     /// <summary>One line per event, handed to the operating system before this returns, so it survives an app crash.</summary>
     public void Append(AttemptEvent e)
     {
-        var line = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(e, Options) + "\n");
+        var line = Utf8.GetBytes(JsonSerializer.Serialize(e, Options) + "\n");
         lock (_gate)
         {
             _events.Write(line);
