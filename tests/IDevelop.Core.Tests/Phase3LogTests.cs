@@ -6,8 +6,10 @@ using IDevelop.TestSupport;
 namespace IDevelop.Core.Tests;
 
 /// <summary>
-/// tests/Shared/Fixtures/phase3-attempts holds attempt logs that the phase 3 engine wrote, through the fake agent, and
-/// record.json beside each holds the record the phase 3 reducer folded from it.
+/// tests/Shared/Fixtures/phase3-attempts holds attempt logs that the phase 3 engine wrote on 2026-10-04 at commit 73221ef.
+/// A one-off test that was never committed drove ProjectRuns through the fake agent's shims, once per case, and
+/// record.json beside each log holds the record the phase 3 reducer folded from it. They are frozen evidence of what
+/// phase 3 wrote and folded, not output to regenerate. The commands in them name test folders that no longer exist.
 /// </summary>
 public class Phase3LogTests
 {
