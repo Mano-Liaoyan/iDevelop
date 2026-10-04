@@ -11,6 +11,13 @@ namespace IDevelop.Execution;
 /// </summary>
 public sealed partial record ResolvedCommand(string Path, bool IsBatchShim)
 {
+    /// <summary>
+    /// The PATH the command's process gets, which lists the folders the resolver searched. A script that starts node, and
+    /// the tools an agent runs, then find what the app found, even when the app itself started with a minimal PATH. Null
+    /// keeps the app's own PATH.
+    /// </summary>
+    public string? SearchPath { get; init; }
+
     /// <summary>The first argument a batch shim cannot pass safely, or null.</summary>
     internal string? UnsafeArgument(IEnumerable<string> arguments) =>
         IsBatchShim ? arguments.FirstOrDefault(argument => !BatchSafe().IsMatch(argument)) : null;
@@ -64,14 +71,15 @@ public sealed class CommandResolver
 
     public ResolvedCommand? Resolve(string command)
     {
-        foreach (var folder in _searchPath.Value.GetAwaiter().GetResult().Where(Path.IsPathFullyQualified))
+        var searchPath = _searchPath.Value.GetAwaiter().GetResult();
+        foreach (var folder in searchPath.Where(Path.IsPathFullyQualified))
         {
             if (_extensions.IsEmpty)
             {
                 var path = Path.Combine(folder, command);
                 if (File.Exists(path) && (OperatingSystem.IsWindows() || IsExecutable(path)))
                 {
-                    return new ResolvedCommand(path, IsBatchShim: false);
+                    return Found(path, isBatch: false);
                 }
 
                 continue;
@@ -83,12 +91,14 @@ public sealed class CommandResolver
                 if (File.Exists(path))
                 {
                     var isBatch = extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) || extension.Equals(".bat", StringComparison.OrdinalIgnoreCase);
-                    return new ResolvedCommand(path, isBatch);
+                    return Found(path, isBatch);
                 }
             }
         }
 
         return null;
+
+        ResolvedCommand Found(string path, bool isBatch) => new(path, isBatch) { SearchPath = string.Join(Path.PathSeparator, searchPath) };
     }
 
     /// <summary>The PATH a login shell prints after <see cref="PathMarker"/>. Shell start-up noise before it is ignored.</summary>

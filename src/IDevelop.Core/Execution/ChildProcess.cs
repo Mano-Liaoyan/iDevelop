@@ -59,6 +59,11 @@ internal sealed class ChildProcess : IDisposable
             start.ArgumentList.Add(value);
         }
 
+        if (command.SearchPath is { } searchPath)
+        {
+            start.Environment["PATH"] = searchPath;
+        }
+
         try
         {
             return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."));

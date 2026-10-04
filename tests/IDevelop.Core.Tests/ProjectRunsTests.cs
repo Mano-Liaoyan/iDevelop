@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -112,6 +113,32 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Null(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (reopened.Latest[SayHiId].Status, reopened.Latest[SayHiId].Result));
+    }
+
+    // An npm install of Codex is a script that starts with "#!/usr/bin/env node". The folder that holds it and node is
+    // not on this process's PATH, as for an app started from Finder whose clients only the login shell's PATH finds.
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task A_client_script_finds_node_in_the_folders_the_client_was_found_in()
+    {
+        var codex = Path.Combine(_fakes.Folder, "codex");
+        File.WriteAllText(codex, "#!/usr/bin/env node\n");
+        File.SetUnixFileMode(codex, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        _fakes.Install("node",
+            On(codex, "debug", "models").Replay(Fixture.Path("codex-debug-models.json")),
+            On(codex, "login", "status").Print("Logged in using ChatGPT"),
+            On(codex, "exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
+        var clients = await DiscoverAsync();
+        Assert.Equal(
+            ["gpt-6.1-sol", "gpt-6-sol", "gpt-5.5"],
+            Assert.IsType<ClientStatus.Ready>(clients.Current[ClientId.Codex]).Models.Select(model => model.Id));
+        await using var runs = ProjectRuns.Open(_project, clients);
+        var settled = NextSettled(runs);
+
+        runs.Start(SayHi(Runs[ClientId.Codex].Settings));
+
+        var record = await settled;
+        Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
     }
 
     [Theory]

@@ -20,10 +20,10 @@ public sealed class CommandResolverTests : IDisposable
         File.WriteAllText(Path.Combine(second, "pi.exe"), "");
 
         Assert.Equal(
-            new ResolvedCommand(Path.Combine(first, "pi.cmd"), IsBatchShim: true),
+            new ResolvedCommand(Path.Combine(first, "pi.cmd"), IsBatchShim: true) { SearchPath = $"{first}{Path.PathSeparator}{second}" },
             CommandResolver.Create([first, second], [".exe", ".cmd"]).Resolve("pi"));
         Assert.Equal(
-            new ResolvedCommand(Path.Combine(second, "pi.exe"), IsBatchShim: false),
+            new ResolvedCommand(Path.Combine(second, "pi.exe"), IsBatchShim: false) { SearchPath = $"{second}{Path.PathSeparator}{first}" },
             CommandResolver.Create([second, first], [".exe", ".cmd"]).Resolve("pi"));
         Assert.Null(CommandResolver.Create([first, second], [".exe", ".cmd"]).Resolve("codex"));
     }
@@ -40,7 +40,7 @@ public sealed class CommandResolverTests : IDisposable
 
         File.SetUnixFileMode(agy, UnixFileMode.UserRead | UnixFileMode.UserExecute);
 
-        Assert.Equal(new ResolvedCommand(agy, IsBatchShim: false), resolver.Resolve("agy"));
+        Assert.Equal(new ResolvedCommand(agy, IsBatchShim: false) { SearchPath = folder }, resolver.Resolve("agy"));
     }
 
     [Fact]
