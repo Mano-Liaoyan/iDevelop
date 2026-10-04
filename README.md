@@ -4,7 +4,7 @@ A project for building a graphical interface that coordinates multiple coding ag
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
-This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugins/tree/main/pstack), version `0.15.6`, pinned to commit `23e4138daa01c42d4969f7a5465f82704e64f798`. Its 49 skills, 24 principles, and 23 playbooks come from the official source. This repository adds local adapters for Codex, Pi, Claude Code, and Antigravity CLI. These adapters are maintained by this project and are not an official PStack port.
+This project uses [Lauren Tan's PStack, @poteto](https://github.com/cursor/plugins/tree/main/pstack), version `0.15.6`, pinned to commit `23e4138daa01c42d4969f7a5465f82704e64f798`. Its 49 skills, 24 principles, and 23 playbooks come from the official source. This repository adds local adapters for Codex, Pi, Claude Code, and Antigravity CLI. These adapters are maintained by this project and are not an official PStack port. Project-owned skills live in [`skills/`](skills/), and setup installs them beside the PStack skills. [`verify-idevelop`](skills/verify-idevelop/SKILL.md) drives the built app's real window on Windows.
 
 ## Initialize the project
 
@@ -17,7 +17,7 @@ node scripts/pstack.mjs setup
 node scripts/pstack.mjs check
 ```
 
-Setup downloads the recorded PStack submodule revision and generates `.agents/skills` inside the project. Claude and Cursor link to that directory. Antigravity CLI discovers it natively, and the Pi launcher loads it explicitly. Run setup after cloning or creating a worktree. Initial setup needs network access. Generated files and personal settings are excluded from commits.
+Setup downloads the recorded PStack submodule revision and generates `.agents/skills` inside the project from PStack and from each folder in `skills/`. Both get the same adapter notice and drift check, and a project skill named like a PStack skill fails setup. Claude and Cursor link to that directory. Antigravity CLI discovers it natively, and the Pi launcher loads it explicitly. Run setup after cloning or creating a worktree. Initial setup needs network access. Generated files and personal settings are excluded from commits.
 
 The upstream repository lives at `.pstack/upstream`. The main repository records its URL and commit. PStack belongs to the official `cursor/plugins` monorepo, so the submodule points to that repository. Setup uses sparse checkout to expose `pstack` and upstream root files without expanding other plugin directories. The source and license are under `.pstack/upstream/pstack`.
 
@@ -54,7 +54,7 @@ dotnet run --project src/IDevelop.Desktop
 
 The solution is [`iDevelop.slnx`](iDevelop.slnx). `src/IDevelop.Core` holds the workflow model, its edit rules, the project file format, and the engine that finds the agent clients and runs a task. It has no UI dependency. `tests/IDevelop.FakeAgent` is a stand-in client that replays recorded client output, so the tests start real processes without any agent client installed. `src/IDevelop.Desktop` is the Avalonia application with the NodifyAvalonia canvas. The tests in `tests/IDevelop.Desktop.Tests` drive the real main window headlessly with pointer and keyboard input.
 
-On Windows, `scripts/check-real-window.ps1 -Exe src/IDevelop.Desktop/bin/Release/net10.0/IDevelop.Desktop.exe -OutDir <folder>` drives the built app's real window through UI Automation without moving the mouse. It edits and saves a workflow, answers the unsaved-changes prompt, reopens the project, and switches the theme across a restart. It reads the AGENTS section and the agent pickers against the clients installed on your machine. It then runs and cancels a task through a fake Codex from the Release build of `tests/IDevelop.FakeAgent`, so the run needs no agent account. Each run writes its projects and screenshots to a new timestamped folder inside the given folder. The script replaces your theme preference while it runs and restores it afterward, or on its next start if it was killed.
+On Windows, `scripts/check-real-window.ps1 -Exe src/IDevelop.Desktop/bin/Release/net10.0/IDevelop.Desktop.exe -OutDir <folder>` drives the built app's real window through UI Automation without moving the mouse. It edits and saves a workflow, answers the unsaved-changes prompt, reopens the project, and switches the theme across a restart. It reads the AGENTS section and the agent pickers against the clients installed on your machine. It then runs and cancels a task through a fake Codex from the Release build of `tests/IDevelop.FakeAgent`, so the run needs no agent account. Each run writes its projects and screenshots to a new timestamped folder inside the given folder. The script replaces your theme preference while it runs and restores it afterward, or on the next start of a real-window run if it was killed. It refuses to start while a `verify-idevelop` session holds the preference. That skill drives the same window one feature at a time through the script's module, [`scripts/real-window.psm1`](scripts/real-window.psm1), and keeps its evidence in `.verify/`.
 
 Choose the folder button beside **PROJECT** in the sidebar, or name a folder after `--` in the run command to open it at start. Any existing folder opens, including a repository. Its workflow is saved to `.idp/workflows/<workflow-id>.json`, which travels with the repository and reviews as an ordinary diff. The first save creates that folder. Earlier builds wrote the same file format to a differently named data folder, so renaming that folder to `.idp` by hand is enough to open it. [`samples/storage-change`](samples/storage-change) is a three-task example. Copy it to a scratch folder and open the copy, or open a folder of your own. Saving rewrites the opened folder's workflow file, and the tests compare the sample byte for byte.
 
@@ -103,7 +103,7 @@ Search for `poteto-mode` in the composer's `@` menu, or include `$poteto-mode` i
 $poteto-mode Check this project's development environment and explain the next step.
 ```
 
-The upstream `/poteto-mode` examples use Cursor's invocation syntax. Codex's slash menu is not the installation check. Codex added skills to the [`@` menu in March 2026](https://learn.chatgpt.com/docs/changelog). This project's 49 PStack skills have been verified through its discovery API. If you opened a conversation before setup, start a new conversation in this project and search again.
+The upstream `/poteto-mode` examples use Cursor's invocation syntax. Codex's slash menu is not the installation check. Codex added skills to the [`@` menu in March 2026](https://learn.chatgpt.com/docs/changelog). This project's 49 PStack skills and its project skills have been verified through its discovery API. If you opened a conversation before setup, start a new conversation in this project and search again.
 
 Invoking project skills and hiding other skills are separate capabilities. The table below records the desktop isolation limit. Global skill settings have not been changed to hide them.
 
@@ -122,7 +122,7 @@ The launcher does not install clients, copy credentials, or change other project
 
 | Client | Project isolation | Verification and limits |
 | --- | --- | --- |
-| Codex CLI | Generates session-level `-c skills.config=...` overrides from discovered `SKILL.md` paths. Tool connections remain available. | `node scripts/pstack.mjs isolate-codex` generates the filter. `audit-codex` uses the same override with the real `skills/list` API. It verifies exactly 49 enabled PStack skills and confirms that an ordinary parent-directory session retains its other skills. The model's actual prompt was also checked for the same 49 entries. |
+| Codex CLI | Generates session-level `-c skills.config=...` overrides from discovered `SKILL.md` paths. Tool connections remain available. | `node scripts/pstack.mjs isolate-codex` generates the filter. `audit-codex` uses the same override with the real `skills/list` API. It verifies that exactly the 49 PStack skills and the project skills are enabled, and confirms that an ordinary parent-directory session retains its other skills. An earlier check of the model's actual prompt found the 49 PStack entries. |
 | Codex desktop | Reads project PStack skills and `AGENTS.md`. | Version `0.160.0` ignores project-layer `skills.config` filters. No supported desktop setting for project-only skill hiding was found. Ordinary desktop conversations may display other skills. Use the CLI launcher for the verified isolation. |
 | Claude Code | Uses `--setting-sources project,local` to exclude personal and synced skill sources. Disables bundled skills and hides doctor. | Shares `.claude/skills`. Organization-managed settings may still apply. After installing the client, inspect `/skills` and `/plugin`. |
 | Pi | Uses `--no-extensions --no-skills --skill <project-directory> --no-prompt-templates`. | Explicitly loads only PStack. Disabling extensions also disables subagent and MCP capabilities supplied by those extensions. Review any required extension before explicitly loading it from the project. An ordinary `pi` launch does not guarantee isolation. |
@@ -204,7 +204,7 @@ node scripts/pstack.mjs setup
 
 Ordinary setup does not follow the latest upstream version. If an initialized submodule differs from the index, setup asks you to synchronize it or stage an intentional upgrade. Generation also rejects upstream working-tree changes.
 
-The script owns the generated directory. Regeneration removes files and skills deleted upstream. Put project customizations in the adapter script or shared configuration.
+The script owns the generated directory. Regeneration removes files and skills deleted upstream or from `skills/`. Put project customizations in the adapter script, shared configuration, or a project skill in `skills/`.
 
 ## References
 
