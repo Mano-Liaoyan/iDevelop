@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-03. The user selected C# and Avalonia. Runtime design details remain proposals. No application, provider login, or performance claim has been validated by running iDevelop.
+Updated: 2026-10-04. The user selected C# and Avalonia. The desktop editor runs and looks like PlanWeave. Runtime design details remain proposals. No agent execution, provider login, or performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -169,7 +169,7 @@ Avalonia documents accessibility and IME facilities. The custom graph still need
 
 A log viewer is not an interactive terminal. Prefer structured agent events for the main interface. If a client requires an interactive terminal, select and validate a suitable .NET integration separately, including process control, escape sequences, selection, and keyboard behavior.
 
-The [selection record](handoffs/2026-10-03-avalonia-selection.md) supersedes the earlier [language comparison](handoffs/2026-10-03-language-and-node-editors.md). Earlier alternatives are historical research, not active prototype tasks.
+The [selection record](handoffs/2026-10-03-avalonia-selection.md) records the decision and closes the earlier framework comparisons. Those comparisons are historical research, not active prototype tasks.
 
 ## The interface follows the PlanWeave look
 
@@ -219,4 +219,52 @@ The implementation should cover these acceptance cases:
 - Continue a task with a different agent using only the exported handoff and repository artifacts.
 - Build and smoke-test on Windows, macOS, and Linux separately. One shared codebase does not remove platform packaging and testing work.
 
-The first working slice should prove two-person graph review, one subscription-backed coding client, one API-backed agent, dependency scheduling, a Markdown handoff, and a GitHub review gate. The provider catalog can include additional documented integrations with their real availability clearly marked. This is delivery sequencing, not removal of the requested provider scope.
+The [delivery order](#delivery-order) decides which phase proves which case. The provider catalog can include additional documented integrations with their real availability clearly marked. This is delivery sequencing, not removal of the requested provider scope.
+
+## Delivery order
+
+The user set this order on 2026-10-04. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement. It moved later, not out of scope.
+
+| Phase | State | Completion condition |
+| --- | --- | --- |
+| 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
+| 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
+| 3. Single-task execution | Next | Every task runs on its own with each supported agent, using the agent, model, and reasoning setting configured on its node. |
+| 4. Workflow execution | Planned | A workflow runs as a dependency graph. Ready tasks start when their predecessors meet their completion condition, and independent tasks run concurrently. |
+| 5. Team synchronization | Planned | Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
+
+### Single-task execution comes next
+
+Each task node gains an execution configuration with the agent client, the model, and the reasoning setting that the chosen agent and model support. The app finds the coding clients installed on the local machine and shows whether each one is ready, which means installed, signed in, and able to serve the chosen model. Claude Code, Codex, Pi, and Antigravity CLI are in scope, each through an access route its provider permits. The [provider access reference](provider-access.md) lists the routes that are still unverified.
+
+Running a task starts one attempt of its agent in the project. The app shows the agent's progress, lets the user cancel it, and records the attempt with its agent, model, settings, start and end times, outcome, and summary. Running a task ignores its connections. Several tasks can each run on their own.
+
+This phase makes the agent picker, the status pill, and status-colored cards real features, so they join the PlanWeave look.
+
+The phase is complete when these cases pass in the running app:
+
+- Configure a task's agent, model, and reasoning setting from the values that agent and model support. Save and reopen the project with the configuration intact.
+- See which clients are installed and ready, and why a client is not ready.
+- Run one task with each supported client and see its outcome and summary.
+- Cancel a running attempt and see it recorded as cancelled.
+- Try to run a task whose client is not ready, and see the reason instead of a launch.
+- Quit the app while an attempt runs, and see that attempt reported as interrupted when the project reopens.
+
+The phase's design step settles these questions. Nothing here decides them.
+
+- How the app drives each client. Prefer a structured interface, such as ACP where the client implements it, over a client-specific adapter.
+- Whether an attempt edits the project folder itself or an isolated Git worktree and branch.
+- Where per-user client settings live, and how the workflow file stores each task's configuration. That changes the file format.
+- What an attempt record contains and where the app keeps it.
+
+### Workflow execution follows
+
+Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. This phase settles what a review connection blocks, which is still an open question.
+
+### Team synchronization comes after execution
+
+Synchronization then shares a workflow that already carries execution configuration and attempt state, so its protocol is designed against the final task model. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
+
+### Later work
+
+The order of these remains open. Generate a draft workflow from a natural-language request. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
