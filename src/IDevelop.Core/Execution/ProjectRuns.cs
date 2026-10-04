@@ -124,7 +124,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
             if (held is null)
             {
-                result = new StartResult.Refused(ReadAnotherWindowsRun(task));
+                // Another instance holds the lock, so the read settles nothing.
+                (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
+                result = new StartResult.Refused(AnotherWindowsRun(task.Id));
             }
             else
             {
@@ -341,14 +343,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private StartResult.Refused CannotRecord(Exception e) => new(new StartProblem.CannotRecord($"iDevelop could not write {_attempts}. {e.Message}"));
 
-    /// <summary>Another instance holds the lock, so the read settles nothing.</summary>
-    private StartProblem ReadAnotherWindowsRun(TaskDefinition task)
-    {
-        (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
-        return Latest.TryGetValue(task.Id, out var running) && running.Status == AttemptStatus.Running
+    /// <summary>The run of another instance that holds the task's lock, as <see cref="Latest"/> shows it.</summary>
+    private StartProblem AnotherWindowsRun(TaskId task) =>
+        Latest.TryGetValue(task, out var running) && running.Status == AttemptStatus.Running
             ? new StartProblem.AlreadyRunning(running.Task, running.TaskTitle)
             : new StartProblem.RunInAnotherWindow();
-    }
 
     private void Publish(AttemptRecord record)
     {
