@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
+using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
 
 namespace IDevelop.Desktop.Tests;
@@ -82,11 +83,11 @@ public sealed class ThemeTests : IDisposable
             File.WriteAllText(file, text);
         }
 
-        Assert.Equal(theme, App.ReadTheme(file).ToString());
+        Assert.Equal(theme, ThemePreference.Read(file).ToString());
     }
 
     [AvaloniaFact]
-    public void The_switch_marks_the_theme_set_in_code()
+    public void The_switch_marks_a_theme_set_in_code_which_leaves_the_saved_choice_as_it_was()
     {
         var shell = Shell.Open(_temp.Create("plan"));
         shell.Click(shell.Find<RadioButton>("ThemeDark"));

@@ -101,25 +101,9 @@ public sealed class TaskNodeViewModel : ObservableObject
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
 
     /// <summary>The levels the task's model offers, then the task's level when the model does not offer it, marked.</summary>
-    public IReadOnlyList<Choice> ReasoningChoices
-    {
-        get
-        {
-            if (_task.Execution is not { } settings)
-            {
-                return [];
-            }
-
-            var model = ExecutionChoices.OfferedModel(Status, settings.Model);
-            List<Choice> choices = [.. (model?.ReasoningLevels ?? []).Select(level => new Choice(Id, level, level))];
-            if (settings.Reasoning is { } stored && !choices.Any(choice => choice.Id == stored))
-            {
-                choices.Add(new Choice(Id, stored, model is null ? stored : $"{stored} (not offered)"));
-            }
-
-            return choices;
-        }
-    }
+    public IReadOnlyList<Choice> ReasoningChoices => _task.Execution is { } settings
+        ? [.. ExecutionChoices.Reasoning(settings, Status).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
+        : [];
 
     public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
 

@@ -20,7 +20,6 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
-    private readonly WorkflowDocument _document;
     private readonly Action<string?> _setNotice;
     private readonly Dictionary<TaskId, TaskNodeViewModel> _nodes = [];
     private readonly Dictionary<ConnectionKey, ConnectionViewModel> _connections = [];
@@ -31,7 +30,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice)
     {
-        _document = document;
+        Document = document;
         Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
@@ -44,7 +43,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
-        _document.Changed += (_, _) => Sync();
+        Document.Changed += (_, _) => Sync();
         Sync();
     }
 
@@ -116,7 +115,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public ICommand CommitMovesCommand { get; }
 
-    internal Workflow Workflow => _document.Current;
+    internal WorkflowDocument Document { get; }
+
+    internal Workflow Workflow => Document.Current;
 
     internal ProjectRuns Runs { get; }
 
@@ -135,8 +136,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     internal EditResult Edit(WorkflowEdit edit)
     {
-        var result = _document.Apply(edit);
-        _setNotice(result is EditResult.Rejected rejected ? RejectionText.Describe(rejected.Reason, _document.Current) : null);
+        var result = Document.Apply(edit);
+        _setNotice(result is EditResult.Rejected rejected ? RejectionText.Describe(rejected.Reason, Document.Current) : null);
         return result;
     }
 
@@ -211,69 +212,85 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private void Sync()
     {
         var previous = _projected;
-        var current = _document.Current;
+        var current = Document.Current;
         _projected = current;
         var connectionsChanged = !ReferenceEquals(previous?.Connections, current.Connections);
 
+        // A connection holds its two task nodes, so a connection leaves before its nodes can, and comes after they exist.
         if (connectionsChanged)
         {
-            foreach (var key in _connections.Keys.Where(key => !current.Connections.ContainsKey(key)).ToList())
-            {
-                var connection = _connections[key];
-                SelectedConnections.Remove(connection);
-                Connections.Remove(connection);
-                _connections.Remove(key);
-            }
+            DropConnections(current);
         }
 
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
         {
-            foreach (var (id, task) in current.Tasks)
-            {
-                if (_nodes.TryGetValue(id, out var node))
-                {
-                    node.Update(task, current.Positions[id]);
-                }
-                else
-                {
-                    node = new TaskNodeViewModel(this, task, current.Positions[id]);
-                    _nodes.Add(id, node);
-                    Nodes.Add(node);
-                }
-            }
-
-            foreach (var id in _nodes.Keys.Where(id => !current.Tasks.ContainsKey(id)).ToList())
-            {
-                var node = _nodes[id];
-                SelectedNodes.Remove(node);
-                Nodes.Remove(node);
-                _nodes.Remove(id);
-            }
+            SyncNodes(current);
         }
 
         if (connectionsChanged)
         {
-            foreach (var (key, kind) in current.Connections)
-            {
-                if (_connections.TryGetValue(key, out var connection))
-                {
-                    connection.Update(kind);
-                }
-                else
-                {
-                    connection = new ConnectionViewModel(this, key, _nodes[key.From], _nodes[key.To], kind);
-                    _connections.Add(key, connection);
-                    Connections.Add(connection);
-                }
-            }
+            SyncConnections(current);
+        }
+    }
 
-            var sources = current.Connections.Keys.Select(key => key.From).ToHashSet();
-            var targets = current.Connections.Keys.Select(key => key.To).ToHashSet();
-            foreach (var (id, node) in _nodes)
+    private void DropConnections(Workflow current)
+    {
+        foreach (var key in _connections.Keys.Where(key => !current.Connections.ContainsKey(key)).ToList())
+        {
+            var connection = _connections[key];
+            SelectedConnections.Remove(connection);
+            Connections.Remove(connection);
+            _connections.Remove(key);
+        }
+    }
+
+    private void SyncNodes(Workflow current)
+    {
+        foreach (var (id, task) in current.Tasks)
+        {
+            if (_nodes.TryGetValue(id, out var node))
             {
-                node.Output.IsConnected = sources.Contains(id);
-                node.Input.IsConnected = targets.Contains(id);
+                node.Update(task, current.Positions[id]);
             }
+            else
+            {
+                node = new TaskNodeViewModel(this, task, current.Positions[id]);
+                _nodes.Add(id, node);
+                Nodes.Add(node);
+            }
+        }
+
+        foreach (var id in _nodes.Keys.Where(id => !current.Tasks.ContainsKey(id)).ToList())
+        {
+            var node = _nodes[id];
+            SelectedNodes.Remove(node);
+            Nodes.Remove(node);
+            _nodes.Remove(id);
+        }
+    }
+
+    private void SyncConnections(Workflow current)
+    {
+        foreach (var (key, kind) in current.Connections)
+        {
+            if (_connections.TryGetValue(key, out var connection))
+            {
+                connection.Update(kind);
+            }
+            else
+            {
+                connection = new ConnectionViewModel(this, key, _nodes[key.From], _nodes[key.To], kind);
+                _connections.Add(key, connection);
+                Connections.Add(connection);
+            }
+        }
+
+        var sources = current.Connections.Keys.Select(key => key.From).ToHashSet();
+        var targets = current.Connections.Keys.Select(key => key.To).ToHashSet();
+        foreach (var (id, node) in _nodes)
+        {
+            node.Output.IsConnected = sources.Contains(id);
+            node.Input.IsConnected = targets.Contains(id);
         }
     }
 

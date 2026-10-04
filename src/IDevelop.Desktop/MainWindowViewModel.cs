@@ -13,10 +13,7 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly ClientDirectory _clients;
     private readonly RelayCommand _save;
-    private readonly RelayCommand _addTask;
     private readonly RelayCommand _refreshAgents;
-    private WorkflowDocument? _document;
-    private ProjectRuns? _runs;
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
     private bool _refreshingAgents;
@@ -24,8 +21,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(ClientDirectory clients)
     {
         _clients = clients;
-        _save = new RelayCommand(() => TrySave(), () => _document is not null);
-        _addTask = new RelayCommand(() => Canvas?.AddTaskCommand.Execute(null), () => Canvas is not null);
+        _save = new RelayCommand(() => TrySave(), () => Canvas is not null);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -36,11 +32,11 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _canvas, value);
     }
 
-    public string? ProjectName => _document is null ? null : Path.GetFileName(Path.TrimEndingDirectorySeparator(_document.ProjectFolder));
+    public string? ProjectName => Canvas is { } canvas ? Path.GetFileName(Path.TrimEndingDirectorySeparator(canvas.Document.ProjectFolder)) : null;
 
     public string Title => ProjectName is null ? "iDevelop" : $"{ProjectName}{(HasUnsavedChanges ? "*" : "")} - iDevelop";
 
-    public bool HasUnsavedChanges => _document?.HasUnsavedChanges ?? false;
+    public bool HasUnsavedChanges => Canvas?.Document.HasUnsavedChanges ?? false;
 
     public string? Status
     {
@@ -50,15 +46,13 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ICommand SaveCommand => _save;
 
-    public ICommand AddTaskCommand => _addTask;
-
     public IReadOnlyList<AgentRow> Agents => [.. Clients.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;
 
     /// <summary>The tasks this window's project is running, oldest first.</summary>
-    public ImmutableArray<AttemptRecord> ActiveRuns => _runs?.Active ?? [];
+    public ImmutableArray<AttemptRecord> ActiveRuns => Canvas?.Runs.Active ?? [];
 
     /// <summary>
     /// Reads the folder's workflow before it leaves the open project, so a folder that fails to open leaves that project
@@ -73,14 +67,12 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {
-            Status = e is ProjectException ? e.Message : $"Couldn't open {folder}: {e.Message}";
+            Status = Describe(e, $"Couldn't open {folder}");
             return;
         }
 
         await LeaveProject();
         var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
-        _document = document;
-        _runs = runs;
         document.Changed += (_, _) => OnDocumentChanged();
         Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice);
         Status = runs.Warnings.IsEmpty ? null : string.Join(" ", runs.Warnings);
@@ -90,37 +82,38 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Closes the open project. A running task's client is stopped, and its attempt is recorded as interrupted.</summary>
     public async Task LeaveProject()
     {
-        if (_runs is not { } runs)
+        if (Canvas is not { } canvas)
         {
             return;
         }
 
-        _runs = null;
-        _document = null;
         Canvas = null;
         OnProjectChanged();
-        await runs.DisposeAsync();
+        await canvas.Runs.DisposeAsync();
     }
 
     public bool TrySave()
     {
-        if (_document is null)
+        if (Canvas is not { } canvas)
         {
             return true;
         }
 
         try
         {
-            _document.Save();
+            canvas.Document.Save();
             Status = null;
             return true;
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {
-            Status = e is ProjectException ? e.Message : $"Couldn't save: {e.Message}";
+            Status = Describe(e, "Couldn't save");
             return false;
         }
     }
+
+    // A ProjectException's message is already written for the user. A file system error's message needs the action.
+    private static string Describe(Exception e, string action) => e is ProjectException ? e.Message : $"{action}: {e.Message}";
 
     private void OnClientsChanged()
     {
@@ -148,7 +141,6 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ProjectName));
         OnDocumentChanged();
         _save.NotifyCanExecuteChanged();
-        _addTask.NotifyCanExecuteChanged();
     }
 
     private void OnDocumentChanged()

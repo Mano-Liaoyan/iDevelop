@@ -2,10 +2,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -18,7 +18,7 @@ public sealed class UnsavedChangesTests : IDisposable
 
     public UnsavedChangesTests()
     {
-        _seed = _temp.Seed(new WorkflowEdit.CreateTask(new TaskDefinition(TaskId.New()) { Title = "Design" }, new CanvasPoint(105, 90)));
+        _seed = _temp.Seed(TaskAt(TaskId.New(), "Design", 105, 90));
         _other = _temp.Create("other");
     }
 
@@ -45,9 +45,6 @@ public sealed class UnsavedChangesTests : IDisposable
         return shell;
     }
 
-    private static string[] Texts(Window? dialog) =>
-        [.. Assert.IsType<UnsavedChangesDialog>(dialog).GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text ?? "")];
-
     private string[] SavedTitles() => [.. WorkflowDocument.Open(_seed).Current.Tasks.Values.Select(task => task.Title).Order()];
 
     [AvaloniaFact]
@@ -57,7 +54,7 @@ public sealed class UnsavedChangesTests : IDisposable
 
         shell.Click(shell.Find<Button>("OpenFolder"));
 
-        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], Texts(shell.Dialog));
+        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("CancelChanges");
         Assert.Null(shell.Dialog);
         Assert.Equal(0, _picks);
@@ -144,7 +141,7 @@ public sealed class UnsavedChangesTests : IDisposable
         shell.Window.Close();
         shell.Render();
 
-        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], Texts(shell.Dialog));
+        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("CancelChanges");
         Assert.Null(shell.Dialog);
         Assert.True(shell.Window.IsVisible);

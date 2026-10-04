@@ -9,9 +9,9 @@ public partial class UnsavedChangesDialog : Window
 {
     public UnsavedChangesDialog() => InitializeComponent();
 
-    public UnsavedChangesDialog(string folder) : this()
+    public UnsavedChangesDialog(string projectName) : this()
     {
-        Title = $"Save changes to {folder}?";
+        Title = $"Save changes to {projectName}?";
         Question.Text = Title;
     }
 

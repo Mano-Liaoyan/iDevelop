@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Execution;
+using IDevelop.Workflows;
 using Nodify;
 
 namespace IDevelop.Desktop.Tests;
@@ -30,7 +31,8 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
-    /// <summary>Without <paramref name="clients"/> the window finds no client, so no test probes this machine's clients.</summary>
+    /// <summary>Without <paramref name="clients"/> nothing refreshes the window's directory, so every client stays Checking
+    /// and no test probes this machine's clients.</summary>
     public static Shell Show(ClientDirectory? clients = null)
     {
         var window = clients is null ? new MainWindow() : new MainWindow(clients);
@@ -42,16 +44,13 @@ internal sealed class Shell
 
     public static Shell Open(string folder, ClientDirectory? clients = null)
     {
-        var window = clients is null ? new MainWindow() : new MainWindow(clients);
-        window.Show();
-        window.ViewModel.Open(folder);
-        var shell = new Shell(window);
+        var shell = Show(clients);
+        shell.Window.ViewModel.Open(folder);
         shell.Render();
         return shell;
     }
 
-    public T Find<T>(string automationId) where T : Control =>
-        Window.GetVisualDescendants().OfType<T>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+    public T Find<T>(string automationId) where T : Control => ById<T>(Window, automationId).Single();
 
     /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
     public T InView<T>(string automationId) where T : Control
@@ -62,8 +61,7 @@ internal sealed class Shell
         return control;
     }
 
-    public bool Has<T>(string automationId) where T : Control =>
-        Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
+    public bool Has<T>(string automationId) where T : Control => ById<T>(Window, automationId).Any();
 
     public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
 
@@ -88,15 +86,39 @@ internal sealed class Shell
 
     public IEnumerable<ItemContainer> Nodes() => Window.GetVisualDescendants().OfType<ItemContainer>();
 
+    public T InCard<T>(string title, string automationId) where T : Control => ById<T>(Node(title), automationId).Single();
+
+    public string CardText(string title, string automationId) => TextOf(InCard<Control>(title, automationId));
+
+    public ListBoxItem SidebarRow(string title) =>
+        Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
+
     // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
     public IEnumerable<BaseConnection> Connections() =>
         Window.GetVisualDescendants().OfType<BaseConnection>().Where(connection => connection.DataContext is ConnectionViewModel);
+
+    /// <summary>Each drawn connection's ends and kind, in order.</summary>
+    public (string From, string To, ConnectionKind Kind)[] Drawn() =>
+        [.. Connections()
+            .Select(connection => (ConnectionViewModel)connection.DataContext!)
+            .Select(connection => (connection.From.Title, connection.To.Title, connection.Kind))
+            .Order()];
 
     public NodeOutput Output(string title) =>
         Window.GetVisualDescendants().OfType<NodeOutput>().Single(output => ((PortViewModel)output.DataContext!).Node.Title == title);
 
     public NodeInput Input(string title) =>
         Window.GetVisualDescendants().OfType<NodeInput>().Single(input => ((PortViewModel)input.DataContext!).Node.Title == title);
+
+    /// <summary>The visual's box in the window.</summary>
+    public Rect Bounds(Visual visual) => new(At(visual, default), visual.Bounds.Size);
+
+    /// <summary>The nearest border around the visual that has the style class.</summary>
+    public static Border Around(Visual visual, string cssClass) =>
+        visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains(cssClass));
+
+    /// <summary>The card's box in the editor, at the editor's zoom.</summary>
+    public Rect CardRect(string title) => new(Node(title).TranslatePoint(default, Editor)!.Value, Node(title).Bounds.Size * Editor.ViewportZoom);
 
     public Point Center(Visual visual) => At(visual, new Point(visual.Bounds.Width / 2, visual.Bounds.Height / 2));
 
@@ -106,6 +128,10 @@ internal sealed class Shell
         Center(connector.GetVisualDescendants().OfType<TemplatedControl>().Single(control => control.Name == "PART_Connector"));
 
     public (Point Source, Point Target) Ends(BaseConnection connection) => (At(connection, connection.Source), At(connection, connection.Target));
+
+    public static Point Rounded(Point point) => new(Math.Round(point.X, 2), Math.Round(point.Y, 2));
+
+    public static (Point, Point) Rounded((Point Source, Point Target) ends) => (Rounded(ends.Source), Rounded(ends.Target));
 
     // Step connections from one output share their first runs. Only the run that enters the target is unique to one
     // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
@@ -149,15 +175,20 @@ internal sealed class Shell
     /// <summary>What the picker shows as chosen, or its placeholder.</summary>
     public string Picked(string picker) => TextOf(Find<ComboBox>(picker));
 
-    public static string TextOf(Visual visual) =>
-        string.Join(" ", visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
+    /// <summary>The visible, non-empty texts of the visual and everything in it, in visual order.</summary>
+    public static string[] Texts(Visual visual) =>
+        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text!)];
+
+    public static string TextOf(Visual visual) => string.Join(" ", Texts(visual));
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
+
+    public string[] DialogTexts() => Texts(Dialog ?? throw new InvalidOperationException("No dialog is open."));
 
     public void Choose(string automationId)
     {
         var dialog = Dialog ?? throw new InvalidOperationException("No dialog is open.");
-        var button = dialog.GetVisualDescendants().OfType<Button>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+        var button = ById<Button>(dialog, automationId).Single();
         var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), dialog)!.Value;
         dialog.MouseMove(point);
         dialog.MouseDown(point, MouseButton.Left);
@@ -241,6 +272,9 @@ internal sealed class Shell
 
         Dispatcher.UIThread.RunJobs();
     }
+
+    private static IEnumerable<T> ById<T>(Visual root, string automationId) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().Where(control => AutomationProperties.GetAutomationId(control) == automationId);
 
     private Point At(Visual visual, Point local) =>
         visual.TranslatePoint(local, Window) ?? throw new InvalidOperationException($"{visual} is not in the window.");

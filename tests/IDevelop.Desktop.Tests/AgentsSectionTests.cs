@@ -25,13 +25,6 @@ public sealed class AgentsSectionTests : IDisposable
     // The row's id sits on its summary, which UI Automation shows, and the row is the panel around it.
     private static Visual Row(Shell shell, string row) => shell.Find<TextBlock>(row).GetVisualParent()!;
 
-    private static string[] RowTexts(Shell shell, string row) =>
-    [
-        .. Row(shell, row).GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
-            .Select(text => text.Text!),
-    ];
-
     private static Color Dot(Shell shell, string row) =>
         ((ISolidColorBrush)Row(shell, row).GetVisualDescendants().OfType<Ellipse>().Single().Fill!).Color;
 
@@ -44,18 +37,18 @@ public sealed class AgentsSectionTests : IDisposable
         var clients = new ClientDirectory(_fakes.Resolver);
         var shell = Shell.Show(clients);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
-        Assert.Equal(["Codex", "Checking…"], RowTexts(shell, "AgentCodex"));
+        Assert.Equal(["Codex", "Checking…"], Shell.Texts(Row(shell, "AgentCodex")));
         Assert.Equal(Color.Parse("#00A0A1"), Dot(shell, "AgentCodex"));
 
         clients.RefreshAsync().Wait();
         shell.Render();
 
-        Assert.Equal(["Claude Code", "Not ready", "Claude Code is not signed in. Run claude in a terminal and sign in."], RowTexts(shell, "AgentClaudeCode"));
-        Assert.Equal(["Codex", "Ready · 3 models"], RowTexts(shell, "AgentCodex"));
+        Assert.Equal(["Claude Code", "Not ready", "Claude Code is not signed in. Run claude in a terminal and sign in."], Shell.Texts(Row(shell, "AgentClaudeCode")));
+        Assert.Equal(["Codex", "Ready · 3 models"], Shell.Texts(Row(shell, "AgentCodex")));
         Assert.Equal(
             ["Pi", "Ready · 2 of 5 models", "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again."],
-            RowTexts(shell, "AgentPi"));
-        Assert.Equal(["Antigravity CLI", "Not installed", "No agy command was found on PATH."], RowTexts(shell, "AgentAntigravity"));
+            Shell.Texts(Row(shell, "AgentPi")));
+        Assert.Equal(["Antigravity CLI", "Not installed", "No agy command was found on PATH."], Shell.Texts(Row(shell, "AgentAntigravity")));
         Assert.Equal(
             [Color.Parse("#D7352D"), Color.Parse("#44984A"), Color.Parse("#44984A"), Color.Parse("#90969C")],
             new[] { "AgentClaudeCode", "AgentCodex", "AgentPi", "AgentAntigravity" }.Select(row => Dot(shell, row)));
@@ -71,13 +64,13 @@ public sealed class AgentsSectionTests : IDisposable
         FakeAgents.Install(_fakes, ClientId.Codex);
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Show(clients);
-        Assert.Equal(["Codex", "Ready · 3 models"], RowTexts(shell, "AgentCodex"));
+        Assert.Equal(["Codex", "Ready · 3 models"], Shell.Texts(Row(shell, "AgentCodex")));
         _fakes.Install("codex", FakeAgents.CodexModels, On("login", "status").Print("Not logged in").Exit(1));
 
         shell.Click(shell.Find<Button>("RefreshAgents"));
 
-        shell.WaitUntil(() => RowTexts(shell, "AgentCodex") is [_, "Not ready", ..], "Codex shows that it is signed out");
-        Assert.Equal(["Codex", "Not ready", "Codex is not signed in. Run codex login in a terminal."], RowTexts(shell, "AgentCodex"));
+        shell.WaitUntil(() => Shell.Texts(Row(shell, "AgentCodex")) is [_, "Not ready", ..], "Codex shows that it is signed out");
+        Assert.Equal(["Codex", "Not ready", "Codex is not signed in. Run codex login in a terminal."], Shell.Texts(Row(shell, "AgentCodex")));
         shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
     }
 }
