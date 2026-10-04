@@ -111,7 +111,6 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 return new StartResult.Refused(blocked.Problem);
             }
 
-            var plan = ((StartVerdict.Allowed)verdict).Plan;
             RunLock? held;
             try
             {
@@ -130,31 +129,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
             else
             {
-                AttemptLog log;
-                AttemptEvent.Requested requested;
-                try
+                (result, run) = Record(task, ((StartVerdict.Allowed)verdict).Plan, held);
+                if (result is StartResult.Refused)
                 {
-                    (Latest, Warnings) = ReadAndReconcile(_attempts, held: task.Id);
-                    DataFolder.EnsureGitIgnore(_projectFolder);
-                    requested = new AttemptEvent.Requested(
-                        DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
-                    log = AttemptLog.Create(_attempts, requested);
+                    return result;
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    held.Dispose();
-                    return CannotRecord(e);
-                }
-
-                (var record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
-                _started.Add(record.Id);
-                if (run is not null)
-                {
-                    _active[task.Id] = run;
-                }
-
-                Latest = Latest.SetItem(task.Id, record);
-                result = new StartResult.Started(record);
             }
         }
 
@@ -283,6 +262,39 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             warnings.Add($"iDevelop could not record that \"{record.TaskTitle}\" was interrupted. {e.Message}");
             return latest;
         }
+    }
+
+    /// <summary>
+    /// Settles any attempt a crash left running, records the attempt, and launches the client. An attempt that cannot be
+    /// recorded is refused, and the lock is released. Called under the gate.
+    /// </summary>
+    private (StartResult Result, ActiveRun? Run) Record(TaskDefinition task, LaunchPlan plan, RunLock held)
+    {
+        AttemptLog log;
+        AttemptEvent.Requested requested;
+        try
+        {
+            (Latest, Warnings) = ReadAndReconcile(_attempts, held: task.Id);
+            DataFolder.EnsureGitIgnore(_projectFolder);
+            requested = new AttemptEvent.Requested(
+                DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
+            log = AttemptLog.Create(_attempts, requested);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            held.Dispose();
+            return (CannotRecord(e), null);
+        }
+
+        var (record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
+        _started.Add(record.Id);
+        if (run is not null)
+        {
+            _active[task.Id] = run;
+        }
+
+        Latest = Latest.SetItem(task.Id, record);
+        return (new StartResult.Started(record), run);
     }
 
     /// <summary>Whether this window runs the task, then what <see cref="StartCheck"/> says. Called under the gate.</summary>
