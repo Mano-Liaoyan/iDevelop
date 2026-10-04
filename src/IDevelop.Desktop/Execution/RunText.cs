@@ -48,7 +48,7 @@ public static class RunText
         }
 
         var model = settings.Model is { } id ? ExecutionChoices.OfferedModel(status, id)?.Name ?? id : null;
-        return string.Join(" · ", new[] { Clients.Name(settings.Client), model, settings.Reasoning }.OfType<string>());
+        return Dotted(Clients.Name(settings.Client), model, settings.Reasoning);
     }
 
     /// <summary>A client in the inspector's picker, with what keeps it from running.</summary>
@@ -126,12 +126,12 @@ public static class RunText
     public static string Configuration(AttemptRecord attempt)
     {
         var requested = attempt.Requested;
-        var text = $"Requested {string.Join(" · ", new[] { Clients.Name(requested.Client), requested.Model, requested.Reasoning }.OfType<string>())}.";
+        var text = $"Requested {Dotted(Clients.Name(requested.Client), requested.Model, requested.Reasoning)}.";
         var model = attempt.ReportedModel ?? requested.Model;
         var reasoning = attempt.ReportedReasoning ?? requested.Reasoning;
         return model == requested.Model && reasoning == requested.Reasoning
             ? text
-            : $"{text} Reported {string.Join(" · ", new[] { model, reasoning }.OfType<string>())}.";
+            : $"{text} Reported {Dotted(model, reasoning)}.";
     }
 
     public static string Timing(AttemptRecord attempt)
@@ -149,4 +149,7 @@ public static class RunText
     };
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    /// <summary>The parts that are present, joined by middle dots.</summary>
+    private static string Dotted(params string?[] parts) => string.Join(" · ", parts.OfType<string>());
 }
