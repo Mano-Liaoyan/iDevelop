@@ -5,6 +5,7 @@
 .pstack/local/
 .pstack/runtime/
 .worktrees/
+.verify/
 node_modules/
 .env
 .env.*

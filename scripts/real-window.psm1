@@ -183,7 +183,7 @@ function Restore-Settings([string] $Run) {
 
 # A fake Codex for a PATH of its own, so a run needs no agent account. It answers the probes, starts a process whose
 # parent exits, waits until the gate file exists, and then replays a successful turn. Returns the program it runs.
-function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile) {
+function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile, [switch] $BlockOtherClients, [string] $Agent = $FakeAgent) {
     [IO.Directory]::CreateDirectory($Bin) | Out-Null
     $rules = [ordered]@{ rules = @(
         [ordered]@{ when = @('debug', 'models'); steps = @(@{ replay = (Join-Path $Fixtures 'codex-debug-models.json') }) },
@@ -191,10 +191,263 @@ function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile) 
         [ordered]@{ when = @('exec', '--json'); steps = @(@{ spawnThroughCmd = $SleeperPidFile }, @{ waitForFile = $Gate }, @{ replay = (Join-Path $Fixtures 'codex-success.jsonl') }) }
     ) }
     [IO.File]::WriteAllText((Join-Path $Bin 'codex.rules.json'), ($rules | ConvertTo-Json -Depth 6 -Compress))
-    [IO.File]::WriteAllText((Join-Path $Bin 'codex.cmd'), "@`"$FakeAgent`" --rules `"$(Join-Path $Bin 'codex.rules.json')`" -- %*`r`n")
-    $FakeAgent
+    [IO.File]::WriteAllText((Join-Path $Bin 'codex.cmd'), "@`"$Agent`" --rules `"$(Join-Path $Bin 'codex.rules.json')`" -- %*`r`n")
+    if ($BlockOtherClients) {
+        # iDevelop also searches the user's PATH, where the real clients would spend quota. A shim earlier on the search
+        # path that answers no probe leaves its client not ready, so it cannot run.
+        [IO.File]::WriteAllText((Join-Path $Bin 'none.rules.json'), '{"rules":[]}')
+        foreach ($client in 'claude', 'pi', 'agy') {
+            [IO.File]::WriteAllText((Join-Path $Bin "$client.cmd"), "@`"$Agent`" --rules `"$(Join-Path $Bin 'none.rules.json')`" -- %*`r`n")
+        }
+    }
+    $Agent
+}
+
+# A verify-idevelop session spans many shells. Its run folder under .verify holds session.json, which records the
+# process it started, and every piece of evidence. Stop-IDevelop never deletes the folder.
+$Repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$ReleaseExe = Join-Path $Repo 'src\IDevelop.Desktop\bin\Release\net10.0\IDevelop.Desktop.exe'
+$VerifyRoot = Join-Path $Repo '.verify'
+$AgentRows = 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity'
+
+function Get-SessionState([string] $Run) {
+    if (-not $Run) {
+        $Run = Get-ChildItem -LiteralPath $VerifyRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending |
+            Where-Object { [IO.File]::Exists((Join-Path $_.FullName 'session.json')) } | Select-Object -First 1 -ExpandProperty FullName
+        if (-not $Run) { throw "No session in $VerifyRoot. Start-IDevelop starts one." }
+    }
+    $file = Join-Path $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Run) 'session.json'
+    if (-not [IO.File]::Exists($file)) { throw "$Run holds no session.json." }
+    [IO.File]::ReadAllText($file) | ConvertFrom-Json
+}
+
+function Save-SessionState($State) {
+    [IO.File]::WriteAllText((Join-Path $State.run 'session.json'), ($State | ConvertTo-Json))
+}
+
+# The start time and the path keep a reused process id from passing as the session's window.
+function Get-SessionProcess($State) {
+    $process = Get-Process -Id $State.pid -ErrorAction SilentlyContinue
+    if ($process -and $process.StartTime.ToUniversalTime().Ticks -eq $State.started -and $process.Path -eq $State.exe) { $process }
+}
+
+function Get-FakeProcesses([string] $Run) {
+    $prefix = (Join-Path $Run 'fake-bin') + '\'
+    Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
+}
+
+function Add-Transcript([string] $Run, [string] $Line) {
+    Add-Content -LiteralPath (Join-Path $Run 'transcript.txt') -Value $Line -Encoding utf8
+}
+
+function New-Session($State, $Process, $Window) {
+    [pscustomobject]@{
+        Run = $State.run
+        Project = $State.project
+        Gate = Join-Path $State.run 'fake-bin\gate'
+        Process = $Process
+        Window = $Window
+    }
+}
+
+function Start-IDevelop([string] $Project, [string] $Run, [switch] $Empty, [switch] $RealClients) {
+    if (-not [IO.File]::Exists($ReleaseExe)) { throw "No Release build at $ReleaseExe. Run dotnet build -c Release first." }
+    if ($Run) {
+        $previous = Get-SessionState $Run
+        if (Get-SessionProcess $previous) { throw "The session in $($previous.run) still runs pid $($previous.pid). Connect-IDevelop drives it." }
+        $Run = $previous.run
+        if (-not $Project -and -not $Empty) { $Project = $previous.project }
+    } else {
+        $Run = Join-Path $VerifyRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
+    }
+    Backup-Settings $Run
+    [IO.Directory]::CreateDirectory($Run) | Out-Null
+    if (-not $Project) {
+        $Project = Join-Path $Run $(if ($Empty) { 'empty-project' } else { 'project' })
+        if ($Empty) {
+            [IO.Directory]::CreateDirectory($Project) | Out-Null
+        } elseif (-not [IO.Directory]::Exists($Project)) {
+            Copy-Item -Recurse -LiteralPath (Join-Path $Repo 'samples\storage-change') -Destination $Project
+        }
+    }
+    $Project = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Project)
+    if (-not [IO.Directory]::Exists($Project)) { throw "No project folder at $Project." }
+
+    $savedPath = $env:PATH
+    if (-not $RealClients) {
+        $bin = Join-Path $Run 'fake-bin'
+        # A copy of its own marks every fake process as this session's, so Stop-IDevelop can find each one it left.
+        $agent = Join-Path $bin 'agent\IDevelop.FakeAgent.exe'
+        if (-not [IO.File]::Exists($agent)) {
+            if (-not [IO.File]::Exists($FakeAgent)) { throw "No fake agent at $FakeAgent. Run dotnet build -c Release first." }
+            [IO.Directory]::CreateDirectory((Split-Path $agent)) | Out-Null
+            Copy-Item -Path (Join-Path (Split-Path $FakeAgent) 'IDevelop.FakeAgent.*') -Destination (Split-Path $agent)
+        }
+        New-FakeCodex $bin (Join-Path $bin 'gate') (Join-Path $bin 'sleeper.pid') -BlockOtherClients -Agent $agent | Out-Null
+        $env:PATH = $bin
+    }
+    try {
+        $process = Start-Process -FilePath $ReleaseExe -ArgumentList "`"$Project`"" -PassThru
+    } finally {
+        $env:PATH = $savedPath
+    }
+    Write-SettingsOwner $Run $process
+    $state = [pscustomobject]@{
+        run = $Run; project = $Project; exe = $ReleaseExe; pid = $process.Id
+        started = $process.StartTime.ToUniversalTime().Ticks; fakeCodex = -not $RealClients; stopped = $false
+    }
+    Save-SessionState $state
+    Add-Transcript $Run "INFO started pid $($process.Id) on $Project with $(if ($RealClients) { 'the real clients' } else { 'the fake Codex' })"
+    $window = Find-MainWindow $process
+    if (-not $window) { throw "No window appeared for pid $($process.Id). Stop-IDevelop -Run '$Run' cleans up." }
+    New-Session $state $process $window
+}
+
+function Connect-IDevelop([string] $Run) {
+    $state = Get-SessionState $Run
+    if ($state.stopped) { throw "The session in $($state.run) is stopped. Start-IDevelop starts a new one." }
+    $process = Get-SessionProcess $state
+    if (-not $process) { throw "The window of the session in $($state.run) is not running. Start-IDevelop -Run '$($state.run)' opens it again, and Stop-IDevelop cleans up." }
+    $window = Find-MainWindow $process
+    if (-not $window) { throw "Pid $($process.Id) shows no window. Stop-IDevelop -Run '$($state.run)' cleans up." }
+    New-Session $state $process $window
+}
+
+function Get-SidebarTasks($Window) {
+    (Find-ById $Window 'SidebarTasks').FindAll([TreeScope]::Children, [Condition]::TrueCondition)
+}
+
+# An entry chosen in the open list counts as the user's choice. An entry's name is its label, then " · " and a note.
+function Select-PickerEntry($Session, [string] $Id, [string] $Entry) {
+    $expand = (Find-ById $Session.Window $Id).GetCurrentPattern([ExpandCollapsePattern]::Pattern)
+    $expand.Expand()
+    $item = Wait-Until {
+        Find-AllInProcess $Session.Process ([ControlType]::ListItem) |
+            Where-Object { $_.Current.Name -eq $Entry -or $_.Current.Name.StartsWith("$Entry $([char] 0xB7) ") } | Select-Object -First 1
+    } 5
+    if ($item) { Select-Element $item }
+    try { $expand.Collapse() } catch {}
+    if (-not $item) { throw "The $Id picker offers no entry '$Entry'." }
+}
+
+function Assert-Step($Session, [bool] $Ok, [string] $What) {
+    $line = '{0} {1}' -f $(if ($Ok) { 'PASS' } else { 'FAIL' }), $What
+    Add-Transcript $Session.Run $line
+    $line
+    if (-not $Ok) { throw "Check failed: $What" }
+}
+
+# The screenshot shows what the user sees, and the copies keep what the app wrote at that moment. A closed window
+# leaves only the copies.
+function Save-Evidence($Session, [string] $Name) {
+    $shot = ' The window is closed, so no screenshot.'
+    if (-not $Session.Process.HasExited) {
+        Save-Screenshot $Session.Window (Join-Path $Session.Run "$Name.png")
+        $shot = " Saved $Name.png."
+    }
+    $idp = Get-Item -LiteralPath (Join-Path $Session.Project '.idp') -ErrorAction SilentlyContinue
+    $copied = 0
+    foreach ($file in $(if ($idp) { Get-ChildItem -LiteralPath $idp.FullName -Recurse -File })) {
+        if ($file.Name -eq 'events.jsonl' -or ($file.Extension -eq '.json' -and $file.Directory.Name -eq 'workflows')) {
+            $target = Join-Path (Join-Path $Session.Run $Name) ($file.FullName.Substring($idp.FullName.Length + 1))
+            [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $target)) | Out-Null
+            [IO.File]::Copy($file.FullName, $target, $true)
+            $copied++
+        }
+    }
+    "Copied $copied project files to $(Join-Path $Session.Run $Name).$shot"
+}
+
+function Format-Doctor([bool] $Ok, [string] $Line) {
+    '{0} {1}' -f $(if ($Ok) { 'OK ' } else { 'BAD' }), $Line
+}
+
+# Read-only. It reads the session, the process, the build's age, the window, and the preference backup.
+function Test-IDevelop([string] $Run) {
+    $state = Get-SessionState $Run
+    $lines = & {
+        "INFO session $($state.run)$(if ($state.stopped) { ', stopped' })"
+        $process = Get-SessionProcess $state
+        Format-Doctor ($null -ne $process) "process $($state.pid) is alive"
+        if ($process) {
+            Format-Doctor ($process.Path -eq $ReleaseExe) "it runs $($process.Path), and this checkout's build is $ReleaseExe"
+        }
+        # A change to one project rebuilds only its own assembly, and the exe changes only with the desktop project.
+        foreach ($project in Get-ChildItem -LiteralPath (Join-Path $Repo 'src') -Directory) {
+            $dll = Get-Item -LiteralPath (Join-Path (Split-Path $ReleaseExe) "$($project.Name).dll") -ErrorAction SilentlyContinue
+            $newest = Get-ChildItem -LiteralPath $project.FullName -Recurse -File | Where-Object FullName -notmatch '\\(bin|obj)\\' |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            Format-Doctor ($dll -and $dll.LastWriteTime -gt $newest.LastWriteTime) "$($project.Name).dll ($($dll.LastWriteTime)) is newer than every file under src\$($project.Name), the newest being $($newest.Name) ($($newest.LastWriteTime))"
+        }
+        if ($process) {
+            $window = Find-MainWindow $process
+            Format-Doctor ($null -ne $window) "window title '$($window.Current.Name)'"
+            if ($window) {
+                foreach ($id in $AgentRows) {
+                    $row = Find-ById $window $id 2
+                    "INFO $id '$($row.Current.Name)' $($row.Current.HelpText)"
+                }
+            }
+        }
+        "INFO clients: $(if ($state.fakeCodex) { "the fake Codex, which finishes once $(Join-Path $state.run 'fake-bin\gate') exists, with Claude Code, Pi, and Antigravity CLI blocked" } else { 'the real clients' })"
+        $fakes = @(Get-FakeProcesses $state.run)
+        "INFO the session's fake agent processes: $(if ($fakes) { $fakes.Id -join ', ' } else { 'none' })"
+        $owner = Get-SettingsOwner
+        if (-not [IO.File]::Exists($BackupFile)) {
+            Format-Doctor ($state.stopped) $(if ($state.stopped) { 'no theme preference backup is left' } else { 'this live session holds no theme preference backup' })
+        } elseif ($owner.run -eq $state.run) {
+            Format-Doctor (-not $state.stopped) $(if ($state.stopped) { 'this stopped session still holds the theme preference backup. Stop-IDevelop restores it' } else { 'this session holds the theme preference backup' })
+        } elseif ($owner -and (Test-OwnerAlive $owner)) {
+            Format-Doctor $false "another live run holds the theme preference backup: $($owner.run), pid $($owner.pid)"
+        } else {
+            "WARN a theme preference backup from a killed run is left$(if ($owner) { " by $($owner.run)" }). The next Start-IDevelop or check-real-window.ps1 restores it."
+        }
+    }
+    $lines
+    $bad = @($lines | Where-Object { $_ -like 'BAD *' }).Count
+    if ($bad) { "Doctor: not worth driving ($bad BAD)" } else { 'Doctor: worth driving' }
+}
+
+function Stop-IDevelop([string] $Run) {
+    $state = Get-SessionState $Run
+    $done = 'the window had already closed'
+    try {
+        $process = Get-SessionProcess $state
+        if ($process) {
+            # A run in progress asks first, and unsaved edits ask next. The answers stop the run and keep the last save.
+            try {
+                $window = Find-MainWindow $process
+                if ($window) { Close-Window $window }
+                $deadline = (Get-Date).AddSeconds(15)
+                while ($window -and -not $process.HasExited -and (Get-Date) -lt $deadline) {
+                    foreach ($id in 'StopAndLeave', 'DiscardChanges') {
+                        $button = Find-InProcessWindows $process $id 1
+                        if ($button) { Invoke-Element $button }
+                    }
+                }
+            } catch {}
+            if ($process.HasExited) {
+                $done = 'closed the window'
+            } else {
+                $process.Kill()
+                $process.WaitForExit(5000) | Out-Null
+                $done = "killed pid $($process.Id)"
+            }
+        }
+        # A run that ends on its own leaves the fake Codex's sleeper running, as a real client's dev server would.
+        $fakes = @(Get-FakeProcesses $state.run)
+        foreach ($fake in $fakes) { $fake.Kill() }
+        if ($fakes) { $done += ", stopped the session's fake agent processes $($fakes.Id -join ', ')" }
+    } finally {
+        Restore-Settings $state.run
+        $state.stopped = $true
+        Save-SessionState $state
+        Add-Transcript $state.run "INFO stopped: $done"
+    }
+    "Stopped: $done. The evidence stays in $($state.run)."
 }
 
 Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Find-AllInProcess,
     Get-Value, Invoke-Element, Select-Element, Test-Selected, Set-Text, Save-Screenshot, Close-Window,
-    Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Restore-Settings, New-FakeCodex
+    Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Restore-Settings, New-FakeCodex,
+    Start-IDevelop, Connect-IDevelop, Test-IDevelop, Get-SidebarTasks, Select-PickerEntry, Assert-Step, Save-Evidence, Stop-IDevelop
