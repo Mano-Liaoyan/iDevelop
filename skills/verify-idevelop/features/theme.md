@@ -19,13 +19,14 @@ The `System`, `Light`, and `Dark` segments under `APPEARANCE` at the bottom of t
 Preconditions:
 
 - A new session on the sample, started with `$s = Start-IDevelop`. The session moved the user's preference aside, so `Get-SettingsText` returns nothing.
+- Run each bullet in one call, so its variables stay set.
 
-- **Default.** Run `Assert-Step $s (Test-Selected (Find-ById $s.Window 'ThemeSystem')) 'System is chosen without a preference'`. It passes.
-- **Light.** Run `Select-Element (Find-ById $s.Window 'ThemeLight')` and `Wait-Until { (Get-SettingsTheme) -eq 'light' }`. It returns `$true`. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')` and `Save-Evidence $s 'light'`. The screenshot shows a light sidebar, canvas, and inspector.
-- **Dark.** Run `Select-Element (Find-ById $s.Window 'ThemeDark')` and `Wait-Until { (Get-SettingsTheme) -eq 'dark' }`. It returns `$true`, and `Test-Selected (Find-ById $s.Window 'ThemeLight')` is `$false`. Run `Save-Evidence $s 'dark'`. The screenshot shows the dark theme. The window title stays `project - iDevelop`.
-- **Restart.** Close the window and reopen it in the same session. Run `$text = Get-SettingsText`, `Close-Window $s.Window`, `$s.Process.WaitForExit(15000)`, and `$s = Start-IDevelop -Reopen`. `Test-Selected (Find-ById $s.Window 'ThemeDark')` is `$true`, and `(Get-SettingsText) -eq $text` is `$true`.
-- **System.** Run `Select-Element (Find-ById $s.Window 'ThemeSystem')` and `Wait-Until { (Get-SettingsTheme) -eq 'system' }`. It returns `$true`.
-- **Restore.** Run `Stop-IDevelop`. `%APPDATA%\iDevelop\settings.json` is the user's own file again, byte for byte.
+- **Default.** Run `Assert-Step $s ($null -eq (Get-SettingsText)) 'the session starts without a theme preference'` and `Assert-Step $s (Test-Selected (Find-ById $s.Window 'ThemeSystem')) 'System is chosen without a preference'`.
+- **Light.** Run `Select-Element (Find-ById $s.Window 'ThemeLight')` and `Assert-Step $s ((Wait-Until { (Get-SettingsTheme) -eq 'light' }) -eq $true) 'choosing Light saves light'`. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')` and `Save-Evidence $s 'light'`. The screenshot shows a light sidebar, canvas, and inspector.
+- **Dark.** Run `Select-Element (Find-ById $s.Window 'ThemeDark')`, `Assert-Step $s ((Wait-Until { (Get-SettingsTheme) -eq 'dark' }) -eq $true) 'choosing Dark saves dark'`, `Assert-Step $s (-not (Test-Selected (Find-ById $s.Window 'ThemeLight'))) 'Light is no longer chosen'`, and `Assert-Step $s ($s.Window.Current.Name -eq 'project - iDevelop') 'the theme edits no project'`. Run `Save-Evidence $s 'dark'`. The screenshot shows the dark theme.
+- **Restart.** Close the window and reopen it in the same session. Run `$text = Get-SettingsText`, `Close-Window $s.Window`, `$s.Process.WaitForExit(15000)`, and `$s = Start-IDevelop -Reopen`. Then run `Assert-Step $s (Test-Selected (Find-ById $s.Window 'ThemeDark')) 'Dark is still chosen after a restart'` and `Assert-Step $s ((Get-SettingsText) -eq $text) 'the launch leaves the preference file unchanged'`.
+- **System.** Run `Select-Element (Find-ById $s.Window 'ThemeSystem')` and `Assert-Step $s ((Wait-Until { (Get-SettingsTheme) -eq 'system' }) -eq $true) 'choosing System saves system'`.
+- **Restore.** Run `$own = [IO.File]::ReadAllText("$(Get-SettingsPath).verify-backup")`, `Stop-IDevelop`, and `Assert-Step $s ("$(Get-SettingsText)" -eq $own) "Stop-IDevelop restores the user's preference"`. An empty backup means the user had no preference, and then `settings.json` is gone again.
 
 ## Gotchas
 
