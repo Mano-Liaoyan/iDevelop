@@ -134,7 +134,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             }
         }
 
-        return StartCheck.Evaluate(task, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
+        return StartCheck.Evaluate(task, ProjectFolder, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public sealed class ProjectRuns : IAsyncDisposable
                 return new StartResult.Refused(new StartProblem.AlreadyRunning(running.Record.Task, running.Record.TaskTitle));
             }
 
-            var verdict = StartCheck.Evaluate(task, _clients.Current);
+            var verdict = StartCheck.Evaluate(task, ProjectFolder, _clients.Current);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);

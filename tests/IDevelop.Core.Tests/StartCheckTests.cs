@@ -6,6 +6,8 @@ namespace IDevelop.Core.Tests;
 
 public class StartCheckTests
 {
+    private const string Folder = @"C:\project";
+
     private static readonly TaskId Id = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
     private static readonly ResolvedCommand CodexCommand = new("/usr/local/bin/codex", IsBatchShim: false);
     private static readonly ExecutionSettings SolHigh = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
@@ -18,7 +20,7 @@ public class StartCheckTests
     [Fact]
     public void A_task_that_can_start_gets_its_command_arguments_and_prompt()
     {
-        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(SolHigh), CodexReady)).Plan;
+        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(SolHigh), Folder, CodexReady)).Plan;
 
         Assert.Same(CodexCommand, plan.Command);
         Assert.Equal(
@@ -92,6 +94,21 @@ public class StartCheckTests
             Problem(SayHi(new ExecutionSettings(ClientId.Antigravity) { Model = "weird%model" }), clients));
     }
 
+    // cmd.exe cannot work in a folder that starts with \\, and would run the client in the Windows folder instead.
+    [Fact]
+    public void A_batch_shim_cannot_start_in_a_network_folder_and_a_program_can()
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        Dictionary<ClientId, ClientStatus> PiAt(string path, bool isBatchShim) => new()
+        {
+            [ClientId.Pi] = new ClientStatus.Ready(new ResolvedCommand(path, isBatchShim), [new ModelOption("deepseek/deepseek-v4-pro", "DeepSeek V4 Pro", ["high"])]),
+        };
+
+        Assert.Equal(new UncProjectFolder(ClientId.Pi), Problem(SayHi(pi), PiAt(@"C:\npm\pi.cmd", isBatchShim: true), folder: @"\\wsl.localhost\Ubuntu\home\me\repo"));
+        Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(pi), @"Z:\repo", PiAt(@"C:\npm\pi.cmd", isBatchShim: true)));
+        Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(pi), @"\\server\share\repo", PiAt(@"C:\tools\pi.exe", isBatchShim: false)));
+    }
+
     [Fact]
     public void The_prompt_leaves_out_a_blank_title_and_blank_acceptance_criteria()
     {
@@ -103,6 +120,6 @@ public class StartCheckTests
     private static TaskDefinition SayHi(ExecutionSettings? execution, string instructions = "Create hello.txt containing hi.") =>
         new(Id) { Title = "Say hi", Instructions = instructions, AcceptanceCriteria = "hello.txt holds hi.", Execution = execution };
 
-    private static StartProblem Problem(TaskDefinition task, IReadOnlyDictionary<ClientId, ClientStatus> clients) =>
-        Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(task, clients)).Problem;
+    private static StartProblem Problem(TaskDefinition task, IReadOnlyDictionary<ClientId, ClientStatus> clients, string folder = Folder) =>
+        Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(task, folder, clients)).Problem;
 }

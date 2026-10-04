@@ -30,6 +30,9 @@ public abstract record StartProblem
     /// <summary>The client is a batch shim, and cmd.exe could misread this argument.</summary>
     public sealed record UnsafeArgument(ClientId Client, string Argument) : StartProblem;
 
+    /// <summary>The client is a batch shim, and cmd.exe cannot work in the project's network folder.</summary>
+    public sealed record UncProjectFolder(ClientId Client) : StartProblem;
+
     /// <summary>A task of this project is running, in this window or another one.</summary>
     public sealed record AlreadyRunning(TaskId Task, string Title) : StartProblem;
 
@@ -64,7 +67,7 @@ internal abstract record StartVerdict
 /// <summary>Pure. The inspector's message before any click and the start itself use the same check.</summary>
 internal static class StartCheck
 {
-    public static StartVerdict Evaluate(TaskDefinition task, IReadOnlyDictionary<ClientId, ClientStatus> clients)
+    public static StartVerdict Evaluate(TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients)
     {
         if (task.Execution is not { } settings)
         {
@@ -84,6 +87,12 @@ internal static class StartCheck
                 return Block(new StartProblem.ClientUnready(client, unready.Reason));
             default:
                 return Block(new StartProblem.ClientChecking(client));
+        }
+
+        // cmd.exe refuses a current folder that starts with \\ and runs in the Windows folder instead.
+        if (ready.Command.IsBatchShim && projectFolder.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return Block(new StartProblem.UncProjectFolder(client));
         }
 
         if (settings.Model is not { } id)
