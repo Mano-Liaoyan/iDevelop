@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
+using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
 
 namespace IDevelop.Desktop.Tests;
@@ -82,7 +83,7 @@ public sealed class ThemeTests : IDisposable
             File.WriteAllText(file, text);
         }
 
-        Assert.Equal(theme, App.ReadTheme(file).ToString());
+        Assert.Equal(theme, ThemePreference.Read(file).ToString());
     }
 
     [AvaloniaFact]

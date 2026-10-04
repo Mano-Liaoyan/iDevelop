@@ -1,7 +1,9 @@
 namespace IDevelop.Projects;
 
-internal static class AtomicFile
+public static class AtomicFile
 {
+    /// <summary>Writes the contents to a temporary file beside the path, flushes it to disk, then moves it over the path,
+    /// so a crash leaves either the old file or the new one.</summary>
     public static void Replace(string path, ReadOnlySpan<byte> contents)
     {
         var temp = $"{path}.{Guid.NewGuid():N}.tmp";
