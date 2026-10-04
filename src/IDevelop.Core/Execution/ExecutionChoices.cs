@@ -11,7 +11,7 @@ public static class ExecutionChoices
     public static ExecutionSettings ForClient(ClientId client, ClientStatus status)
     {
         var settings = new ExecutionSettings(client);
-        var models = status is ClientStatus.Ready ready ? ready.Models : [];
+        var models = Offered(status);
         return (models.FirstOrDefault(model => model.Problem is null) ?? models.FirstOrDefault()) is { } first ? ForModel(settings, first) : settings;
     }
 
@@ -25,8 +25,13 @@ public static class ExecutionChoices
     /// <summary>The offered models, then the stored model when this machine does not offer it, so the picker can show it.</summary>
     public static ImmutableArray<(ModelOption Model, bool Offered)> Models(ExecutionSettings settings, ClientStatus status)
     {
-        var offered = status is ClientStatus.Ready ready ? ready.Models : [];
-        ImmutableArray<(ModelOption Model, bool Offered)> choices = [.. offered.Select(model => (model, true))];
-        return settings.Model is { } id && !offered.Any(model => model.Id == id) ? choices.Add((new ModelOption(id, id, []), false)) : choices;
+        ImmutableArray<(ModelOption Model, bool Offered)> choices = [.. Offered(status).Select(model => (model, true))];
+        return settings.Model is { } id && OfferedModel(status, id) is null ? choices.Add((new ModelOption(id, id, []), false)) : choices;
     }
+
+    /// <summary>The models a client offers on this machine, which are none until it is ready.</summary>
+    public static ImmutableArray<ModelOption> Offered(ClientStatus status) => status is ClientStatus.Ready ready ? ready.Models : [];
+
+    /// <summary>The offered model with this id, or null.</summary>
+    public static ModelOption? OfferedModel(ClientStatus status, string? id) => Offered(status).FirstOrDefault(model => model.Id == id);
 }

@@ -50,7 +50,7 @@ public static class RunText
             return "No agent";
         }
 
-        var model = settings.Model is { } id ? Offered(status).FirstOrDefault(option => option.Id == id)?.Name ?? id : null;
+        var model = settings.Model is { } id ? ExecutionChoices.OfferedModel(status, id)?.Name ?? id : null;
         return string.Join(" · ", new[] { Clients.Name(settings.Client), model, settings.Reasoning }.OfType<string>());
     }
 
@@ -150,8 +150,6 @@ public static class RunText
         { TotalHours: < 1 } => $"{span.Minutes} min {span.Seconds:00} s",
         _ => $"{(int)span.TotalHours} h {span.Minutes:00} min",
     };
-
-    internal static IEnumerable<ModelOption> Offered(ClientStatus status) => status is ClientStatus.Ready ready ? ready.Models : [];
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 }
