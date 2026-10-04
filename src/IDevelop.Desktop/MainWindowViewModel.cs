@@ -13,7 +13,6 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly ClientDirectory _clients;
     private readonly RelayCommand _save;
-    private readonly RelayCommand _addTask;
     private readonly RelayCommand _refreshAgents;
     private WorkflowDocument? _document;
     private ProjectRuns? _runs;
@@ -25,7 +24,6 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _clients = clients;
         _save = new RelayCommand(() => TrySave(), () => _document is not null);
-        _addTask = new RelayCommand(() => Canvas?.AddTaskCommand.Execute(null), () => Canvas is not null);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -49,8 +47,6 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public ICommand SaveCommand => _save;
-
-    public ICommand AddTaskCommand => _addTask;
 
     public IReadOnlyList<AgentRow> Agents => [.. Clients.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
@@ -151,7 +147,6 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ProjectName));
         OnDocumentChanged();
         _save.NotifyCanExecuteChanged();
-        _addTask.NotifyCanExecuteChanged();
     }
 
     private void OnDocumentChanged()

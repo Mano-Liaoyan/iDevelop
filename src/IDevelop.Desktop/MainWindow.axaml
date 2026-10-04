@@ -36,7 +36,8 @@
 
       <Border Grid.Row="1" Padding="12,8,12,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border60Brush}">
         <Button Classes="nav"
-                Command="{Binding AddTaskCommand}"
+                Command="{Binding Canvas.AddTaskCommand}"
+                IsEnabled="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
                 AutomationProperties.AutomationId="AddTask"
                 AutomationProperties.Name="New task">
           <StackPanel Orientation="Horizontal" Spacing="6">
