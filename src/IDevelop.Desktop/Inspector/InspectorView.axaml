@@ -115,30 +115,47 @@
                     <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                AutomationProperties.AutomationId="LastRunDetail" />
-                    <ItemsControl ItemsSource="{Binding Turns}"
+                    <ItemsControl ItemsSource="{Binding Conversation}"
                                   AutomationProperties.AutomationId="Conversation"
                                   AutomationProperties.Name="Conversation">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                          <StackPanel Spacing="6" />
+                          <StackPanel Spacing="12" />
                         </ItemsPanelTemplate>
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="execution:TurnViewModel">
+                        <DataTemplate DataType="execution:ExchangeViewModel">
                           <StackPanel Spacing="6">
-                            <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
-                                    IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <StackPanel Spacing="2">
-                                <TextBlock Classes="caption" Text="You" />
-                                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                              </StackPanel>
-                            </Border>
-                            <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
-                                     IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                     AutomationProperties.AutomationId="{Binding ReplyId}"
-                                     AutomationProperties.Name="{Binding ReplyName}" />
-                            <TextBlock Classes="caption" Text="{Binding Note}"
-                                       IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Classes="caption" Text="{Binding StatusLine}" TextWrapping="Wrap"
+                                       IsVisible="{Binding StatusLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <ItemsControl ItemsSource="{Binding Turns}">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <StackPanel Spacing="6" />
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="execution:TurnViewModel">
+                                  <StackPanel Spacing="6">
+                                    <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
+                                            IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                      <StackPanel Spacing="2">
+                                        <TextBlock Classes="caption" Text="You" />
+                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                      </StackPanel>
+                                    </Border>
+                                    <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
+                                             IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                             AutomationProperties.AutomationId="{Binding ReplyId}"
+                                             AutomationProperties.Name="{Binding ReplyName}" />
+                                    <TextBlock Classes="caption" Text="{Binding Note}" TextWrapping="Wrap"
+                                               IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                  </StackPanel>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
+                                       IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           </StackPanel>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>

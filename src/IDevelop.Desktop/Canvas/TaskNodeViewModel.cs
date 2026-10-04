@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia;
@@ -42,6 +43,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     private TaskDefinition _task;
     private Point _location;
     private AttemptRecord? _attempt;
+    private (AttemptId? Continues, ImmutableArray<AttemptRecord> Attempts) _earlier = (null, []);
     private string _draft = "";
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
@@ -127,7 +129,8 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
     public string? StartProblem => !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
 
-    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, RunsElsewhere);
+    /// <summary>Only the inspector shows it, so only the selected task reads the attempts that its last run continues.</summary>
+    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere);
 
     /// <summary>
     /// Enabled unless this window runs the task. A task that cannot start shows why instead of launching, which is also
@@ -171,6 +174,21 @@ public sealed class TaskNodeViewModel : ObservableObject
     private bool RunsHere => _attempt is { Status: AttemptStatus.Running } attempt && _canvas.Runs.StartedHere(attempt.Id);
 
     private bool RunsElsewhere => _attempt is { Status: AttemptStatus.Running } && !RunsHere;
+
+    /// <summary>
+    /// The attempts that <paramref name="attempt"/> continues. Their logs are read again only when it continues another
+    /// attempt than before, because a continued attempt never changes.
+    /// </summary>
+    private ImmutableArray<AttemptRecord> Earlier(AttemptRecord attempt)
+    {
+        var continues = attempt.Continues?.Attempt;
+        if (continues != _earlier.Continues)
+        {
+            _earlier = (continues, continues is null ? [] : _canvas.Runs.EarlierAttempts(attempt));
+        }
+
+        return _earlier.Attempts;
+    }
 
     internal void Update(TaskDefinition task, CanvasPoint position)
     {

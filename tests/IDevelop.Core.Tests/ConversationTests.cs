@@ -286,6 +286,38 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task The_earlier_attempts_of_a_conversation_are_the_ones_its_continuations_resumed_oldest_first()
+    {
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Noted.")),
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var codex = SayHi(Settings[ClientId.Codex]);
+        async Task<AttemptRecord> Settled(Func<AttemptId> start)
+        {
+            var settled = NextSettled(runs);
+            var id = start();
+            var record = await settled;
+            Assert.Equal((id, AttemptStatus.Succeeded), (record.Id, record.Status));
+            return record;
+        }
+
+        var unrelated = await Settled(() => Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id);
+        var asked = await Settled(() => Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id);
+        var answered = await Settled(() => Assert.IsType<SendResult.Continued>(runs.Send(codex, "banana", stopTurn: false)).Attempt.Id);
+        var latest = await Settled(() => Assert.IsType<SendResult.Continued>(runs.Send(codex, "and an apple", stopTurn: false)).Attempt.Id);
+
+        var earlier = runs.EarlierAttempts(latest);
+
+        Assert.Equal([asked.Id, answered.Id], earlier.Select(attempt => attempt.Id));
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?")], earlier[0].Turns);
+        Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Succeeded, "Noted.")], earlier[1].Turns);
+        Assert.Equal(new Continuation(answered.Id, Session), latest.Continues);
+        Assert.Empty(runs.EarlierAttempts(asked));
+        Assert.Empty(runs.EarlierAttempts(unrelated));
+    }
+
+    [Fact]
     public async Task A_message_is_refused_with_a_reason_when_there_is_nothing_to_continue_or_the_task_cannot_start()
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Done.")));

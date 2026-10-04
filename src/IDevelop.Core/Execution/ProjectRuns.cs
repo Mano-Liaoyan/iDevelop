@@ -224,6 +224,26 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>
+    /// The attempts whose session <paramref name="attempt"/> continues, one continuation after another, oldest first, read
+    /// from their logs. An attempt that cannot be read ends the list there. A continued attempt is settled and is no
+    /// longer its task's latest, so it never changes again.
+    /// </summary>
+    public ImmutableArray<AttemptRecord> EarlierAttempts(AttemptRecord attempt)
+    {
+        List<AttemptRecord> earlier = [];
+        // An edited log could link back to an attempt already read.
+        HashSet<AttemptId> seen = [attempt.Id];
+        var link = attempt.Continues;
+        while (link is not null && seen.Add(link.Attempt) && AttemptLog.ReadAttempt(_attempts, attempt.Task, link.Attempt) is { } continued)
+        {
+            earlier.Insert(0, continued);
+            link = continued.Continues;
+        }
+
+        return [.. earlier];
+    }
+
+    /// <summary>
     /// Records on the task's latest attempt that the person took its session to the client's own terminal interface, and
     /// returns the command that opens it there. Refused while a turn of the task runs, and without a session.
     /// </summary>

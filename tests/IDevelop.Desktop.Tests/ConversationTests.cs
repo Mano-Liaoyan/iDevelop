@@ -139,9 +139,39 @@ public sealed class ConversationTests : IDisposable
 
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded" && shell.Find<TextBox>("LastRunResult").Text == "Added a test.", "the continuation succeeds");
         Assert.Equal("", shell.Find<TextBox>("Composer").Text);
-        Assert.Equal(["You", "Now add a test.\nKeep it short."], Shell.Texts(shell.Find<ItemsControl>("Conversation")));
+        Assert.Equal("Wrote hello.txt.", shell.Find<TextBox>("TurnReply1").Text);
+        Assert.Equal(["You", "Now add a test.\nKeep it short."], Shell.Texts(shell.Find<ItemsControl>("Conversation"))[^2..]);
         Assert.Equal("Now add a test.\nKeep it short.", File.ReadAllText(Path.Combine(_evidence, "resumed.txt")));
         Assert.Equal("", shell.Status);
+    }
+
+    [AvaloniaFact]
+    public void After_a_continuation_the_question_the_person_answered_stays_above_the_answer()
+    {
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Wrote banana into answer.txt.")),
+            Asks().Print(ReplyLines(ClientId.Codex, "Which fruit should go into answer.txt?")));
+        var shell = OpenSayHi();
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the question is asked");
+        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Type("banana");
+
+        shell.Press(Key.Enter, RawInputModifiers.Control);
+
+        shell.WaitUntil(() => shell.Has<TextBox>("TurnReply1"), "the earlier question shows with the continuation");
+        // Its log is read once per continuation, so the running attempt's later changes never need it again.
+        var attempts = Path.Combine(_project, ".idp", "attempts", SayHi.ToString());
+        File.Delete(Path.Combine(Directory.EnumerateDirectories(attempts).Order().First(), "events.jsonl"));
+        File.WriteAllText(_gate, "");
+        shell.WaitUntil(() => shell.Find<TextBox>("LastRunResult").Text == "Wrote banana into answer.txt.", "the continuation answers");
+        Assert.Equal("Which fruit should go into answer.txt?", shell.Find<TextBox>("TurnReply1").Text);
+        Assert.Collection(
+            Shell.Texts(shell.Find<ItemsControl>("Conversation")),
+            line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
+            line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
+            line => Assert.Equal("You", line),
+            line => Assert.Equal("banana", line));
     }
 
     [AvaloniaFact]

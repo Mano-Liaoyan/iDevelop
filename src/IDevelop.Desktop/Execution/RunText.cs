@@ -188,6 +188,12 @@ public static class RunText
             : $"{text} Reported {Dotted(model, reasoning)}.";
     }
 
+    /// <summary>
+    /// An attempt's line in a conversation of several attempts, such as "Interrupted · Started 10/5/2026 2:00 PM · took 8 s".
+    /// </summary>
+    /// <param name="elsewhere">Another window runs the attempt.</param>
+    public static string ExchangeLine(AttemptRecord attempt, bool elsewhere) => $"{StatusLabel(attempt, elsewhere)} · {Timing(attempt)}";
+
     public static string Timing(AttemptRecord attempt)
     {
         var started = $"Started {attempt.RequestedAt.ToLocalTime():g}";
