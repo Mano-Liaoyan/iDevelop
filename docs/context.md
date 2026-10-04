@@ -6,7 +6,7 @@ Build a graphical interface for coordinating multiple coding agents, including C
 
 ## Current scope
 
-The repository contains the PStack development environment, product research, and the first application slice. The slice is a C# desktop editor on Avalonia 11.3.22 and NodifyAvalonia 6.6.0. It opens a project folder, edits tasks and typed connections on a node canvas, and saves the workflow to `.idp/workflows/<workflow-id>.json` inside that folder without a server. Team storage, the synchronization protocol, and scheduling remain open.
+The repository contains the PStack development environment, product research, and the first application slice. The slice is a C# desktop editor on Avalonia 11.3.22 and NodifyAvalonia 6.6.0. It opens a project folder, edits tasks and typed connections on a node canvas, and saves the workflow to `.idp/workflows/<workflow-id>.json` inside that folder without a server. It looks like PlanWeave's desktop app in a light theme and a dark theme. Team storage, the synchronization protocol, and scheduling remain open.
 
 ## Confirmed product direction
 
@@ -19,7 +19,7 @@ The repository contains the PStack development environment, product research, an
 - Windows, macOS, and Linux are required. The user prefers a responsive modern UI without a JavaScript or TypeScript application stack.
 - Use C# and Avalonia. The user is familiar with both and explicitly declined further framework comparisons. Use BAndysc's `NodifyAvalonia` as the starting node-editor component. Keep the local runner and optional synchronization service in C# and .NET.
 - Prefer permissive dependencies such as MIT, Apache-2.0, and BSD for commercial distribution and company use without mandatory framework fees. Preserve the option of a proprietary product. No product license has been chosen.
-- The interface must look like PlanWeave's desktop app: a light theme, a sidebar with a project tree, rounded status-colored task cards, and floating canvas controls. It stays in Avalonia and NodifyAvalonia. The [product direction](product-direction.md#the-interface-follows-the-planweave-look) records the reference screenshot and what to adopt.
+- The interface must look like PlanWeave's desktop app: a sidebar with a project tree, rounded task cards, and floating canvas controls, in a light theme and a dark theme the user can switch between. Cards take PlanWeave's status colors once tasks have a status. It stays in Avalonia and NodifyAvalonia. The [product direction](product-direction.md#the-interface-follows-the-planweave-look) records the reference screenshot and what to adopt.
 
 The [product direction](product-direction.md) records the selected stack, proposed runtime design, and acceptance cases. Framework selection is settled. Runtime design details remain provisional.
 
@@ -38,7 +38,10 @@ The [product direction](product-direction.md) records the selected stack, propos
 - Central package management and committed lock files pin every package. `scripts/check-licenses.mjs` fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, and on a bundled notice file without a reviewed entry.
 - The SkiaSharp and HarfBuzzSharp native packages that Avalonia renders through ship one third-party notice. It names terms outside the permissive list, including Skia's GIF decoder under MPL-1.1, GPL-2.0, or LGPL-2.1. Distributing a build needs a license decision on those terms.
 - `Avalonia.BuildServices` sends anonymous build telemetry. CI sets `AVALONIA_TELEMETRY_OPTOUT=1`, and the README explains the local opt-out.
+- `Application.RequestedThemeVariant` is the only runtime theme state. The app writes `iDevelop/settings.json` in the per-user application data folder only when the user picks a theme. The [restyle record](handoffs/2026-10-04-planweave-restyle.md) records the design and its alternatives.
+- The app's own colors come from `src/IDevelop.Desktop/Theme/Tokens.axaml`, which `scripts/planweave-tokens.mjs` generates from PlanWeave's color tokens. Its `--check` mode runs in CI. It fails on a stale file, and on the color forms the README lists elsewhere in the desktop project's XAML and C# files. It does not catch every way to make a color.
+- iDevelop works around these NodifyAvalonia 6.6.0 defects, so a Nodify upgrade should retest each one. Connections draw over the cards. The minimap does not follow a moved task, and its wheel zooms about 0.2% per notch. The animated pan does not update the bound viewport location. Connections never raise the context menu request. Commands on buttons outside the editor never reach it. The editor's key gestures, including Ctrl+A, still do not fire.
 
 ## Next product step
 
-The editable local canvas is complete. CI builds it and runs its headless tests on Linux, Windows, and macOS. The next step first restyles the current shell and canvas to the PlanWeave look, so later features are built in the final style. Shared graph review then follows as planned. Two desktop clients edit one workflow through the optional synchronization service, with defined behavior for conflicts, reconnects, and approval of a specific version. Execution, provider integrations, and GitHub review gates follow in the complete execution loop. Validate each against the product direction's acceptance cases without comparing other frameworks.
+The editable local canvas and the PlanWeave restyle are complete. On Windows, `scripts/check-real-window.ps1` checks the built window. Shared graph review is next. Two desktop clients edit one workflow through the optional synchronization service, with defined behavior for conflicts, reconnects, and approval of a specific version. Execution, provider integrations, and GitHub review gates follow in the complete execution loop. Validate each against the product direction's acceptance cases without comparing other frameworks.
