@@ -68,7 +68,10 @@ internal sealed class ChildProcess : IDisposable
         if (OperatingSystem.IsWindows())
         {
             // cmd.exe, which runs a .cmd client such as an npm shim, otherwise looks for a bare command such as node in
-            // the current folder before PATH. For a run, that folder is the project.
+            // the current folder before PATH. For a run, that folder is the project. Every command the agent runs
+            // inherits the variable too, so a step that calls a bare build.cmd from the project folder needs .\build.cmd
+            // under a run. That failure names the command, while a command planted in a shared repository would run
+            // unnoticed.
             start.Environment["NoDefaultCurrentDirectoryInExePath"] = "1";
         }
 
