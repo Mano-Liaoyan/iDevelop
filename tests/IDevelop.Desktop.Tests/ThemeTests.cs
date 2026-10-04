@@ -87,7 +87,7 @@ public sealed class ThemeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_switch_marks_the_theme_set_in_code()
+    public void The_switch_marks_a_theme_set_in_code_which_leaves_the_saved_choice_as_it_was()
     {
         var shell = Shell.Open(_temp.Create("plan"));
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
