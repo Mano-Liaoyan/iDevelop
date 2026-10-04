@@ -98,6 +98,87 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_message_sent_during_a_later_turn_waits_for_it_and_starts_a_third_turn()
+    {
+        var second = Evidence("second");
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).CaptureStdin(Evidence("resumed.txt")).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(second).Print(ReplyLines(ClientId.Codex, "Noted.")),
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var codex = SayHi(Settings[ClientId.Codex]);
+        var settled = NextSettled(runs);
+        runs.Start(codex);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
+        runs.Send(codex, "banana", stopTurn: false);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        File.WriteAllText(_gate, "");
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Turns is [_, { Outcome: TurnOutcome.Running }]);
+
+        Assert.Equal(new SendResult.Queued(), runs.Send(codex, "and an apple", stopTurn: false));
+
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["and an apple"]);
+        File.WriteAllText(second, "");
+        var record = await settled;
+        Assert.Equal((AttemptStatus.Succeeded, "Noted."), (record.Status, record.Result));
+        Assert.Equal(
+            [
+                new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?"),
+                new TurnRecord(2, "banana", TurnOutcome.Succeeded, "Noted."),
+                new TurnRecord(3, "and an apple", TurnOutcome.Succeeded, "Noted."),
+            ],
+            record.Turns);
+        Assert.Equal("and an apple", File.ReadAllText(Evidence("resumed.txt")));
+    }
+
+    [Fact]
+    public async Task Two_messages_sent_during_one_turn_reach_the_next_turn_together_separated_by_a_blank_line()
+    {
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).CaptureStdin(Evidence("turn-2.txt")).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Wrote both.")),
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var codex = SayHi(Settings[ClientId.Codex]);
+        var settled = NextSettled(runs);
+        runs.Start(codex);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
+
+        runs.Send(codex, "banana", stopTurn: false);
+        runs.Send(codex, "and an apple", stopTurn: false);
+
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana", "and an apple"]);
+        File.WriteAllText(_gate, "");
+        var record = await settled;
+        Assert.Equal("banana\n\nand an apple", File.ReadAllText(Evidence("turn-2.txt")));
+        Assert.Equal(new TurnRecord(2, "banana\n\nand an apple", TurnOutcome.Succeeded, "Wrote both."), record.Turns[^1]);
+    }
+
+    [Fact]
+    public async Task A_message_sent_after_the_turns_client_exited_with_nothing_waiting_is_refused_as_ending()
+    {
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Done.")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var codex = SayHi(Settings[ClientId.Codex]);
+        var answer = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.Changed += (_, _) =>
+        {
+            // The drain waits for this handler at the agent's answer, so the attempt still runs after its client exits.
+            if (runs.Latest.GetValueOrDefault(SayHiId) is { Status: AttemptStatus.Running, Activity: [.., { Text: "Done." }] } && !answer.Task.IsCompleted)
+            {
+                SpinWait.SpinUntil(() => runs.CheckSend(codex) is not null, Patience);
+                answer.TrySetResult(runs.Send(codex, "banana", stopTurn: false));
+            }
+        };
+        var settled = NextSettled(runs);
+
+        runs.Start(codex);
+
+        Assert.Equal(new SendResult.Refused(new SendProblem.Ending("Say hi")), await answer.Task.WaitAsync(2 * Patience));
+        var record = await settled;
+        Assert.Equal((AttemptStatus.Succeeded, 0), (record.Status, record.Queued.Count));
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Done.")], record.Turns);
+    }
+
+    [Fact]
     public async Task Stop_and_send_stops_the_turns_process_tree_and_the_next_turn_resumes_at_once()
     {
         var grandchild = Evidence("grandchild.pid");
