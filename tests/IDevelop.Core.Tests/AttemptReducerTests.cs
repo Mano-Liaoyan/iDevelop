@@ -47,6 +47,12 @@ public class AttemptReducerTests
         ["a crash after another program took the client's process id"] =
             ([Launched, new Reconciled(T0.AddSeconds(9), ProcessMatch.Reused)], AttemptStatus.Interrupted,
                 "iDevelop stopped while this task ran. Process 4242 now belongs to another program and was left alone."),
+        ["a leave that gave up on a client that ended later"] =
+            ([Launched, new InterruptRequested(T0.AddSeconds(2), Closed), new Reconciled(T0.AddSeconds(9), ProcessMatch.Gone)], AttemptStatus.Interrupted,
+                "The project was closed while this task ran. Its client did not stop in time, and iDevelop settled it when the project was opened again."),
+        ["a leave that gave up on a client that kept running"] =
+            ([Launched, new InterruptRequested(T0.AddSeconds(2), Closed), new Reconciled(T0.AddSeconds(9), ProcessMatch.Same)], AttemptStatus.Interrupted,
+                "The project was closed while this task ran. Its client did not stop in time, and iDevelop settled it when the project was opened again. Its client was still running and was stopped."),
     };
 
     internal static Launched Launched => new(T0.AddSeconds(1), 4242, T0.AddSeconds(1));

@@ -407,7 +407,9 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.StartsWith("{\"type\":\"interruptRequested\"", File.ReadLines(events).Last());
         AssertGone(started.Attempt.Process!.Value.Id);
         await using var next = ProjectRuns.Open(_project, clients);
-        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped while this task ran."), (next.Latest[SayHiId].Status, next.Latest[SayHiId].Detail));
+        Assert.Equal(
+            (AttemptStatus.Interrupted, "The project was closed while this task ran. Its client did not stop in time, and iDevelop settled it when the project was opened again."),
+            (next.Latest[SayHiId].Status, next.Latest[SayHiId].Detail));
     }
 
     [Theory]

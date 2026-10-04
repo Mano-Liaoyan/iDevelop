@@ -194,19 +194,19 @@ internal static class AttemptReducer
         return Settle(record, outcome.Status, outcome.Detail, exited.At);
     }
 
+    /// <summary>Why the attempt ended, from leaving when leaving gave up on it, else from a crash, then what reconciling found.</summary>
     private static string Reconciliation(AttemptRecord record, ProcessMatch? process)
     {
-        if (process is not { } match)
+        var cause = record.InterruptReason is { } reason
+            ? $"{reason} Its client did not stop in time, and iDevelop settled it when the project was opened again."
+            : process is null ? "iDevelop stopped while starting the client." : "iDevelop stopped while this task ran.";
+        var found = process is not { } match ? " If the client started, it may still be running." : match switch
         {
-            return "iDevelop stopped while starting the client. If the client started, it may still be running.";
-        }
-
-        return match switch
-        {
-            ProcessMatch.Same => "iDevelop stopped while this task ran. Its client was still running and was stopped.",
-            ProcessMatch.Gone => "iDevelop stopped while this task ran.",
-            ProcessMatch.Reused => $"iDevelop stopped while this task ran. Process {record.Process?.Id} now belongs to another program and was left alone.",
+            ProcessMatch.Same => " Its client was still running and was stopped.",
+            ProcessMatch.Gone => "",
+            ProcessMatch.Reused => $" Process {record.Process?.Id} now belongs to another program and was left alone.",
         };
+        return cause + found;
     }
 
     private static AttemptRecord Settle(AttemptRecord record, AttemptStatus status, string? detail, DateTimeOffset at) => record with
