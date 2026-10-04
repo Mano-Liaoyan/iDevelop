@@ -42,7 +42,7 @@ The launcher does not install clients, copy credentials, or change other project
 | Codex desktop | Reads project PStack skills and `AGENTS.md`. | Version `0.160.0` ignores project-layer `skills.config` filters. No supported desktop setting for project-only skill hiding was found. Ordinary desktop conversations may display other skills. Use the CLI launcher for the verified isolation. |
 | Claude Code | Uses `--setting-sources project,local` to exclude personal and synced skill sources. Disables bundled skills and hides doctor. | Shares `.claude/skills`. Organization-managed settings may still apply. After installing the client, inspect `/skills` and `/plugin`. |
 | Pi | Uses `--no-extensions --no-skills --skill <project-directory> --no-prompt-templates`. | Explicitly loads only PStack and the project skills. Disabling extensions also disables subagent and MCP capabilities supplied by those extensions. Review any required extension before explicitly loading it from the project. An ordinary `pi` launch does not guarantee isolation. |
-| Antigravity CLI | Discovers `.agents/skills` and reads `AGENTS.md` natively. The launcher stops if personal skill or plugin sources under `~/.gemini` contain anything. | `agy` has no isolated profile and no setting that hides personal or bundled skills. Its eight bundled skills, such as `agy-customizations` and `antigravity_guide`, stay available. Inspect `/skills` after sign-in. |
+| Antigravity CLI | Discovers `.agents/skills` and reads `AGENTS.md` natively. The launcher stops if personal skill or plugin sources under `~/.gemini` contain anything. | `agy` has no isolated profile and no setting that hides personal or bundled skills. The project chose not to point `USERPROFILE` at a project folder, because every tool the agent starts, Git included, would inherit the fake home folder. Its eight bundled skills, such as `agy-customizations` and `antigravity_guide`, stay available. Inspect `/skills` after sign-in. |
 
 Invoking project skills and hiding other skills are separate capabilities. The Codex desktop row records the desktop isolation limit. Global skill settings have not been changed to hide the other skills. Claude's complete skill catalog and the Pi and Antigravity isolation adapters remain unverified in their actual clients.
 
@@ -67,21 +67,7 @@ These versioned records support handoffs. They do not provide live messaging, cr
 
 ## Configure models for quality
 
-Edit [`.pstack/models.json`](../.pstack/models.json). Until the app prototype works, the user assigned every development role to one model.
-
-| Work | Required model | Reasoning |
-| --- | --- | --- |
-| Frontend and backend implementation, review, judgment, and exploration | Claude Opus 5.5 | xhigh |
-
-Each review runs in a fresh Opus session that did not write the change. After the prototype works, the user will choose each part's owner inside the app. Reassigning a role also changes `requiredRoles` in `scripts/model-policy.mjs` and its tests.
-
-Every dispatch needs an explicit supported effort at or below xhigh. Max, higher levels, and inherited effort are prohibited. Provider effort names do not imply identical token budgets. The policy overrides upstream skill defaults.
-
-Run `node scripts/model-policy.mjs validate` to check the policy. Run `node scripts/model-policy.mjs resolve backend-implementation` to inspect a route. Missing participants produce a blocked result and exit code 2. A partially available panel does not run, and a missing provider is not replaced automatically. The resolver prepares instructions; it does not launch clients or authenticate accounts.
-
-Claude Code 2.1.288 passed a subscription-authenticated request to `claude-opus-5-5` with explicit xhigh, so the Opus route is active. The registry keeps two verified routes that no role selects yet. Astra is available through the native Codex catalog. Antigravity CLI 1.2.16 passed a signed-in request with `--model gemini-3.8-flash --effort high`, and its log identified Gemini 3.8 Flash (High) as the served model. A ready route does not mean any review has run.
-
-[`.codex/config.toml`](../.codex/config.toml) sets new project launches to Astra at xhigh. No role uses this default until the user reassigns work. It does not change an existing conversation or prevent explicit app or CLI overrides. Check the active setting when starting work. [`.pstack/compatibility.md`](../.pstack/compatibility.md) maps PStack's workflow roles to the scoped assignments.
+[`.pstack/models.json`](../.pstack/models.json) assigns each development role its model and reasoning level, and [`.pstack/compatibility.md`](../.pstack/compatibility.md) states the policy and maps PStack's workflow roles to those roles. Run `node scripts/model-policy.mjs validate` to check the policy, and `node scripts/model-policy.mjs resolve <role>` to get the model and effort for a role, or the missing participants that block it.
 
 These settings govern the agents developing iDevelop. The application's provider connections and a programmatic dispatcher across providers remain separate product work.
 
