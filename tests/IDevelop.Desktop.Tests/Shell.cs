@@ -110,6 +110,16 @@ internal sealed class Shell
     public NodeInput Input(string title) =>
         Window.GetVisualDescendants().OfType<NodeInput>().Single(input => ((PortViewModel)input.DataContext!).Node.Title == title);
 
+    /// <summary>The visual's box in the window.</summary>
+    public Rect Bounds(Visual visual) => new(At(visual, default), visual.Bounds.Size);
+
+    /// <summary>The nearest border around the visual that has the style class.</summary>
+    public static Border Around(Visual visual, string cssClass) =>
+        visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains(cssClass));
+
+    /// <summary>The card's box in the editor, at the editor's zoom.</summary>
+    public Rect CardRect(string title) => new(Node(title).TranslatePoint(default, Editor)!.Value, Node(title).Bounds.Size * Editor.ViewportZoom);
+
     public Point Center(Visual visual) => At(visual, new Point(visual.Bounds.Width / 2, visual.Bounds.Height / 2));
 
     public Point Header(ItemContainer node) => At(node, new Point(node.Bounds.Width / 2, 10));

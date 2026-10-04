@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
@@ -75,12 +74,10 @@ public sealed class MainWindowTests : IDisposable
         shell.Window.Height = shell.Window.MinHeight;
         shell.Render();
 
-        Rect Bounds(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.Bounds.Size);
-        Border Around(Visual visual, string kind) => visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains(kind));
-        var status = Bounds(Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
+        var status = shell.Bounds(Shell.Around(shell.Find<TextBlock>("Status"), "breadcrumb"));
         Assert.Equal(new Size(900, 600), shell.Window.ClientSize);
         Assert.All(
-            [Bounds(shell.Find<Border>("Breadcrumb")), Bounds(Around(shell.Find<Button>("ZoomIn"), "floating")), Bounds(Around(shell.Find<Minimap>("Minimap"), "floating"))],
+            [shell.Bounds(shell.Find<Border>("Breadcrumb")), shell.Bounds(Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), shell.Bounds(Shell.Around(shell.Find<Minimap>("Minimap"), "floating"))],
             other => Assert.False(status.Intersects(other), $"The status at {status} covers {other}"));
     }
 

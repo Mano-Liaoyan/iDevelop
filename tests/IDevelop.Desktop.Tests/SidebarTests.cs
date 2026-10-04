@@ -71,13 +71,12 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_a_task_off_the_screen_in_the_sidebar_brings_its_card_into_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
-        Rect Card() => new(shell.Node("Build").TranslatePoint(default, shell.Editor)!.Value, shell.Node("Build").Bounds.Size);
-        Assert.False(new Rect(shell.Editor.Bounds.Size).Intersects(Card()));
+        Assert.False(new Rect(shell.Editor.Bounds.Size).Intersects(shell.CardRect("Build")));
 
         shell.Click(shell.SidebarRow("Build"));
         WaitForPan(shell);
 
-        Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(Card()), $"{Card()} is outside {shell.Editor.Bounds.Size}");
+        Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {shell.Editor.Bounds.Size}");
         Assert.Equal(new Point(2161, 1272), shell.Editor.ViewportLocation);
         Assert.Equal(new Point(2161, 1272), shell.Find<Minimap>("Minimap").ViewportLocation);
     }

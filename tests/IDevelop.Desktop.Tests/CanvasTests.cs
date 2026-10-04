@@ -146,14 +146,13 @@ public sealed class CanvasTests : IDisposable
     public void Fit_to_screen_brings_a_distant_task_into_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
-        Rect Card(string title) => new(shell.Node(title).TranslatePoint(default, shell.Editor)!.Value, shell.Node(title).Bounds.Size * shell.Editor.ViewportZoom);
         var editor = new Rect(shell.Editor.Bounds.Size);
-        Assert.False(editor.Intersects(Card("Build")));
+        Assert.False(editor.Intersects(shell.CardRect("Build")));
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 
-        Assert.True(editor.Contains(Card("Design")), $"{Card("Design")} is outside {editor}");
-        Assert.True(editor.Contains(Card("Build")), $"{Card("Build")} is outside {editor}");
+        Assert.True(editor.Contains(shell.CardRect("Design")), $"{shell.CardRect("Design")} is outside {editor}");
+        Assert.True(editor.Contains(shell.CardRect("Build")), $"{shell.CardRect("Build")} is outside {editor}");
     }
 
     [AvaloniaFact]

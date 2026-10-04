@@ -274,15 +274,13 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
 
-        Rect Bounds(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.Bounds.Size);
-        Border Floating(Visual visual) => visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains("floating"));
-        var bar = Bounds(shell.Find<Control>("RunBar"));
+        var bar = shell.Bounds(shell.Find<Control>("RunBar"));
         Assert.Equal(new Size(width, height), shell.Window.ClientSize);
         Assert.All(
-            [Bounds(Floating(shell.Find<Button>("ZoomIn"))), Bounds(Floating(shell.Find<Minimap>("Minimap")))],
+            [shell.Bounds(Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), shell.Bounds(Shell.Around(shell.Find<Minimap>("Minimap"), "floating"))],
             other => Assert.False(bar.Intersects(other), $"The run bar at {bar} covers {other}"));
-        Assert.True(Bounds(shell.Editor).Contains(bar), $"The run bar at {bar} leaves the canvas");
-        var (title, cancel) = (Bounds(shell.Find<TextBlock>("RunBarTask")), Bounds(shell.Find<Button>("RunBarCancel")));
+        Assert.True(shell.Bounds(shell.Editor).Contains(bar), $"The run bar at {bar} leaves the canvas");
+        var (title, cancel) = (shell.Bounds(shell.Find<TextBlock>("RunBarTask")), shell.Bounds(shell.Find<Button>("RunBarCancel")));
         Assert.True(bar.Contains(title) && bar.Contains(cancel) && !title.Intersects(cancel), $"The bar at {bar} squeezes {title} and {cancel}");
 
         shell.Click(shell.Find<Button>("RunBarCancel"));
