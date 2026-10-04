@@ -93,13 +93,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            if (_active.TryGetValue(task.Id, out var run))
-            {
-                return new StartProblem.AlreadyRunning(run.Record.Task, run.Record.TaskTitle);
-            }
+            return Verdict(task) is StartVerdict.Blocked blocked ? blocked.Problem : null;
         }
-
-        return StartCheck.Evaluate(task, _projectFolder, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
     }
 
     /// <summary>
@@ -113,12 +108,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
-            if (_active.TryGetValue(task.Id, out var running))
-            {
-                return new StartResult.Refused(new StartProblem.AlreadyRunning(running.Record.Task, running.Record.TaskTitle));
-            }
-
-            var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current);
+            var verdict = Verdict(task);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);
@@ -293,6 +283,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return latest;
         }
     }
+
+    /// <summary>Whether this window runs the task, then what <see cref="StartCheck"/> says. Called under the gate.</summary>
+    private StartVerdict Verdict(TaskDefinition task) => _active.TryGetValue(task.Id, out var run)
+        ? new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run.Record.Task, run.Record.TaskTitle))
+        : StartCheck.Evaluate(task, _projectFolder, _clients.Current);
 
     /// <summary>Starts the client and records its process. A client that does not start is a failed attempt, and then the
     /// log and the lock are released at once.</summary>
