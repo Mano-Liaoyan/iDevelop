@@ -11,7 +11,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
     if (!(Get-Command $Client -ErrorAction SilentlyContinue)) {
-        throw "$Client is not installed or is not on PATH. See README.md."
+        throw "$Client is not installed or is not on PATH. See docs/development-environment.md."
     }
     & node (Join-Path $PSScriptRoot 'pstack.mjs') check
     if ($LASTEXITCODE -ne 0) { throw 'Run node scripts/pstack.mjs setup first.' }
@@ -34,7 +34,7 @@ try {
                 ForEach-Object { Join-Path $env:USERPROFILE ".gemini/$_" } |
                 Where-Object { (Test-Path $_ -PathType Leaf) -or @(Get-ChildItem $_ -Force -ErrorAction SilentlyContinue).Count -gt 0 }
             if ($personalSources) {
-                throw "Antigravity CLI would load personal skills or plugins from $($personalSources -join ', '). It has no isolated profile; see README.md."
+                throw "Antigravity CLI would load personal skills or plugins from $($personalSources -join ', '). It has no isolated profile; see docs/development-environment.md."
             }
             & agy @ClientArguments
         }
