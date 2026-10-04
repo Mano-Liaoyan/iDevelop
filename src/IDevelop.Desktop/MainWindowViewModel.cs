@@ -25,7 +25,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _save = new RelayCommand(() => TrySave(), () => _document is not null);
         _addTask = new RelayCommand(() => Canvas?.AddTaskCommand.Execute(null), () => Canvas is not null);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
-        clients.Changed += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Agents)));
+        clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
 
     public WorkflowCanvasViewModel? Canvas
@@ -70,7 +70,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         _document = document;
         document.Changed += (_, _) => OnDocumentChanged();
-        Canvas = new WorkflowCanvasViewModel(document, notice => Status = notice);
+        Canvas = new WorkflowCanvasViewModel(document, _clients, notice => Status = notice);
         Status = null;
         OnPropertyChanged(nameof(ProjectName));
         OnDocumentChanged();
@@ -96,6 +96,12 @@ public sealed class MainWindowViewModel : ObservableObject
             Status = e is ProjectException ? e.Message : $"Couldn't save: {e.Message}";
             return false;
         }
+    }
+
+    private void OnClientsChanged()
+    {
+        OnPropertyChanged(nameof(Agents));
+        Canvas?.OnClientsChanged();
     }
 
     private async void RefreshAgents()

@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -113,6 +115,35 @@ internal sealed class Shell
     }
 
     public void Click(Visual visual) => Click(Center(visual));
+
+    /// <summary>Opens the picker, chooses the entry, and returns every entry the picker offered, in order.</summary>
+    public string[] Pick(string picker, string entry)
+    {
+        var box = Find<ComboBox>(picker);
+        box.BringIntoView();
+        Render();
+        Click(box);
+        string[] offered = [.. Window.GetVisualDescendants().OfType<ComboBoxItem>().Select(TextOf)];
+        Assert.True(offered.Contains(entry), $"The picker offers [{string.Join(", ", offered)}], not {entry}.");
+        // A headless popup sits in the window's overlay layer, where the picker never sees input on its entries,
+        // so the list closes again and the arrow keys choose the entry, as they do for a keyboard user.
+        ControlAutomationPeer.CreatePeerForElement(box).GetProvider<IExpandCollapseProvider>()!.Collapse();
+        box.Focus();
+        var steps = Array.IndexOf(offered, entry) - box.SelectedIndex;
+        for (var step = 0; step < Math.Abs(steps); step++)
+        {
+            Press(steps > 0 ? Key.Down : Key.Up);
+        }
+
+        Assert.Equal(entry, Picked(picker));
+        return offered;
+    }
+
+    /// <summary>What the picker shows as chosen, or its placeholder.</summary>
+    public string Picked(string picker) => TextOf(Find<ComboBox>(picker));
+
+    public static string TextOf(Visual visual) =>
+        string.Join(" ", visual.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
 

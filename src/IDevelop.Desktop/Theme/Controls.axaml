@@ -198,6 +198,24 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
+  <!-- Fluent's own state styles set the template's colors, so each state is restated here. -->
+  <Style Selector="ComboBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible /template/ Border#Background, ComboBox:dropdownopen /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+  </Style>
+
   <!-- The splitter is 8 px wide for the pointer and draws a 1 px line in its middle. -->
   <Style Selector="GridSplitter">
     <Setter Property="MinWidth" Value="0" />

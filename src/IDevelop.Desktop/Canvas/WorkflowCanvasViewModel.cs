@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -26,9 +27,10 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
 
-    public WorkflowCanvasViewModel(WorkflowDocument document, Action<string?> setNotice)
+    public WorkflowCanvasViewModel(WorkflowDocument document, ClientDirectory clients, Action<string?> setNotice)
     {
         _document = document;
+        Clients = clients;
         _setNotice = setNotice;
         PendingConnection = new PendingConnectionViewModel(this);
         AddTaskCommand = new RelayCommand(AddTaskInView);
@@ -108,6 +110,17 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     public ICommand CommitMovesCommand { get; }
 
     internal Workflow Workflow => _document.Current;
+
+    internal ClientDirectory Clients { get; }
+
+    /// <summary>Called on the UI thread after the client directory changes.</summary>
+    internal void OnClientsChanged()
+    {
+        foreach (var node in Nodes)
+        {
+            node.OnAgentChanged();
+        }
+    }
 
     internal EditResult Edit(WorkflowEdit edit)
     {

@@ -215,7 +215,8 @@
                     BoxShadow="{DynamicResource CardShadow}">
               <StackPanel Spacing="4">
                 <TextBlock Classes="cardTitle" Height="24" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Classes="cardLabel" Margin="0,6,0,0" Text="Instructions" />
+                <TextBlock Classes="cardLabel" Margin="0,6,0,0" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="CardAgent" />
                 <Border Classes="prompt" Height="64">
                   <Panel>
                     <TextBlock Text="{Binding Instructions}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />

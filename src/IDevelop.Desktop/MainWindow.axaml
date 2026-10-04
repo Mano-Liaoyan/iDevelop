@@ -285,6 +285,46 @@
                                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
                                  AutomationProperties.AutomationId="TaskAcceptanceCriteria"
                                  AutomationProperties.Name="Acceptance criteria" />
+
+                        <TextBlock Classes="section" Text="AGENT" Margin="0,20,0,2" />
+                        <TextBlock Classes="caption" Text="Client" />
+                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient}"
+                                  AutomationProperties.AutomationId="TaskClient"
+                                  AutomationProperties.Name="Client">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:ClientChoice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
+                          <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
+                          <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel}"
+                                    PlaceholderText="Choose a model"
+                                    AutomationProperties.AutomationId="TaskModel"
+                                    AutomationProperties.Name="Model">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate DataType="canvas:Choice">
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
+                            <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
+                            <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning}"
+                                      PlaceholderText="Choose a level"
+                                      AutomationProperties.AutomationId="TaskReasoning"
+                                      AutomationProperties.Name="Reasoning">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="canvas:Choice">
+                                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                            </ComboBox>
+                          </StackPanel>
+                          <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                     AutomationProperties.AutomationId="PermissionNote" />
+                        </StackPanel>
                       </StackPanel>
                     </DataTemplate>
                     <DataTemplate DataType="canvas:ConnectionViewModel">
