@@ -26,18 +26,17 @@ public abstract record ClientStatus
 public sealed class ClientDirectory
 {
     private readonly Lock _gate = new();
+    private readonly CommandResolver _resolver;
     private Task? _refresh;
 
     public ClientDirectory(CommandResolver resolver)
     {
-        Resolver = resolver;
+        _resolver = resolver;
         Current = Clients.All.ToImmutableDictionary(id => id, ClientStatus (_) => new ClientStatus.Checking());
     }
 
     /// <summary>Every client has an entry. Each starts as Checking and keeps its last status while a refresh runs.</summary>
     public ImmutableDictionary<ClientId, ClientStatus> Current { get; private set; }
-
-    internal CommandResolver Resolver { get; }
 
     /// <summary>Raised on a worker thread after each client's status changes.</summary>
     public event EventHandler? Changed;
@@ -49,7 +48,11 @@ public sealed class ClientDirectory
         {
             if (_refresh is not { IsCompleted: false })
             {
-                _refresh = Task.Run(() => Task.WhenAll(Clients.All.Select(RefreshClientAsync)));
+                _refresh = Task.Run(async () =>
+                {
+                    await _resolver.Ready;
+                    await Task.WhenAll(Clients.All.Select(RefreshClientAsync));
+                });
             }
 
             return _refresh;
@@ -58,7 +61,7 @@ public sealed class ClientDirectory
 
     /// <summary>A whole-client problem makes the client Unready. A provider problem marks only that provider's models,
     /// unless every provider has one.</summary>
-    internal static ClientStatus Assemble(
+    private static ClientStatus Assemble(
         ResolvedCommand command, ImmutableArray<ModelOption> catalog, IReadOnlyList<(string? Provider, string? Problem)> checks)
     {
         if (checks.FirstOrDefault(check => check.Provider is null && check.Problem is not null).Problem is { } problem)
@@ -87,7 +90,7 @@ public sealed class ClientDirectory
 
     private async Task<ClientStatus> ProbeAsync(ClientDefinition client)
     {
-        if (Resolver.Resolve(client.Command) is not { } command)
+        if (_resolver.Resolve(client.Command) is not { } command)
         {
             return new ClientStatus.Missing($"No {client.Command} command was found on PATH.");
         }
