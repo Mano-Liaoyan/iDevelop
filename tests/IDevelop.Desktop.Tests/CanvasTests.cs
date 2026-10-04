@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -83,7 +82,7 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
-        Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "TaskCard")));
+        Assert.Equal(title, ToolTip.GetTip(shell.InCard<Panel>(title, "TaskCard")));
     }
 
     [AvaloniaFact]

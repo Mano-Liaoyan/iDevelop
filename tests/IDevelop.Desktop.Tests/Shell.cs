@@ -86,6 +86,10 @@ internal sealed class Shell
 
     public IEnumerable<ItemContainer> Nodes() => Window.GetVisualDescendants().OfType<ItemContainer>();
 
+    public T InCard<T>(string title, string automationId) where T : Control => ById<T>(Node(title), automationId).Single();
+
+    public string CardText(string title, string automationId) => TextOf(InCard<Control>(title, automationId));
+
     public ListBoxItem SidebarRow(string title) =>
         Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
 

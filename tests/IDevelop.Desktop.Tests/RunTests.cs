@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -48,11 +47,6 @@ public sealed class RunTests : IDisposable
     private static WorkflowEdit.CreateTask SayHiTask(ExecutionSettings execution) =>
         TaskAt(SayHi, "Say hi", 105, 90, execution, "Create hello.txt containing hi. Then reply with DONE.");
 
-    private static Control Part(Shell shell, string automationId, string title = "Say hi") =>
-        shell.Node(title).GetVisualDescendants().OfType<Control>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
-
-    private static string CardStatus(Shell shell, string title = "Say hi") => Shell.TextOf(Part(shell, "CardStatus", title));
-
     private static Color CardFill(Shell shell) =>
         ((ISolidColorBrush)shell.Node("Say hi").GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("card")).Background!).Color;
 
@@ -65,7 +59,7 @@ public sealed class RunTests : IDisposable
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
-        Assert.Equal("Running", CardStatus(shell));
+        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
         return (shell, folder, clients);
     }
 
@@ -84,7 +78,7 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.InView<Button>("RunTask"));
 
         Assert.Equal(reason, shell.Status);
-        Assert.Equal("Not run", CardStatus(shell));
+        Assert.Equal("Not run", shell.CardText("Say hi", "CardStatus"));
         Assert.False(Directory.Exists(Path.Combine(folder, ".idp", "attempts")));
     }
 
@@ -95,11 +89,11 @@ public sealed class RunTests : IDisposable
         var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Say hi")));
-        Assert.Equal(("Not run", Color.Parse("#FFFFFF")), (CardStatus(shell), CardFill(shell)));
+        Assert.Equal(("Not run", Color.Parse("#FFFFFF")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
 
         shell.Click(shell.InView<Button>("RunTask"));
 
-        Assert.Equal(("Running", Color.Parse("#CDF4F3")), (CardStatus(shell), CardFill(shell)));
+        Assert.Equal(("Running", Color.Parse("#CDF4F3")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
         Assert.Equal("", shell.Status);
         Assert.True(shell.Find<Control>("RunBar").IsEffectivelyVisible);
@@ -111,11 +105,11 @@ public sealed class RunTests : IDisposable
         Assert.Matches(@"^\d+ s$", shell.Find<TextBlock>("RunBarElapsed").Text);
 
         File.WriteAllText(_gate, "");
-        shell.WaitUntil(() => CardStatus(shell) == "Succeeded", "the run succeeds");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
 
         Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
         Assert.Equal(Color.Parse("#D9F4D9"), CardFill(shell));
-        Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)((TextBlock)Part(shell, "CardStatus")).Foreground!).Color);
+        Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
         Assert.Equal("Requested Codex · gpt-5.5 · high.", shell.Find<TextBlock>("LastRunConfiguration").Text);
@@ -134,14 +128,14 @@ public sealed class RunTests : IDisposable
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
-        Assert.Equal("Running", CardStatus(shell));
+        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
 
         shell.Click(shell.InView<Button>("CancelRun"));
 
-        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
         Assert.Equal("Cancelled", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal(Color.Parse("#FFFFFF"), CardFill(shell));
-        Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
+        Assert.Equal("Cancelled", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
     }
 
     [AvaloniaFact]
@@ -156,7 +150,7 @@ public sealed class RunTests : IDisposable
         shell.Choose("StopAndLeave");
         shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
         var reopened = Shell.Open(folder, clients);
-        Assert.Equal("Interrupted", CardStatus(reopened));
+        Assert.Equal("Interrupted", reopened.CardText("Say hi", "CardStatus"));
         reopened.Click(reopened.Header(reopened.Node("Say hi")));
         Assert.Equal("The project was closed while this task ran.", reopened.InView<TextBlock>("LastRunDetail").Text);
     }
@@ -173,7 +167,7 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.Header(shell.Node("Review")));
         shell.Click(shell.InView<Button>("RunTask"));
 
-        Assert.Equal(["Running", "Running"], new[] { "Say hi", "Review" }.Select(title => CardStatus(shell, title)));
+        Assert.Equal(["Running", "Running"], new[] { "Say hi", "Review" }.Select(title => shell.CardText(title, "CardStatus")));
         Assert.Equal("Review and 1 more", shell.Find<TextBlock>("RunBarTask").Text);
         shell.Window.Close();
         shell.Render();
@@ -182,7 +176,7 @@ public sealed class RunTests : IDisposable
         shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
 
         var reopened = Shell.Open(folder, clients);
-        Assert.Equal(["Interrupted", "Interrupted"], new[] { "Say hi", "Review" }.Select(title => CardStatus(reopened, title)));
+        Assert.Equal(["Interrupted", "Interrupted"], new[] { "Say hi", "Review" }.Select(title => reopened.CardText(title, "CardStatus")));
     }
 
     [AvaloniaFact]
@@ -196,9 +190,9 @@ public sealed class RunTests : IDisposable
 
         Assert.Null(shell.Dialog);
         Assert.True(shell.Window.IsVisible);
-        Assert.Equal("Running", CardStatus(shell));
+        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
         shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
     }
 
     [AvaloniaFact]
@@ -216,9 +210,9 @@ public sealed class RunTests : IDisposable
 
         Assert.Null(shell.Dialog);
         Assert.True(shell.Window.IsVisible);
-        Assert.Equal(("Running", "seed* - iDevelop"), (CardStatus(shell), shell.Window.Title));
+        Assert.Equal(("Running", "seed* - iDevelop"), (shell.CardText("Say hi", "CardStatus"), shell.Window.Title));
         shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
     }
 
     [AvaloniaFact]
@@ -234,7 +228,7 @@ public sealed class RunTests : IDisposable
 
         shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the other folder opens");
         Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        Assert.Equal("Interrupted", CardStatus(Shell.Open(folder, clients)));
+        Assert.Equal("Interrupted", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
     }
 
     [AvaloniaFact]
@@ -249,23 +243,23 @@ public sealed class RunTests : IDisposable
         var second = Shell.Open(folder, clients);
         second.Click(second.Header(second.Node("Say hi")));
 
-        Assert.Equal(("Running in another window", "Running in another window"), (CardStatus(second), second.InView<TextBlock>("LastRunStatus").Text));
+        Assert.Equal(("Running in another window", "Running in another window"), (second.CardText("Say hi", "CardStatus"), second.InView<TextBlock>("LastRunStatus").Text));
         Assert.Equal((true, false), (second.Find<Button>("RunTask").IsEffectivelyEnabled, second.Find<Button>("CancelRun").IsEffectivelyEnabled));
         second.Click(second.InView<Button>("RunTask"));
         Assert.Equal("\"Say hi\" is already running.", second.Status);
 
         first.Click(first.Find<Button>("RunBarCancel"));
-        first.WaitUntil(() => CardStatus(first) == "Cancelled", "the first window's run is cancelled");
+        first.WaitUntil(() => first.CardText("Say hi", "CardStatus") == "Cancelled", "the first window's run is cancelled");
         first.Click(first.Header(first.Node("Review")));
         first.Click(first.InView<Button>("RunTask"));
         second.Click(second.InView<Button>("RunTask"));
 
-        Assert.Equal(["Running", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
+        Assert.Equal(["Running", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => second.CardText(title, "CardStatus")));
 
         first.Click(first.Find<Button>("RunBarCancel"));
-        first.WaitUntil(() => CardStatus(first, "Review") == "Cancelled", "the first window's second run is cancelled");
+        first.WaitUntil(() => first.CardText("Review", "CardStatus") == "Cancelled", "the first window's second run is cancelled");
         second.Click(second.Find<Button>("RunBarCancel"));
-        second.WaitUntil(() => CardStatus(second) == "Cancelled", "the second window's run is cancelled");
+        second.WaitUntil(() => second.CardText("Say hi", "CardStatus") == "Cancelled", "the second window's run is cancelled");
     }
 
     [AvaloniaTheory]
@@ -292,7 +286,7 @@ public sealed class RunTests : IDisposable
         Assert.True(bar.Contains(title) && bar.Contains(cancel) && !title.Intersects(cancel), $"The bar at {bar} squeezes {title} and {cancel}");
 
         shell.Click(shell.Find<Button>("RunBarCancel"));
-        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
     }
 
     [AvaloniaFact]
@@ -312,6 +306,6 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.Find<Button>("RunBarCancel"));
 
         shell.WaitUntil(() => !shell.Find<Control>("RunBar").IsEffectivelyVisible, "the run bar goes away");
-        Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
+        Assert.Equal("Cancelled", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
     }
 }

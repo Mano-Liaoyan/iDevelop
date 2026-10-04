@@ -3,7 +3,6 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -46,16 +45,13 @@ public sealed class AgentPickerTests : IDisposable
         return fakes.DiscoverAsync().Result;
     }
 
-    private static string CardAgent(Shell shell, string title) =>
-        shell.Node(title).GetVisualDescendants().OfType<TextBlock>().Single(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "CardAgent").Text!;
-
     [AvaloniaFact]
     public void The_pickers_offer_what_the_clients_offer_and_the_choice_survives_save_and_reopen()
     {
         var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90));
         var shell = Shell.Open(folder, _clients);
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal("No agent", CardAgent(shell, "Design"));
+        Assert.Equal("No agent", shell.CardText("Design", "CardAgent"));
         Assert.Equal("None", shell.Picked("TaskClient"));
         Assert.False(shell.Find<ComboBox>("TaskModel").IsEffectivelyVisible);
 
@@ -65,7 +61,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["GPT-6.1-Sol", "GPT-6-Sol", "GPT-5.5"], shell.Pick("TaskModel", "GPT-5.5"));
         Assert.Equal(["low", "medium", "high", "xhigh"], shell.Pick("TaskReasoning", "high"));
 
-        Assert.Equal("Codex · GPT-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · GPT-5.5 · high", shell.CardText("Design", "CardAgent"));
         Assert.Equal(
             ["Codex", "GPT-5.5", "high"],
             new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(id =>
@@ -79,7 +75,7 @@ public sealed class AgentPickerTests : IDisposable
 
         var reopened = Shell.Open(folder, _clients);
         reopened.Click(reopened.Header(reopened.Node("Design")));
-        Assert.Equal("Codex · GPT-5.5 · high", CardAgent(reopened, "Design"));
+        Assert.Equal("Codex · GPT-5.5 · high", reopened.CardText("Design", "CardAgent"));
         Assert.Equal(["Codex", "GPT-5.5", "high"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(reopened.Picked));
     }
 
@@ -91,11 +87,11 @@ public sealed class AgentPickerTests : IDisposable
 
         shell.Pick("TaskClient", "Antigravity CLI");
 
-        Assert.Equal("Antigravity CLI · Gemini 3.8 Flash · medium", CardAgent(shell, "Design"));
+        Assert.Equal("Antigravity CLI · Gemini 3.8 Flash · medium", shell.CardText("Design", "CardAgent"));
         Assert.Equal(
             ["Gemini 3.8 Flash", "Gemini 3.7 Flash", "Gemini 3.6 Flash", "Gemini 3.1 Pro", "Claude Sonnet 4.6 (Thinking)", "Claude Opus 4.6 (Thinking)", "GPT-OSS 120B"],
             shell.Pick("TaskModel", "Claude Opus 4.6 (Thinking)"));
-        Assert.Equal("Antigravity CLI · Claude Opus 4.6 (Thinking)", CardAgent(shell, "Design"));
+        Assert.Equal("Antigravity CLI · Claude Opus 4.6 (Thinking)", shell.CardText("Design", "CardAgent"));
         Assert.False(shell.Find<ComboBox>("TaskReasoning").IsEffectivelyVisible);
     }
 
@@ -106,7 +102,7 @@ public sealed class AgentPickerTests : IDisposable
         var shell = Shell.Open(folder, _clients);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal("Codex · gpt-7 · ultra", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · gpt-7 · ultra", shell.CardText("Design", "CardAgent"));
         Assert.Equal(["gpt-7 (not offered on this machine)", "ultra"], new[] { "TaskModel", "TaskReasoning" }.Select(shell.Picked));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
 
@@ -114,7 +110,7 @@ public sealed class AgentPickerTests : IDisposable
             ["GPT-6.1-Sol", "GPT-6-Sol", "GPT-5.5", "gpt-7 (not offered on this machine)"],
             shell.Pick("TaskModel", "GPT-5.5"));
 
-        Assert.Equal("Codex · GPT-5.5 · medium", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · GPT-5.5 · medium", shell.CardText("Design", "CardAgent"));
         Assert.Equal(["low", "medium", "high", "xhigh"], shell.Pick("TaskReasoning", "medium"));
         Assert.Equal(["GPT-6.1-Sol", "GPT-6-Sol", "GPT-5.5"], shell.Pick("TaskModel", "GPT-5.5"));
         shell.Press(Key.S, RawInputModifiers.Control);
@@ -132,7 +128,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal("ultra (not offered)", shell.Picked("TaskReasoning"));
         Assert.Equal(["low", "medium", "high", "xhigh", "ultra (not offered)"], shell.Pick("TaskReasoning", "high"));
 
-        Assert.Equal("Codex · GPT-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · GPT-5.5 · high", shell.CardText("Design", "CardAgent"));
         Assert.Equal(["low", "medium", "high", "xhigh"], shell.Pick("TaskReasoning", "high"));
     }
 
@@ -144,7 +140,7 @@ public sealed class AgentPickerTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Codex · checking", "gpt-5.5", "high"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
-        Assert.Equal("Codex · gpt-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · gpt-5.5 · high", shell.CardText("Design", "CardAgent"));
         Assert.Equal("iDevelop is still checking Codex.", shell.InView<TextBlock>("StartProblem").Text);
     }
 
@@ -164,7 +160,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Codex", "GPT-6-Sol", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
         Assert.Equal(
             ["Codex · GPT-5.5 · xhigh", "Codex · GPT-6-Sol · low", "Antigravity CLI · Gemini 3.8 Flash · high"],
-            new[] { "Design", "Build", "Review" }.Select(title => CardAgent(shell, title)));
+            new[] { "Design", "Build", "Review" }.Select(title => shell.CardText(title, "CardAgent")));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 
@@ -184,7 +180,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Antigravity CLI", "Gemini 3.8 Flash", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
         Assert.Equal(
             ["Codex · GPT-5.5 · low", "Codex · GPT-6-Sol · xhigh", "Antigravity CLI · Gemini 3.8 Flash · low"],
-            new[] { "Design", "Build", "Review" }.Select(title => CardAgent(shell, title)));
+            new[] { "Design", "Build", "Review" }.Select(title => shell.CardText(title, "CardAgent")));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 
@@ -216,7 +212,7 @@ public sealed class AgentPickerTests : IDisposable
             Assert.Equal(pickers[title], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
             Assert.Equal(
                 ["Pi · DeepSeek V4 Pro (deepseek) · high", "Codex · GPT-5.5 · low", "Antigravity CLI · Gemini 3.8 Flash · medium"],
-                new[] { "Design", "Build", "Review" }.Select(task => CardAgent(shell, task)));
+                new[] { "Design", "Build", "Review" }.Select(task => shell.CardText(task, "CardAgent")));
             Assert.True("seed - iDevelop" == shell.Window.Title, $"Choosing {title} in the {where} made the title '{shell.Window.Title}'.");
         }
     }
@@ -241,7 +237,7 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["Codex", "GPT-5.5", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
         Assert.Equal(
             ["Pi · DeepSeek V4 Pro (deepseek) · high", "Codex · GPT-5.5 · low"],
-            new[] { "Design", "Build" }.Select(task => CardAgent(shell, task)));
+            new[] { "Design", "Build" }.Select(task => shell.CardText(task, "CardAgent")));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 
@@ -255,6 +251,6 @@ public sealed class AgentPickerTests : IDisposable
         shell.Pick("TaskClient", "Codex");
 
         Assert.Equal(["Codex", "GPT-6.1-Sol", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
-        Assert.Equal("Codex · GPT-6.1-Sol · low", CardAgent(shell, "Design"));
+        Assert.Equal("Codex · GPT-6.1-Sol · low", shell.CardText("Design", "CardAgent"));
     }
 }
