@@ -73,7 +73,7 @@ public sealed class CanvasTests : IDisposable
     {
         const string title = "Document the migration path for the new workflow file format";
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 60, 60)));
-        var canvasOrigin = shell.Window.GetVisualDescendants().OfType<NodifyEditor>().Single().TranslatePoint(default, shell.Window)!.Value;
+        var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
         shell.Pan(canvasOrigin + new Vector(700, 400), new Vector(-pan, 0));
         shell.Click(shell.Find<Button>("AddTask"));
@@ -200,7 +200,7 @@ public sealed class CanvasTests : IDisposable
     public void The_canvas_menu_adds_a_task_where_the_canvas_was_right_clicked()
     {
         var shell = Shell.Open(_temp.Create("plan"));
-        var canvasOrigin = shell.Window.GetVisualDescendants().OfType<NodifyEditor>().Single().TranslatePoint(default, shell.Window)!.Value;
+        var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
         shell.RightClick(canvasOrigin + new Vector(300, 405));
         shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(item => (string?)item.Header == "Add task"));
