@@ -10,22 +10,14 @@ import { validateModelPolicy } from './model-policy.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const upstream = path.join(root, '.pstack/upstream');
 const source = path.join(upstream, 'pstack');
+const projectSkills = path.join(root, 'skills');
 const active = path.join(root, '.agents/skills');
-const command = process.argv[2] ?? 'check';
+const local = path.join(root, '.pstack/local');
 const adapterNotice = 'Project adapter: read `.pstack/compatibility.md` and `.pstack/models.json` from the repository root before executing this skill.';
 
 function git(args, cwd = root) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', windowsHide: true }).trim();
 }
-
-if (command === 'setup') {
-  if (!fs.existsSync(path.join(upstream, '.git'))) {
-    git(['submodule', 'update', '--init', '--checkout', '--', '.pstack/upstream']);
-  }
-  git(['sparse-checkout', 'set', 'pstack'], upstream);
-}
-assert.ok(fs.existsSync(path.join(source, 'skills')), 'PStack submodule is missing. Run node scripts/pstack.mjs setup.');
-const local = path.join(root, '.pstack/local');
 
 function files(directory) {
   if (!fs.existsSync(directory)) return [];
@@ -39,28 +31,34 @@ function skillFile(base, input) {
   return { input, relative: path.relative(base, input).replaceAll('\\', '/') };
 }
 
-const upstreamSkills = path.join(source, 'skills');
-const upstreamFiles = git(['ls-files', '-z', '--', 'skills'], source).split('\0').filter(Boolean)
-  .map(file => skillFile(upstreamSkills, path.join(source, file)));
-const upstreamNames = upstreamFiles.map(file => file.relative)
-  .filter(relative => /^[^/]+\/SKILL\.md$/.test(relative)).map(relative => relative.split('/')[0]).sort();
-const projectSkills = path.join(root, 'skills');
-const projectNames = fs.existsSync(projectSkills)
-  ? fs.readdirSync(projectSkills, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
-  : [];
-// Windows and macOS paths ignore case, so a name that differs only in case would overwrite the PStack skill.
-const upstreamKeys = new Set(upstreamNames.map(name => name.toLowerCase()));
-for (const name of projectNames) {
-  assert.ok(!upstreamKeys.has(name.toLowerCase()), `Project skill skills/${name} has the same name as a PStack skill. Rename the project skill.`);
-  const entrypoint = path.join(projectSkills, name, 'SKILL.md');
-  assert.ok(fs.existsSync(entrypoint), `Project skill skills/${name} has no SKILL.md.`);
-  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(entrypoint, 'utf8'))?.[1] ?? '';
-  assert.ok(/^name:/m.test(frontmatter) && /^description:/m.test(frontmatter),
-    `Project skill skills/${name}/SKILL.md must begin with YAML frontmatter that holds name: and description:.`);
+function readSkills() {
+  const upstreamSkills = path.join(source, 'skills');
+  assert.ok(fs.existsSync(upstreamSkills), 'PStack submodule is missing. Run node scripts/pstack.mjs setup.');
+  const upstreamFiles = git(['ls-files', '-z', '--', 'skills'], source).split('\0').filter(Boolean)
+    .map(file => skillFile(upstreamSkills, path.join(source, file)));
+  const upstreamNames = upstreamFiles.map(file => file.relative)
+    .filter(relative => /^[^/]+\/SKILL\.md$/.test(relative)).map(relative => relative.split('/')[0]).sort();
+  const projectNames = fs.existsSync(projectSkills)
+    ? fs.readdirSync(projectSkills, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
+    : [];
+  // Windows and macOS paths ignore case, so a name that differs only in case would overwrite the PStack skill.
+  const upstreamKeys = new Set(upstreamNames.map(name => name.toLowerCase()));
+  for (const name of projectNames) {
+    assert.ok(!upstreamKeys.has(name.toLowerCase()), `Project skill skills/${name} has the same name as a PStack skill. Rename the project skill.`);
+    const entrypoint = path.join(projectSkills, name, 'SKILL.md');
+    assert.ok(fs.existsSync(entrypoint), `Project skill skills/${name} has no SKILL.md.`);
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(entrypoint, 'utf8'))?.[1] ?? '';
+    assert.ok(/^name:/m.test(frontmatter) && /^description:/m.test(frontmatter),
+      `Project skill skills/${name}/SKILL.md must begin with YAML frontmatter that holds name: and description:.`);
+  }
+  return {
+    sources: [...upstreamFiles, ...projectNames.flatMap(name => files(path.join(projectSkills, name)))
+      .map(input => skillFile(projectSkills, input))],
+    upstreamNames,
+    projectNames,
+    names: [...upstreamNames, ...projectNames].sort(),
+  };
 }
-const skillFiles = [...upstreamFiles, ...projectNames.flatMap(name => files(path.join(projectSkills, name)))
-  .map(input => skillFile(projectSkills, input))];
-const names = [...upstreamNames, ...projectNames].sort();
 
 function write(target, content) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -114,7 +112,7 @@ function link(directory) {
   }
 }
 
-async function isolateCodex() {
+async function isolateCodex(skills) {
   const entries = await listSkills([root, path.dirname(root)]);
   for (const entry of entries) assert.deepEqual(entry.errors, [], 'Codex discovery errors');
   const excluded = new Set(entries.flatMap(entry => entry.skills)
@@ -128,10 +126,10 @@ async function isolateCodex() {
     `{path=${JSON.stringify(file.replaceAll('\\', '/'))},enabled=false}`).join(',');
   write(path.join(local, 'codex-override.txt'), `skills.config=[${overrides}]`);
   write(path.join(local, 'codex-before.json'), JSON.stringify(entries, null, 2) + '\n');
-  await auditCodex();
+  await auditCodex(skills);
 }
 
-async function auditCodex() {
+async function auditCodex({ upstreamNames, projectNames, names }) {
   const override = fs.readFileSync(path.join(local, 'codex-override.txt'), 'utf8');
   const entries = await listSkills([root], [override]);
   const project = entries.find(entry => path.resolve(entry.cwd) === root);
@@ -151,12 +149,12 @@ async function auditCodex() {
   console.log(`PASS: Codex launch override enables exactly ${names.length} skills (${upstreamNames.length} PStack, ${projectNames.length} project-owned); other skills remain enabled outside this project.`);
 }
 
-function check() {
+function check({ sources, upstreamNames, projectNames, names }) {
   checkSource();
-  const expectedFiles = skillFiles.map(file => file.relative).sort();
+  const expectedFiles = sources.map(file => file.relative).sort();
   assert.deepEqual(files(active).map(file => path.relative(active, file).replaceAll('\\', '/')).sort(), expectedFiles,
     'Generated skill file inventory drifted. Run setup to synchronize it.');
-  for (const { input, relative } of skillFiles) {
+  for (const { input, relative } of sources) {
     const expected = render(input, relative);
     assert.deepEqual(fs.readFileSync(path.join(active, relative)), expected, `Generated file drift: ${relative}`);
   }
@@ -174,7 +172,12 @@ function check() {
   console.log(`PASS: ${names.length} skills (${upstreamNames.length} PStack, ${projectNames.length} project-owned), clean upstream ${git(['rev-parse', '--short', 'HEAD'], upstream)}, generated adapters, shared links, and model configuration.`);
 }
 
-if (command === 'setup') {
+function setup() {
+  if (!fs.existsSync(path.join(upstream, '.git'))) {
+    git(['submodule', 'update', '--init', '--checkout', '--', '.pstack/upstream']);
+  }
+  git(['sparse-checkout', 'set', 'pstack'], upstream);
+  const skills = readSkills();
   checkSource();
   if (fs.existsSync(active)) {
     assert.equal(fs.realpathSync(active), active, 'Generated skills must be a real directory inside this checkout.');
@@ -182,12 +185,12 @@ if (command === 'setup') {
     for (const entry of fs.readdirSync(active, { withFileTypes: true })) {
       assert.ok(entry.isDirectory(), `Unexpected generated skill entry: ${entry.name}`);
       const entrypoint = path.join(active, entry.name, 'SKILL.md');
-      assert.ok(fs.existsSync(entrypoint) ? fs.readFileSync(entrypoint, 'utf8').includes(adapterNotice) : names.includes(entry.name),
+      assert.ok(fs.existsSync(entrypoint) ? fs.readFileSync(entrypoint, 'utf8').includes(adapterNotice) : skills.names.includes(entry.name),
         `Refusing to overwrite a non-generated skill: ${entry.name}`);
     }
   }
   const expectedFiles = new Set();
-  for (const { input, relative } of skillFiles) {
+  for (const { input, relative } of skills.sources) {
     expectedFiles.add(path.join(active, relative));
     write(path.join(active, relative), render(input, relative));
   }
@@ -198,14 +201,19 @@ if (command === 'setup') {
   pruneEmptyDirectories(active);
   link('.claude');
   link('.cursor');
-  check();
+  check(skills);
   console.log('Next: node scripts/pstack.mjs isolate-codex (when Codex is installed).');
+}
+
+const command = process.argv[2] ?? 'check';
+if (command === 'setup') {
+  setup();
 } else if (command === 'check') {
-  check();
+  check(readSkills());
 } else if (command === 'isolate-codex') {
-  await isolateCodex();
+  await isolateCodex(readSkills());
 } else if (command === 'audit-codex') {
-  await auditCodex();
+  await auditCodex(readSkills());
 } else {
   throw new Error('Use setup, check, isolate-codex, or audit-codex');
 }

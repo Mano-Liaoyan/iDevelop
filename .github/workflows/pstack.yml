@@ -18,7 +18,9 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
-      - run: node --test scripts/model-policy.test.mjs
+      # Node expands the quoted glob itself, because PowerShell on the Windows runner does not.
+      - run: node --test 'scripts/*.test.mjs'
+      - run: node scripts/check-handoffs.mjs
       - run: node scripts/pstack.mjs setup
       - run: node scripts/pstack.mjs setup
       - name: Parse Windows launcher

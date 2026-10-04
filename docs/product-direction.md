@@ -163,7 +163,7 @@ Keep the task, workflow, and attempt model independent of Avalonia controls. The
 
 Avalonia supports Windows, macOS, and Linux and renders its controls through Skia. Its open-source framework is MIT licensed. Paid products are separate options. [Avalonia platforms](https://docs.avaloniaui.net/docs/supported-platforms), [architecture](https://docs.avaloniaui.net/docs/fundamentals/cross-platform-architecture), [license](https://raw.githubusercontent.com/AvaloniaUI/Avalonia/master/licence.md)
 
-Use the NuGet package `NodifyAvalonia`. The similarly named `Nodify.Avalonia` is a different package, and the original Nodify targets WPF. The inspected port provides selection, connections, zoom, panning, themes, and undo/redo hooks. Its compatibility table names Avalonia 11.1.0 for NodifyAvalonia 6.6.0. This is source evidence, not the selected version pair. Pin a compatible dependency set during implementation. The inspected README lists cutting lines as unsupported. [Port and examples](https://github.com/BAndysc/nodify-avalonia), [package](https://www.nuget.org/packages/NodifyAvalonia), [MIT license](https://github.com/BAndysc/nodify-avalonia/blob/avalonia_port/LICENSE)
+Use the NuGet package `NodifyAvalonia`. The similarly named `Nodify.Avalonia` is a different package, and the original Nodify targets WPF. The inspected port provides selection, connections, zoom, panning, themes, and undo/redo hooks. Its compatibility table names Avalonia 11.1.0 for NodifyAvalonia 6.6.0. iDevelop pins Avalonia 11.3.22 with NodifyAvalonia 6.6.0. The inspected README lists cutting lines as unsupported. [Port and examples](https://github.com/BAndysc/nodify-avalonia), [package](https://www.nuget.org/packages/NodifyAvalonia), [MIT license](https://github.com/BAndysc/nodify-avalonia/blob/avalonia_port/LICENSE)
 
 Avalonia documents accessibility and IME facilities. The custom graph still needs keyboard interactions and automation support, and the selected implementation must pass those checks. [Accessibility](https://docs.avaloniaui.net/docs/app-development/accessibility), [text input](https://docs.avaloniaui.net/docs/input-interaction/text-input)
 
@@ -244,13 +244,9 @@ On 2026-10-04 the user accepted the four proposed cases, so the phase covers six
 - Cancel a running task and see it recorded as cancelled.
 - Quit the app while a task runs, and see that run reported as interrupted when the project reopens.
 
-The phase settled its open design questions. The [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives.
+The phase settled its open design questions. The [working decisions](context.md#working-decisions) state the settled rules, and the [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives. The [agent client behavior](agent-clients.md) reference records what each client does when it runs.
 
-- Each client runs in its own documented non-interactive mode with a JSON event stream, and the prompt goes over stdin. ACP was not used, because Claude Code and Codex need separately installed adapters for it.
-- A run edits the project folder itself. Several tasks can run at once in that folder, and each task runs at most once at a time, across app instances. Isolated Git worktrees and branches wait for workflow execution.
-- The workflow file format moved to `idevelop.workflow/2`, which stores each task's execution configuration. No per-user client setting exists.
-- Each attempt is an append-only event log inside the project at `.idp/attempts/`, which Git ignores.
-- Each client's own commands decide its readiness and its models, and its own event stream decides whether a run succeeded. iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records what was observed.
+iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
 
 ### Workflow execution follows
 

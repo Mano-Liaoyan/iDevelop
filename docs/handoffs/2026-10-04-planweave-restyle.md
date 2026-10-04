@@ -87,16 +87,16 @@ The coordinator fixed the script and the documentation. A fresh Opus 5.5 session
 
 - Tapping a sidebar row, or pressing Space or Enter on it, brings that row's card into view even when it is already selected. The handler uses the row the event came from, so a tap in the gap between rows moves nothing.
 - The token check matches the four hex forms, skips character references such as `&#160;`, and skips font weight values. The README lists exactly what it matches and what it misses.
-- `The_switch_marks_the_theme_set_in_code` asserts the file still reads `{"theme":"dark"}` after code sets System. It was the only test that failed with the early return removed.
+- `The_switch_marks_a_theme_set_in_code_which_leaves_the_saved_choice_as_it_was` asserts the file still reads `{"theme":"dark"}` after code sets System. It was the only test that failed with the early return removed.
 
 The round 2 code fixes and the coordinator's script and documentation fixes were not reviewed a third time. Each has a test or a real-window run that fails without it.
 
 ## Changed artifacts
 
 - `scripts/planweave-tokens.mjs` holds PlanWeave's `oklch` tokens pinned to `8647d015`, converts them to sRGB, and writes `src/IDevelop.Desktop/Theme/Tokens.axaml`. `--check` runs in CI.
-- `src/IDevelop.Desktop/App.axaml` merges Nodify's switching `Theme.axaml` and the tokens. `App.axaml.cs` reads, applies, and writes the theme preference. `Program.cs` chooses the preference folder per platform.
+- `src/IDevelop.Desktop/App.axaml` merges Nodify's switching `Theme.axaml` and the tokens. `App.axaml.cs` applies the theme preference, and `Theme/ThemePreference.cs` reads and writes its file. `Program.cs` chooses the preference folder per platform.
 - `Theme/Controls.axaml` styles the shell controls by class. `Theme/Icons.axaml` holds six icons drawn for iDevelop.
-- `MainWindow.axaml` lays out the title bands, the sidebar, the canvas column with the breadcrumb and status pill, and the inspector. `Canvas/WorkflowCanvasView.axaml` holds the card template, the step connections, the dot grid, the zoom panel, and the minimap. `ConnectionKindStyles.cs` is deleted.
+- `MainWindow.axaml` lays out the title bands, the sidebar, the canvas column with the breadcrumb and status pill, and the inspector column. `Inspector/InspectorView.axaml` holds the inspector. `Canvas/WorkflowCanvasView.axaml` holds the card template, the step connections, the dot grid, the zoom panel, and the minimap. `ConnectionKindStyles.cs` is deleted.
 - `tests/IDevelop.Desktop.Tests` grows from 37 to 75 tests, including `ThemeTests.cs`.
 - `scripts/check-real-window.ps1` drives the built window on Windows. `README.md`, `docs/context.md`, and `docs/product-direction.md` describe the restyle.
 

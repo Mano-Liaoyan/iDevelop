@@ -49,5 +49,5 @@ $card = { (Find-NameOutside $s.Window 'Review the storage change' 'SidebarTasks'
 - UI Automation sees no card, connection, or minimap item as an element. It sees each card's text. Measure zoom and position from a card title's `BoundingRectangle`.
 - Every element reports `IsOffscreen` as false. Compare a card's rectangle with `$editor` to decide whether it is in view.
 - The `New task` button's label is also `New task`, outside the sidebar list. Retitle a new task before finding its card by name.
-- Creating or selecting a connection needs a pointer drag or click, which UI Automation patterns cannot do. The real-window path uses the sample's existing connections. `CanvasTests` covers dragging an output onto an input, the cycle refusal, clicking and right-clicking a connection, and deleting one.
-- The canvas menu's `Add task`, dragging a card, the minimap's click, drag, and wheel, and the Delete key need a pointer or a key. `CanvasTests` covers each of them headlessly.
+- Creating or selecting a connection needs a pointer drag or click, which UI Automation patterns cannot do. The real-window path uses the sample's existing connections. `ConnectionTests` covers dragging an output onto an input, the cycle refusal, clicking and right-clicking a connection, and deleting one.
+- The canvas menu's `Add task`, dragging a card, the minimap's click and wheel, and the Delete key need a pointer or a key. `CanvasTests` covers each of them headlessly. No test drags in the minimap.
