@@ -20,8 +20,12 @@ public sealed class ClientDirectoryTests : IDisposable
     [Fact]
     public async Task Discovery_reads_each_installed_clients_models_and_sign_in()
     {
-        FakeAgents.InstallAll(_fakes);
-        var shim = _fakes.Install("claude", FakeAgents.ClaudeSignedIn);
+        var shim = FakeAgents.Install(_fakes, ClientId.ClaudeCode);
+        foreach (var client in Clients.All.Remove(ClientId.ClaudeCode))
+        {
+            FakeAgents.Install(_fakes, client);
+        }
+
         var directory = new ClientDirectory(_fakes.Resolver);
         var changes = 0;
         directory.Changed += (_, _) => Interlocked.Increment(ref changes);

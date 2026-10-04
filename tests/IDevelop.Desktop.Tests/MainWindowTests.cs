@@ -49,17 +49,6 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_main_window_opens_titled_iDevelop()
-    {
-        var window = new MainWindow();
-
-        window.Show();
-
-        Assert.True(window.IsVisible);
-        Assert.Equal("iDevelop", window.Title);
-    }
-
-    [AvaloniaFact]
     public void Saving_beside_another_workflow_file_shows_why_and_keeps_the_unsaved_changes()
     {
         var folder = _temp.Create("plan");
@@ -304,6 +293,7 @@ public sealed class MainWindowTests : IDisposable
     {
         var shell = Shell.Show();
 
+        Assert.Equal("iDevelop", shell.Window.Title);
         Assert.Equal([false, false, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(["Inspector"], VisibleTexts(shell.Find<Control>("Inspector")));
 

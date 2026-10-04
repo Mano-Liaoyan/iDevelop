@@ -92,13 +92,27 @@ public sealed class AttemptLogTests : IDisposable
 
         var unreadable = Directory.CreateDirectory(AttemptLog.FolderOf(attempts, Build, Second)).FullName;
         Directory.CreateDirectory(Path.Combine(attempts, "notes"));
-        File.WriteAllText(Path.Combine(attempts, "run.lock"), "");
 
         var (latest, warnings) = AttemptLog.ReadLatest(attempts);
 
         var record = Assert.Single(latest.Values);
         Assert.Equal((First, AttemptStatus.Succeeded), (record.Id, record.Status));
         Assert.StartsWith($"iDevelop could not read {unreadable}, so it skipped that attempt.", Assert.Single(warnings));
+    }
+
+    [Fact]
+    public void A_log_without_its_request_line_is_skipped_with_a_warning()
+    {
+        var attempts = _temp.Create("attempts");
+        var folder = Directory.CreateDirectory(AttemptLog.FolderOf(attempts, Build, First)).FullName;
+        File.WriteAllText(
+            Path.Combine(folder, "events.jsonl"),
+            """{"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00"}""" + "\n");
+
+        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+
+        Assert.Empty(latest);
+        Assert.Equal($"{folder} holds no attempt record, so iDevelop skipped it.", Assert.Single(warnings));
     }
 
     [Fact]

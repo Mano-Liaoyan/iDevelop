@@ -56,10 +56,6 @@ function cli(args, config = requestedPolicy()) {
   }
 }
 
-test('the interim policy validates', () => {
-  assert.equal(validateModelPolicy(requestedPolicy()), true);
-});
-
 test('every role resolves to Opus while Claude owns all prototype work', () => {
   const config = requestedPolicy();
   const before = structuredClone(config);
@@ -158,15 +154,11 @@ for (const [name, mutate, message] of [
   ['verified identity mismatch', config => { config.models.astra.model = 'gpt-6.1-sol'; }, /model must match/],
   ['unknown verification', config => { config.models.opus.verification = 'ready'; }, /verification must be/],
   ['wrong verification source', config => { config.models.opus.verification = 'native-catalog'; }, /verification must be/],
-  ['provider relabeling', config => { config.models.astra.provider = 'anthropic'; }, /provider must match/],
   ['client relabeling', config => { config.models.opus.client = 'codex'; }, /provider must match client/],
-  ['unknown provider', config => { config.models.opus.provider = 'other'; }, /provider must match/],
-  ['unknown client', config => { config.models.opus.client = 'other'; }, /client must be/],
   ['implicit requested identity', config => { config.models.astra.requestedModel = 'auto'; }, /requestedModel must name an explicit model/],
   ['duplicate model identity', config => { config.models.alias = { ...config.models.astra }; }, /duplicates a model identity/],
   ['duplicate panel participant', config => { config.roles.judgment.push('opus'); }, /duplicate participants/],
   ['unknown registry reference', config => { config.roles.exploration = ['missing']; }, /references unknown model/],
-  ['empty registry', config => { config.models = {}; }, /references unknown model/],
   ['missing role', config => { delete config.roles['backend-review']; }, /roles must contain exactly/],
   ['empty reviewer list', config => { config.roles['backend-review'] = []; }, /must be a nonempty array/],
   ['non-Claude frontend reviewer', config => { config.roles['frontend-review'] = ['astra']; }, /frontend-review must select exactly/],

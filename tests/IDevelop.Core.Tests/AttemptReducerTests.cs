@@ -138,12 +138,6 @@ public class AttemptReducerTests
         Assert.Equal(("notice 20", "notice 119"), (record.Activity[0].Text, record.Activity[^1].Text));
     }
 
-    [Fact]
-    public void A_log_without_its_request_line_folds_to_nothing()
-    {
-        Assert.Null(AttemptReducer.Replay([Launched, Exit(3, 0)]));
-    }
-
     internal static AttemptEvent Said(int seconds, AgentEvent e) => new Agent(T0.AddSeconds(seconds), e);
 
     internal static Exited Exit(int seconds, int code, string stderr = "") => new(T0.AddSeconds(seconds), code, stderr);

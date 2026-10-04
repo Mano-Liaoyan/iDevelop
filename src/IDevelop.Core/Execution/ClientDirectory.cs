@@ -104,7 +104,7 @@ public sealed class ClientDirectory
                 case CatalogParse.Models models:
                     var checks = await Task.WhenAll(client.Readiness(models.Options).Select(async check =>
                     {
-                        var output = await Probes.RunAsync(command, check.Probe, CancellationToken.None);
+                        var output = await Probes.RunAsync(command, check.Probe);
                         return (check.Provider, output.TimedOut ? NoAnswer(client, check.Probe) : check.Problem(output));
                     }));
                     return Assemble(command, models.Options, checks);
@@ -125,7 +125,7 @@ public sealed class ClientDirectory
             case CatalogSource.Fixed list:
                 return new CatalogParse.Models(list.Models);
             case CatalogSource.Probed probed:
-                var output = await Probes.RunAsync(command, probed.Probe, CancellationToken.None);
+                var output = await Probes.RunAsync(command, probed.Probe);
                 return output.TimedOut ? new CatalogParse.Problem(NoAnswer(client, probed.Probe)) : probed.Parse(output);
             default:
                 throw new UnreachableException();

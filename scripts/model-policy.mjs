@@ -88,7 +88,6 @@ export function validateModelPolicy(config) {
     assert.deepEqual(entries.map(entry => entry.provider).sort(), [...providers].sort(),
       `roles.${role} must select exactly these providers: ${providers.join(', ')}`);
   }
-  return true;
 }
 
 export function resolveRole(config, role) {

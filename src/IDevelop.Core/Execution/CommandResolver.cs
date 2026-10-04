@@ -162,7 +162,7 @@ public sealed class CommandResolver
         try
         {
             var probe = new Probe(["-i", "-l", "-c", $"printf \"\\n{PathMarker}%s\\n\" \"$PATH\""]) { Timeout = TimeSpan.FromSeconds(5) };
-            var output = await Probes.RunAsync(new ResolvedCommand(shell, IsBatchShim: false), probe, CancellationToken.None);
+            var output = await Probes.RunAsync(new ResolvedCommand(shell, IsBatchShim: false), probe);
             return ParseLoginShellPath(output.Stdout);
         }
         catch (Exception)

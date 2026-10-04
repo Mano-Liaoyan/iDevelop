@@ -19,7 +19,7 @@ internal static class Antigravity
         Interpret = Interpret,
     };
 
-    internal static LaunchArguments Launch(LaunchRequest request) => new(
+    private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "--input-format", "stream-json", "--output-format", "stream-json", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
@@ -51,7 +51,7 @@ internal static class Antigravity
     /// "gemini-3.8-flash-high	Gemini 3.8 Flash (High)". A trailing "-level" splits off only when the name ends with the
     /// same "(Level)". The bare id with <c>--effort</c> selects the variant, and a model without levels takes no effort.
     /// </summary>
-    internal static CatalogParse ParseCatalog(ProbeOutput output)
+    private static CatalogParse ParseCatalog(ProbeOutput output)
     {
         if (output.ExitCode != 0)
         {
@@ -100,7 +100,7 @@ internal static class Antigravity
         })]);
     }
 
-    internal static ImmutableArray<AgentEvent> Interpret(string line)
+    private static ImmutableArray<AgentEvent> Interpret(string line)
     {
         using var json = JsonDocument.Parse(line);
         var root = json.RootElement;

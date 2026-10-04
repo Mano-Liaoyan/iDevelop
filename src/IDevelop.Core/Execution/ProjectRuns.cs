@@ -46,6 +46,7 @@ public sealed class ProjectRuns : IAsyncDisposable
     private const string LeaveReason = "The project was closed while this task ran.";
 
     private readonly Lock _gate = new();
+    private readonly string _projectFolder;
     private readonly ClientDirectory _clients;
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
@@ -54,14 +55,12 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings)
     {
-        ProjectFolder = projectFolder;
+        _projectFolder = projectFolder;
         _clients = clients;
         _attempts = DataFolder.Attempts(projectFolder);
         Latest = latest;
         Warnings = warnings;
     }
-
-    public string ProjectFolder { get; }
 
     /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
@@ -132,7 +131,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             }
         }
 
-        return StartCheck.Evaluate(task, ProjectFolder, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
+        return StartCheck.Evaluate(task, _projectFolder, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
     }
 
     /// <summary>
@@ -151,7 +150,7 @@ public sealed class ProjectRuns : IAsyncDisposable
                 return new StartResult.Refused(new StartProblem.AlreadyRunning(running.Record.Task, running.Record.TaskTitle));
             }
 
-            var verdict = StartCheck.Evaluate(task, ProjectFolder, _clients.Current);
+            var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);
@@ -182,7 +181,7 @@ public sealed class ProjectRuns : IAsyncDisposable
                     var notes = warnings.ToBuilder();
                     Latest = Reconcile(_attempts, latest, notes, held: task.Id);
                     Warnings = notes.ToImmutable();
-                    DataFolder.EnsureGitIgnore(ProjectFolder);
+                    DataFolder.EnsureGitIgnore(_projectFolder);
                     requested = new AttemptEvent.Requested(
                         DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
                     log = AttemptLog.Create(_attempts, requested);
@@ -334,7 +333,7 @@ public sealed class ProjectRuns : IAsyncDisposable
         ChildProcess process;
         try
         {
-            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, ProjectFolder);
+            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, _projectFolder);
         }
         catch (LaunchException e)
         {

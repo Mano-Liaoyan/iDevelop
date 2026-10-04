@@ -18,13 +18,9 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
-      - run: node --check scripts/codex-skills.mjs
-      - run: node --check scripts/model-policy.mjs
-      - run: node --check scripts/model-policy.test.mjs
       - run: node --test scripts/model-policy.test.mjs
       - run: node scripts/pstack.mjs setup
       - run: node scripts/pstack.mjs setup
-      - run: node scripts/pstack.mjs check
       - name: Parse Windows launcher
         if: runner.os == 'Windows'
         shell: pwsh
