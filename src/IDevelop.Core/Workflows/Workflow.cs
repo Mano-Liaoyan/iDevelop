@@ -44,6 +44,25 @@ public static class ConnectionKindRules
 
 public enum TaskField { Title, Instructions, AcceptanceCriteria }
 
+/// <summary>The coding clients a task can run with.</summary>
+public enum ClientId { ClaudeCode, Codex, Pi, Antigravity }
+
+/// <summary>
+/// The agent a task asks for. <see cref="Model"/> and <see cref="Reasoning"/> are the client's own ids, such as
+/// "deepseek/deepseek-v4-pro" for Pi, or "gemini-3.8-flash" with "high" for Antigravity. Null means not chosen yet.
+/// The workflow never checks them against a catalog, because a catalog belongs to one machine and the file opens on any machine.
+/// </summary>
+public sealed record ExecutionSettings(ClientId Client)
+{
+    public ClientId Client { get; } = Client;
+
+    public string? Model { get; init => field = Blank(value); }
+
+    public string? Reasoning { get; init => field = Blank(value); }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
 public sealed record TaskDefinition(TaskId Id)
 {
     public TaskId Id { get; } = Id;
@@ -53,6 +72,9 @@ public sealed record TaskDefinition(TaskId Id)
     public string Instructions { get; init => field = NormalizeLineBreaks(value); } = "";
 
     public string AcceptanceCriteria { get; init => field = NormalizeLineBreaks(value); } = "";
+
+    /// <summary>Null when the task has no agent yet.</summary>
+    public ExecutionSettings? Execution { get; init; }
 
     internal TaskDefinition With(TaskField which, string text) => which switch
     {
@@ -73,6 +95,9 @@ public abstract record WorkflowEdit
     public sealed record CreateTask(TaskDefinition Task, CanvasPoint Position) : WorkflowEdit;
 
     public sealed record EditTask(TaskId Task, TaskField Field, string Text) : WorkflowEdit;
+
+    /// <summary>Sets or clears a task's agent. A running attempt keeps the settings it started with.</summary>
+    public sealed record SetExecution(TaskId Task, ExecutionSettings? Execution) : WorkflowEdit;
 
     public sealed record MoveTasks(ImmutableArray<TaskPosition> Moves) : WorkflowEdit;
 
@@ -148,6 +173,7 @@ public sealed class Workflow
     {
         WorkflowEdit.CreateTask e => CreateTask(e),
         WorkflowEdit.EditTask e => EditTask(e),
+        WorkflowEdit.SetExecution e => SetExecution(e),
         WorkflowEdit.MoveTasks e => MoveTasks(e),
         WorkflowEdit.Connect e => Connect(e),
         WorkflowEdit.SetConnectionKind e => SetConnectionKind(e),
@@ -173,11 +199,22 @@ public sealed class Workflow
             return Reject(new EditRejection.UnknownTask(e.Task));
         }
 
-        var edited = task.With(e.Field, e.Text);
-        return edited == task
-            ? Applied(this)
-            : Applied(new Workflow(Id, Tasks.SetItem(e.Task, edited), Connections, Positions));
+        return Replace(task, task.With(e.Field, e.Text));
     }
+
+    private EditResult SetExecution(WorkflowEdit.SetExecution e)
+    {
+        if (!Tasks.TryGetValue(e.Task, out var task))
+        {
+            return Reject(new EditRejection.UnknownTask(e.Task));
+        }
+
+        return Replace(task, task with { Execution = e.Execution });
+    }
+
+    private EditResult Replace(TaskDefinition task, TaskDefinition edited) => edited == task
+        ? Applied(this)
+        : Applied(new Workflow(Id, Tasks.SetItem(task.Id, edited), Connections, Positions));
 
     private EditResult MoveTasks(WorkflowEdit.MoveTasks e)
     {

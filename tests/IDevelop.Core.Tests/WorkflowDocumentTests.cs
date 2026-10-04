@@ -13,6 +13,7 @@ public sealed class WorkflowDocumentTests : IDisposable
 
     private static readonly string Sample = Path.Combine(AppContext.BaseDirectory, "sample-project");
     private static readonly string SampleFile = Path.Combine(Sample, ".idp", "workflows", SampleFileName);
+    private static readonly string SampleV1File = Path.Combine(AppContext.BaseDirectory, "Fixtures", "storage-change-v1.json");
     private static readonly TaskId Design = new(Guid.Parse(A));
     private static readonly TaskId Build = new(Guid.Parse(B));
     private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
@@ -52,7 +53,27 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.Equal(new CanvasPoint(720, 247.5), workflow.Positions[Review]);
         Assert.Equal(ConnectionKind.Context, workflow.Connections[new ConnectionKey(Design, Review)]);
         Assert.Equal(ConnectionKind.Review, workflow.Connections[new ConnectionKey(Build, Review)]);
+        Assert.Equal(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }, workflow.Tasks[Design].Execution);
+        Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "medium" }, workflow.Tasks[Build].Execution);
+        Assert.Null(workflow.Tasks[Review].Execution);
         Assert.False(document.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void A_version_1_file_opens_without_agents_and_saves_as_version_2()
+    {
+        var folder = _temp.CopyOf(Sample);
+        var file = Path.Combine(folder, ".idp", "workflows", SampleFileName);
+        File.Copy(SampleV1File, file, overwrite: true);
+
+        var document = WorkflowDocument.Open(folder);
+
+        Assert.Equal("Design the workflow file format", document.Current.Tasks[Design].Title);
+        Assert.All(document.Current.Tasks.Values, task => Assert.Null(task.Execution));
+        document.Apply(new SetExecution(Design, new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
+        document.Apply(new SetExecution(Build, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "medium" }));
+        document.Save();
+        Assert.Equal(File.ReadAllBytes(SampleFile), File.ReadAllBytes(file));
     }
 
     [Fact]
@@ -90,7 +111,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         document.Save();
 
         Assert.False(document.HasUnsavedChanges);
-        Assert.Equal("*.tmp\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
         Assert.Equal(
             new[] { $"{document.Current.Id}.json" },
             Directory.EnumerateFiles(Path.Combine(folder, ".idp", "workflows")).Select(Path.GetFileName));
@@ -98,6 +119,22 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.Equal(document.Current.Id, reopened.Id);
         Assert.Equal("Plan release", reopened.Tasks[Design].Title);
         Assert.Equal(new CanvasPoint(40, 60), reopened.Positions[Design]);
+    }
+
+    [Fact]
+    public void Saving_keeps_the_users_ignore_lines_and_adds_the_missing_ones()
+    {
+        var folder = _temp.CopyOf(Sample);
+        var gitignore = Path.Combine(folder, ".idp", ".gitignore");
+        File.WriteAllText(gitignore, "# mine\r\n*.tmp\r\nnotes.md");
+        var document = WorkflowDocument.Open(folder);
+        document.Apply(new EditTask(Design, TaskField.Title, "Changed"));
+
+        document.Save();
+        document.Apply(new EditTask(Design, TaskField.Title, "Changed again"));
+        document.Save();
+
+        Assert.Equal("# mine\r\n*.tmp\r\nnotes.md\nattempts/\n", File.ReadAllText(gitignore));
     }
 
     [Fact]
@@ -202,24 +239,40 @@ public sealed class WorkflowDocumentTests : IDisposable
     public static TheoryData<string, string> InvalidFiles => new()
     {
         {
-            "{'format': 'idevelop.workflow/1',",
+            "{'format': 'idevelop.workflow/2',",
             "<file> is not a valid workflow file. Expected start of a property name or value, but instead reached end of data. Path: $ | LineNumber: 0 | BytePositionInLine: 32."
         },
         {
-            "{'format': 'idevelop.workflow/2', 'nodes': []}",
-            "<file> has format \"idevelop.workflow/2\". This version of iDevelop reads idevelop.workflow/1."
+            "{'format': 'idevelop.workflow/3', 'nodes': []}",
+            "<file> has format \"idevelop.workflow/3\". This version of iDevelop reads idevelop.workflow/1 and idevelop.workflow/2."
         },
         {
-            Workflow($"{{'id': '{A}', 'titel': 'Design', 'instructions': [], 'acceptanceCriteria': []}}", "", At(A)),
+            Workflow($"{{'id': '{A}', 'titel': 'Design', 'instructions': [], 'acceptanceCriteria': [], 'execution': null}}", "", At(A)),
             "<file> is not a valid workflow file. The JSON property 'titel' could not be mapped to any .NET member contained in type 'IDevelop.Projects.WorkflowFile+TaskDto'."
         },
         {
-            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': []}}", "", At(A)),
+            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'execution': null}}", "", At(A)),
             "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDto' was missing required properties including: 'acceptanceCriteria'."
         },
         {
-            Workflow($"{{'id': '{A}', 'title': 'Design', 'title': 'Build', 'instructions': [], 'acceptanceCriteria': []}}", "", At(A)),
+            Workflow($"{{'id': '{A}', 'title': 'Design', 'title': 'Build', 'instructions': [], 'acceptanceCriteria': [], 'execution': null}}", "", At(A)),
             "<file> is not a valid workflow file. Duplicate property 'title' encountered during deserialization of type 'IDevelop.Projects.WorkflowFile+TaskDto'."
+        },
+        {
+            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'acceptanceCriteria': []}}", "", At(A)),
+            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDto' was missing required properties including: 'execution'."
+        },
+        {
+            Workflow(Task(A, "Design", "{'client': 'cursor', 'model': null, 'reasoning': null}"), "", At(A)),
+            $"<file>: task {A} names unknown agent \"cursor\"."
+        },
+        {
+            Workflow(Task(A, "Design", "{'client': 'codex', 'model': 'gpt-6-sol'}"), "", At(A)),
+            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+ExecutionDto' was missing required properties including: 'reasoning'."
+        },
+        {
+            WorkflowV1(Task(A, "Design", "null")),
+            "<file> is not a valid workflow file. The JSON property 'execution' could not be mapped to any .NET member contained in type 'IDevelop.Projects.WorkflowFile+TaskDtoV1'."
         },
         {
             Workflow(Task(A, "Design"), "", ""),
@@ -250,11 +303,11 @@ public sealed class WorkflowDocumentTests : IDisposable
             $"<file>: task {A} has a null position in the layout."
         },
         {
-            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': ['Draft', null], 'acceptanceCriteria': []}}", "", At(A)),
+            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': ['Draft', null], 'acceptanceCriteria': [], 'execution': null}}", "", At(A)),
             $"<file>: task {A} has a null line in instructions."
         },
         {
-            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'acceptanceCriteria': [null]}}", "", At(A)),
+            Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'acceptanceCriteria': [null], 'execution': null}}", "", At(A)),
             $"<file>: task {A} has a null line in acceptanceCriteria."
         },
     };
@@ -283,10 +336,13 @@ public sealed class WorkflowDocumentTests : IDisposable
     }
 
     private static string Workflow(string tasks, string connections, string layout) =>
-        $"{{'format': 'idevelop.workflow/1', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'tasks': [{tasks}], 'connections': [{connections}], 'layout': {{{layout}}}}}";
+        $"{{'format': 'idevelop.workflow/2', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'tasks': [{tasks}], 'connections': [{connections}], 'layout': {{{layout}}}}}";
 
-    private static string Task(string id, string title) =>
-        $"{{'id': '{id}', 'title': '{title}', 'instructions': [], 'acceptanceCriteria': []}}";
+    private static string WorkflowV1(string task) =>
+        $"{{'format': 'idevelop.workflow/1', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'tasks': [{task}], 'connections': [], 'layout': {{{At(A)}}}}}";
+
+    private static string Task(string id, string title, string execution = "null") =>
+        $"{{'id': '{id}', 'title': '{title}', 'instructions': [], 'acceptanceCriteria': [], 'execution': {execution}}}";
 
     private static string Link(string from, string to, string kind) => $"{{'from': '{from}', 'to': '{to}', 'kind': '{kind}'}}";
 

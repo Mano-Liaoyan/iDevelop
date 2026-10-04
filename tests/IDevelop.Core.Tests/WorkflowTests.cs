@@ -145,6 +145,22 @@ public class WorkflowTests
     }
 
     [Fact]
+    public void Setting_an_agent_changes_only_that_task_and_clearing_it_restores_the_task()
+    {
+        var workflow = DesignBuildReview();
+        var codex = new ExecutionSettings(ClientId.Codex) { Model = " gpt-6-sol ", Reasoning = "" };
+
+        var configured = workflow.Must(new SetExecution(Build, codex));
+
+        Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol" }, configured.Tasks[Build].Execution);
+        Assert.Null(configured.Tasks[Build].Execution!.Reasoning);
+        Assert.Same(workflow.Tasks[Design], configured.Tasks[Design]);
+        Assert.Same(workflow.Connections, configured.Connections);
+        Assert.Same(configured, configured.Must(new SetExecution(Build, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol" })));
+        Assert.Equal(workflow.Tasks[Build], configured.Must(new SetExecution(Build, null)).Tasks[Build]);
+    }
+
+    [Fact]
     public void Invalid_edits_are_rejected_with_their_reason()
     {
         var workflow = ThreeTasks().Must(new Connect(new ConnectionKey(Design, Build), ConnectionKind.Context));
@@ -167,5 +183,8 @@ public class WorkflowTests
         Assert.Equal(
             new EditRejection.TaskAlreadyExists(Design),
             workflow.Rejection(new CreateTask(new TaskDefinition(Design), new CanvasPoint(0, 0))));
+        Assert.Equal(
+            new EditRejection.UnknownTask(Missing),
+            workflow.Rejection(new SetExecution(Missing, new ExecutionSettings(ClientId.Pi))));
     }
 }
