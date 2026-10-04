@@ -18,8 +18,7 @@ namespace IDevelop.Desktop.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class RunTests : IDisposable
 {
-    private static readonly TaskId SayHi = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
-    private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
+    private static readonly TaskId SayHi = TestTasks.Design;
     private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" };
 
     private readonly TempFolder _temp = AppTempFolder.New();
@@ -167,7 +166,7 @@ public sealed class RunTests : IDisposable
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
-            new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+            new TaskDefinition(TestTasks.Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -244,7 +243,7 @@ public sealed class RunTests : IDisposable
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
-            new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+            new TaskDefinition(TestTasks.Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
         var clients = _fakes.DiscoverAsync().Result;
         var first = Shell.Open(folder, clients);
         first.Click(first.Header(first.Node("Say hi")));

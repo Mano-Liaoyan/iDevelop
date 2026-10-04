@@ -2,13 +2,13 @@ using IDevelop.Execution;
 using IDevelop.Workflows;
 using static IDevelop.Execution.AgentEvent;
 using static IDevelop.Execution.AttemptEvent;
+using static IDevelop.TestSupport.TestTasks;
 
 namespace IDevelop.Core.Tests;
 
 public class AttemptReducerTests
 {
     internal static readonly DateTimeOffset T0 = new(2026, 10, 4, 5, 0, 0, TimeSpan.Zero);
-    internal static readonly TaskId Build = new(Guid.Parse("019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22"));
     internal static readonly AttemptId First = new(Guid.Parse("019aa000-0000-7000-8000-000000000001"));
     internal static readonly ExecutionSettings CodexHigh = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
 

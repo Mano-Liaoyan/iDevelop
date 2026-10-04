@@ -13,8 +13,8 @@ namespace IDevelop.Core.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class ProjectRunsTests : IDisposable
 {
-    private static readonly TaskId SayHiId = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
-    private static readonly TaskId ReviewId = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
+    private static readonly TaskId SayHiId = TestTasks.Design;
+    private static readonly TaskId ReviewId = TestTasks.Review;
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
 
     private static readonly Dictionary<ClientId, ClientRun> Runs = new()
