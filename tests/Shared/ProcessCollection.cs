@@ -5,7 +5,7 @@ namespace IDevelop.TestSupport;
 /// a shim is still open for writing makes running that shim fail with "Text file busy".
 /// </summary>
 [CollectionDefinition(Name)]
-public sealed class ProcessTests
+public sealed class ProcessCollection
 {
     public const string Name = "Processes";
 }

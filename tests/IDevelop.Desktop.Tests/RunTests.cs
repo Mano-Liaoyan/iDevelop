@@ -15,7 +15,7 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>Runs go through the fake agent behind on-disk shims, resolved and launched like a real client.</summary>
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class RunTests : IDisposable
 {
     private static readonly TaskId SayHi = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));

@@ -11,7 +11,7 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;
 
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class AgentPickerTests : IDisposable
 {
     private static readonly TaskId Design = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));

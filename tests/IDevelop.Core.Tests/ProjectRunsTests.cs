@@ -10,7 +10,7 @@ using static IDevelop.TestSupport.Processes;
 namespace IDevelop.Core.Tests;
 
 /// <summary>Runs go through real child processes: the fake agent behind on-disk shims, resolved like a real client.</summary>
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class ProjectRunsTests : IDisposable
 {
     private static readonly TaskId SayHiId = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));

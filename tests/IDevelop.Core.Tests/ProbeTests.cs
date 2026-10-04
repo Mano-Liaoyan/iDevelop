@@ -6,7 +6,7 @@ using static IDevelop.TestSupport.Processes;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class ProbeTests : IDisposable
 {
     private readonly TempFolder _temp = new();

@@ -12,7 +12,7 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
 
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class AgentsSectionTests : IDisposable
 {
     private readonly TempFolder _temp = new();
