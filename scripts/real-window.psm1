@@ -250,10 +250,11 @@ function New-Session($State, $Process, $Window) {
     }
 }
 
-function Start-IDevelop([string] $Project, [string] $Run, [switch] $Empty, [switch] $RealClients) {
+function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $Run, [switch] $Reopen, [switch] $Empty, [switch] $RealClients) {
     if (-not [IO.File]::Exists($ReleaseExe)) { throw "No Release build at $ReleaseExe. Run dotnet build -c Release first." }
-    if ($Run) {
+    if ($Run -or $Reopen) {
         $previous = Get-SessionState $Run
+        if ($previous.stopped) { throw "The session in $($previous.run) is stopped. Start-IDevelop starts a new one." }
         if (Get-SessionProcess $previous) { throw "The session in $($previous.run) still runs pid $($previous.pid). Connect-IDevelop drives it." }
         $Run = $previous.run
         if (-not $Project -and -not $Empty) { $Project = $previous.project }

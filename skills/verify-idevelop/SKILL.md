@@ -30,7 +30,7 @@ $s = Start-IDevelop
 `Start-IDevelop` creates `.verify/<yyyyMMdd-HHmmss>/`, copies the sample into its `project` folder, launches `src/IDevelop.Desktop/bin/Release/net10.0/IDevelop.Desktop.exe` on it, and waits for the window. The window is ready when `$s.Window.Current.Name` is `project - iDevelop`. `$s` carries `Run`, `Project`, `Gate`, `Process`, and `Window`.
 
 - `-Empty` opens an empty folder instead of the sample.
-- `-Run <run folder>` reopens an earlier session after its window closed. It keeps the project, the preference backup, and the evidence, so it checks what survives a restart.
+- `-Reopen` reopens the newest session after its window closed, and `-Run <run folder>` reopens a named one. Both keep the project, the preference backup, and the evidence, so they check what survives a restart.
 - `-Project <folder>` opens another folder. Use only a scratch copy.
 
 Each tool call is a new shell. Begin every later call with these two lines. `Connect-IDevelop` attaches to the newest session in `.verify`, or to the one `-Run` names.
