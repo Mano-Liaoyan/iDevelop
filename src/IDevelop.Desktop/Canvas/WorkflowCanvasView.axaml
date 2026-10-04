@@ -241,12 +241,10 @@
                   <Border Grid.Column="1" Classes="pill"
                           Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                           Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                          AutomationProperties.AutomationId="CardStatus"
-                          AutomationProperties.Name="{Binding StatusLabel}">
+                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon />
-                      <TextBlock Text="{Binding StatusLabel}" />
+                      <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="CardStatus" />
                     </StackPanel>
                   </Border>
                 </Grid>

@@ -1,3 +1,5 @@
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -54,6 +56,10 @@ public sealed class AgentPickerTests : IDisposable
         Assert.Equal(["low", "medium", "high", "xhigh"], shell.Pick("TaskReasoning", "high"));
 
         Assert.Equal("Codex · GPT-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal(
+            ["Codex", "GPT-5.5", "high"],
+            new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(id =>
+                ControlAutomationPeer.CreatePeerForElement(shell.Find<ComboBox>(id)).GetProvider<IValueProvider>()!.Value));
         Assert.Equal("Codex may edit files in the project folder. Its commands run in its workspace sandbox.", shell.Find<TextBlock>("PermissionNote").Text);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         shell.Press(Key.S, RawInputModifiers.Control);

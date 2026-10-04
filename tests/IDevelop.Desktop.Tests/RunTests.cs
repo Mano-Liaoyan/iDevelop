@@ -119,8 +119,8 @@ public sealed class RunTests : IDisposable
 
         Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
         Assert.Equal(Color.Parse("#D9F4D9"), CardFill(shell));
-        Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)Part(shell, "CardStatus").GetVisualDescendants().OfType<TextBlock>().Single().Foreground!).Color);
-        Assert.Equal("Succeeded", Shell.TextOf(shell.InView<Border>("LastRunStatus")));
+        Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)((TextBlock)Part(shell, "CardStatus")).Foreground!).Color);
+        Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
         Assert.Equal("Requested Codex · gpt-5.5 · high.", shell.Find<TextBlock>("LastRunConfiguration").Text);
         Assert.Equal(
@@ -143,7 +143,7 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.InView<Button>("CancelRun"));
 
         shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
-        Assert.Equal("Cancelled", Shell.TextOf(shell.InView<Border>("LastRunStatus")));
+        Assert.Equal("Cancelled", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal(Color.Parse("#FFFFFF"), CardFill(shell));
         Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
     }

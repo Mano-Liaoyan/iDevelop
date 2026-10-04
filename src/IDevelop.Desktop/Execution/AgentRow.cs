@@ -15,6 +15,4 @@ public sealed record AgentRow(ClientId Id, ClientStatus Status)
     public string? Detail => RunText.Detail(Status);
 
     public string AutomationId => $"Agent{Id}";
-
-    public string AccessibleName => $"{Name}, {Summary}";
 }

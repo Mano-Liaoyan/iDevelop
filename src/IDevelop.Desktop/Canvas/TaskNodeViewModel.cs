@@ -9,11 +9,19 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
+// A picker's UI Automation value is its chosen entry's text, so each entry's text is its label.
+
 /// <summary>An entry in the inspector's client picker. A null client is "None".</summary>
-public sealed record ClientChoice(ClientId? Id, string Label);
+public sealed record ClientChoice(ClientId? Id, string Label)
+{
+    public override string ToString() => Label;
+}
 
 /// <summary>An entry in the model or reasoning picker: the client's own id and what the picker shows.</summary>
-public sealed record Choice(string Id, string Label);
+public sealed record Choice(string Id, string Label)
+{
+    public override string ToString() => Label;
+}
 
 public sealed class TaskNodeViewModel : ObservableObject
 {

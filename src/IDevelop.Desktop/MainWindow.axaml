@@ -125,18 +125,19 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="execution:AgentRow">
+                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. -->
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
                       Background="Transparent"
-                      ToolTip.Tip="{Binding Detail}"
-                      AutomationProperties.AutomationId="{Binding AutomationId}"
-                      AutomationProperties.Name="{Binding AccessibleName}">
+                      ToolTip.Tip="{Binding Detail}">
                   <Ellipse Classes="status" VerticalAlignment="Center"
                            Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                            Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                            Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}" />
                   <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
                              FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="{Binding AutomationId}"
+                             AutomationProperties.HelpText="{Binding Detail}" />
                   <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding Detail}"
                              TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                              IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -357,12 +358,10 @@
                                   <Border Grid.Column="1" Classes="pill"
                                           Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                                           Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                          AutomationProperties.AutomationId="LastRunStatus"
-                                          AutomationProperties.Name="{Binding StatusLabel}">
+                                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                       <PathIcon />
-                                      <TextBlock Text="{Binding StatusLabel}" />
+                                      <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
                                     </StackPanel>
                                   </Border>
                                 </Grid>

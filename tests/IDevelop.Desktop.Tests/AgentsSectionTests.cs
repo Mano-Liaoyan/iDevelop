@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
@@ -20,15 +22,18 @@ public sealed class AgentsSectionTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
+    // The row's id sits on its summary, which UI Automation shows, and the row is the panel around it.
+    private static Visual Row(Shell shell, string row) => shell.Find<TextBlock>(row).GetVisualParent()!;
+
     private static string[] RowTexts(Shell shell, string row) =>
     [
-        .. shell.Find<Grid>(row).GetVisualDescendants().OfType<TextBlock>()
+        .. Row(shell, row).GetVisualDescendants().OfType<TextBlock>()
             .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
             .Select(text => text.Text!),
     ];
 
     private static Color Dot(Shell shell, string row) =>
-        ((ISolidColorBrush)shell.Find<Grid>(row).GetVisualDescendants().OfType<Ellipse>().Single().Fill!).Color;
+        ((ISolidColorBrush)Row(shell, row).GetVisualDescendants().OfType<Ellipse>().Single().Fill!).Color;
 
     [AvaloniaFact]
     public void The_agents_section_says_which_clients_are_ready_and_why_the_others_are_not()
@@ -54,6 +59,10 @@ public sealed class AgentsSectionTests : IDisposable
         Assert.Equal(
             [Color.Parse("#D7352D"), Color.Parse("#44984A"), Color.Parse("#44984A"), Color.Parse("#90969C")],
             new[] { "AgentClaudeCode", "AgentCodex", "AgentPi", "AgentAntigravity" }.Select(row => Dot(shell, row)));
+        var claude = ControlAutomationPeer.CreatePeerForElement(shell.Find<TextBlock>("AgentClaudeCode"));
+        Assert.Equal(
+            ("Not ready", "Claude Code is not signed in. Run claude in a terminal and sign in."),
+            (claude.GetName(), claude.GetHelpText()));
     }
 
     [AvaloniaFact]

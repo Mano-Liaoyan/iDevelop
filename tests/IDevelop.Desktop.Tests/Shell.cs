@@ -150,7 +150,7 @@ internal sealed class Shell
     public string Picked(string picker) => TextOf(Find<ComboBox>(picker));
 
     public static string TextOf(Visual visual) =>
-        string.Join(" ", visual.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
+        string.Join(" ", visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
 
