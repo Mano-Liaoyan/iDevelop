@@ -129,7 +129,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
             else
             {
-                (result, run) = Record(task, ((StartVerdict.Allowed)verdict).Plan, held);
+                (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held);
                 if (result is StartResult.Refused)
                 {
                     return result;
@@ -268,7 +268,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Settles any attempt a crash left running, records the attempt, and launches the client. An attempt that cannot be
     /// recorded is refused, and the lock is released. Called under the gate.
     /// </summary>
-    private (StartResult Result, ActiveRun? Run) Record(TaskDefinition task, LaunchPlan plan, RunLock held)
+    private (StartResult Result, ActiveRun? Run) RecordAndLaunch(TaskDefinition task, LaunchPlan plan, RunLock held)
     {
         AttemptLog log;
         AttemptEvent.Requested requested;
