@@ -49,8 +49,11 @@ internal sealed class AttemptLog : IDisposable
 
     public string Folder { get; }
 
+    /// <summary>The folder of a task's attempts, which also holds its run lock.</summary>
+    public static string TaskFolder(string attemptsFolder, TaskId task) => Path.Combine(attemptsFolder, task.ToString());
+
     public static string FolderOf(string attemptsFolder, TaskId task, AttemptId attempt) =>
-        Path.Combine(attemptsFolder, task.ToString(), attempt.ToString());
+        Path.Combine(TaskFolder(attemptsFolder, task), attempt.ToString());
 
     /// <summary>Creates the attempt's folder and writes <paramref name="requested"/> as its first line.</summary>
     public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested)

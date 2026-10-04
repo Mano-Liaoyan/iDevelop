@@ -17,7 +17,7 @@ internal sealed class RunLock : IDisposable
     /// <summary>Null when another handle holds it, in this process or another one. Never waits.</summary>
     public static RunLock? TryTake(string attemptsFolder, TaskId task)
     {
-        var folder = Directory.CreateDirectory(Path.Combine(attemptsFolder, task.ToString())).FullName;
+        var folder = Directory.CreateDirectory(AttemptLog.TaskFolder(attemptsFolder, task)).FullName;
         try
         {
             return new RunLock(new FileStream(Path.Combine(folder, "run.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
