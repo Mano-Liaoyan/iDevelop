@@ -1,0 +1,7 @@
+{"type":"requested","at":"2026-10-04T21:49:46.6350943+00:00","attempt":"01a108e4-fb0b-7a1e-ab01-c7624ee76f1b","task":"019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11","taskTitle":"Say hi","settings":{"client":"antigravity","model":"gemini-3.8-flash","reasoning":"low"},"prompt":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n","command":"/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/agy-succeeded-bin/agy","arguments":["--input-format","stream-json","--output-format","stream-json","--model","gemini-3.8-flash","--effort","low","--mode","accept-edits","--print="]}
+{"type":"launched","at":"2026-10-04T21:49:46.6353244+00:00","processId":168494,"processStarted":"2026-10-04T21:49:46.6295563+00:00"}
+{"type":"agent","at":"2026-10-04T21:49:46.6546726+00:00","event":{"type":"sessionStarted","sessionId":"88fcc1a4-0a4f-495c-a2db-b6fc830d0b4a"}}
+{"type":"agent","at":"2026-10-04T21:49:46.6546775+00:00","event":{"type":"reported","model":"gemini-3.8-flash","reasoning":null}}
+{"type":"agent","at":"2026-10-04T21:49:46.6547093+00:00","event":{"type":"toolStarted","tool":"write_to_file","detail":"C:\\project\\hello.txt"}}
+{"type":"agent","at":"2026-10-04T21:49:46.654776+00:00","event":{"type":"succeeded","result":"DONE"}}
+{"type":"exited","at":"2026-10-04T21:49:46.6551728+00:00","exitCode":0,"stderrTail":""}

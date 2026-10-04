@@ -1,0 +1,8 @@
+{"type":"requested","at":"2026-10-04T21:49:46.793691+00:00","attempt":"01a108e4-fba9-729f-a211-310e17b44249","task":"019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11","taskTitle":"Say hi","settings":{"client":"codex","model":"gpt-6-sol","reasoning":"high"},"prompt":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n","command":"/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/codex-bad-model-bin/codex","arguments":["exec","--json","-m","gpt-6-sol","-c","model_reasoning_effort=high","-c","approval_policy=never","--sandbox","workspace-write","--skip-git-repo-check","-"]}
+{"type":"launched","at":"2026-10-04T21:49:46.7939174+00:00","processId":168566,"processStarted":"2026-10-04T21:49:46.7895563+00:00"}
+{"type":"agent","at":"2026-10-04T21:49:46.8133318+00:00","event":{"type":"sessionStarted","sessionId":"01a104d9-a009-7be2-838d-52895b1024e6"}}
+{"type":"agent","at":"2026-10-04T21:49:46.813385+00:00","event":{"type":"notice","text":"Configured service tier `priority` is not advertised as supported for model `gpt-bogus-9` and will be omitted from requests."}}
+{"type":"agent","at":"2026-10-04T21:49:46.8133881+00:00","event":{"type":"notice","text":"Model metadata for `gpt-bogus-9` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"agent","at":"2026-10-04T21:49:46.8135054+00:00","event":{"type":"notice","text":"The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account."}}
+{"type":"agent","at":"2026-10-04T21:49:46.8135116+00:00","event":{"type":"failed","reason":"The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account."}}
+{"type":"exited","at":"2026-10-04T21:49:46.8138141+00:00","exitCode":1,"stderrTail":"error: the model is not supported\n"}

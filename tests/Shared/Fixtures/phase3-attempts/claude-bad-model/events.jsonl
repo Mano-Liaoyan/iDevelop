@@ -1,0 +1,7 @@
+{"type":"requested","at":"2026-10-04T21:49:46.734673+00:00","attempt":"01a108e4-fb6e-7c27-b205-91da8315caab","task":"019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11","taskTitle":"Say hi","settings":{"client":"claude-code","model":"claude-haiku-4-5","reasoning":"high"},"prompt":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n","command":"/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/claude-bad-model-bin/claude","arguments":["-p","--output-format","stream-json","--verbose","--model","claude-haiku-4-5","--effort","high","--permission-mode","acceptEdits"]}
+{"type":"launched","at":"2026-10-04T21:49:46.7348882+00:00","processId":168542,"processStarted":"2026-10-04T21:49:46.7295563+00:00"}
+{"type":"agent","at":"2026-10-04T21:49:46.7539847+00:00","event":{"type":"sessionStarted","sessionId":"0a78e77d-034b-493d-a042-0fe607c70c34"}}
+{"type":"agent","at":"2026-10-04T21:49:46.7539859+00:00","event":{"type":"reported","model":"claude-bogus-9","reasoning":null}}
+{"type":"agent","at":"2026-10-04T21:49:46.7539982+00:00","event":{"type":"message","text":"There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model."}}
+{"type":"agent","at":"2026-10-04T21:49:46.7540032+00:00","event":{"type":"failed","reason":"There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model."}}
+{"type":"exited","at":"2026-10-04T21:49:46.7547727+00:00","exitCode":1,"stderrTail":""}

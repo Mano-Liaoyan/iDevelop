@@ -1,0 +1,9 @@
+{"type":"requested","at":"2026-10-04T21:49:46.5913445+00:00","attempt":"01a108e4-fadf-7e83-aa18-35cec9672679","task":"019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11","taskTitle":"Say hi","settings":{"client":"pi","model":"deepseek/deepseek-v4-pro","reasoning":"high"},"prompt":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n","command":"/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/pi-succeeded-bin/pi","arguments":["-p","--mode","json","--model","deepseek/deepseek-v4-pro","--thinking","high"]}
+{"type":"launched","at":"2026-10-04T21:49:46.5916024+00:00","processId":168478,"processStarted":"2026-10-04T21:49:46.5895563+00:00"}
+{"type":"agent","at":"2026-10-04T21:49:46.6106585+00:00","event":{"type":"sessionStarted","sessionId":"01a104d6-5d29-70a3-b067-4dea17388eb1"}}
+{"type":"agent","at":"2026-10-04T21:49:46.610864+00:00","event":{"type":"reported","model":"deepseek/deepseek-v4-pro","reasoning":"high"}}
+{"type":"agent","at":"2026-10-04T21:49:46.610872+00:00","event":{"type":"toolStarted","tool":"write","detail":"hello.txt"}}
+{"type":"agent","at":"2026-10-04T21:49:46.6109007+00:00","event":{"type":"reported","model":"deepseek/deepseek-v4-pro","reasoning":"high"}}
+{"type":"agent","at":"2026-10-04T21:49:46.6109012+00:00","event":{"type":"message","text":"DONE"}}
+{"type":"agent","at":"2026-10-04T21:49:46.6114669+00:00","event":{"type":"succeeded","result":"DONE"}}
+{"type":"exited","at":"2026-10-04T21:49:46.611484+00:00","exitCode":0,"stderrTail":""}

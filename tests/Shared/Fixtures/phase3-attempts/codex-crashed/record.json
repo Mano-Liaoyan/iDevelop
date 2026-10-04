@@ -1,0 +1,18 @@
+{
+  "id": "01a108e5-0d19-763a-bb02-c66550b3f957",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "codex",
+  "model": "gpt-6-sol",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:51.2572637+00:00",
+  "status": "Interrupted",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:51.2576087+00:00",
+  "result": null,
+  "detail": "iDevelop stopped while this task ran.",
+  "sessionId": "01a104d5-d442-71a1-9b08-8938c119e5ae",
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": []
+}
