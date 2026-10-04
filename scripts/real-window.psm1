@@ -137,8 +137,11 @@ function Get-SettingsTheme {
     if ($text) { ($text | ConvertFrom-Json).theme }
 }
 
+# An owner file another run is still writing reads as an owner with no run.
 function Get-SettingsOwner {
-    if ([IO.File]::Exists($OwnerFile)) { [IO.File]::ReadAllText($OwnerFile) | ConvertFrom-Json }
+    if ([IO.File]::Exists($OwnerFile)) {
+        try { [IO.File]::ReadAllText($OwnerFile) | ConvertFrom-Json } catch { [pscustomobject]@{ run = $null; pid = 0; started = 0 } }
+    }
 }
 
 # The owner process's life bounds the session. The calling shell runs no other session, so a backup it owns is a leftover.
@@ -153,7 +156,7 @@ function Write-SettingsOwner([string] $Run, [System.Diagnostics.Process] $Proces
     [IO.File]::WriteAllText($OwnerFile, ($owner | ConvertTo-Json -Compress))
 }
 
-function Restore-Backup {
+function Restore-BackupFile {
     if ([IO.File]::Exists($BackupFile)) {
         if ((Get-Item -LiteralPath $BackupFile).Length -eq 0) {
             [IO.File]::Delete($SettingsFile)
@@ -162,22 +165,48 @@ function Restore-Backup {
         }
         [IO.File]::Delete($BackupFile)
     }
+}
+
+function Restore-Backup {
+    Restore-BackupFile
     if ([IO.File]::Exists($OwnerFile)) { [IO.File]::Delete($OwnerFile) }
+}
+
+# The owner file is the lock. Only one of two runs that start together can create it.
+function Lock-SettingsOwner([string] $Run, [System.Diagnostics.Process] $Owner) {
+    $record = [ordered]@{ run = $Run; pid = $Owner.Id; started = $Owner.StartTime.ToUniversalTime().Ticks }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($record | ConvertTo-Json -Compress))
+    try {
+        $stream = [IO.File]::Open($OwnerFile, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+    } catch {
+        if ([IO.File]::Exists($OwnerFile)) { return $false }
+        throw
+    }
+    try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+    $true
 }
 
 # The preference is per user, so one verification run at a time may replace it. A backup left by a killed run is
 # restored before a new one is taken.
 function Backup-Settings([string] $Run, [System.Diagnostics.Process] $Owner = (Get-Process -Id $PID)) {
+    [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $SettingsFile)) | Out-Null
     $current = Get-SettingsOwner
-    if ($current -and $current.run -ne $Run -and (Test-OwnerAlive $current)) {
-        throw "Another verification run owns the iDevelop theme preference: $($current.run), pid $($current.pid). Only one may run at a time per Windows account. If it is a verify-idevelop session, Stop-IDevelop -Run '$($current.run)' ends it."
+    if ($current -and $current.run -eq $Run -and [IO.File]::Exists($BackupFile)) {
+        Write-SettingsOwner $Run $Owner
+        return
     }
-    if (-not ($current -and $current.run -eq $Run -and [IO.File]::Exists($BackupFile))) {
+    while (-not (Lock-SettingsOwner $Run $Owner)) {
+        $current = Get-SettingsOwner
+        if (-not $current) { continue }
+        if ($current.run -eq $Run) { break }
+        if (-not $current.run) { throw "Another verification run is taking the iDevelop theme preference. If none runs, delete $OwnerFile." }
+        if (Test-OwnerAlive $current) {
+            throw "Another verification run owns the iDevelop theme preference: $($current.run), pid $($current.pid). Only one may run at a time per Windows account. If it is a verify-idevelop session, Stop-IDevelop -Run '$($current.run)' ends it."
+        }
         Restore-Backup
-        [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $SettingsFile)) | Out-Null
-        if ([IO.File]::Exists($SettingsFile)) { [IO.File]::Move($SettingsFile, $BackupFile) } else { [IO.File]::WriteAllText($BackupFile, '') }
     }
-    Write-SettingsOwner $Run $Owner
+    Restore-BackupFile
+    if ([IO.File]::Exists($SettingsFile)) { [IO.File]::Move($SettingsFile, $BackupFile) } else { [IO.File]::WriteAllText($BackupFile, '') }
 }
 
 function Restore-Settings([string] $Run) {
