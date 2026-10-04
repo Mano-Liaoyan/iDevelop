@@ -41,16 +41,22 @@ internal static class ProcessCheck
         var match = Compare(process, identity);
         if (match == ProcessMatch.Same)
         {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
-            {
-            }
+            KillTreeQuietly(process);
         }
 
         return match;
+    }
+
+    public static void KillTreeQuietly(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
+        {
+            // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+        }
     }
 
     private static Process? Find(int id)

@@ -134,15 +134,8 @@ internal sealed class ChildProcess : IDisposable
             }
 
             _job?.Terminate();
-            try
-            {
-                // The job holds the process only from just after its start, and Linux and macOS have no job.
-                _process.Kill(entireProcessTree: true);
-            }
-            catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
-            {
-                // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
-            }
+            // The job holds the process only from just after its start, and Linux and macOS have no job.
+            ProcessCheck.KillTreeQuietly(_process);
         }
     }
 
