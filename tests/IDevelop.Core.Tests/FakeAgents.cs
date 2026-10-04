@@ -1,4 +1,6 @@
+using IDevelop.Execution;
 using IDevelop.TestSupport;
+using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests;
@@ -23,9 +25,18 @@ internal static class FakeAgents
     /// <summary>All four clients installed and signed in, except Pi's openai-codex provider, as on the probing machine.</summary>
     public static void InstallAll(FakeClients fakes)
     {
-        fakes.Install("claude", ClaudeSignedIn);
-        fakes.Install("codex", CodexModels, CodexSignedIn);
-        fakes.Install("pi", PiModels, PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"));
-        fakes.Install("agy", AgyModels);
+        foreach (var client in Clients.All)
+        {
+            Install(fakes, client);
+        }
     }
+
+    /// <summary>One client as on the probing machine, plus the rules for its runs. Returns the shim's path.</summary>
+    public static string Install(FakeClients fakes, ClientId client, params FakeRule[] runs) => client switch
+    {
+        ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, .. runs]),
+        ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, .. runs]),
+        ClientId.Pi => fakes.Install("pi", [PiModels, PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"), .. runs]),
+        ClientId.Antigravity => fakes.Install("agy", [AgyModels, .. runs]),
+    };
 }
