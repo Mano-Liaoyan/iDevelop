@@ -1,6 +1,6 @@
 # Provider access reference
 
-Checked on 2026-10-03. These findings describe source code and provider documentation. No account login, subscription quota, paid request, or live provider integration was tested.
+Checked on 2026-10-03. Apart from the observed client behavior below, these findings describe source code and provider documentation, and no account login, subscription quota, paid request, or live provider integration was tested.
 
 ## Pi AI source snapshot
 
@@ -81,6 +81,15 @@ Pi converts conversation history for the destination model. It preserves compati
 
 The proposed iDevelop handoff therefore relies on task instructions, observed actions, verified code revisions, artifacts, concise decisions, and next steps. It does not require access to hidden reasoning or a provider's opaque session state.
 
+## Observed client behavior
+
+These observations come from running Antigravity CLI 1.2.16 (`agy`) on Windows on 2026-10-03 while setting up this project.
+
+- Print mode (`-p`) cannot ask for permission. It refused to read files in an untrusted folder, and it read them in a repository the user's `agy` settings trust. Commands and file writes stayed blocked. No run passed `--dangerously-skip-permissions`, so its effect is unverified.
+- `agy models` lists combined IDs such as `gemini-3.8-flash-high`. The bare ID `gemini-3.8-flash` with a separate `--effort high` or `--effort low` reached the matching backend variant. An unknown model ID failed with exit code 1, with no silent fallback.
+- With `--output-format stream-json`, the `init` event reports the requested model ID, and `--log-file` records the backend label. The `json` output reports no model.
+- `agy` has no documented profile override. The project chose not to point `USERPROFILE` at a project folder, because every tool the agent starts, Git included, would inherit the fake home folder. Its eight bundled skills cannot be turned off.
+
 ## Unverified items
 
 - Custom-client eligibility for subscription OAuth routes not explicitly covered by provider documentation.
@@ -89,4 +98,4 @@ The proposed iDevelop handoff therefore relies on task instructions, observed ac
 - Authentication refresh, cancellation, rate limiting, and recovery on real local runners.
 - Volcengine compatibility through a custom provider and any international BytePlus equivalent.
 
-These gaps are product integration work. They do not prevent designing the local graph editor or optional team synchronization.
+These gaps are product integration work. The single-task execution phase must settle or work around them for each client in scope.

@@ -2,7 +2,7 @@
 
 ## Task
 
-Restyle the shell and canvas to look like PlanWeave's desktop app. The user accepted the scope in `2026-10-03-restyle-next-step.md` and added a requirement: a light theme and a dark theme that the user can switch between. The coordinator read "两个可以切换" as that pair, because PlanWeave's stylesheet defines both token sets. The user accepted the platform system font in place of Geist.
+Restyle the shell and canvas to look like PlanWeave's desktop app. The scope adopts PlanWeave's look and shows a control only when iDevelop has its feature, as `docs/product-direction.md` records. The user added a light theme and a dark theme to switch between. The coordinator read "两个可以切换" as that pair, because PlanWeave's stylesheet defines both token sets. The user accepted the platform system font in place of Geist.
 
 ## Checklist
 
@@ -17,7 +17,7 @@ Restyle the shell and canvas to look like PlanWeave's desktop app. The user acce
 - [x] 5. Verify on the matching surface. "Inconclusive" or wrong-surface is not a pass. Flag it. The coordinator drove the built Release executable's real window on Windows through UI Automation and inspected screenshots in both themes. That run found the two theme defects the headless tests missed. After the fix round, `scripts/check-real-window.ps1` passed all 31 checks. The title band's drag and double-click, and the macOS and Linux windows, are unverified. See Open issues.
 - [x] 6. Rebase into small, ordered commits. Stack follow-ups. The fix round folded each fix into the commit that introduced the problem. The coordinator then checked out each of the five commits in a separate detached worktree and ran the full gate on it. The real-window script and the documentation are two stacked commits.
 - [x] 7. If the design is contested, `interrogate` before shipping. Skip, because the design was not contested. The cross-judge and the coordinator picked the same base and grafts independently.
-- [x] 8. Run **Opening a PR**. Pull request 4 is open and ready, with every check passing. Its description carries no attribution line, as the user prefers.
+- [x] 8. Run **Opening a PR**. Pull request 4 opened ready with every check passing, and its description carries no attribution line, as the user prefers.
 
 ## Decisions
 
@@ -119,8 +119,7 @@ The round 2 code fixes and the coordinator's script and documentation fixes were
 - Arrow keys do not move the check inside the theme switch. Space and UI Automation do.
 - NodifyAvalonia 6.6.0's editor key gestures, including Ctrl+A, never fire. This predates the restyle.
 - The open questions from the canvas handoff remain: what a review connection blocks, the Skia notice terms, local Avalonia build telemetry, external-change detection, and one connection per task pair.
-- Two fully merged remote branches, `claude/adoring-cannon-kke4h8` and `feat/editable-local-canvas`, can be deleted only with the user's approval.
 
 ## Next action
 
-Review and merge the pull request. Then start the shared graph review milestone.
+Pull request 4 merged as `12a24f5`. Before the merge, a fresh session that wrote none of the code ran the gates and the real-window script at the head and posted its verdict, PASS with notes, on the [pull request](https://github.com/Mano-Liaoyan/iDevelop/pull/4#issuecomment-5975612894). The [delivery order](../product-direction.md#delivery-order) names the next phase.

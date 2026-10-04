@@ -64,7 +64,7 @@ Every build in this session before the second fix round ran without `AVALONIA_TE
 - `tests/IDevelop.Core.Tests` and `tests/IDevelop.Desktop.Tests` hold 38 and 37 tests. `samples/storage-change` is the golden workflow file.
 - `scripts/check-licenses.mjs` checks every restored package's license and every bundled notice by hash.
 - `.github/workflows/dotnet.yml` restores in locked mode, checks licenses, builds, and tests on Linux, Windows, and macOS, with Avalonia telemetry turned off.
-- `README.md`, `AGENTS.md`, and `docs/context.md` describe the slice. This record and `2026-10-03-next-step.md` record the task.
+- `README.md`, `AGENTS.md`, and `docs/context.md` describe the slice. This record holds its design.
 
 ## Commands and observed results
 
@@ -87,4 +87,4 @@ The real-window script lived in the session scratchpad and is not committed. It 
 
 ## Next action
 
-Pull request 2 is open with every check passing. It waits for the user to review and merge it, and to settle the open product questions. Then start the shared graph review milestone.
+Pull request 2 merged. The [delivery order](../product-direction.md#delivery-order) names the next phase.

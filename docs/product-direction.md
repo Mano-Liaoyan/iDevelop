@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-03. The user selected C# and Avalonia. Runtime design details remain proposals. No application, provider login, or performance claim has been validated by running iDevelop.
+Updated: 2026-10-04. The user selected C# and Avalonia. The desktop editor runs and looks like PlanWeave. Runtime design details remain proposals. No agent execution, provider login, or performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -58,7 +58,7 @@ Reuse these ideas selectively. PlanWeave's server also coordinates execution ope
 
 The investigation did not establish an enforced human approval state, native GitHub issue and pull-request integration, or worktree ownership that meets iDevelop's requirements. The README labels its collaboration and remote-agent features experimental. Static source inspection does not prove their runtime reliability. PlanWeave's MIT license permits reuse subject to its notice requirements. [PlanWeave README](https://github.com/GaosCode/PlanWeave), [license](https://github.com/GaosCode/PlanWeave/blob/8647d015ac562e8fda148415b84ee77e3b3ada89/LICENSE)
 
-## The first complete workflow
+## The target workflow
 
 Two teammates open the same project. One describes a change. iDevelop generates a draft graph and shows the proposed agents and dependencies. Both teammates can edit it. The interface shows who is present and makes concurrent edits visible.
 
@@ -169,8 +169,6 @@ Avalonia documents accessibility and IME facilities. The custom graph still need
 
 A log viewer is not an interactive terminal. Prefer structured agent events for the main interface. If a client requires an interactive terminal, select and validate a suitable .NET integration separately, including process control, escape sequences, selection, and keyboard behavior.
 
-The [selection record](handoffs/2026-10-03-avalonia-selection.md) supersedes the earlier [language comparison](handoffs/2026-10-03-language-and-node-editors.md). Earlier alternatives are historical research, not active prototype tasks.
-
 ## The interface follows the PlanWeave look
 
 The user wants iDevelop restyled to look like PlanWeave's desktop app, built with Avalonia and NodifyAvalonia. The user also wants a light theme and a dark theme to switch between. PlanWeave defines both palettes. The references are the [PlanWeave repository](https://github.com/GaosCode/PlanWeave/tree/8647d015ac562e8fda148415b84ee77e3b3ada89) at the commit inspected above and the user's screenshot of its canvas.
@@ -219,4 +217,56 @@ The implementation should cover these acceptance cases:
 - Continue a task with a different agent using only the exported handoff and repository artifacts.
 - Build and smoke-test on Windows, macOS, and Linux separately. One shared codebase does not remove platform packaging and testing work.
 
-The first working slice should prove two-person graph review, one subscription-backed coding client, one API-backed agent, dependency scheduling, a Markdown handoff, and a GitHub review gate. The provider catalog can include additional documented integrations with their real availability clearly marked. This is delivery sequencing, not removal of the requested provider scope.
+The [delivery order](#delivery-order) does not yet assign these cases to phases. The provider catalog can include additional documented integrations with their real availability clearly marked.
+
+## Delivery order
+
+On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
+
+| Phase | State | Completion condition |
+| --- | --- | --- |
+| 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
+| 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
+| 3. Single-task execution | Next | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
+| 4. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
+| 5. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
+
+### Single-task execution comes next
+
+Each task node gains an execution configuration with the agent client, the model, and the reasoning setting that the chosen agent and model support. Claude Code, Codex, Pi, and Antigravity CLI are in scope, each through an access route its provider permits. If a client turns out to have no permitted route, the user decides whether the phase completes without it. The [provider access reference](provider-access.md) lists the routes that are still unverified and the client behavior observed so far.
+
+Running a task starts its configured agent on the project, and the user sees the result when it finishes. Running a task ignores its connections.
+
+This phase makes the card's agent picker, the card's status pill, and status-colored cards real features, so they join the PlanWeave look.
+
+The user's completion condition gives these cases:
+
+- Configure a task's agent, model, and reasoning setting from the values that agent and model support. Save and reopen the project with the configuration intact.
+- Run a task on its own with each of the four clients and see its result.
+
+These further cases are proposals:
+
+- See which clients are installed and ready, and why a client is not ready.
+- Try to run a task whose client is not ready, and see the reason instead of a launch.
+- Cancel a running task and see it recorded as cancelled.
+- Quit the app while a task runs, and see that run reported as interrupted when the project reopens.
+
+The phase's design step settles these questions. Nothing here decides them.
+
+- How the app drives each client. Prefer documented structured interfaces, including ACP where a client actually implements it, and use a client-specific adapter when its official interface is better suited.
+- Whether a run edits the project folder itself or an isolated Git worktree and branch, and whether two runs may overlap in one folder.
+- Where per-user client settings live, and how the workflow file stores each task's configuration. That changes the file format.
+- What the app records about a run and where it keeps that record.
+- How each client's route handles the provider items that are still unverified, such as subscription eligibility for a custom client, unattended use, cancellation, and authentication refresh.
+
+### Workflow execution follows
+
+The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. This phase also settles what a review connection blocks.
+
+### Team synchronization comes after execution
+
+The current proposal is that synchronization shares a workflow that already carries execution configuration and run state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
+
+### Later work
+
+The user has not placed these relative to phases 3 to 5, and their own order is open. Generate a draft workflow from a natural-language request. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
