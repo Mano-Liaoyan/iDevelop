@@ -15,7 +15,8 @@ public partial class MainWindow : Window
     private bool _waitingForUser;
     private bool _closeConfirmed;
 
-    /// <summary>For the XAML loader and the designer. Its directory searches no folder, so it finds no client.</summary>
+    /// <summary>For the XAML loader and the designer. Nothing refreshes its directory, which searches no folder, so every
+    /// client stays Checking.</summary>
     public MainWindow() : this(new ClientDirectory(CommandResolver.Create([], [])))
     {
     }

@@ -31,7 +31,8 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
-    /// <summary>Without <paramref name="clients"/> the window finds no client, so no test probes this machine's clients.</summary>
+    /// <summary>Without <paramref name="clients"/> nothing refreshes the window's directory, so every client stays Checking
+    /// and no test probes this machine's clients.</summary>
     public static Shell Show(ClientDirectory? clients = null)
     {
         var window = clients is null ? new MainWindow() : new MainWindow(clients);
