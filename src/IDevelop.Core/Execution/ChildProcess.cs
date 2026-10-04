@@ -189,7 +189,10 @@ internal static class ProcessCheck
         return process is null ? ProcessMatch.Gone : Compare(process, identity);
     }
 
-    /// <summary>Stops the tree only if the process still matches at the moment of the kill.</summary>
+    /// <summary>
+    /// Stops the tree only if the process still matches at the moment of the kill. It does not wait for the exit, because
+    /// opening a project calls it on the UI thread.
+    /// </summary>
     public static void KillTree(ProcessIdentity identity)
     {
         using var process = Find(identity.Id);
@@ -201,7 +204,6 @@ internal static class ProcessCheck
         try
         {
             process.Kill(entireProcessTree: true);
-            process.WaitForExit(TimeSpan.FromSeconds(5));
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
