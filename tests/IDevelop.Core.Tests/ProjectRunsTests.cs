@@ -158,6 +158,71 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Null(runs.Active);
     }
 
+    [WindowsFact]
+    public async Task Cancelling_stops_a_process_whose_parent_has_already_exited()
+    {
+        var sleeper = Evidence("sleeper.pid");
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnThroughCmd(sleeper).Hang());
+        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        var settled = NextSettled(runs);
+        var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
+        _spawned.Add(started.Attempt.Process!.Value.Id);
+        var sleeperId = await PidAsync(sleeper);
+
+        runs.Cancel(SayHiId);
+
+        Assert.Equal(AttemptStatus.Cancelled, (await settled).Status);
+        AssertGone(started.Attempt.Process!.Value.Id);
+        AssertGone(sleeperId);
+    }
+
+    [WindowsFact]
+    public async Task A_process_the_client_leaves_running_is_stopped_when_the_attempt_settles()
+    {
+        var sleeper = Evidence("sleeper.pid");
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnSleepingChild(sleeper).Replay(Fixture.Path("codex-success.jsonl")).Exit(0));
+        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        var settled = NextSettled(runs);
+
+        runs.Start(SayHi(Runs[ClientId.Codex].Settings));
+        var sleeperId = await PidAsync(sleeper);
+
+        Assert.Equal((AttemptStatus.Succeeded, "DONE"), ((await settled).Status, (await settled).Result));
+        AssertGone(sleeperId);
+    }
+
+    [GitBashFact]
+    public async Task Stopping_a_client_stops_the_commands_Git_Bash_runs_for_it()
+    {
+        var sleeper = Evidence("sleep.pid");
+        var shim = Path.Combine(_fakes.Folder, "bash-client.cmd");
+        File.WriteAllText(shim, $"@\"{GitBashFactAttribute.Bash}\" -c \"bash -c 'sleep 300 & cat /proc/$!/winpid > {sleeper.Replace('\\', '/')}; wait'\"\r\n");
+        var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _project);
+        _spawned.Add(client.Identity.Id);
+        var sleepId = await PidAsync(sleeper);
+
+        client.StopTree();
+
+        AssertGone(client.Identity.Id);
+        AssertGone(sleepId);
+        client.Dispose();
+    }
+
+    [WindowsFact]
+    public async Task Closing_a_childs_job_as_Windows_does_when_iDevelop_exits_stops_everything_it_started()
+    {
+        var sleeper = Evidence("sleeper.pid");
+        var shim = _fakes.Install("client", On().SpawnThroughCmd(sleeper).Hang());
+        var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _project);
+        _spawned.Add(client.Identity.Id);
+        var sleeperId = await PidAsync(sleeper);
+
+        client.Dispose();
+
+        AssertGone(client.Identity.Id);
+        AssertGone(sleeperId);
+    }
+
     [Fact]
     public async Task Leaving_stops_the_client_records_interrupted_and_frees_the_folder()
     {
@@ -224,50 +289,49 @@ public sealed class ProjectRunsTests : IDisposable
     [InlineData("never launched", "iDevelop stopped while starting the client. If the client started, it may still be running.")]
     public async Task Opening_settles_an_attempt_that_a_crashed_window_left_running(string survivor, string detail)
     {
-        var sleeper = new ResolvedCommand(_fakes.Install("sleeper", On().Hang()), IsBatchShim: OperatingSystem.IsWindows());
-        using var client = ChildProcess.Start(sleeper, [], _project);
-        try
+        // The stand-in starts outside any job, like a client that outlived iDevelop on Linux or macOS, or one that left
+        // its job on Windows. A client still in its job stops with iDevelop.
+        var shim = _fakes.Install("sleeper", On().Hang());
+        using var client = Process.Start(new ProcessStartInfo(shim)
         {
-            var identity = client.Identity;
-            if (survivor == "gone")
-            {
-                client.StopTree();
-                await client.WaitForExitAsync();
-            }
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+        })!;
+        _spawned.Add(client.Id);
+        var identity = ProcessCheck.Identify(client);
+        if (survivor == "gone")
+        {
+            client.Kill(entireProcessTree: true);
+            await client.WaitForExitAsync();
+        }
 
-            var attempts = Path.Combine(_project, ".idp", "attempts");
-            using (var log = AttemptLog.Create(attempts, new AttemptEvent.Requested(
-                DateTimeOffset.UtcNow, AttemptId.New(), SayHiId, "Say hi", Runs[ClientId.Codex].Settings, "# Say hi\n", sleeper.Path, [])))
+        var attempts = Path.Combine(_project, ".idp", "attempts");
+        using (var log = AttemptLog.Create(attempts, new AttemptEvent.Requested(
+            DateTimeOffset.UtcNow, AttemptId.New(), SayHiId, "Say hi", Runs[ClientId.Codex].Settings, "# Say hi\n", shim, [])))
+        {
+            if (survivor != "never launched")
             {
-                if (survivor != "never launched")
-                {
-                    var started = survivor == "reused" ? identity.StartedAt.AddHours(-1) : identity.StartedAt;
-                    log.Append(new AttemptEvent.Launched(DateTimeOffset.UtcNow, identity.Id, started));
-                }
-            }
-
-            await using var runs = ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver));
-
-            var record = runs.Latest[SayHiId];
-            Assert.Equal((AttemptStatus.Interrupted, string.Format(detail, identity.Id)), (record.Status, record.Detail));
-            var events = File.ReadAllLines(Path.Combine(AttemptLog.FolderOf(attempts, SayHiId, record.Id), "events.jsonl"));
-            await using (ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver)))
-            {
-                Assert.Equal(events, File.ReadAllLines(Path.Combine(AttemptLog.FolderOf(attempts, SayHiId, record.Id), "events.jsonl")));
-            }
-
-            if (survivor == "same")
-            {
-                AssertGone(identity.Id);
-            }
-            else if (survivor is "reused" or "never launched")
-            {
-                Assert.False(Process.GetProcessById(identity.Id).HasExited);
+                var started = survivor == "reused" ? identity.StartedAt.AddHours(-1) : identity.StartedAt;
+                log.Append(new AttemptEvent.Launched(DateTimeOffset.UtcNow, identity.Id, started));
             }
         }
-        finally
+
+        await using var runs = ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver));
+
+        var record = runs.Latest[SayHiId];
+        Assert.Equal((AttemptStatus.Interrupted, string.Format(detail, identity.Id)), (record.Status, record.Detail));
+        var events = File.ReadAllLines(Path.Combine(AttemptLog.FolderOf(attempts, SayHiId, record.Id), "events.jsonl"));
+        await using (ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver)))
         {
-            client.StopTree();
+            Assert.Equal(events, File.ReadAllLines(Path.Combine(AttemptLog.FolderOf(attempts, SayHiId, record.Id), "events.jsonl")));
+        }
+
+        if (survivor == "same")
+        {
+            AssertGone(identity.Id);
+        }
+        else if (survivor is "reused" or "never launched")
+        {
+            Assert.False(Process.GetProcessById(identity.Id).HasExited);
         }
     }
 

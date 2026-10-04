@@ -11,6 +11,20 @@ internal sealed class WindowsFactAttribute : FactAttribute
     }
 }
 
+/// <summary>Git for Windows' bash, which Pi runs its commands in on Windows.</summary>
+internal sealed class GitBashFactAttribute : FactAttribute
+{
+    public static readonly string Bash = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
+
+    public GitBashFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() || !File.Exists(Bash))
+        {
+            Skip = $"Git Bash is not installed at {Bash}.";
+        }
+    }
+}
+
 internal sealed class UnixFactAttribute : FactAttribute
 {
     public UnixFactAttribute()

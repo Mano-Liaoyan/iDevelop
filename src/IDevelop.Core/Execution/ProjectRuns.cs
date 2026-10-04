@@ -316,8 +316,8 @@ public sealed class ProjectRuns : IAsyncDisposable
             return (AttemptReducer.Apply(record, failed), null);
         }
 
-        // Known gap: a crash before this line is on disk leaves a client that reconciliation cannot identify.
-        // A Windows Job Object that kills its processes on close could cover it later.
+        // On Windows a crash stops the client through its job. On Linux and macOS, a crash before this line is on disk
+        // leaves a client that reconciliation cannot identify.
         var launched = new AttemptEvent.Launched(DateTimeOffset.UtcNow, process.Identity.Id, process.Identity.StartedAt);
         try
         {
@@ -378,7 +378,8 @@ public sealed class ProjectRuns : IAsyncDisposable
     /// each event to the log, folds it, and publishes the record, in that order. A stop request enqueued before the kill
     /// therefore always precedes the exit the kill causes. The lock is released only after the last event is on disk,
     /// or after the drain stops and the log is closed, so nothing appends after another instance could take over.
-    /// The run never disposes its process: the open handle keeps a late stop from reaching a process that reused the id.
+    /// The run disposes its process just before it releases the lock, which on Windows stops whatever the client left
+    /// running. A late stop then does nothing.
     /// </summary>
     private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
     {
@@ -456,6 +457,7 @@ public sealed class ProjectRuns : IAsyncDisposable
                     process.StopTree();
                 }
 
+                process.Dispose();
                 log.Dispose();
                 held.Dispose();
                 owner.Finish(this);
@@ -491,7 +493,13 @@ public sealed class ProjectRuns : IAsyncDisposable
             try
             {
                 var code = await process.WaitForExitAsync();
-                await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(ExitGrace));
+                var output = Task.WhenAll(stdout, stderr);
+                if (await Task.WhenAny(output, Task.Delay(ExitGrace)) != output)
+                {
+                    // On Linux and macOS this finds nothing, because the processes of a client that exited have a new parent.
+                    process.StopTree();
+                }
+
                 Request(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
             }
             finally

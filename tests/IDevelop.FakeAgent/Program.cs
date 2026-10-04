@@ -18,12 +18,20 @@ using System.Text.Json;
 //   waitForFile <file>            wait until the file exists, so a test decides when the client goes on. Exit 97 if its
 //                                 folder is deleted, because the test that owned it has ended
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
+//   spawnThroughCmd <file>        Windows only: run a copy through cmd.exe /c that starts a sleeping copy, writes its
+//                                 pid, and exits, so the sleeper shares the pipes and its parent is gone
 //   hang                          wait until killed
 //   exit <code>
 
 if (args is ["--sleep-forever"])
 {
     Thread.Sleep(Timeout.Infinite);
+}
+
+if (args is ["--spawn-sleeper", var sleeperFile])
+{
+    File.WriteAllText(sleeperFile, StartSleeper().Id.ToString());
+    return 0;
 }
 
 if (args is not ["--rules", var rulesFile, "--", .. var clientArguments])
@@ -99,8 +107,13 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
 
             break;
         case "spawnSleepingChild":
-            var child = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), "--sleep-forever"]) { UseShellExecute = false })!;
-            File.WriteAllText(value.GetString()!, child.Id.ToString());
+            File.WriteAllText(value.GetString()!, StartSleeper().Id.ToString());
+            break;
+        case "spawnThroughCmd":
+            // /s makes cmd.exe strip only the outer quotes, so each quoted part reaches the copy intact.
+            string[] parts = [Environment.ProcessPath!, .. HostArguments(), "--spawn-sleeper", value.GetString()!];
+            var copy = string.Join(' ', parts.Select(part => $"\"{part}\""));
+            Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, $"/s /c \"{copy}\"") { UseShellExecute = false })!.Dispose();
             break;
         case "hang":
             Thread.Sleep(Timeout.Infinite);
@@ -120,6 +133,9 @@ static bool Matches(JsonElement when, string[] arguments)
     string[] prefix = [.. when.EnumerateArray().Select(part => part.GetString()!)];
     return prefix.Length <= arguments.Length && prefix.SequenceEqual(arguments[..prefix.Length]);
 }
+
+static Process StartSleeper() =>
+    Process.Start(new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), "--sleep-forever"]) { UseShellExecute = false })!;
 
 // Run through "dotnet IDevelop.FakeAgent.dll", a copy needs the assembly path. Run through its apphost, it needs nothing.
 static string[] HostArguments() =>

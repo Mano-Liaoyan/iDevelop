@@ -80,6 +80,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule SpawnSleepingChild(string pidFile) => Step("spawnSleepingChild", pidFile);
 
+    public FakeRule SpawnThroughCmd(string pidFile) => Step("spawnThroughCmd", pidFile);
+
     public FakeRule Hang() => Step("hang", true);
 
     public FakeRule Exit(int code) => Step("exit", code);

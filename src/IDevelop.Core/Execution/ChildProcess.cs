@@ -12,17 +12,22 @@ internal sealed class LaunchException(string message, Exception? inner = null) :
 
 /// <summary>
 /// A started command with redirected pipes. It knows nothing about any client: runs and probes both use it.
-/// Text crosses the pipes as UTF-8 without a byte order mark on every platform.
+/// Text crosses the pipes as UTF-8 without a byte order mark on every platform. On Windows the process and everything
+/// it starts share a job, so disposing it, or iDevelop exiting, stops whatever is still running.
 /// </summary>
 internal sealed class ChildProcess : IDisposable
 {
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
+    private readonly Lock _gate = new();
     private readonly Process _process;
+    private readonly ProcessJob? _job;
+    private bool _disposed;
 
     private ChildProcess(Process process)
     {
         _process = process;
+        _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
         Identity = ProcessCheck.Identify(process);
     }
 
@@ -92,20 +97,44 @@ internal sealed class ChildProcess : IDisposable
         return _process.ExitCode;
     }
 
-    /// <summary>Stops the process and every process it started. A process that already exited is not an error.</summary>
+    /// <summary>
+    /// Stops the process and every process it started. A process that already exited is not an error. After
+    /// <see cref="Dispose"/> it does nothing, so it never reaches a process that reused the id.
+    /// </summary>
     public void StopTree()
     {
-        try
+        lock (_gate)
         {
-            _process.Kill(entireProcessTree: true);
-        }
-        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
-        {
-            // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+            if (_disposed)
+            {
+                return;
+            }
+
+            _job?.Terminate();
+            try
+            {
+                // The job holds the process only from just after its start, and Linux and macOS have no job.
+                _process.Kill(entireProcessTree: true);
+            }
+            catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
+            {
+                // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+            }
         }
     }
 
-    public void Dispose() => _process.Dispose();
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                _job?.Dispose();
+                _process.Dispose();
+            }
+        }
+    }
 
     private static async Task ReadLinesAsync(StreamReader reader, Action<string> onLine)
     {
