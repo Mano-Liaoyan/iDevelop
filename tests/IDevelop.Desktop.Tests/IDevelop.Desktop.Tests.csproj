@@ -14,6 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
-    <None Include="..\IDevelop.Core.Tests\Fixtures\**" LinkBase="Fixtures" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Shared\Fixtures\**" LinkBase="Fixtures" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
