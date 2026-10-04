@@ -20,8 +20,8 @@ internal static class FakeAgents
     public static FakeRule PiProvider(string provider, string status) =>
         On("auth", "check", "--provider", provider, "--json").Print($$"""{"status":"{{status}}"}""");
 
-    /// <summary>One client as on the probing machine, plus the rules for its runs.</summary>
-    public static void Install(FakeClients fakes, ClientId client, params FakeRule[] runs) => _ = client switch
+    /// <summary>One client as on the probing machine, plus the rules for its runs. Returns the shim's path.</summary>
+    public static string Install(FakeClients fakes, ClientId client, params FakeRule[] runs) => client switch
     {
         ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, .. runs]),
         ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, .. runs]),
