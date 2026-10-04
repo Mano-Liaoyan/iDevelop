@@ -132,14 +132,9 @@ internal sealed class AttemptLog : IDisposable
 
             foreach (var taskFolder in Directory.EnumerateDirectories(attemptsFolder).Where(IsIdFolder))
             {
-                var newestFirst = Directory.EnumerateDirectories(taskFolder).Where(IsIdFolder).OrderByDescending(folder => Guid.Parse(Path.GetFileName(folder)));
-                foreach (var attemptFolder in newestFirst)
+                if (Newest(taskFolder, warnings) is { } record)
                 {
-                    if (TryFold(attemptFolder, warnings) is { } record)
-                    {
-                        latest[record.Task] = record;
-                        break;
-                    }
+                    latest[record.Task] = record;
                 }
             }
         }
@@ -151,6 +146,22 @@ internal sealed class AttemptLog : IDisposable
         return (latest.ToImmutable(), warnings.ToImmutable());
     }
 
+    /// <summary>
+    /// The newest readable attempt of one task, or null. Reconciliation reads a task again this way once it holds the
+    /// task's lock. The read that found the task running has already reported its warnings.
+    /// </summary>
+    public static AttemptRecord? ReadLatest(string attemptsFolder, TaskId task)
+    {
+        try
+        {
+            return Newest(TaskFolder(attemptsFolder, task), ImmutableArray.CreateBuilder<string>());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)
@@ -160,6 +171,20 @@ internal sealed class AttemptLog : IDisposable
             _output?.Dispose();
             _stderr?.Dispose();
         }
+    }
+
+    private static AttemptRecord? Newest(string taskFolder, ImmutableArray<string>.Builder warnings)
+    {
+        var newestFirst = Directory.EnumerateDirectories(taskFolder).Where(IsIdFolder).OrderByDescending(folder => Guid.Parse(Path.GetFileName(folder)));
+        foreach (var attemptFolder in newestFirst)
+        {
+            if (TryFold(attemptFolder, warnings) is { } record)
+            {
+                return record;
+            }
+        }
+
+        return null;
     }
 
     private static AttemptRecord? TryFold(string folder, ImmutableArray<string>.Builder warnings)

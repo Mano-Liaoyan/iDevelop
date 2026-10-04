@@ -207,7 +207,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             if (running.Task == held)
             {
-                latest = Settle(attempts, latest, running, warnings);
+                latest = SettleCrashed(attempts, latest, running, warnings);
                 continue;
             }
 
@@ -227,10 +227,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 if (taskLock is not null)
                 {
                     // The run may have ended between the read and the lock, so settle what its log says now.
-                    var (now, _) = AttemptLog.ReadLatest(attempts);
-                    if (now.TryGetValue(running.Task, out var record) && record is { Status: AttemptStatus.Running })
+                    var record = AttemptLog.ReadLatest(attempts, running.Task);
+                    if (record is { Status: AttemptStatus.Running })
                     {
-                        latest = Settle(attempts, latest, record, warnings);
+                        latest = SettleCrashed(attempts, latest, record, warnings);
                     }
                     else if (record is not null)
                     {
@@ -243,7 +243,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return latest;
     }
 
-    private static ImmutableDictionary<TaskId, AttemptRecord> Settle(
+    private static ImmutableDictionary<TaskId, AttemptRecord> SettleCrashed(
         string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings)
     {
         ProcessMatch? match = record.Process is { } process ? ProcessCheck.StopIfSame(process) : null;
