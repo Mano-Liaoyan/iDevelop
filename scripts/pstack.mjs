@@ -25,10 +25,6 @@ if (command === 'setup') {
   git(['sparse-checkout', 'set', 'pstack'], upstream);
 }
 assert.ok(fs.existsSync(path.join(source, 'skills')), 'PStack submodule is missing. Run node scripts/pstack.mjs setup.');
-const sourceFiles = git(['ls-files', '-z', '--', 'skills'], source).split('\0').filter(Boolean)
-  .map(file => path.join(source, file));
-const names = sourceFiles.map(file => path.relative(path.join(source, 'skills'), file).replaceAll('\\', '/'))
-  .filter(relative => /^[^/]+\/SKILL\.md$/.test(relative)).map(relative => relative.split('/')[0]).sort();
 const local = path.join(root, '.pstack/local');
 
 function files(directory) {
@@ -38,6 +34,27 @@ function files(directory) {
     return entry.isDirectory() ? files(target) : entry.isFile() ? [target] : [];
   });
 }
+
+function skillFile(base, input) {
+  return { input, relative: path.relative(base, input).replaceAll('\\', '/') };
+}
+
+const upstreamSkills = path.join(source, 'skills');
+const upstreamFiles = git(['ls-files', '-z', '--', 'skills'], source).split('\0').filter(Boolean)
+  .map(file => skillFile(upstreamSkills, path.join(source, file)));
+const upstreamNames = upstreamFiles.map(file => file.relative)
+  .filter(relative => /^[^/]+\/SKILL\.md$/.test(relative)).map(relative => relative.split('/')[0]).sort();
+const projectSkills = path.join(root, 'skills');
+const projectNames = fs.existsSync(projectSkills)
+  ? fs.readdirSync(projectSkills, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
+  : [];
+for (const name of projectNames) {
+  assert.ok(!upstreamNames.includes(name), `Project skill skills/${name} has the same name as a PStack skill. Rename the project skill.`);
+  assert.ok(fs.existsSync(path.join(projectSkills, name, 'SKILL.md')), `Project skill skills/${name} has no SKILL.md.`);
+}
+const skillFiles = [...upstreamFiles, ...projectNames.flatMap(name => files(path.join(projectSkills, name)))
+  .map(input => skillFile(projectSkills, input))];
+const names = [...upstreamNames, ...projectNames].sort();
 
 function write(target, content) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -116,7 +133,7 @@ async function auditCodex() {
   assert.deepEqual(project.errors, [], 'Codex discovery errors');
   const enabled = project.skills.filter(skill => skill.enabled);
   assert.deepEqual(enabled.map(skill => skill.name).sort(), names,
-    'Enabled Codex skills must be exactly PStack; re-run isolate-codex');
+    'Enabled Codex skills must be exactly PStack and the project skills; re-run isolate-codex');
   for (const skill of enabled) {
     assert.ok(fs.realpathSync(skill.path).startsWith(fs.realpathSync(active) + path.sep),
       `Non-project skill enabled: ${skill.name}`);
@@ -125,16 +142,15 @@ async function auditCodex() {
   assert.ok(sibling.skills.some(skill => skill.enabled && !names.includes(skill.name)),
     'Control directory should retain its other skills');
   write(path.join(local, 'codex-audit.json'), JSON.stringify([...entries, sibling], null, 2) + '\n');
-  console.log(`PASS: Codex launch override enables exactly ${names.length} project PStack skills; other skills remain enabled outside this project.`);
+  console.log(`PASS: Codex launch override enables exactly ${names.length} skills (${upstreamNames.length} PStack, ${projectNames.length} project-owned); other skills remain enabled outside this project.`);
 }
 
 function check() {
   checkSource();
-  const expectedFiles = sourceFiles.map(file => path.relative(path.join(source, 'skills'), file)).sort();
-  assert.deepEqual(files(active).map(file => path.relative(active, file)).sort(), expectedFiles,
+  const expectedFiles = skillFiles.map(file => file.relative).sort();
+  assert.deepEqual(files(active).map(file => path.relative(active, file).replaceAll('\\', '/')).sort(), expectedFiles,
     'Generated skill file inventory drifted. Run setup to synchronize it.');
-  for (const input of sourceFiles) {
-    const relative = path.relative(path.join(source, 'skills'), input).replaceAll('\\', '/');
+  for (const { input, relative } of skillFiles) {
     const expected = render(input, relative);
     assert.deepEqual(fs.readFileSync(path.join(active, relative)), expected, `Generated file drift: ${relative}`);
   }
@@ -149,7 +165,7 @@ function check() {
   }
   const models = JSON.parse(fs.readFileSync(path.join(root, '.pstack/models.json'), 'utf8'));
   validateModelPolicy(models);
-  console.log(`PASS: ${names.length} skills, clean upstream ${git(['rev-parse', '--short', 'HEAD'], upstream)}, generated adapters, shared links, and model configuration.`);
+  console.log(`PASS: ${names.length} skills (${upstreamNames.length} PStack, ${projectNames.length} project-owned), clean upstream ${git(['rev-parse', '--short', 'HEAD'], upstream)}, generated adapters, shared links, and model configuration.`);
 }
 
 if (command === 'setup') {
@@ -165,8 +181,7 @@ if (command === 'setup') {
     }
   }
   const expectedFiles = new Set();
-  for (const input of sourceFiles) {
-    const relative = path.relative(path.join(source, 'skills'), input).replaceAll('\\', '/');
+  for (const { input, relative } of skillFiles) {
     expectedFiles.add(path.join(active, relative));
     write(path.join(active, relative), render(input, relative));
   }
