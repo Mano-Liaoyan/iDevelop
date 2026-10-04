@@ -64,8 +64,14 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
-    public static string ModelChoice(ModelOption model, bool offered) =>
-        !offered ? $"{model.Id} (not offered on this machine)" : model.Problem is null ? model.Name : $"{model.Name} (not ready)";
+    /// <summary>A model in the picker. A stored model that the client does not offer is marked, unless the client is still
+    /// being checked and nothing is known yet.</summary>
+    public static string ModelChoice(ModelOption model, bool offered, ClientStatus status) => (offered, status) switch
+    {
+        (false, ClientStatus.Checking) => model.Id,
+        (false, _) => $"{model.Id} (not offered on this machine)",
+        _ => model.Problem is null ? model.Name : $"{model.Name} (not ready)",
+    };
 
     /// <summary>What the chosen client may do in the project folder without asking.</summary>
     public static string PermissionNote(ClientId client) => client switch

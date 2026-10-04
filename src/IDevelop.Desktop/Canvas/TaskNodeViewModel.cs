@@ -93,7 +93,7 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     /// <summary>The models this machine offers, then the task's model when it is not one of them, marked.</summary>
     public IReadOnlyList<Choice> ModelChoices => _task.Execution is { } settings
-        ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered)))]
+        ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, Status)))]
         : [];
 
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);

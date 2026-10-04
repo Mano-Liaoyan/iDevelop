@@ -114,6 +114,18 @@ public sealed class AgentPickerTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void While_its_client_is_being_checked_a_task_shows_its_model_plainly()
+    {
+        var checking = new ClientDirectory(CommandResolver.Create([], []));
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" })), checking);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        Assert.Equal(["Codex · checking", "gpt-5.5", "high"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+        Assert.Equal("Codex · gpt-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal("iDevelop is still checking Codex.", shell.InView<TextBlock>("StartProblem").Text);
+    }
+
+    [AvaloniaFact]
     public void Switching_the_inspector_between_tasks_leaves_each_tasks_agent_as_it_was()
     {
         var shell = Shell.Open(_temp.Seed(
