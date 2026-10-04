@@ -96,10 +96,13 @@ public partial class MainWindow : Window
     }
 
     // The inspector's pickers take a choice the same way, and their bindings only show the task's agent. A picker that
-    // moves to another task briefly holds the old task's entry, which a two-way binding would write into the new task.
+    // moves to another task, or whose list is replaced, keeps an equal entry from its old list selected, so only a change
+    // in the open list or by a key on the focused picker is a choice.
+    private static bool IsChoice(ComboBox picker) => picker.IsDropDownOpen || picker.IsKeyboardFocusWithin;
+
     private void OnClientChosen(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: ClientChoice choice })
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: ClientChoice choice } picker && IsChoice(picker))
         {
             task.ChooseClient(choice);
         }
@@ -107,7 +110,7 @@ public partial class MainWindow : Window
 
     private void OnModelChosen(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice })
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))
         {
             task.ChooseModel(choice);
         }
@@ -115,7 +118,7 @@ public partial class MainWindow : Window
 
     private void OnReasoningChosen(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice })
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))
         {
             task.ChooseReasoning(choice);
         }

@@ -17,6 +17,7 @@ public sealed class AgentPickerTests : IDisposable
     private static readonly TaskId Design = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
     private static readonly TaskId Build = new(Guid.Parse("019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22"));
     private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
+    private static readonly ExecutionSettings PiAtHigh = new(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
 
     private readonly TempFolder _temp = new();
     private readonly ClientDirectory _clients;
@@ -33,8 +34,22 @@ public sealed class AgentPickerTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, ExecutionSettings? execution = null) =>
-        new(new TaskDefinition(id) { Title = title, Execution = execution }, new CanvasPoint(x, 90));
+    // Codex, Pi, and Antigravity CLI are installed and ready.
+    private ClientDirectory WithPi()
+    {
+        var fakes = new FakeClients(_temp.Create("bin-with-pi"));
+        foreach (var client in new[] { ClientId.Codex, ClientId.Pi, ClientId.Antigravity })
+        {
+            FakeAgents.Install(fakes, client);
+        }
+
+        var clients = new ClientDirectory(fakes.Resolver);
+        clients.RefreshAsync().Wait();
+        return clients;
+    }
+
+    private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, ExecutionSettings? execution = null, double y = 90) =>
+        new(new TaskDefinition(id) { Title = title, Execution = execution }, new CanvasPoint(x, y));
 
     private static string CardAgent(Shell shell, string title) =>
         shell.Node(title).GetVisualDescendants().OfType<TextBlock>().Single(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "CardAgent").Text!;
@@ -131,7 +146,7 @@ public sealed class AgentPickerTests : IDisposable
         var shell = Shell.Open(_temp.Seed(
             Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "xhigh" }),
             Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "low" }),
-            Task(Review, "Review", 705, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "high" })), _clients);
+            Task(Review, "Review", 105, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "high" }, y: 330)), _clients);
 
         foreach (var title in new[] { "Design", "Build", "Review", "Design", "Review", "Build" })
         {
@@ -164,5 +179,51 @@ public sealed class AgentPickerTests : IDisposable
             ["Codex · GPT-5.5 · low", "Codex · GPT-6-Sol · xhigh", "Antigravity CLI · Gemini 3.8 Flash · low"],
             new[] { "Design", "Build", "Review" }.Select(title => CardAgent(shell, title)));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
+    }
+
+    // Pi's high is also a level of Codex's GPT-5.5, at another place in its list. A picker keeps the keyboard focus after
+    // the user chooses in it.
+    [AvaloniaFact]
+    public void Choosing_each_task_in_the_sidebar_and_on_the_canvas_changes_no_tasks_agent()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, PiAtHigh),
+            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
+            Task(Review, "Review", 105, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "medium" }, y: 330)), WithPi());
+        var pickers = new Dictionary<string, string[]>
+        {
+            ["Design"] = ["Pi", "DeepSeek V4 Pro (deepseek)", "high"],
+            ["Build"] = ["Codex", "GPT-5.5", "low"],
+            ["Review"] = ["Antigravity CLI", "Gemini 3.8 Flash", "medium"],
+        };
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        string[] order = ["Build", "Review", "Design", "Review", "Build", "Design"];
+        foreach (var (title, where) in order.Select(title => (title, "sidebar")).Concat(order.Select(title => (title, "canvas"))))
+        {
+            shell.Find<ComboBox>("TaskReasoning").Focus();
+            shell.Click(where == "sidebar"
+                ? shell.Center(shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == title))
+                : shell.Header(shell.Node(title)));
+
+            Assert.Equal(pickers[title], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+            Assert.Equal(
+                ["Pi · DeepSeek V4 Pro (deepseek) · high", "Codex · GPT-5.5 · low", "Antigravity CLI · Gemini 3.8 Flash · medium"],
+                new[] { "Design", "Build", "Review" }.Select(task => CardAgent(shell, task)));
+            Assert.True("seed - iDevelop" == shell.Window.Title, $"Choosing {title} in the {where} made the title '{shell.Window.Title}'.");
+        }
+    }
+
+    // The reasoning picker still holds Pi's high when Codex's levels replace Pi's, and Codex's first model offers high.
+    [AvaloniaFact]
+    public void Choosing_another_client_takes_its_first_model_at_that_models_default_level()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, PiAtHigh)), WithPi());
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        shell.Pick("TaskClient", "Codex");
+
+        Assert.Equal(["Codex", "GPT-6.1-Sol", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+        Assert.Equal("Codex · GPT-6.1-Sol · low", CardAgent(shell, "Design"));
     }
 }

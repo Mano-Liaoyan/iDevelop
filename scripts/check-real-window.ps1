@@ -277,7 +277,16 @@ try {
         With-App $project {
             param($process, $window)
             Check ((Wait-Until { (Find-ById $window 'AgentCodex').Current.Name -like 'Ready*' } 60) -eq $true) 'the fake Codex is ready'
-            Select-Element ((Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)[1])
+            # Claude Code is missing here, so the first task's picker lists only high, and the second task's GPT-6-Sol lists
+            # high third. Moving between them makes Avalonia carry high over to the new list as a selection change.
+            $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+            Select-Element $sidebarRows[0]
+            $reasoning = Find-ById $window 'TaskReasoning'
+            Check ((Wait-Until { (Value $reasoning) -eq 'high' }) -eq $true) "the reasoning picker shows the first task's high (found '$(Value $reasoning)')"
+            Select-Element $sidebarRows[1]
+            Check ((Wait-Until { (Value (Find-ById $window 'TaskClient')) -like 'Codex*' }) -eq $true) "the client picker follows the second task (found '$(Value (Find-ById $window 'TaskClient'))')"
+            Check ((Value $reasoning) -eq 'medium') "the reasoning picker shows the second task's medium (found '$(Value $reasoning)')"
+            Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing a task whose model offers the previous task's level edits nothing: '$($window.Current.Name)'"
             Invoke-Element (Find-ById $window 'RunTask')
             $bar = Find-ById $window 'RunBar'
             Check ($null -ne $bar) 'UI Automation finds the run bar'
