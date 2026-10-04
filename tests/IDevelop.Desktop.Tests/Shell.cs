@@ -44,16 +44,13 @@ internal sealed class Shell
 
     public static Shell Open(string folder, ClientDirectory? clients = null)
     {
-        var window = clients is null ? new MainWindow() : new MainWindow(clients);
-        window.Show();
-        window.ViewModel.Open(folder);
-        var shell = new Shell(window);
+        var shell = Show(clients);
+        shell.Window.ViewModel.Open(folder);
         shell.Render();
         return shell;
     }
 
-    public T Find<T>(string automationId) where T : Control =>
-        Window.GetVisualDescendants().OfType<T>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+    public T Find<T>(string automationId) where T : Control => ById<T>(Window, automationId).Single();
 
     /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
     public T InView<T>(string automationId) where T : Control
@@ -64,8 +61,7 @@ internal sealed class Shell
         return control;
     }
 
-    public bool Has<T>(string automationId) where T : Control =>
-        Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
+    public bool Has<T>(string automationId) where T : Control => ById<T>(Window, automationId).Any();
 
     public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
 
@@ -173,7 +169,7 @@ internal sealed class Shell
     public void Choose(string automationId)
     {
         var dialog = Dialog ?? throw new InvalidOperationException("No dialog is open.");
-        var button = dialog.GetVisualDescendants().OfType<Button>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+        var button = ById<Button>(dialog, automationId).Single();
         var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), dialog)!.Value;
         dialog.MouseMove(point);
         dialog.MouseDown(point, MouseButton.Left);
@@ -257,6 +253,9 @@ internal sealed class Shell
 
         Dispatcher.UIThread.RunJobs();
     }
+
+    private static IEnumerable<T> ById<T>(Visual root, string automationId) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().Where(control => AutomationProperties.GetAutomationId(control) == automationId);
 
     private Point At(Visual visual, Point local) =>
         visual.TranslatePoint(local, Window) ?? throw new InvalidOperationException($"{visual} is not in the window.");
