@@ -107,9 +107,7 @@ public sealed class ProjectException(string message, Exception? inner = null) : 
 
 internal static class WorkflowFile
 {
-    public const string FormatV1 = "idevelop.workflow/1";
-
-    /// <summary>The only format <see cref="Serialize"/> writes. Version 1 files still open, with no agent on any task.</summary>
+    /// <summary>The only format this version reads and writes.</summary>
     public const string FormatV2 = "idevelop.workflow/2";
 
     private static readonly JsonSerializerOptions Options = new()
@@ -168,12 +166,9 @@ internal static class WorkflowFile
         try
         {
             var format = JsonSerializer.Deserialize<HeaderDto>(utf8, HeaderOptions)?.Format;
-            file = format switch
-            {
-                FormatV1 => JsonSerializer.Deserialize<FileDtoV1>(utf8, Options)!.Upgrade(),
-                FormatV2 => JsonSerializer.Deserialize<FileDto>(utf8, Options)!,
-                _ => throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {FormatV1} and {FormatV2}."),
-            };
+            file = format == FormatV2
+                ? JsonSerializer.Deserialize<FileDto>(utf8, Options)!
+                : throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {FormatV2}.");
         }
         catch (JsonException e)
         {
@@ -307,39 +302,6 @@ internal static class WorkflowFile
         public required string Client { get; init; }
         public required string? Model { get; init; }
         public required string? Reasoning { get; init; }
-    }
-
-    private sealed class FileDtoV1
-    {
-        public required string Format { get; init; }
-        public required Guid Id { get; init; }
-        public required List<TaskDtoV1?> Tasks { get; init; }
-        public required List<ConnectionDto?> Connections { get; init; }
-        public required Dictionary<string, PointDto?> Layout { get; init; }
-
-        public FileDto Upgrade() => new()
-        {
-            Format = FormatV2,
-            Id = Id,
-            Tasks = [.. Tasks.Select(task => task is null ? null : new TaskDto
-            {
-                Id = task.Id,
-                Title = task.Title,
-                Instructions = task.Instructions,
-                AcceptanceCriteria = task.AcceptanceCriteria,
-                Execution = null,
-            })],
-            Connections = Connections,
-            Layout = Layout,
-        };
-    }
-
-    private sealed class TaskDtoV1
-    {
-        public required Guid Id { get; init; }
-        public required string Title { get; init; }
-        public required string?[] Instructions { get; init; }
-        public required string?[] AcceptanceCriteria { get; init; }
     }
 
     private sealed class ConnectionDto
