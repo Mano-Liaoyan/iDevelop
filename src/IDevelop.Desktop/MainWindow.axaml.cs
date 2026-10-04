@@ -168,12 +168,12 @@ public partial class MainWindow : Window
 
     private async Task<bool> ConfirmLeavingDocument()
     {
-        if (ViewModel is not { HasUnsavedChanges: true, ProjectName: { } folder })
+        if (ViewModel is not { HasUnsavedChanges: true, ProjectName: { } projectName })
         {
             return true;
         }
 
-        return await new UnsavedChangesDialog(folder).ShowDialog<UnsavedChangesChoice?>(this) switch
+        return await new UnsavedChangesDialog(projectName).ShowDialog<UnsavedChangesChoice?>(this) switch
         {
             UnsavedChangesChoice.Save => ViewModel.TrySave(),
             UnsavedChangesChoice.Discard => true,
