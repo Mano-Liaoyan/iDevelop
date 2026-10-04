@@ -17,7 +17,7 @@ Restyle the shell and canvas to look like PlanWeave's desktop app. The user acce
 - [x] 5. Verify on the matching surface. "Inconclusive" or wrong-surface is not a pass. Flag it. The coordinator drove the built Release executable's real window on Windows through UI Automation and inspected screenshots in both themes. That run found the two theme defects the headless tests missed. After the fix round, `scripts/check-real-window.ps1` passed all 31 checks. The title band's drag and double-click, and the macOS and Linux windows, are unverified. See Open issues.
 - [x] 6. Rebase into small, ordered commits. Stack follow-ups. The fix round folded each fix into the commit that introduced the problem. The coordinator then checked out each of the five commits in a separate detached worktree and ran the full gate on it. The real-window script and the documentation are two stacked commits.
 - [x] 7. If the design is contested, `interrogate` before shipping. Skip, because the design was not contested. The cross-judge and the coordinator picked the same base and grafts independently.
-- [ ] 8. Run **Opening a PR**.
+- [x] 8. Run **Opening a PR**. Pull request 4 is open and ready, with every check passing. Its description carries no attribution line, as the user prefers.
 
 ## Decisions
 
@@ -108,12 +108,13 @@ The round 2 code fixes and the coordinator's script and documentation fixes were
 | `scripts/check-real-window.ps1` against the Release build of the final tip | 32 checks passed. A first launch wrote no preference, UI Automation selection applied and saved each theme, Dark survived a restart, a launch left a hand-written preference file byte for byte, and the script left no preference file because none existed before. |
 | The same script after planting a backup as a killed run would leave it, with a relative output folder | 32 checks passed. The planted preference was restored, no backup was left, and the screenshots landed in the resolved folder. |
 | Every headless test run in this task after fix round 1 | Nothing was left under `%TEMP%\idevelop-tests`. |
+| CI runs 37169024908 and 37169024911 on `cb2b75d`, for the push and the pull request | Both passed on Linux, Windows, and macOS. The Linux and macOS logs show 38 Core and 75 Desktop tests passing and a current token file, so the exact pixel colors hold off Windows too. |
 | The coordinator's first real-window run against the round-1 build | Failed at "the card shows the typed title" because a `Panel` has no UI Automation peer, which the script then worked around. It then found the two theme defects. |
 | `node oklch-tokens.mjs` over PlanWeave's `index.css` | `oklch(0.922 0 0)` converted to `#E5E5E5` and `oklch(0.145 0 0)` to `#0A0A0A`, which match shadcn's neutral palette. |
 
 ## Open issues
 
-- The title band's drag, double-click to maximize, and Aero Snap on Windows are unverified, because the script never moves the mouse. The macOS traffic lights over the sidebar band and the collapsed bands on Linux are unverified, because no such machine was available. CI runs the headless tests on both.
+- The title band's drag, double-click to maximize, and Aero Snap on Windows are unverified, because the script never moves the mouse. The macOS traffic lights over the sidebar band and the collapsed bands on Linux are unverified, because no such machine was available. CI passed the headless tests on both.
 - In the dark theme, the minimap's viewport window has weak contrast against its mask.
 - Arrow keys do not move the check inside the theme switch. Space and UI Automation do.
 - NodifyAvalonia 6.6.0's editor key gestures, including Ctrl+A, never fire. This predates the restyle.
