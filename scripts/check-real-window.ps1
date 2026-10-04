@@ -74,6 +74,18 @@ function Find-InProcessWindows([System.Diagnostics.Process] $process, [string] $
     } 10
 }
 
+# A picker's list opens in a window of its own, so its entries are searched across the process's windows.
+function Find-AllInProcess([System.Diagnostics.Process] $process, $controlType) {
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $controlType))
+    [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Value($element) {
+    $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+}
+
 function Invoke-Element($element) {
     $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
@@ -200,12 +212,45 @@ try {
         Close-Window $window
     }
 
+    $project = Join-Path $run 'agents-project'
+    Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
+    $agentRows = 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity'
+
+    With-App $project {
+        param($process, $window)
+        foreach ($id in $agentRows) { Check ($null -ne (Find-ById $window $id)) "the AGENTS section lists $id" }
+        $settled = Wait-Until { -not (@($agentRows | ForEach-Object { (Find-ById $window $_).Current.Name }) -match 'Checking') } 120
+        Check ($settled -eq $true) 'every agent client finished its check within 120 seconds'
+        foreach ($id in $agentRows) { $row = Find-ById $window $id; $results.Add("INFO $id says '$($row.Current.Name)'. $($row.Current.HelpText)") }
+        Save-Screenshot $window 'agents.png'
+
+        # The sample's first task asks for Claude Code with Claude Opus 5.5 at high. The model's name comes from the
+        # catalog, or its id when this machine has no Claude Code.
+        Select-Element ((Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)[0])
+        $client = Find-ById $window 'TaskClient'
+        Check ((Value $client) -like 'Claude Code*') "the client picker shows Claude Code (found '$(Value $client)')"
+        Check ((Value (Find-ById $window 'TaskModel')) -match '^(Claude Opus 5\.5|claude-opus-5-5 .+)$') "the model picker shows Claude Opus 5.5 (found '$(Value (Find-ById $window 'TaskModel'))')"
+        Check ((Value (Find-ById $window 'TaskReasoning')) -eq 'high') "the reasoning picker shows high (found '$(Value (Find-ById $window 'TaskReasoning'))')"
+
+        $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        $entries = Wait-Until { @(Find-AllInProcess $process ([System.Windows.Automation.ControlType]::ListItem) | Where-Object { $_.Current.Name -match '^(None|Claude Code|Codex|Pi|Antigravity CLI)( · .+)?$' }) | Where-Object { $_ } } 10
+        Check (@($entries).Count -eq 5) "the client picker offers None and the four clients (found $(@($entries).Count))"
+        Select-Element (@($entries) | Where-Object { $_.Current.Name -like 'Codex*' })
+        try { $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse() } catch {}
+        Check ((Wait-Until { (Value $client) -like 'Codex*' }) -eq $true) "choosing Codex selects it (found '$(Value $client)')"
+        Check ((Wait-Until { (Find-ById $window 'PermissionNote').Current.Name -like 'Codex may edit*' }) -eq $true) 'the permission note follows the chosen client'
+        Check ((Wait-Until { $window.Current.Name -eq 'agents-project* - iDevelop' }) -eq $true) "choosing an agent is an unsaved edit: '$($window.Current.Name)'"
+        Save-Screenshot $window 'pickers.png'
+        Close-Window $window
+        Invoke-Element (Find-InProcessWindows $process 'DiscardChanges')
+    }
+
     $project = Join-Path $run 'theme-project'
     Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
 
     With-App $project {
         param($process, $window)
-        Check ($null -eq (Settings-Text)) 'two launches left no theme preference'
+        Check ($null -eq (Settings-Text)) 'the earlier launches left no theme preference'
         Check (Is-Selected (Find-ById $window 'ThemeSystem')) 'without a preference the System segment is chosen'
         Select-Element (Find-ById $window 'ThemeLight')
         Check ((Wait-Until { (Settings-Theme) -eq 'light' }) -eq $true) "choosing Light saves 'light' (found '$(Settings-Theme)')"
