@@ -43,9 +43,7 @@ public sealed class WorkflowDocument
         }
 
         var workflowsFolder = DataFolder.Workflows(projectFolder);
-        string[] files = Directory.Exists(workflowsFolder)
-            ? [.. Directory.EnumerateFiles(workflowsFolder, "*.json").Order(StringComparer.Ordinal)]
-            : [];
+        var files = WorkflowFiles(workflowsFolder);
         switch (files)
         {
             case []:
@@ -81,10 +79,7 @@ public sealed class WorkflowDocument
     {
         var snapshot = Current;
         var workflowsFolder = Path.GetDirectoryName(FilePath)!;
-        var other = Directory.Exists(workflowsFolder)
-            ? Directory.EnumerateFiles(workflowsFolder, "*.json").Order(StringComparer.Ordinal).FirstOrDefault(file => file != FilePath)
-            : null;
-        if (other is not null)
+        if (WorkflowFiles(workflowsFolder).FirstOrDefault(file => file != FilePath) is { } other)
         {
             throw new ProjectException($"Not saved. {other} is another workflow file, and this version of iDevelop keeps one workflow per project.");
         }
@@ -95,6 +90,10 @@ public sealed class WorkflowDocument
         _saved = snapshot;
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>In ordinal order, so a message names the same file each time.</summary>
+    private static string[] WorkflowFiles(string workflowsFolder) =>
+        Directory.Exists(workflowsFolder) ? [.. Directory.EnumerateFiles(workflowsFolder, "*.json").Order(StringComparer.Ordinal)] : [];
 }
 
 /// <summary>The message is for the user.</summary>
