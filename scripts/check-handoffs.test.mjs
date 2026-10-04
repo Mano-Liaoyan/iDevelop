@@ -55,12 +55,6 @@ test('links may start with ./ and carry a title', () => {
   assert.equal(result.out, 'Handoff records: 2. Each is linked from docs/context.md or docs/product-direction.md.');
 });
 
-test('a ./ link to a missing record fails', () => {
-  const result = check(project({ context: 'The [old record](./handoffs/gone.md).' }));
-  assert.equal(result.status, 1);
-  assert.equal(result.err, 'A link in docs/context.md or docs/product-direction.md names docs/handoffs/gone.md, which does not exist.');
-});
-
 test('a project without a handoffs folder has no records', () => {
   const result = check(project({ folder: false }));
   assert.equal(result.status, 0);

@@ -43,7 +43,6 @@ const brushes = [
   ['AppShell', 'app-shell'],
   ['AppSidebar', 'app-sidebar'],
   ['AppTopbar', 'app-topbar'],
-  ['AppCanvas', 'app-canvas'],
   ['AppPanel', 'app-panel'],
   ['SurfaceBase', 'surface-base'],
   ['SurfaceMuted', 'surface-muted'],
