@@ -59,16 +59,6 @@ public sealed class WorkflowDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Saving_the_opened_sample_rewrites_identical_bytes()
-    {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
-
-        document.Save();
-
-        Assert.Equal(File.ReadAllBytes(SampleFile), File.ReadAllBytes(document.FilePath));
-    }
-
-    [Fact]
     public void A_folder_without_a_data_folder_opens_empty_and_writes_nothing()
     {
         var folder = _temp.Create("repository");

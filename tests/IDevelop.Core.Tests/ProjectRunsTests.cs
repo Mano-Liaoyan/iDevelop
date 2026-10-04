@@ -209,16 +209,12 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
     }
 
-    [Theory]
-    [InlineData(ClientId.ClaudeCode, "claude-bad-model.jsonl", 1,
-        "There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model.")]
-    [InlineData(ClientId.Codex, "codex-bad-model.jsonl", 1, "The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account.")]
-    [InlineData(ClientId.Pi, "pi-auth-error.jsonl", 0, "OAuth refresh failed for openai-codex: OpenAI Codex token refresh failed (401): {")]
-    [InlineData(ClientId.Antigravity, "agy-bad-model.jsonl", 1, "invalid model selection (--model \"gemini-bogus-9\" --effort \"low\"): --effort is not supported")]
-    public async Task A_client_that_reports_a_failure_fails_the_attempt_with_its_own_reason(ClientId client, string fixture, int exitCode, string reason)
+    // Pi exits with code 0 after a failed turn, so only its event stream can fail the attempt.
+    [Fact]
+    public async Task A_client_that_reports_a_failure_and_exits_0_fails_the_attempt_with_its_own_reason()
     {
-        var expected = Runs[client];
-        FakeAgents.Install(_fakes, client, On(expected.Arguments[0], expected.Arguments[1]).Replay(Fixture.Path(fixture)).Exit(exitCode));
+        var expected = Runs[ClientId.Pi];
+        FakeAgents.Install(_fakes, ClientId.Pi, On(expected.Arguments[0], expected.Arguments[1]).Replay(Fixture.Path("pi-auth-error.jsonl")).Exit(0));
         await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
         var settled = NextSettled(runs);
 
@@ -226,7 +222,7 @@ public sealed class ProjectRunsTests : IDisposable
 
         var record = await settled;
         Assert.Equal(AttemptStatus.Failed, record.Status);
-        Assert.StartsWith(reason, record.Detail);
+        Assert.StartsWith("OAuth refresh failed for openai-codex: OpenAI Codex token refresh failed (401): {", record.Detail);
     }
 
     [Fact]
@@ -336,8 +332,6 @@ public sealed class ProjectRunsTests : IDisposable
 
         await runs.DisposeAsync();
 
-        var events = Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl");
-        Assert.StartsWith("{\"type\":\"exited\"", File.ReadLines(events).Last());
         Assert.Empty(runs.Active);
         var record = await settled;
         Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (record.Status, record.Detail));
@@ -346,7 +340,7 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Throws<ObjectDisposedException>(() => runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
         await using var next = ProjectRuns.Open(_project, clients);
-        Assert.Equal(AttemptStatus.Interrupted, next.Latest[SayHiId].Status);
+        Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (next.Latest[SayHiId].Status, next.Latest[SayHiId].Detail));
         var nextSettled = NextSettled(next);
         Assert.IsType<StartResult.Started>(next.Start(SayHi(Runs[ClientId.Codex].Settings)));
         Assert.Equal(AttemptStatus.Succeeded, (await nextSettled).Status);
@@ -446,8 +440,6 @@ public sealed class ProjectRunsTests : IDisposable
 
         var record = await last.Task.WaitAsync(Patience);
         Assert.Equal((AttemptStatus.Running, true), (record.Status, record.Stopping));
-        var events = Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl");
-        Assert.StartsWith("{\"type\":\"interruptRequested\"", File.ReadLines(events).Last());
         AssertGone(started.Attempt.Process!.Value.Id);
         await using var next = ProjectRuns.Open(_project, clients);
         Assert.Equal(

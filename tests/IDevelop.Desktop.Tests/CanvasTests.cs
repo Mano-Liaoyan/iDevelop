@@ -63,20 +63,18 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(new Point(60, 60), node.Location);
     }
 
-    [AvaloniaTheory]
-    [InlineData(2)]
-    [InlineData(3)]
-    public void Tasks_added_from_the_toolbar_do_not_overlap(int count)
+    [AvaloniaFact]
+    public void Tasks_added_from_the_toolbar_do_not_overlap()
     {
         var shell = Shell.Open(_temp.Create("plan"));
 
-        for (var click = 0; click < count; click++)
+        for (var click = 0; click < 3; click++)
         {
             shell.Click(shell.Find<Button>("AddTask"));
         }
 
         var bounds = shell.Nodes().Select(node => node.Bounds).ToList();
-        Assert.Equal(count, bounds.Count);
+        Assert.Equal(3, bounds.Count);
         Assert.Empty(bounds.SelectMany((a, i) => bounds.Skip(i + 1).Where(a.Intersects).Select(b => $"{a} overlaps {b}")));
     }
 
