@@ -148,6 +148,42 @@ public sealed class ProjectRunsTests : IDisposable
         }
     }
 
+    // A process keeps a junction in its current folder as given, as on a machine whose temporary folder was moved to
+    // another drive behind one.
+    [WindowsFact]
+    public async Task A_run_in_a_project_opened_through_a_junction_works_in_the_folder_as_opened()
+    {
+        var junction = Path.Combine(Path.GetDirectoryName(_project)!, "junction");
+        using (var mklink = Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, ["/c", "mklink", "/J", junction, _project])
+        {
+            UseShellExecute = false, RedirectStandardOutput = true,
+        })!)
+        {
+            await mklink.WaitForExitAsync().WaitAsync(Patience);
+            Assert.Equal(0, mklink.ExitCode);
+        }
+
+        try
+        {
+            FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
+                .RecordWorkingDirectory(Evidence("folder.txt"))
+                .Replay(Fixture.Path("codex-success.jsonl")));
+            await using var runs = ProjectRuns.Open(junction, await DiscoverAsync());
+            var settled = NextSettled(runs);
+
+            runs.Start(SayHi(Runs[ClientId.Codex].Settings));
+
+            Assert.Equal(AttemptStatus.Succeeded, (await settled).Status);
+            Assert.Equal(junction, File.ReadAllText(Evidence("folder.txt")));
+            Assert.Equal(Folders.AsCurrentFolder(junction), File.ReadAllText(Evidence("folder.txt")));
+        }
+        finally
+        {
+            // A recursive delete fails on a junction, so the temporary folder's cleanup would.
+            Directory.Delete(junction);
+        }
+    }
+
     // An npm install of Codex is a script that starts with "#!/usr/bin/env node". The folder that holds it and node is
     // not on this process's PATH, as for an app started from Finder whose clients only the login shell's PATH finds.
     [UnixFact]
