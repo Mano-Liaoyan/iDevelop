@@ -166,8 +166,7 @@ internal sealed class Shell
     public static string[] Texts(Visual visual) =>
         [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text!)];
 
-    public static string TextOf(Visual visual) =>
-        string.Join(" ", visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
+    public static string TextOf(Visual visual) => string.Join(" ", Texts(visual));
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
 

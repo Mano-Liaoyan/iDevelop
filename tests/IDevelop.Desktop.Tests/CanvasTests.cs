@@ -106,19 +106,13 @@ public sealed class CanvasTests : IDisposable
     public void A_card_previews_its_instructions_and_says_when_there_are_none()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        string[] CardTexts() =>
-        [
-            .. shell.Node("Build").GetVisualDescendants().OfType<TextBlock>()
-                .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
-                .Select(text => text.Text!),
-        ];
-        Assert.Equal(["Build", "Not run", "No agent", "No instructions yet."], CardTexts());
+        Assert.Equal(["Build", "Not run", "No agent", "No instructions yet."], Shell.Texts(shell.Node("Build")));
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "Not run", "No agent", "Compile"], CardTexts());
+        Assert.Equal(["Build", "Not run", "No agent", "Compile"], Shell.Texts(shell.Node("Build")));
     }
 
     [AvaloniaFact]
