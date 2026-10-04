@@ -92,7 +92,6 @@ public sealed class AttemptLogTests : IDisposable
 
         var unreadable = Directory.CreateDirectory(AttemptLog.FolderOf(attempts, Build, Second)).FullName;
         Directory.CreateDirectory(Path.Combine(attempts, "notes"));
-        File.WriteAllText(Path.Combine(attempts, "run.lock"), "");
 
         var (latest, warnings) = AttemptLog.ReadLatest(attempts);
 

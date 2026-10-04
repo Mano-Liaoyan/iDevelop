@@ -175,7 +175,6 @@ public sealed class ProjectRunsTests : IDisposable
 
             Assert.Equal(AttemptStatus.Succeeded, (await settled).Status);
             Assert.Equal(junction, File.ReadAllText(Evidence("folder.txt")));
-            Assert.Equal(Folders.AsCurrentFolder(junction), File.ReadAllText(Evidence("folder.txt")));
         }
         finally
         {

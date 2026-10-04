@@ -18,7 +18,7 @@ internal static class Codex
 
     // The level is unquoted, so the argument passes the batch-shim rule for an npm codex.cmd.
     // Codex reads the value as TOML and falls back to the plain string.
-    internal static LaunchArguments Launch(LaunchRequest request) => new(
+    private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "exec", "--json", "-m", request.Model,
         .. request.Reasoning is { } effort ? ["-c", $"model_reasoning_effort={effort}"] : Array.Empty<string>(),
@@ -26,7 +26,7 @@ internal static class Codex
     ],
     request.Prompt);
 
-    internal static CatalogParse ParseCatalog(ProbeOutput output)
+    private static CatalogParse ParseCatalog(ProbeOutput output)
     {
         if (output.ExitCode != 0)
         {
@@ -61,10 +61,10 @@ internal static class Codex
         };
     }
 
-    internal static string? SignInProblem(ProbeOutput output) =>
+    private static string? SignInProblem(ProbeOutput output) =>
         output.ExitCode == 0 ? null : "Codex is not signed in. Run codex login in a terminal.";
 
-    internal static ImmutableArray<AgentEvent> Interpret(string line)
+    private static ImmutableArray<AgentEvent> Interpret(string line)
     {
         using var json = JsonDocument.Parse(line);
         var root = json.RootElement;

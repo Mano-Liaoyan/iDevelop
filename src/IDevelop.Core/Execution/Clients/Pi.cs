@@ -28,14 +28,14 @@ internal static class Pi
         Interpret = Interpret,
     };
 
-    internal static LaunchArguments Launch(LaunchRequest request) => new(
+    private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "-p", "--mode", "json", "--model", request.Model,
         .. request.Reasoning is { } thinking ? ["--thinking", thinking] : Array.Empty<string>(),
     ],
     request.Prompt);
 
-    internal static CatalogParse ParseCatalog(ProbeOutput output)
+    private static CatalogParse ParseCatalog(ProbeOutput output)
     {
         foreach (var line in ClientRegistry.Lines(output.Stdout).Where(IsModelsResponse))
         {
@@ -99,7 +99,7 @@ internal static class Pi
         ]);
     }
 
-    internal static string? SignInProblem(string provider, ProbeOutput output)
+    private static string? SignInProblem(string provider, ProbeOutput output)
     {
         try
         {
@@ -116,7 +116,7 @@ internal static class Pi
         return ClientRegistry.ProbeFailure($"pi auth check --provider {provider}", output);
     }
 
-    internal static ImmutableArray<AgentEvent> Interpret(string line)
+    private static ImmutableArray<AgentEvent> Interpret(string line)
     {
         using var json = JsonDocument.Parse(line);
         var root = json.RootElement;

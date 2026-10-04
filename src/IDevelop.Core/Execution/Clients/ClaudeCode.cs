@@ -10,7 +10,7 @@ internal static class ClaudeCode
     private static readonly ImmutableArray<string> Efforts = ["low", "medium", "high", "xhigh", "max"];
 
     // Claude Code has no model-list command, so this list changes with Claude Code releases.
-    internal static readonly ImmutableArray<ModelOption> Models =
+    private static readonly ImmutableArray<ModelOption> Models =
     [
         new("claude-fable-5-1", "Claude Fable 5.1", Efforts) { DefaultReasoning = "high" },
         new("claude-opus-5-5", "Claude Opus 5.5", Efforts) { DefaultReasoning = "high" },
@@ -27,7 +27,7 @@ internal static class ClaudeCode
         Interpret = Interpret,
     };
 
-    internal static LaunchArguments Launch(LaunchRequest request) => new(
+    private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "-p", "--output-format", "stream-json", "--verbose", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
@@ -35,7 +35,7 @@ internal static class ClaudeCode
     ],
     request.Prompt);
 
-    internal static string? SignInProblem(ProbeOutput output)
+    private static string? SignInProblem(ProbeOutput output)
     {
         try
         {
@@ -55,7 +55,7 @@ internal static class ClaudeCode
         return ClientRegistry.ProbeFailure("claude auth status", output);
     }
 
-    internal static ImmutableArray<AgentEvent> Interpret(string line)
+    private static ImmutableArray<AgentEvent> Interpret(string line)
     {
         using var json = JsonDocument.Parse(line);
         var root = json.RootElement;

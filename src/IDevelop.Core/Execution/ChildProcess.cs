@@ -275,7 +275,7 @@ internal static class Probes
     /// if it has not exited 5 seconds later.
     /// </summary>
     /// <exception cref="LaunchException">The command did not start.</exception>
-    public static async Task<ProbeOutput> RunAsync(ResolvedCommand command, Probe probe, CancellationToken cancellation)
+    public static async Task<ProbeOutput> RunAsync(ResolvedCommand command, Probe probe)
     {
         using var child = ChildProcess.Start(command, probe.Arguments, Path.GetTempPath());
         var stdout = new StringBuilder();
@@ -303,8 +303,7 @@ internal static class Probes
             }
         });
 
-        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        limit.CancelAfter(probe.Timeout);
+        using var limit = new CancellationTokenSource(probe.Timeout);
         var exit = child.WaitForExitAsync();
         var first = await Task.WhenAny(exit, answered.Task, Task.Delay(Timeout.Infinite, limit.Token));
         var ended = first == exit;
@@ -314,7 +313,7 @@ internal static class Probes
             // take about 30 seconds to exit, which timed out its sign-in checks.
             await input;
             await child.WriteStdinAsync("", close: true);
-            ended = await Task.WhenAny(exit, Task.Delay(ShutdownGrace, CancellationToken.None)) == exit;
+            ended = await Task.WhenAny(exit, Task.Delay(ShutdownGrace)) == exit;
         }
 
         if (!ended)
@@ -322,8 +321,7 @@ internal static class Probes
             child.StopTree();
         }
 
-        await Task.WhenAny(Task.WhenAll(output, errors), Task.Delay(OutputGrace, CancellationToken.None));
-        cancellation.ThrowIfCancellationRequested();
+        await Task.WhenAny(Task.WhenAll(output, errors), Task.Delay(OutputGrace));
         int? exitCode = ended ? await exit : null;
         return new ProbeOutput(exitCode, Snapshot(stdout), Snapshot(stderr), TimedOut: first != exit && first != answered.Task);
     }
