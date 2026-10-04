@@ -20,7 +20,6 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
-    private readonly WorkflowDocument _document;
     private readonly Action<string?> _setNotice;
     private readonly Dictionary<TaskId, TaskNodeViewModel> _nodes = [];
     private readonly Dictionary<ConnectionKey, ConnectionViewModel> _connections = [];
@@ -31,7 +30,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice)
     {
-        _document = document;
+        Document = document;
         Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
@@ -44,7 +43,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
-        _document.Changed += (_, _) => Sync();
+        Document.Changed += (_, _) => Sync();
         Sync();
     }
 
@@ -116,7 +115,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public ICommand CommitMovesCommand { get; }
 
-    internal Workflow Workflow => _document.Current;
+    internal WorkflowDocument Document { get; }
+
+    internal Workflow Workflow => Document.Current;
 
     internal ProjectRuns Runs { get; }
 
@@ -135,8 +136,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     internal EditResult Edit(WorkflowEdit edit)
     {
-        var result = _document.Apply(edit);
-        _setNotice(result is EditResult.Rejected rejected ? RejectionText.Describe(rejected.Reason, _document.Current) : null);
+        var result = Document.Apply(edit);
+        _setNotice(result is EditResult.Rejected rejected ? RejectionText.Describe(rejected.Reason, Document.Current) : null);
         return result;
     }
 
@@ -211,7 +212,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private void Sync()
     {
         var previous = _projected;
-        var current = _document.Current;
+        var current = Document.Current;
         _projected = current;
         var connectionsChanged = !ReferenceEquals(previous?.Connections, current.Connections);
 
