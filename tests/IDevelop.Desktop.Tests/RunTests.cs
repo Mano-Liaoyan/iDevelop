@@ -10,6 +10,7 @@ using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
@@ -44,9 +45,8 @@ public sealed class RunTests : IDisposable
         .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
         .WaitForFile(_gate);
 
-    private static WorkflowEdit.CreateTask Task(ExecutionSettings execution) => new(
-        new TaskDefinition(SayHi) { Title = "Say hi", Instructions = "Create hello.txt containing hi. Then reply with DONE.", Execution = execution },
-        new CanvasPoint(105, 90));
+    private static WorkflowEdit.CreateTask SayHiTask(ExecutionSettings execution) =>
+        TaskAt(SayHi, "Say hi", 105, 90, execution, "Create hello.txt containing hi. Then reply with DONE.");
 
     private static Control Part(Shell shell, string automationId, string title = "Say hi") =>
         shell.Node(title).GetVisualDescendants().OfType<Control>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
@@ -60,7 +60,7 @@ public sealed class RunTests : IDisposable
     private (Shell Shell, string Folder, ClientDirectory Clients) StartWaitingRun()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(Task(Codex));
+        var folder = _temp.Seed(SayHiTask(Codex));
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -75,7 +75,7 @@ public sealed class RunTests : IDisposable
     public void Running_a_task_whose_client_is_not_ready_shows_why_and_launches_nothing()
     {
         _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
-        var folder = _temp.Seed(Task(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
+        var folder = _temp.Seed(SayHiTask(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
         var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Say hi")));
         const string reason = "Claude Code is not ready. Claude Code is not signed in. Run claude in a terminal and sign in.";
@@ -92,7 +92,7 @@ public sealed class RunTests : IDisposable
     public void A_task_shows_that_it_runs_and_then_its_result_on_its_card_and_in_the_inspector()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits().Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(Task(Codex)), _fakes.DiscoverAsync().Result);
+        var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Say hi")));
         Assert.Equal(("Not run", Color.Parse("#FFFFFF")), (CardStatus(shell), CardFill(shell)));
@@ -129,7 +129,7 @@ public sealed class RunTests : IDisposable
     public void Cancelling_a_running_task_stops_it_and_records_it_as_cancelled()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(Task(Codex));
+        var folder = _temp.Seed(SayHiTask(Codex));
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -165,8 +165,7 @@ public sealed class RunTests : IDisposable
     public void Two_tasks_run_at_once_and_closing_asks_about_both_and_stops_both()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
-            new TaskDefinition(TestTasks.Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+        var folder = _temp.Seed(SayHiTask(Codex), TaskAt(TestTasks.Review, "Review", 405, 90, Codex, "Review hello.txt."));
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -227,7 +226,7 @@ public sealed class RunTests : IDisposable
     {
         var (shell, folder, clients) = StartWaitingRun();
         var other = _temp.Create("other");
-        shell.Window.PickFolder = () => System.Threading.Tasks.Task.FromResult<string?>(other);
+        shell.Window.PickFolder = () => Task.FromResult<string?>(other);
 
         shell.Click(shell.Find<Button>("OpenFolder"));
         Assert.IsType<RunningTaskDialog>(shell.Dialog);
@@ -242,8 +241,7 @@ public sealed class RunTests : IDisposable
     public void A_second_window_shows_the_other_windows_runs_and_learns_how_they_ended_when_it_tries_to_start_a_task()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
-            new TaskDefinition(TestTasks.Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+        var folder = _temp.Seed(SayHiTask(Codex), TaskAt(TestTasks.Review, "Review", 405, 90, Codex, "Review hello.txt."));
         var clients = _fakes.DiscoverAsync().Result;
         var first = Shell.Open(folder, clients);
         first.Click(first.Header(first.Node("Say hi")));
@@ -276,7 +274,7 @@ public sealed class RunTests : IDisposable
     public void The_run_bar_covers_neither_the_zoom_controls_nor_the_minimap(double width, double height)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var shell = Shell.Open(_temp.Seed(Task(Codex)), _fakes.DiscoverAsync().Result);
+        var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
         shell.Window.Width = width;
         shell.Window.Height = height;
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -301,7 +299,7 @@ public sealed class RunTests : IDisposable
     public void The_run_bar_still_cancels_a_run_whose_task_was_deleted()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(Task(Codex));
+        var folder = _temp.Seed(SayHiTask(Codex));
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));

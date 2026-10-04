@@ -6,6 +6,7 @@ using Avalonia.VisualTree;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -17,9 +18,6 @@ public sealed class MainWindowTests : IDisposable
     private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
-
-    private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, double y) =>
-        new(new TaskDefinition(id) { Title = title }, new CanvasPoint(x, y));
 
     // Unlimited, the status these titles produce would run about 78 lines at the window's minimum width.
     private static readonly string LongTitle = string.Join(" ", Enumerable.Repeat("with every step of the release written out in full", 30));
@@ -44,7 +42,7 @@ public sealed class MainWindowTests : IDisposable
     [AvaloniaFact]
     public void Open_folder_does_nothing_while_an_earlier_open_is_still_in_progress()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         var other = _temp.Create("other");
         var picker = new TaskCompletionSource<string?>();
         var picks = 0;
@@ -67,8 +65,8 @@ public sealed class MainWindowTests : IDisposable
     {
         var (design, build) = ($"Design {LongTitle}", $"Build {LongTitle}");
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, design, 105, 90),
-            Task(Build, build, 405, 90),
+            TaskAt(Design, design, 105, 90),
+            TaskAt(Build, build, 405, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
         shell.Drag(shell.Center(shell.Output(build)), shell.Center(shell.Input(design)));
         Assert.Equal($"That would create a cycle: {build} → {design} → {build}.", shell.Status);

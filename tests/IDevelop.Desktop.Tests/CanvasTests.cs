@@ -11,6 +11,7 @@ using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Workflows.WorkflowEdit;
 
 namespace IDevelop.Desktop.Tests;
@@ -24,9 +25,6 @@ public sealed class CanvasTests : IDisposable
     private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
-
-    private static CreateTask Task(TaskId id, string title, double x, double y) =>
-        new(new TaskDefinition(id) { Title = title }, new CanvasPoint(x, y));
 
     [AvaloniaFact]
     public void A_task_added_from_the_toolbar_keeps_its_typed_title_and_position_after_save_and_reopen()
@@ -75,7 +73,7 @@ public sealed class CanvasTests : IDisposable
     public void A_task_added_after_panning_does_not_overlap_a_task_with_a_long_title(double pan)
     {
         const string title = "Document the migration path for the new workflow file format";
-        var shell = Shell.Open(_temp.Seed(Task(Design, title, 60, 60)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 60, 60)));
         var canvasOrigin = shell.Window.GetVisualDescendants().OfType<NodifyEditor>().Single().TranslatePoint(default, shell.Window)!.Value;
 
         shell.Pan(canvasOrigin + new Vector(700, 400), new Vector(-pan, 0));
@@ -91,7 +89,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void A_selected_card_shows_its_ring_in_the_selection_color()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         // The ring is 2 px wide and sits 2 px outside the card, so this pixel is on its straight top edge.
         Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
@@ -107,7 +105,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void A_card_previews_its_instructions_and_says_when_there_are_none()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
         string[] CardTexts() =>
         [
             .. shell.Node("Build").GetVisualDescendants().OfType<TextBlock>()
@@ -142,7 +140,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Zoom_in_then_zoom_out_steps_the_canvas_zoom_and_back()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
         shell.Click(shell.Find<Button>("ZoomIn"));
         Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
@@ -154,7 +152,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Fit_to_screen_brings_a_distant_task_into_view()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
         Rect Card(string title) => new(shell.Node(title).TranslatePoint(default, shell.Editor)!.Value, shell.Node(title).Bounds.Size * shell.Editor.ViewportZoom);
         var editor = new Rect(shell.Editor.Bounds.Size);
         Assert.False(editor.Intersects(Card("Build")));
@@ -168,7 +166,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Dragging_a_task_moves_its_minimap_item()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
         Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
         Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
@@ -182,7 +180,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Turning_the_wheel_over_the_minimap_zooms_the_canvas_one_step_per_notch()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         var minimap = shell.Center(shell.Find<Minimap>("Minimap"));
 
         shell.Window.MouseWheel(minimap, new Vector(0, 1));
@@ -196,7 +194,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Clicking_the_minimap_centers_the_canvas_on_that_point()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
         var build = shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
             .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == "Build");
 
@@ -224,7 +222,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void The_inspector_asks_for_a_selection_until_a_task_is_selected()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
 
         Assert.True(shell.Find<TextBlock>("InspectorHint").IsEffectivelyVisible);
         Assert.Equal("Select a task or connection to edit it.", shell.Find<TextBlock>("InspectorHint").Text);
@@ -239,7 +237,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Enter_in_the_instructions_box_stores_a_line_feed()
     {
-        var folder = _temp.Seed(Task(Design, "Design", 105, 90));
+        var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90));
         var shell = Shell.Open(folder);
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
@@ -257,9 +255,9 @@ public sealed class CanvasTests : IDisposable
     public void Deleting_a_selected_task_removes_it_and_its_connections()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            Task(Review, "Review", 405, 300),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 405, 300),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
@@ -276,7 +274,7 @@ public sealed class CanvasTests : IDisposable
     [AvaloniaFact]
     public void Delete_in_the_title_box_deletes_a_character_and_keeps_the_task()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Click(shell.Find<TextBox>("TaskTitle"));
         shell.Press(Key.Home);
@@ -292,8 +290,8 @@ public sealed class CanvasTests : IDisposable
     public void Dragging_a_task_commits_one_move_at_the_drop_that_survives_save_and_reopen()
     {
         var folder = _temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency));
         var shell = Shell.Open(folder);
         var from = shell.Header(shell.Node("Design"));

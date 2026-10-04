@@ -6,6 +6,7 @@ using Avalonia.VisualTree;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -18,7 +19,7 @@ public sealed class UnsavedChangesTests : IDisposable
 
     public UnsavedChangesTests()
     {
-        _seed = _temp.Seed(new WorkflowEdit.CreateTask(new TaskDefinition(TaskId.New()) { Title = "Design" }, new CanvasPoint(105, 90)));
+        _seed = _temp.Seed(TaskAt(TaskId.New(), "Design", 105, 90));
         _other = _temp.Create("other");
     }
 

@@ -8,6 +8,7 @@ using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -45,16 +46,13 @@ public sealed class AgentPickerTests : IDisposable
         return fakes.DiscoverAsync().Result;
     }
 
-    private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, ExecutionSettings? execution = null, double y = 90) =>
-        new(new TaskDefinition(id) { Title = title, Execution = execution }, new CanvasPoint(x, y));
-
     private static string CardAgent(Shell shell, string title) =>
         shell.Node(title).GetVisualDescendants().OfType<TextBlock>().Single(text => Avalonia.Automation.AutomationProperties.GetAutomationId(text) == "CardAgent").Text!;
 
     [AvaloniaFact]
     public void The_pickers_offer_what_the_clients_offer_and_the_choice_survives_save_and_reopen()
     {
-        var folder = _temp.Seed(Task(Design, "Design", 105));
+        var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90));
         var shell = Shell.Open(folder, _clients);
         shell.Click(shell.Header(shell.Node("Design")));
         Assert.Equal("No agent", CardAgent(shell, "Design"));
@@ -88,7 +86,7 @@ public sealed class AgentPickerTests : IDisposable
     [AvaloniaFact]
     public void A_model_without_reasoning_levels_hides_the_reasoning_picker()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105)), _clients);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)), _clients);
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.Pick("TaskClient", "Antigravity CLI");
@@ -104,7 +102,7 @@ public sealed class AgentPickerTests : IDisposable
     [AvaloniaFact]
     public void A_model_this_machine_does_not_offer_stays_chosen_and_marked_until_another_is_chosen()
     {
-        var folder = _temp.Seed(Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-7", Reasoning = "ultra" }));
+        var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-7", Reasoning = "ultra" }));
         var shell = Shell.Open(folder, _clients);
         shell.Click(shell.Header(shell.Node("Design")));
 
@@ -128,7 +126,7 @@ public sealed class AgentPickerTests : IDisposable
     [AvaloniaFact]
     public void A_level_the_model_does_not_offer_stays_chosen_and_marked_until_another_is_chosen()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "ultra" })), _clients);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "ultra" })), _clients);
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal("ultra (not offered)", shell.Picked("TaskReasoning"));
@@ -142,7 +140,7 @@ public sealed class AgentPickerTests : IDisposable
     public void While_its_client_is_being_checked_a_task_shows_its_model_plainly()
     {
         var checking = new ClientDirectory(CommandResolver.Create([], []));
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" })), checking);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" })), checking);
         shell.Click(shell.Header(shell.Node("Design")));
 
         Assert.Equal(["Codex · checking", "gpt-5.5", "high"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
@@ -154,9 +152,9 @@ public sealed class AgentPickerTests : IDisposable
     public void Switching_the_inspector_between_tasks_leaves_each_tasks_agent_as_it_was()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "xhigh" }),
-            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "low" }),
-            Task(Review, "Review", 105, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "high" }, y: 330)), _clients);
+            TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "xhigh" }),
+            TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "low" }),
+            TaskAt(Review, "Review", 105, 330, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "high" })), _clients);
 
         foreach (var title in new[] { "Design", "Build", "Review", "Design", "Review", "Build" })
         {
@@ -174,9 +172,9 @@ public sealed class AgentPickerTests : IDisposable
     public void Choosing_tasks_of_different_clients_in_the_sidebar_leaves_each_tasks_agent_as_it_was()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
-            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "xhigh" }),
-            Task(Review, "Review", 705, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })), _clients);
+            TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
+            TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "xhigh" }),
+            TaskAt(Review, "Review", 705, 90, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })), _clients);
 
         foreach (var title in new[] { "Design", "Review", "Build", "Design", "Review" })
         {
@@ -197,9 +195,9 @@ public sealed class AgentPickerTests : IDisposable
     public void Choosing_each_task_in_the_sidebar_and_on_the_canvas_changes_no_tasks_agent()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, PiAtHigh),
-            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
-            Task(Review, "Review", 105, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "medium" }, y: 330)), WithPi());
+            TaskAt(Design, "Design", 105, 90, PiAtHigh),
+            TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
+            TaskAt(Review, "Review", 105, 330, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "medium" })), WithPi());
         var pickers = new Dictionary<string, string[]>
         {
             ["Design"] = ["Pi", "DeepSeek V4 Pro (deepseek)", "high"],
@@ -230,8 +228,8 @@ public sealed class AgentPickerTests : IDisposable
     public void Selecting_a_task_while_a_picker_keeps_the_focus_changes_no_tasks_agent()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, PiAtHigh),
-            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" })), WithPi());
+            TaskAt(Design, "Design", 105, 90, PiAtHigh),
+            TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" })), WithPi());
         shell.Click(shell.Header(shell.Node("Design")));
         var reasoning = shell.Find<ComboBox>("TaskReasoning");
         reasoning.Focus();
@@ -253,7 +251,7 @@ public sealed class AgentPickerTests : IDisposable
     [AvaloniaFact]
     public void Choosing_another_client_takes_its_first_model_at_that_models_default_level()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, PiAtHigh)), WithPi());
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, PiAtHigh)), WithPi());
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.Pick("TaskClient", "Codex");

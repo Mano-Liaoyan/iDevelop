@@ -9,6 +9,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
 
@@ -21,9 +22,6 @@ public sealed class SidebarTests : IDisposable
     private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
-
-    private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, double y) =>
-        new(new TaskDefinition(id) { Title = title }, new CanvasPoint(x, y));
 
     private static ListBoxItem SidebarRow(Shell shell, string title) =>
         shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
@@ -46,7 +44,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void The_sidebar_lists_the_open_project_with_its_task_count_and_tasks()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90), Task(Review, "Review", 405, 300)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90), TaskAt(Review, "Review", 405, 300)));
 
         Assert.Equal("seed", shell.Find<TextBlock>("ProjectName").Text);
         Assert.Equal("3", shell.Find<TextBlock>("TaskCount").Text);
@@ -61,7 +59,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Choosing_a_task_in_the_sidebar_selects_its_card_and_opens_it_in_the_inspector()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
 
         shell.Click(SidebarRow(shell, "Build"));
 
@@ -77,7 +75,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Choosing_a_task_off_the_screen_in_the_sidebar_brings_its_card_into_view()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
         Rect Card() => new(shell.Node("Build").TranslatePoint(default, shell.Editor)!.Value, shell.Node("Build").Bounds.Size);
         Assert.False(new Rect(shell.Editor.Bounds.Size).Intersects(Card()));
 
@@ -92,7 +90,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Choosing_a_task_off_the_screen_in_the_sidebar_with_the_keyboard_brings_its_card_into_view()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
         shell.Click(SidebarRow(shell, "Design"));
         WaitForPan(shell);
         Assert.Equal(new Point(0, 0), shell.Editor.ViewportLocation);
@@ -106,7 +104,7 @@ public sealed class SidebarTests : IDisposable
 
     private Shell SelectBuildOnTheCanvasAndPanItAway()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Pan(shell.Editor.TranslatePoint(new Point(700, 400), shell.Window)!.Value, new Vector(-600, -300));
         Assert.Equal("Build", ((TaskNodeViewModel)shell.Find<ListBox>("SidebarTasks").SelectedItem!).Title);
@@ -148,7 +146,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Pressing_and_releasing_a_card_partly_off_the_screen_leaves_the_canvas_where_it_is()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", PartlyOffScreen, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", PartlyOffScreen, 90)));
         var header = shell.Header(shell.Node("Design"));
 
         shell.Window.MouseMove(header);
@@ -166,7 +164,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Dragging_a_card_partly_off_the_screen_drops_it_where_the_pointer_left_it_and_leaves_the_canvas_where_it_is()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", PartlyOffScreen, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", PartlyOffScreen, 90)));
         var header = shell.Header(shell.Node("Design"));
 
         shell.Drag(header, header - new Vector(195, 0));
@@ -179,7 +177,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Selecting_a_card_partly_off_the_screen_with_a_rubber_band_leaves_the_canvas_where_it_is()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", PartlyOffScreen, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", PartlyOffScreen, 90)));
         var canvas = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
         shell.Drag(canvas + new Vector(450, 300), canvas + new Vector(650, 60));
@@ -192,7 +190,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Selecting_every_card_leaves_the_canvas_where_it_is()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", PartlyOffScreen, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", PartlyOffScreen, 90)));
 
         // NodifyAvalonia 6.6.0 never matches its commands' key gestures, so Ctrl+A does nothing and the test runs the command.
         EditorCommands.SelectAll.Execute(null, shell.Editor);
@@ -205,7 +203,7 @@ public sealed class SidebarTests : IDisposable
     [AvaloniaFact]
     public void Tab_moves_through_the_sidebar_from_top_to_bottom()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
         shell.Find<Button>("AddTask").Focus();
         string Tab()
         {

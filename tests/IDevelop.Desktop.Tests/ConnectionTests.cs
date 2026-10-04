@@ -8,6 +8,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Workflows.WorkflowEdit;
 
 namespace IDevelop.Desktop.Tests;
@@ -22,13 +23,15 @@ public sealed class ConnectionTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static CreateTask Task(TaskId id, string title, double x, double y) =>
-        new(new TaskDefinition(id) { Title = title }, new CanvasPoint(x, y));
+    private string DesignThenBuild() => _temp.Seed(
+        TaskAt(Design, "Design", 105, 90),
+        TaskAt(Build, "Build", 405, 90),
+        new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency));
 
     [AvaloniaFact]
     public void Dragging_an_output_onto_an_input_adds_a_dependency()
     {
-        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
 
         shell.Drag(shell.Center(shell.Output("Design")), shell.Center(shell.Input("Build")));
 
@@ -43,10 +46,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void A_drop_that_would_close_a_cycle_shows_why_and_adds_nothing()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
         string? preview = null;
 
         shell.Drag(
@@ -63,10 +63,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void Clicking_a_connection_after_a_task_shows_its_kind_buttons_which_change_its_kind()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
         shell.Click(shell.Header(shell.Node("Design")));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
 
@@ -87,10 +84,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void Clicking_a_task_after_a_connection_shows_the_task_and_deselects_the_connection()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
         shell.Click(shell.ConnectionInto("Build"));
         Assert.True(shell.Has<Button>("KindDependency"));
 
@@ -107,9 +101,9 @@ public sealed class ConnectionTests : IDisposable
     public void Each_connection_kind_draws_in_its_theme_color(string theme, string context)
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            Task(Review, "Review", 705, 250),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 705, 250),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review)));
@@ -143,9 +137,9 @@ public sealed class ConnectionTests : IDisposable
     public void A_connection_runs_under_the_cards_it_crosses()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            Task(Review, "Review", 705, 250),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 705, 250),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
@@ -158,10 +152,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void Clicking_just_beside_a_connection_selects_it()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
 
         shell.Click(shell.ConnectionInto("Build") + new Vector(0, 4));
 
@@ -173,9 +164,9 @@ public sealed class ConnectionTests : IDisposable
     public void A_kind_change_that_would_close_a_cycle_shows_why_and_keeps_the_kind()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            Task(Review, "Review", 405, 300),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 405, 300),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Review, Design), ConnectionKind.Context)));
@@ -194,10 +185,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void Right_clicking_a_connection_opens_its_menu_which_changes_its_kind()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
         shell.RightClick(shell.ConnectionInto("Build"));
         shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(item => (string?)item.Header == "Context"));
 
@@ -208,10 +196,7 @@ public sealed class ConnectionTests : IDisposable
     [AvaloniaFact]
     public void Pressing_delete_on_a_selected_connection_removes_only_the_connection()
     {
-        var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        var shell = Shell.Open(DesignThenBuild());
         shell.Click(shell.ConnectionInto("Build"));
 
         shell.Press(Key.Delete);
@@ -224,9 +209,9 @@ public sealed class ConnectionTests : IDisposable
     public void Alt_clicking_a_connection_removes_it()
     {
         var shell = Shell.Open(_temp.Seed(
-            Task(Design, "Design", 105, 90),
-            Task(Build, "Build", 405, 90),
-            Task(Review, "Review", 405, 300),
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 405, 300),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
 
