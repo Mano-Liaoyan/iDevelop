@@ -28,7 +28,12 @@ const planweave = {
   'text-faint': ['oklch(0.67 0.012 248)', 'oklch(0.5 0.01 100)'],
   'state-selected': ['oklch(0.58 0.14 250)', 'oklch(0.72 0.13 250)'],
   'state-selected-surface': ['oklch(0.94 0.035 250)', 'oklch(0.32 0.055 250)'],
+  'state-running': ['oklch(0.63 0.13 195)', 'oklch(0.72 0.12 195)'],
+  'state-running-surface': ['oklch(0.94 0.04 195)', 'oklch(0.31 0.05 195)'],
+  'state-success': ['oklch(0.61 0.14 145)', 'oklch(0.72 0.13 145)'],
+  'state-success-surface': ['oklch(0.94 0.045 145)', 'oklch(0.32 0.055 145)'],
   'state-failed': ['oklch(0.58 0.2 28)', 'oklch(0.72 0.17 28)'],
+  'state-failed-surface': ['oklch(0.94 0.05 28)', 'oklch(0.32 0.065 28)'],
   'edge-0': ['#2563eb', '#2563eb'],
   'edge-9': ['#ea580c', '#ea580c'],
 };
@@ -57,7 +62,18 @@ const brushes = [
   ['StateSelected25', 'state-selected', 25],
   ['StateSelected40', 'state-selected', 40],
   ['StateSelectedSurface', 'state-selected-surface'],
+  ['StateRunning', 'state-running'],
+  ['StateRunning45', 'state-running', 45],
+  ['StateRunning55', 'state-running', 55],
+  ['StateRunningSurface', 'state-running-surface'],
+  ['StateSuccess', 'state-success'],
+  ['StateSuccess45', 'state-success', 45],
+  ['StateSuccess55', 'state-success', 55],
+  ['StateSuccessSurface', 'state-success-surface'],
   ['StateFailed', 'state-failed'],
+  ['StateFailed50', 'state-failed', 50],
+  ['StateFailed60', 'state-failed', 60],
+  ['StateFailedSurface', 'state-failed-surface'],
   ['ConnectionDependency', 'edge-0'],
   ['ConnectionReview', 'edge-9'],
   ['ConnectionContext', 'text-muted'],
@@ -78,12 +94,17 @@ const colorKeys = [
 ];
 
 // Each layer is x, y, blur, spread, token, and opacity in percent. Tailwind's shadow-sm is two black layers at 10%.
+// A status card's ring-1 at 15% is a one-pixel spread layer in the status color.
 const shadowSm = [
   [0, 1, 3, 0, 'black', 10],
   [0, 1, 2, -1, 'black', 10],
 ];
+const ringed = (token, percent) => [[0, 0, 0, 1, token, percent], ...shadowSm];
 const themedShadows = [
-  ['CardShadow', [[0, 0, 0, 1, 'foreground', 10], ...shadowSm], [[0, 0, 0, 1, 'foreground', 10], ...shadowSm]],
+  ['CardShadow', ringed('foreground', 10), ringed('foreground', 10)],
+  ['CardRunningShadow', ringed('state-running', 15), ringed('state-running', 15)],
+  ['CardSuccessShadow', ringed('state-success', 15), ringed('state-success', 15)],
+  ['CardFailedShadow', ringed('state-failed', 15), ringed('state-failed', 15)],
   ['FloatingShadow', [[0, 12, 28, 0, 'black', 12]], [[0, 14, 32, 0, 'black', 32]]],
 ];
 
