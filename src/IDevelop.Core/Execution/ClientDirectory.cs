@@ -50,7 +50,7 @@ public sealed class ClientDirectory
             {
                 _refresh = Task.Run(async () =>
                 {
-                    await _resolver.Ready;
+                    await _resolver.ReloadAsync();
                     await Task.WhenAll(Clients.All.Select(RefreshClientAsync));
                 });
             }
