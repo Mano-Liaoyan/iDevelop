@@ -19,7 +19,7 @@ namespace IDevelopVerify {
 }
 
 $FakeAgent = Join-Path $PSScriptRoot '../tests/IDevelop.FakeAgent/bin/Release/net10.0/IDevelop.FakeAgent.exe'
-$Fixtures = Join-Path $PSScriptRoot '../tests/IDevelop.Core.Tests/Fixtures'
+$Fixtures = Join-Path $PSScriptRoot '../tests/Shared/Fixtures'
 $SettingsFile = Join-Path $env:APPDATA 'iDevelop\settings.json'
 # An empty backup records that no preference existed. The owner file names the run that holds the backup.
 $BackupFile = "$SettingsFile.verify-backup"

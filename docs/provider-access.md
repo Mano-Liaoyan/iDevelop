@@ -92,7 +92,7 @@ These observations come from running Antigravity CLI 1.2.16 (`agy`) on Windows o
 
 ## Client behavior that single-task execution relies on
 
-These observations come from running each client on Windows on 2026-10-04, first from a shell and then through iDevelop. Each client wrote a requested file in a fresh Git repository and returned its final text. The recorded event streams, trimmed and without local paths, are the fixtures in `tests/IDevelop.Core.Tests/Fixtures`.
+These observations come from running each client on Windows on 2026-10-04, first from a shell and then through iDevelop. Each client wrote a requested file in a fresh Git repository and returned its final text. The recorded event streams, trimmed and without local paths, are the fixtures in `tests/Shared/Fixtures`.
 
 Claude Code 2.1.289:
 
