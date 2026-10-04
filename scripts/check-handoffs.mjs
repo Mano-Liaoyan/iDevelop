@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,10 +6,13 @@ const root = process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), '.
 const docs = ['docs/context.md', 'docs/product-direction.md'];
 const folder = 'docs/handoffs';
 
-const records = readdirSync(join(root, folder)).filter((name) => name.endsWith('.md'));
+// Git keeps no empty folder, so a clone without records has no handoffs folder at all.
+const records = existsSync(join(root, folder)) ? readdirSync(join(root, folder)).filter((name) => name.endsWith('.md')) : [];
 const links = new Set(
   docs.flatMap((doc) =>
-    [...readFileSync(join(root, doc), 'utf8').matchAll(/\]\(handoffs\/([^)#\s]+\.md)[)#]/g)].map((match) => match[1]),
+    [...readFileSync(join(root, doc), 'utf8').matchAll(/\]\((?:\.\/)?handoffs\/([^)#\s]+\.md)(?:#[^)\s]*)?(?:\s+"[^"]*")?\)/g)].map(
+      (match) => match[1],
+    ),
   ),
 );
 
@@ -26,4 +29,4 @@ if (problems.length > 0) {
   console.error(problems.join('\n'));
   process.exit(1);
 }
-console.log(`${records.length} handoff records, each linked from ${docs.join(' or ')}.`);
+console.log(`Handoff records: ${records.length}. Each is linked from ${docs.join(' or ')}.`);

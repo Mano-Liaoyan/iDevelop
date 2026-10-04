@@ -7,9 +7,9 @@ import { test } from 'node:test';
 
 const script = path.join(import.meta.dirname, 'check-handoffs.mjs');
 
-function project({ context = '', direction = '', records = [] }) {
+function project({ context = '', direction = '', records = [], folder = true }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'check-handoffs-'));
-  fs.mkdirSync(path.join(root, 'docs', 'handoffs'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', folder ? 'handoffs' : ''), { recursive: true });
   fs.writeFileSync(path.join(root, 'docs', 'context.md'), context);
   fs.writeFileSync(path.join(root, 'docs', 'product-direction.md'), direction);
   for (const name of records) {
@@ -31,7 +31,7 @@ test('passes when each record is linked from one of the two docs', () => {
     records: ['a.md', 'b.md'],
   }));
   assert.equal(result.status, 0);
-  assert.equal(result.out, '2 handoff records, each linked from docs/context.md or docs/product-direction.md.');
+  assert.equal(result.out, 'Handoff records: 2. Each is linked from docs/context.md or docs/product-direction.md.');
 });
 
 test('fails on a record that nothing links', () => {
@@ -44,6 +44,35 @@ test('fails on a link to a missing record', () => {
   const result = check(project({ direction: 'The [old record](handoffs/gone.md).', records: [] }));
   assert.equal(result.status, 1);
   assert.equal(result.err, 'A link in docs/context.md or docs/product-direction.md names docs/handoffs/gone.md, which does not exist.');
+});
+
+test('links may start with ./ and carry a title', () => {
+  const result = check(project({
+    context: 'The [canvas record](./handoffs/a.md) and the [restyle record](handoffs/b.md "Restyle").',
+    records: ['a.md', 'b.md'],
+  }));
+  assert.equal(result.status, 0);
+  assert.equal(result.out, 'Handoff records: 2. Each is linked from docs/context.md or docs/product-direction.md.');
+});
+
+test('a ./ link to a missing record fails', () => {
+  const result = check(project({ context: 'The [old record](./handoffs/gone.md).' }));
+  assert.equal(result.status, 1);
+  assert.equal(result.err, 'A link in docs/context.md or docs/product-direction.md names docs/handoffs/gone.md, which does not exist.');
+});
+
+test('a project without a handoffs folder has no records', () => {
+  const result = check(project({ folder: false }));
+  assert.equal(result.status, 0);
+  assert.equal(result.out, 'Handoff records: 0. Each is linked from docs/context.md or docs/product-direction.md.');
+});
+
+test('only markdown files count as records', () => {
+  const root = project({ context: 'The [record](handoffs/a.md).', records: ['a.md'] });
+  fs.writeFileSync(path.join(root, 'docs', 'handoffs', 'diagram.png'), '');
+  const result = check(root);
+  assert.equal(result.status, 0);
+  assert.equal(result.out, 'Handoff records: 1. Each is linked from docs/context.md or docs/product-direction.md.');
 });
 
 test('a file name in plain text is not a link', () => {

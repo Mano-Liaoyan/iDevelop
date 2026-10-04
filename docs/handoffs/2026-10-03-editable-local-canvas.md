@@ -87,4 +87,4 @@ The real-window script lived in the session scratchpad and is not committed. It 
 
 ## Next action
 
-Pull request 2 is open with every check passing. It waits for the user to review and merge it, and to settle the open product questions. Then start the shared graph review milestone.
+Pull request 2 merged. The [delivery order](../product-direction.md#delivery-order) names the next phase.
