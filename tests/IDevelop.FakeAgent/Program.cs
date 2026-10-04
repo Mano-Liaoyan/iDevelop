@@ -15,6 +15,7 @@ using System.Text.Json;
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
 //   sleep <milliseconds>
+//   waitForFile <file>            wait until the file exists, so a test decides when the client goes on
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
 //   hang                          wait until killed
 //   exit <code>
@@ -82,6 +83,13 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
             break;
         case "sleep":
             Thread.Sleep(value.GetInt32());
+            break;
+        case "waitForFile":
+            while (!File.Exists(value.GetString()!))
+            {
+                Thread.Sleep(20);
+            }
+
             break;
         case "spawnSleepingChild":
             var child = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), "--sleep-forever"]) { UseShellExecute = false })!;

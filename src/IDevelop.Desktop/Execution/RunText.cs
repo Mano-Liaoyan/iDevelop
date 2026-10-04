@@ -76,6 +76,71 @@ public static class RunText
         ClientId.Antigravity => "Antigravity CLI may edit files in the project folder. It blocks commands in its accept-edits mode.",
     };
 
+    /// <summary>A cancelled attempt is neutral: the user chose that outcome.</summary>
+    public static StatusTone Tone(AttemptRecord? attempt) => attempt is null ? StatusTone.Neutral : attempt.Status switch
+    {
+        AttemptStatus.Running => StatusTone.Running,
+        AttemptStatus.Succeeded => StatusTone.Complete,
+        AttemptStatus.Failed or AttemptStatus.Interrupted => StatusTone.Problem,
+        AttemptStatus.Cancelled => StatusTone.Neutral,
+    };
+
+    public static string StatusLabel(AttemptRecord? attempt) => attempt switch
+    {
+        null => "Not run",
+        { Status: AttemptStatus.Running, Stopping: true } => "Stopping",
+        _ => attempt.Status.ToString(),
+    };
+
+    /// <summary>One or two sentences for each reason a task cannot start.</summary>
+    public static string Describe(StartProblem problem) => problem switch
+    {
+        StartProblem.NoAgent => "Choose an agent for this task first.",
+        StartProblem.NoInstructions => "Write instructions for this task first.",
+        StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
+        StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
+        StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",
+        StartProblem.ClientUnready p => $"{Clients.Name(p.Client)} is not ready. {p.Reason}",
+        StartProblem.ModelNotOffered p => $"{Clients.Name(p.Client)} does not offer {p.Model} on this machine. Choose another model.",
+        StartProblem.ModelUnready p => $"{p.Model} cannot run now. {p.Reason}",
+        StartProblem.ReasoningNotOffered { Reasoning: null } p => $"Choose a reasoning level for {p.Model}.",
+        StartProblem.ReasoningNotOffered { Offered.IsEmpty: true } p =>
+            $"{p.Model} takes no reasoning level. Choose another model and then {p.Model} again to clear {p.Reasoning}.",
+        StartProblem.ReasoningNotOffered p => $"{p.Model} does not offer the {p.Reasoning} reasoning level. Choose {string.Join(", ", p.Offered)}.",
+        StartProblem.UnsafeArgument p =>
+            $"{Clients.Name(p.Client)} runs through cmd.exe, which could misread {p.Argument}, so iDevelop will not start it.",
+        StartProblem.AlreadyRunning p => $"\"{p.Title}\" is running, and a project runs one task at a time.",
+        StartProblem.RunInAnotherWindow => "Another iDevelop window is starting a task in this project.",
+        StartProblem.CannotRecord p => p.Reason,
+        _ => throw new UnreachableException(),
+    };
+
+    /// <summary>"Requested Codex · gpt-5.5 · high", then what the client reported when that differs.</summary>
+    public static string Configuration(AttemptRecord attempt)
+    {
+        var requested = attempt.Requested;
+        var text = $"Requested {string.Join(" · ", new[] { Clients.Name(requested.Client), requested.Model, requested.Reasoning }.OfType<string>())}.";
+        var model = attempt.ReportedModel ?? requested.Model;
+        var reasoning = attempt.ReportedReasoning ?? requested.Reasoning;
+        return model == requested.Model && reasoning == requested.Reasoning
+            ? text
+            : $"{text} Reported {string.Join(" · ", new[] { model, reasoning }.OfType<string>())}.";
+    }
+
+    public static string Timing(AttemptRecord attempt)
+    {
+        var started = $"Started {attempt.RequestedAt.ToLocalTime():g}";
+        return attempt.EndedAt is { } ended ? $"{started} · took {Elapsed(ended - attempt.RequestedAt)}" : started;
+    }
+
+    /// <summary>"8 s", "1 min 05 s", or "2 h 05 min".</summary>
+    public static string Elapsed(TimeSpan span) => span switch
+    {
+        { TotalMinutes: < 1 } => $"{Math.Max(0, (int)span.TotalSeconds)} s",
+        { TotalHours: < 1 } => $"{span.Minutes} min {span.Seconds:00} s",
+        _ => $"{(int)span.TotalHours} h {span.Minutes:00} min",
+    };
+
     internal static IEnumerable<ModelOption> Offered(ClientStatus status) => status is ClientStatus.Ready ready ? ready.Models : [];
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";

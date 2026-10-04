@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Threading;
 using IDevelop.Desktop.Execution;
@@ -25,16 +26,22 @@ public sealed class TaskNodeViewModel : ObservableObject
     ];
 
     private readonly WorkflowCanvasViewModel _canvas;
+    private readonly RelayCommand _run;
+    private readonly RelayCommand _cancel;
     private TaskDefinition _task;
     private Point _location;
+    private AttemptRecord? _attempt;
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
         _canvas = canvas;
         _task = task;
         _location = WorkflowCanvasViewModel.ToPoint(position);
+        _attempt = canvas.Runs.Latest.GetValueOrDefault(task.Id);
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
+        _run = new RelayCommand(Run, () => !IsRunning);
+        _cancel = new RelayCommand(() => _canvas.Runs.Cancel(Id), () => _attempt is { Status: AttemptStatus.Running, Stopping: false });
     }
 
     public TaskId Id => _task.Id;
@@ -143,6 +150,23 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     public string? PermissionNote => _task.Execution is { } settings ? RunText.PermissionNote(settings.Client) : null;
 
+    public string StatusLabel => RunText.StatusLabel(_attempt);
+
+    /// <summary>The card and its status pill take it as a style class.</summary>
+    public StatusTone Tone => RunText.Tone(_attempt);
+
+    public bool IsRunning => _attempt is { Status: AttemptStatus.Running };
+
+    /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
+    public string? StartProblem => !IsRunning && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
+
+    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt);
+
+    /// <summary>Enabled for a task that is not running. A task that cannot start shows why instead of launching.</summary>
+    public ICommand RunCommand => _run;
+
+    public ICommand CancelCommand => _cancel;
+
     private ClientStatus Status => _task.Execution is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking();
 
     internal void Update(TaskDefinition task, CanvasPoint position)
@@ -170,15 +194,33 @@ public sealed class TaskNodeViewModel : ObservableObject
             {
                 OnAgentChanged();
             }
+
+            OnPropertyChanged(nameof(StartProblem));
         }
 
         Location = WorkflowCanvasViewModel.ToPoint(position);
     }
 
+    /// <summary>Called on the UI thread with each new state of this task's attempt.</summary>
+    internal void ShowAttempt(AttemptRecord attempt)
+    {
+        _attempt = attempt;
+        OnPropertyChanged(nameof(StatusLabel));
+        OnPropertyChanged(nameof(Tone));
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(LastAttempt));
+        _run.NotifyCanExecuteChanged();
+        _cancel.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>A run started or ended somewhere in the project, which can keep this task from starting.</summary>
+    internal void OnRunsChanged() => OnPropertyChanged(nameof(StartProblem));
+
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
     internal void OnAgentChanged()
     {
         OnPropertyChanged(nameof(AgentLabel));
+        OnPropertyChanged(nameof(StartProblem));
         // A picker whose choice made this edit is still committing it. A new list now would make Avalonia's selection
         // model restore the choice before it, and write that back as another edit, so the pickers update after.
         Dispatcher.UIThread.Post(() =>
@@ -189,6 +231,9 @@ public sealed class TaskNodeViewModel : ObservableObject
             }
         });
     }
+
+    private void Run() =>
+        _canvas.Notice(_canvas.Runs.Start(_task) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
     private void SetExecution(ExecutionSettings? settings)
     {

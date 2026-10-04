@@ -48,7 +48,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!ViewModel.HasUnsavedChanges)
+        if (!ViewModel.HasUnsavedChanges && ViewModel.ActiveRun is null)
         {
             return;
         }
@@ -56,6 +56,11 @@ public partial class MainWindow : Window
         e.Cancel = true;
         _waitingForUser = true;
         var leave = await ConfirmLeavingDocument();
+        if (leave)
+        {
+            await ViewModel.LeaveProject();
+        }
+
         _waitingForUser = false;
         if (leave)
         {
@@ -126,11 +131,12 @@ public partial class MainWindow : Window
     {
         _waitingForUser = true;
         var folder = await ConfirmLeavingDocument() ? await PickFolder() : null;
-        _waitingForUser = false;
         if (folder is not null)
         {
-            ViewModel.Open(folder);
+            await ViewModel.Open(folder);
         }
+
+        _waitingForUser = false;
     }
 
     private async Task<bool> ConfirmLeavingDocument()

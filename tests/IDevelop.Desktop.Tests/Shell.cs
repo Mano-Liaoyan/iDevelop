@@ -53,6 +53,15 @@ internal sealed class Shell
     public T Find<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
 
+    /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
+    public T InView<T>(string automationId) where T : Control
+    {
+        var control = Find<T>(automationId);
+        control.BringIntoView();
+        Render();
+        return control;
+    }
+
     public bool Has<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
 
@@ -119,9 +128,7 @@ internal sealed class Shell
     /// <summary>Opens the picker, chooses the entry, and returns every entry the picker offered, in order.</summary>
     public string[] Pick(string picker, string entry)
     {
-        var box = Find<ComboBox>(picker);
-        box.BringIntoView();
-        Render();
+        var box = InView<ComboBox>(picker);
         Click(box);
         string[] offered = [.. Window.GetVisualDescendants().OfType<ComboBoxItem>().Select(TextOf)];
         Assert.True(offered.Contains(entry), $"The picker offers [{string.Join(", ", offered)}], not {entry}.");

@@ -15,6 +15,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _addTask;
     private readonly RelayCommand _refreshAgents;
     private WorkflowDocument? _document;
+    private ProjectRuns? _runs;
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
     private bool _refreshingAgents;
@@ -55,7 +56,14 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;
 
-    public void Open(string folder)
+    /// <summary>The task this window's project is running, or null.</summary>
+    public AttemptRecord? ActiveRun => _runs?.Active;
+
+    /// <summary>
+    /// Reads the folder's workflow before it leaves the open project, so a folder that fails to open leaves that project
+    /// and its run alone. Completes at once when no task runs.
+    /// </summary>
+    public async Task Open(string folder)
     {
         WorkflowDocument document;
         try
@@ -68,14 +76,29 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
+        await LeaveProject();
+        var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
         _document = document;
+        _runs = runs;
         document.Changed += (_, _) => OnDocumentChanged();
-        Canvas = new WorkflowCanvasViewModel(document, _clients, notice => Status = notice);
-        Status = null;
-        OnPropertyChanged(nameof(ProjectName));
-        OnDocumentChanged();
-        _save.NotifyCanExecuteChanged();
-        _addTask.NotifyCanExecuteChanged();
+        Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice);
+        Status = runs.Warnings.IsEmpty ? null : string.Join(" ", runs.Warnings);
+        OnProjectChanged();
+    }
+
+    /// <summary>Closes the open project. A running task's client is stopped, and its attempt is recorded as interrupted.</summary>
+    public async Task LeaveProject()
+    {
+        if (_runs is not { } runs)
+        {
+            return;
+        }
+
+        _runs = null;
+        _document = null;
+        Canvas = null;
+        OnProjectChanged();
+        await runs.DisposeAsync();
     }
 
     public bool TrySave()
@@ -117,6 +140,14 @@ public sealed class MainWindowViewModel : ObservableObject
             _refreshingAgents = false;
             _refreshAgents.NotifyCanExecuteChanged();
         }
+    }
+
+    private void OnProjectChanged()
+    {
+        OnPropertyChanged(nameof(ProjectName));
+        OnDocumentChanged();
+        _save.NotifyCanExecuteChanged();
+        _addTask.NotifyCanExecuteChanged();
     }
 
     private void OnDocumentChanged()

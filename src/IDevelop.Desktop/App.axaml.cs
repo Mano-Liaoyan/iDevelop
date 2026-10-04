@@ -35,7 +35,7 @@ public partial class App : Application
             var window = new MainWindow(clients);
             if (desktop.Args is [var folder, ..])
             {
-                window.ViewModel.Open(folder);
+                _ = window.ViewModel.Open(folder);
             }
 
             desktop.MainWindow = window;

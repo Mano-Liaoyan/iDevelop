@@ -125,13 +125,13 @@ public sealed class CanvasTests : IDisposable
                 .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
                 .Select(text => text.Text!),
         ];
-        Assert.Equal(["Build", "No agent", "No instructions yet."], CardTexts());
+        Assert.Equal(["Build", "Not run", "No agent", "No instructions yet."], CardTexts());
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "No agent", "Compile"], CardTexts());
+        Assert.Equal(["Build", "Not run", "No agent", "Compile"], CardTexts());
     }
 
     [AvaloniaFact]

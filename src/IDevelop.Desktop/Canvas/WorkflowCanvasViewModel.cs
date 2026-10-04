@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Threading;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -27,11 +28,13 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
 
-    public WorkflowCanvasViewModel(WorkflowDocument document, ClientDirectory clients, Action<string?> setNotice)
+    public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice)
     {
         _document = document;
+        Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
+        runs.Changed += (_, attempt) => Dispatcher.UIThread.Post(() => ShowAttempt(attempt));
         PendingConnection = new PendingConnectionViewModel(this);
         AddTaskCommand = new RelayCommand(AddTaskInView);
         AddTaskAtCommand = new RelayCommand<Point>(location => AddTask(new CanvasPoint(location.X, location.Y)));
@@ -111,6 +114,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     internal Workflow Workflow => _document.Current;
 
+    internal ProjectRuns Runs { get; }
+
     internal ClientDirectory Clients { get; }
 
     /// <summary>Called on the UI thread after the client directory changes.</summary>
@@ -121,6 +126,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
             node.OnAgentChanged();
         }
     }
+
+    internal void Notice(string? text) => _setNotice(text);
 
     internal EditResult Edit(WorkflowEdit edit)
     {
@@ -135,6 +142,19 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         (PortViewModel { Side: PortSide.Input } input, PortViewModel { Side: PortSide.Output } output) => new ConnectionKey(output.Node.Id, input.Node.Id),
         _ => null,
     };
+
+    private void ShowAttempt(AttemptRecord attempt)
+    {
+        if (_nodes.TryGetValue(attempt.Task, out var owner))
+        {
+            owner.ShowAttempt(attempt);
+        }
+
+        foreach (var node in Nodes)
+        {
+            node.OnRunsChanged();
+        }
+    }
 
     private void AddTaskInView()
     {

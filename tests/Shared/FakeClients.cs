@@ -76,6 +76,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule Sleep(int milliseconds) => Step("sleep", milliseconds);
 
+    public FakeRule WaitForFile(string file) => Step("waitForFile", file);
+
     public FakeRule SpawnSleepingChild(string pidFile) => Step("spawnSleepingChild", pidFile);
 
     public FakeRule Hang() => Step("hang", true);
