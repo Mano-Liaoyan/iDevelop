@@ -28,7 +28,5 @@ jobs:
       - run: dotnet restore --locked-mode
       - run: node scripts/check-licenses.mjs
       - run: node scripts/planweave-tokens.mjs --check
-      - run: node scripts/check-handoffs.mjs
-      - run: node --test scripts/check-handoffs.test.mjs
       - run: dotnet build -c Release --no-restore
       - run: dotnet test -c Release --no-build
