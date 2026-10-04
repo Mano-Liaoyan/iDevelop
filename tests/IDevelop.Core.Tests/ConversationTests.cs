@@ -376,23 +376,22 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task A_crash_between_turns_reconciles_to_interrupted()
+    public async Task A_crash_between_turns_reconciles_to_interrupted_without_checking_the_ended_turns_process()
     {
+        // Another program now has the ended turn's process id, as after the id was reused.
         var shim = _fakes.Install("sleeper", On().Hang());
-        using var client = Process.Start(new ProcessStartInfo(shim)
+        using var other = Process.Start(new ProcessStartInfo(shim)
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
         })!;
-        _spawned.Add(client.Id);
-        var identity = ProcessCheck.Identify(client);
-        client.Kill(entireProcessTree: true);
-        await client.WaitForExitAsync();
+        _spawned.Add(other.Id);
+        var identity = ProcessCheck.Identify(other);
         var attempts = Path.Combine(_project, ".idp", "attempts");
         var requested = new AttemptEvent.Requested(
             DateTimeOffset.UtcNow, AttemptId.New(), SayHiId, "Say hi", Settings[ClientId.Codex], "# Say hi\n", shim, ["exec", "--json"]);
         using (var log = AttemptLog.Create(attempts, requested))
         {
-            log.Append(new AttemptEvent.Launched(DateTimeOffset.UtcNow, identity.Id, identity.StartedAt));
+            log.Append(new AttemptEvent.Launched(DateTimeOffset.UtcNow, identity.Id, identity.StartedAt.AddMinutes(-5)));
             log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.SessionStarted(Session)));
             log.Append(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, "banana", false));
             log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Succeeded("Which fruit?")));
@@ -402,8 +401,10 @@ public sealed class ConversationTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver));
 
         var record = runs.Latest[SayHiId];
-        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped while this task ran.", "Which fruit?"), (record.Status, record.Detail, record.Result));
+        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped before the next turn started.", "Which fruit?"), (record.Status, record.Detail, record.Result));
         Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?")], record.Turns);
+        Assert.Equal(["banana"], record.Queued);
+        Assert.False(other.HasExited);
     }
 
     [Fact]

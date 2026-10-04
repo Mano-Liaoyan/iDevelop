@@ -226,9 +226,9 @@ public class AttemptReducerTests
     [Fact]
     public void A_crash_between_turns_reconciles_to_interrupted()
     {
-        var record = Replay([.. AskedWhichFruit, Sent(4, "banana"), Exit(5, 0), new Reconciled(T0.AddSeconds(9), ProcessMatch.Gone)]);
+        var record = Replay([.. AskedWhichFruit, Sent(4, "banana"), Exit(5, 0), new Reconciled(T0.AddSeconds(9), null)]);
 
-        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped while this task ran."), (record.Status, record.Detail));
+        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped before the next turn started."), (record.Status, record.Detail));
         Assert.Equal([TurnOutcome.Succeeded], record.Turns.Select(turn => turn.Outcome));
     }
 

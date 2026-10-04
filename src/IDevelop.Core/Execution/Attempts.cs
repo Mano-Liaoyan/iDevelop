@@ -276,9 +276,17 @@ internal static class AttemptReducer
         };
     }
 
-    /// <summary>Why the attempt ended, from leaving when leaving gave up on it, else from a crash, then what reconciling found.</summary>
+    /// <summary>
+    /// Why the attempt ended: a crash between turns, when no client runs; otherwise leaving when leaving gave up on it, else
+    /// a crash, then what reconciling found.
+    /// </summary>
     private static string Reconciliation(AttemptRecord record, ProcessMatch? process)
     {
+        if (record.BetweenTurns)
+        {
+            return "iDevelop stopped before the next turn started.";
+        }
+
         var cause = record.InterruptReason is { } reason
             ? $"{reason} Its client did not stop in time, and iDevelop settled it when the project was opened again."
             : process is null ? "iDevelop stopped while starting the client." : "iDevelop stopped while this task ran.";
@@ -292,8 +300,8 @@ internal static class AttemptReducer
     }
 
     /// <summary>
-    /// Ends the running turn with its final text, and with the detail if it failed or was interrupted. Between turns there
-    /// is none to end.
+    /// Ends the running turn with its final text, and with the detail if it failed or was interrupted. Its process is
+    /// forgotten, so nothing checks a process that already exited. Between turns there is none to end.
     /// </summary>
     private static AttemptRecord EndTurn(AttemptRecord record, TurnOutcome outcome, string? detail) => record.BetweenTurns
         ? record
@@ -305,6 +313,7 @@ internal static class AttemptReducer
                 FinalText = FinalText(record),
                 Detail = outcome is TurnOutcome.Failed or TurnOutcome.Interrupted ? detail : null,
             }),
+            Process = null,
         };
 
     /// <summary>Ends the running turn, if one runs, and settles the attempt, both for the same reason.</summary>
