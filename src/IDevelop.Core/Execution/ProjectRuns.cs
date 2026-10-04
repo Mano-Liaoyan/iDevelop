@@ -80,11 +80,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     public static ProjectRuns Open(string projectFolder, ClientDirectory clients)
     {
         var folder = Path.GetFullPath(projectFolder);
-        var attempts = DataFolder.Attempts(folder);
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
-        var notes = warnings.ToBuilder();
-        latest = Reconcile(attempts, latest, notes);
-        return new ProjectRuns(folder, clients, latest, notes.ToImmutable());
+        var (latest, warnings) = ReadAndReconcile(DataFolder.Attempts(folder));
+        return new ProjectRuns(folder, clients, latest, warnings);
     }
 
     /// <summary>The reason this task cannot start now, or null. A run of it in another window shows up only at
@@ -135,10 +132,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 AttemptEvent.Requested requested;
                 try
                 {
-                    var (latest, warnings) = AttemptLog.ReadLatest(_attempts);
-                    var notes = warnings.ToBuilder();
-                    Latest = Reconcile(_attempts, latest, notes, held: task.Id);
-                    Warnings = notes.ToImmutable();
+                    (Latest, Warnings) = ReadAndReconcile(_attempts, held: task.Id);
                     DataFolder.EnsureGitIgnore(_projectFolder);
                     requested = new AttemptEvent.Requested(
                         DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
@@ -211,12 +205,22 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
     }
 
+    /// <summary>The newest attempt of each task, after <see cref="Reconcile"/>, and the warnings of both.</summary>
+    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings) ReadAndReconcile(
+        string attempts, TaskId? held = null)
+    {
+        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var notes = warnings.ToBuilder();
+        latest = Reconcile(attempts, latest, notes, held);
+        return (latest, notes.ToImmutable());
+    }
+
     /// <summary>
     /// Settles each attempt that reads as running and whose task's lock is free, so no live instance runs it. A run of this
     /// window holds its task's lock and is skipped. <paramref name="held"/> names a task whose lock the caller holds.
     /// </summary>
     private static ImmutableDictionary<TaskId, AttemptRecord> Reconcile(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held = null)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held)
     {
         foreach (var running in latest.Values.Where(record => record.Status == AttemptStatus.Running).ToList())
         {
