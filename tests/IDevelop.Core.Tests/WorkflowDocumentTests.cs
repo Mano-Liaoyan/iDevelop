@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using IDevelop.Projects;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.TestSupport.TestTasks;
 using static IDevelop.Workflows.WorkflowEdit;
 
 namespace IDevelop.Core.Tests;
@@ -8,14 +10,11 @@ namespace IDevelop.Core.Tests;
 public sealed class WorkflowDocumentTests : IDisposable
 {
     private const string SampleFileName = "019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01.json";
-    private const string A = "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11";
-    private const string B = "019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22";
 
     private static readonly string Sample = Path.Combine(AppContext.BaseDirectory, "sample-project");
     private static readonly string SampleFile = Path.Combine(Sample, ".idp", "workflows", SampleFileName);
-    private static readonly TaskId Design = new(Guid.Parse(A));
-    private static readonly TaskId Build = new(Guid.Parse(B));
-    private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
+    private static readonly string A = Design.ToString();
+    private static readonly string B = Build.ToString();
 
     private readonly TempFolder _temp = new();
 

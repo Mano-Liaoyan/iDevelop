@@ -11,15 +11,15 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;
 
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class AgentPickerTests : IDisposable
 {
-    private static readonly TaskId Design = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
-    private static readonly TaskId Build = new(Guid.Parse("019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22"));
-    private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
+    private static readonly TaskId Design = TestTasks.Design;
+    private static readonly TaskId Build = TestTasks.Build;
+    private static readonly TaskId Review = TestTasks.Review;
     private static readonly ExecutionSettings PiAtHigh = new(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
 
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
     private readonly ClientDirectory _clients;
 
     // Codex and Antigravity CLI are installed and ready. Claude Code and Pi are not installed.
@@ -28,8 +28,7 @@ public sealed class AgentPickerTests : IDisposable
         var fakes = new FakeClients(_temp.Create("bin"));
         FakeAgents.Install(fakes, ClientId.Codex);
         FakeAgents.Install(fakes, ClientId.Antigravity);
-        _clients = new ClientDirectory(fakes.Resolver);
-        _clients.RefreshAsync().Wait();
+        _clients = fakes.DiscoverAsync().Result;
     }
 
     public void Dispose() => _temp.Dispose();
@@ -43,9 +42,7 @@ public sealed class AgentPickerTests : IDisposable
             FakeAgents.Install(fakes, client);
         }
 
-        var clients = new ClientDirectory(fakes.Resolver);
-        clients.RefreshAsync().Wait();
-        return clients;
+        return fakes.DiscoverAsync().Result;
     }
 
     private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, ExecutionSettings? execution = null, double y = 90) =>

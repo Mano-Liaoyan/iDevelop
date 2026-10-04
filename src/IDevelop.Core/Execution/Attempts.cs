@@ -143,7 +143,7 @@ internal static class AttemptReducer
             AttemptEvent.Requested => record,
             AttemptEvent.Launched launched => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
             AttemptEvent.LaunchFailed failed => Settle(record, AttemptStatus.Failed, failed.Reason, failed.At),
-            AttemptEvent.Agent agent => Apply(record, agent.Event, agent.At),
+            AttemptEvent.Agent agent => ApplyAgent(record, agent.Event, agent.At),
             AttemptEvent.CancelRequested => record with { CancelRequested = true, Stopping = true },
             AttemptEvent.InterruptRequested interrupt => record with { InterruptReason = record.InterruptReason ?? interrupt.Reason, Stopping = true },
             AttemptEvent.Exited exited => SettleAtExit(record, exited),
@@ -156,7 +156,7 @@ internal static class AttemptReducer
     public static AttemptRecord Abandon(AttemptRecord record, string reason, DateTimeOffset at) =>
         record.Status == AttemptStatus.Running ? Settle(record, AttemptStatus.Failed, reason, at) : record;
 
-    private static AttemptRecord Apply(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
+    private static AttemptRecord ApplyAgent(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
     {
         AgentEvent.SessionStarted session => record with { SessionId = session.SessionId },
         AgentEvent.Reported reported => record with
@@ -164,7 +164,7 @@ internal static class AttemptReducer
             ReportedModel = reported.Model ?? record.ReportedModel,
             ReportedReasoning = reported.Reasoning ?? record.ReportedReasoning,
         },
-        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, FirstLine(message.Text)),
+        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, TextLines.FirstLine(message.Text) ?? ""),
         AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}"),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
@@ -187,7 +187,7 @@ internal static class AttemptReducer
             { Verdict: AgentEvent.Succeeded } when exited.ExitCode == 0 => (AttemptStatus.Succeeded, null),
             { Verdict: AgentEvent.Succeeded } => (AttemptStatus.Failed, $"{client} reported success but exited with code {exited.ExitCode}."),
             _ when exited.ExitCode == 0 => (AttemptStatus.Failed, $"{client} ended without a result."),
-            _ => (AttemptStatus.Failed, LastLine(exited.StderrTail) is { } line
+            _ => (AttemptStatus.Failed, TextLines.LastLine(exited.StderrTail) is { } line
                 ? $"{client} exited with code {exited.ExitCode}: {line}"
                 : $"{client} exited with code {exited.ExitCode}."),
         };
@@ -223,8 +223,4 @@ internal static class AttemptReducer
         var activity = record.Activity.Count < ActivityLimit ? record.Activity : record.Activity.RemoveAt(0);
         return record with { Activity = activity.Add(new ActivityLine(at, text)) };
     }
-
-    private static string FirstLine(string text) => text.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
-
-    private static string? LastLine(string text) => text.Split('\n').Select(line => line.Trim()).LastOrDefault(line => line.Length > 0);
 }

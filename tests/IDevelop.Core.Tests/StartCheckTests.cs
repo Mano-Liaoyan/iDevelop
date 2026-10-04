@@ -1,4 +1,5 @@
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Execution.StartProblem;
 
@@ -8,7 +9,6 @@ public class StartCheckTests
 {
     private const string Folder = @"C:\project";
 
-    private static readonly TaskId Id = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
     private static readonly ResolvedCommand CodexCommand = new("/usr/local/bin/codex", IsBatchShim: false);
     private static readonly ExecutionSettings SolHigh = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
 
@@ -26,7 +26,9 @@ public class StartCheckTests
         Assert.Equal(
             ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
             plan.Launch.Arguments.ToArray());
-        Assert.Equal("# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n", plan.Launch.Stdin);
+        const string prompt = "# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n";
+        Assert.Equal(prompt, plan.Launch.Stdin);
+        Assert.Equal(prompt, plan.Prompt);
     }
 
     [Fact]
@@ -112,13 +114,13 @@ public class StartCheckTests
     [Fact]
     public void The_prompt_leaves_out_a_blank_title_and_blank_acceptance_criteria()
     {
-        var task = new TaskDefinition(Id) { Title = " ", Instructions = "\nCreate hello.txt.\n" };
+        var task = new TaskDefinition(TestTasks.Design) { Title = " ", Instructions = "\nCreate hello.txt.\n" };
 
         Assert.Equal("Create hello.txt.\n", Prompt.For(task));
     }
 
     private static TaskDefinition SayHi(ExecutionSettings? execution, string instructions = "Create hello.txt containing hi.") =>
-        new(Id) { Title = "Say hi", Instructions = instructions, AcceptanceCriteria = "hello.txt holds hi.", Execution = execution };
+        new(TestTasks.Design) { Title = "Say hi", Instructions = instructions, AcceptanceCriteria = "hello.txt holds hi.", Execution = execution };
 
     private static StartProblem Problem(TaskDefinition task, IReadOnlyDictionary<ClientId, ClientStatus> clients, string folder = Folder) =>
         Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(task, folder, clients)).Problem;

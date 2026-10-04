@@ -1,47 +1,15 @@
 using System.Collections.Immutable;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Channels;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
 /// <summary>
-/// <c>.idp/attempts/&lt;task-id&gt;/run.lock</c>, held with FileShare.None for a run's whole life: an exclusive handle on
-/// Windows and an exclusive flock on Linux and macOS. The operating system releases it when its holder dies, so holding it
-/// is owning the task's run, and an attempt that reads as running while its task's lock is free was left by a crash. The
-/// file is never deleted, because then two instances could lock two different files.
-/// </summary>
-internal sealed class RunLock : IDisposable
-{
-    private readonly FileStream _handle;
-
-    private RunLock(FileStream handle) => _handle = handle;
-
-    /// <summary>Null when another handle holds it, in this process or another one. Never waits.</summary>
-    public static RunLock? TryTake(string attemptsFolder, TaskId task)
-    {
-        var folder = Directory.CreateDirectory(Path.Combine(attemptsFolder, task.ToString())).FullName;
-        try
-        {
-            return new RunLock(new FileStream(Path.Combine(folder, "run.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
-    public void Dispose() => _handle.Dispose();
-}
-
-/// <summary>
 /// The attempts of one open project. It lives as long as the project is open in a window.
 /// Several tasks of a project folder can run at once, and each task runs at most once at a time, across every iDevelop
 /// instance.
 /// </summary>
-public sealed class ProjectRuns : IAsyncDisposable
+public sealed partial class ProjectRuns : IAsyncDisposable
 {
     private const string LeaveReason = "The project was closed while this task ran.";
 
@@ -112,11 +80,8 @@ public sealed class ProjectRuns : IAsyncDisposable
     public static ProjectRuns Open(string projectFolder, ClientDirectory clients)
     {
         var folder = Path.GetFullPath(projectFolder);
-        var attempts = DataFolder.Attempts(folder);
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
-        var notes = warnings.ToBuilder();
-        latest = Reconcile(attempts, latest, notes);
-        return new ProjectRuns(folder, clients, latest, notes.ToImmutable());
+        var (latest, warnings) = ReadAndReconcile(DataFolder.Attempts(folder));
+        return new ProjectRuns(folder, clients, latest, warnings);
     }
 
     /// <summary>The reason this task cannot start now, or null. A run of it in another window shows up only at
@@ -125,13 +90,8 @@ public sealed class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            if (_active.TryGetValue(task.Id, out var run))
-            {
-                return new StartProblem.AlreadyRunning(run.Record.Task, run.Record.TaskTitle);
-            }
+            return Verdict(task) is StartVerdict.Blocked blocked ? blocked.Problem : null;
         }
-
-        return StartCheck.Evaluate(task, _projectFolder, _clients.Current) is StartVerdict.Blocked blocked ? blocked.Problem : null;
     }
 
     /// <summary>
@@ -145,18 +105,12 @@ public sealed class ProjectRuns : IAsyncDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
-            if (_active.TryGetValue(task.Id, out var running))
-            {
-                return new StartResult.Refused(new StartProblem.AlreadyRunning(running.Record.Task, running.Record.TaskTitle));
-            }
-
-            var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current);
+            var verdict = Verdict(task);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);
             }
 
-            var plan = ((StartVerdict.Allowed)verdict).Plan;
             RunLock? held;
             try
             {
@@ -169,38 +123,17 @@ public sealed class ProjectRuns : IAsyncDisposable
 
             if (held is null)
             {
-                result = new StartResult.Refused(ReadAnotherWindowsRun(task));
+                // Another instance holds the lock, so the read settles nothing.
+                (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
+                result = new StartResult.Refused(AnotherWindowsRun(task.Id));
             }
             else
             {
-                AttemptLog log;
-                AttemptEvent.Requested requested;
-                try
+                (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held);
+                if (result is StartResult.Refused)
                 {
-                    var (latest, warnings) = AttemptLog.ReadLatest(_attempts);
-                    var notes = warnings.ToBuilder();
-                    Latest = Reconcile(_attempts, latest, notes, held: task.Id);
-                    Warnings = notes.ToImmutable();
-                    DataFolder.EnsureGitIgnore(_projectFolder);
-                    requested = new AttemptEvent.Requested(
-                        DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
-                    log = AttemptLog.Create(_attempts, requested);
+                    return result;
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    held.Dispose();
-                    return CannotRecord(e);
-                }
-
-                (var record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
-                _started.Add(record.Id);
-                if (run is not null)
-                {
-                    _active[task.Id] = run;
-                }
-
-                Latest = Latest.SetItem(task.Id, record);
-                result = new StartResult.Started(record);
             }
         }
 
@@ -253,18 +186,28 @@ public sealed class ProjectRuns : IAsyncDisposable
         }
     }
 
+    /// <summary>The newest attempt of each task, after <see cref="Reconcile"/>, and the warnings of both.</summary>
+    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings) ReadAndReconcile(
+        string attempts, TaskId? held = null)
+    {
+        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var notes = warnings.ToBuilder();
+        latest = Reconcile(attempts, latest, notes, held);
+        return (latest, notes.ToImmutable());
+    }
+
     /// <summary>
     /// Settles each attempt that reads as running and whose task's lock is free, so no live instance runs it. A run of this
     /// window holds its task's lock and is skipped. <paramref name="held"/> names a task whose lock the caller holds.
     /// </summary>
     private static ImmutableDictionary<TaskId, AttemptRecord> Reconcile(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held = null)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held)
     {
         foreach (var running in latest.Values.Where(record => record.Status == AttemptStatus.Running).ToList())
         {
             if (running.Task == held)
             {
-                latest = Settle(attempts, latest, running, warnings);
+                latest = SettleCrashed(attempts, latest, running, warnings);
                 continue;
             }
 
@@ -284,10 +227,10 @@ public sealed class ProjectRuns : IAsyncDisposable
                 if (taskLock is not null)
                 {
                     // The run may have ended between the read and the lock, so settle what its log says now.
-                    var (now, _) = AttemptLog.ReadLatest(attempts);
-                    if (now.TryGetValue(running.Task, out var record) && record is { Status: AttemptStatus.Running })
+                    var record = AttemptLog.ReadLatest(attempts, running.Task);
+                    if (record is { Status: AttemptStatus.Running })
                     {
-                        latest = Settle(attempts, latest, record, warnings);
+                        latest = SettleCrashed(attempts, latest, record, warnings);
                     }
                     else if (record is not null)
                     {
@@ -300,15 +243,10 @@ public sealed class ProjectRuns : IAsyncDisposable
         return latest;
     }
 
-    private static ImmutableDictionary<TaskId, AttemptRecord> Settle(
+    private static ImmutableDictionary<TaskId, AttemptRecord> SettleCrashed(
         string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings)
     {
-        ProcessMatch? match = record.Process is { } process ? ProcessCheck.Match(process) : null;
-        if (match == ProcessMatch.Same)
-        {
-            ProcessCheck.KillTree(record.Process!.Value);
-        }
-
+        ProcessMatch? match = record.Process is { } process ? ProcessCheck.StopIfSame(process) : null;
         var reconciled = new AttemptEvent.Reconciled(DateTimeOffset.UtcNow, match);
         try
         {
@@ -325,6 +263,44 @@ public sealed class ProjectRuns : IAsyncDisposable
             return latest;
         }
     }
+
+    /// <summary>
+    /// Settles any attempt a crash left running, records the attempt, and launches the client. An attempt that cannot be
+    /// recorded is refused, and the lock is released. Called under the gate.
+    /// </summary>
+    private (StartResult Result, ActiveRun? Run) RecordAndLaunch(TaskDefinition task, LaunchPlan plan, RunLock held)
+    {
+        AttemptLog log;
+        AttemptEvent.Requested requested;
+        try
+        {
+            (Latest, Warnings) = ReadAndReconcile(_attempts, held: task.Id);
+            DataFolder.EnsureGitIgnore(_projectFolder);
+            requested = new AttemptEvent.Requested(
+                DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
+            log = AttemptLog.Create(_attempts, requested);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            held.Dispose();
+            return (CannotRecord(e), null);
+        }
+
+        var (record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
+        _started.Add(record.Id);
+        if (run is not null)
+        {
+            _active[task.Id] = run;
+        }
+
+        Latest = Latest.SetItem(task.Id, record);
+        return (new StartResult.Started(record), run);
+    }
+
+    /// <summary>Whether this window runs the task, then what <see cref="StartCheck"/> says. Called under the gate.</summary>
+    private StartVerdict Verdict(TaskDefinition task) => _active.TryGetValue(task.Id, out var run)
+        ? new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run.Record.Task, run.Record.TaskTitle))
+        : StartCheck.Evaluate(task, _projectFolder, _clients.Current);
 
     /// <summary>Starts the client and records its process. A client that does not start is a failed attempt, and then the
     /// log and the lock are released at once.</summary>
@@ -379,14 +355,11 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     private StartResult.Refused CannotRecord(Exception e) => new(new StartProblem.CannotRecord($"iDevelop could not write {_attempts}. {e.Message}"));
 
-    /// <summary>Another instance holds the lock, so the read settles nothing.</summary>
-    private StartProblem ReadAnotherWindowsRun(TaskDefinition task)
-    {
-        (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
-        return Latest.TryGetValue(task.Id, out var running) && running.Status == AttemptStatus.Running
+    /// <summary>The run of another instance that holds the task's lock, as <see cref="Latest"/> shows it.</summary>
+    private StartProblem AnotherWindowsRun(TaskId task) =>
+        Latest.TryGetValue(task, out var running) && running.Status == AttemptStatus.Running
             ? new StartProblem.AlreadyRunning(running.Task, running.TaskTitle)
             : new StartProblem.RunInAnotherWindow();
-    }
 
     private void Publish(AttemptRecord record)
     {
@@ -414,175 +387,5 @@ public sealed class ProjectRuns : IAsyncDisposable
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
-    /// One run. A channel puts every event in one order: stdout lines, stop requests, and the exit. One drain appends
-    /// each event to the log, folds it, and publishes the record, in that order. A stop request enqueued before the kill
-    /// therefore always precedes the exit the kill causes. The lock is released only after the last event is on disk,
-    /// or after the drain stops and the log is closed, so nothing appends after another instance could take over.
-    /// The run disposes its process just before it releases the lock, so a late stop does nothing. While the client runs,
-    /// Cancel and leaving stop everything it started, and so does a crash on Windows. What it leaves running when it exits
-    /// on its own keeps running, as after a command in a terminal.
-    /// </summary>
-    private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
-    {
-        // A process the client started can hold the pipes open after the client exits. The attempt settles without the
-        // rest of its output, which the closed log ignores.
-        private static readonly TimeSpan ExitGrace = TimeSpan.FromSeconds(5);
-
-        private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
-        private readonly CancellationTokenSource _abandon = new();
-        private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public AttemptRecord Record { get; private set; } = record;
-
-        /// <summary>Completes once the lock is released.</summary>
-        public Task Completion => _finished.Task;
-
-        public void Start() => _ = Task.Run(RunAsync);
-
-        public void Stop(AttemptEvent request)
-        {
-            Request(request);
-            process.StopTree();
-        }
-
-        /// <summary>Stops the drain at its next event, without waiting for the client's exit. The attempt stays on record as running.</summary>
-        public void Abandon() => _abandon.Cancel();
-
-        private void Request(AttemptEvent e) => _events.Writer.TryWrite(e);
-
-        private async Task RunAsync()
-        {
-            try
-            {
-                var stderrTail = new Tail();
-                _ = process.WriteStdinAsync(plan.Launch.Stdin, close: true);
-                var stdout = process.ReadStdoutAsync(Interpret);
-                var stderr = process.ReadStderrAsync(line =>
-                {
-                    log.AppendStderr(line);
-                    stderrTail.Add(line);
-                });
-                _ = WatchExitAsync(stdout, stderr, stderrTail);
-                await DrainAsync();
-            }
-            finally
-            {
-                _finished.TrySetResult();
-            }
-        }
-
-        private async Task DrainAsync()
-        {
-            var exited = false;
-            try
-            {
-                await foreach (var e in _events.Reader.ReadAllAsync(_abandon.Token))
-                {
-                    // Leaving gave up while this drain was busy. Events already queued stay off the log too.
-                    _abandon.Token.ThrowIfCancellationRequested();
-                    log.Append(e);
-                    exited |= e is AttemptEvent.Exited;
-                    Record = AttemptReducer.Apply(Record, e);
-                    owner.Publish(Record);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Record = AttemptReducer.Abandon(Record, CannotWriteLog(e), DateTimeOffset.UtcNow);
-            }
-            finally
-            {
-                // Whatever ended the drain early, including a Changed handler that threw, no client runs on unobserved.
-                // After its exit, whatever the client started for the user, such as a dev server, keeps running.
-                if (exited)
-                {
-                    process.LeaveDescendantsRunning();
-                }
-                else
-                {
-                    process.StopTree();
-                }
-
-                process.Dispose();
-                log.Dispose();
-                held.Dispose();
-                owner.Finish(this);
-            }
-        }
-
-        private void Interpret(string line)
-        {
-            log.AppendOutput(line);
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                return;
-            }
-
-            ImmutableArray<AgentEvent> events;
-            try
-            {
-                events = plan.Client.Interpret(line);
-            }
-            catch (JsonException)
-            {
-                events = [new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(plan.Settings.Client)} printed.")];
-            }
-
-            foreach (var e in events)
-            {
-                Request(new AttemptEvent.Agent(DateTimeOffset.UtcNow, e));
-            }
-        }
-
-        private async Task WatchExitAsync(Task stdout, Task stderr, Tail stderrTail)
-        {
-            try
-            {
-                var code = await process.WaitForExitAsync();
-                await Task.WhenAny(Task.WhenAll(stdout, stderr), Task.Delay(ExitGrace));
-                Request(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
-            }
-            finally
-            {
-                _events.Writer.TryComplete();
-            }
-        }
-    }
-
-    /// <summary>The last few kilobytes of the client's stderr, for the exit event.</summary>
-    private sealed class Tail
-    {
-        private const int Limit = 4096;
-
-        private readonly StringBuilder _text = new();
-
-        public string Text
-        {
-            get
-            {
-                lock (_text)
-                {
-                    return _text.ToString();
-                }
-            }
-        }
-
-        public void Add(string line)
-        {
-            lock (_text)
-            {
-                _text.Append(line).Append('\n');
-                if (_text.Length > Limit)
-                {
-                    _text.Remove(0, _text.Length - Limit);
-                }
-            }
-        }
     }
 }

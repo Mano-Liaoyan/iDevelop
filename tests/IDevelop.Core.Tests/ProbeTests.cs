@@ -6,7 +6,7 @@ using static IDevelop.TestSupport.Processes;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessTests.Name)]
+[Collection(ProcessCollection.Name)]
 public sealed class ProbeTests : IDisposable
 {
     private readonly TempFolder _temp = new();
@@ -16,7 +16,7 @@ public sealed class ProbeTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private static CatalogSource.Probed PiCatalog => (CatalogSource.Probed)ClientRegistry.Get(ClientId.Pi).Catalog;
+    private static CatalogSource.Probed PiCatalog => (CatalogSource.Probed)Clients.Get(ClientId.Pi).Catalog;
 
     [Fact]
     public async Task A_probe_that_answered_gets_the_end_of_its_input_and_exits_on_its_own()

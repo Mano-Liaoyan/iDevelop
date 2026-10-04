@@ -110,7 +110,7 @@ public sealed class TaskNodeViewModel : ObservableObject
                 return [];
             }
 
-            var model = RunText.Offered(Status).FirstOrDefault(option => option.Id == settings.Model);
+            var model = ExecutionChoices.OfferedModel(Status, settings.Model);
             List<Choice> choices = [.. (model?.ReasoningLevels ?? []).Select(level => new Choice(Id, level, level))];
             if (settings.Reasoning is { } stored && !choices.Any(choice => choice.Id == stored))
             {
@@ -225,7 +225,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     internal void ChooseModel(Choice choice)
     {
         if (_task.Execution is { } settings && choice.Id != settings.Model
-            && RunText.Offered(Status).FirstOrDefault(model => model.Id == choice.Id) is { } model)
+            && ExecutionChoices.OfferedModel(Status, choice.Id) is { } model)
         {
             SetExecution(ExecutionChoices.ForModel(settings, model));
         }
@@ -234,7 +234,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     internal void ChooseReasoning(Choice choice)
     {
         if (_task.Execution is { } settings && choice.Id != settings.Reasoning
-            && RunText.Offered(Status).FirstOrDefault(model => model.Id == settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
+            && ExecutionChoices.OfferedModel(Status, settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
         {
             SetExecution(settings with { Reasoning = choice.Id });
         }

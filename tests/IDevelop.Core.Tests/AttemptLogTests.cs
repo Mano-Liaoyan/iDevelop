@@ -1,6 +1,8 @@
 using IDevelop.Execution;
-using static IDevelop.Core.Tests.AttemptReducerTests;
+using IDevelop.TestSupport;
+using static IDevelop.Core.Tests.AttemptEvents;
 using static IDevelop.Execution.AgentEvent;
+using static IDevelop.TestSupport.TestTasks;
 
 namespace IDevelop.Core.Tests;
 
@@ -18,10 +20,10 @@ public sealed class AttemptLogTests : IDisposable
         var attempts = _temp.Create("attempts");
 
         string folder;
-        using (var log = AttemptLog.Create(attempts, Requested(First)))
+        using (var log = AttemptLog.Create(attempts, BuildRequested(First)))
         {
             folder = log.Folder;
-            log.Append(Launched);
+            log.Append(LaunchedAt1s);
             log.Append(Said(2, new Message("DONE 审查")));
             log.Append(Said(3, new Succeeded(null)));
             log.Append(Exit(4, 0));
@@ -49,10 +51,10 @@ public sealed class AttemptLogTests : IDisposable
     {
         var attempts = _temp.Create("attempts");
         string folder;
-        using (var log = AttemptLog.Create(attempts, Requested(First)))
+        using (var log = AttemptLog.Create(attempts, BuildRequested(First)))
         {
             folder = log.Folder;
-            log.Append(Launched);
+            log.Append(LaunchedAt1s);
         }
 
         File.AppendAllText(
@@ -68,7 +70,7 @@ public sealed class AttemptLogTests : IDisposable
     [Fact]
     public void Evidence_written_after_the_log_closes_is_dropped()
     {
-        var log = AttemptLog.Create(_temp.Create("attempts"), Requested(First));
+        var log = AttemptLog.Create(_temp.Create("attempts"), BuildRequested(First));
         log.AppendStderr("first");
         log.Dispose();
 
@@ -83,9 +85,9 @@ public sealed class AttemptLogTests : IDisposable
     public void Each_task_shows_its_newest_readable_attempt_and_an_unreadable_one_becomes_a_warning()
     {
         var attempts = _temp.Create("attempts");
-        using (var log = AttemptLog.Create(attempts, Requested(First)))
+        using (var log = AttemptLog.Create(attempts, BuildRequested(First)))
         {
-            log.Append(Launched);
+            log.Append(LaunchedAt1s);
             log.Append(Said(2, new Succeeded("Done.")));
             log.Append(Exit(3, 0));
         }

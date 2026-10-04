@@ -1,0 +1,96 @@
+using System.ComponentModel;
+using System.Diagnostics;
+
+namespace IDevelop.Execution;
+
+/// <summary>A process id and its start time. After a crash, the pair tells the client apart from a process that reused its id.</summary>
+internal readonly record struct ProcessIdentity(int Id, DateTimeOffset StartedAt);
+
+internal enum ProcessMatch { Gone, Same, Reused }
+
+internal static class ProcessCheck
+{
+    // Linux derives a start time from the boot time and clock ticks, so two reads of one process can differ slightly.
+    private static readonly TimeSpan StartTolerance = TimeSpan.FromSeconds(1);
+
+    public static ProcessIdentity Identify(Process process)
+    {
+        try
+        {
+            return new ProcessIdentity(process.Id, new DateTimeOffset(process.StartTime.ToUniversalTime()));
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
+        {
+            // It already exited, so the identity only has to tell it apart from a later process with the same id.
+            return new ProcessIdentity(process.Id, DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// Finds the process and stops its tree when it is the same process. It does not wait for the exit, because opening a
+    /// project calls it on the UI thread.
+    /// </summary>
+    public static ProcessMatch StopIfSame(ProcessIdentity identity)
+    {
+        using var process = Find(identity.Id);
+        if (process is null)
+        {
+            return ProcessMatch.Gone;
+        }
+
+        var match = Compare(process, identity);
+        if (match == ProcessMatch.Same)
+        {
+            KillTreeQuietly(process);
+        }
+
+        return match;
+    }
+
+    public static void KillTreeQuietly(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
+        {
+            // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+        }
+    }
+
+    private static Process? Find(int id)
+    {
+        try
+        {
+            return Process.GetProcessById(id);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static ProcessMatch Compare(Process process, ProcessIdentity identity)
+    {
+        try
+        {
+            if (process.HasExited)
+            {
+                return ProcessMatch.Gone;
+            }
+
+            var started = new DateTimeOffset(process.StartTime.ToUniversalTime());
+            return (started - identity.StartedAt).Duration() <= StartTolerance ? ProcessMatch.Same : ProcessMatch.Reused;
+        }
+        catch (InvalidOperationException)
+        {
+            return ProcessMatch.Gone;
+        }
+        catch (Win32Exception)
+        {
+            // Another user's process: it cannot be proved to be the client, so it is left alone.
+            return ProcessMatch.Reused;
+        }
+    }
+}

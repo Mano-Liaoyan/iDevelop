@@ -5,7 +5,7 @@ using static IDevelop.Execution.AgentEvent;
 
 namespace IDevelop.Core.Tests;
 
-public class ClientRowTests
+public class ClientDefinitionTests
 {
     private const string BadCodexModel = "The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account.";
 
@@ -55,7 +55,7 @@ public class ClientRowTests
     [Fact]
     public void Claude_Code_turns_each_permission_denial_into_a_notice()
     {
-        var events = ClientRegistry.Get(ClientId.ClaudeCode).Interpret(
+        var events = Clients.Get(ClientId.ClaudeCode).Interpret(
             """{"type":"result","subtype":"success","is_error":false,"result":"I could not run it.","permission_denials":[{"tool_name":"Bash"}]}""");
 
         Assert.Equal([new Notice("Claude Code denied Bash."), new Succeeded("I could not run it.")], events.ToArray());
@@ -255,7 +255,7 @@ public class ClientRowTests
     {
         var catalog = Models(ClientId.Pi, new ProbeOutput(null, Fixture.Text("pi-rpc-models.jsonl"), "", false));
 
-        var probes = ClientRegistry.Get(ClientId.Pi).Readiness([.. catalog]);
+        var probes = Clients.Get(ClientId.Pi).Readiness([.. catalog]);
 
         Assert.Equal(new string?[] { "deepseek", "openai-codex" }, probes.Select(probe => probe.Provider));
         Assert.Equal(["auth", "check", "--provider", "openai-codex", "--json"], probes[1].Probe.Arguments.ToArray());
@@ -266,16 +266,16 @@ public class ClientRowTests
     }
 
     private static AgentEvent[] Events(ClientId client, string fixture) =>
-        [.. Fixture.Lines(fixture).SelectMany(line => ClientRegistry.Get(client).Interpret(line))];
+        [.. Fixture.Lines(fixture).SelectMany(line => Clients.Get(client).Interpret(line))];
 
     private static LaunchArguments Launch(ClientId client, string model, string? reasoning, string prompt) =>
-        ClientRegistry.Get(client).Launch(new LaunchRequest(model, reasoning, prompt));
+        Clients.Get(client).Launch(new LaunchRequest(model, reasoning, prompt));
 
     private static CatalogParse Catalog(ClientId client, ProbeOutput output) =>
-        Assert.IsType<CatalogSource.Probed>(ClientRegistry.Get(client).Catalog).Parse(output);
+        Assert.IsType<CatalogSource.Probed>(Clients.Get(client).Catalog).Parse(output);
 
     private static ModelOption[] Models(ClientId client, ProbeOutput output) =>
         [.. Assert.IsType<CatalogParse.Models>(Catalog(client, output)).Options];
 
-    private static string? Problem(ClientId client, ProbeOutput output) => Assert.Single(ClientRegistry.Get(client).Readiness([])).Problem(output);
+    private static string? Problem(ClientId client, ProbeOutput output) => Assert.Single(Clients.Get(client).Readiness([])).Problem(output);
 }

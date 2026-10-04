@@ -5,12 +5,13 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
+using IDevelop.TestSupport;
 
 namespace IDevelop.Desktop.Tests;
 
 public sealed class ThemeTests : IDisposable
 {
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
 

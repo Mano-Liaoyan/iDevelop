@@ -4,13 +4,14 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using IDevelop.Projects;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Tests;
 
 public sealed class UnsavedChangesTests : IDisposable
 {
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
     private readonly string _seed;
     private readonly string _other;
     private int _picks;

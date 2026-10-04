@@ -49,8 +49,11 @@ internal sealed class AttemptLog : IDisposable
 
     public string Folder { get; }
 
+    /// <summary>The folder of a task's attempts, which also holds its run lock.</summary>
+    public static string TaskFolder(string attemptsFolder, TaskId task) => Path.Combine(attemptsFolder, task.ToString());
+
     public static string FolderOf(string attemptsFolder, TaskId task, AttemptId attempt) =>
-        Path.Combine(attemptsFolder, task.ToString(), attempt.ToString());
+        Path.Combine(TaskFolder(attemptsFolder, task), attempt.ToString());
 
     /// <summary>Creates the attempt's folder and writes <paramref name="requested"/> as its first line.</summary>
     public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested)
@@ -75,7 +78,7 @@ internal sealed class AttemptLog : IDisposable
     /// <summary>One line per event, handed to the operating system before this returns, so it survives an app crash.</summary>
     public void Append(AttemptEvent e)
     {
-        var line = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(e, Options) + "\n");
+        var line = Utf8.GetBytes(JsonSerializer.Serialize(e, Options) + "\n");
         lock (_gate)
         {
             _events.Write(line);
@@ -129,14 +132,9 @@ internal sealed class AttemptLog : IDisposable
 
             foreach (var taskFolder in Directory.EnumerateDirectories(attemptsFolder).Where(IsIdFolder))
             {
-                var newestFirst = Directory.EnumerateDirectories(taskFolder).Where(IsIdFolder).OrderByDescending(folder => Guid.Parse(Path.GetFileName(folder)));
-                foreach (var attemptFolder in newestFirst)
+                if (Newest(taskFolder, warnings) is { } record)
                 {
-                    if (TryFold(attemptFolder, warnings) is { } record)
-                    {
-                        latest[record.Task] = record;
-                        break;
-                    }
+                    latest[record.Task] = record;
                 }
             }
         }
@@ -148,6 +146,22 @@ internal sealed class AttemptLog : IDisposable
         return (latest.ToImmutable(), warnings.ToImmutable());
     }
 
+    /// <summary>
+    /// The newest readable attempt of one task, or null. Reconciliation reads a task again this way once it holds the
+    /// task's lock. The read that found the task running has already reported its warnings.
+    /// </summary>
+    public static AttemptRecord? ReadLatest(string attemptsFolder, TaskId task)
+    {
+        try
+        {
+            return Newest(TaskFolder(attemptsFolder, task), ImmutableArray.CreateBuilder<string>());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)
@@ -157,6 +171,20 @@ internal sealed class AttemptLog : IDisposable
             _output?.Dispose();
             _stderr?.Dispose();
         }
+    }
+
+    private static AttemptRecord? Newest(string taskFolder, ImmutableArray<string>.Builder warnings)
+    {
+        var newestFirst = Directory.EnumerateDirectories(taskFolder).Where(IsIdFolder).OrderByDescending(folder => Guid.Parse(Path.GetFileName(folder)));
+        foreach (var attemptFolder in newestFirst)
+        {
+            if (TryFold(attemptFolder, warnings) is { } record)
+            {
+                return record;
+            }
+        }
+
+        return null;
     }
 
     private static AttemptRecord? TryFold(string folder, ImmutableArray<string>.Builder warnings)

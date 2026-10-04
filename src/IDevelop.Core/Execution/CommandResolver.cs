@@ -34,15 +34,15 @@ public sealed class CommandResolver
 {
     private const string PathMarker = "__IDEVELOP_PATH__";
 
-    private readonly Func<Task<ImmutableArray<string>>> _load;
+    private readonly Func<Task<ImmutableArray<string>>> _readSearchPath;
     private readonly ImmutableArray<string> _extensions;
     private Lazy<Task<ImmutableArray<string>>> _searchPath;
 
-    internal CommandResolver(Func<Task<ImmutableArray<string>>> searchPath, ImmutableArray<string> extensions)
+    internal CommandResolver(Func<Task<ImmutableArray<string>>> readSearchPath, ImmutableArray<string> extensions)
     {
-        _load = searchPath;
+        _readSearchPath = readSearchPath;
         _extensions = extensions;
-        _searchPath = Load();
+        _searchPath = ReadFullyQualifiedFolders();
     }
 
     /// <summary>
@@ -51,12 +51,13 @@ public sealed class CommandResolver
     /// </summary>
     internal Task ReloadAsync()
     {
-        _searchPath = Load();
+        _searchPath = ReadFullyQualifiedFolders();
         return _searchPath.Value;
     }
 
     // A relative folder would point into the current folder, so neither the search nor the command's PATH keeps one.
-    private Lazy<Task<ImmutableArray<string>>> Load() => new(async () => [.. (await _load()).Where(Path.IsPathFullyQualified)]);
+    private Lazy<Task<ImmutableArray<string>>> ReadFullyQualifiedFolders() =>
+        new(async () => [.. (await _readSearchPath()).Where(Path.IsPathFullyQualified)]);
 
     /// <param name="extensions">Windows' PATHEXT entries, tried in order. Empty elsewhere, where a file needs an execute bit.</param>
     public static CommandResolver Create(IReadOnlyList<string> searchPath, IReadOnlyList<string> extensions)

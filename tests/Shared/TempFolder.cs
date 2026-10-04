@@ -1,8 +1,11 @@
-namespace IDevelop.Core.Tests;
+namespace IDevelop.TestSupport;
 
-internal sealed class TempFolder : IDisposable
+internal sealed class TempFolder(string? root = null) : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "idevelop-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _root = root ?? NewRoot();
+
+    /// <summary>A new folder's path under the temporary folder. Nothing creates it yet.</summary>
+    public static string NewRoot() => Path.Combine(Path.GetTempPath(), "idevelop-tests", Guid.NewGuid().ToString("N"));
 
     public string Create(string name)
     {

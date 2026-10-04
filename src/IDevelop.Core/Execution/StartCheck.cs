@@ -121,7 +121,7 @@ internal static class StartCheck
             return Block(new StartProblem.NoInstructions());
         }
 
-        var definition = ClientRegistry.Get(client);
+        var definition = Clients.Get(client);
         var prompt = Prompt.For(task);
         var launch = definition.Launch(new LaunchRequest(id, settings.Reasoning, prompt));
         if (ready.Command.UnsafeArgument(launch.Arguments) is { } argument)

@@ -13,6 +13,8 @@ internal static class Pi
 
     public static readonly ClientDefinition Definition = new()
     {
+        Name = "Pi",
+        WireName = "pi",
         Command = "pi",
         Catalog = new CatalogSource.Probed(
             new Probe(["--mode", "rpc", "--no-session"])
@@ -37,7 +39,7 @@ internal static class Pi
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {
-        foreach (var line in ClientRegistry.Lines(output.Stdout).Where(IsModelsResponse))
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsModelsResponse))
         {
             try
             {
@@ -56,7 +58,7 @@ internal static class Pi
             }
         }
 
-        return new CatalogParse.Problem($"Pi did not list its models. {ClientRegistry.ProbeFailure("pi --mode rpc", output)}");
+        return new CatalogParse.Problem($"Pi did not list its models. {Probes.Failure("pi --mode rpc", output)}");
     }
 
     private static bool IsModelsResponse(string line) =>
@@ -73,7 +75,7 @@ internal static class Pi
         return new ModelOption($"{provider}/{id}", $"{model.String("name") ?? id} ({provider})", levels)
         {
             Provider = provider,
-            DefaultReasoning = ClientRegistry.DefaultLevel(levels),
+            DefaultReasoning = ReasoningLevels.Default(levels),
         };
     }
 
@@ -92,7 +94,7 @@ internal static class Pi
         JsonValueKind? Entry(string level) =>
             map is { ValueKind: JsonValueKind.Object } levels && levels.TryGetProperty(level, out var value) ? value.ValueKind : null;
 
-        return ClientRegistry.SortLevels(
+        return ReasoningLevels.Sort(
         [
             .. StandardLevels.Where(level => Entry(level) != JsonValueKind.Null),
             .. ExtraLevels.Where(level => Entry(level) is { } kind && kind != JsonValueKind.Null),
@@ -113,7 +115,7 @@ internal static class Pi
         {
         }
 
-        return ClientRegistry.ProbeFailure($"pi auth check --provider {provider}", output);
+        return Probes.Failure($"pi auth check --provider {provider}", output);
     }
 
     private static ImmutableArray<AgentEvent> Interpret(string line)
