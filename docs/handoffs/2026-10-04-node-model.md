@@ -2,18 +2,19 @@
 
 ## Task
 
-On 2026-10-04 the user made the node model the top priority, ahead of workflow execution: "once the node is designed well, executing the rest is comparatively easy." A node today holds a title, instructions, acceptance criteria, and an agent setting. The user asked for typed nodes, node types that users define and save as blueprints, a review loop between two agents, and a way to talk to a running agent. This record proposes the design. It is a proposal until the user confirms it. The [open issues](#open-issues) list what waits for the user.
+On 2026-10-04 the user made the node model the top priority, ahead of workflow execution: "once the node is designed well, executing the rest is comparatively easy." A node today holds a title, instructions, acceptance criteria, and an agent setting. The user asked for typed nodes, node types that users define and save as blueprints, a review loop between two agents, and a way to talk to a running agent. This record holds the design. The user accepted it on 2026-10-04 and changed the review loop, as [What the user decided](#what-the-user-decided) records.
 
 ## Checklist
 
-The Feature playbook drove the design. Its build steps wait for the user's confirmation.
+The Feature playbook drove the design. Each delivery slice runs the remaining steps in its own pull request.
 
 - [x] 1. `how` over the affected subsystem. A fresh read-only Opus 5.5 session at xhigh mapped the workflow model and the single-task engine against workflow execution.
 - [x] The user answered three product questions. See [What the user decided](#what-the-user-decided).
 - [x] The coordinator ran a two-turn conversation on all four real clients. See [Commands and observed results](#commands-and-observed-results).
 - [x] 2. `architect` for parallel design exploration. Two fresh Opus 5.5 runners at xhigh designed from opposing starting directions. A fresh Opus 5.5 cross-judge at xhigh scored them. See [The design arena](#the-design-arena).
-- [ ] 3. Throughput checkpoint. Slice 1 writes it after the user confirms.
-- [ ] 4. Delegate code writing. Waits for the confirmation.
+- [x] The user accepted the design, kept the defaults for three open questions, and changed the review loop.
+- [ ] 3. Throughput checkpoint. Slice 1 writes it in its pull request.
+- [ ] 4. Delegate code writing, one slice at a time.
 - [ ] 5. to 8. Verify, rebase, interrogate, and open the pull requests, one per slice.
 
 ## What the user decided
@@ -31,7 +32,15 @@ The user wrote in Chinese. This summary keeps the meaning.
 - Placing a node copies its blueprint and records which blueprint and version it came from. A later edit of the blueprint changes only nodes placed afterwards.
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 
-## Proposed design
+After reading the proposal on 2026-10-04, the user kept the defaults for three questions:
+
+- During a workflow run, an accepted proposal only adds nodes and fills nodes that have not started.
+- Changing one node's fields, template, or work means deriving a blueprint first.
+- The Approval node stays in the first release.
+
+The user changed the review loop. The proposal started both agents in fresh sessions each round and paused for the user when a round repeated an earlier one. The user wants the implement node to do its work and tell the reviewer what it changed. The reviewer judges and says what is wrong. The implement node fixes it and hands it back. They go back and forth until both agree. Each agent keeps its own session, the loop has no round limit, and the user does not have to stop it.
+
+## Design
 
 ### A node type is a blueprint over one of three works
 
@@ -84,20 +93,23 @@ Built-ins live in the app under the reserved `idevelop.` id prefix, so they are 
 
 `ConnectionKind.Review` goes away, which settles what a review connection blocks. Connections are `dependency`, which waits for its source and receives its result, and `context`, which reads the source's latest result without waiting. In `Implement → Review → Next`, the review's subject is its one dependency predecessor that produces a change. `Workflow.Apply` rejects a second one. The loop runs as attempts, never as edges, so the dependency graph stays acyclic under today's rule.
 
-Each round has a reviewer turn and, when findings remain, an author turn.
+The implement node runs first, as any node does. Then the review node starts a back-and-forth between two sessions, and each session keeps its own history.
 
-1. The reviewer turn is a fresh read-only session on the review's own agent. It reads the reviewer template, the subject's ticket, the subject's diff, and the ledger. It ends with a verdict that sets each known finding to open, fixed, or withdrawn and adds new ones.
-2. The author turn is a fresh session on the subject's own agent, recorded as a new attempt of the subject node. It reads the fix template, the subject's ticket, and the unresolved findings with the person's guidance. It answers each finding as fixed, or disputed with a reason.
+1. The reviewer's first turn starts its session with the reviewer template, the subject's ticket, the implementer's final report of what it changed and why, and the diff. It answers with a verdict: approve, or findings.
+2. If the reviewer found problems, iDevelop resumes the implementer's own session with the findings. The implementer fixes each one, or disputes it with a reason, and reports what it changed.
+3. iDevelop resumes the reviewer's session with that report and the new diff. The reviewer approves, raises new findings, or answers each dispute by withdrawing the finding or explaining why it stands. Then step 2 repeats.
 
-iDevelop keeps the ledger: each finding's latest state, the author's latest answer, and the person's guidance. It is folded from the review's attempts and the subject's linked fix attempts, so each log keeps one writer. No turn reads an earlier transcript, so a turn's prompt grows with the unresolved findings and not with the number of rounds. That keeps small context windows clean with no limit on rounds.
+Each fix round is a **Continue** of the implement node, a new attempt whose first turn resumes the implementer's session. Each review round is a new turn in the review node's own session. Neither agent reads the other's transcript. Each reads its own history plus the other side's short message, so a round adds one message and one diff to each session. Small tickets keep both sessions small.
 
-The loop ends in one of three ways:
+The loop ends when the two agents agree. The reviewer approves with no open finding, and the implementer's last reply disputes nothing. There is no round limit, and the user does not have to stop it. iDevelop keeps agreement reachable:
 
-- The reviewer leaves nothing unresolved. A disputed finding stays unresolved until the reviewer withdraws it or the person waives it. That is "both satisfied".
-- The person ends it. **Accept as is** waives what is open and hands the change on. **Cancel** fails the review. The person can add guidance at any time.
-- It stalls. A verdict that reads the same revision and leaves the same findings in the same states as any earlier verdict, with no guidance since, means another round would repeat a past one. That catches a loop that stands still and one that goes back and forth. The review waits for the person's ruling, which both agents read in the next round.
+- Every finding names the change that would settle it.
+- A disputed finding goes back to the reviewer, who withdraws it or answers the reason.
+- If a round repeats the positions of an earlier round, iDevelop says so to both agents in their next message and asks the reviewer for the exact change that would settle each open finding.
 
-A loop that keeps finding new problems has not stalled, so it keeps going until the person stops it. The card shows the round and the open count.
+The user can add guidance at any time, which reaches both agents in their next message, and can cancel the review as any run can be cancelled. The loop does not need either to end.
+
+iDevelop folds a findings ledger from the verdicts and replies. The card shows the round and the open findings. The inspector lists each finding with both sides' latest words. The ledger is a record and a view, and the agents talk through their sessions. If a session cannot resume, for example after the user changed the node's client, the next turn starts a fresh session with the ticket, the latest change, and the ledger.
 
 iDevelop records the project tree with `git write-tree` through a temporary index when each turn starts and ends. A node's change is the difference between the tree at its first turn's start and the tree at its last turn's end, so the review reads the subject's change and not every edit in the folder. A read-only turn whose tree changed fails with that reason, which checks read-only access on every client, including Pi, which has no permission system.
 
@@ -164,7 +176,7 @@ Each slice ends in a check that a reviewer can rerun. The real-window checks use
 2. **Typed nodes and format 3.** The node record, embedded blueprints, the built-in Implement, the new `Workflow.Apply` rules, the conversation modes, and the format 2 conversion. *Check.* A test shows that the Implement template renders today's prompt byte for byte. The format 2 sample opens, says what it converted, saves as format 3, and reopens. A May ask node asks and waits on each client.
 3. **Blueprint libraries.** Both libraries, **Save as blueprint**, **Derive**, the blueprint editor with fields and templates, and the palette in the right panel. *Check.* Derive a type into the project library, place it, edit the blueprint to version 2, and place it again. After a save and a reopen, the first node keeps version 1. A built-in offers only **Derive**.
 4. **Planning.** Proposals, the Plan and Architect built-ins, slot and type handles, ghost cards, and accepting a subset as one batch. *Check.* An Architect with two drawn empty nodes fills both and adds one. Accept applies as one undo step. A proposal that would close a cycle names it and applies nothing. A Chat planner shows nodes after its first turn.
-5. **Review and approval.** `ReviewWork`, the ledger, the stall rule over every earlier verdict, author turns as attempts of the subject, tree snapshots, the Review and Approval built-ins, and the removal of `ConnectionKind.Review`. *Check.* Tests drive the ledger through scripted verdicts that approve in one round and in three, stand still, go back and forth, and receive guidance. A seeded defect is found, fixed, and approved with a Codex author and a Claude Code reviewer. No recorded prompt contains an earlier turn's transcript.
+5. **Review and approval.** `ReviewWork`, the two continuing sessions, the ledger, the repeat check over every earlier round, fix rounds as attempts of the subject, tree snapshots, the Review and Approval built-ins, and the removal of `ConnectionKind.Review`. *Check.* Tests drive the loop through scripted replies that agree in one round and in three, settle a dispute that the reviewer withdraws, repeat an earlier round, and receive guidance. A seeded defect is found, fixed, and approved with a Codex implementer and a Claude Code reviewer, and every round resumes the same two sessions.
 
 Workflow execution follows. Its scheduler marks a node ready when every dependency predecessor finished with a handoff, calls `Next` for each ready node, and runs the step it returns. The scheduler, worktrees, and merge rules stay with that phase.
 
@@ -191,7 +203,7 @@ The cross-judge and the coordinator chose B as the base. Its extension point is 
 
 These parts came from A or from the judge:
 
-- The stall rule compares against every earlier verdict, not only the last one, so it catches a loop that goes back and forth. From A.
+- The repeat check compares against every earlier round, not only the last one, so it catches a loop that goes back and forth. From A. After the user's change, a repeat prompts both agents instead of pausing for the user.
 - A `WorkKind` enum tag makes a new work fail the build. B's switch over records would only throw at run time. From A.
 - Planners write slot and type handles and never choose agents, and the person can accept a subset. B let a planner set a new node's agent and accepted only all or nothing. From A.
 - Reconcile still reports Interrupted, and Continue resumes in a new attempt. B had replaced the phase 3 Interrupted case with a waiting state. From the judge.
@@ -205,6 +217,7 @@ These parts were rejected:
 - A's six-call plan acceptance, which the judge flagged as a shallow module, and its id minting on every translation, which could place nodes twice after a crash.
 - A's Architect with edit access. A user who wants design files in the repository derives an Architect with edit access.
 - B's two-verdict stall rule and B's all-or-nothing acceptance, replaced as listed above.
+- Fresh sessions for every review round, which both runners chose to keep each prompt small. The user chose continuing sessions on 2026-10-04, with small tickets keeping them small.
 - Typed ports, which both runners rejected. They would add a port to every connection to express one rule, a review's single subject.
 - One class per node type implementing `INode`, which users cannot write, and which would split the exit policy across classes as phase 3 rejected.
 
@@ -220,23 +233,18 @@ These parts were rejected:
 
 ## Open issues
 
-These wait for the user:
-
-- During a workflow run, may an accepted proposal only add nodes and fill nodes that have not started, as proposed?
-- Is it acceptable that changing one node's structure (its fields, template, or work) means deriving a blueprint?
-- The Approval node is a built-in that the user did not ask for. The product direction lists human review gates, and it costs one small work. Keep it, or drop it from the first release?
-- A review that keeps finding new problems runs until the user stops it, as the user asked. Should iDevelop also notify the user after many rounds, without stopping?
-
 These are unverified, and slice 1 probes the first four:
 
 - Whether every model reliably ends with a readable result block, especially through Pi.
 - Whether a turn stopped mid-tool-call leaves a session that resumes cleanly on each client.
 - Whether Claude Code's plan mode, Codex's read-only sandbox, and Antigravity CLI without accept-edits keep a non-interactive turn read-only.
 - Whether each client runs a slash command, such as `/tdd`, at the start of a non-interactive prompt. If one does not, a PStack or Matt Pocock command reaches that agent as plain text.
+- Whether each client keeps a long resumed session usable, for example by compacting it. A review loop resumes the same two sessions for as many rounds as agreement takes.
+- Two agents that never agree keep the loop running, because the user chose agreement as the only end. The card shows the round count.
 - `pi auth check` reported a provider ready that then answered 401. iDevelop uses that check for Pi's readiness.
 - The shipped Antigravity CLI row reads the conversation id from the `init` event, and the probe read it from the `result` event. Slice 1 checks which one the row should trust.
 - Before workflow execution gives each node its own worktree, tasks that run at once in one project folder blur the tree snapshots. A node's change can then include another task's edits, and a read-only turn can fail because of them.
 
 ## Next action
 
-The user confirms the design or changes it. Then slice 1 starts on its own branch.
+Slice 1, talk to a node, starts on its own branch.

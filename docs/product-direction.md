@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-04. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase. Their design, workflow execution, and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-04. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -97,17 +97,17 @@ On 2026-10-04 the user asked for typed nodes and confirmed these requirements:
 - Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
 - Node types build on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
 - iDevelop does not depend on PStack or any other skill library. A user's own commands and skills work inside a node.
-- A review is two agents that iterate until both are satisfied, with no fixed limit on rounds. Each agent's context window stays clean.
+- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. It has no round limit, and the user does not have to stop it. Small tickets keep each session small.
 - The user can answer, guide, and correct an agent that asks how to proceed. Some nodes never ask. A live terminal is not required.
 - A planner usually creates the implement nodes. Nodes may also exist already, be drawn empty and filled later, or have no planner. The long-term goal is to talk to one agent and get the whole workflow.
 
-The [node model record](handoffs/2026-10-04-node-model.md) proposes the design. A node type is a blueprint over one of three works: an agent, a review loop, or a person. Review becomes a node, and every planner proposes graph edits that the user approves. A conversation resumes the client's own session, so no process runs while a node waits. The design waits for the user's confirmation.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design, which the user accepted on 2026-10-04 with a change to the review loop. A node type is a blueprint over one of three works: an agent, a review loop, or a person. Review becomes a node, and every planner proposes graph edits that the user approves. A conversation resumes the client's own session, so no process runs while a node waits.
 
 ## Connections have explicit meanings
 
-A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. A review connection names the artifact and revision that a reviewer must accept. The [node model proposal](handoffs/2026-10-04-node-model.md#review-is-a-node-and-connections-express-flow) replaces the review connection with a review node.
+A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. A review connection names the artifact and revision that a reviewer must accept. The [node model](handoffs/2026-10-04-node-model.md#review-is-a-node-and-connections-express-flow) replaces the review connection with a review node.
 
-Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop has no fixed round limit, as the user decided on 2026-10-04.
+Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop has no round limit and ends when the implementer and the reviewer agree, as the user decided on 2026-10-04.
 
 Task readiness is derived from dependencies, required inputs, approvals, runner availability, and quota constraints. Attempt status is recorded separately as queued, running, waiting for input, succeeded, failed, cancelled, or interrupted. A disconnected runner has an unknown outcome until reconciliation establishes what happened. The interface should say why a task is waiting rather than present a generic spinner.
 
@@ -268,11 +268,11 @@ iDevelop starts the official clients, so each run uses the sign-in that client a
 
 ### The node model comes next
 
-The [node model record](handoffs/2026-10-04-node-model.md) proposes the design, the five delivery slices, and the questions that wait for the user. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape.
 
 ### Workflow execution follows
 
-The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. The node model proposal settles what a review connection blocks, because a review node replaces it.
+The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. The node model settles what a review connection blocks, because a review node replaces it.
 
 ### Team synchronization comes after execution
 
