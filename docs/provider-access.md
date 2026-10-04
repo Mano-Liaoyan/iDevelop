@@ -1,6 +1,6 @@
 # Provider access reference
 
-Checked on 2026-10-03. These findings describe source code and provider documentation. Apart from the observed client behavior below, no account login, subscription quota, paid request, or live provider integration was tested.
+Checked on 2026-10-03. Apart from the observed client behavior below, these findings describe source code and provider documentation, and no account login, subscription quota, paid request, or live provider integration was tested.
 
 ## Pi AI source snapshot
 

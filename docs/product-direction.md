@@ -221,7 +221,7 @@ The [delivery order](#delivery-order) does not yet assign these cases to phases.
 
 ## Delivery order
 
-On 2026-10-04 the user ordered phases 3, 4, and 5 and set the completion condition of phase 3. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
+On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
 
 | Phase | State | Completion condition |
 | --- | --- | --- |
