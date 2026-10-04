@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:workflows="using:IDevelop.Workflows"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
@@ -48,6 +49,27 @@
     </Style>
     <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
       <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+    </Style>
+    <!-- PlanWeave's status card: the tone's surface, the tone at 55 to 60% as its border, and a ring of the tone at 15%. -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+    </Style>
+    <Style Selector="Border.card.running">
+      <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateRunning55Brush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource CardRunningShadow}" />
+    </Style>
+    <Style Selector="Border.card.complete">
+      <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess55Brush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource CardSuccessShadow}" />
+    </Style>
+    <Style Selector="Border.card.problem">
+      <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateFailed60Brush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
     </Style>
     <Style Selector="TextBlock.cardTitle">
       <Setter Property="FontSize" Value="14" />
@@ -210,12 +232,24 @@
             <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
             <Border Classes="card" Margin="10,0" Padding="12" BorderThickness="1"
                     CornerRadius="{StaticResource RadiusXl}"
-                    Background="{DynamicResource SurfaceRaisedBrush}"
-                    BorderBrush="{DynamicResource Border80Brush}"
-                    BoxShadow="{DynamicResource CardShadow}">
+                    Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                    Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                    Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
               <StackPanel Spacing="4">
-                <TextBlock Classes="cardTitle" Height="24" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Classes="cardLabel" Margin="0,6,0,0" Text="Instructions" />
+                <Grid Height="24" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Classes="cardTitle" VerticalAlignment="Center" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <Border Grid.Column="1" Classes="pill"
+                          Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                          Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon />
+                      <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="CardStatus" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <TextBlock Classes="cardLabel" Margin="0,6,0,0" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="CardAgent" />
                 <Border Classes="prompt" Height="64">
                   <Panel>
                     <TextBlock Text="{Binding Instructions}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
@@ -305,6 +339,45 @@
         </StackPanel>
       </Border>
     </Border>
+
+    <!-- The code-behind sets the margin, so the bar never covers the zoom controls or the minimap. UI Automation shows
+         no plain border, so a user control carries the bar's id. -->
+    <UserControl x:Name="RunBar" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                 IsVisible="{Binding ActiveRun.IsVisible}"
+                 AutomationProperties.AutomationId="RunBar"
+                 AutomationProperties.Name="Running task">
+      <Border Classes="floating">
+        <Border Padding="12,6,6,6">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <PathIcon Classes="spin" Data="{StaticResource LoaderIcon}" Width="14" Height="14"
+                      Foreground="{DynamicResource StateRunningBrush}" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding ActiveRun.TaskTitle}" MaxWidth="200" TextTrimming="CharacterEllipsis"
+                           FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}"
+                           AutomationProperties.AutomationId="RunBarTask" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ActiveRun.AgentLabel}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="RunBarAgent" />
+                <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ActiveRun.Elapsed}"
+                           AutomationProperties.AutomationId="RunBarElapsed" />
+              </Grid>
+              <TextBlock Classes="caption" Text="{Binding ActiveRun.LastActivity}" MaxWidth="360" HorizontalAlignment="Left"
+                         TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ActiveRun.LastActivity}"
+                         AutomationProperties.AutomationId="RunBarActivity" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="ghost" Height="32" VerticalAlignment="Center"
+                    Command="{Binding ActiveRun.CancelCommand}"
+                    AutomationProperties.AutomationId="RunBarCancel"
+                    AutomationProperties.Name="Cancel run">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource StopIcon}" Width="10" Height="10" />
+                <TextBlock Text="Cancel" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+      </Border>
+    </UserControl>
 
     <Border Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Width="200" Height="150">
       <Border>

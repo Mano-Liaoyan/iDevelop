@@ -6,5 +6,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/IDevelop.Core.Tests/IDevelop.Core.Tests.csproj" />
     <Project Path="tests/IDevelop.Desktop.Tests/IDevelop.Desktop.Tests.csproj" />
+    <Project Path="tests/IDevelop.FakeAgent/IDevelop.FakeAgent.csproj" />
   </Folder>
 </Solution>

@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-04. The user selected C# and Avalonia. The desktop editor runs and looks like PlanWeave. Runtime design details remain proposals. No agent execution, provider login, or performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-04. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -221,43 +221,36 @@ The [delivery order](#delivery-order) does not yet assign these cases to phases.
 
 ## Delivery order
 
-On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
+On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement, which the user confirmed again on 2026-10-04. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
 
 | Phase | State | Completion condition |
 | --- | --- | --- |
 | 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
-| 3. Single-task execution | Next | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
-| 4. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
+| 3. Single-task execution | Done | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
+| 4. Workflow execution | Next | A workflow runs as a dependency graph, with linked execution across its tasks. |
 | 5. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
-### Single-task execution comes next
+### Single-task execution is done
 
-Each task node gains an execution configuration with the agent client, the model, and the reasoning setting that the chosen agent and model support. Claude Code, Codex, Pi, and Antigravity CLI are in scope, each through an access route its provider permits. If a client turns out to have no permitted route, the user decides whether the phase completes without it. The [provider access reference](provider-access.md) lists the routes that are still unverified and the client behavior observed so far.
+Each task node carries an execution configuration: the agent client, the model, and the reasoning setting that the chosen client and model support. Running a task starts its configured client in the project folder, and the inspector and the card show the result when it finishes. Running a task ignores its connections. The card's agent label, its status pill, and status-colored cards joined the PlanWeave look with this phase.
 
-Running a task starts its configured agent on the project, and the user sees the result when it finishes. Running a task ignores its connections.
-
-This phase makes the card's agent picker, the card's status pill, and status-colored cards real features, so they join the PlanWeave look.
-
-The user's completion condition gives these cases:
+On 2026-10-04 the user accepted the four proposed cases, so the phase covers six:
 
 - Configure a task's agent, model, and reasoning setting from the values that agent and model support. Save and reopen the project with the configuration intact.
 - Run a task on its own with each of the four clients and see its result.
-
-These further cases are proposals:
-
 - See which clients are installed and ready, and why a client is not ready.
-- Try to run a task whose client is not ready, and see the reason instead of a launch.
+- Try to run a task that cannot start, and see the reason instead of a launch.
 - Cancel a running task and see it recorded as cancelled.
 - Quit the app while a task runs, and see that run reported as interrupted when the project reopens.
 
-The phase's design step settles these questions. Nothing here decides them.
+The phase settled its open design questions. The [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives.
 
-- How the app drives each client. Prefer documented structured interfaces, including ACP where a client actually implements it, and use a client-specific adapter when its official interface is better suited.
-- Whether a run edits the project folder itself or an isolated Git worktree and branch, and whether two runs may overlap in one folder.
-- Where per-user client settings live, and how the workflow file stores each task's configuration. That changes the file format.
-- What the app records about a run and where it keeps that record.
-- How each client's route handles the provider items that are still unverified, such as subscription eligibility for a custom client, unattended use, cancellation, and authentication refresh.
+- Each client runs in its own documented non-interactive mode with a JSON event stream, and the prompt goes over stdin. ACP was not used, because Claude Code and Codex need separately installed adapters for it.
+- A run edits the project folder itself. At most one task of a folder runs at a time, across app instances. Isolated Git worktrees and branches wait for workflow execution.
+- The workflow file format moved to `idevelop.workflow/2`, which stores each task's execution configuration. No per-user client setting exists.
+- Each attempt is an append-only event log inside the project at `.idp/attempts/`, which Git ignores.
+- Each client's own commands decide its readiness and its models, and its own event stream decides whether a run succeeded. iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records what was observed.
 
 ### Workflow execution follows
 
@@ -269,4 +262,4 @@ The current proposal is that synchronization shares a workflow that already carr
 
 ### Later work
 
-The user has not placed these relative to phases 3 to 5, and their own order is open. Generate a draft workflow from a natural-language request. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
+The user has not placed these relative to phases 4 and 5, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generate a draft workflow from a natural-language request. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.

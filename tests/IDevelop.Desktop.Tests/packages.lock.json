@@ -254,6 +254,9 @@
           "NodifyAvalonia": "[6.6.0, )"
         }
       },
+      "idevelop.fakeagent": {
+        "type": "Project"
+      },
       "Avalonia": {
         "type": "CentralTransitive",
         "requested": "[11.3.22, )",

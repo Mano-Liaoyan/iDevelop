@@ -1,0 +1,37 @@
+namespace IDevelop.TestSupport;
+
+internal sealed class WindowsFactAttribute : FactAttribute
+{
+    public WindowsFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Skip = "Only Windows runs batch shims through cmd.exe.";
+        }
+    }
+}
+
+/// <summary>Git for Windows' bash, which Pi runs its commands in on Windows.</summary>
+internal sealed class GitBashFactAttribute : FactAttribute
+{
+    public static readonly string Bash = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
+
+    public GitBashFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() || !File.Exists(Bash))
+        {
+            Skip = $"Git Bash is not installed at {Bash}.";
+        }
+    }
+}
+
+internal sealed class UnixFactAttribute : FactAttribute
+{
+    public UnixFactAttribute()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip = "Only Linux and macOS need an execute bit.";
+        }
+    }
+}

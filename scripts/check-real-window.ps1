@@ -74,6 +74,18 @@ function Find-InProcessWindows([System.Diagnostics.Process] $process, [string] $
     } 10
 }
 
+# A picker's list opens in a window of its own, so its entries are searched across the process's windows.
+function Find-AllInProcess([System.Diagnostics.Process] $process, $controlType) {
+    $condition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $controlType))
+    [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Value($element) {
+    $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+}
+
 function Invoke-Element($element) {
     $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
@@ -200,12 +212,105 @@ try {
         Close-Window $window
     }
 
+    $project = Join-Path $run 'agents-project'
+    Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
+    $agentRows = 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity'
+
+    With-App $project {
+        param($process, $window)
+        foreach ($id in $agentRows) { Check ($null -ne (Find-ById $window $id)) "the AGENTS section lists $id" }
+        $settled = Wait-Until { -not (@($agentRows | ForEach-Object { (Find-ById $window $_).Current.Name }) -match 'Checking') } 120
+        Check ($settled -eq $true) 'every agent client finished its check within 120 seconds'
+        foreach ($id in $agentRows) { $row = Find-ById $window $id; $results.Add("INFO $id says '$($row.Current.Name)'. $($row.Current.HelpText)") }
+        Save-Screenshot $window 'agents.png'
+
+        # The sample's first task asks for Claude Code with Claude Opus 5.5 at high. The model's name comes from the
+        # catalog, or its id when this machine has no Claude Code.
+        $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+        Select-Element $sidebarRows[0]
+        $client = Find-ById $window 'TaskClient'
+        Check ((Value $client) -like 'Claude Code*') "the client picker shows Claude Code (found '$(Value $client)')"
+        Check ((Value (Find-ById $window 'TaskModel')) -match '^(Claude Opus 5\.5|claude-opus-5-5 .+)$') "the model picker shows Claude Opus 5.5 (found '$(Value (Find-ById $window 'TaskModel'))')"
+        Check ((Value (Find-ById $window 'TaskReasoning')) -eq 'high') "the reasoning picker shows high (found '$(Value (Find-ById $window 'TaskReasoning'))')"
+
+        # The second task asks for Codex with GPT-6-Sol at medium, which is not Codex's first model.
+        Select-Element $sidebarRows[1]
+        Check ((Wait-Until { (Value $client) -like 'Codex*' }) -eq $true) "the client picker follows the second task (found '$(Value $client)')"
+        Check ((Value (Find-ById $window 'TaskModel')) -match '^(GPT-6-Sol|gpt-6-sol .+)$') "choosing another task keeps its model (found '$(Value (Find-ById $window 'TaskModel'))')"
+        Check ((Value (Find-ById $window 'TaskReasoning')) -eq 'medium') "choosing another task keeps its reasoning (found '$(Value (Find-ById $window 'TaskReasoning'))')"
+        Select-Element $sidebarRows[0]
+        Check ((Wait-Until { (Value $client) -like 'Claude Code*' }) -eq $true) "the client picker follows the first task again (found '$(Value $client)')"
+        Check ($window.Current.Name -eq 'agents-project - iDevelop') "choosing tasks in the sidebar edits nothing: '$($window.Current.Name)'"
+
+        $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+        $entries = Wait-Until { @(Find-AllInProcess $process ([System.Windows.Automation.ControlType]::ListItem) | Where-Object { $_.Current.Name -match '^(None|Claude Code|Codex|Pi|Antigravity CLI)( · .+)?$' }) | Where-Object { $_ } } 10
+        Check (@($entries).Count -eq 5) "the client picker offers None and the four clients (found $(@($entries).Count))"
+        Select-Element (@($entries) | Where-Object { $_.Current.Name -like 'Codex*' })
+        try { $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse() } catch {}
+        Check ((Wait-Until { (Value $client) -like 'Codex*' }) -eq $true) "choosing Codex selects it (found '$(Value $client)')"
+        Check ((Wait-Until { (Find-ById $window 'PermissionNote').Current.Name -like 'Codex may edit*' }) -eq $true) 'the permission note follows the chosen client'
+        Check ((Wait-Until { $window.Current.Name -eq 'agents-project* - iDevelop' }) -eq $true) "choosing an agent is an unsaved edit: '$($window.Current.Name)'"
+        Save-Screenshot $window 'pickers.png'
+        Close-Window $window
+        Invoke-Element (Find-InProcessWindows $process 'DiscardChanges')
+    }
+
+    # A fake Codex on an otherwise empty PATH, so a run needs no agent account. It answers the probes, starts a process
+    # that outlives it, and waits at a gate that the check never opens.
+    $project = Join-Path $run 'run-project'
+    Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
+    $fakeBin = Join-Path $run 'fake-bin'
+    [IO.Directory]::CreateDirectory($fakeBin) | Out-Null
+    $fakeAgent = Join-Path $PSScriptRoot '../tests/IDevelop.FakeAgent/bin/Release/net10.0/IDevelop.FakeAgent.exe'
+    Check ([IO.File]::Exists($fakeAgent)) "the fake agent is built at $fakeAgent"
+    $sleeperPid = Join-Path $run 'sleeper.pid'
+    $rules = [ordered]@{ rules = @(
+        [ordered]@{ when = @('debug', 'models'); steps = @(@{ replay = (Join-Path $PSScriptRoot '../tests/IDevelop.Core.Tests/Fixtures/codex-debug-models.json') }) },
+        [ordered]@{ when = @('login', 'status'); steps = @(@{ print = 'Logged in using ChatGPT' }) },
+        [ordered]@{ when = @('exec', '--json'); steps = @(@{ spawnThroughCmd = $sleeperPid }, @{ waitForFile = (Join-Path $run 'never') }) }
+    ) }
+    [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.rules.json'), ($rules | ConvertTo-Json -Depth 6 -Compress))
+    [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@`"$fakeAgent`" --rules `"$(Join-Path $fakeBin 'codex.rules.json')`" -- %*`r`n")
+    $savedPath = $env:PATH
+    $env:PATH = $fakeBin
+    try {
+        With-App $project {
+            param($process, $window)
+            Check ((Wait-Until { (Find-ById $window 'AgentCodex').Current.Name -like 'Ready*' } 60) -eq $true) 'the fake Codex is ready'
+            # Claude Code is missing here, so the first task's picker lists only high, and the second task's GPT-6-Sol lists
+            # high third. Moving between them makes Avalonia carry high over to the new list as a selection change.
+            $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+            Select-Element $sidebarRows[0]
+            $reasoning = Find-ById $window 'TaskReasoning'
+            Check ((Wait-Until { (Value $reasoning) -eq 'high' }) -eq $true) "the reasoning picker shows the first task's high (found '$(Value $reasoning)')"
+            Select-Element $sidebarRows[1]
+            Check ((Wait-Until { (Value (Find-ById $window 'TaskClient')) -like 'Codex*' }) -eq $true) "the client picker follows the second task (found '$(Value (Find-ById $window 'TaskClient'))')"
+            Check ((Value $reasoning) -eq 'medium') "the reasoning picker shows the second task's medium (found '$(Value $reasoning)')"
+            Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing a task whose model offers the previous task's level edits nothing: '$($window.Current.Name)'"
+            Invoke-Element (Find-ById $window 'RunTask')
+            $bar = Find-ById $window 'RunBar'
+            Check ($null -ne $bar) 'UI Automation finds the run bar'
+            Check ((Find-ById $window 'RunBarTask').Current.Name -eq 'Implement atomic save') "the run bar names the running task (found '$((Find-ById $window 'RunBarTask').Current.Name)')"
+            $sleeper = Wait-Until { if ([IO.File]::Exists($sleeperPid)) { [int]([IO.File]::ReadAllText($sleeperPid)) } } 30
+            Check ($null -ne $sleeper) 'the fake Codex started a process whose parent exits'
+            Save-Screenshot $window 'run-bar.png'
+
+            Invoke-Element (Find-ById $window 'RunBarCancel')
+            Check ((Wait-Until { (Find-ById $window 'LastRunStatus').Current.Name -eq 'Cancelled' } 30) -eq $true) 'Cancel records the run as cancelled'
+            Check ((Wait-Until { $null -eq (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30) -eq $true) "Cancel stops the process whose parent had exited (pid $sleeper)"
+            Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing and running a task edits nothing: '$($window.Current.Name)'"
+            Close-Window $window
+        }
+    } finally {
+        $env:PATH = $savedPath
+    }
+
     $project = Join-Path $run 'theme-project'
     Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
 
     With-App $project {
         param($process, $window)
-        Check ($null -eq (Settings-Text)) 'two launches left no theme preference'
+        Check ($null -eq (Settings-Text)) 'the earlier launches left no theme preference'
         Check (Is-Selected (Find-ById $window 'ThemeSystem')) 'without a preference the System segment is chosen'
         Select-Element (Find-ById $window 'ThemeLight')
         Check ((Wait-Until { (Settings-Theme) -eq 'light' }) -eq $true) "choosing Light saves 'light' (found '$(Settings-Theme)')"

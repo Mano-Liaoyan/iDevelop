@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using IDevelop.Execution;
 using IDevelop.Workflows;
 
 namespace IDevelop.Projects;
@@ -12,8 +13,6 @@ namespace IDevelop.Projects;
 /// </summary>
 public sealed class WorkflowDocument
 {
-    private const string DataFolderName = ".idp";
-
     private Workflow _saved;
 
     private WorkflowDocument(string projectFolder, string filePath, Workflow workflow)
@@ -48,7 +47,7 @@ public sealed class WorkflowDocument
             throw new ProjectException($"The folder {projectFolder} does not exist.");
         }
 
-        var workflowsFolder = Path.Combine(projectFolder, DataFolderName, "workflows");
+        var workflowsFolder = DataFolder.Workflows(projectFolder);
         string[] files = Directory.Exists(workflowsFolder)
             ? [.. Directory.EnumerateFiles(workflowsFolder, "*.json").Order(StringComparer.Ordinal)]
             : [];
@@ -96,12 +95,7 @@ public sealed class WorkflowDocument
         }
 
         Directory.CreateDirectory(workflowsFolder);
-        var gitignore = Path.Combine(ProjectFolder, DataFolderName, ".gitignore");
-        if (!File.Exists(gitignore))
-        {
-            File.WriteAllText(gitignore, "*.tmp\n");
-        }
-
+        DataFolder.EnsureGitIgnore(ProjectFolder);
         AtomicFile.Replace(FilePath, WorkflowFile.Serialize(snapshot));
         _saved = snapshot;
         Changed?.Invoke(this, EventArgs.Empty);
@@ -113,7 +107,10 @@ public sealed class ProjectException(string message, Exception? inner = null) : 
 
 internal static class WorkflowFile
 {
-    public const string FormatTag = "idevelop.workflow/1";
+    public const string FormatV1 = "idevelop.workflow/1";
+
+    /// <summary>The only format <see cref="Serialize"/> writes. Version 1 files still open, with no agent on any task.</summary>
+    public const string FormatV2 = "idevelop.workflow/2";
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -134,7 +131,7 @@ internal static class WorkflowFile
     {
         var file = new FileDto
         {
-            Format = FormatTag,
+            Format = FormatV2,
             Id = workflow.Id.Value,
             Tasks = [.. workflow.Tasks.Values.Select(task => new TaskDto
             {
@@ -142,6 +139,9 @@ internal static class WorkflowFile
                 Title = task.Title,
                 Instructions = Lines(task.Instructions),
                 AcceptanceCriteria = Lines(task.AcceptanceCriteria),
+                Execution = task.Execution is { } execution
+                    ? new ExecutionDto { Client = Clients.WireName(execution.Client), Model = execution.Model, Reasoning = execution.Reasoning }
+                    : null,
             })],
             Connections = [.. workflow.Connections.Select(connection => new ConnectionDto
             {
@@ -168,12 +168,12 @@ internal static class WorkflowFile
         try
         {
             var format = JsonSerializer.Deserialize<HeaderDto>(utf8, HeaderOptions)?.Format;
-            if (format != FormatTag)
+            file = format switch
             {
-                throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {FormatTag}.");
-            }
-
-            file = JsonSerializer.Deserialize<FileDto>(utf8, Options)!;
+                FormatV1 => JsonSerializer.Deserialize<FileDtoV1>(utf8, Options)!.Upgrade(),
+                FormatV2 => JsonSerializer.Deserialize<FileDto>(utf8, Options)!,
+                _ => throw new ProjectException($"{path} has format \"{format}\". This version of iDevelop reads {FormatV1} and {FormatV2}."),
+            };
         }
         catch (JsonException e)
         {
@@ -204,6 +204,7 @@ internal static class WorkflowFile
                 Title = task.Title,
                 Instructions = Text(task.Instructions, path, id, "instructions"),
                 AcceptanceCriteria = Text(task.AcceptanceCriteria, path, id, "acceptanceCriteria"),
+                Execution = task.Execution is { } execution ? Execution(execution, path, id) : null,
             };
             workflow = Replay(workflow, new WorkflowEdit.CreateTask(definition, new CanvasPoint(point.X, point.Y)), path, $"task {id}");
         }
@@ -254,6 +255,13 @@ internal static class WorkflowFile
         ? throw new ProjectException($"{path}: task {task} has a null line in {property}.")
         : string.Join('\n', lines);
 
+    private static ExecutionSettings Execution(ExecutionDto execution, string path, TaskId task) =>
+        new(Clients.ParseWireName(execution.Client) ?? throw new ProjectException($"{path}: task {task} names unknown agent \"{execution.Client}\"."))
+        {
+            Model = execution.Model,
+            Reasoning = execution.Reasoning,
+        };
+
     private static string KindName(ConnectionKind kind) => kind switch
     {
         ConnectionKind.Dependency => "dependency",
@@ -286,6 +294,47 @@ internal static class WorkflowFile
     }
 
     private sealed class TaskDto
+    {
+        public required Guid Id { get; init; }
+        public required string Title { get; init; }
+        public required string?[] Instructions { get; init; }
+        public required string?[] AcceptanceCriteria { get; init; }
+        public required ExecutionDto? Execution { get; init; }
+    }
+
+    private sealed class ExecutionDto
+    {
+        public required string Client { get; init; }
+        public required string? Model { get; init; }
+        public required string? Reasoning { get; init; }
+    }
+
+    private sealed class FileDtoV1
+    {
+        public required string Format { get; init; }
+        public required Guid Id { get; init; }
+        public required List<TaskDtoV1?> Tasks { get; init; }
+        public required List<ConnectionDto?> Connections { get; init; }
+        public required Dictionary<string, PointDto?> Layout { get; init; }
+
+        public FileDto Upgrade() => new()
+        {
+            Format = FormatV2,
+            Id = Id,
+            Tasks = [.. Tasks.Select(task => task is null ? null : new TaskDto
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Instructions = task.Instructions,
+                AcceptanceCriteria = task.AcceptanceCriteria,
+                Execution = null,
+            })],
+            Connections = Connections,
+            Layout = Layout,
+        };
+    }
+
+    private sealed class TaskDtoV1
     {
         public required Guid Id { get; init; }
         public required string Title { get; init; }

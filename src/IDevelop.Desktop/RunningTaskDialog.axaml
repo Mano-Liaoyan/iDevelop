@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="IDevelop.Desktop.RunningTaskDialog"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="24" Spacing="20">
+    <TextBlock x:Name="Question" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Stop and leave"
+              Click="OnStop"
+              AutomationProperties.AutomationId="StopAndLeave"
+              AutomationProperties.Name="Stop and leave" />
+      <Button x:Name="KeepButton"
+              Content="Keep running"
+              IsDefault="True"
+              IsCancel="True"
+              Click="OnKeep"
+              AutomationProperties.AutomationId="KeepRunning"
+              AutomationProperties.Name="Keep running" />
+    </StackPanel>
+  </StackPanel>
+</Window>

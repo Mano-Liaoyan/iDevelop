@@ -1,6 +1,6 @@
 # iDevelop
 
-A project for building a graphical interface that coordinates multiple coding agents. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). The first application slice is a desktop editor for one project's workflow. It opens a project folder, edits tasks and their connections on a node canvas, and saves the workflow inside the folder without a server.
+A project for building a graphical interface that coordinates multiple coding agents. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). The application is a desktop editor for one project's workflow. It opens a project folder, edits tasks and their connections on a node canvas, saves the workflow inside the folder without a server, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI.
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
@@ -52,9 +52,9 @@ node scripts/planweave-tokens.mjs --check
 dotnet run --project src/IDevelop.Desktop
 ```
 
-The solution is [`iDevelop.slnx`](iDevelop.slnx). `src/IDevelop.Core` holds the workflow model, its edit rules, and the project file format. It has no UI dependency. `src/IDevelop.Desktop` is the Avalonia application with the NodifyAvalonia canvas. The tests in `tests/IDevelop.Desktop.Tests` drive the real main window headlessly with pointer and keyboard input.
+The solution is [`iDevelop.slnx`](iDevelop.slnx). `src/IDevelop.Core` holds the workflow model, its edit rules, the project file format, and the engine that finds the agent clients and runs a task. It has no UI dependency. `tests/IDevelop.FakeAgent` is a stand-in client that replays recorded client output, so the tests start real processes without any agent client installed. `src/IDevelop.Desktop` is the Avalonia application with the NodifyAvalonia canvas. The tests in `tests/IDevelop.Desktop.Tests` drive the real main window headlessly with pointer and keyboard input.
 
-On Windows, `scripts/check-real-window.ps1 -Exe src/IDevelop.Desktop/bin/Release/net10.0/IDevelop.Desktop.exe -OutDir <folder>` drives the built app's real window through UI Automation without moving the mouse. It edits and saves a workflow, answers the unsaved-changes prompt, reopens the project, and switches the theme across a restart. Each run writes its projects and screenshots to a new timestamped folder inside the given folder. The script replaces your theme preference while it runs and restores it afterward, or on its next start if it was killed.
+On Windows, `scripts/check-real-window.ps1 -Exe src/IDevelop.Desktop/bin/Release/net10.0/IDevelop.Desktop.exe -OutDir <folder>` drives the built app's real window through UI Automation without moving the mouse. It edits and saves a workflow, answers the unsaved-changes prompt, reopens the project, and switches the theme across a restart. It reads the AGENTS section and the agent pickers against the clients installed on your machine. It then runs and cancels a task through a fake Codex from the Release build of `tests/IDevelop.FakeAgent`, so the run needs no agent account. Each run writes its projects and screenshots to a new timestamped folder inside the given folder. The script replaces your theme preference while it runs and restores it afterward, or on its next start if it was killed.
 
 Choose the folder button beside **PROJECT** in the sidebar, or name a folder after `--` in the run command to open it at start. Any existing folder opens, including a repository. Its workflow is saved to `.idp/workflows/<workflow-id>.json`, which travels with the repository and reviews as an ordinary diff. The first save creates that folder. Earlier builds wrote the same file format to a differently named data folder, so renaming that folder to `.idp` by hand is enough to open it. [`samples/storage-change`](samples/storage-change) is a three-task example. Copy it to a scratch folder and open the copy, or open a folder of your own. Saving rewrites the opened folder's workflow file, and the tests compare the sample byte for byte.
 
@@ -71,6 +71,29 @@ Every color the app sets comes from `src/IDevelop.Desktop/Theme/Tokens.axaml`. `
 The check matches nothing else. It misses a color name inside a longer value, such as a `BoxShadow`, and `{x:Static Colors.Red}` in XAML. In C# it misses a color made any other way, such as `new Color(...)` or `Brush.Parse("Red")`.
 
 Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, token check, build, and tests on Linux, Windows, and macOS.
+
+## Run a task with an agent client
+
+Install and sign in to the clients you want iDevelop to run: Claude Code (`claude`), Codex (`codex`), Pi (`pi`), or Antigravity CLI (`agy`). iDevelop finds them on PATH. On macOS and Linux it also reads your login shell's PATH, so it finds a client installed through Homebrew, npm, or nvm when the app starts from Finder or a desktop launcher. The **AGENTS** section of the sidebar shows whether each client is ready, and why not. Pi checks sign-in for each provider, so a Pi model whose provider is signed out cannot run while Pi's other models can. The refresh button beside **AGENTS** checks the clients again.
+
+To run a task:
+
+1. Select the task on the canvas or in the sidebar.
+2. In the inspector's **Agent** section, choose the client, the model, and the reasoning level. Each list offers only what that client offers on this machine. A model saved on another machine stays visible, marked as not offered here.
+3. Choose **Run**. If the task cannot start, the reason appears under the button and in the status line, and nothing starts.
+
+The card's status pill and color follow the task's latest run: **Running**, **Succeeded**, **Failed**, **Cancelled**, or **Interrupted**. The inspector shows the last run's configuration, timing, result, and recent activity. While a task runs, a bar at the bottom of the canvas shows it. **Cancel** stops the client and the processes it started. A run that ends on its own leaves running what the client started on purpose, such as a dev server or a browser it opened for you. On Windows each client runs in a Job Object, so Cancel, leaving the project, or iDevelop closing during a run stops every process the client started. On macOS and Linux, a process that the client started and that outlives it keeps running. Closing the window or opening another folder during a run asks first, and stopping there records the run as interrupted. If iDevelop stops during a run, the next open of the project records the run as interrupted and stops its client if it is still running.
+
+A run starts the client in the project folder. Its prompt is the task's title, instructions, and acceptance criteria. One task of a project folder runs at a time, across every iDevelop window. Each client keeps its own rules for what it may do without asking:
+
+- Claude Code may edit files and is denied commands you have not allowed in its settings.
+- Codex may edit files and runs commands in its workspace sandbox.
+- Antigravity CLI may edit files, and its commands stay blocked.
+- Pi has no permission system. It can edit any file and run any command as you.
+
+On Windows, Pi and npm installs of the other clients are `.cmd` shims that run through `cmd.exe`. iDevelop sets `NoDefaultCurrentDirectoryInExePath` for every client, so `cmd.exe` never runs a program from the project folder by its bare name. The setting reaches the agent's own commands too, so a batch file in the project folder runs as `.\build.cmd`, not `build.cmd`. It also refuses to start a `.cmd` client for a project on a network path, because `cmd.exe` would run it in `C:\Windows` instead.
+
+Each run is a folder `.idp/attempts/<task-id>/<attempt-id>/` in the project. `events.jsonl` is iDevelop's record of the run, `output.jsonl` holds the client's raw output, and `stderr.log` holds its error output. `.idp/.gitignore` keeps these folders out of Git. Workflow files use format `idevelop.workflow/2`, which stores each task's agent, model, and reasoning level. iDevelop opens format 1 files and saves them as format 2, which older builds cannot open.
 
 ## Invoke skills in Codex desktop
 

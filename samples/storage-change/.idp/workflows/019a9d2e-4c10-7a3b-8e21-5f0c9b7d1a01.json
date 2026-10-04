@@ -1,5 +1,5 @@
 {
-  "format": "idevelop.workflow/1",
+  "format": "idevelop.workflow/2",
   "id": "019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01",
   "tasks": [
     {
@@ -14,7 +14,12 @@
       "acceptanceCriteria": [
         "A three-task sample opens in a text editor without escaped line breaks.",
         "Chinese text such as 审查说明 stays readable."
-      ]
+      ],
+      "execution": {
+        "client": "claude-code",
+        "model": "claude-opus-5-5",
+        "reasoning": "high"
+      }
     },
     {
       "id": "019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22",
@@ -24,7 +29,12 @@
       ],
       "acceptanceCriteria": [
         "Killing the process during save leaves the previous file intact."
-      ]
+      ],
+      "execution": {
+        "client": "codex",
+        "model": "gpt-6-sol",
+        "reasoning": "medium"
+      }
     },
     {
       "id": "019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33",
@@ -32,7 +42,8 @@
       "instructions": [],
       "acceptanceCriteria": [
         "The reviewer approves the diff or lists the required changes."
-      ]
+      ],
+      "execution": null
     }
   ],
   "connections": [

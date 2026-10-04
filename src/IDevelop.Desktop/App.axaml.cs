@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using IDevelop.Execution;
 
 namespace IDevelop.Desktop;
 
@@ -29,10 +30,12 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var window = new MainWindow();
+            var clients = new ClientDirectory(CommandResolver.FromEnvironment());
+            _ = clients.RefreshAsync();
+            var window = new MainWindow(clients);
             if (desktop.Args is [var folder, ..])
             {
-                window.ViewModel.Open(folder);
+                _ = window.ViewModel.Open(folder);
             }
 
             desktop.MainWindow = window;

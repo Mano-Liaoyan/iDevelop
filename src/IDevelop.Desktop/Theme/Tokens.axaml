@@ -25,7 +25,18 @@
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#402B7EC9" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#662B7EC9" />
       <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#DAEEFF" />
+      <SolidColorBrush x:Key="StateRunningBrush" Color="#00A0A1" />
+      <SolidColorBrush x:Key="StateRunning45Brush" Color="#7300A0A1" />
+      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C00A0A1" />
+      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#CDF4F3" />
+      <SolidColorBrush x:Key="StateSuccessBrush" Color="#44984A" />
+      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#7344984A" />
+      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C44984A" />
+      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#D9F4D9" />
       <SolidColorBrush x:Key="StateFailedBrush" Color="#D7352D" />
+      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80D7352D" />
+      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99D7352D" />
+      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#FFDFD9" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionReviewBrush" Color="#EA580C" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#5A6168" />
@@ -39,6 +50,9 @@
       <Color x:Key="Minimap.BackgroundColor">#EDEFF2</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#90969C</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1A0A0A0A, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #2600A0A1, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #2644984A, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26D7352D, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 12 28 0 #1F000000</BoxShadows>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
@@ -64,7 +78,18 @@
       <SolidColorBrush x:Key="StateSelected25Brush" Color="#4060AAF3" />
       <SolidColorBrush x:Key="StateSelected40Brush" Color="#6660AAF3" />
       <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1C354E" />
+      <SolidColorBrush x:Key="StateRunningBrush" Color="#16BBBC" />
+      <SolidColorBrush x:Key="StateRunning45Brush" Color="#7316BBBC" />
+      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C16BBBC" />
+      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#053838" />
+      <SolidColorBrush x:Key="StateSuccessBrush" Color="#6DBA70" />
+      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#736DBA70" />
+      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C6DBA70" />
+      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#203A21" />
       <SolidColorBrush x:Key="StateFailedBrush" Color="#FD7466" />
+      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80FD7466" />
+      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99FD7466" />
+      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#4F2420" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionReviewBrush" Color="#EA580C" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#999893" />
@@ -78,6 +103,9 @@
       <Color x:Key="Minimap.BackgroundColor">#222629</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#64635D</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1AFAFAFA, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #2616BBBC, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #266DBA70, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26FD7466, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 14 32 0 #52000000</BoxShadows>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>

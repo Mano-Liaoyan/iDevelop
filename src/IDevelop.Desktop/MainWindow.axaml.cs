@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Execution;
 
 namespace IDevelop.Desktop;
 
@@ -14,14 +15,21 @@ public partial class MainWindow : Window
     private bool _waitingForUser;
     private bool _closeConfirmed;
 
-    public MainWindow()
+    /// <summary>For the XAML loader and the designer. Its directory searches no folder, so it finds no client.</summary>
+    public MainWindow() : this(new ClientDirectory(CommandResolver.Create([], [])))
     {
+    }
+
+    /// <param name="clients">The app's one directory. The app starts its first refresh.</param>
+    public MainWindow(ClientDirectory clients)
+    {
+        ViewModel = new MainWindowViewModel(clients);
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
     }
 
-    public MainWindowViewModel ViewModel { get; } = new();
+    public MainWindowViewModel ViewModel { get; }
 
     /// <summary>Asks for a project folder and returns its path, or null when the user cancels.</summary>
     internal Func<Task<string?>> PickFolder { get; set; }
@@ -40,14 +48,19 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!ViewModel.HasUnsavedChanges)
+        if (!ViewModel.HasUnsavedChanges && ViewModel.ActiveRun is null)
         {
             return;
         }
 
         e.Cancel = true;
         _waitingForUser = true;
-        var leave = await ConfirmLeavingDocument();
+        var leave = await ConfirmLeaving();
+        if (leave)
+        {
+            await ViewModel.LeaveProject();
+        }
+
         _waitingForUser = false;
         if (leave)
         {
@@ -79,6 +92,35 @@ public partial class MainWindow : Window
         if (sender is RadioButton { IsChecked: true, Tag: ThemeVariant variant })
         {
             ((App)Application.Current!).Choose(variant);
+        }
+    }
+
+    // The inspector's pickers take a choice the same way, and their bindings only show the task's agent. A picker whose
+    // list is replaced keeps an equal entry from its old list selected, such as the old level when the new client's model
+    // also offers it, so only a change in the open list or by a key on the focused picker is a choice.
+    private static bool IsChoice(ComboBox picker) => picker.IsDropDownOpen || picker.IsKeyboardFocusWithin;
+
+    private void OnClientChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: ClientChoice choice } picker && IsChoice(picker))
+        {
+            task.ChooseClient(choice);
+        }
+    }
+
+    private void OnModelChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))
+        {
+            task.ChooseModel(choice);
+        }
+    }
+
+    private void OnReasoningChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))
+        {
+            task.ChooseReasoning(choice);
         }
     }
 
@@ -114,15 +156,37 @@ public partial class MainWindow : Window
         }
     }
 
+    // A question, the folder picker, or a run that is still stopping can hold an earlier open or close, which would
+    // replace whatever a second open loaded.
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
+        if (_waitingForUser)
+        {
+            return;
+        }
+
         _waitingForUser = true;
-        var folder = await ConfirmLeavingDocument() ? await PickFolder() : null;
-        _waitingForUser = false;
+        var folder = await ConfirmLeaving() ? await PickFolder() : null;
         if (folder is not null)
         {
-            ViewModel.Open(folder);
+            await ViewModel.Open(folder);
         }
+
+        _waitingForUser = false;
+    }
+
+    // Both questions come before either answer acts, so a Cancel at the second leaves the run going. The run stops only
+    // when the project is actually left.
+    private async Task<bool> ConfirmLeaving() => await ConfirmStoppingRun() && await ConfirmLeavingDocument();
+
+    private async Task<bool> ConfirmStoppingRun()
+    {
+        if (ViewModel.ActiveRun is not { } run)
+        {
+            return true;
+        }
+
+        return await new RunningTaskDialog(run.TaskTitle).ShowDialog<RunningTaskChoice?>(this) == RunningTaskChoice.StopAndLeave;
     }
 
     private async Task<bool> ConfirmLeavingDocument()

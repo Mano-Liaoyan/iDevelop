@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -10,6 +12,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Execution;
 using Nodify;
 
 namespace IDevelop.Desktop.Tests;
@@ -27,18 +30,19 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
-    public static Shell Show()
+    /// <summary>Without <paramref name="clients"/> the window finds no client, so no test probes this machine's clients.</summary>
+    public static Shell Show(ClientDirectory? clients = null)
     {
-        var window = new MainWindow();
+        var window = clients is null ? new MainWindow() : new MainWindow(clients);
         window.Show();
         var shell = new Shell(window);
         shell.Render();
         return shell;
     }
 
-    public static Shell Open(string folder)
+    public static Shell Open(string folder, ClientDirectory? clients = null)
     {
-        var window = new MainWindow();
+        var window = clients is null ? new MainWindow() : new MainWindow(clients);
         window.Show();
         window.ViewModel.Open(folder);
         var shell = new Shell(window);
@@ -48,6 +52,15 @@ internal sealed class Shell
 
     public T Find<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+    /// <summary>Scrolls the control into view first, for a control low in the inspector.</summary>
+    public T InView<T>(string automationId) where T : Control
+    {
+        var control = Find<T>(automationId);
+        control.BringIntoView();
+        Render();
+        return control;
+    }
 
     public bool Has<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
@@ -111,6 +124,33 @@ internal sealed class Shell
     }
 
     public void Click(Visual visual) => Click(Center(visual));
+
+    /// <summary>Opens the picker, chooses the entry, and returns every entry the picker offered, in order.</summary>
+    public string[] Pick(string picker, string entry)
+    {
+        var box = InView<ComboBox>(picker);
+        Click(box);
+        string[] offered = [.. Window.GetVisualDescendants().OfType<ComboBoxItem>().Select(TextOf)];
+        Assert.True(offered.Contains(entry), $"The picker offers [{string.Join(", ", offered)}], not {entry}.");
+        // A headless popup sits in the window's overlay layer, where the picker never sees input on its entries,
+        // so the list closes again and the arrow keys choose the entry, as they do for a keyboard user.
+        ControlAutomationPeer.CreatePeerForElement(box).GetProvider<IExpandCollapseProvider>()!.Collapse();
+        box.Focus();
+        var steps = Array.IndexOf(offered, entry) - box.SelectedIndex;
+        for (var step = 0; step < Math.Abs(steps); step++)
+        {
+            Press(steps > 0 ? Key.Down : Key.Up);
+        }
+
+        Assert.Equal(entry, Picked(picker));
+        return offered;
+    }
+
+    /// <summary>What the picker shows as chosen, or its placeholder.</summary>
+    public string Picked(string picker) => TextOf(Find<ComboBox>(picker));
+
+    public static string TextOf(Visual visual) =>
+        string.Join(" ", visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
 
     public Window? Dialog => Window.OwnedWindows.SingleOrDefault();
 
@@ -177,6 +217,18 @@ internal sealed class Shell
         Window.KeyPress(key, modifiers, PhysicalKey.None, null);
         Window.KeyRelease(key, modifiers, PhysicalKey.None, null);
         Render();
+    }
+
+    /// <summary>Runs the UI thread's jobs until the condition holds, for work that ends on another thread.</summary>
+    public void WaitUntil(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            Thread.Sleep(20);
+            Render();
+        }
     }
 
     public void Render()

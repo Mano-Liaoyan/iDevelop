@@ -2,7 +2,10 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Threading;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -26,10 +29,14 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
 
-    public WorkflowCanvasViewModel(WorkflowDocument document, Action<string?> setNotice)
+    public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice)
     {
         _document = document;
+        Runs = runs;
+        Clients = clients;
         _setNotice = setNotice;
+        ActiveRun = new ActiveRunViewModel(runs, clients);
+        runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
         AddTaskCommand = new RelayCommand(AddTaskInView);
         AddTaskAtCommand = new RelayCommand<Point>(location => AddTask(new CanvasPoint(location.X, location.Y)));
@@ -89,6 +96,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public PendingConnectionViewModel PendingConnection { get; }
 
+    public ActiveRunViewModel ActiveRun { get; }
+
     public Point ViewportLocation
     {
         get => _viewportLocation;
@@ -109,6 +118,21 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     internal Workflow Workflow => _document.Current;
 
+    internal ProjectRuns Runs { get; }
+
+    internal ClientDirectory Clients { get; }
+
+    /// <summary>Called on the UI thread after the client directory changes.</summary>
+    internal void OnClientsChanged()
+    {
+        foreach (var node in Nodes)
+        {
+            node.OnAgentChanged();
+        }
+    }
+
+    internal void Notice(string? text) => _setNotice(text);
+
     internal EditResult Edit(WorkflowEdit edit)
     {
         var result = _document.Apply(edit);
@@ -122,6 +146,19 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         (PortViewModel { Side: PortSide.Input } input, PortViewModel { Side: PortSide.Output } output) => new ConnectionKey(output.Node.Id, input.Node.Id),
         _ => null,
     };
+
+    // Each change reads the newest attempts, which is never older than the change itself. A start, even one that another
+    // window's run refuses, also reads the other tasks' attempts again, which another window may have ended or a crash
+    // may have left running.
+    private void ShowAttempts()
+    {
+        foreach (var node in Nodes)
+        {
+            node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id));
+        }
+
+        ActiveRun.Show(Runs.Active);
+    }
 
     private void AddTaskInView()
     {

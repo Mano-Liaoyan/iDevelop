@@ -46,6 +46,78 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- PlanWeave's status marker: the tone's surface, the tone at 45 to 50% as its border, and the tone as its text. -->
+  <Style Selector="Border.pill">
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Border.pill TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.pill PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Data" Value="{StaticResource CircleIcon}" />
+  </Style>
+  <Style Selector="Border.pill.running">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="Border.pill.running PathIcon">
+    <Setter Property="Data" Value="{StaticResource LoaderIcon}" />
+  </Style>
+  <Style Selector="Border.pill.running PathIcon, PathIcon.spin">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="Infinite">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector="Border.pill.complete">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess45Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateSuccessBrush}" />
+  </Style>
+  <Style Selector="Border.pill.complete PathIcon">
+    <Setter Property="Data" Value="{StaticResource CircleCheckIcon}" />
+  </Style>
+  <Style Selector="Border.pill.problem">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateFailed50Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+  <Style Selector="Border.pill.problem PathIcon">
+    <Setter Property="Data" Value="{StaticResource CircleAlertIcon}" />
+  </Style>
+
+  <Style Selector="Ellipse.status">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Fill" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.running">
+    <Setter Property="Fill" Value="{DynamicResource StateRunningBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.complete">
+    <Setter Property="Fill" Value="{DynamicResource StateSuccessBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.problem">
+    <Setter Property="Fill" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+
   <!-- Buttons without a fill until the pointer is over them. Fluent's own state styles set the template's colors,
        so each state is restated here. -->
   <Style Selector="Button.nav, Button.icon, Button.ghost">
@@ -83,6 +155,30 @@
   <Style Selector="Button.ghost">
     <Setter Property="Padding" Value="8,0" />
     <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <!-- A bordered button for a command on the selected item, such as Run. -->
+  <Style Selector="Button.action">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.action:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
 
   <Style Selector="Button.segment, RadioButton.segment">
@@ -181,6 +277,24 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Fluent's own state styles set the template's colors, so each state is restated here. -->
+  <Style Selector="ComboBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="ComboBox:pointerover /template/ Border#Background, ComboBox:pressed /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible /template/ Border#Background, ComboBox:dropdownopen /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
   </Style>
 
   <!-- The splitter is 8 px wide for the pointer and draws a 1 px line in its middle. -->

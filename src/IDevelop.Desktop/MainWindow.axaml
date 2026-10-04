@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
+        xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:workflows="using:IDevelop.Workflows"
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
@@ -27,7 +28,7 @@
 
     <!-- The sidebar has no fill of its own. The window's sidebar color shows through it.
          Its rows are in the order they appear, which is also the Tab order. -->
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
       <!-- Linux ignores the request to draw into the title bar, so the bands that stand in for it collapse there. -->
       <Border Height="44" Background="Transparent"
               IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
@@ -103,6 +104,51 @@
       </Grid>
 
       <Border Grid.Row="3" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="AGENTS" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="icon"
+                    Command="{Binding RefreshAgentsCommand}"
+                    ToolTip.Tip="Check agents again"
+                    AutomationProperties.AutomationId="RefreshAgents"
+                    AutomationProperties.Name="Check agents again">
+              <PathIcon Data="{StaticResource RefreshIcon}" Width="16" Height="16" />
+            </Button>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Agents}"
+                        AutomationProperties.AutomationId="Agents"
+                        AutomationProperties.Name="Agents">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="execution:AgentRow">
+                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. -->
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
+                      Background="Transparent"
+                      ToolTip.Tip="{Binding Detail}">
+                  <Ellipse Classes="status" VerticalAlignment="Center"
+                           Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                           Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                           Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                             FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="{Binding AutomationId}"
+                             AutomationProperties.HelpText="{Binding Detail}" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding Detail}"
+                             TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
+                             IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Row="4" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="8">
           <TextBlock Classes="section" Text="APPEARANCE" />
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
@@ -240,6 +286,111 @@
                                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
                                  AutomationProperties.AutomationId="TaskAcceptanceCriteria"
                                  AutomationProperties.Name="Acceptance criteria" />
+
+                        <TextBlock Classes="section" Text="AGENT" Margin="0,20,0,2" />
+                        <TextBlock Classes="caption" Text="Client" />
+                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
+                                  AutomationProperties.AutomationId="TaskClient"
+                                  AutomationProperties.Name="Client">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:ClientChoice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
+                          <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
+                          <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
+                                    PlaceholderText="Choose a model"
+                                    AutomationProperties.AutomationId="TaskModel"
+                                    AutomationProperties.Name="Model">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate DataType="canvas:Choice">
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
+                            <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
+                            <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
+                                      PlaceholderText="Choose a level"
+                                      AutomationProperties.AutomationId="TaskReasoning"
+                                      AutomationProperties.Name="Reasoning">
+                              <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="canvas:Choice">
+                                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                              </ComboBox.ItemTemplate>
+                            </ComboBox>
+                          </StackPanel>
+                          <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                     AutomationProperties.AutomationId="PermissionNote" />
+                        </StackPanel>
+
+                        <TextBlock Classes="section" Text="RUN" Margin="0,20,0,2" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Button Classes="action" Command="{Binding RunCommand}"
+                                  AutomationProperties.AutomationId="RunTask"
+                                  AutomationProperties.Name="Run">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Data="{StaticResource PlayIcon}" Width="12" Height="12" />
+                              <TextBlock Text="Run" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="action" Command="{Binding CancelCommand}"
+                                  AutomationProperties.AutomationId="CancelRun"
+                                  AutomationProperties.Name="Cancel run">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" />
+                              <TextBlock Text="Cancel" />
+                            </StackPanel>
+                          </Button>
+                        </StackPanel>
+                        <TextBlock Classes="caption" Text="{Binding StartProblem}" TextWrapping="Wrap"
+                                   IsVisible="{Binding StartProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   AutomationProperties.AutomationId="StartProblem" />
+                        <ContentControl Content="{Binding LastAttempt}" Margin="0,6,0,0">
+                          <ContentControl.ContentTemplate>
+                            <DataTemplate DataType="execution:AttemptViewModel">
+                              <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                  <TextBlock Classes="caption" Text="Last run" VerticalAlignment="Center" />
+                                  <Border Grid.Column="1" Classes="pill"
+                                          Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                                          Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                      <PathIcon />
+                                      <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
+                                    </StackPanel>
+                                  </Border>
+                                </Grid>
+                                <TextBlock Classes="caption" Text="{Binding Configuration}" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="LastRunConfiguration" />
+                                <TextBlock Classes="caption" Text="{Binding Timing}"
+                                           AutomationProperties.AutomationId="LastRunTiming" />
+                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                           IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           AutomationProperties.AutomationId="LastRunDetail" />
+                                <TextBox Text="{Binding Result, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
+                                         IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                         AutomationProperties.AutomationId="LastRunResult"
+                                         AutomationProperties.Name="Result" />
+                                <TextBlock Classes="caption" Text="Recent activity" Margin="0,4,0,0" IsVisible="{Binding HasActivity}" />
+                                <ItemsControl ItemsSource="{Binding Activity}"
+                                              AutomationProperties.AutomationId="LastRunActivity"
+                                              AutomationProperties.Name="Recent activity">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                      <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ContentControl.ContentTemplate>
+                        </ContentControl>
                       </StackPanel>
                     </DataTemplate>
                     <DataTemplate DataType="canvas:ConnectionViewModel">

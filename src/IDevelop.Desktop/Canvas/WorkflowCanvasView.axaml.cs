@@ -10,6 +10,12 @@ namespace IDevelop.Desktop.Canvas;
 
 public partial class WorkflowCanvasView : UserControl
 {
+    // The run bar sits in the bottom row between the zoom controls and the minimap, as PlanWeave's does, when it fits
+    // there. On a narrower canvas it sits above them.
+    private static readonly Thickness BetweenCorners = new(54, 12, 224, 12);
+    private static readonly Thickness AboveCorners = new(12, 12, 12, 174);
+    private const double RunBarWidth = 380;
+
     static WorkflowCanvasView()
     {
         // NodifyAvalonia 6.6.0 refreshes a minimap item's layout only inside a DecoratorContainer,
@@ -26,6 +32,8 @@ public partial class WorkflowCanvasView : UserControl
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
+        SizeChanged += (_, e) => RunBar.Margin =
+            e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
     }
 
     /// <summary>Centers the canvas on a task chosen in the sidebar when its card is not wholly in view.</summary>

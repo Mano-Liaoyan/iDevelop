@@ -1,0 +1,35 @@
+using System.Text;
+
+namespace IDevelop.Projects;
+
+/// <summary>The layout of a project's <c>.idp</c> folder, which the workflow document and the attempts share.</summary>
+internal static class DataFolder
+{
+    public const string Name = ".idp";
+
+    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/"];
+
+    public static string Workflows(string projectFolder) => Path.Combine(projectFolder, Name, "workflows");
+
+    public static string Attempts(string projectFolder) => Path.Combine(projectFolder, Name, "attempts");
+
+    /// <summary>
+    /// Makes <c>.idp/.gitignore</c> ignore temporary files and attempts. It keeps the user's lines and appends the
+    /// missing ones, so a project saved before attempts existed gains "attempts/".
+    /// </summary>
+    public static void EnsureGitIgnore(string projectFolder)
+    {
+        var path = Path.Combine(projectFolder, Name, ".gitignore");
+        var text = File.Exists(path) ? File.ReadAllText(path) : "";
+        var present = text.Split('\n').Select(line => line.Trim()).ToHashSet();
+        var missing = IgnoredLines.Where(line => !present.Contains(line)).ToArray();
+        if (missing.Length == 0)
+        {
+            return;
+        }
+
+        var separator = text.Length == 0 || text.EndsWith('\n') ? "" : "\n";
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        AtomicFile.Replace(path, Encoding.UTF8.GetBytes(text + separator + string.Concat(missing.Select(line => line + "\n"))));
+    }
+}
