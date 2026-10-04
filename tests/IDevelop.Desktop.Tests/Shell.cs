@@ -161,6 +161,10 @@ internal sealed class Shell
     /// <summary>What the picker shows as chosen, or its placeholder.</summary>
     public string Picked(string picker) => TextOf(Find<ComboBox>(picker));
 
+    /// <summary>The visible, non-empty texts of the visual and everything in it, in visual order.</summary>
+    public static string[] Texts(Visual visual) =>
+        [.. visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text!)];
+
     public static string TextOf(Visual visual) =>
         string.Join(" ", visual.GetSelfAndVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text => text.Text));
 
