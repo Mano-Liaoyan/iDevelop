@@ -143,7 +143,7 @@ internal static class AttemptReducer
             AttemptEvent.Requested => record,
             AttemptEvent.Launched launched => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
             AttemptEvent.LaunchFailed failed => Settle(record, AttemptStatus.Failed, failed.Reason, failed.At),
-            AttemptEvent.Agent agent => Apply(record, agent.Event, agent.At),
+            AttemptEvent.Agent agent => ApplyAgent(record, agent.Event, agent.At),
             AttemptEvent.CancelRequested => record with { CancelRequested = true, Stopping = true },
             AttemptEvent.InterruptRequested interrupt => record with { InterruptReason = record.InterruptReason ?? interrupt.Reason, Stopping = true },
             AttemptEvent.Exited exited => SettleAtExit(record, exited),
@@ -156,7 +156,7 @@ internal static class AttemptReducer
     public static AttemptRecord Abandon(AttemptRecord record, string reason, DateTimeOffset at) =>
         record.Status == AttemptStatus.Running ? Settle(record, AttemptStatus.Failed, reason, at) : record;
 
-    private static AttemptRecord Apply(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
+    private static AttemptRecord ApplyAgent(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
     {
         AgentEvent.SessionStarted session => record with { SessionId = session.SessionId },
         AgentEvent.Reported reported => record with
