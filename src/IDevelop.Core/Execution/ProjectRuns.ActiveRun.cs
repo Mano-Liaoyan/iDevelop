@@ -18,9 +18,10 @@ public sealed partial class ProjectRuns
     /// each turn's exit. One drain appends each event to the log, folds it, and publishes the record, in that order. A stop
     /// request enqueued before the kill therefore always precedes the exit the kill causes. A turn's output ends at its
     /// exit, so nothing a turn left running writes into the next one.
-    /// A message is accepted only while a turn can still take it. The exit of a turn with no message waiting closes the
-    /// run to messages, under the gate that accepts them, so every accepted message precedes that exit or reaches the
-    /// next turn.
+    /// A message is accepted only while a turn can still take it. A cancel or leave, the exit of a turn with no message
+    /// waiting, and a next turn that does not start each close the run to messages under the gate that accepts them, so
+    /// every accepted message precedes that point or reaches the next turn. Whatever else ends the drain closes the run
+    /// first.
     /// The lock is released only after the last event is on disk, or after the drain stops and the log is closed, so
     /// nothing appends after another instance could take over. The run disposes each turn's process before it starts the
     /// next turn or releases the lock, so a late stop does nothing. While a turn runs, Cancel, Stop and send, and leaving
@@ -213,7 +214,8 @@ public sealed partial class ProjectRuns
         /// <summary>
         /// After a turn ended with a message waiting, starts the next turn with every waiting message. Every event still
         /// queued came from the person, because the ended turn writes nothing more, so they are folded first. False when
-        /// the attempt ended instead: a cancel or leave came first, or the client did not start.
+        /// the attempt ended instead: a cancel or leave came first, or the client did not start. Unless the next turn
+        /// started, the run closes to messages before the gate opens, because no turn is left to take them.
         /// </summary>
         private bool NextTurn()
         {
@@ -221,12 +223,21 @@ public sealed partial class ProjectRuns
             _turn.Process.Dispose();
             lock (_gate)
             {
-                while (Record.Status == AttemptStatus.Running && _events.Reader.TryRead(out var e))
+                var started = false;
+                try
                 {
-                    Append(e);
-                }
+                    while (Record.Status == AttemptStatus.Running && _events.Reader.TryRead(out var e))
+                    {
+                        Append(e);
+                    }
 
-                return Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session);
+                    started = Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session);
+                    return started;
+                }
+                finally
+                {
+                    _closed |= !started;
+                }
             }
         }
 

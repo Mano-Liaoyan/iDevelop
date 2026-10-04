@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using IDevelop.Execution;
@@ -409,6 +410,52 @@ public sealed class ConversationTests : IDisposable
         Assert.EndsWith($$""","command":"codex resume {{Session}}"}""", lastLine);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal(handed.Terminal, reopened.Latest[SayHiId].Terminal);
+    }
+
+    /// <summary>
+    /// The sender races the run for its gate, so a run that stays open after its next turn fails to start loses a
+    /// message in most runs of this test, not in every run. Deleting a running .cmd shim would end its batch early on
+    /// Windows.
+    /// </summary>
+    [UnixFact]
+    public async Task Every_message_accepted_while_a_later_turn_fails_to_start_reaches_the_log()
+    {
+        var shim = Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var codex = SayHi(Settings[ClientId.Codex]);
+        var settled = NextSettled(runs);
+        var started = Assert.IsType<StartResult.Started>(runs.Start(codex));
+        await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
+        runs.Send(codex, "banana", stopTurn: false);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        File.Delete(shim);
+        var accepted = new ConcurrentQueue<string>();
+        var sending = true;
+        var sender = Task.Run(() =>
+        {
+            for (var i = 0; Volatile.Read(ref sending); i++)
+            {
+                switch (runs.Send(codex, $"message {i}", stopTurn: false))
+                {
+                    case SendResult.Queued:
+                        accepted.Enqueue($"message {i}");
+                        break;
+                    case SendResult.Continued:
+                        return;
+                }
+            }
+        });
+
+        File.WriteAllText(_gate, "");
+
+        await settled;
+        Volatile.Write(ref sending, false);
+        await sender.WaitAsync(Patience);
+        var events = AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id));
+        var record = AttemptReducer.Replay(events)!;
+        Assert.Equal(AttemptStatus.Failed, record.Status);
+        Assert.Equal([TurnOutcome.Succeeded, TurnOutcome.Failed], record.Turns.Select(turn => turn.Outcome));
+        Assert.Empty(accepted.Except(events.OfType<AttemptEvent.MessageQueued>().Select(e => e.Text)));
     }
 
     private static TaskDefinition SayHi(ExecutionSettings settings) =>
