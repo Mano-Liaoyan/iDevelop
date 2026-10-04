@@ -383,8 +383,9 @@ public sealed class ProjectRunsTests : IDisposable
         runs.LeaveTimeout = TimeSpan.FromMilliseconds(100);
         var stalled = 0;
         var last = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, record) =>
+        runs.Changed += (_, _) =>
         {
+            var record = runs.Latest[SayHiId];
             if (record.Stopping && Interlocked.Exchange(ref stalled, 1) == 0)
             {
                 Thread.Sleep(TimeSpan.FromSeconds(1));
@@ -545,9 +546,9 @@ public sealed class ProjectRunsTests : IDisposable
     private static Task<AttemptRecord> NextSettled(ProjectRuns runs)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, record) =>
+        runs.Changed += (_, _) =>
         {
-            if (record.Status != AttemptStatus.Running)
+            if (runs.Latest.GetValueOrDefault(SayHiId) is { Status: not AttemptStatus.Running } record)
             {
                 settled.TrySetResult(record);
             }

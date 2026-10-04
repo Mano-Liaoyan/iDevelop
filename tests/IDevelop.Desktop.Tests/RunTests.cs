@@ -222,7 +222,7 @@ public sealed class RunTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_second_window_shows_the_other_windows_run_and_learns_that_it_ended_when_it_starts_a_task()
+    public void A_second_window_shows_the_other_windows_runs_and_learns_how_they_ended_when_it_tries_to_start_a_task()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
@@ -241,12 +241,20 @@ public sealed class RunTests : IDisposable
 
         first.Click(first.Find<Button>("RunBarCancel"));
         first.WaitUntil(() => CardStatus(first) == "Cancelled", "the first window's run is cancelled");
-        second.Click(second.Header(second.Node("Review")));
+        first.Click(first.Header(first.Node("Review")));
+        first.Click(first.InView<Button>("RunTask"));
         second.Click(second.InView<Button>("RunTask"));
 
-        Assert.Equal(["Cancelled", "Running"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
+        Assert.Equal("\"Review\" is running, and a project runs one task at a time.", second.Status);
+        Assert.Equal(["Cancelled", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
+
+        first.Click(first.Find<Button>("RunBarCancel"));
+        first.WaitUntil(() => CardStatus(first, "Review") == "Cancelled", "the first window's second run is cancelled");
+        second.Click(second.InView<Button>("RunTask"));
+
+        Assert.Equal(["Running", "Cancelled"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
         second.Click(second.Find<Button>("RunBarCancel"));
-        second.WaitUntil(() => CardStatus(second, "Review") == "Cancelled", "the second window's run is cancelled");
+        second.WaitUntil(() => CardStatus(second) == "Cancelled", "the second window's run is cancelled");
     }
 
     [AvaloniaTheory]

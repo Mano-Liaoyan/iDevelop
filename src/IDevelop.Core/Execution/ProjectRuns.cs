@@ -85,7 +85,7 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// False for an attempt another window started. That window may have ended it since, and <see cref="Latest"/> shows
-    /// the end only after the next <see cref="Start"/> reads the attempts again.
+    /// the end only after the next <see cref="Start"/> reads the attempts again, whether it starts or not.
     /// </summary>
     public bool StartedHere(AttemptId attempt)
     {
@@ -96,12 +96,13 @@ public sealed class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>
-    /// Raised with each new state of an attempt this window starts. The first comes from <see cref="Start"/> on its caller's
-    /// thread and the rest from a worker thread, in order. By the last one, <see cref="Active"/> is null and the folder is
-    /// free. Its status is settled, unless leaving gave up on a client that did not end; that attempt stays on record as
-    /// running, and the next open settles it.
+    /// Raised after <see cref="Latest"/> or <see cref="Active"/> changes: at each new state of an attempt this window
+    /// starts, and at a start that another window's run refuses, which reads every task's newest attempt again. A start
+    /// raises it on its caller's thread and a run from a worker thread, in order. By a run's last one,
+    /// <see cref="Active"/> is null and the folder is free. The attempt is settled, unless leaving gave up on a client
+    /// that did not end; that attempt stays on record as running, and the next open settles it.
     /// </summary>
-    public event EventHandler<AttemptRecord>? Changed;
+    public event EventHandler? Changed;
 
     /// <summary>
     /// Reads the newest attempt of each task. When no instance runs a task of this folder, it also settles any attempt that
@@ -157,8 +158,8 @@ public sealed class ProjectRuns : IAsyncDisposable
     /// </summary>
     public StartResult Start(TaskDefinition task)
     {
-        AttemptRecord record;
-        ActiveRun? run;
+        StartResult result;
+        ActiveRun? run = null;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
@@ -186,44 +187,47 @@ public sealed class ProjectRuns : IAsyncDisposable
 
             if (held is null)
             {
-                return new StartResult.Refused(RunningElsewhere());
+                result = new StartResult.Refused(ReadAnotherWindowsRun());
             }
-
-            AttemptLog log;
-            AttemptEvent.Requested requested;
-            try
+            else
             {
-                var (latest, warnings) = AttemptLog.ReadLatest(_attempts);
-                var notes = warnings.ToBuilder();
-                Latest = Reconcile(_attempts, latest, notes);
-                Warnings = notes.ToImmutable();
-                DataFolder.EnsureGitIgnore(ProjectFolder);
-                requested = new AttemptEvent.Requested(
-                    DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
-                log = AttemptLog.Create(_attempts, requested);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                held.Dispose();
-                return CannotRecord(e);
-            }
+                AttemptLog log;
+                AttemptEvent.Requested requested;
+                try
+                {
+                    var (latest, warnings) = AttemptLog.ReadLatest(_attempts);
+                    var notes = warnings.ToBuilder();
+                    Latest = Reconcile(_attempts, latest, notes);
+                    Warnings = notes.ToImmutable();
+                    DataFolder.EnsureGitIgnore(ProjectFolder);
+                    requested = new AttemptEvent.Requested(
+                        DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Prompt, plan.Command.Path, plan.Launch.Arguments);
+                    log = AttemptLog.Create(_attempts, requested);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    held.Dispose();
+                    return CannotRecord(e);
+                }
 
-            (record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
-            _started.Add(record.Id);
-            _active = run;
-            Latest = Latest.SetItem(task.Id, record);
+                (var record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
+                _started.Add(record.Id);
+                _active = run;
+                Latest = Latest.SetItem(task.Id, record);
+                result = new StartResult.Started(record);
+            }
         }
 
         try
         {
-            Changed?.Invoke(this, record);
+            Changed?.Invoke(this, EventArgs.Empty);
         }
         finally
         {
             run?.Start();
         }
 
-        return new StartResult.Started(record);
+        return result;
     }
 
     /// <summary>Stops the task's client and every process it started, and records the attempt as cancelled.
@@ -355,10 +359,14 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     private StartResult.Refused CannotRecord(Exception e) => new(new StartProblem.CannotRecord($"iDevelop could not write {_attempts}. {e.Message}"));
 
-    private StartProblem RunningElsewhere() =>
-        AttemptLog.ReadLatest(_attempts).Latest.Values.Where(record => record.Status == AttemptStatus.Running).MaxBy(record => record.Id) is { } running
+    /// <summary>Another instance holds the lock, so the read settles nothing.</summary>
+    private StartProblem ReadAnotherWindowsRun()
+    {
+        (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
+        return Latest.Values.Where(record => record.Status == AttemptStatus.Running).MaxBy(record => record.Id) is { } running
             ? new StartProblem.AlreadyRunning(running.Task, running.TaskTitle)
             : new StartProblem.RunInAnotherWindow();
+    }
 
     private void Publish(AttemptRecord record)
     {
@@ -369,7 +377,7 @@ public sealed class ProjectRuns : IAsyncDisposable
 
         if (record.Status == AttemptStatus.Running)
         {
-            Changed?.Invoke(this, record);
+            Changed?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -385,7 +393,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             Latest = Latest.SetItem(run.Record.Task, run.Record);
         }
 
-        Changed?.Invoke(this, run.Record);
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

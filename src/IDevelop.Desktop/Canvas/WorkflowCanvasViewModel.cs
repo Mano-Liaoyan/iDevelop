@@ -147,8 +147,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         _ => null,
     };
 
-    // Each change reads the newest attempts, which is never older than the change itself. A start also reads the other
-    // tasks' attempts again, which another window may have ended or a crash may have left running.
+    // Each change reads the newest attempts, which is never older than the change itself. A start, even one that another
+    // window's run refuses, also reads the other tasks' attempts again, which another window may have ended or a crash
+    // may have left running.
     private void ShowAttempts()
     {
         foreach (var node in Nodes)
