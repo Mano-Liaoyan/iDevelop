@@ -137,10 +137,11 @@ function Get-SettingsTheme {
     if ($text) { ($text | ConvertFrom-Json).theme }
 }
 
-# An owner file another run is still writing reads as an owner with no run.
+# An empty or damaged owner file reads as an owner with no run, which no live run can be.
 function Get-SettingsOwner {
     if ([IO.File]::Exists($OwnerFile)) {
-        try { [IO.File]::ReadAllText($OwnerFile) | ConvertFrom-Json } catch { [pscustomobject]@{ run = $null; pid = 0; started = 0 } }
+        $owner = try { [IO.File]::ReadAllText($OwnerFile) | ConvertFrom-Json } catch { $null }
+        if ($owner) { $owner } else { [pscustomobject]@{ run = $null; pid = 0; started = 0 } }
     }
 }
 
@@ -151,12 +152,13 @@ function Test-OwnerAlive($Owner) {
     $null -ne $process -and $process.StartTime.ToUniversalTime().Ticks -eq $Owner.started
 }
 
+# Called only under Use-SettingsLock, so no run reads the file half written.
 function Write-SettingsOwner([string] $Run, [System.Diagnostics.Process] $Process) {
     $owner = [ordered]@{ run = $Run; pid = $Process.Id; started = $Process.StartTime.ToUniversalTime().Ticks }
     [IO.File]::WriteAllText($OwnerFile, ($owner | ConvertTo-Json -Compress))
 }
 
-function Restore-BackupFile {
+function Restore-Backup {
     if ([IO.File]::Exists($BackupFile)) {
         if ((Get-Item -LiteralPath $BackupFile).Length -eq 0) {
             [IO.File]::Delete($SettingsFile)
@@ -165,52 +167,45 @@ function Restore-BackupFile {
         }
         [IO.File]::Delete($BackupFile)
     }
-}
-
-function Restore-Backup {
-    Restore-BackupFile
     if ([IO.File]::Exists($OwnerFile)) { [IO.File]::Delete($OwnerFile) }
 }
 
-# The owner file is the lock. Only one of two runs that start together can create it.
-function Lock-SettingsOwner([string] $Run, [System.Diagnostics.Process] $Owner) {
-    $record = [ordered]@{ run = $Run; pid = $Owner.Id; started = $Owner.StartTime.ToUniversalTime().Ticks }
-    $bytes = [Text.Encoding]::UTF8.GetBytes(($record | ConvertTo-Json -Compress))
+# Runs in separate shells check the owner file and then act on it, so one named mutex makes each check and its
+# action a single step. A shell that died holding the mutex leaves it abandoned, which the next run may take.
+function Use-SettingsLock([scriptblock] $Body) {
+    $mutex = [Threading.Mutex]::new($false, 'Local\IDevelopVerifyThemePreference')
+    $held = $false
     try {
-        $stream = [IO.File]::Open($OwnerFile, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read)
-    } catch {
-        if ([IO.File]::Exists($OwnerFile)) { return $false }
-        throw
+        try { $held = $mutex.WaitOne(30000) } catch [Threading.AbandonedMutexException] { $held = $true }
+        if (-not $held) { throw 'Another verification run is taking or returning the iDevelop theme preference. Try again.' }
+        & $Body
+    } finally {
+        if ($held) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
     }
-    try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
-    $true
 }
 
 # The preference is per user, so one verification run at a time may replace it. A backup left by a killed run is
 # restored before a new one is taken.
 function Backup-Settings([string] $Run, [System.Diagnostics.Process] $Owner = (Get-Process -Id $PID)) {
-    [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $SettingsFile)) | Out-Null
-    $current = Get-SettingsOwner
-    if ($current -and $current.run -eq $Run -and [IO.File]::Exists($BackupFile)) {
-        Write-SettingsOwner $Run $Owner
-        return
-    }
-    while (-not (Lock-SettingsOwner $Run $Owner)) {
+    Use-SettingsLock {
         $current = Get-SettingsOwner
-        if (-not $current) { continue }
-        if ($current.run -eq $Run) { break }
-        if (-not $current.run) { throw "Another verification run is taking the iDevelop theme preference. If none runs, delete $OwnerFile." }
-        if (Test-OwnerAlive $current) {
+        if ($current -and $current.run -eq $Run -and [IO.File]::Exists($BackupFile)) {
+            Write-SettingsOwner $Run $Owner
+            return
+        }
+        if ($current -and $current.run -and $current.run -ne $Run -and (Test-OwnerAlive $current)) {
             throw "Another verification run owns the iDevelop theme preference: $($current.run), pid $($current.pid). Only one may run at a time per Windows account. If it is a verify-idevelop session, Stop-IDevelop -Run '$($current.run)' ends it."
         }
         Restore-Backup
+        [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $SettingsFile)) | Out-Null
+        if ([IO.File]::Exists($SettingsFile)) { [IO.File]::Move($SettingsFile, $BackupFile) } else { [IO.File]::WriteAllText($BackupFile, '') }
+        Write-SettingsOwner $Run $Owner
     }
-    Restore-BackupFile
-    if ([IO.File]::Exists($SettingsFile)) { [IO.File]::Move($SettingsFile, $BackupFile) } else { [IO.File]::WriteAllText($BackupFile, '') }
 }
 
 function Restore-Settings([string] $Run) {
-    if ((Get-SettingsOwner).run -eq $Run) { Restore-Backup }
+    Use-SettingsLock { if ((Get-SettingsOwner).run -eq $Run) { Restore-Backup } }
 }
 
 # A fake Codex for a PATH of its own, so a run needs no agent account. It answers the probes, starts a process whose
@@ -333,7 +328,7 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
     } finally {
         $env:PATH = $savedPath
     }
-    Write-SettingsOwner $Run $process
+    Use-SettingsLock { Write-SettingsOwner $Run $process }
     $state = [pscustomobject]@{
         run = $Run; project = $Project; exe = $ReleaseExe; pid = $process.Id
         started = $process.StartTime.ToUniversalTime().Ticks; fakeCodex = -not $RealClients; stopped = $false
