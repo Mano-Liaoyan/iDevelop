@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Execution;
+using IDevelop.Workflows;
 using Nodify;
 
 namespace IDevelop.Desktop.Tests;
@@ -92,6 +93,13 @@ internal sealed class Shell
     public IEnumerable<BaseConnection> Connections() =>
         Window.GetVisualDescendants().OfType<BaseConnection>().Where(connection => connection.DataContext is ConnectionViewModel);
 
+    /// <summary>Each drawn connection's ends and kind, in order.</summary>
+    public (string From, string To, ConnectionKind Kind)[] Drawn() =>
+        [.. Connections()
+            .Select(connection => (ConnectionViewModel)connection.DataContext!)
+            .Select(connection => (connection.From.Title, connection.To.Title, connection.Kind))
+            .Order()];
+
     public NodeOutput Output(string title) =>
         Window.GetVisualDescendants().OfType<NodeOutput>().Single(output => ((PortViewModel)output.DataContext!).Node.Title == title);
 
@@ -106,6 +114,10 @@ internal sealed class Shell
         Center(connector.GetVisualDescendants().OfType<TemplatedControl>().Single(control => control.Name == "PART_Connector"));
 
     public (Point Source, Point Target) Ends(BaseConnection connection) => (At(connection, connection.Source), At(connection, connection.Target));
+
+    public static Point Rounded(Point point) => new(Math.Round(point.X, 2), Math.Round(point.Y, 2));
+
+    public static (Point, Point) Rounded((Point Source, Point Target) ends) => (Rounded(ends.Source), Rounded(ends.Target));
 
     // Step connections from one output share their first runs. Only the run that enters the target is unique to one
     // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
