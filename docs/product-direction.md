@@ -244,7 +244,7 @@ On 2026-10-04 the user accepted the four proposed cases, so the phase covers six
 - Cancel a running task and see it recorded as cancelled.
 - Quit the app while a task runs, and see that run reported as interrupted when the project reopens.
 
-The phase settled its open design questions. The [working decisions](context.md#working-decisions) state each one, and the [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives. The [agent client behavior](agent-clients.md) reference records what each client does when it runs.
+The phase settled its open design questions. The [working decisions](context.md#working-decisions) state the settled rules, and the [execution record](handoffs/2026-10-04-single-task-execution.md) gives the reasons and the rejected alternatives. The [agent client behavior](agent-clients.md) reference records what each client does when it runs.
 
 iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
 

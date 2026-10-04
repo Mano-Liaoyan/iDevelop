@@ -67,7 +67,7 @@ These versioned records support handoffs. They do not provide live messaging, cr
 
 ## Configure models for quality
 
-[`.pstack/models.json`](../.pstack/models.json) assigns each development role its model and reasoning level, and [`.pstack/compatibility.md`](../.pstack/compatibility.md) states the policy and maps PStack's workflow roles to those roles. Run `node scripts/model-policy.mjs validate` to check the policy, and `node scripts/model-policy.mjs resolve <role>` to get the model and effort for a role, or the missing participants that block it.
+[`.pstack/models.json`](../.pstack/models.json) assigns each development role its model and reasoning level, and [`.pstack/compatibility.md`](../.pstack/compatibility.md) states the policy and maps PStack's workflow roles to those roles. Run `node scripts/model-policy.mjs validate` to check the policy, and `node scripts/model-policy.mjs resolve <role>` to get the model and effort for a role, or the missing participants that block it. A blocked role exits with code 2. A ready route does not mean any review has run.
 
 These settings govern the agents developing iDevelop. The application's provider connections and a programmatic dispatcher across providers remain separate product work.
 
