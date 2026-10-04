@@ -18,12 +18,15 @@ public class StartCheckTests
     };
 
     [Fact]
-    public void A_task_that_can_start_gets_its_command_and_prompt()
+    public void A_task_that_can_start_gets_its_command_arguments_and_prompt()
     {
         var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(SolHigh), Folder, CodexReady)).Plan;
 
         Assert.Same(CodexCommand, plan.Command);
-        Assert.Equal("# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n", plan.Prompt);
+        Assert.Equal(
+            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            plan.Launch.Arguments.ToArray());
+        Assert.Equal("# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n", plan.Launch.Stdin);
     }
 
     [Fact]
