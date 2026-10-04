@@ -26,7 +26,9 @@ public class StartCheckTests
         Assert.Equal(
             ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
             plan.Launch.Arguments.ToArray());
-        Assert.Equal("# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n", plan.Launch.Stdin);
+        const string prompt = "# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n";
+        Assert.Equal(prompt, plan.Launch.Stdin);
+        Assert.Equal(prompt, plan.Prompt);
     }
 
     [Fact]
