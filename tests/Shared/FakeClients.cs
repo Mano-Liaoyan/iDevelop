@@ -27,6 +27,15 @@ internal sealed class FakeClients
 
     public CommandResolver Resolver => CommandResolver.Create([Folder], OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []);
 
+    /// <summary>A client directory that searches only this folder, after its first refresh.</summary>
+    public async Task<ClientDirectory> DiscoverAsync()
+    {
+        var clients = new ClientDirectory(Resolver);
+        // The headless tests block on this on the UI thread, so its end must not need that thread.
+        await clients.RefreshAsync().ConfigureAwait(false);
+        return clients;
+    }
+
     /// <summary>Writes the shim for <paramref name="command"/>, or replaces it.</summary>
     public string Install(string command, params FakeRule[] rules)
     {

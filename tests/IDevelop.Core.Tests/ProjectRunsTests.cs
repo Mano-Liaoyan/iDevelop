@@ -89,7 +89,7 @@ public sealed class ProjectRunsTests : IDisposable
             .RecordWorkingDirectory(Evidence("folder.txt"))
             .CaptureStdin(Evidence("stdin.txt"))
             .Replay(Fixture.Path(expected.Fixture)));
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         await using var runs = ProjectRuns.Open(_project, clients);
         var settled = NextSettled(runs);
 
@@ -130,7 +130,7 @@ public sealed class ProjectRunsTests : IDisposable
         Environment.SetEnvironmentVariable(NoCurrentFolder, null);
         try
         {
-            await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+            await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
             var settled = NextSettled(runs);
 
             runs.Start(SayHi(Runs[ClientId.Codex].Settings));
@@ -165,7 +165,7 @@ public sealed class ProjectRunsTests : IDisposable
             FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
                 .RecordWorkingDirectory(Evidence("folder.txt"))
                 .Replay(Fixture.Path("codex-success.jsonl")));
-            await using var runs = ProjectRuns.Open(junction, await DiscoverAsync());
+            await using var runs = ProjectRuns.Open(junction, await _fakes.DiscoverAsync());
             var settled = NextSettled(runs);
 
             runs.Start(SayHi(Runs[ClientId.Codex].Settings));
@@ -193,7 +193,7 @@ public sealed class ProjectRunsTests : IDisposable
             On(codex, "debug", "models").Replay(Fixture.Path("codex-debug-models.json")),
             On(codex, "login", "status").Print("Logged in using ChatGPT"),
             On(codex, "exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         Assert.Equal(
             ["gpt-6.1-sol", "gpt-6-sol", "gpt-5.5"],
             Assert.IsType<ClientStatus.Ready>(clients.Current[ClientId.Codex]).Models.Select(model => model.Id));
@@ -212,7 +212,7 @@ public sealed class ProjectRunsTests : IDisposable
     {
         var expected = Runs[ClientId.Pi];
         FakeAgents.Install(_fakes, ClientId.Pi, On().Replay(Fixture.Path("pi-auth-error.jsonl")).Exit(0));
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var settled = NextSettled(runs);
 
         runs.Start(SayHi(expected.Settings));
@@ -230,7 +230,7 @@ public sealed class ProjectRunsTests : IDisposable
             .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
             .SpawnSleepingChild(grandchild)
             .Hang());
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         _spawned.Add(started.Attempt.Process!.Value.Id);
@@ -251,7 +251,7 @@ public sealed class ProjectRunsTests : IDisposable
     {
         var sleeper = Evidence("sleeper.pid");
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnThroughCmd(sleeper).Hang());
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         _spawned.Add(started.Attempt.Process!.Value.Id);
@@ -271,7 +271,7 @@ public sealed class ProjectRunsTests : IDisposable
     {
         var sleeper = Evidence("sleeper.pid");
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnSleepingChild(sleeper).Replay(Fixture.Path("codex-success.jsonl")).Exit(0));
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var settled = NextSettled(runs);
 
         runs.Start(SayHi(Runs[ClientId.Codex].Settings));
@@ -320,7 +320,7 @@ public sealed class ProjectRunsTests : IDisposable
     {
         var grandchild = Evidence("grandchild.pid");
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").SpawnSleepingChild(grandchild).Hang());
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         var runs = ProjectRuns.Open(_project, clients);
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
@@ -347,7 +347,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task Two_tasks_run_at_once_and_a_task_runs_once_at_a_time_across_windows()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Hang());
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         await using var first = ProjectRuns.Open(_project, clients);
         await using var second = ProjectRuns.Open(_project, clients);
         var settled = NextSettled(first);
@@ -389,7 +389,7 @@ public sealed class ProjectRunsTests : IDisposable
             .Print("locked")
             .WaitForFile(gate));
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         using var other = Process.Start(new ProcessStartInfo(holder)
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -412,7 +412,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task Leaving_gives_up_on_a_run_that_does_not_end_in_time_and_the_next_open_settles_it()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Hang());
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         var runs = ProjectRuns.Open(_project, clients);
         runs.LeaveTimeout = TimeSpan.FromMilliseconds(100);
         var stalled = 0;
@@ -501,7 +501,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task A_Changed_handler_that_throws_stops_the_client_and_frees_the_folder()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")).Hang());
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         var runs = ProjectRuns.Open(_project, clients);
         var calls = 0;
         var freed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -534,7 +534,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task A_client_that_cannot_launch_is_recorded_as_a_failed_attempt()
     {
         FakeAgents.Install(_fakes, ClientId.Codex);
-        var clients = await DiscoverAsync();
+        var clients = await _fakes.DiscoverAsync();
         var command = Assert.IsType<ClientStatus.Ready>(clients.Current[ClientId.Codex]).Command;
         File.Delete(command.Path);
         await using var runs = ProjectRuns.Open(_project, clients);
@@ -552,7 +552,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task A_batch_shim_with_an_argument_cmd_could_misread_is_refused_before_anything_is_recorded()
     {
         _fakes.Install("agy", On("models").Print("weird%model\tWeird Model"));
-        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
 
         var result = runs.Start(SayHi(new ExecutionSettings(ClientId.Antigravity) { Model = "weird%model" }));
 
@@ -620,13 +620,6 @@ public sealed class ProjectRunsTests : IDisposable
 
             await Task.Delay(50, timeout.Token);
         }
-    }
-
-    private async Task<ClientDirectory> DiscoverAsync()
-    {
-        var clients = new ClientDirectory(_fakes.Resolver);
-        await clients.RefreshAsync();
-        return clients;
     }
 
     private string Evidence(string name) => Path.Combine(_evidence, name);

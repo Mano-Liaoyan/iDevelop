@@ -69,8 +69,7 @@ public sealed class AgentsSectionTests : IDisposable
     public void Checking_again_shows_a_client_that_signed_out_since_the_last_check()
     {
         FakeAgents.Install(_fakes, ClientId.Codex);
-        var clients = new ClientDirectory(_fakes.Resolver);
-        clients.RefreshAsync().Wait();
+        var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Show(clients);
         Assert.Equal(["Codex", "Ready · 3 models"], RowTexts(shell, "AgentCodex"));
         _fakes.Install("codex", FakeAgents.CodexModels, On("login", "status").Print("Not logged in").Exit(1));

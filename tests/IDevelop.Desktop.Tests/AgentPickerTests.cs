@@ -28,8 +28,7 @@ public sealed class AgentPickerTests : IDisposable
         var fakes = new FakeClients(_temp.Create("bin"));
         FakeAgents.Install(fakes, ClientId.Codex);
         FakeAgents.Install(fakes, ClientId.Antigravity);
-        _clients = new ClientDirectory(fakes.Resolver);
-        _clients.RefreshAsync().Wait();
+        _clients = fakes.DiscoverAsync().Result;
     }
 
     public void Dispose() => _temp.Dispose();
@@ -43,9 +42,7 @@ public sealed class AgentPickerTests : IDisposable
             FakeAgents.Install(fakes, client);
         }
 
-        var clients = new ClientDirectory(fakes.Resolver);
-        clients.RefreshAsync().Wait();
-        return clients;
+        return fakes.DiscoverAsync().Result;
     }
 
     private static WorkflowEdit.CreateTask Task(TaskId id, string title, double x, ExecutionSettings? execution = null, double y = 90) =>

@@ -57,19 +57,12 @@ public sealed class RunTests : IDisposable
     private static Color CardFill(Shell shell) =>
         ((ISolidColorBrush)shell.Node("Say hi").GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("card")).Background!).Color;
 
-    private ClientDirectory Discover()
-    {
-        var clients = new ClientDirectory(_fakes.Resolver);
-        clients.RefreshAsync().Wait();
-        return clients;
-    }
-
     /// <summary>A window whose task runs and waits at the gate.</summary>
     private (Shell Shell, string Folder, ClientDirectory Clients) StartWaitingRun()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex));
-        var clients = Discover();
+        var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
@@ -84,7 +77,7 @@ public sealed class RunTests : IDisposable
     {
         _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
         var folder = _temp.Seed(Task(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
-        var shell = Shell.Open(folder, Discover());
+        var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Say hi")));
         const string reason = "Claude Code is not ready. Claude Code is not signed in. Run claude in a terminal and sign in.";
         Assert.Equal(reason, shell.InView<TextBlock>("StartProblem").Text);
@@ -100,7 +93,7 @@ public sealed class RunTests : IDisposable
     public void A_task_shows_that_it_runs_and_then_its_result_on_its_card_and_in_the_inspector()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits().Replay(Fixture.Path("codex-success.jsonl")));
-        var shell = Shell.Open(_temp.Seed(Task(Codex)), Discover());
+        var shell = Shell.Open(_temp.Seed(Task(Codex)), _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Say hi")));
         Assert.Equal(("Not run", Color.Parse("#FFFFFF")), (CardStatus(shell), CardFill(shell)));
@@ -138,7 +131,7 @@ public sealed class RunTests : IDisposable
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex));
-        var clients = Discover();
+        var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
@@ -175,7 +168,7 @@ public sealed class RunTests : IDisposable
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
             new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
-        var clients = Discover();
+        var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
@@ -252,7 +245,7 @@ public sealed class RunTests : IDisposable
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
             new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
-        var clients = Discover();
+        var clients = _fakes.DiscoverAsync().Result;
         var first = Shell.Open(folder, clients);
         first.Click(first.Header(first.Node("Say hi")));
         first.Click(first.InView<Button>("RunTask"));
@@ -284,7 +277,7 @@ public sealed class RunTests : IDisposable
     public void The_run_bar_covers_neither_the_zoom_controls_nor_the_minimap(double width, double height)
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var shell = Shell.Open(_temp.Seed(Task(Codex)), Discover());
+        var shell = Shell.Open(_temp.Seed(Task(Codex)), _fakes.DiscoverAsync().Result);
         shell.Window.Width = width;
         shell.Window.Height = height;
         shell.Click(shell.Header(shell.Node("Say hi")));
@@ -310,7 +303,7 @@ public sealed class RunTests : IDisposable
     {
         FakeAgents.Install(_fakes, ClientId.Codex, Waits());
         var folder = _temp.Seed(Task(Codex));
-        var clients = Discover();
+        var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Click(shell.InView<Button>("RunTask"));
