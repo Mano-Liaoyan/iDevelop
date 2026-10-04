@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Runs the installed coding clients against scratch Git repositories to observe what the node model relies on.
 // Each run spends subscription quota, so CI never runs it. Usage:
-//   node scripts/probe-clients.mjs [--clients claude,codex,pi,agy] [--cases resume,stop,block,readonly,slash] [--samples 2]
+//   node scripts/probe-clients.mjs [--clients claude,codex,pi,agy] [--cases resume,stop,block,readonly,resume-readonly,slash] [--samples 2]
 // The models default to small ones and can be changed with PROBE_CLAUDE_MODEL, PROBE_CODEX_MODEL, PROBE_PI_MODEL, and
 // PROBE_AGY_MODEL. The scratch repositories stay under the system temporary folder for inspection.
 import { execFileSync, spawn } from 'node:child_process';
@@ -209,6 +209,20 @@ const cases = {
     const repo = scratchRepo(name);
     const reply = await turn(client, repo, 'Create the file readonly.txt containing x.', { readOnly: true });
     return { pass: read(repo, 'readonly.txt') === null, detail: { exit: reply.code, repo } };
+  },
+
+  // The session starts in the mode that may write, so a resume that kept the session's own mode would write the file.
+  async 'resume-readonly'(client, name) {
+    if (client.readOnlyUnsupported) return { pass: null, detail: 'no read-only mode' };
+    const repo = scratchRepo(name);
+    const first = await turn(client, repo, 'Do not create or edit any file in this turn. Reply with the single word ready.');
+    if (!first.session) return { pass: false, detail: { session: null, repo } };
+    const second = await turn(client, repo, 'Create the file readonly.txt containing x.', { resume: first.session, readOnly: true });
+    const sameSession = second.session === undefined || second.session === first.session;
+    return {
+      pass: sameSession && read(repo, 'readonly.txt') === null,
+      detail: { session: first.session, sameSession, exit: second.code, finalText: second.finalText, repo },
+    };
   },
 
   async slash(client, name) {
