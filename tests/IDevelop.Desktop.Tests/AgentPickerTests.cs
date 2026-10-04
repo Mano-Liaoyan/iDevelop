@@ -126,6 +126,19 @@ public sealed class AgentPickerTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_level_the_model_does_not_offer_stays_chosen_and_marked_until_another_is_chosen()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "ultra" })), _clients);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        Assert.Equal("ultra (not offered)", shell.Picked("TaskReasoning"));
+        Assert.Equal(["low", "medium", "high", "xhigh", "ultra (not offered)"], shell.Pick("TaskReasoning", "high"));
+
+        Assert.Equal("Codex · GPT-5.5 · high", CardAgent(shell, "Design"));
+        Assert.Equal(["low", "medium", "high", "xhigh"], shell.Pick("TaskReasoning", "high"));
+    }
+
+    [AvaloniaFact]
     public void While_its_client_is_being_checked_a_task_shows_its_model_plainly()
     {
         var checking = new ClientDirectory(CommandResolver.Create([], []));
