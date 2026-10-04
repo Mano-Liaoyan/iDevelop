@@ -34,13 +34,13 @@ Preconditions:
 - **No agent.** Choose the third task. Run `Select-Element (Get-SidebarTasks $s.Window)[2]`. `TaskClient` gives `None`, and `Find-ById $s.Window 'TaskModel' 1` returns `$null`.
 - **Choose a client.** Run `Select-PickerEntry $s 'TaskClient' 'Codex'`. `TaskModel` gives `GPT-6.1-Sol`, `TaskReasoning` gives `low`, and the window title becomes `project* - iDevelop`.
 - **Choose a model and a level.** Run `Select-PickerEntry $s 'TaskModel' 'GPT-5.5'` and `Select-PickerEntry $s 'TaskReasoning' 'high'`. The third card's `CardAgent` text reads `Codex · GPT-5.5 · high`. `Select-PickerEntry $s 'TaskReasoning' 'ultra'` throws, because GPT-5.5 offers only `low`, `medium`, `high`, and `xhigh`.
-- **List the entries.** Open a picker and read its list. Run `$p = (Find-ById $s.Window 'TaskClient').GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)`, `$p.Expand()`, `(Find-AllInProcess $s.Process ([System.Windows.Automation.ControlType]::ListItem)).Current.Name`, and `$p.Collapse()`. Besides the sidebar rows, in no fixed order, it lists `None`, `Claude Code · not ready`, `Codex`, `Pi · not ready`, and `Antigravity CLI · not ready`.
+- **List the entries.** Open a picker and read its list. Run `$picker = Find-ById $s.Window 'TaskClient'`, `(Wait-Until { Get-PickerEntries $picker }).Current.Name`, and `$picker.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()`. It lists `None`, `Claude Code · not ready`, `Codex`, `Pi · not ready`, and `Antigravity CLI · not ready`.
 - **Save.** Run `Invoke-Element (Find-ById $s.Window 'Save')` and `Save-Evidence $s 'agent-saved'`. In the copied workflow file the third task's `execution` is `{"client":"codex","model":"gpt-5.5","reasoning":"high"}`.
 
 ## Gotchas
 
 - A picker only takes a choice made in its open list. `Select-PickerEntry` opens the list first. Setting a picker's value any other way changes no task.
-- A picker's list opens in its own window, so `Find-AllInProcess` also returns the sidebar's rows. Match entries by name.
+- A picker's list closes as soon as the window loses the foreground, such as when the user clicks another application. `Get-PickerEntries` and `Select-PickerEntry` open it again on each try.
 - An entry's name is its label, followed by ` · ` and a note for a client that is not ready. Pass `Select-PickerEntry` the label alone.
 - The `Checking…` summary after a refresh can be too brief to see. Wait for the settled text instead of asserting it.
 - The fake clients make every row except Codex `Not ready`. To read this machine's real clients, start with `Start-IDevelop -RealClients` and run no task. The probes start each client to read its sign-in state and models, as `scripts/check-real-window.ps1` does.

@@ -60,6 +60,7 @@ Elements are found by automation id and driven through patterns. An element's te
 | `Find-InProcessWindows $s.Process <id>` | Find a button in a dialog, which opens as its own window. |
 | `Get-SidebarTasks $s.Window` | List the sidebar's task rows, in order. |
 | `Select-PickerEntry $s <picker id> <label>` | Open a picker, choose the entry with that label, and close it. |
+| `Wait-Until { Get-PickerEntries <picker> }` | Open a picker's list and return its entries. |
 | `Invoke-Element`, `Select-Element`, `Set-Text`, `Get-Value`, `Test-Selected` | Invoke a button, select a row or segment, set or read a text box or picker. |
 | `Close-Window $s.Window` | Close the window as its close button does. |
 | `Wait-Until { <probe> } [seconds]` | Poll until the probe returns a value. It returns `$null` on timeout. |

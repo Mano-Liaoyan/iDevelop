@@ -78,12 +78,15 @@ function Find-InProcessWindows([System.Diagnostics.Process] $Process, [string] $
     } $Seconds
 }
 
-# A picker's list opens in a window of its own, so its entries are searched across the process's windows.
-function Find-AllInProcess([System.Diagnostics.Process] $Process, $ControlType) {
-    $condition = [AndCondition]::new(
-        [PropertyCondition]::new([AutomationElement]::ProcessIdProperty, $Process.Id),
-        [PropertyCondition]::new([AutomationElement]::ControlTypeProperty, $ControlType))
-    [AutomationElement]::RootElement.FindAll([TreeScope]::Descendants, $condition)
+# A picker's list closes as soon as the window loses the foreground, so each call opens it again. The open list's
+# entries are the picker's children. While the list opens, reading them finds none or fails with E_FAIL, so the call
+# returns nothing then and belongs in Wait-Until.
+function Get-PickerEntries($Picker) {
+    $expand = $Picker.GetCurrentPattern([ExpandCollapsePattern]::Pattern)
+    if ($expand.Current.ExpandCollapseState -ne [ExpandCollapseState]::Expanded) { $expand.Expand() }
+    try {
+        $Picker.FindAll([TreeScope]::Children, [PropertyCondition]::new([AutomationElement]::ControlTypeProperty, [ControlType]::ListItem))
+    } catch [System.Runtime.InteropServices.COMException] {}
 }
 
 function Get-Value($Element) {
@@ -329,14 +332,13 @@ function Get-SidebarTasks($Window) {
 
 # An entry chosen in the open list counts as the user's choice. An entry's name is its label, then " · " and a note.
 function Select-PickerEntry($Session, [string] $Id, [string] $Entry) {
-    $expand = (Find-ById $Session.Window $Id).GetCurrentPattern([ExpandCollapsePattern]::Pattern)
-    $expand.Expand()
+    $picker = Find-ById $Session.Window $Id
     $item = Wait-Until {
-        Find-AllInProcess $Session.Process ([ControlType]::ListItem) |
+        Get-PickerEntries $picker |
             Where-Object { $_.Current.Name -eq $Entry -or $_.Current.Name.StartsWith("$Entry $([char] 0xB7) ") } | Select-Object -First 1
     } 5
     if ($item) { Select-Element $item }
-    try { $expand.Collapse() } catch {}
+    try { $picker.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Collapse() } catch {}
     if (-not $item) { throw "The $Id picker offers no entry '$Entry'." }
 }
 
@@ -467,7 +469,7 @@ function Stop-IDevelop([string] $Run) {
     }
 }
 
-Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Find-AllInProcess,
+Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Get-PickerEntries,
     Get-Value, Invoke-Element, Select-Element, Test-Selected, Set-Text, Save-Screenshot, Close-Window,
     Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Restore-Settings, New-FakeCodex,
     Start-IDevelop, Connect-IDevelop, Test-IDevelop, Get-SidebarTasks, Select-PickerEntry, Assert-Step, Save-Evidence, Stop-IDevelop

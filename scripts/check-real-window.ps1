@@ -111,8 +111,7 @@ try {
         Check ((Wait-Until { (Get-Value $client) -like 'Claude Code*' }) -eq $true) "the client picker follows the first task again (found '$(Get-Value $client)')"
         Check ($window.Current.Name -eq 'agents-project - iDevelop') "choosing tasks in the sidebar edits nothing: '$($window.Current.Name)'"
 
-        $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
-        $entries = Wait-Until { @(Find-AllInProcess $process ([System.Windows.Automation.ControlType]::ListItem) | Where-Object { $_.Current.Name -match '^(None|Claude Code|Codex|Pi|Antigravity CLI)( · .+)?$' }) | Where-Object { $_ } } 10
+        $entries = Wait-Until { @(Get-PickerEntries $client | Where-Object { $_.Current.Name -match '^(None|Claude Code|Codex|Pi|Antigravity CLI)( · .+)?$' }) | Where-Object { $_ } } 10
         Check (@($entries).Count -eq 5) "the client picker offers None and the four clients (found $(@($entries).Count))"
         Select-Element (@($entries) | Where-Object { $_.Current.Name -like 'Codex*' })
         try { $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse() } catch {}
