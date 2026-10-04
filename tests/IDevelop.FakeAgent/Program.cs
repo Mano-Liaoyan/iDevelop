@@ -16,6 +16,7 @@ using System.Text.Json;
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
 //   sleep <milliseconds>
+//   lockFile <file>               open the file with no sharing and hold it until exit, as another iDevelop holds run.lock
 //   waitForFile <file>            wait until the file exists, so a test decides when the client goes on. Exit 97 if its
 //                                 folder is deleted, because the test that owned it has ended
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
@@ -55,6 +56,7 @@ if (rule is not { } matched)
     return 99;
 }
 
+List<FileStream> held = [];
 foreach (var step in matched.GetProperty("steps").EnumerateArray())
 {
     var (name, value) = step.EnumerateObject().Select(property => (property.Name, property.Value)).Single();
@@ -96,6 +98,9 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
             break;
         case "sleep":
             Thread.Sleep(value.GetInt32());
+            break;
+        case "lockFile":
+            held.Add(new FileStream(value.GetString()!, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
             break;
         case "waitForFile":
             var gate = value.GetString()!;

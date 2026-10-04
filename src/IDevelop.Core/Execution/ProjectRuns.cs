@@ -44,8 +44,6 @@ public sealed class ProjectRuns : IAsyncDisposable
 {
     private const string LeaveReason = "The project was closed while this task ran.";
 
-    private static readonly TimeSpan LeaveTimeout = TimeSpan.FromSeconds(10);
-
     private readonly Lock _gate = new();
     private readonly ClientDirectory _clients;
     private readonly string _attempts;
@@ -63,6 +61,9 @@ public sealed class ProjectRuns : IAsyncDisposable
     }
 
     public string ProjectFolder { get; }
+
+    /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
+    internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>The newest attempt of each task that has one.</summary>
     public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; }
@@ -243,19 +244,19 @@ public sealed class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// Leaving the project. It stops a running client's process tree, records the attempt as interrupted, and releases the
-    /// folder. If the client has not ended 10 seconds after the stop, the attempt stays on record as running, and the
-    /// next open settles it.
+    /// folder. If the run has not ended 10 seconds after the stop, the attempt stays on record as running, and the next
+    /// open settles it.
     /// </summary>
     public ValueTask DisposeAsync()
     {
         lock (_gate)
         {
-            _leaving ??= LeaveAsync(_active);
+            _leaving ??= LeaveAsync(_active, LeaveTimeout);
             return new ValueTask(_leaving);
         }
     }
 
-    private static async Task LeaveAsync(ActiveRun? run)
+    private static async Task LeaveAsync(ActiveRun? run, TimeSpan timeout)
     {
         if (run is null)
         {
@@ -263,7 +264,7 @@ public sealed class ProjectRuns : IAsyncDisposable
         }
 
         run.Stop(new AttemptEvent.InterruptRequested(DateTimeOffset.UtcNow, LeaveReason));
-        if (await Task.WhenAny(run.Completion, Task.Delay(LeaveTimeout)) != run.Completion)
+        if (await Task.WhenAny(run.Completion, Task.Delay(timeout)) != run.Completion)
         {
             run.Abandon();
             await run.Completion;
@@ -417,7 +418,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             process.StopTree();
         }
 
-        /// <summary>Stops the drain without waiting for the client's exit. The attempt stays on record as running.</summary>
+        /// <summary>Stops the drain at its next event, without waiting for the client's exit. The attempt stays on record as running.</summary>
         public void Abandon() => _abandon.Cancel();
 
         private void Request(AttemptEvent e) => _events.Writer.TryWrite(e);
@@ -450,6 +451,8 @@ public sealed class ProjectRuns : IAsyncDisposable
             {
                 await foreach (var e in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
+                    // Leaving gave up while this drain was busy. Events already queued stay off the log too.
+                    _abandon.Token.ThrowIfCancellationRequested();
                     log.Append(e);
                     exited |= e is AttemptEvent.Exited;
                     Record = AttemptReducer.Apply(Record, e);

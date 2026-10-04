@@ -5,6 +5,7 @@ using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.TestSupport.FakeRule;
+using static IDevelop.TestSupport.Processes;
 
 namespace IDevelop.Core.Tests;
 
@@ -341,6 +342,69 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Null(first.Check(Review(Runs[ClientId.Codex].Settings)));
     }
 
+    [Fact]
+    public async Task Another_process_that_holds_the_run_lock_keeps_the_folder_from_starting_until_it_ends()
+    {
+        var gate = Evidence("release");
+        var holder = _fakes.Install("holder", On()
+            .LockFile(Path.Combine(Directory.CreateDirectory(Path.Combine(_project, ".idp", "attempts")).FullName, "run.lock"))
+            .Print("locked")
+            .WaitForFile(gate));
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
+        await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+        using var other = Process.Start(new ProcessStartInfo(holder)
+        {
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+        })!;
+        _spawned.Add(other.Id);
+        Assert.Equal("locked", await other.StandardOutput.ReadLineAsync().WaitAsync(Patience));
+
+        Assert.Equal(new StartResult.Refused(new StartProblem.RunInAnotherWindow()), runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
+
+        File.WriteAllText(gate, "");
+        await other.WaitForExitAsync().WaitAsync(Patience);
+        var settled = NextSettled(runs);
+        Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
+        Assert.Equal(AttemptStatus.Succeeded, (await settled).Status);
+    }
+
+    // A drain that is still busy, as on a slow disk, when leaving gives up stops at its next event, so the stop request
+    // stays the last line and the next open settles the attempt.
+    [Fact]
+    public async Task Leaving_gives_up_on_a_run_that_does_not_end_in_time_and_the_next_open_settles_it()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Hang());
+        var clients = await DiscoverAsync();
+        var runs = ProjectRuns.Open(_project, clients);
+        runs.LeaveTimeout = TimeSpan.FromMilliseconds(100);
+        var stalled = 0;
+        var last = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.Changed += (_, record) =>
+        {
+            if (record.Stopping && Interlocked.Exchange(ref stalled, 1) == 0)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(1));
+            }
+
+            if (runs.Active is null)
+            {
+                last.TrySetResult(record);
+            }
+        };
+        var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
+        _spawned.Add(started.Attempt.Process!.Value.Id);
+
+        await runs.DisposeAsync().AsTask().WaitAsync(Patience);
+
+        var record = await last.Task.WaitAsync(Patience);
+        Assert.Equal((AttemptStatus.Running, true), (record.Status, record.Stopping));
+        var events = Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl");
+        Assert.StartsWith("{\"type\":\"interruptRequested\"", File.ReadLines(events).Last());
+        AssertGone(started.Attempt.Process!.Value.Id);
+        await using var next = ProjectRuns.Open(_project, clients);
+        Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped while this task ran."), (next.Latest[SayHiId].Status, next.Latest[SayHiId].Detail));
+    }
+
     [Theory]
     [InlineData("same", "iDevelop stopped while this task ran. Its client was still running and was stopped.")]
     [InlineData("gone", "iDevelop stopped while this task ran.")]
@@ -506,18 +570,6 @@ public sealed class ProjectRunsTests : IDisposable
             }
 
             await Task.Delay(50, timeout.Token);
-        }
-    }
-
-    private static void AssertGone(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            Assert.True(process.WaitForExit(Patience), $"process {pid} is still running");
-        }
-        catch (ArgumentException)
-        {
         }
     }
 

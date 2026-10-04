@@ -1,6 +1,7 @@
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.FakeRule;
+using static IDevelop.TestSupport.Processes;
 
 namespace IDevelop.Core.Tests;
 
@@ -38,6 +39,18 @@ public sealed class ProbeTests : IDisposable
         await Probes.RunAsync(_fakes.Resolver.Resolve("pi")!, PiModelList, CancellationToken.None);
 
         Assert.Equal(Folders.AsCurrentFolder(Path.GetTempPath()), File.ReadAllText(folder));
+    }
+
+    [Fact]
+    public async Task A_probe_that_does_not_answer_in_time_is_stopped_with_everything_it_started()
+    {
+        var sleeper = Path.Combine(_temp.Create("evidence"), "sleeper.pid");
+        _fakes.Install("codex", On("login", "status").SpawnSleepingChild(sleeper).Hang());
+
+        var output = await Probes.RunAsync(_fakes.Resolver.Resolve("codex")!, new Probe(["login", "status"]) { Timeout = TimeSpan.FromSeconds(5) }, CancellationToken.None);
+
+        Assert.Equal((null, true), (output.ExitCode, output.TimedOut));
+        AssertGone(int.Parse(File.ReadAllText(sleeper)));
     }
 
     [Fact]
