@@ -40,7 +40,7 @@ These observations come from running each client on Windows on 2026-10-04, first
 
 ## Sessions
 
-A person's message resumes the client's own session in a new process. `scripts/probe-clients.mjs` ran each client on Linux on 2026-10-04. Each one resumed its session in a new process with the id it reported itself, including after its first turn was stopped mid tool call. No resumed turn reported a different id. The client rows pass these arguments after the ones above.
+A person's message resumes the client's own session in a new process. `scripts/probe-clients.mjs` ran each client on Linux on 2026-10-04. Each one resumed its session in a new process with the id it reported itself, including after its first turn was stopped mid tool call. No resumed turn reported a different id. The Claude Code, Pi, and Antigravity CLI rows pass these arguments after the ones above. Codex resumes through its own subcommand, as the table says.
 
 | Client | Session id | Resume | Terminal interface |
 | --- | --- | --- | --- |
@@ -49,12 +49,13 @@ A person's message resumes the client's own session in a new process. `scripts/p
 | Pi | `id` of the `session` event | `--session-id <id>` | `pi --session <id>` |
 | Antigravity CLI | `conversation_id` of the `init` event | `--conversation <id>` | `agy --conversation <id>` |
 
-- `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key.
+- `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key. On Linux on 2026-10-05, a resumed turn with `-c sandbox_mode=read-only` refused to write a file, so resume honors the key. The probe's `resume-readonly` case repeats this check for each client that has a read-only mode.
 - In the probe, Antigravity CLI's `result` event reported the same `conversation_id` as its `init` event, so the row keeps reading it from `init`.
-- The terminal commands come from each client's `--help`. No probe ran them.
+- The terminal commands come from each client's `--help`. On Linux on 2026-10-05, run from another folder with the same session flags in print mode, `claude -p --resume <id>` and `agy --conversation <id>` found the session but would work in that folder, and `pi -p --session <id>` printed nothing. From the project folder, Pi resumed the session.
+- Open in terminal therefore copies the command after a change into the project folder. On Linux and macOS it copies `cd '<folder>' && <command>`. On Windows, whose default terminal is PowerShell, it copies `Set-Location -LiteralPath '<folder>'; <command>`. The folder is quoted for that shell.
 
 ## Unverified items
 
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
-- Whether each client's terminal command opens the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there.
+- Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
 - Real client runs on macOS and Linux, and the login shell's PATH there. CI runs the fake client on both.
