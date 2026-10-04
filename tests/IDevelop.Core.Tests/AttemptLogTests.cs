@@ -60,7 +60,7 @@ public sealed class AttemptLogTests : IDisposable
             log.Append(Sent(2, "Stop. Use an apple.", stopsTurn: true));
             log.Append(Exit(3, 137));
             log.Append(NextTurn(4, "Stop. Use an apple."));
-            log.Append(new AttemptEvent.HandedToTerminal(T0.AddSeconds(9), "codex resume thread-1"));
+            log.Append(new AttemptEvent.HandedToTerminal(T0.AddSeconds(9), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"));
         }
 
         Assert.Equal(
@@ -70,14 +70,14 @@ public sealed class AttemptLogTests : IDisposable
             {"type":"messageQueued","at":"2026-10-04T05:00:02+00:00","text":"Stop. Use an apple.","stopsTurn":true}
             {"type":"exited","at":"2026-10-04T05:00:03+00:00","exitCode":137,"stderrTail":""}
             {"type":"turnRequested","at":"2026-10-04T05:00:04+00:00","prompt":"Stop. Use an apple.","command":"codex","arguments":["exec","resume","--json","thread-1","-"]}
-            {"type":"handedToTerminal","at":"2026-10-04T05:00:09+00:00","command":"codex resume thread-1"}
+            {"type":"handedToTerminal","at":"2026-10-04T05:00:09+00:00","folder":"/home/me/fruit","command":"cd '/home/me/fruit' && codex resume thread-1"}
 
             """.Replace("\r\n", "\n"),
             File.ReadAllText(Path.Combine(folder, "events.jsonl")));
         var record = AttemptReducer.Replay(AttemptLog.Read(folder))!;
         Assert.Equal((new Continuation(First, "thread-1"), "thread-1"), (record.Continues, record.SessionId));
         Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Stopped, null), new TurnRecord(2, "Stop. Use an apple.", TurnOutcome.Running, null)], record.Turns);
-        Assert.Equal(new TerminalHandoff(T0.AddSeconds(9), "codex resume thread-1"), record.Terminal);
+        Assert.Equal(new TerminalHandoff(T0.AddSeconds(9), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"), record.Terminal);
     }
 
     [Fact]

@@ -33,8 +33,11 @@ public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome
 /// <summary>The settled attempt whose client session an attempt resumes, and that session's id.</summary>
 public sealed record Continuation(AttemptId Attempt, string Session);
 
-/// <summary>The command a person copied to open the attempt's session in the client's own terminal interface.</summary>
-public sealed record TerminalHandoff(DateTimeOffset At, string Command);
+/// <summary>
+/// The command a person copied to open the attempt's session in the client's own terminal interface. It changes into
+/// <see cref="Folder"/>, the project folder, first.
+/// </summary>
+public sealed record TerminalHandoff(DateTimeOffset At, string Folder, string Command);
 
 /// <summary>The attempt log's vocabulary. Only the record folded from it is public.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
@@ -87,7 +90,7 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     public sealed record TurnRequested(DateTimeOffset At, string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At);
 
     /// <summary>Appended to a settled attempt. Turns the person takes in the terminal are not in this log.</summary>
-    public sealed record HandedToTerminal(DateTimeOffset At, string Command) : AttemptEvent(At);
+    public sealed record HandedToTerminal(DateTimeOffset At, string Folder, string Command) : AttemptEvent(At);
 }
 
 /// <summary>
@@ -191,7 +194,7 @@ internal static class AttemptReducer
 
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e) => (e, record) switch
     {
-        (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Command) },
+        (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
         (_, { Status: not AttemptStatus.Running }) => record,
         (AttemptEvent.Requested, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },

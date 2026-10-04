@@ -149,7 +149,8 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
-    public static string HandedOff(string command) => $"Copied {command}. Paste it in a terminal to continue this session there.";
+    public static string HandedOff(TerminalResult.HandedOff handedOff) =>
+        $"Copied {handedOff.Command}. Paste it in a terminal to continue this session in {handedOff.Folder}.";
 
     /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
     public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
@@ -169,7 +170,7 @@ public static class RunText
     };
 
     public static string? TerminalNote(AttemptRecord attempt) => attempt.Terminal is { } handoff
-        ? $"Opened in a terminal at {handoff.At.ToLocalTime():t}. Turns taken there are not in iDevelop's record."
+        ? $"Opened in a terminal in {handoff.Folder} at {handoff.At.ToLocalTime():t}. Turns taken there are not in iDevelop's record."
         : null;
 
     /// <summary>"Requested Codex · gpt-5.5 · high", then what the client reported when that differs.</summary>

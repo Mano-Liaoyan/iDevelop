@@ -285,7 +285,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         {
             case TerminalResult.HandedOff handedOff:
                 await _canvas.Copy(handedOff.Command);
-                _canvas.Notice(RunText.HandedOff(handedOff.Command));
+                _canvas.Notice(RunText.HandedOff(handedOff));
                 break;
             case TerminalResult.Refused refused:
                 _canvas.Notice(RunText.Describe(refused.Problem));

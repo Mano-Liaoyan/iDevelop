@@ -472,7 +472,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return new TerminalResult.Refused(new TerminalProblem.NoSession(last.Requested.Client));
         }
 
-        var handoff = new AttemptEvent.HandedToTerminal(DateTimeOffset.UtcNow, Clients.Get(last.Requested.Client).Terminal(session));
+        var command = TerminalCommand.For(_projectFolder, Clients.Get(last.Requested.Client).Terminal(session), TerminalCommand.Current);
+        var handoff = new AttemptEvent.HandedToTerminal(DateTimeOffset.UtcNow, _projectFolder, command);
         try
         {
             using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, last.Id));
@@ -484,7 +485,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         Latest = Latest.SetItem(task, AttemptReducer.Apply(last, handoff));
-        return new TerminalResult.HandedOff(handoff.Command);
+        return new TerminalResult.HandedOff(handoff.Folder, handoff.Command);
     }
 
     /// <summary>

@@ -423,15 +423,20 @@ public sealed class ConversationTests : IDisposable
         File.WriteAllText(_gate, "");
         var record = await settled;
         var before = DateTimeOffset.UtcNow;
-        Assert.Equal(new TerminalResult.HandedOff($"codex resume {Session}"), runs.OpenInTerminal(SayHiId));
+        var command = OperatingSystem.IsWindows()
+            ? $"Set-Location -LiteralPath '{_project}'; codex resume {Session}"
+            : $"cd '{_project}' && codex resume {Session}";
+        Assert.Equal(new TerminalResult.HandedOff(_project, command), runs.OpenInTerminal(SayHiId));
         var handed = runs.Latest[SayHiId];
-        Assert.Equal((AttemptStatus.Succeeded, "Done.", $"codex resume {Session}"), (handed.Status, handed.Result, handed.Terminal?.Command));
+        Assert.Equal((AttemptStatus.Succeeded, "Done.", _project, command), (handed.Status, handed.Result, handed.Terminal?.Folder, handed.Terminal?.Command));
         Assert.InRange(handed.Terminal!.At, before, DateTimeOffset.UtcNow);
         Assert.Equal((record.Id, record.EndedAt, record.Detail), (handed.Id, handed.EndedAt, handed.Detail));
         Assert.Equal(record.Turns, handed.Turns);
         var lastLine = File.ReadLines(Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl")).Last();
-        Assert.StartsWith("""{"type":"handedToTerminal","at":""", lastLine);
-        Assert.EndsWith($$""","command":"codex resume {{Session}}"}""", lastLine);
+        using var json = JsonDocument.Parse(lastLine);
+        Assert.Equal(
+            ("handedToTerminal", _project, command),
+            (json.RootElement.GetProperty("type").GetString(), json.RootElement.GetProperty("folder").GetString(), json.RootElement.GetProperty("command").GetString()));
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal(handed.Terminal, reopened.Latest[SayHiId].Terminal);
     }

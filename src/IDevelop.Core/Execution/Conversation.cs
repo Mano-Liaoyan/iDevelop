@@ -46,8 +46,11 @@ public abstract record TerminalResult
 {
     private TerminalResult() { }
 
-    /// <summary>The hand-off is on the latest attempt's record. <paramref name="Command"/> is for the person to run.</summary>
-    public sealed record HandedOff(string Command) : TerminalResult;
+    /// <summary>
+    /// The hand-off is on the latest attempt's record. <paramref name="Command"/> is for the person to run, and it changes
+    /// into <paramref name="Folder"/> first.
+    /// </summary>
+    public sealed record HandedOff(string Folder, string Command) : TerminalResult;
 
     public sealed record Refused(TerminalProblem Problem) : TerminalResult;
 }

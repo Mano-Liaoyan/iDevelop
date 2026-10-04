@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
@@ -22,6 +23,7 @@ public sealed class ConversationTests : IDisposable
     private readonly FakeClients _fakes;
     private readonly string _evidence;
     private readonly string _gate;
+    private string _project = "";
 
     public ConversationTests()
     {
@@ -43,7 +45,8 @@ public sealed class ConversationTests : IDisposable
 
     private Shell OpenSayHi()
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(SayHi, "Say hi", 105, 90, Codex, "Create hello.txt containing hi.")), _fakes.DiscoverAsync().Result);
+        _project = _temp.Seed(TaskAt(SayHi, "Say hi", 105, 90, Codex, "Create hello.txt containing hi."));
+        var shell = Shell.Open(_project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Say hi")));
         return shell;
     }
@@ -175,10 +178,13 @@ public sealed class ConversationTests : IDisposable
         Invoke(shell.InView<Button>("OpenInTerminal"));
 
         shell.WaitUntil(() => copied.Count == 1, "the command is copied");
-        Assert.Equal([$"codex resume {Session}"], copied);
-        Assert.Equal($"Copied codex resume {Session}. Paste it in a terminal to continue this session there.", shell.Status);
+        var command = OperatingSystem.IsWindows()
+            ? $"Set-Location -LiteralPath '{_project}'; codex resume {Session}"
+            : $"cd '{_project}' && codex resume {Session}";
+        Assert.Equal([command], copied);
+        Assert.Equal($"Copied {command}. Paste it in a terminal to continue this session in {_project}.", shell.Status);
         var note = shell.InView<TextBlock>("TerminalNote").Text!;
-        Assert.Matches(@"^Opened in a terminal at .+\. Turns taken there are not in iDevelop's record\.$", note);
+        Assert.Matches($@"^Opened in a terminal in {Regex.Escape(_project)} at .+\. Turns taken there are not in iDevelop's record\.$", note);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
     }
 }

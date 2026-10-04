@@ -277,9 +277,9 @@ public class AttemptReducerTests
     {
         var settled = Replay([.. AskedWhichFruit, Exit(4, 0)]);
 
-        var handed = AttemptReducer.Apply(settled, new HandedToTerminal(T0.AddMinutes(5), "codex resume thread-1"));
+        var handed = AttemptReducer.Apply(settled, new HandedToTerminal(T0.AddMinutes(5), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"));
 
-        Assert.Equal(new TerminalHandoff(T0.AddMinutes(5), "codex resume thread-1"), handed.Terminal);
+        Assert.Equal(new TerminalHandoff(T0.AddMinutes(5), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"), handed.Terminal);
         Assert.Equal(settled, handed with { Terminal = null });
     }
 
