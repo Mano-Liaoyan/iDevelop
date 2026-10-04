@@ -89,6 +89,9 @@
       },
       "idevelop.core": {
         "type": "Project"
+      },
+      "idevelop.fakeagent": {
+        "type": "Project"
       }
     }
   }
