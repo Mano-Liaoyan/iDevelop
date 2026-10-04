@@ -64,6 +64,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule RecordArguments(string file) => Step("recordArguments", file);
 
+    public FakeRule RecordWorkingDirectory(string file) => Step("recordWorkingDirectory", file);
+
     public FakeRule CaptureStdin(string file) => Step("captureStdin", file);
 
     public FakeRule WaitForStdinEnd() => Step("waitForStdinEnd", true);

@@ -10,6 +10,7 @@ using System.Text.Json;
 // The rules file is {"rules": [{"when": ["auth", "status"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
 // The first rule whose "when" is a prefix of the client arguments runs its steps in order. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
+//   recordWorkingDirectory <file> write the current folder
 //   captureStdin <file>           copy stdin to the file until it closes
 //   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
@@ -61,6 +62,9 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
     {
         case "recordArguments":
             File.WriteAllText(value.GetString()!, JsonSerializer.Serialize(clientArguments));
+            break;
+        case "recordWorkingDirectory":
+            File.WriteAllText(value.GetString()!, Environment.CurrentDirectory);
             break;
         case "captureStdin":
             using (var input = Console.OpenStandardInput())

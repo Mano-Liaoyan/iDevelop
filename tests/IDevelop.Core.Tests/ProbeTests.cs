@@ -30,6 +30,17 @@ public sealed class ProbeTests : IDisposable
     }
 
     [Fact]
+    public async Task A_probe_runs_in_the_temporary_folder_and_never_in_a_project()
+    {
+        var folder = Path.Combine(_temp.Create("evidence"), "folder.txt");
+        _fakes.Install("pi", On("--mode", "rpc", "--no-session").RecordWorkingDirectory(folder).Replay(Fixture.Path("pi-rpc-models.jsonl")).Exit(0));
+
+        await Probes.RunAsync(_fakes.Resolver.Resolve("pi")!, PiModelList, CancellationToken.None);
+
+        Assert.Equal(Folders.AsCurrentFolder(Path.GetTempPath()), File.ReadAllText(folder));
+    }
+
+    [Fact]
     public async Task A_probe_that_answered_but_ignores_the_end_of_its_input_is_stopped()
     {
         _fakes.Install("pi", On("--mode", "rpc", "--no-session").Replay(Fixture.Path("pi-rpc-models.jsonl")).Hang());

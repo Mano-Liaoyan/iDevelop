@@ -89,6 +89,7 @@ public sealed class ProjectRunsTests : IDisposable
         var expected = Runs[client];
         FakeAgents.Install(_fakes, client, On(expected.Arguments[0], expected.Arguments[1])
             .RecordArguments(Evidence("arguments.json"))
+            .RecordWorkingDirectory(Evidence("folder.txt"))
             .CaptureStdin(Evidence("stdin.txt"))
             .Replay(Fixture.Path(expected.Fixture)));
         var clients = await DiscoverAsync();
@@ -102,6 +103,7 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Equal((AttemptStatus.Succeeded, "DONE", null), (record.Status, record.Result, record.Detail));
         Assert.Equal((expected.Session, expected.Model, expected.Reasoning), (record.SessionId, record.ReportedModel, record.ReportedReasoning));
         Assert.Equal(expected.Arguments, JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("arguments.json")))!);
+        Assert.Equal(Folders.AsCurrentFolder(_project), File.ReadAllText(Evidence("folder.txt")));
         Assert.Equal(
             client == ClientId.Antigravity
                 ? """{"event":"user","message":{"role":"user","content":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n"}}""" + "\n"
