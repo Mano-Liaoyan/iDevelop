@@ -265,12 +265,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private static ImmutableDictionary<TaskId, AttemptRecord> Settle(
         string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings)
     {
-        ProcessMatch? match = record.Process is { } process ? ProcessCheck.Match(process) : null;
-        if (match == ProcessMatch.Same)
-        {
-            ProcessCheck.KillTree(record.Process!.Value);
-        }
-
+        ProcessMatch? match = record.Process is { } process ? ProcessCheck.StopIfSame(process) : null;
         var reconciled = new AttemptEvent.Reconciled(DateTimeOffset.UtcNow, match);
         try
         {
