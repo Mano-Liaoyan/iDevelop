@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -109,7 +110,9 @@ public sealed class RunTests : IDisposable
         Assert.Equal(("Running", Color.Parse("#CDF4F3")), (CardStatus(shell), CardFill(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
         Assert.Equal("", shell.Status);
-        Assert.True(shell.Find<Border>("RunBar").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("RunBar").IsEffectivelyVisible);
+        var bar = ControlAutomationPeer.CreatePeerForElement(shell.Find<Control>("RunBar"));
+        Assert.Equal(("RunBar", "Running task", true), (bar.GetAutomationId(), bar.GetName(), bar.IsControlElement()));
         Assert.Equal(
             ["Say hi", "Codex · GPT-5.5 · high", "Waiting for Codex…"],
             new[] { "RunBarTask", "RunBarAgent", "RunBarActivity" }.Select(id => shell.Find<TextBlock>(id).Text));
@@ -118,7 +121,7 @@ public sealed class RunTests : IDisposable
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => CardStatus(shell) == "Succeeded", "the run succeeds");
 
-        Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
         Assert.Equal(Color.Parse("#D9F4D9"), CardFill(shell));
         Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)((TextBlock)Part(shell, "CardStatus")).Foreground!).Color);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
@@ -214,7 +217,7 @@ public sealed class RunTests : IDisposable
         shell.Choose("StopAndLeave");
 
         shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the other folder opens");
-        Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
         Assert.Equal("Interrupted", CardStatus(Shell.Open(folder, clients)));
     }
 
@@ -260,7 +263,7 @@ public sealed class RunTests : IDisposable
 
         Rect Bounds(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.Bounds.Size);
         Border Floating(Visual visual) => visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains("floating"));
-        var bar = Bounds(shell.Find<Border>("RunBar"));
+        var bar = Bounds(shell.Find<Control>("RunBar"));
         Assert.Equal(new Size(width, height), shell.Window.ClientSize);
         Assert.All(
             [Bounds(Floating(shell.Find<Button>("ZoomIn"))), Bounds(Floating(shell.Find<Minimap>("Minimap")))],
@@ -289,7 +292,7 @@ public sealed class RunTests : IDisposable
 
         shell.Click(shell.Find<Button>("RunBarCancel"));
 
-        shell.WaitUntil(() => !shell.Find<Border>("RunBar").IsEffectivelyVisible, "the run bar goes away");
+        shell.WaitUntil(() => !shell.Find<Control>("RunBar").IsEffectivelyVisible, "the run bar goes away");
         Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
     }
 }

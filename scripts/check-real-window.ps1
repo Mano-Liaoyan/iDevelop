@@ -255,6 +255,47 @@ try {
         Invoke-Element (Find-InProcessWindows $process 'DiscardChanges')
     }
 
+    # A fake Codex on an otherwise empty PATH, so a run needs no agent account. It answers the probes, starts a process
+    # that outlives it, and waits at a gate that the check never opens.
+    $project = Join-Path $run 'run-project'
+    Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
+    $fakeBin = Join-Path $run 'fake-bin'
+    [IO.Directory]::CreateDirectory($fakeBin) | Out-Null
+    $fakeAgent = Join-Path $PSScriptRoot '../tests/IDevelop.FakeAgent/bin/Release/net10.0/IDevelop.FakeAgent.exe'
+    Check ([IO.File]::Exists($fakeAgent)) "the fake agent is built at $fakeAgent"
+    $sleeperPid = Join-Path $run 'sleeper.pid'
+    $rules = [ordered]@{ rules = @(
+        [ordered]@{ when = @('debug', 'models'); steps = @(@{ replay = (Join-Path $PSScriptRoot '../tests/IDevelop.Core.Tests/Fixtures/codex-debug-models.json') }) },
+        [ordered]@{ when = @('login', 'status'); steps = @(@{ print = 'Logged in using ChatGPT' }) },
+        [ordered]@{ when = @('exec', '--json'); steps = @(@{ spawnThroughCmd = $sleeperPid }, @{ waitForFile = (Join-Path $run 'never') }) }
+    ) }
+    [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.rules.json'), ($rules | ConvertTo-Json -Depth 6 -Compress))
+    [IO.File]::WriteAllText((Join-Path $fakeBin 'codex.cmd'), "@`"$fakeAgent`" --rules `"$(Join-Path $fakeBin 'codex.rules.json')`" -- %*`r`n")
+    $savedPath = $env:PATH
+    $env:PATH = $fakeBin
+    try {
+        With-App $project {
+            param($process, $window)
+            Check ((Wait-Until { (Find-ById $window 'AgentCodex').Current.Name -like 'Ready*' } 60) -eq $true) 'the fake Codex is ready'
+            Select-Element ((Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)[1])
+            Invoke-Element (Find-ById $window 'RunTask')
+            $bar = Find-ById $window 'RunBar'
+            Check ($null -ne $bar) 'UI Automation finds the run bar'
+            Check ((Find-ById $window 'RunBarTask').Current.Name -eq 'Implement atomic save') "the run bar names the running task (found '$((Find-ById $window 'RunBarTask').Current.Name)')"
+            $sleeper = Wait-Until { if ([IO.File]::Exists($sleeperPid)) { [int]([IO.File]::ReadAllText($sleeperPid)) } } 30
+            Check ($null -ne $sleeper) 'the fake Codex started a process whose parent exits'
+            Save-Screenshot $window 'run-bar.png'
+
+            Invoke-Element (Find-ById $window 'RunBarCancel')
+            Check ((Wait-Until { (Find-ById $window 'LastRunStatus').Current.Name -eq 'Cancelled' } 30) -eq $true) 'Cancel records the run as cancelled'
+            Check ((Wait-Until { $null -eq (Get-Process -Id $sleeper -ErrorAction SilentlyContinue) } 30) -eq $true) "Cancel stops the process whose parent had exited (pid $sleeper)"
+            Check ($window.Current.Name -eq 'run-project - iDevelop') "choosing and running a task edits nothing: '$($window.Current.Name)'"
+            Close-Window $window
+        }
+    } finally {
+        $env:PATH = $savedPath
+    }
+
     $project = Join-Path $run 'theme-project'
     Copy-Item -Recurse -LiteralPath (Join-Path $PSScriptRoot '../samples/storage-change') -Destination $project
 
