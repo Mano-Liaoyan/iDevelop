@@ -14,7 +14,8 @@ These observations come from running each client on Windows on 2026-10-04, first
 
 ## Codex 0.160.0
 
-- `codex exec --json -m <id> -c model_reasoning_effort=<level> --sandbox workspace-write --skip-git-repo-check -` reads the prompt from stdin. The unquoted value works, and the session file under `~/.codex/sessions` recorded the requested effort. The quoted form `model_reasoning_effort="high"` also works, but a quote cannot pass through an npm `codex.cmd` shim.
+- `codex exec --json -m <id> -c model_reasoning_effort=<level> -c approval_policy=never --sandbox workspace-write --skip-git-repo-check -` reads the prompt from stdin. The unquoted value works, and the session file under `~/.codex/sessions` recorded the requested effort. The quoted form `model_reasoning_effort="high"` also works, but a quote cannot pass through an npm `codex.cmd` shim.
+- A user's `~/.codex/config.toml` can set `approval_policy = "on-request"` with an automatic reviewer. On Linux on 2026-10-04 such a configuration let a run with `--sandbox read-only` write a file, because the reviewer approved the escalation. With `-c approval_policy=never` the sandbox held, so iDevelop passes it on every Codex run.
 - `codex debug models` prints the model catalog as JSON, with each model's `visibility` and its supported reasoning levels.
 - The JSON events never name the served model. A turn ends with `turn.completed`, or with `turn.failed` and exit code 1. A top-level `error` event can precede either.
 - `codex login status` exits with code 0 when Codex is signed in.

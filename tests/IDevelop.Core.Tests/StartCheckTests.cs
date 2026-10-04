@@ -24,11 +24,24 @@ public class StartCheckTests
 
         Assert.Same(CodexCommand, plan.Command);
         Assert.Equal(
-            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
             plan.Launch.Arguments.ToArray());
         const string prompt = "# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n";
         Assert.Equal(prompt, plan.Launch.Stdin);
         Assert.Equal(prompt, plan.Prompt);
+    }
+
+    [Fact]
+    public void Codex_arguments_pass_through_an_npm_codex_cmd_shim()
+    {
+        var shim = new Dictionary<ClientId, ClientStatus>
+        {
+            [ClientId.Codex] = new ClientStatus.Ready(new ResolvedCommand(@"C:\npm\codex.cmd", IsBatchShim: true), [new ModelOption("gpt-6-sol", "GPT-6-Sol", ["high"])]),
+        };
+
+        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(SolHigh), Folder, shim)).Plan;
+
+        Assert.Contains("approval_policy=never", plan.Launch.Arguments);
     }
 
     [Fact]

@@ -150,7 +150,7 @@ public class ClientDefinitionTests
             ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits"],
             claude.Arguments.ToArray());
         Assert.Equal(
-            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
             codex.Arguments.ToArray());
         Assert.Equal(["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high"], pi.Arguments.ToArray());
         Assert.Equal(
