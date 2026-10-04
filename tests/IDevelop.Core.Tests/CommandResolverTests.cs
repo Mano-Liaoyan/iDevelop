@@ -63,4 +63,26 @@ public sealed class CommandResolverTests : IDisposable
         Assert.Equal(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"], CommandResolver.ParseLoginShellPath(output).ToArray());
         Assert.Empty(CommandResolver.ParseLoginShellPath("zsh: command not found: printf\n"));
     }
+
+    // An app started from Finder or a desktop launcher gets a minimal PATH, which the login shell's PATH contains. The
+    // user's own tools then come before the system's copies, as in their terminal.
+    [Fact]
+    public void A_path_the_login_shell_contains_takes_the_login_shells_order()
+    {
+        Assert.Equal(
+            ["/opt/homebrew/bin", "/Users/me/.local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"],
+            CommandResolver.MergeSearchPath(
+                ["/usr/bin", "/bin", "/usr/sbin", "/sbin"],
+                ["/opt/homebrew/bin", "/Users/me/.local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]).ToArray());
+    }
+
+    // An app started from a terminal with an activated virtual environment keeps that environment first.
+    [Fact]
+    public void A_path_with_its_own_folders_keeps_its_order_and_gains_the_login_shells_other_folders()
+    {
+        Assert.Equal(
+            ["/work/app/.venv/bin", "/usr/bin", "/bin", "/opt/homebrew/bin"],
+            CommandResolver.MergeSearchPath(["/work/app/.venv/bin", "/usr/bin", "/bin"], ["/opt/homebrew/bin", "/usr/bin", "/bin"]).ToArray());
+        Assert.Equal(["/usr/bin", "/bin"], CommandResolver.MergeSearchPath(["/usr/bin", "/bin"], []).ToArray());
+    }
 }

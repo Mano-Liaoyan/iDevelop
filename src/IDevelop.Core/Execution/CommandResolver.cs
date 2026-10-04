@@ -54,7 +54,7 @@ public sealed class CommandResolver
     }
 
     /// <summary>
-    /// PATH, with PATHEXT on Windows. On macOS and Linux it also appends the login shell's PATH, because an app started
+    /// PATH, with PATHEXT on Windows. On macOS and Linux it also merges in the login shell's PATH, because an app started
     /// from Finder or a desktop launcher gets a minimal PATH. That costs a shell start, so it happens at the first lookup.
     /// </summary>
     public static CommandResolver FromEnvironment()
@@ -62,7 +62,7 @@ public sealed class CommandResolver
         ImmutableArray<string> path = [.. Split(Environment.GetEnvironmentVariable("PATH"))];
         if (!OperatingSystem.IsWindows())
         {
-            return new CommandResolver(async () => [.. path.Concat(await LoginShellPathAsync()).Distinct()], []);
+            return new CommandResolver(async () => MergeSearchPath(path, await LoginShellPathAsync()), []);
         }
 
         var pathext = Environment.GetEnvironmentVariable("PATHEXT") is { Length: > 0 } value ? value : ".COM;.EXE;.BAT;.CMD";
@@ -100,6 +100,14 @@ public sealed class CommandResolver
 
         ResolvedCommand Found(string path, bool isBatch) => new(path, isBatch) { SearchPath = string.Join(Path.PathSeparator, searchPath) };
     }
+
+    /// <summary>
+    /// The login shell's order when it contains every folder of the app's PATH, as for an app started from Finder or a
+    /// desktop launcher, so the user's own tools come before the system's copies. Otherwise, as for an app started from
+    /// a terminal with an activated environment, the app's order, followed by the login shell's other folders.
+    /// </summary>
+    internal static ImmutableArray<string> MergeSearchPath(IReadOnlyList<string> app, IReadOnlyList<string> loginShell) =>
+        app.All(loginShell.Contains) ? [.. loginShell.Distinct()] : [.. app.Concat(loginShell).Distinct()];
 
     /// <summary>The PATH a login shell prints after <see cref="PathMarker"/>. Shell start-up noise before it is ignored.</summary>
     internal static ImmutableArray<string> ParseLoginShellPath(string output)
