@@ -28,7 +28,19 @@ public class StartCheckTests
             plan.Launch.Arguments.ToArray());
         const string prompt = "# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n";
         Assert.Equal(prompt, plan.Launch.Stdin);
-        Assert.Equal(prompt, plan.Prompt);
+        Assert.Equal(prompt, plan.Request.Prompt);
+    }
+
+    [Fact]
+    public void A_continuation_resumes_the_session_with_the_message_and_needs_no_instructions()
+    {
+        var plan = Assert.IsType<StartVerdict.Allowed>(
+            StartCheck.Evaluate(SayHi(SolHigh, instructions: ""), Folder, CodexReady, new Resumption("thread-1", "banana"))).Plan;
+
+        Assert.Equal(
+            ["exec", "resume", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", "thread-1", "-"],
+            plan.Launch.Arguments.ToArray());
+        Assert.Equal("banana", plan.Launch.Stdin);
     }
 
     [Fact]

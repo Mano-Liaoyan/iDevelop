@@ -1,67 +1,150 @@
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
 namespace IDevelop.Execution;
 
 public sealed partial class ProjectRuns
 {
+    /// <summary>A client's own session ids are UUIDs. Anything else could read as an option or as shell syntax.</summary>
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
+    private static partial Regex PlainSessionId();
+
     /// <summary>
-    /// One run. A channel puts every event in one order: stdout lines, stop requests, and the exit. One drain appends
-    /// each event to the log, folds it, and publishes the record, in that order. A stop request enqueued before the kill
-    /// therefore always precedes the exit the kill causes. The lock is released only after the last event is on disk,
-    /// or after the drain stops and the log is closed, so nothing appends after another instance could take over.
-    /// The run disposes its process just before it releases the lock, so a late stop does nothing. While the client runs,
-    /// Cancel and leaving stop everything it started, and so does a crash on Windows. What it leaves running when it exits
-    /// on its own keeps running, as after a command in a terminal.
+    /// One attempt while it runs. Its turns run one after another, each one client process, under one log, one lock, and
+    /// one channel. The channel puts every event in one order: stdout lines, the person's messages, stop requests, and
+    /// each turn's exit. One drain appends each event to the log, folds it, and publishes the record, in that order. A stop
+    /// request enqueued before the kill therefore always precedes the exit the kill causes. A turn's output ends at its
+    /// exit, so nothing a turn left running writes into the next one.
+    /// A message is accepted only while a turn can still take it. The exit of a turn with no message waiting closes the
+    /// run to messages, under the gate that accepts them, so every accepted message precedes that exit or reaches the
+    /// next turn.
+    /// The lock is released only after the last event is on disk, or after the drain stops and the log is closed, so
+    /// nothing appends after another instance could take over. The run disposes each turn's process before it starts the
+    /// next turn or releases the lock, so a late stop does nothing. While a turn runs, Cancel, Stop and send, and leaving
+    /// stop everything its client started, and so does a crash on Windows. What a turn leaves running when it exits on
+    /// its own keeps running, as after a command in a terminal.
     /// </summary>
-    /// <param name="order">Counts this window's launches, so <see cref="Active"/> keeps the order the runs started in.</param>
-    private sealed class ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
+    private sealed class ActiveRun
     {
+        private readonly ProjectRuns _owner;
+        private readonly AttemptLog _log;
+        private readonly RunLock _held;
         private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Lock _gate = new();
+        private LaunchPlan _plan;
+        private Turn _turn;
+        private bool _messageWaiting;
+        private bool _closed;
 
-        public long Order => order;
+        /// <param name="order">Counts this window's launches, so <see cref="Active"/> keeps the order the runs started in.</param>
+        public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
+        {
+            _owner = owner;
+            Order = order;
+            _plan = plan;
+            _turn = new Turn(process);
+            _log = log;
+            _held = held;
+            Record = record;
+        }
 
-        public AttemptRecord Record { get; private set; } = record;
+        public long Order { get; }
+
+        public AttemptRecord Record { get; private set; }
 
         /// <summary>Completes once the lock is released.</summary>
         public Task Completion => _finished.Task;
 
         public void Start() => _ = Task.Run(RunAsync);
 
+        /// <summary>Cancel or leave: no message is accepted after it, and the running turn's process tree stops.</summary>
         public void Stop(AttemptEvent request)
         {
-            Request(request);
-            process.StopTree();
+            lock (_gate)
+            {
+                _closed = true;
+                _events.Writer.TryWrite(request);
+                if (_turn.Open)
+                {
+                    _turn.Process.StopTree();
+                }
+            }
+        }
+
+        public SendResult Send(string text, bool stopTurn)
+        {
+            lock (_gate)
+            {
+                if (Problem() is { } problem)
+                {
+                    return new SendResult.Refused(problem);
+                }
+
+                _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stopTurn));
+                _messageWaiting = true;
+                if (stopTurn && _turn.Open)
+                {
+                    _turn.Process.StopTree();
+                }
+
+                return new SendResult.Queued();
+            }
+        }
+
+        public SendProblem? SendProblem()
+        {
+            lock (_gate)
+            {
+                return Problem();
+            }
         }
 
         /// <summary>Stops the drain at its next event, without waiting for the client's exit. The attempt stays on record as running.</summary>
         public void Abandon() => _abandon.Cancel();
 
-        private void Request(AttemptEvent e) => _events.Writer.TryWrite(e);
+        /// <summary>Called under the gate.</summary>
+        private SendProblem? Problem() => (_closed, Record.SessionId) switch
+        {
+            (true, _) => new SendProblem.Ending(Record.TaskTitle),
+            (_, null) => new SendProblem.NoSessionYet(Record.Requested.Client),
+            _ => null,
+        };
 
         private async Task RunAsync()
         {
             try
             {
-                var stderrTail = new Tail();
-                _ = process.WriteStdinAsync(plan.Launch.Stdin, close: true);
-                process.ReadStdout(Interpret);
-                process.ReadStderr(line =>
-                {
-                    log.AppendStderr(line);
-                    stderrTail.Add(line);
-                });
-                _ = WatchExitAsync(stderrTail);
+                Read(_turn, _plan);
                 await DrainAsync();
             }
             finally
             {
                 _finished.TrySetResult();
             }
+        }
+
+        private void Read(Turn turn, LaunchPlan plan)
+        {
+            var stderrTail = new Tail();
+            _ = turn.Process.WriteStdinAsync(plan.Launch.Stdin, close: true);
+            turn.Process.ReadStdout(line => Interpret(turn, plan, line));
+            turn.Process.ReadStderr(line =>
+            {
+                lock (_gate)
+                {
+                    if (turn.Open)
+                    {
+                        _log.AppendStderr(line);
+                        stderrTail.Add(line);
+                    }
+                }
+            });
+            _ = WatchExitAsync(turn, stderrTail);
         }
 
         private async Task DrainAsync()
@@ -73,10 +156,24 @@ public sealed partial class ProjectRuns
                 {
                     // Leaving gave up while this drain was busy. Events already queued stay off the log too.
                     _abandon.Token.ThrowIfCancellationRequested();
-                    log.Append(e);
+                    Append(e);
                     exited |= e is AttemptEvent.Exited;
-                    Record = AttemptReducer.Apply(Record, e);
-                    owner.Publish(Record);
+                    _owner.Publish(Record);
+                    if (Record.Status != AttemptStatus.Running)
+                    {
+                        break;
+                    }
+
+                    if (e is AttemptEvent.Exited)
+                    {
+                        if (!NextTurn())
+                        {
+                            break;
+                        }
+
+                        exited = false;
+                        _owner.Publish(Record);
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -88,32 +185,97 @@ public sealed partial class ProjectRuns
             }
             finally
             {
+                lock (_gate)
+                {
+                    _closed = true;
+                    _turn.Open = false;
+                    _events.Writer.TryComplete();
+                }
+
                 // Whatever ended the drain early, including a Changed handler that threw, no client runs on unobserved.
                 // After its exit, whatever the client started for the user, such as a dev server, keeps running.
                 if (exited)
                 {
-                    process.LeaveDescendantsRunning();
+                    _turn.Process.LeaveDescendantsRunning();
                 }
                 else
                 {
-                    process.StopTree();
+                    _turn.Process.StopTree();
                 }
 
-                process.Dispose();
-                log.Dispose();
-                held.Dispose();
-                owner.Finish(this);
+                _turn.Process.Dispose();
+                _log.Dispose();
+                _held.Dispose();
+                _owner.Finish(this);
             }
         }
 
-        private void Interpret(string line)
+        /// <summary>
+        /// After a turn ended with a message waiting, starts the next turn with every waiting message. Every event still
+        /// queued came from the person, because the ended turn writes nothing more, so they are folded first. False when
+        /// the attempt ended instead: a cancel or leave came first, or the client did not start.
+        /// </summary>
+        private bool NextTurn()
         {
-            log.AppendOutput(line);
-            if (string.IsNullOrWhiteSpace(line))
+            _turn.Process.LeaveDescendantsRunning();
+            _turn.Process.Dispose();
+            lock (_gate)
             {
-                return;
+                while (Record.Status == AttemptStatus.Running && _events.Reader.TryRead(out var e))
+                {
+                    Append(e);
+                }
+
+                return Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session);
+            }
+        }
+
+        /// <summary>Called under the gate. False when the client did not start, which ended the attempt.</summary>
+        private bool Launch(string session)
+        {
+            var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued));
+            Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments));
+            var (record, process) = _owner.LaunchTurn(plan, Record, _log);
+            Record = record;
+            _messageWaiting = false;
+            if (process is null)
+            {
+                return false;
             }
 
+            _plan = plan;
+            _turn = new Turn(process);
+            Read(_turn, plan);
+            return true;
+        }
+
+        private void Append(AttemptEvent e)
+        {
+            _log.Append(e);
+            Record = AttemptReducer.Apply(Record, e);
+        }
+
+        private void Interpret(Turn turn, LaunchPlan plan, string line)
+        {
+            var events = string.IsNullOrWhiteSpace(line) ? [] : Parse(plan, line);
+            lock (_gate)
+            {
+                if (!turn.Open)
+                {
+                    return;
+                }
+
+                _log.AppendOutput(line);
+                foreach (var e in events)
+                {
+                    _events.Writer.TryWrite(new AttemptEvent.Agent(DateTimeOffset.UtcNow, e));
+                }
+            }
+        }
+
+        private static ImmutableArray<AgentEvent> Parse(LaunchPlan plan, string line)
+        {
+            var client = Clients.Name(plan.Settings.Client);
             ImmutableArray<AgentEvent> events;
             try
             {
@@ -121,28 +283,46 @@ public sealed partial class ProjectRuns
             }
             catch (JsonException)
             {
-                events = [new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(plan.Settings.Client)} printed.")];
+                return [new AgentEvent.Notice($"iDevelop could not read a line that {client} printed.")];
             }
 
-            foreach (var e in events)
-            {
-                Request(new AttemptEvent.Agent(DateTimeOffset.UtcNow, e));
-            }
+            // A session id goes into the next turn's arguments and into the command a person pastes in a terminal.
+            return [.. events.Select(e => e is AgentEvent.SessionStarted session && !PlainSessionId().IsMatch(session.SessionId)
+                ? new AgentEvent.Notice($"iDevelop ignored the session id {client} reported, because it is not a plain id.")
+                : e)];
         }
 
-        private async Task WatchExitAsync(Tail stderrTail)
+        private async Task WatchExitAsync(Turn turn, Tail stderrTail)
         {
+            var exitQueued = false;
             try
             {
-                var code = await process.WaitForExitAsync();
-                // The attempt settles without output that comes later, which the closed log ignores.
-                await process.WaitForOutputAsync();
-                Request(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
+                var code = await turn.Process.WaitForExitAsync();
+                // The turn ends without output that comes later.
+                await turn.Process.WaitForOutputAsync();
+                lock (_gate)
+                {
+                    turn.Open = false;
+                    _closed |= !_messageWaiting;
+                    exitQueued = _events.Writer.TryWrite(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
+                }
             }
             finally
             {
-                _events.Writer.TryComplete();
+                // Without an exit the drain would wait forever, so it ends, and its end stops the client.
+                if (!exitQueued)
+                {
+                    _events.Writer.TryComplete();
+                }
             }
+        }
+
+        /// <summary>One client process. <see cref="Open"/> turns false under the run's gate when the process exits.</summary>
+        private sealed class Turn(ChildProcess process)
+        {
+            public ChildProcess Process { get; } = process;
+
+            public bool Open { get; set; } = true;
         }
     }
 
