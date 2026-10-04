@@ -60,46 +60,26 @@ internal static class Antigravity
             return new CatalogParse.Problem(Probes.Failure("agy models", output));
         }
 
-        var models = new List<(string Id, string Name, List<string> Levels)>();
-        foreach (var line in TextLines.Lines(output.Stdout))
+        // GroupBy keeps the order in which each id first appears, and its first line gives the name.
+        ImmutableArray<ModelOption> models = [.. TextLines.Lines(output.Stdout).Select(Variant).GroupBy(variant => variant.Id).Select(model =>
         {
-            var fields = line.Split('\t', 2);
-            var (id, name) = (fields[0].Trim(), fields.Length > 1 ? fields[1].Trim() : fields[0].Trim());
-            var dash = id.LastIndexOf('-');
-            var level = dash > 0 ? id[(dash + 1)..] : "";
-            var suffix = $" ({level})";
-            if (ReasoningLevels.IsLevel(level) && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                (id, name) = (id[..dash], name[..^suffix.Length]);
-            }
-            else
-            {
-                level = "";
-            }
+            var levels = ReasoningLevels.Sort(model.Select(variant => variant.Level).OfType<string>());
+            return new ModelOption(model.Key, model.First().Name, levels) { DefaultReasoning = ReasoningLevels.Default(levels) };
+        })];
+        return models.IsEmpty ? new CatalogParse.Problem("agy listed no models.") : new CatalogParse.Models(models);
+    }
 
-            var index = models.FindIndex(model => model.Id == id);
-            if (index < 0)
-            {
-                models.Add((id, name, []));
-                index = models.Count - 1;
-            }
-
-            if (level.Length > 0)
-            {
-                models[index].Levels.Add(level);
-            }
-        }
-
-        if (models.Count == 0)
-        {
-            return new CatalogParse.Problem("agy listed no models.");
-        }
-
-        return new CatalogParse.Models([.. models.Select(model =>
-        {
-            var levels = ReasoningLevels.Sort(model.Levels);
-            return new ModelOption(model.Id, model.Name, levels) { DefaultReasoning = ReasoningLevels.Default(levels) };
-        })]);
+    /// <summary>One line's bare id, its name without the level, and its level, which is null for a model without levels.</summary>
+    private static (string Id, string Name, string? Level) Variant(string line)
+    {
+        var fields = line.Split('\t', 2);
+        var (id, name) = (fields[0].Trim(), fields.Length > 1 ? fields[1].Trim() : fields[0].Trim());
+        var dash = id.LastIndexOf('-');
+        var level = dash > 0 ? id[(dash + 1)..] : "";
+        var suffix = $" ({level})";
+        return ReasoningLevels.IsLevel(level) && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? (id[..dash], name[..^suffix.Length], level)
+            : (id, name, null);
     }
 
     private static ImmutableArray<AgentEvent> Interpret(string line)
