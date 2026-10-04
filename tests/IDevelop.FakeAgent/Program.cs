@@ -6,6 +6,7 @@ using System.Text.Json;
 //
 //   IDevelop.FakeAgent --rules <rules.json> -- <the arguments the real client gets>
 //   IDevelop.FakeAgent --sleep-forever
+//   IDevelop.FakeAgent --spawn-sleeper <file>   start a sleeping copy, write its pid, and exit, as spawnThroughCmd runs it
 //
 // The rules file is {"rules": [{"when": ["auth", "status"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
 // The first rule whose "when" is a prefix of the client arguments runs its steps in order. Steps:
