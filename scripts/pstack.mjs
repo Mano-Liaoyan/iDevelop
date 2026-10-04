@@ -48,9 +48,15 @@ const projectSkills = path.join(root, 'skills');
 const projectNames = fs.existsSync(projectSkills)
   ? fs.readdirSync(projectSkills, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
   : [];
+// Windows and macOS paths ignore case, so a name that differs only in case would overwrite the PStack skill.
+const upstreamKeys = new Set(upstreamNames.map(name => name.toLowerCase()));
 for (const name of projectNames) {
-  assert.ok(!upstreamNames.includes(name), `Project skill skills/${name} has the same name as a PStack skill. Rename the project skill.`);
-  assert.ok(fs.existsSync(path.join(projectSkills, name, 'SKILL.md')), `Project skill skills/${name} has no SKILL.md.`);
+  assert.ok(!upstreamKeys.has(name.toLowerCase()), `Project skill skills/${name} has the same name as a PStack skill. Rename the project skill.`);
+  const entrypoint = path.join(projectSkills, name, 'SKILL.md');
+  assert.ok(fs.existsSync(entrypoint), `Project skill skills/${name} has no SKILL.md.`);
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(fs.readFileSync(entrypoint, 'utf8'))?.[1] ?? '';
+  assert.ok(/^name:/m.test(frontmatter) && /^description:/m.test(frontmatter),
+    `Project skill skills/${name}/SKILL.md must begin with YAML frontmatter that holds name: and description:.`);
 }
 const skillFiles = [...upstreamFiles, ...projectNames.flatMap(name => files(path.join(projectSkills, name)))
   .map(input => skillFile(projectSkills, input))];
