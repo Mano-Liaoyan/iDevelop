@@ -88,7 +88,7 @@ Import-Module ./scripts/real-window.psm1
 Stop-IDevelop
 ```
 
-`Stop-IDevelop` closes the window. It answers `Stop and leave` for a running task and `Don't save` for unsaved edits. It kills only the session's process id if the window has not closed within 15 seconds. It stops every fake client process that runs from the session's folder, such as the sleeper a finished run leaves. It restores the theme preference and marks the session stopped. It never deletes `.verify/<run>/`. Run it after every attempt, failed ones too, then list the run folder to confirm the evidence is still there.
+`Stop-IDevelop` closes the window. It answers `Stop and leave` for a running task and `Don't save` for unsaved edits. It kills only the session's process id if the window has not closed within 15 seconds. It stops every fake client process that runs from the session's folder, such as the sleeper a finished run leaves. It restores the theme preference, says whether it did, and warns about a backup another run left. It marks the session stopped and never deletes `.verify/<run>/`. Run it after every attempt, failed ones too, then list the run folder to confirm the evidence is still there.
 
 ## Features
 

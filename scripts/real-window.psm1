@@ -260,7 +260,17 @@ function Start-IDevelop([string] $Project, [string] $Run, [switch] $Empty, [swit
     } else {
         $Run = Join-Path $VerifyRoot (Get-Date -Format 'yyyyMMdd-HHmmss')
     }
-    Backup-Settings $Run
+    if ($Project) {
+        $Project = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Project)
+        if (-not [IO.Directory]::Exists($Project)) { throw "No project folder at $Project." }
+    }
+    $bin = Join-Path $Run 'fake-bin'
+    # A copy of its own marks every fake process as this session's, so Stop-IDevelop can find each one it left.
+    $agent = Join-Path $bin 'agent\IDevelop.FakeAgent.exe'
+    if (-not $RealClients -and -not [IO.File]::Exists($agent) -and -not [IO.File]::Exists($FakeAgent)) {
+        throw "No fake agent at $FakeAgent. Run dotnet build -c Release first."
+    }
+
     [IO.Directory]::CreateDirectory($Run) | Out-Null
     if (-not $Project) {
         $Project = Join-Path $Run $(if ($Empty) { 'empty-project' } else { 'project' })
@@ -270,24 +280,23 @@ function Start-IDevelop([string] $Project, [string] $Run, [switch] $Empty, [swit
             Copy-Item -Recurse -LiteralPath (Join-Path $Repo 'samples\storage-change') -Destination $Project
         }
     }
-    $Project = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Project)
-    if (-not [IO.Directory]::Exists($Project)) { throw "No project folder at $Project." }
-
-    $savedPath = $env:PATH
     if (-not $RealClients) {
-        $bin = Join-Path $Run 'fake-bin'
-        # A copy of its own marks every fake process as this session's, so Stop-IDevelop can find each one it left.
-        $agent = Join-Path $bin 'agent\IDevelop.FakeAgent.exe'
         if (-not [IO.File]::Exists($agent)) {
-            if (-not [IO.File]::Exists($FakeAgent)) { throw "No fake agent at $FakeAgent. Run dotnet build -c Release first." }
             [IO.Directory]::CreateDirectory((Split-Path $agent)) | Out-Null
             Copy-Item -Path (Join-Path (Split-Path $FakeAgent) 'IDevelop.FakeAgent.*') -Destination (Split-Path $agent)
         }
         New-FakeCodex $bin (Join-Path $bin 'gate') (Join-Path $bin 'sleeper.pid') -BlockOtherClients -Agent $agent | Out-Null
-        $env:PATH = $bin
     }
+
+    # The preference moves aside only once nothing is left to refuse the start, and comes back if the launch fails.
+    Backup-Settings $Run
+    $savedPath = $env:PATH
+    if (-not $RealClients) { $env:PATH = $bin }
     try {
         $process = Start-Process -FilePath $ReleaseExe -ArgumentList "`"$Project`"" -PassThru
+    } catch {
+        Restore-Settings $Run
+        throw
     } finally {
         $env:PATH = $savedPath
     }
@@ -439,12 +448,22 @@ function Stop-IDevelop([string] $Run) {
         foreach ($fake in $fakes) { $fake.Kill() }
         if ($fakes) { $done += ", stopped the session's fake agent processes $($fakes.Id -join ', ')" }
     } finally {
+        $held = (Get-SettingsOwner).run -eq $state.run -and [IO.File]::Exists($BackupFile)
         Restore-Settings $state.run
+        $done += $(if ($held) { ', and restored the theme preference' } else { ', and held no theme preference backup to restore' })
         $state.stopped = $true
         Save-SessionState $state
         Add-Transcript $state.run "INFO stopped: $done"
     }
     "Stopped: $done. The evidence stays in $($state.run)."
+    if ([IO.File]::Exists($BackupFile)) {
+        $owner = Get-SettingsOwner
+        if ($owner -and (Test-OwnerAlive $owner)) {
+            "WARN another live run holds the theme preference backup: $($owner.run), pid $($owner.pid). It restores the preference when it stops."
+        } else {
+            "WARN a theme preference backup from a killed run is left$(if ($owner) { " by $($owner.run)" }). The next Start-IDevelop or check-real-window.ps1 restores it."
+        }
+    }
 }
 
 Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Find-AllInProcess,
