@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using Nodify;
 
@@ -17,7 +18,7 @@ public sealed class MainWindowTests : IDisposable
     private static readonly TaskId Build = new(Guid.Parse("019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22"));
     private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
 
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
 

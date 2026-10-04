@@ -15,7 +15,7 @@ namespace IDevelop.Desktop.Tests;
 [Collection(ProcessCollection.Name)]
 public sealed class AgentsSectionTests : IDisposable
 {
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
     private readonly FakeClients _fakes;
 
     public AgentsSectionTests() => _fakes = new FakeClients(_temp.Create("bin"));

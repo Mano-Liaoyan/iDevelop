@@ -19,7 +19,7 @@ public sealed class AgentPickerTests : IDisposable
     private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
     private static readonly ExecutionSettings PiAtHigh = new(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
 
-    private readonly TempFolder _temp = new();
+    private readonly TempFolder _temp = AppTempFolder.New();
     private readonly ClientDirectory _clients;
 
     // Codex and Antigravity CLI are installed and ready. Claude Code and Pi are not installed.

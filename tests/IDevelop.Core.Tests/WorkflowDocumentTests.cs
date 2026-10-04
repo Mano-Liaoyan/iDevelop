@@ -1,5 +1,6 @@
 using System.Runtime.Versioning;
 using IDevelop.Projects;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Workflows.WorkflowEdit;
 

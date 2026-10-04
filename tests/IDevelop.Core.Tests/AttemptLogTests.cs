@@ -1,4 +1,5 @@
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.AttemptReducerTests;
 using static IDevelop.Execution.AgentEvent;
 
