@@ -21,28 +21,24 @@ public sealed class ProjectRunsTests : IDisposable
     {
         [ClientId.ClaudeCode] = new(
             new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" },
-            ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-haiku-4-5", "--effort", "high", "--permission-mode", "acceptEdits"],
             "claude-success.jsonl",
             "847c08de-2ab8-4e5f-bcee-7d813def3756",
             "claude-haiku-4-5-20251001",
             null),
         [ClientId.Codex] = new(
             new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" },
-            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
             "codex-success.jsonl",
             "01a104d5-d442-71a1-9b08-8938c119e5ae",
             null,
             null),
         [ClientId.Pi] = new(
             new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" },
-            ["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high"],
             "pi-success.jsonl",
             "01a104d6-5d29-70a3-b067-4dea17388eb1",
             "deepseek/deepseek-v4-pro",
             "high"),
         [ClientId.Antigravity] = new(
             new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" },
-            ["--input-format", "stream-json", "--output-format", "stream-json", "--model", "gemini-3.8-flash", "--effort", "low", "--mode", "accept-edits", "--print="],
             "agy-success.jsonl",
             "88fcc1a4-0a4f-495c-a2db-b6fc830d0b4a",
             "gemini-3.8-flash",
@@ -88,7 +84,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task Each_client_runs_a_task_in_the_project_folder_and_reports_its_result(ClientId client)
     {
         var expected = Runs[client];
-        FakeAgents.Install(_fakes, client, On(expected.Arguments[0], expected.Arguments[1])
+        FakeAgents.Install(_fakes, client, On()
             .RecordArguments(Evidence("arguments.json"))
             .RecordWorkingDirectory(Evidence("folder.txt"))
             .CaptureStdin(Evidence("stdin.txt"))
@@ -103,14 +99,15 @@ public sealed class ProjectRunsTests : IDisposable
         var record = await settled;
         Assert.Equal((AttemptStatus.Succeeded, "DONE", null), (record.Status, record.Result, record.Detail));
         Assert.Equal((expected.Session, expected.Model, expected.Reasoning), (record.SessionId, record.ReportedModel, record.ReportedReasoning));
-        Assert.Equal(expected.Arguments, JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("arguments.json")))!);
+        var folder = AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, record.Id);
+        var requested = Assert.IsType<AttemptEvent.Requested>(AttemptLog.Read(folder)[0]);
+        Assert.Equal(requested.Arguments.ToArray(), JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("arguments.json")))!);
         Assert.Equal(Folders.AsCurrentFolder(_project), File.ReadAllText(Evidence("folder.txt")));
         Assert.Equal(
             client == ClientId.Antigravity
                 ? """{"event":"user","message":{"role":"user","content":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n"}}""" + "\n"
                 : "# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n",
             File.ReadAllText(Evidence("stdin.txt")));
-        var folder = AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, record.Id);
         Assert.Equal(Fixture.Text(expected.Fixture), File.ReadAllText(Path.Combine(folder, "output.jsonl")));
         Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
         Assert.Empty(runs.Active);
@@ -214,7 +211,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task A_client_that_reports_a_failure_and_exits_0_fails_the_attempt_with_its_own_reason()
     {
         var expected = Runs[ClientId.Pi];
-        FakeAgents.Install(_fakes, ClientId.Pi, On(expected.Arguments[0], expected.Arguments[1]).Replay(Fixture.Path("pi-auth-error.jsonl")).Exit(0));
+        FakeAgents.Install(_fakes, ClientId.Pi, On().Replay(Fixture.Path("pi-auth-error.jsonl")).Exit(0));
         await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
         var settled = NextSettled(runs);
 
@@ -634,5 +631,5 @@ public sealed class ProjectRunsTests : IDisposable
 
     private string Evidence(string name) => Path.Combine(_evidence, name);
 
-    private sealed record ClientRun(ExecutionSettings Settings, string[] Arguments, string Fixture, string Session, string? Model, string? Reasoning);
+    private sealed record ClientRun(ExecutionSettings Settings, string Fixture, string Session, string? Model, string? Reasoning);
 }
