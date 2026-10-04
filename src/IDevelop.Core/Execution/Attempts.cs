@@ -280,8 +280,8 @@ internal static class AttemptReducer
     }
 
     /// <summary>
-    /// Why the attempt ended: a crash between turns, when no client runs; otherwise leaving when leaving gave up on it, else
-    /// a crash, then what reconciling found.
+    /// Why the attempt ended. No client runs between turns, so a crash there needs no process check. During a turn the
+    /// cause is leaving when leaving gave up on the client, else a crash, followed by what reconciling found.
     /// </summary>
     private static string Reconciliation(AttemptRecord record, ProcessMatch? process)
     {
