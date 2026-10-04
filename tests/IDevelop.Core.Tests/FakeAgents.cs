@@ -14,8 +14,8 @@ internal static class FakeAgents
 
     public static readonly FakeRule CodexSignedIn = On("login", "status").Print("Logged in using ChatGPT");
 
-    // Pi's RPC mode keeps running after it answers, as the real one does.
-    public static readonly FakeRule PiModels = On("--mode", "rpc", "--no-session").Replay(Fixture.Path("pi-rpc-models.jsonl")).Hang();
+    // Pi's RPC mode keeps running after it answers and exits when its input ends, as the real one does.
+    public static readonly FakeRule PiModels = On("--mode", "rpc", "--no-session").Replay(Fixture.Path("pi-rpc-models.jsonl")).WaitForStdinEnd();
 
     public static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
 

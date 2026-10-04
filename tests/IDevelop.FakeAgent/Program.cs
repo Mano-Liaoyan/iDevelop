@@ -11,6 +11,7 @@ using System.Text.Json;
 // The first rule whose "when" is a prefix of the client arguments runs its steps in order. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
 //   captureStdin <file>           copy stdin to the file until it closes
+//   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
 //   sleep <milliseconds>
@@ -56,6 +57,13 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
             using (var file = File.Create(value.GetString()!))
             {
                 input.CopyTo(file);
+            }
+
+            break;
+        case "waitForStdinEnd":
+            using (var input = Console.OpenStandardInput())
+            {
+                input.CopyTo(Stream.Null);
             }
 
             break;
