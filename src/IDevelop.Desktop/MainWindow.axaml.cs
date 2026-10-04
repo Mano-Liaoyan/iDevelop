@@ -1,6 +1,11 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
+using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop;
 
@@ -48,6 +53,64 @@ public partial class MainWindow : Window
         {
             _closeConfirmed = true;
             Close();
+        }
+    }
+
+    private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        }
+        else
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
+    // A click, a key, and UI Automation each check a segment their own way, so the checked segment is the choice.
+    private void OnThemeChecked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { IsChecked: true, Tag: ThemeVariant variant })
+        {
+            ((App)Application.Current!).Choose(variant);
+        }
+    }
+
+    private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
+
+    // The list also follows the canvas's selection, so only a change made while the list has focus is a choice in it.
+    private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (SidebarTasks.IsKeyboardFocusWithin && SidebarTasks.SelectedItem is TaskNodeViewModel task)
+        {
+            CanvasView?.BringIntoViewIfHidden(task);
+        }
+    }
+
+    // Choosing the task that is already selected changes no selection, so a tap on a row and Space or Enter on the
+    // focused row also count as choices.
+    private void OnSidebarTapped(object? sender, TappedEventArgs e) => BringRowIntoView(e.Source);
+
+    private void OnSidebarKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Space or Key.Enter)
+        {
+            BringRowIntoView(e.Source);
+        }
+    }
+
+    // A tap between rows also reaches the list, and it chooses no task.
+    private void BringRowIntoView(object? source)
+    {
+        if ((source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: TaskNodeViewModel task })
+        {
+            CanvasView?.BringIntoViewIfHidden(task);
         }
     }
 

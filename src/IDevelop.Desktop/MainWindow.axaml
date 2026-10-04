@@ -2,51 +2,313 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="using:IDevelop.Desktop"
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
+        xmlns:workflows="using:IDevelop.Workflows"
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
-        Title="{Binding Title}" Width="1280" Height="800">
+        Title="{Binding Title}" Width="1280" Height="800" MinWidth="900" MinHeight="600"
+        Background="{DynamicResource AppSidebarBrush}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="44"
+        ExtendClientAreaChromeHints="PreferSystemChrome, OSXThickTitleBar">
 
   <Window.KeyBindings>
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Meta+S" Command="{Binding SaveCommand}" />
   </Window.KeyBindings>
 
-  <DockPanel>
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="8">
-      <Button Content="Open folder"
-              Click="OnOpenFolder"
-              AutomationProperties.AutomationId="OpenFolder"
-              AutomationProperties.Name="Open folder" />
-      <Button Content="Add task"
-              Command="{Binding AddTaskCommand}"
-              AutomationProperties.AutomationId="AddTask"
-              AutomationProperties.Name="Add task" />
-      <Button Content="Save"
-              Command="{Binding SaveCommand}"
-              AutomationProperties.AutomationId="Save"
-              AutomationProperties.Name="Save" />
-    </StackPanel>
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="240" MinWidth="200" MaxWidth="400" />
+      <ColumnDefinition Width="1" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="1" />
+      <ColumnDefinition Width="300" MinWidth="260" MaxWidth="480" />
+    </Grid.ColumnDefinitions>
 
-    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="16" Margin="8,4">
-      <TextBlock Text="Unsaved changes"
-                 IsVisible="{Binding HasUnsavedChanges}"
-                 AutomationProperties.AutomationId="UnsavedChanges" />
-      <TextBlock Text="{Binding Status}"
-                 AutomationProperties.AutomationId="Status"
-                 AutomationProperties.Name="Status" />
-    </StackPanel>
+    <!-- The sidebar has no fill of its own. The window's sidebar color shows through it.
+         Its rows are in the order they appear, which is also the Tab order. -->
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+      <!-- Linux ignores the request to draw into the title bar, so the bands that stand in for it collapse there. -->
+      <Border Height="44" Background="Transparent"
+              IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
+              PointerPressed="OnTitleBandPressed" />
 
-    <Panel>
-      <TextBlock Text="Open a project folder to start."
-                 IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
-                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-      <ContentControl Content="{Binding Canvas}">
-        <ContentControl.DataTemplates>
-          <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-            <canvas:WorkflowCanvasView />
-          </DataTemplate>
-        </ContentControl.DataTemplates>
-      </ContentControl>
-    </Panel>
-  </DockPanel>
+      <Border Grid.Row="1" Padding="12,8,12,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border60Brush}">
+        <Button Classes="nav"
+                Command="{Binding AddTaskCommand}"
+                AutomationProperties.AutomationId="AddTask"
+                AutomationProperties.Name="New task">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource PlusIcon}" Width="16" Height="16" />
+            <TextBlock Text="New task" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+      <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="12" RowSpacing="12">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="PROJECT" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="icon"
+                    Click="OnOpenFolder"
+                    ToolTip.Tip="Open folder"
+                    AutomationProperties.AutomationId="OpenFolder"
+                    AutomationProperties.Name="Open folder">
+              <PathIcon Data="{StaticResource FolderIcon}" Width="16" Height="16" />
+            </Button>
+          </Grid>
+          <Border IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
+                  Padding="12,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                  BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceMuted60Brush}">
+            <TextBlock Text="No project open." FontSize="14" Foreground="{DynamicResource TextMutedBrush}" />
+          </Border>
+          <!-- The open project is the selected row, as in PlanWeave's project tree. -->
+          <Border IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  Height="32" Padding="8,0" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                  BorderBrush="{DynamicResource StateSelected25Brush}" Background="{DynamicResource StateSelectedSurfaceBrush}"
+                  BoxShadow="{StaticResource SmallShadow}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+              <PathIcon Data="{StaticResource FolderIcon}" Width="16" Height="16" Foreground="{DynamicResource TextStrongBrush}" />
+              <TextBlock Grid.Column="1" Text="{Binding ProjectName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                         FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                         ToolTip.Tip="{Binding ProjectName}"
+                         AutomationProperties.AutomationId="ProjectName" />
+              <Border Grid.Column="2" Classes="badge">
+                <TextBlock Text="{Binding Canvas.Nodes.Count}" AutomationProperties.AutomationId="TaskCount" />
+              </Border>
+            </Grid>
+          </Border>
+        </StackPanel>
+        <Border Grid.Row="1" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}" VerticalAlignment="Top"
+                Margin="12,0,0,0" Padding="12,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border60Brush}">
+          <ListBox x:Name="SidebarTasks" Classes="tasks"
+                   ItemsSource="{Binding Canvas.Nodes}"
+                   SelectedItem="{Binding Canvas.SelectedNode}"
+                   SelectionChanged="OnSidebarSelectionChanged"
+                   Tapped="OnSidebarTapped"
+                   KeyDown="OnSidebarKeyDown"
+                   AutomationProperties.AutomationId="SidebarTasks">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="4" />
+              </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="canvas:TaskNodeViewModel">
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="3" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="APPEARANCE" />
+          <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
+            <UniformGrid Columns="3">
+              <RadioButton Classes="segment" GroupName="Theme" Content="System"
+                           Tag="{x:Static ThemeVariant.Default}"
+                           IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                       Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Default}}"
+                           IsCheckedChanged="OnThemeChecked"
+                           AutomationProperties.AutomationId="ThemeSystem"
+                           AutomationProperties.Name="System theme" />
+              <RadioButton Classes="segment" GroupName="Theme" Content="Light"
+                           Tag="{x:Static ThemeVariant.Light}"
+                           IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                       Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Light}}"
+                           IsCheckedChanged="OnThemeChecked"
+                           AutomationProperties.AutomationId="ThemeLight"
+                           AutomationProperties.Name="Light theme" />
+              <RadioButton Classes="segment" GroupName="Theme" Content="Dark"
+                           Tag="{x:Static ThemeVariant.Dark}"
+                           IsChecked="{Binding RequestedThemeVariant, Source={x:Static Application.Current}, Mode=OneWay,
+                                       Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ThemeVariant.Dark}}"
+                           IsCheckedChanged="OnThemeChecked"
+                           AutomationProperties.AutomationId="ThemeDark"
+                           AutomationProperties.Name="Dark theme" />
+            </UniformGrid>
+          </Border>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <GridSplitter Grid.Column="1" Width="8" Margin="-3.5,0" ZIndex="1" />
+
+    <Border Grid.Column="2" CornerRadius="14,0,0,14" ClipToBounds="True" Background="{DynamicResource AppShellBrush}">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Height="44"
+                Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
+                IsVisible="{Binding $parent[Window].IsExtendedIntoWindowDecorations}"
+                PointerPressed="OnTitleBandPressed" />
+        <Panel>
+          <TextBlock Text="Open a project folder to start."
+                     IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     FontSize="14" Foreground="{DynamicResource TextMutedBrush}" />
+          <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+                <canvas:WorkflowCanvasView />
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+
+          <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Spacing="8">
+            <Border Classes="breadcrumb" HorizontalAlignment="Left"
+                    IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    AutomationProperties.AutomationId="Breadcrumb">
+              <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,0">
+                  <PathIcon Data="{StaticResource FolderIcon}" Width="14" Height="14" Foreground="{DynamicResource TextMutedBrush}" />
+                  <TextBlock Text="{Binding ProjectName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                             FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                             AutomationProperties.AutomationId="BreadcrumbProject" />
+                </StackPanel>
+                <PathIcon Data="{StaticResource ChevronRightIcon}" Width="6" Height="10" Foreground="{DynamicResource TextFaintBrush}" />
+                <!-- A project has one workflow, and the workflow has no name of its own. -->
+                <TextBlock Text="Workflow" Margin="8,0,10,0" VerticalAlignment="Center"
+                           FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                <Border BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Unsaved changes" Margin="10,0,2,0" VerticalAlignment="Center"
+                               FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
+                               IsVisible="{Binding HasUnsavedChanges}"
+                               AutomationProperties.AutomationId="UnsavedChanges" />
+                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                            Command="{Binding SaveCommand}"
+                            ToolTip.Tip="Save"
+                            AutomationProperties.AutomationId="Save"
+                            AutomationProperties.Name="Save">
+                      <PathIcon Data="{StaticResource SaveIcon}" Width="14" Height="14" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <!-- The status sits under the breadcrumb so a long message never covers it. The line limit keeps it above
+                 the zoom panel and the minimap at the window's minimum height, and the tooltip holds the whole message. -->
+            <Border Classes="breadcrumb" HorizontalAlignment="Left" Padding="12,9" MaxWidth="420"
+                    IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <TextBlock Classes="caption" Text="{Binding Status}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="10"
+                         ToolTip.Tip="{Binding Status}"
+                         AutomationProperties.AutomationId="Status"
+                         AutomationProperties.Name="Status" />
+            </Border>
+          </StackPanel>
+        </Panel>
+      </DockPanel>
+    </Border>
+
+    <GridSplitter Grid.Column="3" Width="8" Margin="-3.5,0" ZIndex="1" />
+
+    <DockPanel Grid.Column="4" Background="{DynamicResource AppPanelBrush}" AutomationProperties.AutomationId="Inspector">
+      <!-- Windows draws the caption buttons over this header's right end, so its title stays on the left. -->
+      <Border DockPanel.Dock="Top" Height="44" Padding="12,0"
+              Background="{DynamicResource AppTopbarBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border80Brush}"
+              PointerPressed="OnTitleBandPressed">
+        <TextBlock Text="Inspector" VerticalAlignment="Center"
+                   FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+      </Border>
+      <ScrollViewer>
+        <ContentControl Content="{Binding Canvas}" Margin="12,16,12,12">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+              <Panel>
+                <TextBlock Text="Select a task or connection to edit it."
+                           TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                           IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
+                           AutomationProperties.AutomationId="InspectorHint" />
+                <ContentControl Content="{Binding Inspected}">
+                  <ContentControl.DataTemplates>
+                    <DataTemplate DataType="canvas:TaskNodeViewModel">
+                      <StackPanel Spacing="6">
+                        <TextBlock Classes="caption" Text="Title" />
+                        <TextBox Text="{Binding Title}"
+                                 AutomationProperties.AutomationId="TaskTitle"
+                                 AutomationProperties.Name="Title" />
+                        <TextBlock Classes="caption" Text="Instructions" Margin="0,8,0,0" />
+                        <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
+                        <TextBox Text="{Binding Instructions}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="140"
+                                 AutomationProperties.AutomationId="TaskInstructions"
+                                 AutomationProperties.Name="Instructions" />
+                        <TextBlock Classes="caption" Text="Acceptance criteria" Margin="0,8,0,0" />
+                        <TextBox Text="{Binding AcceptanceCriteria}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
+                                 AutomationProperties.AutomationId="TaskAcceptanceCriteria"
+                                 AutomationProperties.Name="Acceptance criteria" />
+                      </StackPanel>
+                    </DataTemplate>
+                    <DataTemplate DataType="canvas:ConnectionViewModel">
+                      <StackPanel Spacing="12">
+                        <Border Padding="12" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                                BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
+                          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                            <TextBlock Classes="caption" Text="From" />
+                            <TextBlock Grid.Column="1" Text="{Binding From.Title}" TextTrimming="CharacterEllipsis"
+                                       FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                            <TextBlock Grid.Row="1" Classes="caption" Text="Type" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Kind}"
+                                       FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                            <TextBlock Grid.Row="2" Classes="caption" Text="To" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding To.Title}" TextTrimming="CharacterEllipsis"
+                                       FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                          </Grid>
+                        </Border>
+                        <StackPanel Spacing="6">
+                          <TextBlock Classes="caption" Text="Kind" />
+                          <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
+                            <!-- Each swatch draws its kind's line, so the buttons double as the legend for the canvas. -->
+                            <UniformGrid Columns="3">
+                              <Button Classes="segment"
+                                      Command="{Binding SetKindCommand}"
+                                      CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
+                                      AutomationProperties.AutomationId="KindDependency"
+                                      AutomationProperties.Name="Dependency">
+                                <StackPanel Spacing="4">
+                                  <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" HorizontalAlignment="Center"
+                                        Stroke="{DynamicResource ConnectionDependencyBrush}" />
+                                  <TextBlock Text="Dependency" />
+                                </StackPanel>
+                              </Button>
+                              <Button Classes="segment"
+                                      Command="{Binding SetKindCommand}"
+                                      CommandParameter="{x:Static workflows:ConnectionKind.Context}"
+                                      AutomationProperties.AutomationId="KindContext"
+                                      AutomationProperties.Name="Context">
+                                <StackPanel Spacing="4">
+                                  <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" StrokeDashArray="2,1.5" HorizontalAlignment="Center"
+                                        Stroke="{DynamicResource ConnectionContextBrush}" />
+                                  <TextBlock Text="Context" />
+                                </StackPanel>
+                              </Button>
+                              <Button Classes="segment"
+                                      Command="{Binding SetKindCommand}"
+                                      CommandParameter="{x:Static workflows:ConnectionKind.Review}"
+                                      AutomationProperties.AutomationId="KindReview"
+                                      AutomationProperties.Name="Review">
+                                <StackPanel Spacing="4">
+                                  <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" HorizontalAlignment="Center"
+                                        Stroke="{DynamicResource ConnectionReviewBrush}" />
+                                  <TextBlock Text="Review" />
+                                </StackPanel>
+                              </Button>
+                            </UniformGrid>
+                          </Border>
+                        </StackPanel>
+                        <Button Classes="nav" Content="Delete connection" Command="{Binding DeleteCommand}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ContentControl.DataTemplates>
+                </ContentControl>
+              </Panel>
+            </DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
 </Window>

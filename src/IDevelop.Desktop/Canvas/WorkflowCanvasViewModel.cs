@@ -10,9 +10,12 @@ namespace IDevelop.Desktop.Canvas;
 
 public sealed class WorkflowCanvasViewModel : ObservableObject
 {
-    public const double MaxTaskWidth = 240;
+    // The visible card is 240 wide. The container adds a 10 px gutter on each side, where the ports sit on the card's edge.
+    public const double TaskCardWidth = 260;
 
-    private static readonly Size TaskFootprint = new(MaxTaskWidth + 60, 90);
+    public const double TaskCardHeight = 144;
+
+    private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
     private readonly WorkflowDocument _document;
     private readonly Action<string?> _setNotice;

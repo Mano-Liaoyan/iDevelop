@@ -1,9 +1,12 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
@@ -24,6 +27,15 @@ internal sealed class Shell
 
     public bool ShowsUnsavedChanges => Find<TextBlock>("UnsavedChanges").IsVisible;
 
+    public static Shell Show()
+    {
+        var window = new MainWindow();
+        window.Show();
+        var shell = new Shell(window);
+        shell.Render();
+        return shell;
+    }
+
     public static Shell Open(string folder)
     {
         var window = new MainWindow();
@@ -40,12 +52,32 @@ internal sealed class Shell
     public bool Has<T>(string automationId) where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Any(control => AutomationProperties.GetAutomationId(control) == automationId);
 
+    public NodifyEditor Editor => Window.GetVisualDescendants().OfType<NodifyEditor>().Single();
+
+    public Color ColorAt(Visual visual, Point local)
+    {
+        var point = At(visual, local);
+        using var frame = Window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var pixels = frame.Lock();
+        var pixel = pixels.Address + (int)point.Y * pixels.RowBytes + (int)point.X * 4;
+        byte Channel(int index) => Marshal.ReadByte(pixel, index);
+        if (pixels.Format == PixelFormat.Rgba8888)
+        {
+            return Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2));
+        }
+
+        Assert.Equal(PixelFormat.Bgra8888, pixels.Format);
+        return Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
+    }
+
     public ItemContainer Node(string title) =>
         Nodes().Single(container => ((TaskNodeViewModel)container.DataContext!).Title == title);
 
     public IEnumerable<ItemContainer> Nodes() => Window.GetVisualDescendants().OfType<ItemContainer>();
 
-    public IEnumerable<Connection> Connections() => Window.GetVisualDescendants().OfType<Connection>();
+    // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
+    public IEnumerable<BaseConnection> Connections() =>
+        Window.GetVisualDescendants().OfType<BaseConnection>().Where(connection => connection.DataContext is ConnectionViewModel);
 
     public NodeOutput Output(string title) =>
         Window.GetVisualDescendants().OfType<NodeOutput>().Single(output => ((PortViewModel)output.DataContext!).Node.Title == title);
@@ -60,12 +92,14 @@ internal sealed class Shell
     public Point Thumb(Connector connector) =>
         Center(connector.GetVisualDescendants().OfType<TemplatedControl>().Single(control => control.Name == "PART_Connector"));
 
-    public (Point Source, Point Target) Ends(Connection connection) => (At(connection, connection.Source), At(connection, connection.Target));
+    public (Point Source, Point Target) Ends(BaseConnection connection) => (At(connection, connection.Source), At(connection, connection.Target));
 
-    public Point Between(string from, string to)
+    // Step connections from one output share their first runs. Only the run that enters the target is unique to one
+    // connection, and 19 px before the handle is the middle of its straight part, between its corner and its arrowhead.
+    public Point ConnectionInto(string to)
     {
-        var (source, target) = (Thumb(Output(from)), Thumb(Input(to)));
-        return new Point((source.X + target.X) / 2, (source.Y + target.Y) / 2);
+        var target = Thumb(Input(to));
+        return new Point(target.X - 19, target.Y);
     }
 
     public void Click(Point point, RawInputModifiers modifiers = RawInputModifiers.None)

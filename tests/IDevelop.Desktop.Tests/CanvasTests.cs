@@ -1,7 +1,10 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
@@ -93,7 +96,125 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
-        Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Node>().Single()));
+        Assert.Equal(title, ToolTip.GetTip(existing.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "TaskCard")));
+    }
+
+    [AvaloniaFact]
+    public void A_selected_card_shows_its_ring_in_the_selection_color()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        // The ring is 2 px wide and sits 2 px outside the card, so this pixel is on its straight top edge.
+        Color Ring() => shell.ColorAt(shell.Node("Design"), new Point(130, -3));
+        Assert.Equal(Color.Parse("#FBFBF9"), Ring());
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        Assert.Equal(Color.Parse("#2B7EC9"), Ring());
+
+        shell.Click(shell.Find<RadioButton>("ThemeDark"));
+        Assert.Equal(Color.Parse("#60AAF3"), Ring());
+    }
+
+    [AvaloniaFact]
+    public void A_card_previews_its_instructions_and_says_when_there_are_none()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Build, "Build", 405, 90)));
+        string[] CardTexts() =>
+        [
+            .. shell.Node("Build").GetVisualDescendants().OfType<TextBlock>()
+                .Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))
+                .Select(text => text.Text!),
+        ];
+        Assert.Equal(["Build", "Instructions", "No instructions yet."], CardTexts());
+
+        shell.Click(shell.Header(shell.Node("Build")));
+        shell.Click(shell.Find<TextBox>("TaskInstructions"));
+        shell.Type("Compile");
+
+        Assert.Equal(["Build", "Instructions", "Compile"], CardTexts());
+    }
+
+    [AvaloniaFact]
+    public void The_dot_grid_moves_with_the_canvas_when_it_pans()
+    {
+        var shell = Shell.Open(_temp.Create("plan"));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        // The 1 px dot is antialiased, so its pixel is the #E5E5E5 border color blended into the canvas.
+        var (canvas, dot) = (Color.Parse("#FBFBF9"), Color.Parse("#E8E8E8"));
+        Assert.Equal(dot, shell.ColorAt(shell.Editor, new Point(240, 240)));
+        Assert.Equal(canvas, shell.ColorAt(shell.Editor, new Point(230, 240)));
+
+        shell.Pan(shell.Editor.TranslatePoint(new Point(400, 300), shell.Window)!.Value, new Vector(-10, 0));
+
+        Assert.Equal(dot, shell.ColorAt(shell.Editor, new Point(230, 240)));
+        Assert.Equal(canvas, shell.ColorAt(shell.Editor, new Point(240, 240)));
+    }
+
+    [AvaloniaFact]
+    public void Zoom_in_then_zoom_out_steps_the_canvas_zoom_and_back()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+
+        shell.Click(shell.Find<Button>("ZoomIn"));
+        Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
+
+        shell.Click(shell.Find<Button>("ZoomOut"));
+        Assert.Equal(1, Math.Round(shell.Editor.ViewportZoom, 2));
+    }
+
+    [AvaloniaFact]
+    public void Fit_to_screen_brings_a_distant_task_into_view()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        Rect Card(string title) => new(shell.Node(title).TranslatePoint(default, shell.Editor)!.Value, shell.Node(title).Bounds.Size * shell.Editor.ViewportZoom);
+        var editor = new Rect(shell.Editor.Bounds.Size);
+        Assert.False(editor.Intersects(Card("Build")));
+
+        shell.Click(shell.Find<Button>("FitToScreen"));
+
+        Assert.True(editor.Contains(Card("Design")), $"{Card("Design")} is outside {editor}");
+        Assert.True(editor.Contains(Card("Build")), $"{Card("Build")} is outside {editor}");
+    }
+
+    [AvaloniaFact]
+    public void Dragging_a_task_moves_its_minimap_item()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90)));
+        Point Item(string title) => shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
+            .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == title).Bounds.Position;
+        Assert.Equal((new Point(0, 0), new Point(300, 0)), (Item("Design"), Item("Build")));
+
+        var from = shell.Header(shell.Node("Design"));
+        shell.Drag(from, from + new Vector(150, 75));
+
+        Assert.Equal((new Point(0, 75), new Point(150, 0)), (Item("Design"), Item("Build")));
+    }
+
+    [AvaloniaFact]
+    public void Turning_the_wheel_over_the_minimap_zooms_the_canvas_one_step_per_notch()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var minimap = shell.Center(shell.Find<Minimap>("Minimap"));
+
+        shell.Window.MouseWheel(minimap, new Vector(0, 1));
+        Assert.Equal(1.26, Math.Round(shell.Editor.ViewportZoom, 2));
+
+        shell.Window.MouseWheel(minimap, new Vector(0, -1));
+        shell.Window.MouseWheel(minimap, new Vector(0, -1));
+        Assert.Equal(0.79, Math.Round(shell.Editor.ViewportZoom, 2));
+    }
+
+    [AvaloniaFact]
+    public void Clicking_the_minimap_centers_the_canvas_on_that_point()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 2400, 1600)));
+        var build = shell.Find<Minimap>("Minimap").GetVisualDescendants().OfType<MinimapItem>()
+            .Single(item => ((TaskNodeViewModel)item.DataContext!).Title == "Build");
+
+        shell.Click(build);
+
+        var editor = shell.Editor;
+        Assert.Equal(new Point(2530, 1672), Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
     }
 
     [AvaloniaFact]
@@ -171,7 +292,7 @@ public sealed class CanvasTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         Assert.Equal("Design", shell.Find<TextBox>("TaskTitle").Text);
 
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
 
         Assert.False(shell.Has<TextBox>("TaskTitle"));
         Assert.False(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
@@ -192,7 +313,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
         Assert.True(shell.Has<Button>("KindDependency"));
 
         shell.Click(shell.Header(shell.Node("Build")));
@@ -200,6 +321,74 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal("Build", shell.Find<TextBox>("TaskTitle").Text);
         Assert.False(shell.Has<Button>("KindDependency"));
         Assert.False(BaseConnection.GetIsSelected(Assert.Single(shell.Connections())));
+    }
+
+    [AvaloniaTheory]
+    [InlineData("ThemeLight", "#5A6168")]
+    [InlineData("ThemeDark", "#999893")]
+    public void Each_connection_kind_draws_in_its_theme_color(string theme, string context)
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            Task(Review, "Review", 705, 250),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
+            new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
+            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review)));
+        shell.Click(shell.Find<RadioButton>(theme));
+        var (dependency, review, contextColor) = (Color.Parse("#2563EB"), Color.Parse("#EA580C"), Color.Parse(context));
+        (string From, string To, Color Stroke, Color Arrow, bool Dashed)[] Strokes() =>
+        [
+            .. shell.Connections()
+                .Select(connection => (Model: (ConnectionViewModel)connection.DataContext!, Connection: connection))
+                .OrderBy(drawn => drawn.Model.From.Title)
+                .ThenBy(drawn => drawn.Model.To.Title)
+                .Select(drawn => (
+                    drawn.Model.From.Title,
+                    drawn.Model.To.Title,
+                    ((ISolidColorBrush)drawn.Connection.Stroke!).Color,
+                    ((ISolidColorBrush)drawn.Connection.Fill!).Color,
+                    drawn.Connection.StrokeDashArray is { Count: > 0 })),
+        ];
+
+        Assert.Equal(
+            [("Build", "Review", review, review, false), ("Design", "Build", dependency, dependency, false), ("Design", "Review", contextColor, contextColor, true)],
+            Strokes());
+
+        shell.Click(shell.ConnectionInto("Build"));
+        shell.Click(shell.Find<Button>("KindContext"));
+
+        Assert.Contains(("Design", "Build", contextColor, contextColor, true), Strokes());
+    }
+
+    [AvaloniaFact]
+    public void A_connection_runs_under_the_cards_it_crosses()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            Task(Review, "Review", 705, 250),
+            new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+
+        // The connection turns down at x = 535, halfway between its ends, and passes under Build's instructions box.
+        // On the open canvas it is #2563EB at 56% opacity over #FBFBF9.
+        Assert.Equal(Color.Parse("#83A6F1"), shell.ColorAt(shell.Editor, new Point(535, 280)));
+        Assert.Equal(Color.Parse("#FCFCFA"), shell.ColorAt(shell.Editor, new Point(535, 200)));
+    }
+
+    [AvaloniaFact]
+    public void Clicking_just_beside_a_connection_selects_it()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, 90),
+            Task(Build, "Build", 405, 90),
+            new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+
+        shell.Click(shell.ConnectionInto("Build") + new Vector(0, 4));
+
+        Assert.True(BaseConnection.GetIsSelected(Assert.Single(shell.Connections())));
+        Assert.False(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]
@@ -212,7 +401,7 @@ public sealed class CanvasTests : IDisposable
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Review, Design), ConnectionKind.Context)));
-        shell.Click(shell.Between("Review", "Design"));
+        shell.Click(shell.ConnectionInto("Design"));
         Assert.False(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
 
         shell.Click(shell.Find<Button>("KindReview"));
@@ -248,7 +437,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.RightClick(shell.Between("Design", "Build"));
+        shell.RightClick(shell.ConnectionInto("Build"));
         shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(item => (string?)item.Header == "Context"));
 
         Assert.Equal([("Design", "Build", ConnectionKind.Context)], Drawn(shell));
@@ -297,7 +486,7 @@ public sealed class CanvasTests : IDisposable
             Task(Design, "Design", 105, 90),
             Task(Build, "Build", 405, 90),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.Click(shell.Between("Design", "Build"));
+        shell.Click(shell.ConnectionInto("Build"));
 
         shell.Press(Key.Delete);
 
@@ -315,7 +504,7 @@ public sealed class CanvasTests : IDisposable
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
 
-        shell.Click(shell.Between("Design", "Build"), RawInputModifiers.Alt);
+        shell.Click(shell.ConnectionInto("Build"), RawInputModifiers.Alt);
 
         Assert.Equal([("Design", "Review", ConnectionKind.Context)], Drawn(shell));
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
