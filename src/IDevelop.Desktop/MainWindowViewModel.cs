@@ -73,7 +73,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {
-            Status = e is ProjectException ? e.Message : $"Couldn't open {folder}: {e.Message}";
+            Status = Describe(e, $"Couldn't open {folder}");
             return;
         }
 
@@ -117,10 +117,13 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {
-            Status = e is ProjectException ? e.Message : $"Couldn't save: {e.Message}";
+            Status = Describe(e, "Couldn't save");
             return false;
         }
     }
+
+    // A ProjectException's message is already written for the user. A file system error's message needs the action.
+    private static string Describe(Exception e, string action) => e is ProjectException ? e.Message : $"{action}: {e.Message}";
 
     private void OnClientsChanged()
     {
