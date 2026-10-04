@@ -46,8 +46,10 @@ public sealed class TaskNodeViewModel : ObservableObject
         _attempt = canvas.Runs.Latest.GetValueOrDefault(task.Id);
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
-        _run = new RelayCommand(Run, () => !IsRunning);
-        _cancel = new RelayCommand(() => _canvas.Runs.Cancel(Id), () => _attempt is { Status: AttemptStatus.Running, Stopping: false });
+        _run = new RelayCommand(Run, () => !RunsHere);
+        _cancel = new RelayCommand(
+            () => _canvas.Runs.Cancel(Id),
+            () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active?.Id == attempt.Id);
     }
 
     public TaskId Id => _task.Id;
@@ -124,24 +126,29 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     public string? PermissionNote => _task.Execution is { } settings ? RunText.PermissionNote(settings.Client) : null;
 
-    public string StatusLabel => RunText.StatusLabel(_attempt);
+    public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
 
     /// <summary>The card and its status pill take it as a style class.</summary>
     public StatusTone Tone => RunText.Tone(_attempt);
 
-    public bool IsRunning => _attempt is { Status: AttemptStatus.Running };
-
     /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
-    public string? StartProblem => !IsRunning && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
+    public string? StartProblem => !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
 
-    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt);
+    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, RunsElsewhere);
 
-    /// <summary>Enabled for a task that is not running. A task that cannot start shows why instead of launching.</summary>
+    /// <summary>
+    /// Enabled unless this window runs the task. A task that cannot start shows why instead of launching, which is also
+    /// how a task that another window runs, or ran, finds out.
+    /// </summary>
     public ICommand RunCommand => _run;
 
     public ICommand CancelCommand => _cancel;
 
     private ClientStatus Status => _task.Execution is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking();
+
+    private bool RunsHere => _attempt is { Status: AttemptStatus.Running } attempt && _canvas.Runs.StartedHere(attempt.Id);
+
+    private bool RunsElsewhere => _attempt is { Status: AttemptStatus.Running } && !RunsHere;
 
     internal void Update(TaskDefinition task, CanvasPoint position)
     {
@@ -175,20 +182,24 @@ public sealed class TaskNodeViewModel : ObservableObject
         Location = WorkflowCanvasViewModel.ToPoint(position);
     }
 
-    /// <summary>Called on the UI thread with each new state of this task's attempt.</summary>
-    internal void ShowAttempt(AttemptRecord attempt)
+    /// <summary>
+    /// Called on the UI thread with the task's newest attempt after any attempt of the project changes. A run anywhere in
+    /// the project can keep this task from starting.
+    /// </summary>
+    internal void ShowAttempt(AttemptRecord? attempt)
     {
-        _attempt = attempt;
-        OnPropertyChanged(nameof(StatusLabel));
-        OnPropertyChanged(nameof(Tone));
-        OnPropertyChanged(nameof(IsRunning));
-        OnPropertyChanged(nameof(LastAttempt));
+        if (!ReferenceEquals(attempt, _attempt))
+        {
+            _attempt = attempt;
+            OnPropertyChanged(nameof(StatusLabel));
+            OnPropertyChanged(nameof(Tone));
+            OnPropertyChanged(nameof(LastAttempt));
+        }
+
+        OnPropertyChanged(nameof(StartProblem));
         _run.NotifyCanExecuteChanged();
         _cancel.NotifyCanExecuteChanged();
     }
-
-    /// <summary>A run started or ended somewhere in the project, which can keep this task from starting.</summary>
-    internal void OnRunsChanged() => OnPropertyChanged(nameof(StartProblem));
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
     internal void OnAgentChanged()

@@ -18,6 +18,7 @@ namespace IDevelop.Desktop.Tests;
 public sealed class RunTests : IDisposable
 {
     private static readonly TaskId SayHi = new(Guid.Parse("019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11"));
+    private static readonly TaskId Review = new(Guid.Parse("019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33"));
     private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" };
 
     private readonly TempFolder _temp = new();
@@ -47,10 +48,10 @@ public sealed class RunTests : IDisposable
         new TaskDefinition(SayHi) { Title = "Say hi", Instructions = "Create hello.txt containing hi. Then reply with DONE.", Execution = execution },
         new CanvasPoint(105, 90));
 
-    private static Control Part(Shell shell, string automationId) =>
-        shell.Node("Say hi").GetVisualDescendants().OfType<Control>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
+    private static Control Part(Shell shell, string automationId, string title = "Say hi") =>
+        shell.Node(title).GetVisualDescendants().OfType<Control>().Single(control => AutomationProperties.GetAutomationId(control) == automationId);
 
-    private static string CardStatus(Shell shell) => Shell.TextOf(Part(shell, "CardStatus"));
+    private static string CardStatus(Shell shell, string title = "Say hi") => Shell.TextOf(Part(shell, "CardStatus", title));
 
     private static Color CardFill(Shell shell) =>
         ((ISolidColorBrush)shell.Node("Say hi").GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("card")).Background!).Color;
@@ -215,6 +216,34 @@ public sealed class RunTests : IDisposable
         shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the other folder opens");
         Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
         Assert.Equal("Interrupted", CardStatus(Shell.Open(folder, clients)));
+    }
+
+    [AvaloniaFact]
+    public void A_second_window_shows_the_other_windows_run_and_learns_that_it_ended_when_it_starts_a_task()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var folder = _temp.Seed(Task(Codex), new WorkflowEdit.CreateTask(
+            new TaskDefinition(Review) { Title = "Review", Instructions = "Review hello.txt.", Execution = Codex }, new CanvasPoint(405, 90)));
+        var clients = Discover();
+        var first = Shell.Open(folder, clients);
+        first.Click(first.Header(first.Node("Say hi")));
+        first.Click(first.InView<Button>("RunTask"));
+        var second = Shell.Open(folder, clients);
+        second.Click(second.Header(second.Node("Say hi")));
+
+        Assert.Equal(("Running in another window", "Running in another window"), (CardStatus(second), second.InView<TextBlock>("LastRunStatus").Text));
+        Assert.Equal((true, false), (second.Find<Button>("RunTask").IsEffectivelyEnabled, second.Find<Button>("CancelRun").IsEffectivelyEnabled));
+        second.Click(second.InView<Button>("RunTask"));
+        Assert.Equal("\"Say hi\" is running, and a project runs one task at a time.", second.Status);
+
+        first.Click(first.Find<Button>("RunBarCancel"));
+        first.WaitUntil(() => CardStatus(first) == "Cancelled", "the first window's run is cancelled");
+        second.Click(second.Header(second.Node("Review")));
+        second.Click(second.InView<Button>("RunTask"));
+
+        Assert.Equal(["Cancelled", "Running"], new[] { "Say hi", "Review" }.Select(title => CardStatus(second, title)));
+        second.Click(second.Find<Button>("RunBarCancel"));
+        second.WaitUntil(() => CardStatus(second, "Review") == "Cancelled", "the second window's run is cancelled");
     }
 
     [AvaloniaTheory]

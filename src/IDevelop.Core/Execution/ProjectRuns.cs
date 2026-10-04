@@ -49,6 +49,7 @@ public sealed class ProjectRuns : IAsyncDisposable
     private readonly Lock _gate = new();
     private readonly ClientDirectory _clients;
     private readonly string _attempts;
+    private readonly HashSet<AttemptId> _started = [];
     private ActiveRun? _active;
     private Task? _leaving;
 
@@ -78,6 +79,18 @@ public sealed class ProjectRuns : IAsyncDisposable
             {
                 return _active?.Record is { Status: AttemptStatus.Running } record ? record : null;
             }
+        }
+    }
+
+    /// <summary>
+    /// False for an attempt another window started. That window may have ended it since, and <see cref="Latest"/> shows
+    /// the end only after the next <see cref="Start"/> reads the attempts again.
+    /// </summary>
+    public bool StartedHere(AttemptId attempt)
+    {
+        lock (_gate)
+        {
+            return _started.Contains(attempt);
         }
     }
 
@@ -195,6 +208,7 @@ public sealed class ProjectRuns : IAsyncDisposable
             }
 
             (record, run) = Launch(plan, AttemptReducer.Start(requested), log, held);
+            _started.Add(record.Id);
             _active = run;
             Latest = Latest.SetItem(task.Id, record);
         }

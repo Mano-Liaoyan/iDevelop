@@ -36,7 +36,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         Clients = clients;
         _setNotice = setNotice;
         ActiveRun = new ActiveRunViewModel(runs, clients);
-        runs.Changed += (_, attempt) => Dispatcher.UIThread.Post(() => ShowAttempt(attempt));
+        runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
         AddTaskCommand = new RelayCommand(AddTaskInView);
         AddTaskAtCommand = new RelayCommand<Point>(location => AddTask(new CanvasPoint(location.X, location.Y)));
@@ -147,16 +147,13 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         _ => null,
     };
 
-    private void ShowAttempt(AttemptRecord attempt)
+    // Each change reads the newest attempts, which is never older than the change itself. A start also reads the other
+    // tasks' attempts again, which another window may have ended or a crash may have left running.
+    private void ShowAttempts()
     {
-        if (_nodes.TryGetValue(attempt.Task, out var owner))
-        {
-            owner.ShowAttempt(attempt);
-        }
-
         foreach (var node in Nodes)
         {
-            node.OnRunsChanged();
+            node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id));
         }
 
         ActiveRun.Show(Runs.Active);

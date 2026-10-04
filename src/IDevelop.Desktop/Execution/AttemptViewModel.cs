@@ -3,11 +3,11 @@ using IDevelop.Execution;
 namespace IDevelop.Desktop.Execution;
 
 /// <summary>A task's last run in the inspector. Records never change, so each new record gets a new instance.</summary>
-public sealed class AttemptViewModel(AttemptRecord record)
+public sealed class AttemptViewModel(AttemptRecord record, bool elsewhere)
 {
     private const int ActivityShown = 8;
 
-    public string StatusLabel => RunText.StatusLabel(record);
+    public string StatusLabel => RunText.StatusLabel(record, elsewhere);
 
     public StatusTone Tone => RunText.Tone(record);
 

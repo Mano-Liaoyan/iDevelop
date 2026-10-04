@@ -85,9 +85,11 @@ public static class RunText
         AttemptStatus.Cancelled => StatusTone.Neutral,
     };
 
-    public static string StatusLabel(AttemptRecord? attempt) => attempt switch
+    /// <param name="elsewhere">Another window started the attempt.</param>
+    public static string StatusLabel(AttemptRecord? attempt, bool elsewhere) => attempt switch
     {
         null => "Not run",
+        { Status: AttemptStatus.Running } when elsewhere => "Running in another window",
         { Status: AttemptStatus.Running, Stopping: true } => "Stopping",
         _ => attempt.Status.ToString(),
     };
