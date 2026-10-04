@@ -28,12 +28,14 @@ internal static class Pi
             new ReadinessProbe(provider, new Probe(["auth", "check", "--provider", provider, "--json"]), output => SignInProblem(provider, output)))],
         Launch = Launch,
         Interpret = Interpret,
+        Terminal = session => $"pi --session {session}",
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "-p", "--mode", "json", "--model", request.Model,
         .. request.Reasoning is { } thinking ? ["--thinking", thinking] : Array.Empty<string>(),
+        .. request.ResumeSession is { } session ? ["--session-id", session] : Array.Empty<string>(),
     ],
     request.Prompt);
 

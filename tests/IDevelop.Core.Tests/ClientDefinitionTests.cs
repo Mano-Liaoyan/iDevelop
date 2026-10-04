@@ -161,6 +161,51 @@ public class ClientDefinitionTests
     }
 
     [Fact]
+    public void Each_client_resumes_a_session_with_the_arguments_the_probe_ran()
+    {
+        const string session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
+        LaunchArguments Resume(ClientId client, string model, string? reasoning) =>
+            Clients.Get(client).Launch(new LaunchRequest(model, reasoning, "banana") { ResumeSession = session });
+
+        var claude = Resume(ClientId.ClaudeCode, "claude-opus-5-5", "xhigh");
+        var codex = Resume(ClientId.Codex, "gpt-6-sol", "high");
+        var pi = Resume(ClientId.Pi, "deepseek/deepseek-v4-pro", "high");
+        var agy = Resume(ClientId.Antigravity, "gemini-3.8-flash", "low");
+
+        Assert.Equal(
+            ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--resume", session],
+            claude.Arguments.ToArray());
+        Assert.Equal(
+            [
+                "exec", "resume", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never",
+                "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", session, "-",
+            ],
+            codex.Arguments.ToArray());
+        Assert.Equal(["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high", "--session-id", session], pi.Arguments.ToArray());
+        Assert.Equal(
+            [
+                "--input-format", "stream-json", "--output-format", "stream-json", "--model", "gemini-3.8-flash", "--effort", "low", "--mode", "accept-edits", "--print=",
+                "--conversation", session,
+            ],
+            agy.Arguments.ToArray());
+        Assert.Equal(["banana", "banana", "banana"], new[] { claude.Stdin, codex.Stdin, pi.Stdin });
+        Assert.Equal("""{"event":"user","message":{"role":"user","content":"banana"}}""" + "\n", agy.Stdin);
+    }
+
+    [Fact]
+    public void Each_client_names_the_command_that_opens_a_session_in_its_own_terminal_interface()
+    {
+        Assert.Equal(
+            [
+                "claude --resume 5a1c01fc-d492-491f-a024-4e4c1bf97949",
+                "codex resume 5a1c01fc-d492-491f-a024-4e4c1bf97949",
+                "pi --session 5a1c01fc-d492-491f-a024-4e4c1bf97949",
+                "agy --conversation 5a1c01fc-d492-491f-a024-4e4c1bf97949",
+            ],
+            Clients.All.Select(client => Clients.Get(client).Terminal("5a1c01fc-d492-491f-a024-4e4c1bf97949")));
+    }
+
+    [Fact]
     public void A_model_without_reasoning_levels_launches_without_a_level_argument()
     {
         Assert.Equal(

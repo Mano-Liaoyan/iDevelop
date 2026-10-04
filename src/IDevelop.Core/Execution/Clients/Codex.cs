@@ -16,18 +16,27 @@ internal static class Codex
         Readiness = _ => [new ReadinessProbe(null, new Probe(["login", "status"]), SignInProblem)],
         Launch = Launch,
         Interpret = Interpret,
+        Terminal = session => $"codex resume {session}",
     };
 
     // The level is unquoted, so the argument passes the batch-shim rule for an npm codex.cmd.
     // Codex reads the value as TOML and falls back to the plain string.
     // A user's approval_policy can let an automatic reviewer approve a command outside the sandbox, so approvals are off.
-    private static LaunchArguments Launch(LaunchRequest request) => new(
-    [
-        "exec", "--json", "-m", request.Model,
-        .. request.Reasoning is { } effort ? ["-c", $"model_reasoning_effort={effort}"] : Array.Empty<string>(),
-        "-c", "approval_policy=never", "--sandbox", "workspace-write", "--skip-git-repo-check", "-",
-    ],
-    request.Prompt);
+    // exec resume takes no --sandbox, so a resumed turn sets the same sandbox through its config key.
+    private static LaunchArguments Launch(LaunchRequest request)
+    {
+        string[] common =
+        [
+            "--json", "-m", request.Model,
+            .. request.Reasoning is { } effort ? ["-c", $"model_reasoning_effort={effort}"] : Array.Empty<string>(),
+            "-c", "approval_policy=never",
+        ];
+        return new(
+            request.ResumeSession is { } session
+                ? ["exec", "resume", .. common, "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", session, "-"]
+                : ["exec", .. common, "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            request.Prompt);
+    }
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {

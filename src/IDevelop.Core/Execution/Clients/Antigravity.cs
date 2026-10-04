@@ -19,6 +19,7 @@ internal static class Antigravity
         Readiness = _ => [],
         Launch = Launch,
         Interpret = Interpret,
+        Terminal = session => $"agy --conversation {session}",
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
@@ -26,6 +27,7 @@ internal static class Antigravity
         "--input-format", "stream-json", "--output-format", "stream-json", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
         "--mode", "accept-edits", "--print=",
+        .. request.ResumeSession is { } session ? ["--conversation", session] : Array.Empty<string>(),
     ],
     UserLine(request.Prompt));
 
