@@ -49,7 +49,7 @@ public sealed class ProjectRunsTests : IDisposable
     private readonly FakeClients _fakes;
     private readonly string _project;
     private readonly string _evidence;
-    private readonly List<int> _spawned = [];
+    private readonly Processes _spawned = new();
 
     public ProjectRunsTests()
     {
@@ -60,22 +60,9 @@ public sealed class ProjectRunsTests : IDisposable
 
     public static TheoryData<ClientId> AllClients => new(Clients.All);
 
-    // A process that outlives a failed test holds the test host's output open, and dotnet test would wait for it.
     public void Dispose()
     {
-        foreach (var pid in _spawned)
-        {
-            try
-            {
-                using var process = Process.GetProcessById(pid);
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(Patience);
-            }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException)
-            {
-            }
-        }
-
+        _spawned.Dispose();
         _temp.Dispose();
     }
 
@@ -234,7 +221,7 @@ public sealed class ProjectRunsTests : IDisposable
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         _spawned.Add(started.Attempt.Process!.Value.Id);
-        var grandchildId = await PidAsync(grandchild);
+        var grandchildId = await _spawned.PidAsync(grandchild);
 
         runs.Cancel(SayHiId);
         runs.Cancel(SayHiId);
@@ -255,7 +242,7 @@ public sealed class ProjectRunsTests : IDisposable
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         _spawned.Add(started.Attempt.Process!.Value.Id);
-        var sleeperId = await PidAsync(sleeper);
+        var sleeperId = await _spawned.PidAsync(sleeper);
 
         runs.Cancel(SayHiId);
 
@@ -275,44 +262,12 @@ public sealed class ProjectRunsTests : IDisposable
         var settled = NextSettled(runs);
 
         runs.Start(SayHi(Runs[ClientId.Codex].Settings));
-        var sleeperId = await PidAsync(sleeper);
+        var sleeperId = await _spawned.PidAsync(sleeper);
 
         var record = await settled;
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
         using var survivor = Process.GetProcessById(sleeperId);
         Assert.False(survivor.WaitForExit(TimeSpan.FromSeconds(1)), "the process the client left running was stopped");
-    }
-
-    [GitBashFact]
-    public async Task Stopping_a_client_stops_the_commands_Git_Bash_runs_for_it()
-    {
-        var sleeper = Evidence("sleep.pid");
-        var shim = Path.Combine(_fakes.Folder, "bash-client.cmd");
-        File.WriteAllText(shim, $"@\"{GitBashFactAttribute.Bash}\" -c \"bash -c 'sleep 300 & cat /proc/$!/winpid > {sleeper.Replace('\\', '/')}; wait'\"\r\n");
-        var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _project);
-        _spawned.Add(client.Identity.Id);
-        var sleepId = await PidAsync(sleeper);
-
-        client.StopTree();
-
-        AssertGone(client.Identity.Id);
-        AssertGone(sleepId);
-        client.Dispose();
-    }
-
-    [WindowsFact]
-    public async Task Closing_a_childs_job_as_Windows_does_when_iDevelop_exits_stops_everything_it_started()
-    {
-        var sleeper = Evidence("sleeper.pid");
-        var shim = _fakes.Install("client", On().SpawnThroughCmd(sleeper).Hang());
-        var client = ChildProcess.Start(new ResolvedCommand(shim, IsBatchShim: true), [], _project);
-        _spawned.Add(client.Identity.Id);
-        var sleeperId = await PidAsync(sleeper);
-
-        client.Dispose();
-
-        AssertGone(client.Identity.Id);
-        AssertGone(sleeperId);
     }
 
     [Fact]
@@ -325,7 +280,7 @@ public sealed class ProjectRunsTests : IDisposable
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Runs[ClientId.Codex].Settings)));
         _spawned.Add(started.Attempt.Process!.Value.Id);
-        var grandchildId = await PidAsync(grandchild);
+        var grandchildId = await _spawned.PidAsync(grandchild);
 
         await runs.DisposeAsync();
 
@@ -598,28 +553,6 @@ public sealed class ProjectRunsTests : IDisposable
             }
         };
         return settled.Task.WaitAsync(Patience);
-    }
-
-    /// <summary>Waits until the fake agent has written the pid of the process it started.</summary>
-    private async Task<int> PidAsync(string file)
-    {
-        using var timeout = new CancellationTokenSource(Patience);
-        while (true)
-        {
-            try
-            {
-                if (File.Exists(file) && int.TryParse(File.ReadAllText(file), out var pid))
-                {
-                    _spawned.Add(pid);
-                    return pid;
-                }
-            }
-            catch (IOException)
-            {
-            }
-
-            await Task.Delay(50, timeout.Token);
-        }
     }
 
     private string Evidence(string name) => Path.Combine(_evidence, name);
