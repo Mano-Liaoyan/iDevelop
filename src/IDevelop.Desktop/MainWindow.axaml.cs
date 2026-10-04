@@ -153,8 +153,15 @@ public partial class MainWindow : Window
         }
     }
 
+    // A question, the folder picker, or a run that is still stopping can hold an earlier open or close, which would
+    // replace whatever a second open loaded.
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
+        if (_waitingForUser)
+        {
+            return;
+        }
+
         _waitingForUser = true;
         var folder = await ConfirmLeaving() ? await PickFolder() : null;
         if (folder is not null)

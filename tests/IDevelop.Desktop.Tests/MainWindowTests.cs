@@ -77,6 +77,27 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Open_folder_does_nothing_while_an_earlier_open_is_still_in_progress()
+    {
+        var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90)));
+        var other = _temp.Create("other");
+        var picker = new TaskCompletionSource<string?>();
+        var picks = 0;
+        shell.Window.PickFolder = () =>
+        {
+            picks++;
+            return picker.Task;
+        };
+        shell.Click(shell.Find<Button>("OpenFolder"));
+
+        shell.Click(shell.Find<Button>("OpenFolder"));
+
+        Assert.Equal(1, picks);
+        picker.SetResult(other);
+        shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the picked folder opens");
+    }
+
+    [AvaloniaFact]
     public void The_sidebar_lists_the_open_project_with_its_task_count_and_tasks()
     {
         var shell = Shell.Open(_temp.Seed(Task(Design, "Design", 105, 90), Task(Build, "Build", 405, 90), Task(Review, "Review", 405, 300)));
