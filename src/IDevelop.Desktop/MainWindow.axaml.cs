@@ -24,7 +24,7 @@ public partial class MainWindow : Window
     /// <param name="clients">The app's one directory. The app starts its first refresh.</param>
     public MainWindow(ClientDirectory clients)
     {
-        Copy = text => Clipboard?.SetTextAsync(text) ?? Task.CompletedTask;
+        Copy = text => Clipboard?.SetTextAsync(text) ?? Task.FromException(new InvalidOperationException("This window has no clipboard."));
         ViewModel = new MainWindowViewModel(clients, text => Copy(text));
         InitializeComponent();
         DataContext = ViewModel;

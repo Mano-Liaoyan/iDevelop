@@ -152,6 +152,9 @@ public static class RunText
     public static string HandedOff(TerminalResult.HandedOff handedOff) =>
         $"Copied {handedOff.Command}. Paste it in a terminal to continue this session in {handedOff.Folder}.";
 
+    public static string NotCopied(TerminalResult.HandedOff handedOff) =>
+        $"iDevelop could not copy the command. To continue this session in {handedOff.Folder}, run it in a terminal: {handedOff.Command}";
+
     /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
     public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
     {

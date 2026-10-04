@@ -279,17 +279,31 @@ public sealed class TaskNodeViewModel : ObservableObject
         _canvas.Notice(null);
     }
 
+    /// <summary>The hand-off is recorded either way, because the notice shows the command and the folder.</summary>
     private async void OpenInTerminal()
     {
         switch (_canvas.Runs.OpenInTerminal(Id))
         {
             case TerminalResult.HandedOff handedOff:
-                await _canvas.Copy(handedOff.Command);
-                _canvas.Notice(RunText.HandedOff(handedOff));
+                _canvas.Notice(await Copied(handedOff.Command) ? RunText.HandedOff(handedOff) : RunText.NotCopied(handedOff));
                 break;
             case TerminalResult.Refused refused:
                 _canvas.Notice(RunText.Describe(refused.Problem));
                 break;
+        }
+    }
+
+    /// <summary>The platform's clipboard can fail, such as while another program holds it on Windows.</summary>
+    private async Task<bool> Copied(string text)
+    {
+        try
+        {
+            await _canvas.Copy(text);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 

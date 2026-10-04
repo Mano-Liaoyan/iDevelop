@@ -187,4 +187,24 @@ public sealed class ConversationTests : IDisposable
         Assert.Matches($@"^Opened in a terminal in {Regex.Escape(_project)} at .+\. Turns taken there are not in iDevelop's record\.$", note);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
     }
+
+    [AvaloniaFact]
+    public void When_the_clipboard_fails_Open_in_terminal_shows_the_command_to_run_and_still_records_the_hand_off()
+    {
+        Install(_fakes, ClientId.Codex, Asks().Print(ReplyLines(ClientId.Codex, "Done.")));
+        var shell = OpenSayHi();
+        // What Avalonia's Windows clipboard throws while another program holds the clipboard.
+        shell.Window.Copy = _ => Task.FromException(new TimeoutException("Timeout opening clipboard."));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
+
+        Invoke(shell.InView<Button>("OpenInTerminal"));
+
+        shell.WaitUntil(() => shell.Status.StartsWith("iDevelop could not copy", StringComparison.Ordinal), "the notice says the copy failed");
+        var command = OperatingSystem.IsWindows()
+            ? $"Set-Location -LiteralPath '{_project}'; codex resume {Session}"
+            : $"cd '{_project}' && codex resume {Session}";
+        Assert.Equal($"iDevelop could not copy the command. To continue this session in {_project}, run it in a terminal: {command}", shell.Status);
+        Assert.Matches($@"^Opened in a terminal in {Regex.Escape(_project)} at ", shell.InView<TextBlock>("TerminalNote").Text);
+    }
 }
