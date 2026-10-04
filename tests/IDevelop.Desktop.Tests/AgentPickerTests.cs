@@ -178,8 +178,7 @@ public sealed class AgentPickerTests : IDisposable
 
         foreach (var title in new[] { "Design", "Review", "Build", "Design", "Review" })
         {
-            shell.Click(shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
-                .Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == title));
+            shell.Click(shell.SidebarRow(title));
         }
 
         Assert.Equal(["Antigravity CLI", "Gemini 3.8 Flash", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
@@ -211,7 +210,7 @@ public sealed class AgentPickerTests : IDisposable
         {
             shell.Find<ComboBox>("TaskReasoning").Focus();
             shell.Click(where == "sidebar"
-                ? shell.Center(shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == title))
+                ? shell.Center(shell.SidebarRow(title))
                 : shell.Header(shell.Node(title)));
 
             Assert.Equal(pickers[title], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
@@ -233,8 +232,7 @@ public sealed class AgentPickerTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         var reasoning = shell.Find<ComboBox>("TaskReasoning");
         reasoning.Focus();
-        var build = shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
-            .Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == "Build");
+        var build = shell.SidebarRow("Build");
 
         ControlAutomationPeer.CreatePeerForElement(build).GetProvider<ISelectionItemProvider>()!.Select();
         shell.Render();

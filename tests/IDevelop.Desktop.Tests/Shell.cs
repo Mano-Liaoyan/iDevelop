@@ -86,6 +86,9 @@ internal sealed class Shell
 
     public IEnumerable<ItemContainer> Nodes() => Window.GetVisualDescendants().OfType<ItemContainer>();
 
+    public ListBoxItem SidebarRow(string title) =>
+        Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
+
     // The pending connection draws its own LineConnection, so only connections that show a ConnectionViewModel count.
     public IEnumerable<BaseConnection> Connections() =>
         Window.GetVisualDescendants().OfType<BaseConnection>().Where(connection => connection.DataContext is ConnectionViewModel);

@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -22,10 +21,6 @@ public sealed class SidebarTests : IDisposable
     private readonly TempFolder _temp = AppTempFolder.New();
 
     public void Dispose() => _temp.Dispose();
-
-    private static ListBoxItem SidebarRow(Shell shell, string title) =>
-        shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
-            .Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);
 
     // The canvas is 738 px wide, so a 260 px card at this x shows its left 183 px and hides the rest.
     private const double PartlyOffScreen = 555;
@@ -61,7 +56,7 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
 
-        shell.Click(SidebarRow(shell, "Build"));
+        shell.Click(shell.SidebarRow("Build"));
 
         Assert.Equal([false, true], new[] { "Design", "Build" }.Select(title => shell.Node(title).IsSelected));
         Assert.Equal("Build", shell.Find<TextBox>("TaskTitle").Text);
@@ -79,7 +74,7 @@ public sealed class SidebarTests : IDisposable
         Rect Card() => new(shell.Node("Build").TranslatePoint(default, shell.Editor)!.Value, shell.Node("Build").Bounds.Size);
         Assert.False(new Rect(shell.Editor.Bounds.Size).Intersects(Card()));
 
-        shell.Click(SidebarRow(shell, "Build"));
+        shell.Click(shell.SidebarRow("Build"));
         WaitForPan(shell);
 
         Assert.True(new Rect(shell.Editor.Bounds.Size).Contains(Card()), $"{Card()} is outside {shell.Editor.Bounds.Size}");
@@ -91,7 +86,7 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_a_task_off_the_screen_in_the_sidebar_with_the_keyboard_brings_its_card_into_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
-        shell.Click(SidebarRow(shell, "Design"));
+        shell.Click(shell.SidebarRow("Design"));
         WaitForPan(shell);
         Assert.Equal(new Point(0, 0), shell.Editor.ViewportLocation);
 
@@ -116,13 +111,13 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_the_selected_task_in_the_sidebar_brings_its_card_back_into_view()
     {
         var shell = SelectBuildOnTheCanvasAndPanItAway();
-        var design = SidebarRow(shell, "Design");
+        var design = shell.SidebarRow("Design");
 
         // The rows are 4 px apart, so 2 px below Design is between the rows.
         shell.Click(design.TranslatePoint(new Point(design.Bounds.Width / 2, design.Bounds.Height + 2), shell.Window)!.Value);
         Assert.Equal(new Point(600, 300), shell.Editor.ViewportLocation);
 
-        shell.Click(SidebarRow(shell, "Build"));
+        shell.Click(shell.SidebarRow("Build"));
 
         Assert.Equal(new Point(166, -238), shell.Editor.ViewportLocation);
     }
@@ -136,7 +131,7 @@ public sealed class SidebarTests : IDisposable
         shell.Find<Button>("AddTask").Focus();
         shell.Press(Key.Tab);
         shell.Press(Key.Tab);
-        Assert.Same(SidebarRow(shell, "Build"), shell.Window.FocusManager!.GetFocusedElement());
+        Assert.Same(shell.SidebarRow("Build"), shell.Window.FocusManager!.GetFocusedElement());
 
         shell.Press(key);
 
