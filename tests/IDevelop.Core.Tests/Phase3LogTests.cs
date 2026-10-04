@@ -18,17 +18,36 @@ public class Phase3LogTests
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    private static readonly Dictionary<string, TurnOutcome> Outcomes = new()
+    {
+        ["agy-bad-model"] = TurnOutcome.Failed,
+        ["agy-succeeded"] = TurnOutcome.Succeeded,
+        ["claude-bad-model"] = TurnOutcome.Failed,
+        ["claude-succeeded"] = TurnOutcome.Succeeded,
+        ["codex-bad-model"] = TurnOutcome.Failed,
+        ["codex-cancelled"] = TurnOutcome.Stopped,
+        ["codex-crashed"] = TurnOutcome.Interrupted,
+        ["codex-launch-failed"] = TurnOutcome.Failed,
+        ["codex-leave-gave-up"] = TurnOutcome.Interrupted,
+        ["codex-left"] = TurnOutcome.Interrupted,
+        ["codex-succeeded"] = TurnOutcome.Succeeded,
+        ["pi-failed-exit-0"] = TurnOutcome.Failed,
+        ["pi-succeeded"] = TurnOutcome.Succeeded,
+    };
+
     public static TheoryData<string> Logs => new(Directory.EnumerateDirectories(Fixture.Path("phase3-attempts")).Select(folder => Path.GetFileName(folder)).Order());
 
     [Theory]
     [MemberData(nameof(Logs))]
-    public void A_phase_3_log_folds_to_the_record_phase_3_folded(string log)
+    public void A_phase_3_log_folds_to_the_record_phase_3_folded_with_one_turn(string log)
     {
         var folder = Fixture.Path(Path.Combine("phase3-attempts", log));
 
         var record = AttemptReducer.Replay(AttemptLog.Read(folder))!;
 
         Assert.Equal(File.ReadAllText(Path.Combine(folder, "record.json")).Replace("\r\n", "\n"), Phase3Fields(record));
+        Assert.Equal([new TurnRecord(1, null, Outcomes[log], record.Result)], record.Turns);
+        Assert.Equal((0, null, null), (record.Queued.Count, record.Continues, record.Terminal));
     }
 
     /// <summary>The public fields a phase 3 record had, in the shape record.json stores them.</summary>
