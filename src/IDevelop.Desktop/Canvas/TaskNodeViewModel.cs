@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia;
-using Avalonia.Threading;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
@@ -25,8 +24,7 @@ public sealed record Choice(string Id, string Label)
 
 public sealed class TaskNodeViewModel : ObservableObject
 {
-    // A new list clears its picker's selection, so each list is raised before its selection, and a picker's null is
-    // never an edit.
+    // A new list clears its picker's selection, so each list is raised before its selection.
     private static readonly string[] PickerProperties =
     [
         nameof(ClientChoices), nameof(SelectedClient), nameof(HasClient), nameof(ModelChoices), nameof(SelectedModel),
@@ -87,17 +85,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     public IReadOnlyList<ClientChoice> ClientChoices =>
         [new(null, "None"), .. Clients.All.Select(id => new ClientChoice(id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
 
-    public ClientChoice? SelectedClient
-    {
-        get => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
-        set
-        {
-            if (value is not null && value.Id != _task.Execution?.Client)
-            {
-                SetExecution(value.Id is { } id ? ExecutionChoices.ForClient(id, _canvas.Clients.Current[id]) : null);
-            }
-        }
-    }
+    public ClientChoice SelectedClient => ClientChoices.First(choice => choice.Id == _task.Execution?.Client);
 
     public bool HasClient => _task.Execution is not null;
 
@@ -106,18 +94,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         ? [.. ExecutionChoices.Models(settings, Status).Select(choice => new Choice(choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered)))]
         : [];
 
-    public Choice? SelectedModel
-    {
-        get => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
-        set
-        {
-            if (value is not null && _task.Execution is { } settings && value.Id != settings.Model
-                && RunText.Offered(Status).FirstOrDefault(model => model.Id == value.Id) is { } model)
-            {
-                SetExecution(ExecutionChoices.ForModel(settings, model));
-            }
-        }
-    }
+    public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Model);
 
     /// <summary>The levels the task's model offers, then the task's level when the model does not offer it, marked.</summary>
     public IReadOnlyList<Choice> ReasoningChoices
@@ -140,18 +117,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         }
     }
 
-    public Choice? SelectedReasoning
-    {
-        get => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
-        set
-        {
-            if (value is not null && _task.Execution is { } settings && value.Id != settings.Reasoning
-                && RunText.Offered(Status).FirstOrDefault(model => model.Id == settings.Model) is { } model && model.ReasoningLevels.Contains(value.Id))
-            {
-                SetExecution(settings with { Reasoning = value.Id });
-            }
-        }
-    }
+    public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == _task.Execution?.Reasoning);
 
     /// <summary>False when the model takes no reasoning level, such as an Antigravity model without a level suffix.</summary>
     public bool HasReasoning => ReasoningChoices.Count > 0;
@@ -229,15 +195,36 @@ public sealed class TaskNodeViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(AgentLabel));
         OnPropertyChanged(nameof(StartProblem));
-        // A picker whose choice made this edit is still committing it. A new list now would make Avalonia's selection
-        // model restore the choice before it, and write that back as another edit, so the pickers update after.
-        Dispatcher.UIThread.Post(() =>
+        foreach (var property in PickerProperties)
         {
-            foreach (var property in PickerProperties)
-            {
-                OnPropertyChanged(property);
-            }
-        });
+            OnPropertyChanged(property);
+        }
+    }
+
+    internal void ChooseClient(ClientChoice choice)
+    {
+        if (choice.Id != _task.Execution?.Client)
+        {
+            SetExecution(choice.Id is { } id ? ExecutionChoices.ForClient(id, _canvas.Clients.Current[id]) : null);
+        }
+    }
+
+    internal void ChooseModel(Choice choice)
+    {
+        if (_task.Execution is { } settings && choice.Id != settings.Model
+            && RunText.Offered(Status).FirstOrDefault(model => model.Id == choice.Id) is { } model)
+        {
+            SetExecution(ExecutionChoices.ForModel(settings, model));
+        }
+    }
+
+    internal void ChooseReasoning(Choice choice)
+    {
+        if (_task.Execution is { } settings && choice.Id != settings.Reasoning
+            && RunText.Offered(Status).FirstOrDefault(model => model.Id == settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
+        {
+            SetExecution(settings with { Reasoning = choice.Id });
+        }
     }
 
     private void Run() =>

@@ -132,4 +132,25 @@ public sealed class AgentPickerTests : IDisposable
             new[] { "Design", "Build", "Review" }.Select(title => CardAgent(shell, title)));
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
+
+    [AvaloniaFact]
+    public void Choosing_tasks_of_different_clients_in_the_sidebar_leaves_each_tasks_agent_as_it_was()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            Task(Design, "Design", 105, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
+            Task(Build, "Build", 405, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "xhigh" }),
+            Task(Review, "Review", 705, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })), _clients);
+
+        foreach (var title in new[] { "Design", "Review", "Build", "Design", "Review" })
+        {
+            shell.Click(shell.Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>()
+                .Single(row => ((Canvas.TaskNodeViewModel)row.DataContext!).Title == title));
+        }
+
+        Assert.Equal(["Antigravity CLI", "Gemini 3.8 Flash", "low"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+        Assert.Equal(
+            ["Codex · GPT-5.5 · low", "Codex · GPT-6-Sol · xhigh", "Antigravity CLI · Gemini 3.8 Flash · low"],
+            new[] { "Design", "Build", "Review" }.Select(title => CardAgent(shell, title)));
+        Assert.Equal("seed - iDevelop", shell.Window.Title);
+    }
 }

@@ -226,11 +226,21 @@ try {
 
         # The sample's first task asks for Claude Code with Claude Opus 5.5 at high. The model's name comes from the
         # catalog, or its id when this machine has no Claude Code.
-        Select-Element ((Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)[0])
+        $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+        Select-Element $sidebarRows[0]
         $client = Find-ById $window 'TaskClient'
         Check ((Value $client) -like 'Claude Code*') "the client picker shows Claude Code (found '$(Value $client)')"
         Check ((Value (Find-ById $window 'TaskModel')) -match '^(Claude Opus 5\.5|claude-opus-5-5 .+)$') "the model picker shows Claude Opus 5.5 (found '$(Value (Find-ById $window 'TaskModel'))')"
         Check ((Value (Find-ById $window 'TaskReasoning')) -eq 'high') "the reasoning picker shows high (found '$(Value (Find-ById $window 'TaskReasoning'))')"
+
+        # The second task asks for Codex with GPT-6-Sol at medium, which is not Codex's first model.
+        Select-Element $sidebarRows[1]
+        Check ((Wait-Until { (Value $client) -like 'Codex*' }) -eq $true) "the client picker follows the second task (found '$(Value $client)')"
+        Check ((Value (Find-ById $window 'TaskModel')) -match '^(GPT-6-Sol|gpt-6-sol .+)$') "choosing another task keeps its model (found '$(Value (Find-ById $window 'TaskModel'))')"
+        Check ((Value (Find-ById $window 'TaskReasoning')) -eq 'medium') "choosing another task keeps its reasoning (found '$(Value (Find-ById $window 'TaskReasoning'))')"
+        Select-Element $sidebarRows[0]
+        Check ((Wait-Until { (Value $client) -like 'Claude Code*' }) -eq $true) "the client picker follows the first task again (found '$(Value $client)')"
+        Check ($window.Current.Name -eq 'agents-project - iDevelop') "choosing tasks in the sidebar edits nothing: '$($window.Current.Name)'"
 
         $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
         $entries = Wait-Until { @(Find-AllInProcess $process ([System.Windows.Automation.ControlType]::ListItem) | Where-Object { $_.Current.Name -match '^(None|Claude Code|Codex|Pi|Antigravity CLI)( · .+)?$' }) | Where-Object { $_ } } 10

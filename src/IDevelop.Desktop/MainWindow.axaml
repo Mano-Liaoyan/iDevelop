@@ -289,7 +289,7 @@
 
                         <TextBlock Classes="section" Text="AGENT" Margin="0,20,0,2" />
                         <TextBlock Classes="caption" Text="Client" />
-                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient}"
+                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
                                   AutomationProperties.AutomationId="TaskClient"
                                   AutomationProperties.Name="Client">
                           <ComboBox.ItemTemplate>
@@ -300,7 +300,7 @@
                         </ComboBox>
                         <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
                           <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
-                          <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel}"
+                          <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
                                     PlaceholderText="Choose a model"
                                     AutomationProperties.AutomationId="TaskModel"
                                     AutomationProperties.Name="Model">
@@ -312,7 +312,7 @@
                           </ComboBox>
                           <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
                             <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
-                            <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning}"
+                            <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
                                       PlaceholderText="Choose a level"
                                       AutomationProperties.AutomationId="TaskReasoning"
                                       AutomationProperties.Name="Reasoning">

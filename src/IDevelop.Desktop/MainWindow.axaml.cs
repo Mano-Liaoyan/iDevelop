@@ -95,6 +95,32 @@ public partial class MainWindow : Window
         }
     }
 
+    // The inspector's pickers take a choice the same way, and their bindings only show the task's agent. A picker that
+    // moves to another task briefly holds the old task's entry, which a two-way binding would write into the new task.
+    private void OnClientChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: ClientChoice choice })
+        {
+            task.ChooseClient(choice);
+        }
+    }
+
+    private void OnModelChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice })
+        {
+            task.ChooseModel(choice);
+        }
+    }
+
+    private void OnReasoningChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice })
+        {
+            task.ChooseReasoning(choice);
+        }
+    }
+
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
 
     // The list also follows the canvas's selection, so only a change made while the list has focus is a choice in it.
