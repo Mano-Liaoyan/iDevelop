@@ -15,7 +15,8 @@ using System.Text.Json;
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
 //   sleep <milliseconds>
-//   waitForFile <file>            wait until the file exists, so a test decides when the client goes on
+//   waitForFile <file>            wait until the file exists, so a test decides when the client goes on. Exit 97 if its
+//                                 folder is deleted, because the test that owned it has ended
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
 //   hang                          wait until killed
 //   exit <code>
@@ -85,8 +86,14 @@ foreach (var step in matched.GetProperty("steps").EnumerateArray())
             Thread.Sleep(value.GetInt32());
             break;
         case "waitForFile":
-            while (!File.Exists(value.GetString()!))
+            var gate = value.GetString()!;
+            while (!File.Exists(gate))
             {
+                if (!Directory.Exists(Path.GetDirectoryName(gate)))
+                {
+                    return 97;
+                }
+
                 Thread.Sleep(20);
             }
 

@@ -1,11 +1,14 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using Nodify;
 using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Desktop.Tests;
@@ -27,8 +30,8 @@ public sealed class RunTests : IDisposable
         _gate = Path.Combine(_temp.Create("evidence"), "go");
     }
 
-    // A fake client that a failed test left waiting at the gate ends here, or dotnet test would wait for it. Leaving the
-    // project instead would touch the window after the headless session has ended the test.
+    // A fake client that a failed test left waiting at the gate ends here, at the gate or at the deleted folder, or dotnet
+    // test would wait for it. Leaving the project instead would touch the window after the headless session ended the test.
     public void Dispose()
     {
         File.WriteAllText(_gate, "");
@@ -90,10 +93,16 @@ public sealed class RunTests : IDisposable
         Assert.Equal(("Running", Color.Parse("#CDF4F3")), (CardStatus(shell), CardFill(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
         Assert.Equal("", shell.Status);
+        Assert.True(shell.Find<Border>("RunBar").IsEffectivelyVisible);
+        Assert.Equal(
+            ["Say hi", "Codex · GPT-5.5 · high", "Waiting for Codex…"],
+            new[] { "RunBarTask", "RunBarAgent", "RunBarActivity" }.Select(id => shell.Find<TextBlock>(id).Text));
+        Assert.Matches(@"^\d+ s$", shell.Find<TextBlock>("RunBarElapsed").Text);
 
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => CardStatus(shell) == "Succeeded", "the run succeeds");
 
+        Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
         Assert.Equal(Color.Parse("#D9F4D9"), CardFill(shell));
         Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)Part(shell, "CardStatus").GetVisualDescendants().OfType<TextBlock>().Single().Foreground!).Color);
         Assert.Equal("Succeeded", Shell.TextOf(shell.InView<Border>("LastRunStatus")));
@@ -121,6 +130,53 @@ public sealed class RunTests : IDisposable
         shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
         Assert.Equal("Cancelled", Shell.TextOf(shell.InView<Border>("LastRunStatus")));
         Assert.Equal(Color.Parse("#FFFFFF"), CardFill(shell));
+        Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1280, 800)]
+    [InlineData(900, 600)]
+    public void The_run_bar_covers_neither_the_zoom_controls_nor_the_minimap(double width, double height)
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var shell = Shell.Open(_temp.Seed(Task(Codex)), Discover());
+        shell.Window.Width = width;
+        shell.Window.Height = height;
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+
+        Rect Bounds(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.Bounds.Size);
+        Border Floating(Visual visual) => visual.GetVisualAncestors().OfType<Border>().First(border => border.Classes.Contains("floating"));
+        var bar = Bounds(shell.Find<Border>("RunBar"));
+        Assert.Equal(new Size(width, height), shell.Window.ClientSize);
+        Assert.All(
+            [Bounds(Floating(shell.Find<Button>("ZoomIn"))), Bounds(Floating(shell.Find<Minimap>("Minimap")))],
+            other => Assert.False(bar.Intersects(other), $"The run bar at {bar} covers {other}"));
+        Assert.True(Bounds(shell.Editor).Contains(bar), $"The run bar at {bar} leaves the canvas");
+        var (title, cancel) = (Bounds(shell.Find<TextBlock>("RunBarTask")), Bounds(shell.Find<Button>("RunBarCancel")));
+        Assert.True(bar.Contains(title) && bar.Contains(cancel) && !title.Intersects(cancel), $"The bar at {bar} squeezes {title} and {cancel}");
+
+        shell.Click(shell.Find<Button>("RunBarCancel"));
+        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+    }
+
+    [AvaloniaFact]
+    public void The_run_bar_still_cancels_a_run_whose_task_was_deleted()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var folder = _temp.Seed(Task(Codex));
+        var clients = Discover();
+        var shell = Shell.Open(folder, clients);
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Press(Key.Delete);
+        Assert.Empty(shell.Nodes());
+        Assert.Equal("Say hi", shell.Find<TextBlock>("RunBarTask").Text);
+
+        shell.Click(shell.Find<Button>("RunBarCancel"));
+
+        shell.WaitUntil(() => !shell.Find<Border>("RunBar").IsEffectivelyVisible, "the run bar goes away");
         Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
     }
 }

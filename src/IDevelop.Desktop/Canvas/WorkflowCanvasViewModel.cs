@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Threading;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -34,6 +35,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
+        ActiveRun = new ActiveRunViewModel(runs, clients);
         runs.Changed += (_, attempt) => Dispatcher.UIThread.Post(() => ShowAttempt(attempt));
         PendingConnection = new PendingConnectionViewModel(this);
         AddTaskCommand = new RelayCommand(AddTaskInView);
@@ -93,6 +95,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     public object? Inspected => (object?)SelectedNode ?? SelectedConnection;
 
     public PendingConnectionViewModel PendingConnection { get; }
+
+    public ActiveRunViewModel ActiveRun { get; }
 
     public Point ViewportLocation
     {
@@ -154,6 +158,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         {
             node.OnRunsChanged();
         }
+
+        ActiveRun.Show(Runs.Active);
     }
 
     private void AddTaskInView()
