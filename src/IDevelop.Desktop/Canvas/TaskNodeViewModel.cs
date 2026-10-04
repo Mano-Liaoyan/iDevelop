@@ -36,9 +36,13 @@ public sealed class TaskNodeViewModel : ObservableObject
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand _run;
     private readonly RelayCommand _cancel;
+    private readonly RelayCommand _send;
+    private readonly RelayCommand _stopAndSend;
+    private readonly RelayCommand _openInTerminal;
     private TaskDefinition _task;
     private Point _location;
     private AttemptRecord? _attempt;
+    private string _draft = "";
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -52,6 +56,9 @@ public sealed class TaskNodeViewModel : ObservableObject
         _cancel = new RelayCommand(
             () => _canvas.Runs.Cancel(Id),
             () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
+        _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
+        _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => TurnRunsHere && _send.CanExecute(null));
+        _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: not AttemptStatus.Running, SessionId: not null });
     }
 
     public TaskId Id => _task.Id;
@@ -130,6 +137,35 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     public ICommand CancelCommand => _cancel;
 
+    /// <summary>The message the person is writing to the task's agent. Each task keeps its own.</summary>
+    public string Draft
+    {
+        get => _draft;
+        set
+        {
+            if (SetProperty(ref _draft, value))
+            {
+                _send.NotifyCanExecuteChanged();
+                _stopAndSend.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
+    public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem) : null;
+
+    /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
+    public bool TurnRunsHere =>
+        _attempt is { Status: AttemptStatus.Running, Turns: [.., { Outcome: TurnOutcome.Running }] } attempt && _canvas.Runs.StartedHere(attempt.Id);
+
+    /// <summary>Queues the draft for the next turn, or continues the latest session in a new attempt.</summary>
+    public ICommand SendCommand => _send;
+
+    public ICommand StopAndSendCommand => _stopAndSend;
+
+    /// <summary>Copies the client's own command for the latest session, while no turn of the task runs.</summary>
+    public ICommand OpenInTerminalCommand => _openInTerminal;
+
     private ClientStatus Status => _task.Execution is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking();
 
     private bool RunsHere => _attempt is { Status: AttemptStatus.Running } attempt && _canvas.Runs.StartedHere(attempt.Id);
@@ -163,6 +199,7 @@ public sealed class TaskNodeViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(StartProblem));
+            OnConversationChanged();
         }
 
         Location = WorkflowCanvasViewModel.ToPoint(position);
@@ -185,6 +222,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         OnPropertyChanged(nameof(StartProblem));
         _run.NotifyCanExecuteChanged();
         _cancel.NotifyCanExecuteChanged();
+        OnConversationChanged();
     }
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
@@ -196,6 +234,8 @@ public sealed class TaskNodeViewModel : ObservableObject
         {
             OnPropertyChanged(property);
         }
+
+        OnConversationChanged();
     }
 
     internal void ChooseClient(ClientChoice choice)
@@ -226,6 +266,41 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     private void Run() =>
         _canvas.Notice(_canvas.Runs.Start(_task) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
+
+    private void Send(bool stopTurn)
+    {
+        if (_canvas.Runs.Send(_task, _draft, stopTurn) is SendResult.Refused refused)
+        {
+            _canvas.Notice(RunText.Describe(refused.Problem));
+            return;
+        }
+
+        Draft = "";
+        _canvas.Notice(null);
+    }
+
+    private async void OpenInTerminal()
+    {
+        switch (_canvas.Runs.OpenInTerminal(Id))
+        {
+            case TerminalResult.HandedOff handedOff:
+                await _canvas.Copy(handedOff.Command);
+                _canvas.Notice(RunText.HandedOff(handedOff.Command));
+                break;
+            case TerminalResult.Refused refused:
+                _canvas.Notice(RunText.Describe(refused.Problem));
+                break;
+        }
+    }
+
+    private void OnConversationChanged()
+    {
+        OnPropertyChanged(nameof(SendProblem));
+        OnPropertyChanged(nameof(TurnRunsHere));
+        _send.NotifyCanExecuteChanged();
+        _stopAndSend.NotifyCanExecuteChanged();
+        _openInTerminal.NotifyCanExecuteChanged();
+    }
 
     private void SetExecution(ExecutionSettings? settings)
     {

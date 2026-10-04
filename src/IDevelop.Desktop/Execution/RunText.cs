@@ -125,6 +125,53 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>One or two sentences for each reason a message cannot go to a task's agent.</summary>
+    public static string Describe(SendProblem problem) => problem switch
+    {
+        SendProblem.EmptyMessage => "Write a message first.",
+        SendProblem.NeverRan => "Run this task first. Then you can write to its agent.",
+        SendProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to continue. Run the task again.",
+        SendProblem.NoSessionYet p => $"{Clients.Name(p.Client)} has not reported its session yet. Send again in a moment.",
+        SendProblem.ClientChanged p =>
+            $"The last run used {Clients.Name(p.Ran)}, and this task now uses {Clients.Name(p.Now)}. Run the task to start a {Clients.Name(p.Now)} session.",
+        SendProblem.Ending p => $"\"{p.Title}\" is finishing. Send your message again to continue it.",
+        SendProblem.CannotStart p => Describe(p.Problem),
+        _ => throw new UnreachableException(),
+    };
+
+    /// <summary>One or two sentences for each reason a task's session cannot go to a terminal.</summary>
+    public static string Describe(TerminalProblem problem) => problem switch
+    {
+        TerminalProblem.NeverRan => "Run this task first.",
+        TerminalProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to open.",
+        TerminalProblem.TurnRunning p => $"\"{p.Title}\" is running. Open it in a terminal after it ends.",
+        TerminalProblem.Blocked p => Describe(p.Problem),
+        _ => throw new UnreachableException(),
+    };
+
+    public static string HandedOff(string command) => $"Copied {command}. Paste it in a terminal to continue this session there.";
+
+    /// <summary>What happened to a turn before the latest one, when it did not succeed.</summary>
+    public static string? EarlierTurnNote(TurnOutcome outcome) => outcome switch
+    {
+        TurnOutcome.Stopped => "You stopped this turn.",
+        TurnOutcome.Failed => "This turn failed.",
+        TurnOutcome.Interrupted => "This turn was interrupted.",
+        TurnOutcome.Running or TurnOutcome.Succeeded => null,
+    };
+
+    /// <summary>The heading over the person's messages that wait for a turn, or that a settled attempt never sent.</summary>
+    public static string? WaitingCaption(AttemptRecord attempt) => attempt switch
+    {
+        { Queued.IsEmpty: true } => null,
+        { Status: AttemptStatus.Running } => "Waiting for the turn to end",
+        _ => "Not sent",
+    };
+
+    public static string? TerminalNote(AttemptRecord attempt) => attempt.Terminal is { } handoff
+        ? $"Opened in a terminal at {handoff.At.ToLocalTime():t}. Turns taken there are not in iDevelop's record."
+        : null;
+
     /// <summary>"Requested Codex · gpt-5.5 · high", then what the client reported when that differs.</summary>
     public static string Configuration(AttemptRecord attempt)
     {

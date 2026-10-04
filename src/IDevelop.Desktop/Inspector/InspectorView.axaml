@@ -115,10 +115,53 @@
                     <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                AutomationProperties.AutomationId="LastRunDetail" />
-                    <TextBox Text="{Binding Result, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
-                             IsVisible="{Binding Result, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                             AutomationProperties.AutomationId="LastRunResult"
-                             AutomationProperties.Name="Result" />
+                    <ItemsControl ItemsSource="{Binding Turns}"
+                                  AutomationProperties.AutomationId="Conversation"
+                                  AutomationProperties.Name="Conversation">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Spacing="6" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="execution:TurnViewModel">
+                          <StackPanel Spacing="6">
+                            <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
+                                    IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <StackPanel Spacing="2">
+                                <TextBlock Classes="caption" Text="You" />
+                                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                              </StackPanel>
+                            </Border>
+                            <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
+                                     IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="{Binding ReplyId}"
+                                     AutomationProperties.Name="{Binding ReplyName}" />
+                            <TextBlock Classes="caption" Text="{Binding Note}"
+                                       IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Spacing="4" IsVisible="{Binding WaitingCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                AutomationProperties.AutomationId="Waiting">
+
+                      <TextBlock Classes="caption" Text="{Binding WaitingCaption}" />
+                      <ItemsControl ItemsSource="{Binding Waiting}"
+                                    AutomationProperties.AutomationId="WaitingMessages"
+                                    AutomationProperties.Name="{Binding WaitingCaption}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <Border Background="{DynamicResource SurfaceMuted60Brush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,4">
+                              <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                    <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
+                               IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               AutomationProperties.AutomationId="TerminalNote" />
                     <TextBlock Classes="caption" Text="Recent activity" Margin="0,4,0,0" IsVisible="{Binding HasActivity}" />
                     <ItemsControl ItemsSource="{Binding Activity}"
                                   AutomationProperties.AutomationId="LastRunActivity"
@@ -134,6 +177,41 @@
                 </DataTemplate>
               </ContentControl.ContentTemplate>
             </ContentControl>
+
+            <TextBlock Classes="section" Text="TALK TO THE AGENT" Margin="0,20,0,2" />
+            <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
+            <TextBox Text="{Binding Draft}"
+                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
+                     Watermark="Write to the agent. Ctrl+Enter sends."
+                     AutomationProperties.AutomationId="Composer"
+                     AutomationProperties.Name="Message">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+              <Button Classes="action" Command="{Binding SendCommand}"
+                      AutomationProperties.AutomationId="SendMessage"
+                      AutomationProperties.Name="Send">
+                <TextBlock Text="Send" />
+              </Button>
+              <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding TurnRunsHere}"
+                      AutomationProperties.AutomationId="StopAndSend"
+                      AutomationProperties.Name="Stop and send">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" />
+                  <TextBlock Text="Stop and send" />
+                </StackPanel>
+              </Button>
+              <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
+                      AutomationProperties.AutomationId="OpenInTerminal"
+                      AutomationProperties.Name="Open in terminal">
+                <TextBlock Text="Open in terminal" />
+              </Button>
+            </WrapPanel>
+            <TextBlock Classes="caption" Text="{Binding SendProblem}" TextWrapping="Wrap"
+                       IsVisible="{Binding SendProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       AutomationProperties.AutomationId="SendProblem" />
           </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="canvas:ConnectionViewModel">
