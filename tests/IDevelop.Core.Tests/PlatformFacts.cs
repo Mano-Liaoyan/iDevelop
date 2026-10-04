@@ -6,7 +6,7 @@ internal sealed class WindowsFactAttribute : FactAttribute
     {
         if (!OperatingSystem.IsWindows())
         {
-            Skip = "Only Windows runs batch shims through cmd.exe.";
+            Skip = "Windows only.";
         }
     }
 }
@@ -31,7 +31,7 @@ internal sealed class UnixFactAttribute : FactAttribute
     {
         if (OperatingSystem.IsWindows())
         {
-            Skip = "Only Linux and macOS need an execute bit.";
+            Skip = "Linux and macOS only.";
         }
     }
 }
