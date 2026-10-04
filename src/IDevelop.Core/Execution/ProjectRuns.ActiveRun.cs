@@ -16,11 +16,14 @@ public sealed partial class ProjectRuns
     /// Cancel and leaving stop everything it started, and so does a crash on Windows. What it leaves running when it exits
     /// on its own keeps running, as after a command in a terminal.
     /// </summary>
-    private sealed class ActiveRun(ProjectRuns owner, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
+    /// <param name="order">Counts this window's launches, so <see cref="Active"/> keeps the order the runs started in.</param>
+    private sealed class ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
     {
         private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public long Order => order;
 
         public AttemptRecord Record { get; private set; } = record;
 

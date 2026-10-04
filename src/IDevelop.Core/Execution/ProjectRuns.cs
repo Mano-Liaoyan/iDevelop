@@ -19,6 +19,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
     private readonly Dictionary<TaskId, ActiveRun> _active = [];
+    private long _launches;
     private Task? _leaving;
 
     private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings)
@@ -39,14 +40,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>Attempt folders that could not be read or settled. Each one is a sentence for the user.</summary>
     public ImmutableArray<string> Warnings { get; private set; }
 
-    /// <summary>The attempts this window runs, while they run, oldest first.</summary>
+    /// <summary>The attempts this window runs, while they run, in the order this window started them.</summary>
     public ImmutableArray<AttemptRecord> Active
     {
         get
         {
             lock (_gate)
             {
-                return [.. _active.Values.Select(run => run.Record).Where(record => record.Status == AttemptStatus.Running).OrderBy(record => record.Id)];
+                return [.. _active.Values.OrderBy(run => run.Order).Select(run => run.Record).Where(record => record.Status == AttemptStatus.Running)];
             }
         }
     }
@@ -348,7 +349,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         var running = AttemptReducer.Apply(record, launched);
-        return (running, new ActiveRun(this, plan, process, log, held, running));
+        return (running, new ActiveRun(this, ++_launches, plan, process, log, held, running));
     }
 
     private static string CannotWriteLog(Exception e) => $"iDevelop could not write this attempt's log, so it stopped the client. {e.Message}";

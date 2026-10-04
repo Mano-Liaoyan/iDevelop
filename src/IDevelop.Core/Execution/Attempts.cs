@@ -5,12 +5,13 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
-/// <summary>One execution of one task. Version 7, so attempt folders sort by start time.</summary>
-public readonly record struct AttemptId(Guid Value) : IComparable<AttemptId>
+/// <summary>
+/// One execution of one task. Version 7, so attempt folders sort by the millisecond they were created in. Two ids
+/// created in the same millisecond sort in random order.
+/// </summary>
+public readonly record struct AttemptId(Guid Value)
 {
     public static AttemptId New() => new(Guid.CreateVersion7());
-
-    public int CompareTo(AttemptId other) => Value.CompareTo(other.Value);
 
     public override string ToString() => Value.ToString("D");
 }
