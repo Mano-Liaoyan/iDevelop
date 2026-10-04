@@ -38,7 +38,23 @@ These observations come from running each client on Windows on 2026-10-04, first
 - `agy models` prints `<id><TAB><name>` lines. An ID ends with its effort level only when the name ends with the same level in parentheses, such as `gemini-3.8-flash-high` and `Gemini 3.8 Flash (High)`. A model without a level, such as `claude-opus-4-6-thinking`, takes no `--effort`. On 2026-10-03, the bare ID `gemini-3.8-flash` with a separate `--effort high` or `--effort low` reached the matching backend variant.
 - On 2026-10-03, with `--output-format stream-json`, the `init` event reported the requested model ID, and `--log-file` recorded the backend label. The `json` output reported no model.
 
+## Sessions
+
+A person's message resumes the client's own session in a new process. `scripts/probe-clients.mjs` ran each client on Linux on 2026-10-04. Each one resumed its session in a new process with the id it reported itself, including after its first turn was stopped mid tool call. No resumed turn reported a different id. The client rows pass these arguments after the ones above.
+
+| Client | Session id | Resume | Terminal interface |
+| --- | --- | --- | --- |
+| Claude Code | `session_id` of the `system/init` event | `--resume <id>` | `claude --resume <id>` |
+| Codex | `thread_id` of the `thread.started` event | `codex exec resume` with the same options, `-c sandbox_mode=workspace-write` in place of `--sandbox`, and `<id>` before the final `-` | `codex resume <id>` |
+| Pi | `id` of the `session` event | `--session-id <id>` | `pi --session <id>` |
+| Antigravity CLI | `conversation_id` of the `init` event | `--conversation <id>` | `agy --conversation <id>` |
+
+- `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key.
+- In the probe, Antigravity CLI's `result` event reported the same `conversation_id` as its `init` event, so the row keeps reading it from `init`.
+- The terminal commands come from each client's `--help`. No probe ran them.
+
 ## Unverified items
 
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
+- Whether each client's terminal command opens the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there.
 - Real client runs on macOS and Linux, and the login shell's PATH there. CI runs the fake client on both.
