@@ -120,13 +120,7 @@ public sealed class RunTests : IDisposable
     [AvaloniaFact]
     public void Cancelling_a_running_task_stops_it_and_records_it_as_cancelled()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(SayHiTask(Codex));
-        var clients = _fakes.DiscoverAsync().Result;
-        var shell = Shell.Open(folder, clients);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
-        Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
+        var (shell, folder, clients) = StartWaitingRun();
 
         shell.Click(shell.InView<Button>("CancelRun"));
 
@@ -288,12 +282,7 @@ public sealed class RunTests : IDisposable
     [AvaloniaFact]
     public void The_run_bar_still_cancels_a_run_whose_task_was_deleted()
     {
-        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
-        var folder = _temp.Seed(SayHiTask(Codex));
-        var clients = _fakes.DiscoverAsync().Result;
-        var shell = Shell.Open(folder, clients);
-        shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        var (shell, folder, clients) = StartWaitingRun();
         shell.Click(shell.Header(shell.Node("Say hi")));
         shell.Press(Key.Delete);
         Assert.Empty(shell.Nodes());
