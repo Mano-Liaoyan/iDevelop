@@ -166,13 +166,18 @@ internal static class WorkflowFile
         ConnectionKind.Review => "review",
     };
 
-    private static ConnectionKind? ParseKind(string name) => name switch
+    private static ConnectionKind? ParseKind(string name)
     {
-        "dependency" => ConnectionKind.Dependency,
-        "context" => ConnectionKind.Context,
-        "review" => ConnectionKind.Review,
-        _ => null,
-    };
+        foreach (var kind in Enum.GetValues<ConnectionKind>())
+        {
+            if (KindName(kind) == name)
+            {
+                return kind;
+            }
+        }
+
+        return null;
+    }
 
     private sealed class HeaderDto
     {
