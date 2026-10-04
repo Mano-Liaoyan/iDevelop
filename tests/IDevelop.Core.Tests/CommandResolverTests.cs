@@ -28,6 +28,18 @@ public sealed class CommandResolverTests : IDisposable
         Assert.Null(CommandResolver.Create([first, second], [".exe", ".cmd"]).Resolve("codex"));
     }
 
+    // A relative folder in the child's PATH would make it look in its current folder, which for a run is the project.
+    [Fact]
+    public void The_path_a_command_gets_holds_only_the_fully_qualified_folders_it_was_searched_in()
+    {
+        var folder = _temp.Create("bin");
+        File.WriteAllText(Path.Combine(folder, "pi.exe"), "");
+
+        Assert.Equal(
+            new ResolvedCommand(Path.Combine(folder, "pi.exe"), IsBatchShim: false) { SearchPath = folder },
+            CommandResolver.Create([".", "node_modules/.bin", folder], [".exe"]).Resolve("pi"));
+    }
+
     [UnixFact]
     [UnsupportedOSPlatform("windows")]
     public void Without_extensions_a_file_needs_an_execute_bit()

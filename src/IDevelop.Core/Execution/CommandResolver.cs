@@ -39,7 +39,8 @@ public sealed class CommandResolver
 
     private CommandResolver(Func<Task<ImmutableArray<string>>> searchPath, ImmutableArray<string> extensions)
     {
-        _searchPath = new Lazy<Task<ImmutableArray<string>>>(searchPath);
+        // A relative folder would point into the current folder, so neither the search nor the command's PATH keeps one.
+        _searchPath = new Lazy<Task<ImmutableArray<string>>>(async () => [.. (await searchPath()).Where(Path.IsPathFullyQualified)]);
         _extensions = extensions;
     }
 
@@ -72,7 +73,7 @@ public sealed class CommandResolver
     public ResolvedCommand? Resolve(string command)
     {
         var searchPath = _searchPath.Value.GetAwaiter().GetResult();
-        foreach (var folder in searchPath.Where(Path.IsPathFullyQualified))
+        foreach (var folder in searchPath)
         {
             if (_extensions.IsEmpty)
             {
