@@ -9,6 +9,12 @@ namespace IDevelop.Execution;
 /// </summary>
 internal sealed record ClientDefinition
 {
+    /// <summary>The name the interface shows.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The name the workflow file and the attempt log store.</summary>
+    public required string WireName { get; init; }
+
     /// <summary>The command looked up on the search path.</summary>
     public required string Command { get; init; }
 

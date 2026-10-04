@@ -79,7 +79,7 @@ public sealed class ClientDirectory
 
     private async Task RefreshClientAsync(ClientId id)
     {
-        var status = await ProbeAsync(ClientRegistry.Get(id));
+        var status = await ProbeAsync(Clients.Get(id));
         lock (_gate)
         {
             Current = Current.SetItem(id, status);

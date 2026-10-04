@@ -20,6 +20,8 @@ internal static class ClaudeCode
 
     public static readonly ClientDefinition Definition = new()
     {
+        Name = "Claude Code",
+        WireName = "claude-code",
         Command = "claude",
         Catalog = new CatalogSource.Fixed(Models),
         Readiness = _ => [new ReadinessProbe(null, new Probe(["auth", "status"]), SignInProblem)],
@@ -52,7 +54,7 @@ internal static class ClaudeCode
         {
         }
 
-        return ClientRegistry.ProbeFailure("claude auth status", output);
+        return Probes.Failure("claude auth status", output);
     }
 
     private static ImmutableArray<AgentEvent> Interpret(string line)

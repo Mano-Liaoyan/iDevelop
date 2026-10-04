@@ -9,6 +9,8 @@ internal static class Codex
 {
     public static readonly ClientDefinition Definition = new()
     {
+        Name = "Codex",
+        WireName = "codex",
         Command = "codex",
         Catalog = new CatalogSource.Probed(new Probe(["debug", "models"]), ParseCatalog),
         Readiness = _ => [new ReadinessProbe(null, new Probe(["login", "status"]), SignInProblem)],
@@ -30,7 +32,7 @@ internal static class Codex
     {
         if (output.ExitCode != 0)
         {
-            return new CatalogParse.Problem(ClientRegistry.ProbeFailure("codex debug models", output));
+            return new CatalogParse.Problem(Probes.Failure("codex debug models", output));
         }
 
         ImmutableArray<ModelOption> models;
@@ -54,10 +56,10 @@ internal static class Codex
             return null;
         }
 
-        var levels = ClientRegistry.SortLevels(model.Items("supported_reasoning_levels").Select(level => level.String("effort")).OfType<string>());
+        var levels = ReasoningLevels.Sort(model.Items("supported_reasoning_levels").Select(level => level.String("effort")).OfType<string>());
         return new ModelOption(slug, model.String("display_name") ?? slug, levels)
         {
-            DefaultReasoning = model.String("default_reasoning_level") is { } level && levels.Contains(level) ? level : ClientRegistry.DefaultLevel(levels),
+            DefaultReasoning = model.String("default_reasoning_level") is { } level && levels.Contains(level) ? level : ReasoningLevels.Default(levels),
         };
     }
 

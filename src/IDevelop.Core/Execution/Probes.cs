@@ -81,6 +81,14 @@ internal static class Probes
         return new ProbeOutput(exitCode, Snapshot(stdout), Snapshot(stderr), TimedOut: first != exit && first != answered.Task);
     }
 
+    /// <summary>Why a probe did not answer as expected, in the words of its last output line.</summary>
+    public static string Failure(string command, ProbeOutput output)
+    {
+        var said = TextLines.LastLine(output.Stderr) ?? TextLines.LastLine(output.Stdout);
+        var ended = output.ExitCode is { } code ? $"{command} exited with code {code}" : $"{command} was stopped";
+        return said is null ? $"{ended}." : $"{ended}: {said}";
+    }
+
     private static string Snapshot(StringBuilder text)
     {
         lock (text)

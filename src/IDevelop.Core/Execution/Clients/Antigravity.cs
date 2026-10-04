@@ -11,6 +11,8 @@ internal static class Antigravity
 {
     public static readonly ClientDefinition Definition = new()
     {
+        Name = "Antigravity CLI",
+        WireName = "antigravity",
         Command = "agy",
         Catalog = new CatalogSource.Probed(new Probe(["models"]), ParseCatalog),
         // agy has no sign-in check, so a model list that loads counts as ready.
@@ -55,7 +57,7 @@ internal static class Antigravity
     {
         if (output.ExitCode != 0)
         {
-            return new CatalogParse.Problem(ClientRegistry.ProbeFailure("agy models", output));
+            return new CatalogParse.Problem(Probes.Failure("agy models", output));
         }
 
         var models = new List<(string Id, string Name, List<string> Levels)>();
@@ -66,7 +68,7 @@ internal static class Antigravity
             var dash = id.LastIndexOf('-');
             var level = dash > 0 ? id[(dash + 1)..] : "";
             var suffix = $" ({level})";
-            if (ClientRegistry.IsLevel(level) && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            if (ReasoningLevels.IsLevel(level) && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
             {
                 (id, name) = (id[..dash], name[..^suffix.Length]);
             }
@@ -95,8 +97,8 @@ internal static class Antigravity
 
         return new CatalogParse.Models([.. models.Select(model =>
         {
-            var levels = ClientRegistry.SortLevels(model.Levels);
-            return new ModelOption(model.Id, model.Name, levels) { DefaultReasoning = ClientRegistry.DefaultLevel(levels) };
+            var levels = ReasoningLevels.Sort(model.Levels);
+            return new ModelOption(model.Id, model.Name, levels) { DefaultReasoning = ReasoningLevels.Default(levels) };
         })]);
     }
 
