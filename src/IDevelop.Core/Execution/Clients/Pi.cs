@@ -37,7 +37,7 @@ internal static class Pi
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {
-        foreach (var line in ClientRegistry.Lines(output.Stdout).Where(IsModelsResponse))
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsModelsResponse))
         {
             try
             {

@@ -36,13 +36,8 @@ internal static class ClientRegistry
     /// <summary>Why a probe did not answer as expected, in the words of its last output line.</summary>
     public static string ProbeFailure(string command, ProbeOutput output)
     {
-        var said = LastLine(output.Stderr) ?? LastLine(output.Stdout);
+        var said = TextLines.LastLine(output.Stderr) ?? TextLines.LastLine(output.Stdout);
         var ended = output.ExitCode is { } code ? $"{command} exited with code {code}" : $"{command} was stopped";
         return said is null ? $"{ended}." : $"{ended}: {said}";
     }
-
-    public static IEnumerable<string> Lines(string text) =>
-        text.Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Trim().Length > 0);
-
-    private static string? LastLine(string text) => Lines(text).Select(line => line.Trim()).LastOrDefault();
 }

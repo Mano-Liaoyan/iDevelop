@@ -164,7 +164,7 @@ internal static class AttemptReducer
             ReportedModel = reported.Model ?? record.ReportedModel,
             ReportedReasoning = reported.Reasoning ?? record.ReportedReasoning,
         },
-        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, FirstLine(message.Text)),
+        AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, TextLines.FirstLine(message.Text) ?? ""),
         AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}"),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
@@ -187,7 +187,7 @@ internal static class AttemptReducer
             { Verdict: AgentEvent.Succeeded } when exited.ExitCode == 0 => (AttemptStatus.Succeeded, null),
             { Verdict: AgentEvent.Succeeded } => (AttemptStatus.Failed, $"{client} reported success but exited with code {exited.ExitCode}."),
             _ when exited.ExitCode == 0 => (AttemptStatus.Failed, $"{client} ended without a result."),
-            _ => (AttemptStatus.Failed, LastLine(exited.StderrTail) is { } line
+            _ => (AttemptStatus.Failed, TextLines.LastLine(exited.StderrTail) is { } line
                 ? $"{client} exited with code {exited.ExitCode}: {line}"
                 : $"{client} exited with code {exited.ExitCode}."),
         };
@@ -223,8 +223,4 @@ internal static class AttemptReducer
         var activity = record.Activity.Count < ActivityLimit ? record.Activity : record.Activity.RemoveAt(0);
         return record with { Activity = activity.Add(new ActivityLine(at, text)) };
     }
-
-    private static string FirstLine(string text) => text.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? "";
-
-    private static string? LastLine(string text) => text.Split('\n').Select(line => line.Trim()).LastOrDefault(line => line.Length > 0);
 }

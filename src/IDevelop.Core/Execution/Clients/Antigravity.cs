@@ -59,7 +59,7 @@ internal static class Antigravity
         }
 
         var models = new List<(string Id, string Name, List<string> Levels)>();
-        foreach (var line in ClientRegistry.Lines(output.Stdout))
+        foreach (var line in TextLines.Lines(output.Stdout))
         {
             var fields = line.Split('\t', 2);
             var (id, name) = (fields[0].Trim(), fields.Length > 1 ? fields[1].Trim() : fields[0].Trim());
