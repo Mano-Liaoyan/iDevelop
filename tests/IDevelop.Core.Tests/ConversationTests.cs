@@ -207,6 +207,29 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task Stop_and_send_after_the_turns_client_exited_stops_nothing_and_the_turn_keeps_its_outcome()
+    {
+        var server = Evidence("server.pid");
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Using an apple.")),
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Which fruit?")).SpawnSleepingChild(server));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var settled = NextSettled(runs);
+        var client = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Settings[ClientId.Codex]))).Attempt.Process!.Value.Id;
+        var serverId = await _spawned.PidAsync(server);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session && Exited(client));
+
+        // The sleeping child holds the turn's output open, so the run has not seen the turn end yet.
+        Assert.Equal(new SendResult.Queued(), runs.Send(SayHi(Settings[ClientId.Codex]), "Use an apple.", stopTurn: true));
+
+        var record = await settled;
+        Assert.Equal(
+            [new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?"), new TurnRecord(2, "Use an apple.", TurnOutcome.Succeeded, "Using an apple.")],
+            record.Turns);
+        Assert.False(Exited(serverId), "the process the turn left running was stopped");
+    }
+
+    [Fact]
     public async Task Cancel_during_a_later_turn_cancels_the_attempt()
     {
         Install(_fakes, ClientId.Codex,
@@ -468,6 +491,19 @@ public sealed class ConversationTests : IDisposable
         {
             Assert.True(DateTime.UtcNow < deadline, "The condition did not become true in time.");
             await Task.Delay(20);
+        }
+    }
+
+    private static bool Exited(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return true;
         }
     }
 

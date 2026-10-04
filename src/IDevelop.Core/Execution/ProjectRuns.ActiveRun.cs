@@ -86,9 +86,12 @@ public sealed partial class ProjectRuns
                     return new SendResult.Refused(problem);
                 }
 
-                _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stopTurn));
+                // Once the client exited, the turn has its own outcome, and what it left running, such as a dev server,
+                // stays up.
+                var stops = stopTurn && _turn.Open && !_turn.Process.HasExited;
+                _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stops));
                 _messageWaiting = true;
-                if (stopTurn && _turn.Open)
+                if (stops)
                 {
                     _turn.Process.StopTree();
                 }

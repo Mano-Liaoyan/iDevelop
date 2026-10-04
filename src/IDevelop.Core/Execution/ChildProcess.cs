@@ -35,6 +35,18 @@ internal sealed class ChildProcess : IDisposable
 
     public ProcessIdentity Identity { get; }
 
+    /// <summary>True once the process exited, even while a process it started still holds its pipes open.</summary>
+    public bool HasExited
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _disposed || _process.HasExited;
+            }
+        }
+    }
+
     /// <exception cref="LaunchException">The command did not start, or a batch shim was given an unsafe argument.</exception>
     public static ChildProcess Start(ResolvedCommand command, IReadOnlyList<string> arguments, string workingDirectory)
     {
