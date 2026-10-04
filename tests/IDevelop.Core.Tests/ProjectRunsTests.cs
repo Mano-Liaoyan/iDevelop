@@ -115,6 +115,36 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (reopened.Latest[SayHiId].Status, reopened.Latest[SayHiId].Result));
     }
 
+    // An npm shim runs node by its bare name when no node.exe sits beside it, and cmd.exe looks for a bare name in the
+    // current folder first. For a run, that folder is the project, which anyone who shares the repository controls.
+    [WindowsFact]
+    public async Task A_run_never_runs_a_command_planted_in_the_project_folder()
+    {
+        var planted = Evidence("planted.txt");
+        File.WriteAllText(Path.Combine(_project, "codex-helper.cmd"), $"@echo planted> \"{planted}\"\r\n");
+        _fakes.Install("codex-helper", FakeAgents.CodexModels, FakeAgents.CodexSignedIn, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
+        File.WriteAllText(Path.Combine(_fakes.Folder, "codex.cmd"), "@codex-helper %*\r\n");
+        // The machine that runs the tests may already set the variable that stops the search, and children inherit it.
+        const string NoCurrentFolder = "NoDefaultCurrentDirectoryInExePath";
+        var inherited = Environment.GetEnvironmentVariable(NoCurrentFolder);
+        Environment.SetEnvironmentVariable(NoCurrentFolder, null);
+        try
+        {
+            await using var runs = ProjectRuns.Open(_project, await DiscoverAsync());
+            var settled = NextSettled(runs);
+
+            runs.Start(SayHi(Runs[ClientId.Codex].Settings));
+
+            var record = await settled;
+            Assert.Equal((AttemptStatus.Succeeded, "DONE"), (record.Status, record.Result));
+            Assert.False(File.Exists(planted), "the planted command ran");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(NoCurrentFolder, inherited);
+        }
+    }
+
     // An npm install of Codex is a script that starts with "#!/usr/bin/env node". The folder that holds it and node is
     // not on this process's PATH, as for an app started from Finder whose clients only the login shell's PATH finds.
     [UnixFact]

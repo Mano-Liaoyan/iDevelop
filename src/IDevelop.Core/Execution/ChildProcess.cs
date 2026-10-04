@@ -64,6 +64,13 @@ internal sealed class ChildProcess : IDisposable
             start.Environment["PATH"] = searchPath;
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            // cmd.exe, which runs a .cmd client such as an npm shim, otherwise looks for a bare command such as node in
+            // the current folder before PATH. For a run, that folder is the project.
+            start.Environment["NoDefaultCurrentDirectoryInExePath"] = "1";
+        }
+
         try
         {
             return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."));
