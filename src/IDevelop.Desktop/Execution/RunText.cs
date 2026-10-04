@@ -70,6 +70,9 @@ public static class RunText
         _ => model.Problem is null ? model.Name : $"{model.Name} (not ready)",
     };
 
+    /// <summary>A level in the picker. A stored level that the model does not offer is marked.</summary>
+    public static string ReasoningChoice(string level, bool? offered) => offered is false ? $"{level} (not offered)" : level;
+
     /// <summary>What the chosen client may do in the project folder without asking.</summary>
     public static string PermissionNote(ClientId client) => client switch
     {

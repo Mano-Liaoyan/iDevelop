@@ -29,6 +29,17 @@ public static class ExecutionChoices
         return settings.Model is { } id && OfferedModel(status, id) is null ? choices.Add((new ModelOption(id, id, []), false)) : choices;
     }
 
+    /// <summary>The offered model's levels, then the stored level when the model does not offer it, so the picker can show
+    /// it. The stored level's Offered is null while this machine does not offer the model, whose levels are then unknown.</summary>
+    public static ImmutableArray<(string Level, bool? Offered)> Reasoning(ExecutionSettings settings, ClientStatus status)
+    {
+        var model = OfferedModel(status, settings.Model);
+        ImmutableArray<(string Level, bool? Offered)> choices = [.. (model?.ReasoningLevels ?? []).Select(level => (level, (bool?)true))];
+        return settings.Reasoning is { } stored && !choices.Any(choice => choice.Level == stored)
+            ? choices.Add((stored, model is null ? null : false))
+            : choices;
+    }
+
     /// <summary>The models a client offers on this machine, which are none until it is ready.</summary>
     public static ImmutableArray<ModelOption> Offered(ClientStatus status) => status is ClientStatus.Ready ready ? ready.Models : [];
 
