@@ -55,7 +55,7 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         _waitingForUser = true;
-        var leave = await ConfirmLeavingDocument();
+        var leave = await ConfirmLeaving();
         if (leave)
         {
             await ViewModel.LeaveProject();
@@ -130,13 +130,27 @@ public partial class MainWindow : Window
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
         _waitingForUser = true;
-        var folder = await ConfirmLeavingDocument() ? await PickFolder() : null;
+        var folder = await ConfirmLeaving() ? await PickFolder() : null;
         if (folder is not null)
         {
             await ViewModel.Open(folder);
         }
 
         _waitingForUser = false;
+    }
+
+    // Both questions come before either answer acts, so a Cancel at the second leaves the run going. The run stops only
+    // when the project is actually left.
+    private async Task<bool> ConfirmLeaving() => await ConfirmStoppingRun() && await ConfirmLeavingDocument();
+
+    private async Task<bool> ConfirmStoppingRun()
+    {
+        if (ViewModel.ActiveRun is not { } run)
+        {
+            return true;
+        }
+
+        return await new RunningTaskDialog(run.TaskTitle).ShowDialog<RunningTaskChoice?>(this) == RunningTaskChoice.StopAndLeave;
     }
 
     private async Task<bool> ConfirmLeavingDocument()

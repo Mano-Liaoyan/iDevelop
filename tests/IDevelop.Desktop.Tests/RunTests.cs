@@ -62,6 +62,21 @@ public sealed class RunTests : IDisposable
         return clients;
     }
 
+    /// <summary>A window whose task runs and waits at the gate.</summary>
+    private (Shell Shell, string Folder, ClientDirectory Clients) StartWaitingRun()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var folder = _temp.Seed(Task(Codex));
+        var clients = Discover();
+        var shell = Shell.Open(folder, clients);
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        Assert.Equal("Running", CardStatus(shell));
+        return (shell, folder, clients);
+    }
+
+    private static string[] Texts(Window? dialog) => [.. Assert.IsAssignableFrom<Window>(dialog).GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text ?? "")];
+
     [AvaloniaFact]
     public void Running_a_task_whose_client_is_not_ready_shows_why_and_launches_nothing()
     {
@@ -131,6 +146,75 @@ public sealed class RunTests : IDisposable
         Assert.Equal("Cancelled", Shell.TextOf(shell.InView<Border>("LastRunStatus")));
         Assert.Equal(Color.Parse("#FFFFFF"), CardFill(shell));
         Assert.Equal("Cancelled", CardStatus(Shell.Open(folder, clients)));
+    }
+
+    [AvaloniaFact]
+    public void Closing_the_window_during_a_run_asks_first_and_stop_and_leave_records_the_run_as_interrupted()
+    {
+        var (shell, folder, clients) = StartWaitingRun();
+
+        shell.Window.Close();
+        shell.Render();
+
+        Assert.Equal(["\"Say hi\" is running. Stop it and leave?", "Stop and leave", "Keep running"], Texts(shell.Dialog));
+        shell.Choose("StopAndLeave");
+        shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes");
+        var reopened = Shell.Open(folder, clients);
+        Assert.Equal("Interrupted", CardStatus(reopened));
+        reopened.Click(reopened.Header(reopened.Node("Say hi")));
+        Assert.Equal("The project was closed while this task ran.", reopened.InView<TextBlock>("LastRunDetail").Text);
+    }
+
+    [AvaloniaFact]
+    public void Keep_running_cancels_the_close_and_leaves_the_run_going()
+    {
+        var (shell, _, _) = StartWaitingRun();
+        shell.Window.Close();
+        shell.Render();
+
+        shell.Choose("KeepRunning");
+
+        Assert.Null(shell.Dialog);
+        Assert.True(shell.Window.IsVisible);
+        Assert.Equal("Running", CardStatus(shell));
+        shell.Click(shell.Find<Button>("RunBarCancel"));
+        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+    }
+
+    [AvaloniaFact]
+    public void The_running_prompt_comes_before_the_save_prompt_and_cancelling_the_save_prompt_stops_nothing()
+    {
+        var (shell, _, _) = StartWaitingRun();
+        shell.Click(shell.Find<Button>("AddTask"));
+        shell.Window.Close();
+        shell.Render();
+        Assert.IsType<RunningTaskDialog>(shell.Dialog);
+        shell.Choose("StopAndLeave");
+        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], Texts(shell.Dialog));
+
+        shell.Choose("CancelChanges");
+
+        Assert.Null(shell.Dialog);
+        Assert.True(shell.Window.IsVisible);
+        Assert.Equal(("Running", "seed* - iDevelop"), (CardStatus(shell), shell.Window.Title));
+        shell.Click(shell.Find<Button>("RunBarCancel"));
+        shell.WaitUntil(() => CardStatus(shell) == "Cancelled", "the run is cancelled");
+    }
+
+    [AvaloniaFact]
+    public void Opening_another_folder_during_a_run_asks_first_and_records_the_run_as_interrupted()
+    {
+        var (shell, folder, clients) = StartWaitingRun();
+        var other = _temp.Create("other");
+        shell.Window.PickFolder = () => System.Threading.Tasks.Task.FromResult<string?>(other);
+
+        shell.Click(shell.Find<Button>("OpenFolder"));
+        Assert.IsType<RunningTaskDialog>(shell.Dialog);
+        shell.Choose("StopAndLeave");
+
+        shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the other folder opens");
+        Assert.False(shell.Find<Border>("RunBar").IsEffectivelyVisible);
+        Assert.Equal("Interrupted", CardStatus(Shell.Open(folder, clients)));
     }
 
     [AvaloniaTheory]
