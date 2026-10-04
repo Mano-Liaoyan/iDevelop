@@ -50,6 +50,7 @@ A person's message resumes the client's own session in a new process. `scripts/p
 | Antigravity CLI | `conversation_id` of the `init` event | `--conversation <id>` | `agy --conversation <id>` |
 
 - `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key. On Linux on 2026-10-05, a resumed turn with `-c sandbox_mode=read-only` refused to write a file, so resume honors the key. The probe's `resume-readonly` case repeats this check for each client that has a read-only mode.
+- Read-only access on a resumed session depends on the client. On Linux on 2026-10-05 the probe started each session with write access and resumed it read-only. Claude Code in plan mode and Codex with a read-only sandbox wrote nothing. Antigravity CLI kept writing. A conversation started with accept-edits wrote the file when resumed without the flag, and again when resumed with `--mode plan`. A session that must stay read-only therefore starts read-only. Claude Code's plan mode also writes its plan to `~/.claude/plans/`, outside the project.
 - In the probe, Antigravity CLI's `result` event reported the same `conversation_id` as its `init` event, so the row keeps reading it from `init`.
 - The terminal commands come from each client's `--help`. On Linux on 2026-10-05, run from another folder with the same session flags in print mode, `claude -p --resume <id>` and `agy --conversation <id>` found the session but would work in that folder, and `pi -p --session <id>` printed nothing. From the project folder, Pi resumed the session.
 - Open in terminal therefore copies the command after a change into the project folder. On Linux and macOS it copies `cd '<folder>' && <command>`. On Windows, whose default terminal is PowerShell, it copies `Set-Location -LiteralPath '<folder>'; <command>`. The folder is quoted for that shell.
@@ -58,4 +59,4 @@ A person's message resumes the client's own session in a new process. `scripts/p
 
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
 - Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
-- Real client runs on macOS and Linux, and the login shell's PATH there. CI runs the fake client on both.
+- Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness that drives `ProjectRuns` ran all four real clients, but the harness inherited a full PATH. CI runs the fake client on both.

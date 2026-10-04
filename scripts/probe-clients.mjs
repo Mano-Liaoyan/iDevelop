@@ -82,6 +82,7 @@ const clients = {
     resultSession: (events) => events.findLast((e) => e.event === 'result')?.result?.conversation_id,
     finalText: (events) => events.findLast((e) => e.event === 'result')?.result?.response,
     commandFile: () => ['.agents/skills/probe-mark/SKILL.md', '/probe-mark'],
+    resumeReadOnlyUnsupported: 'a conversation started with accept-edits kept writing when resumed without it and with --mode plan',
   },
 };
 
@@ -214,6 +215,7 @@ const cases = {
   // The session starts in the mode that may write, so a resume that kept the session's own mode would write the file.
   async 'resume-readonly'(client, name) {
     if (client.readOnlyUnsupported) return { pass: null, detail: 'no read-only mode' };
+    if (client.resumeReadOnlyUnsupported) return { pass: null, detail: client.resumeReadOnlyUnsupported };
     const repo = scratchRepo(name);
     const first = await turn(client, repo, 'Do not create or edit any file in this turn. Reply with the single word ready.');
     if (!first.session) return { pass: false, detail: { session: null, repo } };

@@ -235,12 +235,15 @@ These parts were rejected:
 
 ## Open issues
 
-These are unverified, and slice 1 probes the first four:
+Slice 1's probe answered four questions on Linux on 2026-10-04 and 2026-10-05:
 
-- Whether every model reliably ends with a readable result block, especially through Pi.
-- Whether a turn stopped mid-tool-call leaves a session that resumes cleanly on each client.
-- Whether Claude Code's plan mode, Codex's read-only sandbox, and Antigravity CLI without accept-edits keep a non-interactive turn read-only.
-- Whether each client runs a slash command, such as `/tdd`, at the start of a non-interactive prompt. If one does not, a PStack or Matt Pocock command reaches that agent as plain text.
+- Each client ended its final message with a readable result block in 2 of 2 samples.
+- Each client resumed its session after a turn was stopped mid-tool-call.
+- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI without accept-edits. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI kept the accept-edits mode it started with. A reviewer or planner session must therefore start read-only, and the tree snapshot catches a write.
+- A project-local command ran on each client in one sample: `.claude/commands/` through `/name` on Claude Code, `.agents/skills/` through `$name` on Codex and `/name` on Antigravity CLI, and `.pi/prompts/` through `/name` on Pi. An agent could also have read the command file on its own, so one sample does not rule that out.
+
+These remain unverified:
+
 - Whether each client keeps a long resumed session usable, for example by compacting it. A review loop resumes the same two sessions for as many rounds as agreement takes.
 - Two agents that never agree keep the loop running, because the user chose agreement as the only end. The card shows the round count.
 - `pi auth check` reported a provider ready that then answered 401. iDevelop uses that check for Pi's readiness.
