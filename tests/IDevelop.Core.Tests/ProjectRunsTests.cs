@@ -113,7 +113,7 @@ public sealed class ProjectRunsTests : IDisposable
         var folder = AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, record.Id);
         Assert.Equal(Fixture.Text(expected.Fixture), File.ReadAllText(Path.Combine(folder, "output.jsonl")));
         Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
-        Assert.Null(runs.Active);
+        Assert.Empty(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (reopened.Latest[SayHiId].Status, reopened.Latest[SayHiId].Result));
     }
@@ -251,7 +251,7 @@ public sealed class ProjectRunsTests : IDisposable
         Assert.Equal((AttemptStatus.Cancelled, null, "01a104d5-d442-71a1-9b08-8938c119e5ae"), (record.Status, record.Detail, record.SessionId));
         AssertGone(started.Attempt.Process!.Value.Id);
         AssertGone(grandchildId);
-        Assert.Null(runs.Active);
+        Assert.Empty(runs.Active);
     }
 
     [WindowsFact]
@@ -339,7 +339,7 @@ public sealed class ProjectRunsTests : IDisposable
 
         var events = Path.Combine(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id), "events.jsonl");
         Assert.StartsWith("{\"type\":\"exited\"", File.ReadLines(events).Last());
-        Assert.Null(runs.Active);
+        Assert.Empty(runs.Active);
         var record = await settled;
         Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (record.Status, record.Detail));
         AssertGone(started.Attempt.Process!.Value.Id);
@@ -354,40 +354,48 @@ public sealed class ProjectRunsTests : IDisposable
     }
 
     [Fact]
-    public async Task A_second_window_on_the_folder_cannot_start_while_a_task_runs_and_leaves_that_run_alone()
+    public async Task Two_tasks_run_at_once_and_a_task_runs_once_at_a_time_across_windows()
     {
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Hang());
         var clients = await DiscoverAsync();
         await using var first = ProjectRuns.Open(_project, clients);
         await using var second = ProjectRuns.Open(_project, clients);
         var settled = NextSettled(first);
-        var started = Assert.IsType<StartResult.Started>(first.Start(SayHi(Runs[ClientId.Codex].Settings)));
-        _spawned.Add(started.Attempt.Process!.Value.Id);
+        var sayHi = Assert.IsType<StartResult.Started>(first.Start(SayHi(Runs[ClientId.Codex].Settings)));
+        _spawned.Add(sayHi.Attempt.Process!.Value.Id);
+        var review = Assert.IsType<StartResult.Started>(first.Start(Review(Runs[ClientId.Codex].Settings)));
+        _spawned.Add(review.Attempt.Process!.Value.Id);
 
-        Assert.Equal(new StartProblem.AlreadyRunning(SayHiId, "Say hi"), first.Check(Review(Runs[ClientId.Codex].Settings)));
+        Assert.Equal([SayHiId, ReviewId], first.Active.Select(record => record.Task));
+        Assert.Equal(new StartProblem.AlreadyRunning(SayHiId, "Say hi"), first.Check(SayHi(Runs[ClientId.Codex].Settings)));
         Assert.Equal(
             new StartResult.Refused(new StartProblem.AlreadyRunning(SayHiId, "Say hi")),
-            first.Start(Review(Runs[ClientId.Codex].Settings)));
+            first.Start(SayHi(Runs[ClientId.Codex].Settings)));
         Assert.Equal(
-            new StartResult.Refused(new StartProblem.AlreadyRunning(SayHiId, "Say hi")),
+            new StartResult.Refused(new StartProblem.AlreadyRunning(ReviewId, "Review")),
             second.Start(Review(Runs[ClientId.Codex].Settings)));
         await using (var third = ProjectRuns.Open(_project, clients))
         {
-            Assert.Equal(AttemptStatus.Running, third.Latest[SayHiId].Status);
+            Assert.Equal([AttemptStatus.Running, AttemptStatus.Running], new[] { SayHiId, ReviewId }.Select(id => third.Latest[id].Status));
         }
 
-        Assert.False(Process.GetProcessById(started.Attempt.Process!.Value.Id).HasExited);
+        Assert.False(Process.GetProcessById(sayHi.Attempt.Process!.Value.Id).HasExited);
+        Assert.False(Process.GetProcessById(review.Attempt.Process!.Value.Id).HasExited);
         first.Cancel(SayHiId);
         Assert.Equal(AttemptStatus.Cancelled, (await settled).Status);
-        Assert.Null(first.Check(Review(Runs[ClientId.Codex].Settings)));
+        Assert.Equal([ReviewId], first.Active.Select(record => record.Task));
+        Assert.Null(first.Check(SayHi(Runs[ClientId.Codex].Settings)));
+        first.Cancel(ReviewId);
+        await WaitUntilAsync(() => first.Active.IsEmpty);
+        Assert.Equal(AttemptStatus.Cancelled, first.Latest[ReviewId].Status);
     }
 
     [Fact]
-    public async Task Another_process_that_holds_the_run_lock_keeps_the_folder_from_starting_until_it_ends()
+    public async Task Another_process_that_holds_a_tasks_run_lock_keeps_that_task_from_starting_until_it_ends()
     {
         var gate = Evidence("release");
         var holder = _fakes.Install("holder", On()
-            .LockFile(Path.Combine(Directory.CreateDirectory(Path.Combine(_project, ".idp", "attempts")).FullName, "run.lock"))
+            .LockFile(Path.Combine(Directory.CreateDirectory(Path.Combine(_project, ".idp", "attempts", SayHiId.ToString())).FullName, "run.lock"))
             .Print("locked")
             .WaitForFile(gate));
         FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
@@ -427,7 +435,7 @@ public sealed class ProjectRunsTests : IDisposable
                 Thread.Sleep(TimeSpan.FromSeconds(1));
             }
 
-            if (runs.Active is null)
+            if (runs.Active.IsEmpty)
             {
                 last.TrySetResult(record);
             }
@@ -516,7 +524,7 @@ public sealed class ProjectRunsTests : IDisposable
                 return;
             }
 
-            if (runs.Active is null)
+            if (runs.Active.IsEmpty)
             {
                 freed.TrySetResult();
             }
@@ -547,7 +555,7 @@ public sealed class ProjectRunsTests : IDisposable
 
         Assert.Equal(AttemptStatus.Failed, started.Attempt.Status);
         Assert.StartsWith($"{command.Path} did not start: ", started.Attempt.Detail);
-        Assert.Null(runs.Active);
+        Assert.Empty(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal(started.Attempt.Detail, reopened.Latest[SayHiId].Detail);
     }
@@ -580,6 +588,16 @@ public sealed class ProjectRunsTests : IDisposable
 
     private static TaskDefinition Review(ExecutionSettings settings) =>
         new(ReviewId) { Title = "Review", Instructions = "Review hello.txt.", Execution = settings };
+
+    private static async Task WaitUntilAsync(Func<bool> done)
+    {
+        var deadline = DateTime.UtcNow + Patience;
+        while (!done())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "The condition did not become true in time.");
+            await Task.Delay(50);
+        }
+    }
 
     private static Task<AttemptRecord> NextSettled(ProjectRuns runs)
     {

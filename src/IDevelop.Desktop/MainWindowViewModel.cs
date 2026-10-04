@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
@@ -56,8 +57,8 @@ public sealed class MainWindowViewModel : ObservableObject
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;
 
-    /// <summary>The task this window's project is running, or null.</summary>
-    public AttemptRecord? ActiveRun => _runs?.Active;
+    /// <summary>The tasks this window's project is running, oldest first.</summary>
+    public ImmutableArray<AttemptRecord> ActiveRuns => _runs?.Active ?? [];
 
     /// <summary>
     /// Reads the folder's workflow before it leaves the open project, so a folder that fails to open leaves that project

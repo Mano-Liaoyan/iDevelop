@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Windows.Input;
 using Avalonia.Threading;
 using IDevelop.Desktop.Mvvm;
@@ -16,6 +17,7 @@ public sealed class ActiveRunViewModel : ObservableObject
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly RelayCommand _cancel;
     private AttemptRecord? _run;
+    private int _others;
 
     internal ActiveRunViewModel(ProjectRuns runs, ClientDirectory clients)
     {
@@ -27,7 +29,7 @@ public sealed class ActiveRunViewModel : ObservableObject
 
     public bool IsVisible => _run is not null;
 
-    public string? TaskTitle => _run?.TaskTitle;
+    public string? TaskTitle => _run is null ? null : _others == 0 ? _run.TaskTitle : $"{_run.TaskTitle} and {_others} more";
 
     public string? AgentLabel => _run is { } run ? RunText.AgentLabel(run.Requested, _clients.Current[run.Requested.Client]) : null;
 
@@ -43,11 +45,13 @@ public sealed class ActiveRunViewModel : ObservableObject
 
     public ICommand CancelCommand => _cancel;
 
-    /// <summary>Called on the UI thread with the window's running attempt, or null once none runs.</summary>
-    internal void Show(AttemptRecord? active)
+    /// <summary>Called on the UI thread with the window's running attempts, oldest first. The bar shows the newest one,
+    /// and its Cancel stops that one. Each card cancels its own task.</summary>
+    internal void Show(ImmutableArray<AttemptRecord> active)
     {
-        _run = active;
-        _clock.IsEnabled = active is not null;
+        _run = active.IsEmpty ? null : active[^1];
+        _others = Math.Max(0, active.Length - 1);
+        _clock.IsEnabled = _run is not null;
         OnPropertyChanged(nameof(IsVisible));
         OnPropertyChanged(nameof(TaskTitle));
         OnPropertyChanged(nameof(AgentLabel));

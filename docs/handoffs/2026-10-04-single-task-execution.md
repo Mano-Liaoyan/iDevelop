@@ -27,7 +27,7 @@ The coordinator settled the phase's open design questions:
 
 - **How the app drives each client.** Each client runs in its own documented non-interactive mode with a JSON event stream, and the prompt goes over stdin. Claude Code runs `claude -p --output-format stream-json`, Codex runs `codex exec --json`, Pi runs `pi -p --mode json`, and Antigravity CLI runs with `--input-format stream-json --output-format stream-json`. ACP was not used, because Claude Code and Codex need separately installed adapters for it.
 - **Project folder or worktree.** A run edits the project folder itself. Worktrees and branches wait for phase 4, when several tasks run at once and their results need merging.
-- **Overlapping runs.** One run per project folder at a time, across every app instance. An operating-system file lock on `.idp/attempts/run.lock` enforces it, and the operating system releases the lock when its holder dies.
+- **Overlapping runs.** Phase 3 first shipped with one run per project folder. After the merge the user asked for parallel runs, so several tasks of a folder can run at once, and each task runs at most once at a time, across every app instance. An operating-system file lock on `.idp/attempts/<task-id>/run.lock` enforces it, and the operating system releases the lock when its holder dies.
 - **Settings and the file format.** The workflow file moves to `idevelop.workflow/2`, which stores an `execution` object (client, model, reasoning) on every task. Version 1 files still open. No per-user client settings exist. The app finds clients on PATH, and on macOS and Linux also on the login shell's PATH.
 - **The run record.** Each attempt is an append-only event log at `.idp/attempts/<task>/<attempt>/events.jsonl`, with the client's raw output beside it. One pure reducer folds the log into the record. Git ignores the folder.
 - **Unverified provider items.** Each client's own catalog and sign-in commands decide readiness: `codex debug models`, Pi's RPC model list with `pi auth check` per provider, and `agy models`. Claude Code has no list command, so iDevelop carries its model list. Permissions follow each client's non-interactive rules: Claude Code accepts edits and denies unapproved commands, Codex sandboxes commands in the workspace, Antigravity CLI accepts edits and blocks commands, and Pi has no permission system, which the inspector says.
@@ -134,7 +134,7 @@ The review's gap that no real client had run inside the job was already closed. 
 - The real-client check and its harness are scratch scripts kept outside the repository. Its cancel and leave cases depend on the model agreeing to run a long command, and DeepSeek once declined. A committed real-client check would make workflow execution easier to verify.
 - Whether `agy models` fails for a signed-out account is unverified, and iDevelop uses it as Antigravity CLI's readiness signal.
 - Whether each provider's plan permits unattended runs started by iDevelop is each provider's policy, as the [provider access reference](../provider-access.md) records.
-- A run edits the project folder itself, so two tasks can never run at once. Workflow execution needs worktrees and branches for that.
+- Parallel runs share the project folder, so two agents can edit the same file at once. Workflow execution needs worktrees and branches to keep them apart.
 
 ## Next action
 

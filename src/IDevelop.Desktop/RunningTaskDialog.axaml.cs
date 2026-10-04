@@ -10,10 +10,10 @@ public partial class RunningTaskDialog : Window
 {
     public RunningTaskDialog() => InitializeComponent();
 
-    public RunningTaskDialog(string task) : this()
+    public RunningTaskDialog(string question) : this()
     {
-        Title = $"\"{task}\" is running. Stop it and leave?";
-        Question.Text = Title;
+        Title = question;
+        Question.Text = question;
     }
 
     protected override void OnOpened(EventArgs e)

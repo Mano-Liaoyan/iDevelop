@@ -74,7 +74,7 @@ Central package management in [`Directory.Packages.props`](Directory.Packages.pr
 
 ## Run a task with an agent client
 
-Install and sign in to the clients you want iDevelop to run: Claude Code (`claude`), Codex (`codex`), Pi (`pi`), or Antigravity CLI (`agy`). iDevelop finds them on PATH. On macOS and Linux it also reads your login shell's PATH, so it finds a client installed through Homebrew, npm, or nvm when the app starts from Finder or a desktop launcher. The **AGENTS** section of the sidebar shows whether each client is ready, and why not. Pi checks sign-in for each provider, so a Pi model whose provider is signed out cannot run while Pi's other models can. The refresh button beside **AGENTS** checks the clients again.
+Install and sign in to the clients you want iDevelop to run: Claude Code (`claude`), Codex (`codex`), Pi (`pi`), or Antigravity CLI (`agy`). iDevelop finds them on PATH. On Windows it also reads your current user and machine PATH, so it finds a client installed after iDevelop or the terminal that started it. On macOS and Linux it also reads your login shell's PATH, so it finds a client installed through Homebrew, npm, or nvm when the app starts from Finder or a desktop launcher. The **AGENTS** section of the sidebar shows whether each client is ready, and why not. Pi checks sign-in for each provider, so a Pi model whose provider is signed out cannot run while Pi's other models can. The refresh button beside **AGENTS** checks the clients again.
 
 To run a task:
 
@@ -84,7 +84,7 @@ To run a task:
 
 The card's status pill and color follow the task's latest run: **Running**, **Succeeded**, **Failed**, **Cancelled**, or **Interrupted**. The inspector shows the last run's configuration, timing, result, and recent activity. While a task runs, a bar at the bottom of the canvas shows it. **Cancel** stops the client and the processes it started. A run that ends on its own leaves running what the client started on purpose, such as a dev server or a browser it opened for you. On Windows each client runs in a Job Object, so Cancel, leaving the project, or iDevelop closing during a run stops every process the client started. On macOS and Linux, a process that the client started and that outlives it keeps running. Closing the window or opening another folder during a run asks first, and stopping there records the run as interrupted. If iDevelop stops during a run, the next open of the project records the run as interrupted and stops its client if it is still running.
 
-A run starts the client in the project folder. Its prompt is the task's title, instructions, and acceptance criteria. One task of a project folder runs at a time, across every iDevelop window. Each client keeps its own rules for what it may do without asking:
+A run starts the client in the project folder. Its prompt is the task's title, instructions, and acceptance criteria. Several tasks of a project can run at once, all in the same project folder, so two agents can edit the same files. Each task runs once at a time, across every iDevelop window. The run bar shows the newest running task and how many others run. Each client keeps its own rules for what it may do without asking:
 
 - Claude Code may edit files and is denied commands you have not allowed in its settings.
 - Codex may edit files and runs commands in its workspace sandbox.
