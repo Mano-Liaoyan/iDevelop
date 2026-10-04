@@ -1,10 +1,19 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
 /// <summary>What a client said, normalized. Interpreters produce these, and only the attempt reducer consumes them.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(SessionStarted), "sessionStarted")]
+[JsonDerivedType(typeof(Reported), "reported")]
+[JsonDerivedType(typeof(Message), "message")]
+[JsonDerivedType(typeof(ToolStarted), "toolStarted")]
+[JsonDerivedType(typeof(Notice), "notice")]
+[JsonDerivedType(typeof(Succeeded), "succeeded")]
+[JsonDerivedType(typeof(Failed), "failed")]
 internal abstract record AgentEvent
 {
     private AgentEvent() { }
