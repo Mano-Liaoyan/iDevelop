@@ -66,6 +66,10 @@ internal sealed partial class Shell
     public string[] MenuHeaders() =>
         [.. OpenMenuItems().Select(item => item.Header?.ToString() ?? "")];
 
+    /// <summary>The shortcut hint the menu item draws, or "" when it has none.</summary>
+    public static string MenuHint(MenuItem item) =>
+        item.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_InputGestureText").Text ?? "";
+
     public MenuItem MenuItem(string automationId) => OpenMenuItems().Single(item => AutomationProperties.GetAutomationId(item) == automationId);
 
     public IEnumerable<MenuItem> OpenMenuItems() =>

@@ -50,8 +50,8 @@ public sealed class NodeMenuTests : IDisposable
             shell.MenuHeaders());
         Assert.All(shell.OpenMenuItems(), item => Assert.IsType<PathIcon>(item.Icon));
         Assert.Equal(
-            [CanvasKeys.Run, CanvasKeys.Rename, CanvasKeys.Duplicate, CanvasKeys.Delete],
-            shell.OpenMenuItems().Where(item => item.InputGesture is not null).Select(item => item.InputGesture));
+            ["Ctrl+Enter", "F2", "Ctrl+D", "", "", "", "", "Del"],
+            shell.OpenMenuItems().Select(Shell.MenuHint));
         var delete = shell.MenuItem("NodeMenuDelete");
         Assert.Same(delete, shell.OpenMenuItems().Last());
         Assert.Contains("destructive", delete.Classes);

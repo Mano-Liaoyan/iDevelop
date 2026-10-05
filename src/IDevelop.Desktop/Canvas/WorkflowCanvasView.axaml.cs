@@ -243,7 +243,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
     }
 
-    // Alt+click on a port deletes the connections on that side of its node.
+    // Alt+click on a port deletes the connections on that side of its node. Nodify's connector raises this event for
+    // Alt+click. Its pointer gestures fire; only the editor's key gestures do not.
     private void OnPortDisconnect(object? sender, ConnectorEventArgs e)
     {
         if (_viewModel is { } canvas && e.Connector is PortViewModel port)

@@ -4,7 +4,14 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:canvas="using:IDevelop.Desktop.Canvas"
                     xmlns:theme="using:IDevelop.Desktop.Theme">
-  <ContextMenu x:Key="NodeMenu" x:DataType="canvas:NodeMenuViewModel">
+  <ContextMenu x:Key="NodeMenu" x:DataType="canvas:NodeMenuViewModel" Classes="hints">
+    <!-- Avalonia's own hint names Enter "Return" outside macOS, so the hints come from CanvasKeys.Hint. The class
+         makes this style a trigger, which outranks the template's own binding of the hint text. -->
+    <ContextMenu.Styles>
+      <Style Selector="ContextMenu.hints MenuItem /template/ TextBlock#PART_InputGestureText">
+        <Setter Property="Text" Value="{Binding $parent[MenuItem].InputGesture, Converter={x:Static canvas:CanvasKeys.HintConverter}}" />
+      </Style>
+    </ContextMenu.Styles>
     <MenuItem Header="Run" InputGesture="{x:Static canvas:CanvasKeys.Run}"
               Command="{Binding Node.RunCommand}" IsVisible="{Binding ShowRun}"
               AutomationProperties.AutomationId="NodeMenuRun">
