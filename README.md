@@ -37,6 +37,7 @@ dotnet build -c Release
 dotnet test -c Release
 node scripts/check-licenses.mjs
 node scripts/planweave-tokens.mjs --check
+node scripts/fluent-icons.mjs --check
 dotnet run --project src/IDevelop.Desktop
 ```
 
@@ -58,7 +59,11 @@ Every color the app sets comes from `src/IDevelop.Desktop/Theme/Tokens.axaml`. `
 
 The check matches nothing else. It misses a color name inside a longer value, such as a `BoxShadow`, and `{x:Static Colors.Red}` in XAML. In C# it misses a color made any other way, such as `new Color(...)` or `Brush.Parse("Red")`.
 
-Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, token check, build, and tests on Linux, Windows, and macOS.
+New icons come from Microsoft's [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons), which are MIT licensed. [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) holds the license, and the build copies it beside the app. `scripts/icons/fluent-icons.json` pins the source commit and lists each icon's key, asset folder, and 16 px SVG file. `node scripts/fluent-icons.mjs` writes `src/IDevelop.Desktop/Theme/FluentIcons.axaml` from the SVG files in `scripts/icons/fluent/`, and fails on a file that is not 16 by 16, fills even-odd, has a transform, or draws anything but paths.
+
+To add an icon, add its entry to the manifest and run `node scripts/fluent-icons.mjs --fetch`, which downloads each missing file and then writes the XAML. It skips files that exist, so a move to another commit starts from an empty folder. The `--check` option fails when the generated file is stale, and when the manifest lacks a key that XAML names as `{StaticResource IconName}` or `{DynamicResource IconName}`, or that C# names in a string such as `"IconRun"`. Draw an icon with `<PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />`. The `Glyph` theme keeps the 16 unit frame each icon is drawn in, so icons keep their relative sizes.
+
+Central package management in [`Directory.Packages.props`](Directory.Packages.props) pins direct dependencies, and the committed `packages.lock.json` files pin transitive ones. After a restore, `node scripts/check-licenses.mjs` prints every package with its SPDX license. It fails on a license outside MIT, Apache-2.0, BSD-2-Clause, and BSD-3-Clause, or on a package without a license expression that has no reviewed exception in the script. It also searches every folder of each package for third-party notice and `COPYING` files. Each notice needs a reviewed entry that records its SHA-256 and names every license in it outside that list, so a changed notice fails until someone reads it again. The script prints those summaries after the table. The SkiaSharp and HarfBuzzSharp native packages share one notice that names MPL-1.1, GPL-2.0, LGPL-2.1, and other licenses for bundled code such as Skia's GIF decoder. CI runs the restore, license check, token check, icon check, build, and tests on Linux, Windows, and macOS.
 
 ## Run a task with an agent client
 
