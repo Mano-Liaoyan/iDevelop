@@ -172,18 +172,12 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         return result;
     }
 
-    /// <summary>
-    /// The blueprints a person or a planner can place, in the order a palette lists them. The built-ins until blueprint
-    /// libraries add theirs here.
-    /// </summary>
-    internal IEnumerable<Blueprint> PlaceableBlueprints() => BuiltInBlueprints.All;
-
-    /// <summary>A placeable blueprint, or a copy the workflow embeds, by key.</summary>
+    /// <summary>A blueprint the palette offers, or a copy the workflow embeds, by key.</summary>
     internal Blueprint? FindBlueprint(BlueprintKey key) =>
-        PlaceableBlueprints().FirstOrDefault(blueprint => blueprint.Key == key) ?? Workflow.Blueprints.GetValueOrDefault(key);
+        Blueprints.Placeable.FirstOrDefault(blueprint => blueprint.Key == key) ?? Workflow.Blueprints.GetValueOrDefault(key);
 
-    /// <summary>What the planner may fill and place when it starts now.</summary>
-    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, PlaceableBlueprints());
+    /// <summary>What the planner may fill and place when it starts now: the palette's blueprints are its types.</summary>
+    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable);
 
     /// <summary>Hides a proposal until its planner proposes again. Only this window forgets it.</summary>
     internal void CloseProposal(ProposalViewModel proposal)

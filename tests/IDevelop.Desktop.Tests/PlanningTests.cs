@@ -88,6 +88,25 @@ public sealed class PlanningTests : IDisposable
         Assert.Equal(3, WorkflowDocument.Open(shell.Window.ViewModel.Canvas!.Document.ProjectFolder).Current.Tasks.Count);
     }
 
+    [AvaloniaFact]
+    public void A_planner_may_place_every_blueprint_the_palette_offers()
+    {
+        var project = _temp.Seed(new WorkflowEdit.PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(105, 90)) { Title = "Design export" });
+        var bugFix = new Blueprint(
+            new BlueprintKey("bug-fix-0a1b2c3d", 1), "Bug fix",
+            new WorkSpec.Agent(AgentAccess.Edit, Proposes: false, PromptTemplate.Parse("Fix {{bug}}.")),
+            [new FieldSpec("bug", "Bug", FieldShape.Text, Required: true, "")],
+            new NodeSettings(null, ConversationMode.Autonomous));
+        BlueprintLibrary.Project(project).Save(bugFix);
+
+        var canvas = Shell.Open(project).Window.ViewModel.Canvas!;
+
+        Assert.Equal(
+            [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key), bugFix.Key],
+            canvas.Planning(Architect).Types.Select(type => type.Key));
+        Assert.Equal(bugFix, canvas.FindBlueprint(bugFix.Key));
+    }
+
     /// <summary>Opens an Architect in Chat mode with two empty tasks after it, runs it, and waits for its first reply.</summary>
     private Shell RunArchitect(string reply)
     {

@@ -98,6 +98,8 @@ public sealed class MainWindowTests : IDisposable
             [
                 "Inspector", "Select a task or connection to edit it.", "BLUEPRINTS", "BUILT-IN", "Implement", "Version 1",
                 "Carries out its instructions with the agent you choose, and may edit the project.", "Place", "Derive",
+                "Plan", "Version 1", "Plans the work toward a goal and proposes the tasks that carry it out. It changes no file.", "Place", "Derive",
+                "Architect", "Version 1", "Designs from a brief, reports the design, and proposes the tasks that build it. It changes no file.", "Place", "Derive",
                 "PROJECT", "None yet. Derive a blueprint to add one.", "PERSONAL", "None yet. Derive a blueprint to add one.",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));
