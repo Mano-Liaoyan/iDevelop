@@ -24,7 +24,7 @@ public sealed class BlueprintTests : IDisposable
     {
         var shell = Shell.Open(_temp.Create("plan"));
 
-        Assert.Equal(["Implement"], EntryNames(shell, "BUILT-IN"));
+        Assert.Equal(["Implement", "Plan", "Architect"], EntryNames(shell, "BUILT-IN"));
         Assert.True(Button(shell, "Implement", "PlaceBlueprint").IsEffectivelyVisible);
         Assert.True(Button(shell, "Implement", "DeriveBlueprint").IsEffectivelyVisible);
         Assert.False(Button(shell, "Implement", "EditBlueprint").IsEffectivelyVisible);

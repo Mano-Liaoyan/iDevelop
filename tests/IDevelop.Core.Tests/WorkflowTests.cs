@@ -47,6 +47,19 @@ public class WorkflowTests
     }
 
     [Fact]
+    public void A_batch_applies_every_edit_or_none()
+    {
+        var workflow = ThreeTasks();
+
+        var applied = workflow.Must(new Batch([new EditTitle(Design, "Plan"), new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)]));
+        var rejection = applied.Rejection(new Batch([new EditTitle(Build, "Changed"), new Connect(new ConnectionKey(Build, Design), ConnectionKind.Dependency)]));
+
+        Assert.Equal(("Plan", 1), (applied.Tasks[Design].Title, applied.Connections.Count));
+        Assert.Equal([Build, Design, Build], Assert.IsType<EditRejection.OrderingCycle>(rejection).Path.ToArray());
+        Assert.Same(workflow, workflow.Must(new Batch([])));
+    }
+
+    [Fact]
     public void Deleting_the_last_node_of_a_blueprint_drops_its_copy()
     {
         var workflow = ThreeTasks().Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)));

@@ -17,6 +17,7 @@ internal static class Codex
         Launch = Launch,
         Interpret = Interpret,
         Terminal = session => $"codex resume {session}",
+        HasReadOnlyMode = true,
     };
 
     // The level is unquoted, so the argument passes the batch-shim rule for an npm codex.cmd.

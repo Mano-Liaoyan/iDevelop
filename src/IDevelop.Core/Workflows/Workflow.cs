@@ -152,6 +152,9 @@ public abstract record WorkflowEdit
     public sealed record SetConnectionKind(ConnectionKey Key, ConnectionKind Kind) : WorkflowEdit;
 
     public sealed record Delete(ImmutableArray<TaskId> Tasks, ImmutableArray<ConnectionKey> Connections) : WorkflowEdit;
+
+    /// <summary>Applies each edit in order, as one change: all of them, or none when one is rejected.</summary>
+    public sealed record Batch(ImmutableArray<WorkflowEdit> Edits) : WorkflowEdit;
 }
 
 public abstract record EditRejection
@@ -239,6 +242,7 @@ public sealed class Workflow
         WorkflowEdit.Connect e => Connect(e),
         WorkflowEdit.SetConnectionKind e => SetConnectionKind(e),
         WorkflowEdit.Delete e => Delete(e),
+        WorkflowEdit.Batch e => Batch(e),
         _ => throw new UnreachableException($"Unhandled edit {edit.GetType().Name}"),
     };
 
@@ -376,6 +380,24 @@ public sealed class Workflow
             Tasks.RemoveRange(tasks),
             Connections.RemoveRange(connections),
             Positions.RemoveRange(tasks)));
+    }
+
+    private EditResult Batch(WorkflowEdit.Batch e)
+    {
+        var workflow = this;
+        foreach (var edit in e.Edits)
+        {
+            switch (workflow.Apply(edit))
+            {
+                case EditResult.Applied applied:
+                    workflow = applied.Workflow;
+                    break;
+                case var rejected:
+                    return rejected;
+            }
+        }
+
+        return Applied(workflow);
     }
 
     private ImmutableArray<TaskId>? FindOrderingPath(TaskId start, TaskId goal)

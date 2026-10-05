@@ -28,6 +28,7 @@ internal static class ClaudeCode
         Launch = Launch,
         Interpret = Interpret,
         Terminal = session => $"claude --resume {session}",
+        HasReadOnlyMode = true,
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(

@@ -29,6 +29,7 @@ internal static class Pi
         Launch = Launch,
         Interpret = Interpret,
         Terminal = session => $"pi --session {session}",
+        HasReadOnlyMode = false,
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(

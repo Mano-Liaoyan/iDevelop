@@ -46,6 +46,9 @@ public sealed class TaskNodeViewModel : ObservableObject
     private AttemptRecord? _attempt;
     private (AttemptId? Continues, ImmutableArray<AttemptRecord> Attempts) _earlier = (null, []);
     private string _draft = "";
+    private AttemptRecord? _proposed;
+    private ProposalRead _proposalRead = new ProposalRead.None();
+    private ProposalViewModel? _proposal;
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -154,7 +157,9 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>False when the model takes no reasoning level, such as an Antigravity model without a level suffix.</summary>
     public bool HasReasoning => ReasoningChoices.Count > 0;
 
-    public string? PermissionNote => _task.Execution is { } settings ? RunText.PermissionNote(settings.Client) : null;
+    public string? PermissionNote => _task.Execution is { } settings
+        ? RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
+        : null;
 
     public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
 
@@ -174,6 +179,13 @@ public sealed class TaskNodeViewModel : ObservableObject
     public ICommand RunCommand => _run;
 
     public ICommand CancelCommand => _cancel;
+
+    /// <summary>The planner's latest proposal while it is open, or null.</summary>
+    public ProposalViewModel? Proposal
+    {
+        get => _proposal;
+        private set => SetProperty(ref _proposal, value);
+    }
 
     /// <summary>The message the person is writing to the task's agent. Each task keeps its own.</summary>
     public string Draft
@@ -279,6 +291,7 @@ public sealed class TaskNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(LastAttempt));
             OnPropertyChanged(nameof(IsWaiting));
             OnPropertyChanged(nameof(Waiting));
+            ShowProposal();
         }
 
         OnPropertyChanged(nameof(StartProblem));
@@ -286,6 +299,34 @@ public sealed class TaskNodeViewModel : ObservableObject
         _cancel.NotifyCanExecuteChanged();
         _markDone.NotifyCanExecuteChanged();
         OnConversationChanged();
+    }
+
+    /// <summary>
+    /// Shows the latest proposal of the task's session, unless it is closed: from its latest attempt, or else from the
+    /// attempts that one continues, newest first. The attempt is read again only when it changed, and an open proposal
+    /// keeps the person's choices and checks them against the workflow again.
+    /// </summary>
+    internal void ShowProposal()
+    {
+        if (!ReferenceEquals(_proposed, _attempt))
+        {
+            _proposed = _attempt;
+            _proposalRead = _attempt is null ? new ProposalRead.None()
+                : Earlier(_attempt).Reverse().Prepend(_attempt)
+                    .Select(attempt => Nodes.Proposal.Read(attempt, _canvas.FindBlueprint))
+                    .FirstOrDefault(read => read is not ProposalRead.None) ?? new ProposalRead.None();
+        }
+
+        var shown = _proposalRead is ProposalRead.None ? null
+            : _proposal is { } current && current.Identity.Equals(ProposalViewModel.IdentityOf(_proposalRead, _proposed!.Id)) ? current
+            : new ProposalViewModel(_canvas, _proposalRead, _proposed!.Id);
+        if (shown is not null && _canvas.IsClosed(shown))
+        {
+            shown = null;
+        }
+
+        shown?.Refresh();
+        Proposal = shown;
     }
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
@@ -352,7 +393,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
 
     private void Run() =>
-        _canvas.Notice(_canvas.Runs.Start(_task) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
+        _canvas.Notice(_canvas.Runs.Start(_task, _canvas.Planning(Id)) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
     private void Send(bool stopTurn)
     {

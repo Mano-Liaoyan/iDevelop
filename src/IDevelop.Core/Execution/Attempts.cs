@@ -76,6 +76,10 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>Null in logs written before conversation modes, which never waited.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ConversationMode? Conversation { get; init; }
+
+        /// <summary>The handles a planner's prompt listed. Null for a node that proposes nothing.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public PlanningHandles? Planning { get; init; }
     }
 
     public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At);
@@ -128,6 +132,7 @@ public sealed record AttemptRecord
         RequestedAt = requested.At;
         Continues = requested.Continues?.Attempt;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
+        Planning = requested.Planning;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null)];
     }
 
@@ -147,6 +152,9 @@ public sealed record AttemptRecord
 
     /// <summary>Why the attempt waits, while its status is WaitingForInput.</summary>
     public Pending? Pending { get; internal init; }
+
+    /// <summary>The handles the planner's prompt listed, which its proposals name. Null for a node that proposes nothing.</summary>
+    public PlanningHandles? Planning { get; }
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }

@@ -63,6 +63,9 @@ public sealed class BlueprintsViewModel : ObservableObject
 
     public ICommand ReloadCommand { get; }
 
+    /// <summary>Every blueprint the palette offers to place, in its order, which a planner's type handles also list.</summary>
+    internal IEnumerable<Blueprint> Placeable => Groups.SelectMany(group => group.Entries).Select(entry => entry.Blueprint);
+
     internal BlueprintLibrary Project { get; }
 
     internal BlueprintLibrary? Personal { get; }

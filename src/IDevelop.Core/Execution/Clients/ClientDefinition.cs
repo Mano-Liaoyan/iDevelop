@@ -30,6 +30,12 @@ internal sealed record ClientDefinition
 
     /// <summary>The command a person types to open a session in the client's own terminal interface.</summary>
     public required Func<string, string> Terminal { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="LaunchRequest.ReadOnly"/> starts the client in a mode that changes no file. Without one, a read-only
+    /// node would run with write access, so it does not start.
+    /// </summary>
+    public required bool HasReadOnlyMode { get; init; }
 }
 
 internal abstract record CatalogSource

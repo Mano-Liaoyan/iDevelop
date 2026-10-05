@@ -20,6 +20,7 @@ internal static class Antigravity
         Launch = Launch,
         Interpret = Interpret,
         Terminal = session => $"agy --conversation {session}",
+        HasReadOnlyMode = true,
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
