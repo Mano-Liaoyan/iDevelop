@@ -1,11 +1,15 @@
 # The canvas
 
-The canvas shows each task as a card with its title, status, agent, type, and instructions, joined by dependency and context connections. A user adds tasks, zooms in and out, fits every task on the screen, and sees the whole workflow in the minimap at the bottom right.
+The canvas shows each task as a card with its kind's tile, its title, and one subtitle, joined by connections in the color of the task they leave. A user adds tasks through the Add popover, undoes and redoes edits, zooms in and out, fits every task on the screen, and sees the whole workflow in the minimap at the bottom right.
 
 ## Sub-features
 
-- `add-task` adds a task from `New task` in the sidebar, selects it, and marks the project unsaved.
-- `card-content` shows each task's title, status, agent, and instructions on its card.
+- `add-task` adds a task from the Add popover that `Add Node` in the sidebar opens, selects it, and marks the project unsaved.
+- `add-popover` opens the same popover from a right-click, a double-click, or N on empty canvas, from a wire dropped on empty canvas, and from `Insert Node…` on a connection.
+- `card-content` shows each task's kind tile, title, and one subtitle, which reads its agent while idle and otherwise its status or what it needs.
+- `menus` offers Run, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection.
+- `keys` runs N, Delete, Ctrl+D, Ctrl+A, F2, Ctrl+Enter, Esc, F, +, -, and 0 on the canvas.
+- `undo` takes back the last workflow edit with `Undo` in the breadcrumb or Ctrl+Z, and `Redo` or Ctrl+Shift+Z applies it again.
 - `zoom` steps the canvas larger with `Zoom in` and smaller with `Zoom out`.
 - `fit` brings every card into view with `Fit to screen`.
 - `sidebar-reveal` scrolls the canvas to a card chosen in the sidebar when it is out of view.
@@ -14,8 +18,10 @@ The canvas shows each task as a card with its title, status, agent, type, and in
 
 ## How to get to it (user POV)
 
-- Choose `New task` at the top of the sidebar.
-- Right-click the canvas and choose `Add task`.
+- Choose `Add Node` at the top of the sidebar, then a type in the popover.
+- Right-click, double-click, or press N on empty canvas, then choose a type.
+- Right-click a card or a connection for its menu.
+- Choose `Undo` or `Redo` in the breadcrumb.
 - Choose the `Zoom in`, `Zoom out`, and `Fit to screen` buttons at the canvas's bottom left.
 - Choose a task's row in the sidebar.
 - Click, drag, or turn the wheel over the minimap.
@@ -42,12 +48,14 @@ $card = { (Find-NameOutside $s.Window 'Review the storage change' 'SidebarTasks'
 - **Fit.** Zoom in until the third card leaves the canvas, then fit. Run `1..4 | ForEach-Object { Invoke-Element (Find-ById $s.Window 'ZoomIn') }`. `$editor.Contains((& $card))` is `$false`. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')`, and `Wait-Until { $editor.Contains((& $card)) } 5` returns `$true`.
 - **Reveal from the sidebar.** Zoom in four times again, so the third card leaves the canvas, then choose its row. Run `Select-Element (Get-SidebarTasks $s.Window)[2]`. `Wait-Until { $editor.Contains((& $card)) } 5` returns `$true`, and `Get-Value (Find-ById $s.Window 'TaskTitle')` is `Review the storage change`.
 - **Add a task.** Run `Invoke-Element (Find-ById $s.Window 'AddTask')`. The Add popover opens under the button, and `(Find-ById $s.Window 'AddNodeItem').Current.Name`, its first row, reads `Add Implement`. Run `Invoke-Element (Find-ById $s.Window 'AddNodeItem')`. `TaskCount` reads `4`, `TaskTitle` reads `New task`, the last sidebar row is `New task`, and the window title becomes `project* - iDevelop`. Run `Set-Text (Find-ById $s.Window 'TaskTitle') 'Write the changelog'`. `Find-NameOutside $s.Window 'Write the changelog' 'SidebarTasks'` finds the new card. Run `Save-Evidence $s 'added-task'`.
-- **Minimap.** Run `(Find-ById $s.Window 'Minimap').Current.BoundingRectangle`. It lies at the bottom right of `$editor`, and the screenshot shows one gray block per task in it.
+- **Undo and redo.** After **Add a task**, run `Invoke-Element (Find-ById $s.Window 'Undo')`. `TaskTitle` reads `New task` again, because the retitle was the last edit. Run `Invoke-Element (Find-ById $s.Window 'Undo')` again. `TaskCount` reads `3`, and the window title becomes `project - iDevelop`, because the workflow matches the saved file. Run `Invoke-Element (Find-ById $s.Window 'Redo')`. `TaskCount` reads `4`, and the title is `project* - iDevelop`.
+- **Minimap.** Run `(Find-ById $s.Window 'Minimap').Current.BoundingRectangle`. It lies at the bottom right of `$editor`, and the screenshot shows one block per task in its kind's color, indigo for the sample's three Implement tasks.
 
 ## Gotchas
 
 - UI Automation sees no card, connection, or minimap item as an element. It sees each card's text. Measure zoom and position from a card title's `BoundingRectangle`.
 - Every element reports `IsOffscreen` as false. Compare a card's rectangle with `$editor` to decide whether it is in view.
-- The `New task` button's label is also `New task`, outside the sidebar list. Retitle a new task before finding its card by name.
+- A new task is titled `New task`, and the sidebar repeats that title. Retitle a new task before finding its card by name.
 - Creating or selecting a connection needs a pointer drag or click, which UI Automation patterns cannot do. The real-window path uses the sample's existing connections. `ConnectionTests` covers dragging an output onto an input, the cycle refusal, clicking and right-clicking a connection, and deleting one.
-- The canvas menu's `Add task`, dragging a card, the minimap's click and wheel, and the Delete key need a pointer or a key. `CanvasTests` covers each of them headlessly. No test drags in the minimap.
+- The popover's right-click, double-click, N, and wire-drop entries, the card and connection menus, dragging a card, the minimap's click and wheel, and the canvas keys need a pointer or a key. `AddNodeTests`, `WireDropTests`, `NodeMenuTests`, `ConnectionMenuTests`, `ShortcutTests`, `UndoTests`, and `CanvasTests` cover them headlessly. No test drags in the minimap.
+- The **Undo and redo** steps were checked by pointer in the Linux window on 2026-10-05. The first Undo restored `New task`, the second removed the task, and Redo restored it. They have not run through `real-window.psm1` on Windows yet.

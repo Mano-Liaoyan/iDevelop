@@ -115,7 +115,7 @@
             AutomationProperties.Name="Show the next task that waits for you">
       <Border Classes="pill waiting">
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon />
+          <PathIcon Theme="{StaticResource Glyph}" />
           <TextBlock Text="{Binding WaitingLabel}" AutomationProperties.AutomationId="WaitingCount" />
         </StackPanel>
       </Border>
@@ -130,7 +130,7 @@
       <Border Classes="floating">
         <Border Padding="12,6,6,6">
           <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-            <PathIcon Classes="spin" Data="{StaticResource LoaderIcon}" Width="14" Height="14"
+            <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}" Width="14" Height="14"
                       Foreground="{DynamicResource StateRunningBrush}" />
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
@@ -151,7 +151,7 @@
                     AutomationProperties.AutomationId="RunBarCancel"
                     AutomationProperties.Name="Cancel run">
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource StopIcon}" Width="10" Height="10" />
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
                 <TextBlock Text="Cancel" />
               </StackPanel>
             </Button>

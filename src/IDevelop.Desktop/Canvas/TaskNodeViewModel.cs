@@ -170,10 +170,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// <summary>Only an agent work waits for the person as its conversation mode says.</summary>
     public bool HasConversation => _task.Blueprint.Work is WorkSpec.Agent;
 
-    public string AgentHeading => IsReview ? "REVIEWER" : "AGENT";
-
-    public string ComposerHeading => IsReview ? "GUIDE THE REVIEW" : "TALK TO THE AGENT";
-
     public string ComposerHint => IsReview
         ? "Both agents read your guidance in their next message. Ctrl+Enter sends."
         : "Write to the agent. Ctrl+Enter sends.";
@@ -187,8 +183,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         : [];
 
     public bool HasFindings => Findings.Count > 0;
-
-    public string PreviewPlaceholder => Fields.Count > 0 ? $"No {Fields[0].Label.ToLowerInvariant()} yet." : "";
 
     public IReadOnlyList<Choice> ConversationChoices =>
         [.. Enum.GetValues<ConversationMode>().Select(mode => new Choice(Id, mode.ToString(), RunText.ConversationChoice(mode)))];
@@ -237,9 +231,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         : null;
 
     public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
-
-    /// <summary>The card and its status pill take it as a style class.</summary>
-    public StatusTone Tone => RunText.Tone(_attempt);
 
     /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
     public string? StartProblem => !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
@@ -374,7 +365,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         {
             _attempt = attempt;
             OnPropertyChanged(nameof(StatusLabel));
-            OnPropertyChanged(nameof(Tone));
             OnPropertyChanged(nameof(LastAttempt));
             OnPropertyChanged(nameof(IsWaiting));
             OnPropertyChanged(nameof(Waiting));
