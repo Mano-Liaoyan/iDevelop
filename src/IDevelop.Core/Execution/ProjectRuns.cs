@@ -225,7 +225,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 return problem;
             }
 
-            return StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, "")) is StartVerdict.Blocked blocked
+            var settings = last is { Status: AttemptStatus.WaitingForInput } ? last.Requested : task.Execution;
+            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, "")) is StartVerdict.Blocked blocked
                 ? new SendProblem.CannotStart(blocked.Problem)
                 : null;
         }
@@ -531,8 +532,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>
-    /// Starts the next turn of the task's waiting attempt with the message, under the same log. Called under the gate with
-    /// the task's lock, which it releases unless the turn runs.
+    /// Starts the next turn of the task's waiting attempt with the message, under the same log and with the model and
+    /// reasoning the attempt started with. Called under the gate with the task's lock, which it releases unless the turn runs.
     /// </summary>
     private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, RunLock held)
     {
@@ -542,7 +543,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, message));
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();

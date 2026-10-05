@@ -83,7 +83,7 @@ public sealed record NodeSettings(ExecutionSettings? Execution, ConversationMode
 /// </summary>
 public sealed partial record Blueprint
 {
-    /// <summary>The prefix of built-in blueprint ids, which no user blueprint may take.</summary>
+    /// <summary>The prefix that marks a built-in blueprint's id.</summary>
     public const string BuiltInPrefix = "idevelop.";
 
     /// <summary>Variables every template may read: the node's title and what earlier nodes handed on.</summary>

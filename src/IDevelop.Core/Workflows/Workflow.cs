@@ -292,7 +292,7 @@ public sealed class Workflow
             return Reject(misfit!);
         }
 
-        return ReferenceEquals(edited, task) || edited.Equals(task)
+        return edited.Equals(task)
             ? Applied(this)
             : Applied(new Workflow(Id, Tasks.SetItem(id, edited), Connections, Positions));
     }

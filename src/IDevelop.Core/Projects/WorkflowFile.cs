@@ -195,7 +195,8 @@ internal static class WorkflowFile
             1 => ", and its review connection became a dependency",
             _ => $", and its {reviews} review connections became dependencies",
         };
-        return $"iDevelop converted this workflow from format 2. {nodes}{connections}. Save to keep it in format 3.";
+        var changes = tasks == 0 ? "" : $" {nodes}{connections}.";
+        return $"iDevelop converted this workflow from format 2.{changes} Save to keep it in format 3.";
     }
 
     private static Workflow Connect(

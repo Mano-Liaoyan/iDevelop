@@ -151,6 +151,25 @@ public sealed class WaitingTests : IDisposable
     }
 
     [Fact]
+    public async Task A_reply_to_a_waiting_node_keeps_the_model_and_reasoning_its_attempt_started_with()
+    {
+        Install(_fakes, ClientId.Codex,
+            Resuming(ClientId.Codex, Session).RecordArguments(Evidence("turn-2.json")).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Done.")),
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = SayHi(ClientId.Codex, ConversationMode.Chat);
+        await Settles(runs, () => runs.Start(task));
+
+        var changed = task with { Execution = new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" } };
+        var record = await Settles(runs, () => runs.Send(changed, "Go ahead.", stopTurn: false));
+
+        var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("turn-2.json")))!;
+        var model = Array.IndexOf(arguments, "-m");
+        Assert.Equal(["gpt-6-sol", "-c", "model_reasoning_effort=high"], arguments[(model + 1)..(model + 4)]);
+        Assert.Equal(Settings[ClientId.Codex], record.Requested);
+    }
+
+    [Fact]
     public void The_agent_work_decides_the_next_step_from_the_latest_attempt()
     {
         var node = new NodeContext(SayHi(ClientId.Codex, ConversationMode.MayAsk), "");

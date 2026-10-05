@@ -60,6 +60,15 @@ public sealed class WorkflowDocumentTests : IDisposable
     }
 
     [Fact]
+    public void A_format_2_file_without_tasks_says_only_that_it_converted()
+    {
+        var parsed = WorkflowFile.Parse(Encoding.UTF8.GetBytes(Workflow("", "", "").Replace('\'', '"')), SampleFile);
+
+        Assert.Equal("iDevelop converted this workflow from format 2. Save to keep it in format 3.", parsed.Converted);
+        Assert.Empty(parsed.Workflow.Tasks);
+    }
+
+    [Fact]
     public void Opening_the_sample_restores_its_text_kinds_and_positions()
     {
         var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
