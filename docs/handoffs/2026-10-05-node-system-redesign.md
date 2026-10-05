@@ -54,6 +54,7 @@ The build settled these further points:
 - The geometry constants landed at the old card size first, and the card unit changed them with its template, so `main` never held a squeezed card.
 - The Generate sheet is a window-level region above the column splitters, so its scrim covers Save and the splitters.
 - Tests check a running or waiting ring by its brush key or style class, because the pulse makes its pixels depend on time.
+- #30 changed the dark Plan and Review tiles from `#007EAE` and `#008575` to `#1894C2` and `#009B89`. U0a had reused the light tiles there, because Apple's dark cyan and mint are too light to carry a white glyph. Those two tiles then had a relative luminance of 0.18, against 0.24 to 0.29 for the other dark tiles, so they looked darker than the rest. The generator now mixes each light tile toward Apple's dark hue, in linear light, until it is as bright as the other dark tiles. Both keep the cyan and mint hues, and the white glyph on them measures 3.47:1, above the 3:1 that the token check requires.
 
 Excluded on purpose, because each needs a product decision or a format change: disabling a node, pinned data, sticky notes, groups, subflows, reroute knots, copy and paste, favorites, recents, inspector history, Ready and Blocked card visuals before workflow execution exists, and a custom color or icon per blueprint.
 
@@ -70,9 +71,10 @@ Excluded on purpose, because each needs a product decision or a format change: d
 | [#28](https://github.com/Mano-Liaoyan/iDevelop/pull/28) | U2 | Add popover, node and connection menus, and canvas keys | `a50592e` |
 | [#25](https://github.com/Mano-Liaoyan/iDevelop/pull/25) | U4b | Generate Workflow from a description | `30fbb1e` |
 | [#24](https://github.com/Mano-Liaoyan/iDevelop/pull/24) | U5b | Undo and redo from the keyboard, breadcrumb, and Add popover | `f95bd6e` |
-| [#29](https://github.com/Mano-Liaoyan/iDevelop/pull/29) | U6 | Fluent glyphs for the last hand-drawn icons, dead token and property removal, and this record | The pull request that adds this record |
+| [#29](https://github.com/Mano-Liaoyan/iDevelop/pull/29) | U6 | Fluent glyphs for the last hand-drawn icons, dead token and property removal, and this record | `2d61b58` |
+| [#30](https://github.com/Mano-Liaoyan/iDevelop/pull/30) | Final pass | Save and Undo blocked under the Generate sheet, and fixes to proposals, wires, wording, agent rows, and the dark Plan and Review tiles | `2f54588` |
 
-The table lists the merges in the order they reached `main`. #24 and #29 formed the run's last wave.
+The table lists the merges in the order they reached `main`. #24 and #29 formed the run's last wave. #30 fixed what the first final real-window pass found, and the second pass then passed.
 
 ## Changed artifacts
 
