@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its five slices are built. Workflow execution, which comes next, and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its five slices are built. The node system redesign gave the editor Apple's colors, an Add popover, a Godot-style inspector, and Generate Workflow. Workflow execution, which comes next, and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -24,6 +24,7 @@ The user wants these capabilities:
 - Use C# and .NET for iDevelop's application code, Avalonia for the desktop UI, and NodifyAvalonia for the initial node canvas. The user declined further framework comparisons.
 - Prefer permissively licensed dependencies that allow commercial distribution and company use without mandatory framework fees. Preserve the option of distributing a proprietary product.
 - Restyle the interface to look like PlanWeave's desktop app, with a light theme and a dark theme the user can switch between, as recorded in [The interface follows the PlanWeave look](#the-interface-follows-the-planweave-look).
+- Make the node editor work like n8n, Unreal Engine Blueprints, and Godot, with a UI in Apple's design style, as recorded in [The node editor follows Apple's design](#the-node-editor-follows-apples-design).
 - Give nodes types that users define and save as blueprints, as recorded in [Nodes have types that users define](#nodes-have-types-that-users-define).
 
 The shared server synchronizes workflow information. It does not host coding agents, model calls, terminals, or repositories. Provider authentication and execution stay on the local machine.
@@ -204,7 +205,22 @@ The screenshot shows these visual traits:
 
 Adopt the visual language: the theme, colors, typography, spacing, corner radii, layout regions, and card and connection styles. Do not adopt PlanWeave's domain through its UI. Its implementation and review blocks, run controls, statistics, and todo views stand for PlanWeave features. A control appears in iDevelop only when iDevelop has the matching feature. Study the repository's styles and components before choosing exact values, and check their licenses before reusing any asset. PlanWeave is MIT licensed.
 
-The [restyle record](handoffs/2026-10-04-planweave-restyle.md) describes what iDevelop adopted. The shell has a sidebar with the project and its tasks, a breadcrumb with the save command, rounded cards, orthogonal connections colored by kind, zoom and fit controls, a minimap, and an inspector panel. A switch at the bottom of the sidebar offers System, Light, and Dark. System follows the operating system and is the default, and the app remembers the choice per user. The app uses the platform's system font instead of PlanWeave's Geist, which is licensed under OFL-1.1. Its icons are drawn for iDevelop instead of taken from lucide, which is licensed under ISC.
+The [restyle record](handoffs/2026-10-04-planweave-restyle.md) describes what iDevelop adopted. The shell has a sidebar with the project and its tasks, a breadcrumb with the save command, rounded cards, orthogonal connections colored by kind, zoom and fit controls, a minimap, and an inspector panel. A switch at the bottom of the sidebar offers System, Light, and Dark. System follows the operating system and is the default, and the app remembers the choice per user. The app uses the platform's system font instead of PlanWeave's Geist, which is licensed under OFL-1.1. The restyle drew its own icons instead of taking lucide's, which are licensed under ISC. The node system redesign replaced them with Fluent icons.
+
+### The node editor follows Apple's design
+
+On 2026-10-05 the user asked for a node editor that works like n8n, Unreal Engine Blueprints, and Godot, in Apple's design style rather than theirs. The user asked for less text on the cards, vivid colors from a tested palette such as Apple's, a logo for each node type and each menu action, and colors for each state and role. Adding a node should not need the side panel. The canvas menu should offer every node type. The inspector should borrow from Godot's. A button should let a person describe the work and get a whole workflow.
+
+The [node system redesign record](handoffs/2026-10-05-node-system-redesign.md) holds the decisions, their reasons, and the rejected alternatives. The shell keeps PlanWeave's surfaces, text, and borders, and these parts changed:
+
+- The accent, the node kinds, and the states take Apple's system colors. Each node kind has its own hue and glyph in a tile. Implement is indigo, Plan cyan, Architect purple, Review mint, Approval brown, and a read-only agent gray. A card's state shows in its ring, a tint, a glyph, and one subtitle line, and a connection takes its source kind's color. Pink and teal are not used, because they sit too close to the Failed red and to cyan.
+- Every icon comes from Microsoft's Fluent UI System Icons, which are MIT licensed, at a pinned commit. Phosphor, which is closer to Apple's SF Symbols, stays a candidate.
+- One Add popover adds every node. Right-click, double-click, or N on empty canvas opens it, and so do the sidebar's Add Node button, a wire dropped on empty canvas, and Insert Node on a connection. Cards and connections have context menus with icons and shortcut hints.
+- The inspector follows Godot's: a pinned header with the kind tile, a property filter, foldable sections, two-column rows, and revert arrows. With nothing selected, it shows the workflow's kinds and the blueprint library.
+- Generate Workflow places a Plan node in Chat mode with the person's description and runs it. The planner's proposal shows as ghost cards, and nothing joins the workflow until the person accepts it.
+- Undo and redo cover every workflow edit, from the keyboard, the breadcrumb, and the Add popover.
+
+Two points wait for the user. A blueprint cannot carry its own icon or color until its file format gains a field. The box "New tasks use the planner's agent" lets a generated workflow's new tasks take the planner's agent, which extends the rule that a new node takes its blueprint's default agent.
 
 ## Dependency licensing preference
 
@@ -268,7 +284,7 @@ iDevelop starts the official clients, so each run uses the sign-in that client a
 
 ### The node model comes next
 
-The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, slice 4, planning, and slice 5, review and approval, are built. Workflow execution is next.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, slice 4, planning, and slice 5, review and approval, are built. The [node system redesign](handoffs/2026-10-05-node-system-redesign.md) then rebuilt the editor around them and added Generate Workflow, the button the node model proposed for talking to one agent. Workflow execution is next.
 
 ### Workflow execution follows
 
@@ -288,4 +304,4 @@ The current proposal is that synchronization shares a workflow that already carr
 
 ### Later work
 
-The user has not placed these relative to the phases above, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generate a draft workflow from a natural-language request, which the node model proposes to do with a plan node in conversation. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
+The user has not placed these relative to the phases above, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generating a draft workflow from a natural-language request left this list when Generate Workflow was built on 2026-10-05. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
