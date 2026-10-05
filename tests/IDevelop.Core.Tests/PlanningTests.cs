@@ -21,6 +21,15 @@ public sealed class PlanningTests : IDisposable
     private static readonly ExecutionSettings Sol = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private static readonly Guid Plan = Guid.Parse("019a9d2e-6100-7000-8000-000000000088");
+    private static readonly ExecutionSettings Haiku = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5" };
+
+    /// <summary>A library blueprint with a default agent of its own.</summary>
+    private static readonly Blueprint Careful = new(
+        new BlueprintKey("team.careful", 1), "Careful implement", BuiltInBlueprints.Implement.Work, BuiltInBlueprints.Implement.Fields,
+        new NodeSettings(Haiku, ConversationMode.MayAsk));
+
+    /// <summary>The types a scripted proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-6</c>.</summary>
+    private static readonly ImmutableArray<Blueprint> Types = [.. BuiltInBlueprints.All, Careful];
 
     private const string FillsBothAndAddsOne = """
         The design splits into a backend and a frontend, which a third task wires together.
@@ -276,6 +285,137 @@ public sealed class PlanningTests : IDisposable
     }
 
     [Fact]
+    public void A_chain_of_new_tasks_goes_one_column_further_right_per_dependency()
+    {
+        var workflow = ArchitectAt(new CanvasPoint(100, 50));
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "c", "type": "type-1"}, {"id": "b", "type": "type-1"}, {"id": "a", "type": "type-1"}],
+             "connect": [{"from": "planner", "to": "a"}, {"from": "a", "to": "b"}, {"from": "b", "to": "c"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
+
+        Assert.Equal(
+            [new CanvasPoint(100 + Proposal.ColumnStep, 50), new CanvasPoint(100 + 2 * Proposal.ColumnStep, 50), new CanvasPoint(100 + 3 * Proposal.ColumnStep, 50)],
+            Places(accepted, proposal, "a", "b", "c"));
+    }
+
+    [Fact]
+    public void Siblings_stack_a_row_apart_and_the_task_after_them_starts_its_column_at_the_planners_height()
+    {
+        var workflow = ArchitectAt(new CanvasPoint(100, 50));
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "a", "type": "type-1"}, {"id": "b", "type": "type-1"}, {"id": "join", "type": "type-1"}],
+             "connect": [{"from": "planner", "to": "a"}, {"from": "planner", "to": "b"}, {"from": "a", "to": "join"}, {"from": "b", "to": "join"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
+
+        Assert.Equal(
+            [new CanvasPoint(100 + Proposal.ColumnStep, 50), new CanvasPoint(100 + Proposal.ColumnStep, 50 + Proposal.RowStep), new CanvasPoint(100 + 2 * Proposal.ColumnStep, 50)],
+            Places(accepted, proposal, "a", "b", "join"));
+    }
+
+    [Fact]
+    public void A_context_cycle_adds_no_depth()
+    {
+        var workflow = ArchitectAt(new CanvasPoint(100, 50));
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "a", "type": "type-1"}, {"id": "b", "type": "type-1"}],
+             "connect": [{"from": "planner", "to": "a"}, {"from": "a", "to": "b", "kind": "context"}, {"from": "b", "to": "a", "kind": "context"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
+
+        Assert.Equal(
+            [new CanvasPoint(100 + Proposal.ColumnStep, 50), new CanvasPoint(100 + Proposal.ColumnStep, 50 + Proposal.RowStep)],
+            Places(accepted, proposal, "a", "b"));
+    }
+
+    [Fact]
+    public void A_dependency_cycle_among_new_tasks_is_cut_where_it_closes_and_accepting_it_names_the_cycle()
+    {
+        var workflow = ArchitectAt(new CanvasPoint(100, 50));
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "a", "type": "type-1"}, {"id": "b", "type": "type-1"}],
+             "connect": [{"from": "a", "to": "b"}, {"from": "b", "to": "a"}]}
+            ```
+            """));
+        var (a, b) = (proposal.Nodes[0].Id, proposal.Nodes[1].Id);
+
+        var layout = proposal.Layout(workflow);
+
+        Assert.Equal((new CanvasPoint(100 + 2 * Proposal.ColumnStep, 50), new CanvasPoint(100 + Proposal.ColumnStep, 50)), (layout[a], layout[b]));
+        Assert.IsType<EditRejection.OrderingCycle>(Assert.IsType<EditResult.Rejected>(workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false))).Reason);
+    }
+
+    [Fact]
+    public void A_task_an_earlier_Accept_placed_keeps_its_place_and_takes_no_new_one()
+    {
+        var workflow = ArchitectAt(new CanvasPoint(100, 50));
+        var first = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal", "add": [{"id": "a", "type": "type-1"}, {"id": "b", "type": "type-1"}]}
+            ```
+            """));
+        var acceptedFirst = workflow.Must(first.Accept(workflow, first.Items.ToHashSet(), _ => false));
+        var second = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal", "add": [{"id": "a", "type": "type-1"}, {"id": "b", "type": "type-1"}, {"id": "c", "type": "type-1"}]}
+            ```
+            """));
+
+        var acceptedSecond = acceptedFirst.Must(second.Accept(acceptedFirst, second.Items.ToHashSet(), _ => false));
+
+        Assert.Equal(
+            [
+                new CanvasPoint(100 + Proposal.ColumnStep, 50),
+                new CanvasPoint(100 + Proposal.ColumnStep, 50 + Proposal.RowStep),
+                new CanvasPoint(100 + Proposal.ColumnStep, 50 + 2 * Proposal.RowStep),
+            ],
+            Places(acceptedSecond, second, "a", "b", "c"));
+    }
+
+    [Fact]
+    public void With_a_fallback_a_new_agent_or_review_whose_type_has_no_default_agent_takes_it()
+    {
+        Assert.Equal(
+            [
+                ("build", Sol, ConversationMode.Autonomous),
+                ("check", Sol, ConversationMode.Autonomous),
+                ("sign", null, ConversationMode.Autonomous),
+                ("careful", Haiku, ConversationMode.MayAsk),
+                ("slot-1", null, ConversationMode.Autonomous),
+            ],
+            AcceptedAgents(Sol));
+    }
+
+    [Fact]
+    public void Without_a_fallback_every_new_task_keeps_its_types_default_agent()
+    {
+        Assert.Equal(
+            [
+                ("build", null, ConversationMode.Autonomous),
+                ("check", null, ConversationMode.Autonomous),
+                ("sign", null, ConversationMode.Autonomous),
+                ("careful", Haiku, ConversationMode.MayAsk),
+                ("slot-1", null, ConversationMode.Autonomous),
+            ],
+            AcceptedAgents(null));
+    }
+
+    [Fact]
     public void A_node_that_proposes_nothing_or_a_reply_without_a_proposal_has_none()
     {
         var implement = AttemptReducer.Replay(
@@ -302,31 +442,60 @@ public sealed class PlanningTests : IDisposable
     }
 
     /// <summary>An Architect at the origin with a dependency on each of two empty Implement nodes the person drew.</summary>
-    private static Workflow ArchitectWithTwoSlots(ConversationMode mode) => Workflow.Empty(new WorkflowId(Guid.Parse("019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01")))
-        .Must(new PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(0, 0))
-        {
-            Title = "Design export",
-            Fields = ImmutableDictionary<string, string>.Empty.Add("brief", "Export the report as CSV."),
-            Settings = new NodeSettings(Sol, mode),
-        })
+    private static Workflow ArchitectWithTwoSlots(ConversationMode mode) => ArchitectAt(new CanvasPoint(0, 0), mode)
         .Must(TestNodes.Place(TestNodes.Implement(Backend, "Backend"), new CanvasPoint(320, 0)))
         .Must(TestNodes.Place(TestNodes.Implement(Frontend, "Frontend"), new CanvasPoint(320, 190)))
         .Must(new Connect(new ConnectionKey(Architect, Backend), ConnectionKind.Dependency))
         .Must(new Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency));
+
+    /// <summary>A workflow that holds only the Architect, at <paramref name="position"/>.</summary>
+    private static Workflow ArchitectAt(CanvasPoint position, ConversationMode mode = ConversationMode.Autonomous) =>
+        Workflow.Empty(new WorkflowId(Guid.Parse("019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01")))
+            .Must(new PlaceNode(Architect, BuiltInBlueprints.Architect, position)
+            {
+                Title = "Design export",
+                Fields = ImmutableDictionary<string, string>.Empty.Add("brief", "Export the report as CSV."),
+                Settings = new NodeSettings(Sol, mode),
+            });
+
+    /// <summary>Where <paramref name="accepted"/> holds each of the proposal's new tasks, by the agent's own id for it.</summary>
+    private static CanvasPoint[] Places(Workflow accepted, Proposal proposal, params string[] names) =>
+        [.. names.Select(name => accepted.Positions[proposal.Nodes.Single(node => node.Name == name).Id])];
+
+    /// <summary>
+    /// The agent and conversation mode of each task after accepting a proposal that fills slot-1 and adds an Implement, a
+    /// Review, an Approval, and a <see cref="Careful"/> node, with <paramref name="fallback"/>.
+    /// </summary>
+    private static (string Task, ExecutionSettings? Execution, ConversationMode Conversation)[] AcceptedAgents(ExecutionSettings? fallback)
+    {
+        var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
+             "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, fallback));
+
+        return [.. proposal.Nodes.Select(node => (node.Name, node.Id)).Append((Name: "slot-1", Id: Backend))
+            .Select(task => (task.Name, accepted.Tasks[task.Id].Execution, accepted.Tasks[task.Id].Conversation))];
+    }
 
     private static (string Title, string Instructions, string Criteria) Summary(TaskDefinition task) =>
         task.Blueprint == BuiltInBlueprints.Architect
             ? (task.Title, task.Field("brief"), "")
             : (task.Title, task.Field("instructions"), task.Field("acceptanceCriteria"));
 
-    private static Blueprint? Find(BlueprintKey key) => BuiltInBlueprints.Find(key);
+    private static Blueprint? Find(BlueprintKey key) => Types.FirstOrDefault(blueprint => blueprint.Key == key);
 
     private static Proposal Ready(AttemptRecord record) => Assert.IsType<ProposalRead.Ready>(Proposal.Read(record, Find)).Proposal;
 
     /// <summary>An Architect attempt whose one turn ended with <paramref name="reply"/>.</summary>
     private static AttemptRecord Proposed(string reply) => AttemptReducer.Replay(
     [
-        Requested(new PlanningHandles(Plan, [Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)])),
+        Requested(new PlanningHandles(Plan, [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)])),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.SessionStarted(Session)),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.Succeeded(reply)),
         new AttemptEvent.Exited(AttemptEvents.T0, 0, ""),
