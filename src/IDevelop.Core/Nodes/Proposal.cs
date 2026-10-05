@@ -43,7 +43,7 @@ public sealed record Proposal(
 
     // A card's footprint with its gutter, so new cards never touch.
     public const double ColumnStep = 320;
-    public const double RowStep = 190;
+    public const double RowStep = 112;
 
     /// <summary>
     /// Reads the latest proposal of a planner's attempt. The same attempt always gives the same proposal and the same new

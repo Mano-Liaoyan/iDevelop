@@ -22,13 +22,13 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     // The visible card is 240 wide. The container adds a 10 px gutter on each side, where the ports sit on the card's edge.
     public const double TaskCardWidth = 260;
 
-    public const double TaskCardHeight = 144;
+    public const double TaskCardHeight = 64;
 
     /// <summary>The input port's center in the card's container. The card template places the port here.</summary>
-    public static readonly Point InputPortCenter = new(10, 81);
+    public static readonly Point InputPortCenter = new(10, 32);
 
     /// <summary>The output port's center in the card's container. The card template places the port here.</summary>
-    public static readonly Point OutputPortCenter = new(250, 63);
+    public static readonly Point OutputPortCenter = new(250, 32);
 
     private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 

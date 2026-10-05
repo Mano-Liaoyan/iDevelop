@@ -82,7 +82,7 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
-        Assert.Equal(title, ToolTip.GetTip(shell.InCard<Panel>(title, "TaskCard")));
+        Assert.Equal(title, ((string)ToolTip.GetTip(shell.InCard<Panel>(title, "TaskCard"))!).Split('\n')[0]);
     }
 
     [AvaloniaFact]
@@ -102,16 +102,19 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_card_previews_its_instructions_and_says_when_there_are_none()
+    public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "Not run", "No agent", "Implement", "No instructions yet."], Shell.Texts(shell.Node("Build")));
+        string Tip() => (string)ToolTip.GetTip(shell.InCard<Panel>("Build", "TaskCard"))!;
+        Assert.Equal(["Build", "Choose an agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal("Build\nImplement · No agent\nChoose an agent for this task first.", Tip());
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "Not run", "No agent", "Implement", "Compile"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Choose an agent"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal("Build\nImplement · No agent\nCompile\nChoose an agent for this task first.", Tip());
     }
 
     [AvaloniaFact]
@@ -193,7 +196,7 @@ public sealed class CanvasTests : IDisposable
         shell.Click(build);
 
         var editor = shell.Editor;
-        Assert.Equal(new Point(2530, 1672), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
+        Assert.Equal(new Point(2530, 1632), Shell.Rounded(editor.ViewportLocation + new Vector(editor.ViewportSize.Width, editor.ViewportSize.Height) / 2));
     }
 
     [AvaloniaFact]

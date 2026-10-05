@@ -5,10 +5,14 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
+/// <summary>How a connection stands out while nodes are selected: it touches one of them, or it recedes behind them.</summary>
+public enum WireEmphasis { Normal, Highlighted, Dimmed }
+
 public sealed class ConnectionViewModel : ObservableObject
 {
     private readonly RelayCommand<ConnectionKind> _setKind;
     private ConnectionKind _kind;
+    private WireEmphasis _emphasis;
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
     {
@@ -33,6 +37,12 @@ public sealed class ConnectionViewModel : ObservableObject
 
     /// <summary>The kind of the node the connection leaves, whose hue the wire takes.</summary>
     public NodeKind SourceKind => From.Kind;
+
+    public WireEmphasis Emphasis
+    {
+        get => _emphasis;
+        internal set => SetProperty(ref _emphasis, value);
+    }
 
     public ICommand SetKindCommand => _setKind;
 

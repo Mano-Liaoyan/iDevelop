@@ -47,8 +47,8 @@ public sealed class RunTests : IDisposable
     private static WorkflowEdit.PlaceNode SayHiTask(ExecutionSettings execution) =>
         TaskAt(SayHi, "Say hi", 105, 90, execution, "Create hello.txt containing hi. Then reply with DONE.");
 
-    private static Color CardFill(Shell shell) =>
-        ((ISolidColorBrush)shell.Node("Say hi").GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("card")).Background!).Color;
+    private static Color CardRing(Shell shell) =>
+        ((ISolidColorBrush)shell.CardLayer("Say hi", "stateStroke").BorderBrush!).Color;
 
     /// <summary>A window whose task runs and waits at the gate.</summary>
     private (Shell Shell, string Folder, ClientDirectory Clients) StartWaitingRun()
@@ -76,7 +76,7 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.InView<Button>("RunTask"));
 
         Assert.Equal(reason, shell.Status);
-        Assert.Equal("Not run", shell.CardText("Say hi", "CardStatus"));
+        Assert.Equal("Claude Code isn't ready", shell.CardText("Say hi", "CardStatus"));
         Assert.False(Directory.Exists(Path.Combine(folder, ".idp", "attempts")));
     }
 
@@ -87,11 +87,12 @@ public sealed class RunTests : IDisposable
         var shell = Shell.Open(_temp.Seed(SayHiTask(Codex)), _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Say hi")));
-        Assert.Equal(("Not run", Color.Parse("#FFFFFF")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
+        // The pointer rests on the card, so its neutral ring shows at full strength.
+        Assert.Equal(("Not run", Color.Parse("#E5E5E5")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
 
         shell.Click(shell.InView<Button>("RunTask"));
 
-        Assert.Equal(("Running", Color.Parse("#1A0088FF")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
+        Assert.Equal(("Running", Color.Parse("#564ADE")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
         Assert.Equal("", shell.Status);
         Assert.True(shell.Find<Control>("RunBar").IsEffectivelyVisible);
@@ -106,7 +107,7 @@ public sealed class RunTests : IDisposable
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
 
         Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        Assert.Equal(Color.Parse("#1A34C759"), CardFill(shell));
+        Assert.Equal(Color.Parse("#008932"), CardRing(shell));
         Assert.Equal(Color.Parse("#25292E"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
@@ -126,7 +127,7 @@ public sealed class RunTests : IDisposable
 
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
         Assert.Equal("Cancelled", shell.InView<TextBlock>("LastRunStatus").Text);
-        Assert.Equal(Color.Parse("#FFFFFF"), CardFill(shell));
+        Assert.Equal(Color.Parse("#6C6C70"), CardRing(shell));
         Assert.Equal("Cancelled", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
     }
 

@@ -43,7 +43,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """);
 
-        Assert.Equal("Waiting for you", shell.CardText("Design export", "CardStatus"));
+        Assert.Equal("Proposal · 3 tasks", shell.CardText("Design export", "CardStatus"));
         Assert.Equal(["Fills Backend API", "Fills Frontend", "New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Fill \"Backend\" as \"Backend API\"", "Fill \"Frontend\"", "Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
         Assert.Equal(["Backend API → Wire export", "Frontend → Wire export"], Shell.Texts(shell.Find<ItemsControl>("ProposalConnections")));
@@ -99,13 +99,13 @@ public sealed class PlanningTests : IDisposable
             """,
             ConversationMode.Autonomous,
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded", "the first run succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("LastRunStatus").Text == "Succeeded", "the first run succeeds");
 
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Why the wire task?");
         shell.Click(shell.InView<Button>("SendMessage"));
 
-        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded" && shell.Find<TextBox>("LastRunResult").Text == "The wire task calls the endpoint.", "the continuation succeeds");
+        shell.WaitUntil(() => shell.InView<TextBlock>("LastRunStatus").Text == "Succeeded" && shell.Find<TextBox>("LastRunResult").Text == "The wire task calls the endpoint.", "the continuation succeeds");
         Assert.Equal(["New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
     }
