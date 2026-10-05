@@ -400,8 +400,18 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter, MenuItem /template/ ContentControl#PART_ToggleIconPresenter">
+  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <!-- A row's current choice is a class bound to the view model, not ToggleType. A click on a toggle row flips
+       IsChecked itself, and a menu reused for another target keeps that flip while its binding's value is unchanged. -->
+  <Style Selector="MenuItem.current /template/ ContentControl#PART_ToggleIconPresenter">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Content">
+      <Template>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" />
+      </Template>
+    </Setter>
   </Style>
   <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
     <Setter Property="FontSize" Value="12" />

@@ -25,7 +25,8 @@ public sealed class ConnectionMenuTests : IDisposable
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), kind)));
 
     private static bool Checked(MenuItem item) =>
-        item.GetVisualDescendants().OfType<ContentControl>().Single(part => part.Name == "PART_ToggleIconPresenter").IsVisible;
+        item.GetVisualDescendants().OfType<ContentControl>().Single(part => part.Name == "PART_ToggleIconPresenter")
+            is { IsVisible: true, Content: PathIcon { Data: var mark } } && Equals(mark, item.FindResource("IconCheckmark"));
 
     private static (bool Dependency, bool Context) Marks(Shell shell) =>
         (Checked(shell.MenuItem("ConnectionMenuDependency")), Checked(shell.MenuItem("ConnectionMenuContext")));

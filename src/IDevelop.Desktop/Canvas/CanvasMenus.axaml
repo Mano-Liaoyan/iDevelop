@@ -98,16 +98,13 @@
   </ContextMenu>
 
   <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionMenuViewModel">
-    <!-- The current kind carries the checkmark in the gutter before the icons, as a macOS menu marks a state. -->
-    <MenuItem Header="Dependency" Command="{Binding DependencyCommand}"
-              ToggleType="CheckBox" IsChecked="{Binding IsDependency, Mode=OneWay}"
+    <MenuItem Header="Dependency" Command="{Binding DependencyCommand}" Classes.current="{Binding IsDependency}"
               AutomationProperties.AutomationId="ConnectionMenuDependency">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" />
       </MenuItem.Icon>
     </MenuItem>
-    <MenuItem Header="Context" Command="{Binding ContextCommand}"
-              ToggleType="CheckBox" IsChecked="{Binding IsContext, Mode=OneWay}"
+    <MenuItem Header="Context" Command="{Binding ContextCommand}" Classes.current="{Binding IsContext}"
               AutomationProperties.AutomationId="ConnectionMenuContext">
       <MenuItem.Icon>
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireContext}" />
