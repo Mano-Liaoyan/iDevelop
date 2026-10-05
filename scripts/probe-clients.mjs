@@ -83,7 +83,7 @@ const clients = {
     resultSession: (events) => events.findLast((e) => e.event === 'result')?.result?.conversation_id,
     finalText: (events) => events.findLast((e) => e.event === 'result')?.result?.response,
     commandFile: () => ['.agents/skills/probe-mark/SKILL.md', '/probe-mark'],
-    // On 2026-10-05 a conversation started with accept-edits kept writing when resumed without it and with --mode plan.
+    // On 2026-10-05 a conversation started with accept-edits and resumed with --mode plan wrote the file in 4 of 4 runs.
     resumeKeepsStartMode: true,
   },
 };
