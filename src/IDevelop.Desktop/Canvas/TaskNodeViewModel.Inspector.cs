@@ -19,6 +19,8 @@ public sealed partial class TaskNodeViewModel
         [nameof(Proposal)] = [nameof(ShowsAcceptAndFinish)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
+        [nameof(Role)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
+        [nameof(State)] = [nameof(ShowsCancel)],
     };
 
     private RelayCommand _acceptAndFinish = null!;
@@ -72,6 +74,15 @@ public sealed partial class TaskNodeViewModel
     public string? DerivedFrom => _task.Blueprint.DerivedFrom is { } key
         ? $"{_canvas.FindBlueprint(key)?.Name ?? BuiltInBlueprints.Find(key)?.Name ?? key.Id}, version {key.Version}"
         : null;
+
+    /// <summary>
+    /// Run and the reason it cannot start. While a proposal is open, accepting it is the node's one primary action, so
+    /// the Run section keeps only the run's status.
+    /// </summary>
+    public bool ShowsRunControls => Role != NodeRole.Proposing;
+
+    /// <summary>Cancel shows with Run, and while a proposal is open only during a turn that this window runs.</summary>
+    public bool ShowsCancel => ShowsRunControls || State is NodeState.Running or NodeState.Stopping;
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the

@@ -19,7 +19,16 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     public string Configuration => RunText.Configuration(record);
 
+    /// <summary>What ran, in short parts. <see cref="Configuration"/> says it in full.</summary>
+    public IReadOnlyList<string> Agent => RunText.Agent(record);
+
     public string Timing => RunText.Timing(record);
+
+    /// <summary>When the run started, which the inspector says relative to now. <see cref="Timing"/> says it in full.</summary>
+    public DateTimeOffset Started => record.RequestedAt;
+
+    /// <summary>How long the run took, such as "28 s", or null until it ends.</summary>
+    public string? Took => record.EndedAt is { } ended ? RunText.Elapsed(ended - record.RequestedAt) : null;
 
     public string? Detail => record.Detail;
 
@@ -32,9 +41,29 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     public string? TerminalNote => RunText.TerminalNote(record);
 
-    public IReadOnlyList<string> Activity => [.. record.Activity.TakeLast(ActivityShown).Select(line => line.Text)];
+    /// <summary>The latest activity. The inspector hides its tool calls until the person asks for them.</summary>
+    public IReadOnlyList<ActivityLine> Activity { get; } = Recent(record.Activity, ActivityShown);
 
     public bool HasActivity => !record.Activity.IsEmpty;
+
+    /// <summary>"1 tool call" or "3 tool calls" in <see cref="Activity"/>, or null when it has none.</summary>
+    public string? ToolCalls => Activity.Count(line => line.IsTool) switch
+    {
+        0 => null,
+        1 => "1 tool call",
+        var count => $"{count} tool calls",
+    };
+
+    /// <summary>
+    /// The last <paramref name="shown"/> lines the agent or iDevelop said, and every tool call since the earliest of them,
+    /// in order. With fewer such lines, every line; with none, the last <paramref name="shown"/> tool calls.
+    /// </summary>
+    internal static IReadOnlyList<ActivityLine> Recent(IReadOnlyList<ActivityLine> lines, int shown)
+    {
+        var said = lines.Select((line, index) => (line, index)).Where(entry => !entry.line.IsTool).ToList();
+        var start = said.Count > shown ? said[^shown].index : said.Count > 0 ? 0 : Math.Max(0, lines.Count - shown);
+        return [.. lines.Skip(start)];
+    }
 
     /// <summary>
     /// Turns are numbered across the whole conversation. Only a conversation of several attempts has status lines. The

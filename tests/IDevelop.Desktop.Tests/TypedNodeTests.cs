@@ -54,7 +54,7 @@ public sealed class TypedNodeTests : IDisposable
 
         Assert.Equal(
             ("Waits for you after every turn.", "The task waits for you after every turn, until you mark it done."),
-            (shell.Find<TextBlock>("ConversationNote").Text, ToolTip.GetTip(shell.Find<TextBlock>("ConversationNote"))));
+            shell.Note("ConversationNote"));
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(ConversationMode.Chat, WorkflowDocument.Open(folder).Current.Tasks[TestTasks.Design].Conversation);
     }
