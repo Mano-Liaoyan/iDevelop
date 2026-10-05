@@ -554,7 +554,7 @@ public sealed class ConversationTests : IDisposable
         var accepted = new ConcurrentQueue<string>();
         var sender = Task.Run(() =>
         {
-            SpinWait.SpinUntil(() => runs.Latest[SayHiId].Turns is [{ Outcome: not TurnOutcome.Running }], Patience);
+            SpinWait.SpinUntil(() => runs.Latest[SayHiId].Turns is [{ Outcome: not TurnOutcome.Running }, ..], Patience);
             for (var i = 0; i < 10_000 && runs.Send(codex, $"message {i}", stopTurn: false) is SendResult.Queued; i++)
             {
                 accepted.Enqueue($"message {i}");
