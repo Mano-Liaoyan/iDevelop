@@ -302,6 +302,35 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void While_the_sheet_is_open_the_save_undo_and_redo_keys_leave_the_workflow_and_its_file_alone()
+    {
+        var shell = OpenEmpty();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        canvas.PlaceInView(BuiltInBlueprints.Implement);
+        canvas.PlaceInView(BuiltInBlueprints.Review);
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        var workflow = canvas.Workflow;
+        OpenSheet(shell);
+        shell.Find<ComboBox>("GenerateClient").Focus();
+
+        shell.Press(Key.S, RawInputModifiers.Control);
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        shell.Press(Key.Z, RawInputModifiers.Control | RawInputModifiers.Shift);
+        shell.Press(Key.Y, RawInputModifiers.Control);
+
+        Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
+        Assert.Same(workflow, canvas.Workflow);
+        Assert.True(shell.ShowsUnsavedChanges);
+        Assert.False(Directory.Exists(DataFolder.Workflows(canvas.Document.ProjectFolder)));
+        Assert.Equal([false, false, false], new[] { "Save", "Undo", "Redo" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+
+        shell.Press(Key.Escape);
+        shell.Press(Key.S, RawInputModifiers.Control);
+        Assert.False(shell.ShowsUnsavedChanges);
+        Assert.True(Directory.Exists(DataFolder.Workflows(canvas.Document.ProjectFolder)));
+    }
+
+    [AvaloniaFact]
     public void The_Add_popover_on_empty_canvas_offers_Generate_Workflow_which_opens_the_sheet()
     {
         var shell = OpenEmpty();
