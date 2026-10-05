@@ -1,0 +1,107 @@
+<!-- The Generate Workflow sheet, over a scrim that covers the whole window, so nothing under it takes a click. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             x:Class="IDevelop.Desktop.Canvas.GenerateSheet"
+             x:DataType="canvas:GenerateWorkflowViewModel"
+             AutomationProperties.AutomationId="GenerateSheet"
+             AutomationProperties.Name="Generate Workflow">
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SubmitCommand}" />
+    <KeyBinding Gesture="Meta+Enter" Command="{Binding SubmitCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+  </UserControl.KeyBindings>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.sheetCaption">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    </Style>
+    <Style Selector="TextBlock.sheetLabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="Button.action">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+  </UserControl.Styles>
+
+  <Panel>
+    <Border Background="{DynamicResource ScrimBrush}" />
+    <Border Classes="popover" Width="480" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+            KeyboardNavigation.TabNavigation="Cycle">
+      <StackPanel Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="24" Height="24" CornerRadius="6" Background="{DynamicResource AccentFillBrush}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" Width="15" Height="15"
+                      Foreground="{DynamicResource OnAccentBrush}" />
+          </Border>
+          <TextBlock Text="Generate Workflow" VerticalAlignment="Center"
+                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <TextBlock Classes="sheetCaption" Text="Describe the Change" />
+          <TextBox x:Name="Prompt" Classes="multiline"
+                   Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="132" MaxHeight="260"
+                   Watermark="Add CSV export to the reports page, with tests."
+                   AutomationProperties.AutomationId="GeneratePrompt"
+                   AutomationProperties.Name="Describe the change" />
+        </StackPanel>
+
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sheetCaption" Text="Planner" />
+          <Grid ColumnDefinitions="88,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+            <TextBlock Classes="sheetLabel" Text="Client" />
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}"
+                      PlaceholderText="Choose a client"
+                      SelectionChanged="OnClientChosen"
+                      AutomationProperties.AutomationId="GenerateClient"
+                      AutomationProperties.Name="Client" />
+            <TextBlock Grid.Row="1" Classes="sheetLabel" Text="Model" />
+            <ComboBox Grid.Row="1" Grid.Column="1"
+                      ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}"
+                      PlaceholderText="Choose a model"
+                      SelectionChanged="OnModelChosen"
+                      AutomationProperties.AutomationId="GenerateModel"
+                      AutomationProperties.Name="Model" />
+            <TextBlock Grid.Row="2" Classes="sheetLabel" Text="Reasoning" IsVisible="{Binding HasReasoning}" />
+            <ComboBox Grid.Row="2" Grid.Column="1" IsVisible="{Binding HasReasoning}"
+                      ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}"
+                      SelectionChanged="OnReasoningChosen"
+                      AutomationProperties.AutomationId="GenerateReasoning"
+                      AutomationProperties.Name="Reasoning" />
+          </Grid>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
+              IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" VerticalAlignment="Top"
+                    Foreground="{DynamicResource StateWarningStrongBrush}" />
+          <TextBlock Grid.Column="1" Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                     AutomationProperties.AutomationId="GenerateProblem" />
+        </Grid>
+
+        <TextBlock Text="The planner reads the project and changes no file. New tasks use this agent unless their type has one."
+                   TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button Classes="action" Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="GenerateCancel"
+                  AutomationProperties.Name="Cancel">
+            <TextBlock Text="Cancel" />
+          </Button>
+          <Button Classes="primary" Command="{Binding SubmitCommand}"
+                  ToolTip.Tip="Ctrl+Enter"
+                  AutomationProperties.AutomationId="GenerateSubmit"
+                  AutomationProperties.Name="Generate">
+            <TextBlock Text="Generate" />
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</UserControl>

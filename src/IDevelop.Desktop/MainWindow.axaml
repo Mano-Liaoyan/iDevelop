@@ -275,5 +275,14 @@
         </ContentControl.DataTemplates>
       </ContentControl>
     </DockPanel>
+
+    <!-- A modal sheet covers every column, so the breadcrumb, Save, and the sidebar take no click while it is open. -->
+    <ContentControl Grid.ColumnSpan="5" Content="{Binding Canvas.Sheet}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
+          <canvas:GenerateSheet />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
   </Grid>
 </Window>

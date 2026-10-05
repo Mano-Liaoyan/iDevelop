@@ -13,6 +13,9 @@ public static class Clients
 
     public static string Name(ClientId id) => Get(id).Name;
 
+    /// <summary>Whether the client has a mode that changes no file, which a node that may only read needs.</summary>
+    public static bool HasReadOnlyMode(ClientId id) => Get(id).HasReadOnlyMode;
+
     internal static string WireName(ClientId id) => Get(id).WireName;
 
     internal static ClientId? ParseWireName(string name)

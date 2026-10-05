@@ -1,6 +1,57 @@
-<!-- The canvas layer for Generate Workflow. Empty, it has no background, so every input passes through to the canvas. -->
+<!-- The canvas layer for Generate Workflow: the Generate button at the top right and, on an empty workflow, a card that
+     starts from a description. The layer has no background, so every other input passes through to the canvas. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              x:Class="IDevelop.Desktop.Canvas.GenerateLayer"
-             x:DataType="canvas:WorkflowCanvasViewModel" />
+             x:DataType="canvas:WorkflowCanvasViewModel">
+  <Panel>
+    <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12"
+            Classes.primary="{Binding IsGenerateIdle}"
+            Classes.action="{Binding !IsGenerateIdle}"
+            Click="OnGenerate"
+            ToolTip.Tip="Describe what to build, and a planner proposes the tasks"
+            AutomationProperties.AutomationId="GenerateWorkflow"
+            AutomationProperties.Name="{Binding GenerateLabel}">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
+        <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
+                  Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
+        <Ellipse Width="8" Height="8" Margin="4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
+        <TextBlock Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
+      </StackPanel>
+    </Button>
+
+    <!-- Only the card's button takes input, so a right-click or a pan anywhere else on the card reaches the canvas.
+         UI Automation shows no plain border, so a user control carries the card's id. A user control clips to its
+         bounds by default, which would cut off the card's shadow. -->
+    <UserControl HorizontalAlignment="Center" VerticalAlignment="Center" Width="360" ClipToBounds="False"
+                 IsVisible="{Binding IsEmpty}"
+                 AutomationProperties.AutomationId="GenerateEmptyState"
+                 AutomationProperties.Name="Start with a description">
+      <Panel>
+        <Border Classes="popover" IsHitTestVisible="False" />
+        <StackPanel Margin="24" Spacing="12">
+          <Border Width="32" Height="32" CornerRadius="8" HorizontalAlignment="Center" IsHitTestVisible="False"
+                  Background="{DynamicResource AccentFillBrush}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" Width="20" Height="20"
+                      Foreground="{DynamicResource OnAccentBrush}" />
+          </Border>
+          <TextBlock Text="Start with a description" HorizontalAlignment="Center" IsHitTestVisible="False"
+                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+          <TextBlock Text="Describe what you want to build. A planner proposes the tasks, and you choose which to add."
+                     TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"
+                     FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+          <Button Classes="primary" HorizontalAlignment="Center"
+                  Command="{Binding OpenGenerateCommand}"
+                  AutomationProperties.AutomationId="GenerateStart"
+                  AutomationProperties.Name="Generate Workflow…">
+            <TextBlock Text="Generate Workflow…" />
+          </Button>
+          <TextBlock Text="or right-click the canvas to add a node" HorizontalAlignment="Center" IsHitTestVisible="False"
+                     FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
+        </StackPanel>
+      </Panel>
+    </UserControl>
+  </Panel>
+</UserControl>

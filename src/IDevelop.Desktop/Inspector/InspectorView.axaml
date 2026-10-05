@@ -326,6 +326,14 @@
                                   </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                               </inspector:InspectorRow>
+                              <inspector:InspectorRow Layout="Full" Label="New tasks use the planner's agent" IsShown="{Binding AddsTasks}">
+                                <CheckBox IsChecked="{Binding UsePlannerAgent}"
+                                          ToolTip.Tip="A new task whose type has no agent of its own takes the planner's client, model, and reasoning."
+                                          AutomationProperties.AutomationId="ProposalUsePlannerAgent"
+                                          AutomationProperties.Name="New tasks use the planner's agent">
+                                  <TextBlock Text="New tasks use the planner's agent" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextStrongBrush}" />
+                                </CheckBox>
+                              </inspector:InspectorRow>
                               <inspector:InspectorRow Layout="Full" IsShown="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                 <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
                                            AutomationProperties.AutomationId="ProposalProblem" />

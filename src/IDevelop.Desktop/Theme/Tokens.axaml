@@ -97,6 +97,7 @@
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ScrimBrush" Color="#4D000000" />
       <Color x:Key="CanvasGrid.BackgroundColor">#FBFBF9</Color>
       <Color x:Key="CanvasGrid.DotColor">#E5E5E5</Color>
       <Color x:Key="NodifyEditor.SelectionRectangleColor">#0088FF</Color>
@@ -218,6 +219,7 @@
       <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
       <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
       <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ScrimBrush" Color="#4D000000" />
       <Color x:Key="CanvasGrid.BackgroundColor">#0D0E0A</Color>
       <Color x:Key="CanvasGrid.DotColor">#1AFFFFFF</Color>
       <Color x:Key="NodifyEditor.SelectionRectangleColor">#0091FF</Color>
