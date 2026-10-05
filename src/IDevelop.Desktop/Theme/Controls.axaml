@@ -64,7 +64,7 @@
   <Style Selector="Border.pill PathIcon">
     <Setter Property="Width" Value="12" />
     <Setter Property="Height" Value="12" />
-    <Setter Property="Data" Value="{StaticResource CircleIcon}" />
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
   </Style>
   <Style Selector="Border.pill.running">
     <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
@@ -72,7 +72,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.running PathIcon">
-    <Setter Property="Data" Value="{StaticResource LoaderIcon}" />
+    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.running PathIcon, PathIcon.spin">
@@ -93,7 +93,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.complete PathIcon">
-    <Setter Property="Data" Value="{StaticResource CircleCheckIcon}" />
+    <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
     <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.problem">
@@ -102,7 +102,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.problem PathIcon">
-    <Setter Property="Data" Value="{StaticResource CircleAlertIcon}" />
+    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
     <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.waiting">
@@ -111,7 +111,7 @@
     <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.waiting PathIcon">
-    <Setter Property="Data" Value="{StaticResource CircleDotsIcon}" />
+    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
     <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
 

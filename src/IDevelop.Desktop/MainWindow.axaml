@@ -58,7 +58,7 @@
                     ToolTip.Tip="Open folder"
                     AutomationProperties.AutomationId="OpenFolder"
                     AutomationProperties.Name="Open folder">
-              <PathIcon Data="{StaticResource FolderIcon}" Width="16" Height="16" />
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
             </Button>
           </Grid>
           <Border IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNull}}"
@@ -72,7 +72,7 @@
                   BorderBrush="{DynamicResource StateSelected25Brush}" Background="{DynamicResource StateSelectedSurfaceBrush}"
                   BoxShadow="{StaticResource SmallShadow}">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-              <PathIcon Data="{StaticResource FolderIcon}" Width="16" Height="16" Foreground="{DynamicResource TextStrongBrush}" />
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextStrongBrush}" />
               <TextBlock Grid.Column="1" Text="{Binding ProjectName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                          FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                          ToolTip.Tip="{Binding ProjectName}"
@@ -119,7 +119,7 @@
                     ToolTip.Tip="Check agents again"
                     AutomationProperties.AutomationId="RefreshAgents"
                     AutomationProperties.Name="Check agents again">
-              <PathIcon Data="{StaticResource RefreshIcon}" Width="16" Height="16" />
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" />
             </Button>
           </Grid>
           <ItemsControl ItemsSource="{Binding Agents}"
@@ -215,12 +215,12 @@
                     AutomationProperties.AutomationId="Breadcrumb">
               <StackPanel Orientation="Horizontal">
                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="10,0">
-                  <PathIcon Data="{StaticResource FolderIcon}" Width="14" Height="14" Foreground="{DynamicResource TextMutedBrush}" />
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Foreground="{DynamicResource TextMutedBrush}" />
                   <TextBlock Text="{Binding ProjectName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                              FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                              AutomationProperties.AutomationId="BreadcrumbProject" />
                 </StackPanel>
-                <PathIcon Data="{StaticResource ChevronRightIcon}" Width="6" Height="10" Foreground="{DynamicResource TextFaintBrush}" />
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Foreground="{DynamicResource TextFaintBrush}" />
                 <!-- A project has one workflow, and the workflow has no name of its own. -->
                 <TextBlock Text="Workflow" Margin="8,0,10,0" VerticalAlignment="Center"
                            FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
@@ -253,7 +253,7 @@
                             ToolTip.Tip="Save"
                             AutomationProperties.AutomationId="Save"
                             AutomationProperties.Name="Save">
-                      <PathIcon Data="{StaticResource SaveIcon}" Width="14" Height="14" />
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
                     </Button>
                   </StackPanel>
                 </Border>

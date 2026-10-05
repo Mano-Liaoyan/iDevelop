@@ -264,7 +264,7 @@
                                         Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                                         Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
                                   <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon />
+                                    <PathIcon Theme="{StaticResource Glyph}" />
                                     <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
                                   </StackPanel>
                                 </Border>
@@ -485,7 +485,7 @@
                         <StackPanel Spacing="6">
                           <Border Classes="pill waiting" HorizontalAlignment="Left">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                              <PathIcon />
+                              <PathIcon Theme="{StaticResource Glyph}" />
                               <TextBlock Text="Waiting for you" />
                             </StackPanel>
                           </Border>
