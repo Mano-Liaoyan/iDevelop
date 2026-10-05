@@ -63,7 +63,9 @@ public sealed class ClientDirectoryTests : IDisposable
 
         await directory.RefreshAsync();
 
-        Assert.Equal(new ClientStatus.Unready("Claude Code is not signed in. Run claude in a terminal and sign in."), directory.Current[ClientId.ClaudeCode]);
+        Assert.Equal(
+            new ClientStatus.Unready("Claude Code is not signed in. Run claude in a terminal and sign in.") { SignedOut = true },
+            directory.Current[ClientId.ClaudeCode]);
         Assert.Equal(
             new ClientStatus.Unready("codex debug models exited with code 1: error: unexpected status 401 Unauthorized"),
             directory.Current[ClientId.Codex]);
@@ -80,7 +82,7 @@ public sealed class ClientDirectoryTests : IDisposable
         await directory.RefreshAsync();
 
         Assert.Equal(
-            new ClientStatus.Unready("Pi's sign-in for deepseek is invalid. Sign in to deepseek in Pi again. " + PiCodexSignedOut),
+            new ClientStatus.Unready("Pi's sign-in for deepseek is invalid. Sign in to deepseek in Pi again. " + PiCodexSignedOut) { SignedOut = true },
             directory.Current[ClientId.Pi]);
     }
 

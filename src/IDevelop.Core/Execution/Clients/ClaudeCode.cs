@@ -40,7 +40,7 @@ internal static class ClaudeCode
     ],
     request.Prompt);
 
-    private static string? SignInProblem(ProbeOutput output)
+    private static ReadinessProblem? SignInProblem(ProbeOutput output)
     {
         try
         {
@@ -50,14 +50,14 @@ internal static class ClaudeCode
                 case true:
                     return null;
                 case false:
-                    return "Claude Code is not signed in. Run claude in a terminal and sign in.";
+                    return new ReadinessProblem("Claude Code is not signed in. Run claude in a terminal and sign in.", SignedOut: true);
             }
         }
         catch (JsonException)
         {
         }
 
-        return Probes.Failure("claude auth status", output);
+        return new ReadinessProblem(Probes.Failure("claude auth status", output), SignedOut: false);
     }
 
     private static ImmutableArray<AgentEvent> Interpret(string line)

@@ -17,7 +17,8 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
-    /// <summary>"Ready · 4 models", "Ready · 2 of 5 models", "Checking…", "Not installed", or "Not ready".</summary>
+    /// <summary>"Ready · 4 models", "Ready · 2 of 5 models", "Checking…", "Not installed", "Not signed in", or "Not ready".
+    /// <see cref="Detail"/> holds the whole reason.</summary>
     public static string Summary(ClientStatus status) => status switch
     {
         ClientStatus.Ready ready when ready.Models.Count(model => model.Problem is null) is var usable && usable < ready.Models.Length =>
@@ -25,6 +26,7 @@ public static class RunText
         ClientStatus.Ready ready => $"Ready · {Count(ready.Models.Length, "model")}",
         ClientStatus.Checking => "Checking…",
         ClientStatus.Missing => "Not installed",
+        ClientStatus.Unready { SignedOut: true } => "Not signed in",
         ClientStatus.Unready => "Not ready",
         _ => throw new UnreachableException(),
     };

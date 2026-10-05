@@ -288,11 +288,15 @@ public class ClientDefinitionTests
     {
         Assert.Null(Problem(ClientId.ClaudeCode, new ProbeOutput(0, """{"loggedIn":true}""", "", false)));
         Assert.Equal(
-            "Claude Code is not signed in. Run claude in a terminal and sign in.",
+            new ReadinessProblem("Claude Code is not signed in. Run claude in a terminal and sign in.", SignedOut: true),
             Problem(ClientId.ClaudeCode, new ProbeOutput(1, """{"loggedIn":false}""", "", false)));
-        Assert.Equal("claude auth status exited with code 2: unknown command", Problem(ClientId.ClaudeCode, new ProbeOutput(2, "", "unknown command", false)));
+        Assert.Equal(
+            new ReadinessProblem("claude auth status exited with code 2: unknown command", SignedOut: false),
+            Problem(ClientId.ClaudeCode, new ProbeOutput(2, "", "unknown command", false)));
         Assert.Null(Problem(ClientId.Codex, new ProbeOutput(0, "Logged in using ChatGPT\n", "", false)));
-        Assert.Equal("Codex is not signed in. Run codex login in a terminal.", Problem(ClientId.Codex, new ProbeOutput(1, "Not logged in\n", "", false)));
+        Assert.Equal(
+            new ReadinessProblem("Codex is not signed in. Run codex login in a terminal.", SignedOut: true),
+            Problem(ClientId.Codex, new ProbeOutput(1, "Not logged in\n", "", false)));
     }
 
     [Fact]
@@ -306,8 +310,11 @@ public class ClientDefinitionTests
         Assert.Equal(["auth", "check", "--provider", "openai-codex", "--json"], probes[1].Probe.Arguments.ToArray());
         Assert.Null(probes[0].Problem(new ProbeOutput(0, """{"status":"ready"}""", "", false)));
         Assert.Equal(
-            "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again.",
+            new ReadinessProblem("Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again.", SignedOut: true),
             probes[1].Problem(new ProbeOutput(0, """{"status":"invalid"}""", "", false)));
+        Assert.Equal(
+            new ReadinessProblem("pi auth check --provider openai-codex exited with code 1: no such provider", SignedOut: false),
+            probes[1].Problem(new ProbeOutput(1, "", "no such provider", false)));
     }
 
     private static AgentEvent[] Events(ClientId client, string fixture) =>
@@ -322,5 +329,5 @@ public class ClientDefinitionTests
     private static ModelOption[] Models(ClientId client, ProbeOutput output) =>
         [.. Assert.IsType<CatalogParse.Models>(Catalog(client, output)).Options];
 
-    private static string? Problem(ClientId client, ProbeOutput output) => Assert.Single(Clients.Get(client).Readiness([])).Problem(output);
+    private static ReadinessProblem? Problem(ClientId client, ProbeOutput output) => Assert.Single(Clients.Get(client).Readiness([])).Problem(output);
 }

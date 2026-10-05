@@ -75,8 +75,8 @@ internal static class Codex
         };
     }
 
-    private static string? SignInProblem(ProbeOutput output) =>
-        output.ExitCode == 0 ? null : "Codex is not signed in. Run codex login in a terminal.";
+    private static ReadinessProblem? SignInProblem(ProbeOutput output) =>
+        output.ExitCode == 0 ? null : new ReadinessProblem("Codex is not signed in. Run codex login in a terminal.", SignedOut: true);
 
     private static ImmutableArray<AgentEvent> Interpret(string line)
     {

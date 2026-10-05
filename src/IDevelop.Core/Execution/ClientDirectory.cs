@@ -14,7 +14,11 @@ public abstract record ClientStatus
     public sealed record Missing(string Reason) : ClientStatus;
 
     /// <summary>Installed, but its models could not be listed or it is not signed in.</summary>
-    public sealed record Unready(string Reason) : ClientStatus;
+    public sealed record Unready(string Reason) : ClientStatus
+    {
+        /// <summary>The client answered that it is signed out, rather than a check failing.</summary>
+        public bool SignedOut { get; init; }
+    }
 
     public sealed record Ready(ResolvedCommand Command, ImmutableArray<ModelOption> Models) : ClientStatus;
 }
@@ -62,18 +66,21 @@ public sealed class ClientDirectory
     /// <summary>A whole-client problem makes the client Unready. A provider problem marks only that provider's models,
     /// unless every provider has one.</summary>
     private static ClientStatus Assemble(
-        ResolvedCommand command, ImmutableArray<ModelOption> catalog, IReadOnlyList<(string? Provider, string? Problem)> checks)
+        ResolvedCommand command, ImmutableArray<ModelOption> catalog, IReadOnlyList<(string? Provider, ReadinessProblem? Problem)> checks)
     {
         if (checks.FirstOrDefault(check => check.Provider is null && check.Problem is not null).Problem is { } problem)
         {
-            return new ClientStatus.Unready(problem);
+            return new ClientStatus.Unready(problem.Reason) { SignedOut = problem.SignedOut };
         }
 
         var providers = checks.Where(check => check.Problem is not null).ToDictionary(check => check.Provider!, check => check.Problem!);
         ImmutableArray<ModelOption> models =
-            [.. catalog.Select(model => model.Provider is { } provider && providers.TryGetValue(provider, out var reason) ? model with { Problem = reason } : model)];
+            [.. catalog.Select(model => model.Provider is { } provider && providers.TryGetValue(provider, out var signIn) ? model with { Problem = signIn.Reason } : model)];
         return models.All(model => model.Problem is not null)
-            ? new ClientStatus.Unready(string.Join(" ", providers.Values))
+            ? new ClientStatus.Unready(string.Join(" ", providers.Values.Select(signIn => signIn.Reason)))
+            {
+                SignedOut = providers.Values.All(signIn => signIn.SignedOut),
+            }
             : new ClientStatus.Ready(command, models);
     }
 
@@ -105,7 +112,7 @@ public sealed class ClientDirectory
                     var checks = await Task.WhenAll(client.Readiness(models.Options).Select(async check =>
                     {
                         var output = await Probes.RunAsync(command, check.Probe);
-                        return (check.Provider, output.TimedOut ? NoAnswer(client, check.Probe) : check.Problem(output));
+                        return (check.Provider, output.TimedOut ? new ReadinessProblem(NoAnswer(client, check.Probe), SignedOut: false) : check.Problem(output));
                     }));
                     return Assemble(command, models.Options, checks);
                 default:

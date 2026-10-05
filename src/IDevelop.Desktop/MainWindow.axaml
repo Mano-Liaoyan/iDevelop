@@ -132,9 +132,9 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="execution:AgentRow">
-                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. The reason
-                     takes one line, and the row's tooltip holds all of it. -->
-                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
+                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. The summary
+                     names the reason in a few words, and the row's tooltip holds all of it. -->
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8"
                       Background="Transparent"
                       ToolTip.Tip="{Binding Detail}">
                   <Ellipse Classes="status" VerticalAlignment="Center"
@@ -147,9 +147,6 @@
                   <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="{Binding AutomationId}"
                              AutomationProperties.HelpText="{Binding Detail}" />
-                  <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding Detail}"
-                             TextTrimming="CharacterEllipsis" MaxLines="1"
-                             IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </Grid>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
