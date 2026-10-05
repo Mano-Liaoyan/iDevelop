@@ -73,7 +73,8 @@ const clients = {
     model: env.PROBE_AGY_MODEL ?? 'gemini-3.8-flash',
     args: (model, { resume, readOnly }) => [
       '--input-format', 'stream-json', '--output-format', 'stream-json', '--model', model, '--effort', 'low',
-      ...(readOnly ? [] : ['--mode', 'accept-edits']),
+      // Without a mode, print mode starts in request-review, which wrote a file in 2 of 3 runs on 2026-10-05.
+      '--mode', readOnly ? 'plan' : 'accept-edits',
       '--print=',
       ...(resume ? ['--conversation', resume] : []),
     ],

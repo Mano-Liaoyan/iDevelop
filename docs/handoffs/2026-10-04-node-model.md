@@ -239,7 +239,7 @@ Slice 1's probe answered four questions on Linux on 2026-10-04 and 2026-10-05:
 
 - Each client ended its final message with a readable result block in 2 of 2 samples.
 - Each client resumed its session after a turn was stopped mid-tool-call.
-- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI without accept-edits. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI kept the accept-edits mode it started with. A reviewer or planner session must therefore start read-only, and the tree snapshot catches a write.
+- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI with `--mode plan`. Without a mode, Antigravity CLI starts in request-review and wrote the file in 2 of 3 runs. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI kept the accept-edits mode it started with. A reviewer or planner session must therefore start read-only, and the tree snapshot catches a write.
 - A project-local command ran on each client in one sample: `.claude/commands/` through `/name` on Claude Code, `.agents/skills/` through `$name` on Codex and `/name` on Antigravity CLI, and `.pi/prompts/` through `/name` on Pi. An agent could also have read the command file on its own, so one sample does not rule that out.
 
 These remain unverified:
