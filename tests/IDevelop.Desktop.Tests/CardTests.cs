@@ -70,7 +70,7 @@ public sealed class CardTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData("ThemeLight", "#564ADE #007EAE #B02FC2 #008575 #956D51 #6C6C70")]
-    [InlineData("ThemeDark", "#6D7CFF #007EAE #DB34F2 #008575 #B78A66 #8E8E93")]
+    [InlineData("ThemeDark", "#6D7CFF #1894C2 #DB34F2 #009B89 #B78A66 #8E8E93")]
     public void Each_kind_shows_its_own_tile_on_its_card(string theme, string tiles)
     {
         var shell = Shell.Open(EachKind());

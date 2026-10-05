@@ -144,7 +144,7 @@
       <SolidColorBrush x:Key="KindPlanBrush" Color="#3CD3FE" />
       <SolidColorBrush x:Key="KindPlan10Brush" Color="#1A3CD3FE" />
       <SolidColorBrush x:Key="KindPlanStrongBrush" Color="#6DD9FF" />
-      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#1894C2" />
       <SolidColorBrush x:Key="KindPlanStrokeBrush" Color="#3CD3FE" />
       <SolidColorBrush x:Key="KindArchitectBrush" Color="#DB34F2" />
       <SolidColorBrush x:Key="KindArchitect10Brush" Color="#1ADB34F2" />
@@ -154,7 +154,7 @@
       <SolidColorBrush x:Key="KindReviewBrush" Color="#00DAC3" />
       <SolidColorBrush x:Key="KindReview10Brush" Color="#1A00DAC3" />
       <SolidColorBrush x:Key="KindReviewStrongBrush" Color="#54DFCB" />
-      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#009B89" />
       <SolidColorBrush x:Key="KindReviewStrokeBrush" Color="#00DAC3" />
       <SolidColorBrush x:Key="KindApprovalBrush" Color="#B78A66" />
       <SolidColorBrush x:Key="KindApproval10Brush" Color="#1AB78A66" />

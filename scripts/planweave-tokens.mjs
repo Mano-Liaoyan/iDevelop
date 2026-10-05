@@ -28,7 +28,9 @@ const planweave = {
 // Apple's system colors from https://developer.apple.com/design/human-interface-guidelines/color, fetched 2026-10-05,
 // as [light, dark]. A plain value is for tints, dots, the minimap, and dark strokes. A -strong value is the
 // increased-contrast one, for glyphs and light strokes, never text. A -text value is for colored text, a -fill value is
-// a fill under white text, and a -tile value carries a white glyph.
+// a fill under white text, and a -tile value carries a white glyph. Apple's dark cyan and mint are too light for a white
+// glyph, so their dark tiles mix the light tile toward the dark hue, in linear light, until they are as bright as the
+// other dark tiles.
 const apple = {
   'apple-red': ['#FF383C', '#FF4245'],
   'apple-red-strong': ['#E9152D', '#FF6165'],
@@ -42,10 +44,10 @@ const apple = {
   'apple-green-strong': ['#008932', '#4AD968'],
   'apple-mint': ['#00C8B3', '#00DAC3'],
   'apple-mint-strong': ['#008575', '#54DFCB'],
-  'apple-mint-tile': ['#008575', '#008575'],
+  'apple-mint-tile': ['#008575', '#009B89'],
   'apple-cyan': ['#00C0E8', '#3CD3FE'],
   'apple-cyan-strong': ['#007EAE', '#6DD9FF'],
-  'apple-cyan-tile': ['#007EAE', '#007EAE'],
+  'apple-cyan-tile': ['#007EAE', '#1894C2'],
   'apple-blue': ['#0088FF', '#0091FF'],
   'apple-blue-strong': ['#1E6EF4', '#5CB8FF'],
   'apple-blue-text': ['#0040DD', '#5CB8FF'],

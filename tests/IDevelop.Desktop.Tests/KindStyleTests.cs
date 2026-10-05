@@ -51,7 +51,7 @@ public sealed class KindStyleTests
             ["#FF564ADE #FF564ADE", "#FF007EAE #FF007EAE", "#FFB02FC2 #FFB02FC2", "#FF008575 #FF008575", "#FF956D51 #FF956D51", "#FF6C6C70 #FF6C6C70"],
             Paint(ThemeVariant.Light));
         Assert.Equal(
-            ["#FF6D7CFF #FF6D7CFF", "#FF007EAE #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF008575 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FF8E8E93 #FF8E8E93"],
+            ["#FF6D7CFF #FF6D7CFF", "#FF1894C2 #FF3CD3FE", "#FFDB34F2 #FFDB34F2", "#FF009B89 #FF00DAC3", "#FFB78A66 #FFB78A66", "#FF8E8E93 #FF8E8E93"],
             Paint(ThemeVariant.Dark));
     }
 
