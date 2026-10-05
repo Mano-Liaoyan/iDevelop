@@ -1,12 +1,15 @@
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
@@ -55,6 +58,23 @@ public sealed class CardTests : IDisposable
 
     private static PlaceNode Place(TaskId id, Blueprint blueprint, string title, double x, double y, ExecutionSettings? execution = null) =>
         new(id, blueprint, new CanvasPoint(x, y)) { Title = title, Settings = new NodeSettings(execution, blueprint.Defaults.Conversation) };
+
+    /// <summary>The window's rendered pixels inside the rectangle, row by row.</summary>
+    private static Color[][] PixelRows(Shell shell, Rect rect)
+    {
+        using var frame = shell.Window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
+        using var pixels = frame.Lock();
+        Assert.Contains(pixels.Format, new[] { PixelFormat.Rgba8888, PixelFormat.Bgra8888 });
+        var (left, top) = ((int)Math.Round(rect.X), (int)Math.Round(rect.Y));
+        return [.. Enumerable.Range(top, (int)Math.Round(rect.Height)).Select(y => Enumerable.Range(left, (int)Math.Round(rect.Width)).Select(x =>
+        {
+            var pixel = pixels.Address + y * pixels.RowBytes + x * 4;
+            byte Channel(int index) => Marshal.ReadByte(pixel, index);
+            return pixels.Format == PixelFormat.Rgba8888
+                ? Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2))
+                : Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
+        }).ToArray())];
+    }
 
     /// <summary>A project with one node of each kind, the last from the project's library.</summary>
     private string EachKind()
@@ -109,22 +129,27 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Renaming_on_the_card_keeps_the_box_to_the_title_row_and_the_subtitle_whole()
+    public void Renaming_on_the_card_shows_the_whole_title_line_where_the_title_was_and_leaves_the_subtitle_whole()
     {
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
         var titleDrawnAt = shell.Bounds(shell.InCard<TextBlock>("Design", "CardTitle")).TopLeft;
+        var subtitle = shell.Bounds(shell.InCard<TextBlock>("Design", "CardAgent"));
         shell.Click(shell.Header(shell.Node("Design")));
+        var subtitleRows = PixelRows(shell, subtitle);
+        int[] inked = [.. Enumerable.Range(0, subtitleRows.Length).Where(row => subtitleRows[row].Distinct().Count() > 1)];
 
         shell.Press(Key.F2);
 
         var box = shell.InCard<TextBox>("Design", "CardTitleBox");
-        var subtitle = shell.InCard<TextBlock>("Design", "CardAgent");
         var text = box.GetVisualDescendants().OfType<TextPresenter>().Single();
+        var shown = shell.Bounds(text.FindAncestorOfType<ScrollContentPresenter>()!).Intersect(shell.Bounds(box).Deflate(box.BorderThickness));
+        var subtitleRowsWhileRenaming = PixelRows(shell, subtitle);
         Assert.True(box.IsFocused);
-        Assert.True(subtitle.IsEffectivelyVisible);
-        Assert.False(shell.Bounds(box).Intersects(shell.Bounds(subtitle)), $"The box {shell.Bounds(box)} covers the subtitle {shell.Bounds(subtitle)}.");
         Assert.True(Point.Distance(titleDrawnAt, shell.Bounds(text).TopLeft) <= 0.5, $"The text moved from {titleDrawnAt} to {shell.Bounds(text).TopLeft}.");
+        Assert.True(shown.Contains(shell.Bounds(text)), $"The box shows {shown} of its line at {shell.Bounds(text)}.");
+        Assert.NotEmpty(inked);
+        Assert.All(inked, row => Assert.True(subtitleRows[row].SequenceEqual(subtitleRowsWhileRenaming[row]), $"The box covers the subtitle's row {subtitle.Top + row}."));
     }
 
     [AvaloniaFact]
