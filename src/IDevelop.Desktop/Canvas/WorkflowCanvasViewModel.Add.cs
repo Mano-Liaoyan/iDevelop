@@ -97,6 +97,14 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Selects every node.</summary>
     internal void SelectAll() => SelectOnly([.. Nodes]);
 
+    internal void SelectConnection(ConnectionViewModel connection)
+    {
+        SelectedNodes.Clear();
+        SelectedConnections.Clear();
+        SelectedConnections.Add(connection);
+        SelectedConnection = connection;
+    }
+
     internal void ClearSelection()
     {
         SelectedNodes.Clear();

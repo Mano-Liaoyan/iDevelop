@@ -223,6 +223,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
         if (e.Source is BaseConnection { DataContext: ConnectionViewModel connection } line)
         {
+            // The connection a right-click reaches is selected, as a card is, so its wider line shows what the menu acts on.
+            canvas.SelectConnection(connection);
             Open("ConnectionMenu", canvas.ConnectionMenu(connection, Pointer), line);
             e.Handled = true;
         }

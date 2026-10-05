@@ -105,6 +105,7 @@
                            Target="{Binding To.Input.Anchor}"
                            theme:StyleClass.Kind="{Binding SourceKind}"
                            Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                           canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
                            Classes.highlighted="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Highlighted}}"
                            Classes.dimmed="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Dimmed}}"
                            nodify:BaseConnection.IsSelectable="True" />

@@ -23,7 +23,7 @@ public sealed class ConnectionMenuTests : IDisposable
         TaskAt(Build, "Build", 605, 90),
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), kind)));
 
-    private static bool Checked(MenuItem item) => Assert.IsType<PathIcon>(item.Icon).IsVisible;
+    private static bool Checked(MenuItem item) => item.ToggleType == MenuItemToggleType.CheckBox && item.IsChecked;
 
     [AvaloniaTheory]
     [InlineData(ConnectionKind.Dependency)]
@@ -39,6 +39,28 @@ public sealed class ConnectionMenuTests : IDisposable
             (kind == ConnectionKind.Dependency, kind == ConnectionKind.Context),
             (Checked(shell.MenuItem("ConnectionMenuDependency")), Checked(shell.MenuItem("ConnectionMenuContext"))));
         Assert.Contains("destructive", shell.MenuItem("ConnectionMenuDelete").Classes);
+        Assert.Equal(
+            (shell.Window.FindResource("IconWireDependency"), shell.Window.FindResource("IconWireContext")),
+            (Assert.IsType<PathIcon>(shell.MenuItem("ConnectionMenuDependency").Icon).Data, Assert.IsType<PathIcon>(shell.MenuItem("ConnectionMenuContext").Icon).Data));
+    }
+
+    [AvaloniaFact]
+    public void Where_a_context_connection_shares_a_run_with_a_dependency_the_right_click_reaches_the_dependency_and_selects_it()
+    {
+        var review = TestTasks.Review;
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 605, 90),
+            TaskAt(review, "Review", 605, 330),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, review), ConnectionKind.Context),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+
+        shell.RightClick(shell.Thumb(shell.Output("Design")) + new Vector(14, 0));
+
+        Assert.Equal((true, false), (Checked(shell.MenuItem("ConnectionMenuDependency")), Checked(shell.MenuItem("ConnectionMenuContext"))));
+        var selected = shell.Window.ViewModel.Canvas!.SelectedConnection;
+        Assert.Equal(new ConnectionKey(Design, Build), selected?.Key);
+        Assert.True(Nodify.BaseConnection.GetIsSelected(shell.Connections().Single(wire => wire.DataContext == selected)));
     }
 
     [AvaloniaFact]

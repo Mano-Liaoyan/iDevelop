@@ -400,7 +400,7 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter">
+  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter, MenuItem /template/ ContentControl#PART_ToggleIconPresenter">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
@@ -416,7 +416,7 @@
   <Style Selector="MenuItem.destructive:selected /template/ Border#PART_LayoutRoot, MenuItem.destructive:pointerover /template/ Border#PART_LayoutRoot, MenuItem.destructive:pressed /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource DestructiveFillBrush}" />
   </Style>
-  <Style Selector="MenuItem:selected /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pointerover /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pressed /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:selected /template/ ContentControl#PART_IconPresenter, MenuItem:pointerover /template/ ContentControl#PART_IconPresenter, MenuItem:pressed /template/ ContentControl#PART_IconPresenter, MenuItem:selected /template/ TextBlock#PART_InputGestureText, MenuItem:pointerover /template/ TextBlock#PART_InputGestureText, MenuItem:pressed /template/ TextBlock#PART_InputGestureText">
+  <Style Selector="MenuItem:selected /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pointerover /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pressed /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:selected /template/ ContentControl#PART_IconPresenter, MenuItem:pointerover /template/ ContentControl#PART_IconPresenter, MenuItem:pressed /template/ ContentControl#PART_IconPresenter, MenuItem:selected /template/ ContentControl#PART_ToggleIconPresenter, MenuItem:pointerover /template/ ContentControl#PART_ToggleIconPresenter, MenuItem:pressed /template/ ContentControl#PART_ToggleIconPresenter, MenuItem:selected /template/ TextBlock#PART_InputGestureText, MenuItem:pointerover /template/ TextBlock#PART_InputGestureText, MenuItem:pressed /template/ TextBlock#PART_InputGestureText">
     <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
   </Style>
   <Style Selector="MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:disabled /template/ ContentControl#PART_IconPresenter, MenuItem:disabled /template/ TextBlock#PART_InputGestureText">
