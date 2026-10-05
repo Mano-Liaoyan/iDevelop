@@ -7,7 +7,7 @@ The canvas shows each task as a card with its kind's tile, its title, and one su
 - `add-task` adds a task from the Add popover that `Add Node` in the sidebar opens, selects it, and marks the project unsaved.
 - `add-popover` opens the same popover from a right-click, a double-click, or N on empty canvas, from a wire dropped on empty canvas, and from `Insert Node…` on a connection.
 - `card-content` shows each task's kind tile, title, and one subtitle, which reads its agent while idle and otherwise its status or what it needs.
-- `menus` offers Run, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection.
+- `menus` offers Run, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection. Duplicate places the copies below their originals, at the first spot where they cover no card.
 - `keys` runs N, Delete, Ctrl+D, Ctrl+A, F2, Ctrl+Enter, Esc, F, +, -, and 0 on the canvas.
 - `rename` edits a task's title on its card from F2 or the node menu's Rename. While it is open, `CardTitleBox` holds the title with its text selected in the title's own row, `CardTitle` is hidden, and the card shows no tooltip. Enter or a click elsewhere keeps the new title, and Esc keeps the old one.
 - `undo` takes back the last workflow edit with `Undo` in the breadcrumb or Ctrl+Z, and `Redo` or Ctrl+Shift+Z applies it again.

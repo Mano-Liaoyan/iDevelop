@@ -103,7 +103,7 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Duplicate_copies_the_selection_and_the_connections_among_it_and_selects_the_copies()
+    public void Duplicate_copies_the_selection_and_the_connections_among_it_below_the_originals_and_selects_the_copies()
     {
         var shell = Shell.Open(DesignThenBuild(
             TaskAt(Check, "Check", 905, 90),
@@ -119,10 +119,28 @@ public sealed class NodeMenuTests : IDisposable
         var buildCopy = workflow.Tasks.Values.Single(task => task.Title == "Build copy");
         Assert.Equal(5, workflow.Tasks.Count);
         Assert.Equal(("Write the parser.", Codex), (designCopy.Field("instructions"), designCopy.Execution));
-        Assert.Equal(new CanvasPoint(135, 120), workflow.Positions[designCopy.Id]);
+        Assert.Equal((new CanvasPoint(105, 184), new CanvasPoint(505, 184)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
         Assert.Equal(ConnectionKind.Dependency, workflow.Connections[new ConnectionKey(designCopy.Id, buildCopy.Id)]);
         Assert.Equal(3, workflow.Connections.Count);
         Assert.Equal(["Build copy", "Design copy"], shell.Window.ViewModel.Canvas!.SelectedNodes.Select(node => node.Title).Order());
+    }
+
+    [AvaloniaFact]
+    public void Duplicate_puts_the_copy_at_the_first_free_spot_below_its_original()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90, Codex),
+            TaskAt(Build, "Build", 105, 184),
+            TaskAt(Check, "Check", 305, 278)));
+
+        shell.RightClick(shell.Header(shell.Node("Design")));
+        shell.Click(shell.MenuItem("NodeMenuDuplicate"));
+
+        var copy = Workflow(shell).Tasks.Values.Single(task => task.Title == "Design copy");
+        Assert.Equal(new CanvasPoint(105, 372), Workflow(shell).Positions[copy.Id]);
+        Assert.All(
+            ["Design", "Build", "Check"],
+            title => Assert.False(shell.CardRect("Design copy").Intersects(shell.CardRect(title)), $"The copy covers {title}."));
     }
 
     [AvaloniaFact]
