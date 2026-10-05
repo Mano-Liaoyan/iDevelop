@@ -11,9 +11,9 @@ namespace IDevelop.Desktop.Canvas;
 public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview);
 
 /// <summary>A task that a proposal adds or fills, which the person can untick before accepting.</summary>
-public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview) : ObservableObject
+public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen) : ObservableObject
 {
-    private bool _isChosen = true;
+    private bool _isChosen = isChosen;
 
     internal TaskId Id { get; } = id;
 
@@ -45,15 +45,21 @@ public sealed class ProposalViewModel : ObservableObject
     private readonly RelayCommand _accept;
     private string? _problem;
 
-    internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read)
+    /// <param name="attempt">The attempt the proposal was read from.</param>
+    internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read, AttemptId attempt)
     {
         _canvas = canvas;
+        Identity = IdentityOf(read, attempt);
+        var workflow = canvas.Workflow;
         switch (read)
         {
             case ProposalRead.Ready ready:
                 Proposal = ready.Proposal;
-                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields))),
-                    .. Proposal.Nodes.Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields)))];
+                // A slot the person has written in since starts unticked, so Accept never overwrites it unasked. A node an
+                // earlier Accept placed is not offered again.
+                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields), IsEmptySlot(fill.Slot))),
+                    .. Proposal.Nodes.Where(node => !workflow.Tasks.ContainsKey(node.Id))
+                        .Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -72,10 +78,10 @@ public sealed class ProposalViewModel : ObservableObject
 
     public bool HasItems => Items.Count > 0;
 
-    /// <summary>Each proposed connection, as its two tasks' titles.</summary>
+    /// <summary>Each connection that Accept adds now, as its two tasks' titles.</summary>
     public IReadOnlyList<string> Connections => Proposal is null ? [] :
-        [.. Proposal.Connections.Select(connection =>
-            $"{Title(connection.From)} → {Title(connection.To)}{(connection.Kind == ConnectionKind.Context ? " (context)" : "")}")];
+        [.. Proposal.Accept(_canvas.Workflow, Chosen()).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
+            $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
 
     /// <summary>Why the proposal cannot be read, or why accepting the chosen tasks would be rejected.</summary>
     public string? Problem
@@ -91,20 +97,19 @@ public sealed class ProposalViewModel : ObservableObject
 
     internal Proposal? Proposal { get; }
 
-    /// <summary>The proposal's attempt and turn, or the problem, which a new turn replaces.</summary>
-    internal object Identity => IdentityOf(Proposal is { } proposal ? new ProposalRead.Ready(proposal) : new ProposalRead.Problem(_readProblem!));
+    /// <summary>The proposal's attempt and turn, or the problem and its attempt, which a new turn replaces.</summary>
+    internal object Identity { get; }
 
-    internal static object IdentityOf(ProposalRead read) => read switch
+    internal static object IdentityOf(ProposalRead read, AttemptId attempt) => read switch
     {
         ProposalRead.Ready ready => (ready.Proposal.Attempt, ready.Proposal.Turn),
-        ProposalRead.Problem problem => problem.Text,
+        ProposalRead.Problem problem => (attempt, problem.Text),
         _ => throw new ArgumentException("Only a proposal or its problem has an identity.", nameof(read)),
     };
 
-    /// <summary>Accepting all of it would change nothing, or one of its new tasks already exists, as after an accept.</summary>
+    /// <summary>Accepting all of it would change nothing, as after an accept: its nodes exist and its fills are in place.</summary>
     internal bool IsSettled(Workflow workflow) => Proposal is { } proposal &&
-        (proposal.Nodes.Any(node => workflow.Tasks.ContainsKey(node.Id))
-         || workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet())) is EditResult.Applied applied && ReferenceEquals(applied.Workflow, workflow));
+        workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet())) is EditResult.Applied applied && ReferenceEquals(applied.Workflow, workflow);
 
     /// <summary>The chosen tasks as ghost cards: a new task where accepting places it, and a fill over its empty card.</summary>
     internal IEnumerable<GhostCardViewModel> Ghosts(Workflow workflow)
@@ -133,7 +138,7 @@ public sealed class ProposalViewModel : ObservableObject
     internal void Refresh()
     {
         Problem = _readProblem ?? (Proposal is { } proposal && _canvas.Workflow.Apply(proposal.Accept(_canvas.Workflow, Chosen())) is EditResult.Rejected rejected
-            ? $"Accept would change nothing. {RejectionText.Describe(rejected.Reason, Title)}"
+            ? $"Accept would be refused. {RejectionText.Describe(rejected.Reason, Title)}"
             : null);
         OnPropertyChanged(nameof(Connections));
         _accept.NotifyCanExecuteChanged();
@@ -160,14 +165,17 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    private ProposalItemViewModel Item(TaskId id, string label, string preview) => new(this, id, label, preview);
+    private ProposalItemViewModel Item(TaskId id, string label, string preview, bool isChosen) => new(this, id, label, preview, isChosen);
+
+    private bool IsEmptySlot(TaskId slot) => _canvas.Workflow.Tasks.TryGetValue(slot, out var task) && PlanningContext.IsEmpty(task);
 
     private Blueprint? SlotBlueprint(TaskId slot) => _canvas.Workflow.Tasks.GetValueOrDefault(slot)?.Blueprint;
 
     private string FillLabel(ProposedFill fill)
     {
         var slot = _canvas.Workflow.Tasks.TryGetValue(fill.Slot, out var task) && !string.IsNullOrWhiteSpace(task.Title) ? $"\"{task.Title.Trim()}\"" : "an untitled task";
-        return fill.Title is { } title && title.Trim() != task?.Title.Trim() ? $"Fill {slot} as \"{title.Trim()}\"" : $"Fill {slot}";
+        var label = fill.Title is { } title && title != task?.Title.Trim() ? $"Fill {slot} as \"{title}\"" : $"Fill {slot}";
+        return task is null || PlanningContext.IsEmpty(task) ? label : $"{label}. It has text of yours now";
     }
 
     /// <summary>A title the proposal gives, else the workflow's, for a message about a task.</summary>

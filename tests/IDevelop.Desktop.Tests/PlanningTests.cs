@@ -53,6 +53,7 @@ public sealed class PlanningTests : IDisposable
         shell.Render();
         shell.Click(frontend);
         Assert.Equal(["Fills Backend API", "New Implement Wire export"], Ghosts(shell));
+        Assert.Equal(["Backend API → Wire export"], Shell.Texts(shell.Find<ItemsControl>("ProposalConnections")));
         shell.Click(shell.InView<Button>("AcceptProposal"));
 
         Assert.Empty(Ghosts(shell));
@@ -77,7 +78,7 @@ public sealed class PlanningTests : IDisposable
 
         Assert.Equal(["New Implement Check"], Ghosts(shell));
         Assert.Equal(
-            "Accept would change nothing. That would create a cycle: Check → Design export → Backend → Check.",
+            "Accept would be refused. That would create a cycle: Check → Design export → Backend → Check.",
             shell.InView<TextBlock>("ProposalProblem").Text);
         Assert.False(shell.Find<Button>("AcceptProposal").IsEffectivelyEnabled);
 

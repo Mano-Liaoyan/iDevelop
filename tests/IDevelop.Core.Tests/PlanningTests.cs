@@ -20,6 +20,7 @@ public sealed class PlanningTests : IDisposable
     private static readonly TaskId Frontend = TestTasks.Review;
     private static readonly ExecutionSettings Sol = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+    private static readonly Guid Plan = Guid.Parse("019a9d2e-6100-7000-8000-000000000088");
 
     private const string FillsBothAndAddsOne = """
         The design splits into a backend and a frontend, which a third task wires together.
@@ -91,9 +92,9 @@ public sealed class PlanningTests : IDisposable
             accepted.Connections.Keys.Select(key => (key.From, key.To)).Order());
 
         await using var reopened = ProjectRuns.Open(_project, clients);
-        Assert.Equal(new PlanningHandles([Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)]), reopened.Latest[Architect].Planning);
+        Assert.Equal(new PlanningHandles(record.Planning!.Plan, [Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)]), reopened.Latest[Architect].Planning);
         Assert.Equal(wire, Assert.Single(Ready(reopened.Latest[Architect]).Nodes).Id);
-        Assert.IsType<EditRejection.TaskAlreadyExists>(accepted.Rejection(proposal.Accept(accepted, proposal.Items.ToHashSet())));
+        Assert.Same(accepted, accepted.Must(proposal.Accept(accepted, proposal.Items.ToHashSet())));
     }
 
     [Fact]
@@ -153,7 +154,7 @@ public sealed class PlanningTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Chat_planner_proposes_after_its_first_turn_and_each_reply_replaces_the_proposal()
+    public async Task A_Chat_planner_proposes_after_its_first_turn_and_a_reply_proposes_an_accepted_node_again_under_its_id()
     {
         const string first = """
             A first cut.
@@ -166,8 +167,8 @@ public sealed class PlanningTests : IDisposable
             Split as you asked.
 
             ```idevelop
-            {"status": "proposal", "add": [{"id": "new-1", "type": "type-1", "title": "Write the lexer"}, {"id": "new-2", "type": "type-1", "title": "Write the parser"}],
-             "connect": [{"from": "new-1", "to": "new-2"}]}
+            {"status": "proposal", "add": [{"id": "new-2", "type": "type-1", "title": "Write the lexer"}, {"id": "new-1", "type": "type-1", "title": "Write the parser"}],
+             "connect": [{"from": "new-2", "to": "new-1"}]}
             ```
             """;
         Install(_fakes, ClientId.Codex,
@@ -179,14 +180,20 @@ public sealed class PlanningTests : IDisposable
 
         var afterFirst = await Settles(runs, () => runs.Start(planner, PlanningContext.For(workflow, Architect, BuiltInBlueprints.All)));
         var firstProposal = Ready(afterFirst);
+        var acceptedFirst = workflow.Must(firstProposal.Accept(workflow, firstProposal.Items.ToHashSet()));
         var afterSecond = await Settles(runs, () => runs.Send(planner, "Split it in two.", stopTurn: false));
         var secondProposal = Ready(afterSecond);
+        var acceptedSecond = acceptedFirst.Must(secondProposal.Accept(acceptedFirst, secondProposal.Items.ToHashSet()));
 
         Assert.Contains("End every message with a proposal block that holds your whole plan as it stands", File.ReadAllText(Evidence("prompt.txt")));
         Assert.Equal((AttemptStatus.WaitingForInput, new Pending.Reply()), (afterFirst.Status, afterFirst.Pending));
         Assert.Equal((1, "Write the parser"), (firstProposal.Turn, string.Join(", ", firstProposal.Nodes.Select(node => node.Title))));
         Assert.Equal((2, "Write the lexer, Write the parser"), (secondProposal.Turn, string.Join(", ", secondProposal.Nodes.Select(node => node.Title))));
-        Assert.NotEqual(firstProposal.Nodes[0].Id, secondProposal.Nodes[0].Id);
+        Assert.Equal(firstProposal.Nodes[0].Id, secondProposal.Nodes[1].Id);
+        Assert.Equal(
+            ["Backend", "Design export", "Frontend", "Write the lexer", "Write the parser"],
+            acceptedSecond.Tasks.Values.Select(task => task.Title).Order());
+        Assert.Contains(new ConnectionKey(secondProposal.Nodes[0].Id, firstProposal.Nodes[0].Id), acceptedSecond.Connections.Keys);
     }
 
     [Fact]
@@ -211,21 +218,42 @@ public sealed class PlanningTests : IDisposable
             .Must(new Connect(new ConnectionKey(Backend, filled), ConnectionKind.Dependency))
             .Must(new Connect(new ConnectionKey(Architect, beside), ConnectionKind.Context));
 
-        Assert.Equal([Backend, Frontend], PlanningContext.For(workflow, Architect, []).Handles.Slots.ToArray());
+        Assert.Equal([Backend, Frontend], PlanningContext.For(workflow, Architect, []).Slots.Select(slot => slot.Id).ToArray());
     }
 
     [Theory]
     [InlineData("{\"status\": \"proposal\"}", "The proposal fills and adds no task.")]
     [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-3\"}]}", "The proposal fills slot-3, which is not one of the empty tasks it was given.")]
-    [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-1\"}, {\"slot\": \"slot-1\"}]}", "The proposal fills slot-1 twice.")]
+    [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-1\", \"title\": \"A\"}, {\"slot\": \"slot-1\", \"title\": \"B\"}]}", "The proposal fills slot-1 twice.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-9\"}]}", "The new task a has type type-9, which is not one of the types it was given.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\"}, {\"id\": \"a\", \"type\": \"type-1\"}]}", "The proposal uses the id a twice.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\"}], \"connect\": [{\"from\": \"a\", \"to\": \"b\"}]}", "A connection names b, which is not the planner, a slot, or a new task.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\", \"fields\": {\"instructions\": 3}}]}", "The field instructions of a is not text.")]
     [InlineData("{\"status\": \"proposal\", \"add\": {\"id\": \"a\"}}", "The proposal's \"add\" is not a list.")]
+    [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-1\", \"title\": \" \"}]}", "The proposal fills slot-1 with nothing.")]
+    [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-1\", \"title\": \"A\"}, {\"slot\": \"slot-01\", \"title\": \"B\"}]}", "The proposal fills slot-1 twice.")]
+    [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\", \"fields\": {\"acceptance_criteria\": \"x\"}}]}", "The new task a has a field acceptance_criteria, which its type Implement does not have.")]
+    [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\"}], \"connect\": [{\"from\": \"a\", \"to\": \"a\"}]}", "A connection goes from a task to itself.")]
     public void A_proposal_that_names_what_it_was_not_given_is_a_problem(string json, string problem)
     {
         Assert.Equal(new ProposalRead.Problem(problem), Proposal.Read(Proposed($"```idevelop\n{json}\n```"), Find));
+    }
+
+    [Fact]
+    public void A_connection_the_proposal_repeats_or_the_workflow_holds_is_added_once()
+    {
+        var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal", "add": [{"id": "a", "type": "type-1"}],
+             "connect": [{"from": "slot-01", "to": "a"}, {"from": "slot-1", "to": "a"}, {"from": "planner", "to": "slot-1"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet()));
+
+        Assert.Equal(("Implement", 2), (proposal.Nodes[0].Title, proposal.Connections.Length));
+        Assert.Equal(3, accepted.Connections.Count);
     }
 
     [Fact]
@@ -279,7 +307,7 @@ public sealed class PlanningTests : IDisposable
     /// <summary>An Architect attempt whose one turn ended with <paramref name="reply"/>.</summary>
     private static AttemptRecord Proposed(string reply) => AttemptReducer.Replay(
     [
-        Requested(new PlanningHandles([Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)])),
+        Requested(new PlanningHandles(Plan, [Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)])),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.SessionStarted(Session)),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.Succeeded(reply)),
         new AttemptEvent.Exited(AttemptEvents.T0, 0, ""),

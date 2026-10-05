@@ -10,7 +10,7 @@ namespace IDevelop.Nodes;
 /// <summary>Fills an empty node with a title, when the proposal gives one, and field values.</summary>
 public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDictionary<string, string> Fields);
 
-/// <summary>A new node. Its id is minted from the attempt, the turn, and the agent's own id for it.</summary>
+/// <summary>A new node. Its id is minted from the plan and the agent's own id for it.</summary>
 public sealed record ProposedNode(TaskId Id, string Name, Blueprint Blueprint, string Title, ImmutableSortedDictionary<string, string> Fields);
 
 public sealed record ProposedConnection(TaskId From, TaskId To, ConnectionKind Kind);
@@ -47,7 +47,7 @@ public sealed record Proposal(
 
     /// <summary>
     /// Reads the latest proposal of a planner's attempt. The same attempt always gives the same proposal and the same new
-    /// ids, so accepting it twice is rejected because the ids exist.
+    /// ids, so accepting it again places no node twice.
     /// </summary>
     /// <param name="blueprint">The blueprint behind a type handle's key, or null when this machine has none.</param>
     public static ProposalRead Read(AttemptRecord attempt, Func<BlueprintKey, Blueprint?> blueprint)
@@ -114,16 +114,18 @@ public sealed record Proposal(
 
     /// <summary>
     /// The one edit that accepts the chosen items: their nodes, their fills, and each connection that touches no item the
-    /// person left out. A connection the workflow already holds is left as it is.
+    /// person left out. A node the workflow already holds was accepted before, so it stays as it is and its connections
+    /// count, and so does a connection the workflow already holds.
     /// </summary>
     public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen)
     {
         var layout = Layout(workflow);
-        var unchosen = Items.Where(item => !chosen.Contains(item)).ToHashSet();
+        var placed = Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id).ToHashSet();
+        var unchosen = Items.Where(item => !chosen.Contains(item) && !placed.Contains(item)).ToHashSet();
         bool Kept(TaskId end) => !unchosen.Contains(end);
         return new(
         [
-            .. Nodes.Where(node => chosen.Contains(node.Id)).Select(node =>
+            .. Nodes.Where(node => chosen.Contains(node.Id) && !placed.Contains(node.Id)).Select(node =>
                 new WorkflowEdit.PlaceNode(node.Id, node.Blueprint, layout[node.Id]) { Title = node.Title, Fields = node.Fields.ToImmutableDictionary() }),
             .. Fills.Where(fill => chosen.Contains(fill.Slot)).SelectMany(Fill),
             .. Connections
@@ -149,18 +151,26 @@ public sealed record Proposal(
         var fills = ImmutableArray.CreateBuilder<ProposedFill>();
         foreach (var item in Entries(block, "fill"))
         {
-            var slot = Text(item, "slot", "fill") ?? throw new ProposalException("A fill names no slot.");
-            if (Index(slot, "slot-", handles.Slots.Length) is not { } index)
+            var named = Text(item, "slot", "fill") ?? throw new ProposalException("A fill names no slot.");
+            if (Index(named, "slot-", handles.Slots.Length) is not { } index)
             {
-                throw new ProposalException($"The proposal fills {slot}, which is not one of the empty tasks it was given.");
+                throw new ProposalException($"The proposal fills {named}, which is not one of the empty tasks it was given.");
             }
 
+            var slot = PlanningContext.Slot(index);
             if (!ends.TryAdd(slot, handles.Slots[index]))
             {
                 throw new ProposalException($"The proposal fills {slot} twice.");
             }
 
-            fills.Add(new ProposedFill(handles.Slots[index], Text(item, "title", slot), Fields(item, slot)));
+            var title = Text(item, "title", slot) is { } given && !string.IsNullOrWhiteSpace(given) ? given.Trim() : null;
+            var fields = Fields(item, slot);
+            if (title is null && fields.Values.All(string.IsNullOrWhiteSpace))
+            {
+                throw new ProposalException($"The proposal fills {slot} with nothing.");
+            }
+
+            fills.Add(new ProposedFill(handles.Slots[index], title, fields));
         }
 
         // Every fill's slot is an end, and so is every slot the person drew, which a connection may name without filling.
@@ -181,7 +191,12 @@ public sealed record Proposal(
 
             var key = handles.Types[index];
             var found = blueprint(key) ?? throw new ProposalException($"The new task {name} is a {key}, which this machine does not have.");
-            var id = Mint(attempt.Id, turn, name);
+            if (Fields(item, name).Keys.FirstOrDefault(field => found.Field(field) is null) is { } unknown)
+            {
+                throw new ProposalException($"The new task {name} has a field {unknown}, which its type {found.Name} does not have.");
+            }
+
+            var id = Mint(handles.Plan, name);
             if (!ends.TryAdd(name, id))
             {
                 throw new ProposalException($"The proposal uses the id {name} twice.");
@@ -192,17 +207,26 @@ public sealed record Proposal(
         }
 
         var connections = ImmutableArray.CreateBuilder<ProposedConnection>();
+        var connected = new HashSet<(TaskId, TaskId)>();
         foreach (var item in Entries(block, "connect"))
         {
-            var from = End(item, "from", ends);
-            var to = End(item, "to", ends);
+            var from = End(item, "from", ends, handles);
+            var to = End(item, "to", ends, handles);
+            if (from == to)
+            {
+                throw new ProposalException("A connection goes from a task to itself.");
+            }
+
             var kind = Text(item, "kind", "connection") switch
             {
                 null or "dependency" => ConnectionKind.Dependency,
                 "context" => ConnectionKind.Context,
                 var other => throw new ProposalException($"A connection has kind {other}, which is neither dependency nor context."),
             };
-            connections.Add(new ProposedConnection(from, to, kind));
+            if (connected.Add((from, to)))
+            {
+                connections.Add(new ProposedConnection(from, to, kind));
+            }
         }
 
         if (fills.Count == 0 && nodes.Count == 0)
@@ -214,12 +238,12 @@ public sealed record Proposal(
     }
 
     /// <summary>
-    /// A version 8 id from a hash of the attempt, the turn, and the agent's id for the node. Reading the same attempt
-    /// again mints the same ids.
+    /// A version 8 id from a hash of the plan and the agent's id for the node. Reading the same log again mints the same
+    /// ids, and a later turn or continuation that proposes the node again under its id names the same node.
     /// </summary>
-    internal static TaskId Mint(AttemptId attempt, int turn, string name)
+    internal static TaskId Mint(Guid plan, string name)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{attempt}/{turn}/{name}"));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{plan}/{name}"));
         hash[6] = (byte)((hash[6] & 0x0F) | 0x80);
         hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
         return new TaskId(new Guid(hash.AsSpan(0, 16), bigEndian: true));
@@ -260,10 +284,10 @@ public sealed record Proposal(
         return values.ToImmutable();
     }
 
-    private static TaskId End(JsonElement item, string property, Dictionary<string, TaskId> ends)
+    private static TaskId End(JsonElement item, string property, Dictionary<string, TaskId> ends, PlanningHandles handles)
     {
         var name = Text(item, property, "a connection") ?? throw new ProposalException($"A connection has no \"{property}\".");
-        return ends.TryGetValue(name, out var id)
+        return ends.TryGetValue(Index(name, "slot-", handles.Slots.Length) is { } slot ? PlanningContext.Slot(slot) : name, out var id)
             ? id
             : throw new ProposalException($"A connection names {name}, which is not the planner, a slot, or a new task.");
     }

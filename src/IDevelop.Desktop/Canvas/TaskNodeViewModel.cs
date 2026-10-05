@@ -314,8 +314,8 @@ public sealed class TaskNodeViewModel : ObservableObject
         }
 
         var shown = _proposalRead is ProposalRead.None ? null
-            : _proposal is { } current && current.Identity.Equals(ProposalViewModel.IdentityOf(_proposalRead)) ? current
-            : new ProposalViewModel(_canvas, _proposalRead);
+            : _proposal is { } current && current.Identity.Equals(ProposalViewModel.IdentityOf(_proposalRead, _proposed!.Id)) ? current
+            : new ProposalViewModel(_canvas, _proposalRead, _proposed!.Id);
         if (shown is not null && _canvas.IsClosed(shown))
         {
             shown = null;

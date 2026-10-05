@@ -7,12 +7,14 @@ namespace IDevelop.Nodes;
 /// <summary>
 /// What a planner's proposal may name: the empty nodes after it as <c>slot-1</c> and on, and the blueprints it may place
 /// as <c>type-1</c> and on. Its attempt records them when it starts, so a proposal reads each handle as the agent read
-/// it, whatever the person changes meanwhile.
+/// it, whatever the person changes meanwhile. <paramref name="Plan"/> is new at each start and goes with every
+/// continuation of the session, so a node the agent proposes again under its own id keeps one id.
 /// </summary>
-public sealed record PlanningHandles(ImmutableArray<TaskId> Slots, ImmutableArray<BlueprintKey> Types)
+public sealed record PlanningHandles(Guid Plan, ImmutableArray<TaskId> Slots, ImmutableArray<BlueprintKey> Types)
 {
     // ImmutableArray compares by reference.
-    public bool Equals(PlanningHandles? other) => other is not null && Slots.SequenceEqual(other.Slots) && Types.SequenceEqual(other.Types);
+    public bool Equals(PlanningHandles? other) =>
+        other is not null && Plan == other.Plan && Slots.SequenceEqual(other.Slots) && Types.SequenceEqual(other.Types);
 
     public override int GetHashCode() => HashCode.Combine(Slots.Length, Types.Length);
 }
@@ -22,11 +24,11 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
 {
     public static readonly PlanningContext None = new([], []);
 
-    public PlanningHandles Handles => new([.. Slots.Select(slot => slot.Id)], [.. Types.Select(type => type.Key)]);
+    public PlanningHandles Handles(Guid plan) => new(plan, [.. Slots.Select(slot => slot.Id)], [.. Types.Select(type => type.Key)]);
 
     /// <summary>
     /// The slots are the nodes that the planner's dependency connections reach and whose fields are all blank, in the order
-    /// they were created.
+    /// order of their ids.
     /// </summary>
     /// <param name="placeable">The blueprints a person can place, in the order a palette lists them.</param>
     public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable)

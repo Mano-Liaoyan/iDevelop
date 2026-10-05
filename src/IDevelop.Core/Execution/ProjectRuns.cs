@@ -133,7 +133,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     taken.Lock.Dispose();
                     return new StartResult.Refused(new StartProblem.Waiting(waiting.TaskTitle));
                 case LockTake.Taken taken:
-                    var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles : null;
+                    var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles(Guid.CreateVersion7()) : null;
                     (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null, handles);
                     if (result is StartResult.Refused)
                     {
