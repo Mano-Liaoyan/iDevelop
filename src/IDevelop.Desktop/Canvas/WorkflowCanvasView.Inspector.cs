@@ -13,6 +13,7 @@ public partial class WorkflowCanvasView
 {
     // The inspector shows the selected node once the selection's change has run and been laid out, so the picker is found
     // after both. A folded Agent section opens, and a filter that hides the picker clears, as the person would have to do.
+    // The list is placed against where the picker is when it opens, so the picker scrolls into view and is laid out first.
     // A hidden picker's list cannot open, so it opens only once the picker has the focus.
     void ICanvasView.FocusAgent() => Dispatcher.UIThread.Post(
         () =>
@@ -38,6 +39,8 @@ public partial class WorkflowCanvasView
                 inspector.UpdateLayout();
             }
 
+            picker.BringIntoView();
+            inspector.UpdateLayout();
             if (picker.Focus(NavigationMethod.Tab))
             {
                 picker.IsDropDownOpen = true;
