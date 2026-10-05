@@ -4,7 +4,6 @@
                     xmlns:canvas="using:IDevelop.Desktop.Canvas"
                     xmlns:theme="using:IDevelop.Desktop.Theme"
                     xmlns:workflows="using:IDevelop.Workflows">
-  <!-- A port's ring takes its node's kind once a connection uses it. -->
   <ControlTheme x:Key="PortTheme" TargetType="nodify:Connector">
     <Setter Property="Template">
       <ControlTemplate>
@@ -141,7 +140,6 @@
                               Classes.rejected="{Binding IsRejected}" />
   </DataTemplate>
 
-  <!-- Each minimap item is a block in its node's hue. -->
   <DataTemplate x:Key="MinimapItemTemplate" DataType="canvas:TaskNodeViewModel">
     <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
   </DataTemplate>
