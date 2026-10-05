@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -111,10 +112,14 @@ public sealed class RunTests : IDisposable
         Assert.Equal(Color.Parse("#25292E"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
-        Assert.Equal("Requested Codex · gpt-5.5 · high.", shell.Find<TextBlock>("LastRunConfiguration").Text);
+        var agent = shell.Find<ItemsControl>("LastRunConfiguration");
+        Assert.Equal(["Codex", "gpt-5.5", "high"], Shell.Texts(agent));
+        Assert.Equal("Requested Codex · gpt-5.5 · high.", ToolTip.GetTip(agent));
+        Assert.Equal(["DONE"], Shell.Texts(shell.InView<ItemsControl>("LastRunActivity")));
+        shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));
         Assert.Equal(
             ["command: pwsh.exe -Command \"Set-Content -LiteralPath .\\\\hello.txt -Value 'hi' -NoNewline\"", "DONE"],
-            shell.Find<ItemsControl>("LastRunActivity").GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text));
+            Shell.Texts(shell.Find<ItemsControl>("LastRunActivity")));
         Assert.Equal((true, false), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
     }
 

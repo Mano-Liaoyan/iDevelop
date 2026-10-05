@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using IDevelop.Projects;
@@ -55,6 +56,8 @@ public sealed class PlanningTests : IDisposable
         Assert.Equal("Proposal · 3 tasks", shell.CardText("Design export", "CardStatus"));
         Assert.Equal(["Fills Backend API", "Fills Frontend", "New Implement Wire export"], Ghosts(shell));
         Assert.Equal(["Fill \"Backend\" as \"Backend API\"", "Fill \"Frontend\"", "Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
+        Assert.Equal(["Backend API Fills Backend", "Frontend Fills Frontend", "Wire export"], Items(shell).Select(Shell.TextOf));
+        shell.Click(shell.InView<ToggleButton>("ProposalConnectionsToggle"));
         Assert.Equal(["Backend API → Wire export", "Frontend → Wire export"], Shell.Texts(shell.Find<ItemsControl>("ProposalConnections")));
 
         var frontend = Items(shell).Single(box => AutomationProperties.GetName(box) == "Fill \"Frontend\"");

@@ -266,6 +266,7 @@ const pairs = (foregrounds, backgrounds, minimum) =>
 const contrast = [
   ...pairs(['TextBrush', 'TextMutedBrush'], ['SurfaceRaisedBrush', 'SurfaceOverlayBrush', 'AppPanelBrush'], 4.5),
   ...pairs(['TextBrush'], tints.map((tint) => [tint, 'SurfaceRaisedBrush']), 4.5),
+  ['TextBrush', 'SurfaceMutedBrush', 4.5],
   ...pairs(['AccentTextBrush', 'DestructiveTextBrush'], ['SurfaceOverlayBrush', 'AppPanelBrush', 'SurfaceRaisedBrush'], 4.5),
   ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'DestructiveFillBrush'], 4.5),
   ...pairs(['OnTileBrush'], kinds.map(([kind]) => `Kind${kind}TileBrush`), 3),
