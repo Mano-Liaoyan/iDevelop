@@ -382,6 +382,9 @@
   <Style Selector="PopupRoot">
     <Setter Property="TransparencyBackgroundFallback" Value="{DynamicResource SurfaceOverlayBrush}" />
   </Style>
+  <!-- No PopoverShadow: a menu is its own popup window, which clips a shadow at the menu's edge. Room for one would be a
+       transparent margin, and a bare X11 server paints that margin with the fallback brush, so only some platforms
+       would show it. -->
   <Style Selector="ContextMenu, MenuFlyoutPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />

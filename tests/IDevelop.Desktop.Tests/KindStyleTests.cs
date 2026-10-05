@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
 using IDevelop.Desktop.Canvas;
@@ -87,6 +88,20 @@ public sealed class KindStyleTests
                 Paint(NodeState.Idle), Paint(NodeState.Running), Paint(NodeState.Waiting), Paint(NodeState.Failed),
                 Paint(NodeState.Succeeded), Paint(NodeState.Waiting, NodeRole.Proposing),
             ]);
+    }
+
+    [AvaloniaFact]
+    public void A_waiting_card_its_ring_and_its_pill_are_all_orange()
+    {
+        var card = new Border { Classes = { "card", "waiting" } };
+        var pill = new Border { Classes = { "pill", "waiting" } };
+        var panel = new StackPanel { Children = { card, pill } };
+        panel.Styles.Add(new StyleInclude((Uri?)null) { Source = new Uri("avares://IDevelop.Desktop/Canvas/CanvasStyles.axaml") });
+        Show(panel, ThemeVariant.Light);
+
+        Assert.Equal(
+            ["#1AFF8D28", "#8CFF8D28", "#26FF8D28", "#1AFF8D28", "#66FF8D28"],
+            [Hex(card.Background), Hex(card.BorderBrush), $"#{card.BoxShadow[0].Color.ToUInt32():X8}", Hex(pill.Background), Hex(pill.BorderBrush)]);
     }
 
     [AvaloniaFact]

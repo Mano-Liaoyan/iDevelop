@@ -32,8 +32,8 @@
     <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
   </Style>
   <Style Selector="Border.card.waiting">
-    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelected55Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting55Brush}" />
     <Setter Property="BoxShadow" Value="{DynamicResource CardWaitingShadow}" />
   </Style>
   <Style Selector="TextBlock.cardTitle">

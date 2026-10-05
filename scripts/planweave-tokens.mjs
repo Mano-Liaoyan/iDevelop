@@ -128,6 +128,7 @@ const brushes = [
   ['StateFailedSurface', 'apple-red', 10],
   ['StateWaiting', 'apple-orange'],
   ['StateWaiting40', 'apple-orange', 40],
+  ['StateWaiting55', 'apple-orange', 55],
   ['ConnectionDependency', 'edge-0'],
   ['ConnectionContext', 'text-muted'],
   ...kinds.flatMap(([kind, hue]) => [

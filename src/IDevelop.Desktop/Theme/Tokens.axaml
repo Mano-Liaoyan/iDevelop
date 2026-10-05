@@ -39,6 +39,7 @@
       <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#1AFF383C" />
       <SolidColorBrush x:Key="StateWaitingBrush" Color="#FF8D28" />
       <SolidColorBrush x:Key="StateWaiting40Brush" Color="#66FF8D28" />
+      <SolidColorBrush x:Key="StateWaiting55Brush" Color="#8CFF8D28" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#5A6168" />
       <SolidColorBrush x:Key="KindImplementBrush" Color="#6155F5" />
@@ -159,6 +160,7 @@
       <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#1AFF4245" />
       <SolidColorBrush x:Key="StateWaitingBrush" Color="#FF9230" />
       <SolidColorBrush x:Key="StateWaiting40Brush" Color="#66FF9230" />
+      <SolidColorBrush x:Key="StateWaiting55Brush" Color="#8CFF9230" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#999893" />
       <SolidColorBrush x:Key="KindImplementBrush" Color="#6D7CFF" />
