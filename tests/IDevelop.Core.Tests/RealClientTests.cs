@@ -98,12 +98,12 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
             ])) is EditResult.Applied { Workflow: var drawn } ? drawn : throw new InvalidOperationException("The workflow did not build.");
         await using var runs = ProjectRuns.Open(project, clients);
 
-        var record = await Settles(runs, () => runs.Start(workflow.Tasks[TestTasks.Design], PlanningContext.For(workflow, TestTasks.Design, BuiltInBlueprints.All)));
+        var record = await Settles(runs, () => runs.Start(workflow.Tasks[TestTasks.Design], PlanningContext.For(workflow, TestTasks.Design, BuiltInBlueprints.All, _ => false)));
         output.WriteLine($"{Clients.Name(client)}: {record.Status} {record.Detail}\n{record.Result}");
 
         Assert.Equal(AttemptStatus.Succeeded, record.Status);
         var proposal = Assert.IsType<ProposalRead.Ready>(Proposal.Read(record, BuiltInBlueprints.Find)).Proposal;
-        var accepted = Assert.IsType<EditResult.Applied>(workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet()))).Workflow;
+        var accepted = Assert.IsType<EditResult.Applied>(workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false))).Workflow;
         foreach (var task in accepted.Tasks.Values)
         {
             output.WriteLine($"{task.Blueprint.Name} \"{task.Title}\": {string.Join(" | ", task.Fields.Select(field => $"{field.Key}={field.Value}"))}");

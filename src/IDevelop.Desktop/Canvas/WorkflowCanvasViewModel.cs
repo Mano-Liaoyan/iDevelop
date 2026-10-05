@@ -177,7 +177,10 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         Blueprints.Placeable.FirstOrDefault(blueprint => blueprint.Key == key) ?? Workflow.Blueprints.GetValueOrDefault(key);
 
     /// <summary>What the planner may fill and place when it starts now: the palette's blueprints are its types.</summary>
-    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable);
+    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted);
+
+    /// <summary>Whether the task has an attempt in this project.</summary>
+    internal bool HasStarted(TaskId task) => Runs.Latest.ContainsKey(task);
 
     /// <summary>Hides a proposal until its planner proposes again. Only this window forgets it.</summary>
     internal void CloseProposal(ProposalViewModel proposal)
@@ -218,6 +221,11 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         foreach (var node in Nodes)
         {
             node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id));
+        }
+
+        foreach (var node in Nodes)
+        {
+            node.Proposal?.Refresh();
         }
 
         ActiveRun.Show(Runs.Active);

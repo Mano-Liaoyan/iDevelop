@@ -115,19 +115,23 @@ public sealed record Proposal(
     /// <summary>
     /// The one edit that accepts the chosen items: their nodes, their fills, and each connection that touches no item the
     /// person left out. A node the workflow already holds was accepted before, so it stays as it is and its connections
-    /// count, and so does a connection the workflow already holds.
+    /// count, and so does a connection the workflow already holds. A slot that has started is never filled, even when
+    /// chosen, and counts as left out.
     /// </summary>
-    public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen)
+    /// <param name="started">Whether a task has an attempt.</param>
+    public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started)
     {
         var layout = Layout(workflow);
         var placed = Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id).ToHashSet();
-        var unchosen = Items.Where(item => !chosen.Contains(item) && !placed.Contains(item)).ToHashSet();
+        var unchosen = Items.Where(item => !chosen.Contains(item) && !placed.Contains(item))
+            .Concat(Fills.Select(fill => fill.Slot).Where(started))
+            .ToHashSet();
         bool Kept(TaskId end) => !unchosen.Contains(end);
         return new(
         [
             .. Nodes.Where(node => chosen.Contains(node.Id) && !placed.Contains(node.Id)).Select(node =>
                 new WorkflowEdit.PlaceNode(node.Id, node.Blueprint, layout[node.Id]) { Title = node.Title, Fields = node.Fields.ToImmutableDictionary() }),
-            .. Fills.Where(fill => chosen.Contains(fill.Slot)).SelectMany(Fill),
+            .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(Fill),
             .. Connections
                 .Where(connection => Kept(connection.From) && Kept(connection.To))
                 .Where(connection => !workflow.Connections.ContainsKey(new ConnectionKey(connection.From, connection.To)))
@@ -183,6 +187,11 @@ public sealed record Proposal(
         foreach (var item in Entries(block, "add"))
         {
             var name = Text(item, "id", "new task") ?? throw new ProposalException("A new task has no id.");
+            if (name == PlannerHandle || Index(name, "slot-", handles.Slots.Length) is not null)
+            {
+                throw new ProposalException($"The new task {name} has the id of the planner or a slot.");
+            }
+
             var type = Text(item, "type", name) ?? throw new ProposalException($"The new task {name} names no type.");
             if (Index(type, "type-", handles.Types.Length) is not { } index)
             {

@@ -14,10 +14,14 @@ public sealed record GhostCardViewModel(Point Location, string Label, string Tit
 public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen) : ObservableObject
 {
     private bool _isChosen = isChosen;
+    private bool _hasStarted;
 
     internal TaskId Id { get; } = id;
 
-    public string Label { get; } = label;
+    /// <summary>False for a fill of a task that has started, which no proposal changes.</summary>
+    public bool CanChoose => !_hasStarted;
+
+    public string Label => _hasStarted ? $"{label}. It has started, so it stays as it is" : label;
 
     public string Preview { get; } = preview;
 
@@ -30,6 +34,22 @@ public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id,
             {
                 proposal.OnChoiceChanged();
             }
+        }
+    }
+
+    /// <summary>Unticks the fill and turns its box off once its task has started.</summary>
+    internal void ShowStarted(bool hasStarted)
+    {
+        if (!SetProperty(ref _hasStarted, hasStarted, nameof(CanChoose)))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(Label));
+        if (hasStarted && _isChosen)
+        {
+            _isChosen = false;
+            OnPropertyChanged(nameof(IsChosen));
         }
     }
 }
@@ -80,7 +100,7 @@ public sealed class ProposalViewModel : ObservableObject
 
     /// <summary>Each connection that Accept adds now, as its two tasks' titles.</summary>
     public IReadOnlyList<string> Connections => Proposal is null ? [] :
-        [.. Proposal.Accept(_canvas.Workflow, Chosen()).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
+        [.. Proposal.Accept(_canvas.Workflow, Chosen(), _canvas.HasStarted).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
             $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
 
     /// <summary>Why the proposal cannot be read, or why accepting the chosen tasks would be rejected.</summary>
@@ -109,7 +129,7 @@ public sealed class ProposalViewModel : ObservableObject
 
     /// <summary>Accepting all of it would change nothing, as after an accept: its nodes exist and its fills are in place.</summary>
     internal bool IsSettled(Workflow workflow) => Proposal is { } proposal &&
-        workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet())) is EditResult.Applied applied && ReferenceEquals(applied.Workflow, workflow);
+        workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet(), _canvas.HasStarted)) is EditResult.Applied applied && ReferenceEquals(applied.Workflow, workflow);
 
     /// <summary>The chosen tasks as ghost cards: a new task where accepting places it, and a fill over its empty card.</summary>
     internal IEnumerable<GhostCardViewModel> Ghosts(Workflow workflow)
@@ -134,10 +154,15 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    /// <summary>Checks the chosen tasks against the workflow as it is now.</summary>
+    /// <summary>Checks the chosen tasks against the workflow and the runs as they are now.</summary>
     internal void Refresh()
     {
-        Problem = _readProblem ?? (Proposal is { } proposal && _canvas.Workflow.Apply(proposal.Accept(_canvas.Workflow, Chosen())) is EditResult.Rejected rejected
+        foreach (var fill in Items.Take(Proposal?.Fills.Length ?? 0))
+        {
+            fill.ShowStarted(_canvas.HasStarted(fill.Id));
+        }
+
+        Problem = _readProblem ?? (Proposal is { } proposal && _canvas.Workflow.Apply(proposal.Accept(_canvas.Workflow, Chosen(), _canvas.HasStarted)) is EditResult.Rejected rejected
             ? $"Accept would be refused. {RejectionText.Describe(rejected.Reason, Title)}"
             : null);
         OnPropertyChanged(nameof(Connections));
@@ -156,7 +181,7 @@ public sealed class ProposalViewModel : ObservableObject
     {
         var workflow = _canvas.Workflow;
         var chosen = Chosen();
-        if (_canvas.Edit(Proposal!.Accept(workflow, chosen), Title) is EditResult.Applied)
+        if (_canvas.Edit(Proposal!.Accept(workflow, chosen, _canvas.HasStarted), Title) is EditResult.Applied)
         {
             var added = Proposal.Nodes.Count(node => chosen.Contains(node.Id));
             var filled = Proposal.Fills.Count(fill => chosen.Contains(fill.Slot));

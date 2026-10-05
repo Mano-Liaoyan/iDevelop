@@ -89,6 +89,60 @@ public sealed class PlanningTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_continuation_that_proposes_nothing_keeps_the_proposal_before_it()
+    {
+        var shell = RunArchitect(
+            """
+            ```idevelop
+            {"status": "proposal", "add": [{"id": "wire", "type": "type-1", "title": "Wire export"}]}
+            ```
+            """,
+            ConversationMode.Autonomous,
+            Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "The wire task calls the endpoint.")));
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded", "the first run succeeds");
+
+        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Type("Why the wire task?");
+        shell.Click(shell.InView<Button>("SendMessage"));
+
+        shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded" && shell.Find<TextBox>("LastRunResult").Text == "The wire task calls the endpoint.", "the continuation succeeds");
+        Assert.Equal(["New Implement Wire export"], Ghosts(shell));
+        Assert.Equal(["Add Implement \"Wire export\""], Items(shell).Select(AutomationProperties.GetName));
+    }
+
+    [AvaloniaFact]
+    public void A_fill_of_a_task_that_has_started_cannot_be_ticked_and_Accept_leaves_the_task_as_it_is()
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "title": "Backend API", "fields": {"instructions": "Add the endpoint."}}],
+             "add": [{"id": "wire", "type": "type-1", "title": "Wire export"}],
+             "connect": [{"from": "slot-1", "to": "wire"}]}
+            ```
+            """);
+        var canvas = shell.Window.ViewModel.Canvas!;
+        canvas.Edit(new WorkflowEdit.Batch([new WorkflowEdit.SetExecution(Backend, Codex), new WorkflowEdit.SetField(Backend, "instructions", "Say hi.")]));
+        shell.Click(shell.Header(shell.Node("Backend")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Succeeded", "the drawn task runs");
+        shell.Click(shell.Header(shell.Node("Design export")));
+
+        var backend = Items(shell).First();
+        Assert.Equal(("Fill \"Backend\" as \"Backend API\". It has started, so it stays as it is", false, false), (AutomationProperties.GetName(backend), backend.IsChecked, backend.IsEffectivelyEnabled));
+        Assert.Equal(["New Implement Wire export"], Ghosts(shell));
+        canvas.Edit(new WorkflowEdit.SetField(Backend, "instructions", ""));
+        Assert.Equal([Frontend], canvas.Planning(Architect).Slots.Select(slot => slot.Id));
+        canvas.Edit(new WorkflowEdit.SetField(Backend, "instructions", "Say hi."));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        var workflow = canvas.Workflow;
+        Assert.Equal(("Backend", "Say hi."), (workflow.Tasks[Backend].Title, workflow.Tasks[Backend].Field("instructions")));
+        var wire = Assert.Single(workflow.Tasks.Values, task => task.Title == "Wire export");
+        Assert.DoesNotContain(new ConnectionKey(Backend, wire.Id), workflow.Connections.Keys);
+    }
+
+    [AvaloniaFact]
     public void A_planner_may_place_every_blueprint_the_palette_offers()
     {
         var project = _temp.Seed(new WorkflowEdit.PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(105, 90)) { Title = "Design export" });
@@ -107,16 +161,16 @@ public sealed class PlanningTests : IDisposable
         Assert.Equal(bugFix, canvas.FindBlueprint(bugFix.Key));
     }
 
-    /// <summary>Opens an Architect in Chat mode with two empty tasks after it, runs it, and waits for its first reply.</summary>
-    private Shell RunArchitect(string reply)
+    /// <summary>Opens an Architect with two empty tasks after it, runs it, and waits for its first reply.</summary>
+    private Shell RunArchitect(string reply, ConversationMode mode = ConversationMode.Chat, params FakeRule[] later)
     {
-        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        Install(_fakes, ClientId.Codex, [.. later, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply))]);
         var project = _temp.Seed(
             new WorkflowEdit.PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(105, 90))
             {
                 Title = "Design export",
                 Fields = ImmutableDictionary<string, string>.Empty.Add("brief", "Export the report as CSV."),
-                Settings = new NodeSettings(Codex, ConversationMode.Chat),
+                Settings = new NodeSettings(Codex, mode),
             },
             TaskAt(Backend, "Backend", 465, 90),
             TaskAt(Frontend, "Frontend", 465, 300),

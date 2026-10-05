@@ -302,15 +302,19 @@ public sealed class TaskNodeViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Shows the latest proposal of the task's latest attempt, unless it is closed. The attempt is read again only when it
-    /// changed, and an open proposal keeps the person's choices and checks them against the workflow again.
+    /// Shows the latest proposal of the task's session, unless it is closed: from its latest attempt, or else from the
+    /// attempts that one continues, newest first. The attempt is read again only when it changed, and an open proposal
+    /// keeps the person's choices and checks them against the workflow again.
     /// </summary>
     internal void ShowProposal()
     {
         if (!ReferenceEquals(_proposed, _attempt))
         {
             _proposed = _attempt;
-            _proposalRead = _attempt is null ? new ProposalRead.None() : Nodes.Proposal.Read(_attempt, _canvas.FindBlueprint);
+            _proposalRead = _attempt is null ? new ProposalRead.None()
+                : Earlier(_attempt).Reverse().Prepend(_attempt)
+                    .Select(attempt => Nodes.Proposal.Read(attempt, _canvas.FindBlueprint))
+                    .FirstOrDefault(read => read is not ProposalRead.None) ?? new ProposalRead.None();
         }
 
         var shown = _proposalRead is ProposalRead.None ? null

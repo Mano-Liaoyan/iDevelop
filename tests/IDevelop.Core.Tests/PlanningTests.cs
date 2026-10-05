@@ -61,7 +61,7 @@ public sealed class PlanningTests : IDisposable
         AttemptRecord record;
         await using (var runs = ProjectRuns.Open(_project, clients))
         {
-            record = await Settles(runs, () => runs.Start(workflow.Tasks[Architect], PlanningContext.For(workflow, Architect, BuiltInBlueprints.All)));
+            record = await Settles(runs, () => runs.Start(workflow.Tasks[Architect], PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false)));
         }
 
         var prompt = File.ReadAllText(Evidence("prompt.txt"));
@@ -75,7 +75,7 @@ public sealed class PlanningTests : IDisposable
 
         var proposal = Ready(record);
         var wire = Assert.Single(proposal.Nodes).Id;
-        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet()));
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
 
         Assert.Equal(
             [
@@ -94,7 +94,7 @@ public sealed class PlanningTests : IDisposable
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal(new PlanningHandles(record.Planning!.Plan, [Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)]), reopened.Latest[Architect].Planning);
         Assert.Equal(wire, Assert.Single(Ready(reopened.Latest[Architect]).Nodes).Id);
-        Assert.Same(accepted, accepted.Must(proposal.Accept(accepted, proposal.Items.ToHashSet())));
+        Assert.Same(accepted, accepted.Must(proposal.Accept(accepted, proposal.Items.ToHashSet(), _ => false)));
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class PlanningTests : IDisposable
         var changes = 0;
         document.Changed += (_, _) => changes++;
 
-        Assert.IsType<EditResult.Applied>(document.Apply(proposal.Accept(document.Current, proposal.Items.ToHashSet())));
+        Assert.IsType<EditResult.Applied>(document.Apply(proposal.Accept(document.Current, proposal.Items.ToHashSet(), _ => false)));
 
         Assert.Equal(1, changes);
         Assert.Equal(4, document.Current.Tasks.Count);
@@ -120,7 +120,7 @@ public sealed class PlanningTests : IDisposable
         var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
         var proposal = Ready(Proposed(FillsBothAndAddsOne));
 
-        var accepted = workflow.Must(proposal.Accept(workflow, new HashSet<TaskId> { Backend, proposal.Nodes[0].Id }));
+        var accepted = workflow.Must(proposal.Accept(workflow, new HashSet<TaskId> { Backend, proposal.Nodes[0].Id }, _ => false));
 
         Assert.Equal("Add the /export endpoint.", accepted.Tasks[Backend].Field("instructions"));
         Assert.Equal("", accepted.Tasks[Frontend].Field("instructions"));
@@ -144,7 +144,7 @@ public sealed class PlanningTests : IDisposable
             """));
         var check = proposal.Nodes[0].Id;
 
-        var result = document.Apply(proposal.Accept(document.Current, proposal.Items.ToHashSet()));
+        var result = document.Apply(proposal.Accept(document.Current, proposal.Items.ToHashSet(), _ => false));
 
         var cycle = Assert.IsType<EditRejection.OrderingCycle>(Assert.IsType<EditResult.Rejected>(result).Reason);
         Assert.Equal([check, Architect, Backend, check], cycle.Path.ToArray());
@@ -178,12 +178,12 @@ public sealed class PlanningTests : IDisposable
         var workflow = ArchitectWithTwoSlots(ConversationMode.Chat);
         var planner = workflow.Tasks[Architect];
 
-        var afterFirst = await Settles(runs, () => runs.Start(planner, PlanningContext.For(workflow, Architect, BuiltInBlueprints.All)));
+        var afterFirst = await Settles(runs, () => runs.Start(planner, PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false)));
         var firstProposal = Ready(afterFirst);
-        var acceptedFirst = workflow.Must(firstProposal.Accept(workflow, firstProposal.Items.ToHashSet()));
+        var acceptedFirst = workflow.Must(firstProposal.Accept(workflow, firstProposal.Items.ToHashSet(), _ => false));
         var afterSecond = await Settles(runs, () => runs.Send(planner, "Split it in two.", stopTurn: false));
         var secondProposal = Ready(afterSecond);
-        var acceptedSecond = acceptedFirst.Must(secondProposal.Accept(acceptedFirst, secondProposal.Items.ToHashSet()));
+        var acceptedSecond = acceptedFirst.Must(secondProposal.Accept(acceptedFirst, secondProposal.Items.ToHashSet(), _ => false));
 
         Assert.Contains("End every message with a proposal block that holds your whole plan as it stands", File.ReadAllText(Evidence("prompt.txt")));
         Assert.Equal((AttemptStatus.WaitingForInput, new Pending.Reply()), (afterFirst.Status, afterFirst.Pending));
@@ -201,7 +201,7 @@ public sealed class PlanningTests : IDisposable
     {
         var workflow = ArchitectWithTwoSlots(ConversationMode.MayAsk);
 
-        var prompt = AgentWork.Prompt(new NodeContext(workflow.Tasks[Architect], "") { Planning = PlanningContext.For(workflow, Architect, [BuiltInBlueprints.Implement]) });
+        var prompt = AgentWork.Prompt(new NodeContext(workflow.Tasks[Architect], "") { Planning = PlanningContext.For(workflow, Architect, [BuiltInBlueprints.Implement], _ => false) });
 
         Assert.Contains("```idevelop\n{\"status\": \"asking\", \"question\": \"...\"}\n```\n\nWhen you have finished, end with the proposal block below instead.\n\nWhen your plan is ready,", prompt);
         Assert.EndsWith("Types you may add:\n- type-1: Implement. Carries out its instructions with the agent you choose, and may edit the project. Fields: instructions (Instructions, required), acceptanceCriteria (Acceptance criteria).\n", prompt);
@@ -218,7 +218,24 @@ public sealed class PlanningTests : IDisposable
             .Must(new Connect(new ConnectionKey(Backend, filled), ConnectionKind.Dependency))
             .Must(new Connect(new ConnectionKey(Architect, beside), ConnectionKind.Context));
 
-        Assert.Equal([Backend, Frontend], PlanningContext.For(workflow, Architect, []).Slots.Select(slot => slot.Id).ToArray());
+        Assert.Equal([Backend, Frontend], PlanningContext.For(workflow, Architect, [], _ => false).Slots.Select(slot => slot.Id).ToArray());
+    }
+
+    [Fact]
+    public void A_task_that_has_started_is_no_slot_and_a_proposal_never_fills_it()
+    {
+        var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
+        var proposal = Ready(Proposed(FillsBothAndAddsOne));
+        var wire = proposal.Nodes[0].Id;
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), id => id == Backend));
+
+        Assert.Equal([Frontend], PlanningContext.For(workflow, Architect, [], id => id == Backend).Slots.Select(slot => slot.Id).ToArray());
+        Assert.Equal(("Backend", ""), (accepted.Tasks[Backend].Title, accepted.Tasks[Backend].Field("instructions")));
+        Assert.Equal("Add the export button.", accepted.Tasks[Frontend].Field("instructions"));
+        Assert.Equal(
+            [(Architect, Backend), (Architect, Frontend), (Frontend, wire)],
+            accepted.Connections.Keys.Select(key => (key.From, key.To)).Order());
     }
 
     [Theory]
@@ -234,6 +251,8 @@ public sealed class PlanningTests : IDisposable
     [InlineData("{\"status\": \"proposal\", \"fill\": [{\"slot\": \"slot-1\", \"title\": \"A\"}, {\"slot\": \"slot-01\", \"title\": \"B\"}]}", "The proposal fills slot-1 twice.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\", \"fields\": {\"acceptance_criteria\": \"x\"}}]}", "The new task a has a field acceptance_criteria, which its type Implement does not have.")]
     [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"a\", \"type\": \"type-1\"}], \"connect\": [{\"from\": \"a\", \"to\": \"a\"}]}", "A connection goes from a task to itself.")]
+    [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"slot-01\", \"type\": \"type-1\"}]}", "The new task slot-01 has the id of the planner or a slot.")]
+    [InlineData("{\"status\": \"proposal\", \"add\": [{\"id\": \"planner\", \"type\": \"type-1\"}]}", "The new task planner has the id of the planner or a slot.")]
     public void A_proposal_that_names_what_it_was_not_given_is_a_problem(string json, string problem)
     {
         Assert.Equal(new ProposalRead.Problem(problem), Proposal.Read(Proposed($"```idevelop\n{json}\n```"), Find));
@@ -250,7 +269,7 @@ public sealed class PlanningTests : IDisposable
             ```
             """));
 
-        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet()));
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
 
         Assert.Equal(("Implement", 2), (proposal.Nodes[0].Title, proposal.Connections.Length));
         Assert.Equal(3, accepted.Connections.Count);

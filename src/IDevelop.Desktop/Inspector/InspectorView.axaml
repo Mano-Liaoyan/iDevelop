@@ -149,7 +149,7 @@
                     <ItemsControl ItemsSource="{Binding Items}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="canvas:ProposalItemViewModel">
-                          <CheckBox IsChecked="{Binding IsChosen}" Margin="0,0,0,4"
+                          <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" Margin="0,0,0,4"
                                     AutomationProperties.AutomationId="ProposalItem"
                                     AutomationProperties.Name="{Binding Label}">
                             <StackPanel Spacing="2">

@@ -27,11 +27,12 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     public PlanningHandles Handles(Guid plan) => new(plan, [.. Slots.Select(slot => slot.Id)], [.. Types.Select(type => type.Key)]);
 
     /// <summary>
-    /// The slots are the nodes that the planner's dependency connections reach and whose fields are all blank, in the order
-    /// order of their ids.
+    /// The slots are the nodes that the planner's dependency connections reach, whose fields are all blank, and that have
+    /// not started, in the order of their ids.
     /// </summary>
     /// <param name="placeable">The blueprints a person can place, in the order a palette lists them.</param>
-    public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable)
+    /// <param name="started">Whether a task has an attempt.</param>
+    public static PlanningContext For(Workflow workflow, TaskId planner, IEnumerable<Blueprint> placeable, Func<TaskId, bool> started)
     {
         var successors = workflow.Connections.Where(connection => connection.Value.Blocks()).ToLookup(connection => connection.Key.From, connection => connection.Key.To);
         var reached = new HashSet<TaskId>();
@@ -47,7 +48,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
             }
         }
 
-        return new([.. reached.Order().Select(id => workflow.Tasks[id]).Where(IsEmpty)], [.. placeable]);
+        return new([.. reached.Order().Where(id => !started(id)).Select(id => workflow.Tasks[id]).Where(IsEmpty)], [.. placeable]);
     }
 
     public static bool IsEmpty(TaskDefinition node) => node.Fields.Values.All(string.IsNullOrWhiteSpace);
