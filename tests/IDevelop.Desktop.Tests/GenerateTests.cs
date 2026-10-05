@@ -175,6 +175,15 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_planners_reply_shows_its_prose_and_the_Proposal_section_stands_for_its_block()
+    {
+        var shell = Generated();
+
+        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastRunResult").Text);
+        Assert.Equal(3, shell.InView<StackPanel>("Proposal").GetVisualDescendants().OfType<CheckBox>().Count(box => box.IsChecked == true && AutomationProperties.GetAutomationId(box) != "ProposalUsePlannerAgent"));
+    }
+
+    [AvaloniaFact]
     public void Accept_and_Finish_places_the_tasks_in_layered_columns_with_the_planners_agent_and_ends_the_planner()
     {
         var shell = Generated();

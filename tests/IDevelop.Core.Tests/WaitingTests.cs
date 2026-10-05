@@ -207,6 +207,18 @@ public sealed class WaitingTests : IDisposable
         Assert.Equal(expected, read);
     }
 
+    [Theory]
+    [InlineData("Done.", "Done.")]
+    [InlineData("Here is the plan.\r\n\r\n```idevelop\n{\"status\": \"proposal\"}\n```\n", "Here is the plan.")]
+    [InlineData("```idevelop\n{\"status\": \"asking\", \"question\": \"Why?\"}\n```", "")]
+    [InlineData("Cut off.\n```idevelop\n{\"status\": \"asking\",", "Cut off.\n```idevelop\n{\"status\": \"asking\",")]
+    [InlineData("Odd.\n```idevelop\n[1]\n```", "Odd.\n```idevelop\n[1]\n```")]
+    [InlineData("```idevelop\n{\"status\": \"done\"}\n```\nThen more text.", "```idevelop\n{\"status\": \"done\"}\n```\nThen more text.")]
+    public void The_prose_of_a_message_leaves_out_only_a_block_that_was_read(string text, string expected)
+    {
+        Assert.Equal(expected, ResultBlock.Prose(text));
+    }
+
     [Fact]
     public void A_May_ask_turn_that_asks_without_a_session_fails_because_no_answer_could_reach_it()
     {
