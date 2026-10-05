@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-04. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-04. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -24,6 +24,7 @@ The user wants these capabilities:
 - Use C# and .NET for iDevelop's application code, Avalonia for the desktop UI, and NodifyAvalonia for the initial node canvas. The user declined further framework comparisons.
 - Prefer permissively licensed dependencies that allow commercial distribution and company use without mandatory framework fees. Preserve the option of distributing a proprietary product.
 - Restyle the interface to look like PlanWeave's desktop app, with a light theme and a dark theme the user can switch between, as recorded in [The interface follows the PlanWeave look](#the-interface-follows-the-planweave-look).
+- Give nodes types that users define and save as blueprints, as recorded in [Nodes have types that users define](#nodes-have-types-that-users-define).
 
 The shared server synchronizes workflow information. It does not host coding agents, model calls, terminals, or repositories. Provider authentication and execution stay on the local machine.
 
@@ -86,11 +87,27 @@ flowchart LR
 
 The feedback arrows describe new attempts. They do not introduce a cycle into the dependency graph for a single run version.
 
+## Nodes have types that users define
+
+On 2026-10-04 the user asked for typed nodes and confirmed these requirements:
+
+- A node has a type, such as implement, plan, architect, or review. An implement node executes a plan with the agent, model, and reasoning setting the user chose. A plan node makes a plan and hands it to implement nodes. An architect node designs.
+- Users define their own node types without code. Any node can be saved as a blueprint. Built-in blueprints are read-only, and a user changes one by deriving and saving a new blueprint.
+- Placing a node copies its blueprint and records which blueprint and version it came from. A later edit of the blueprint changes only nodes placed afterwards.
+- Blueprints live in a personal library in the user's folder and in a project library under `.idp/blueprints/`.
+- Node types build on interfaces. A node that needs a capability, such as interaction, implements that capability's interface.
+- iDevelop does not depend on PStack or any other skill library. A user's own commands and skills work inside a node.
+- A review is a back-and-forth between the implementer and the reviewer, each in its own continuing session, until both agree. It has no round limit, and the user does not have to stop it. Small tickets keep each session small.
+- The user can answer, guide, and correct an agent that asks how to proceed. Some nodes never ask. A live terminal is not required.
+- A planner usually creates the implement nodes. Nodes may also exist already, be drawn empty and filled later, or have no planner. The long-term goal is to talk to one agent and get the whole workflow.
+
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design, which the user accepted on 2026-10-04 with a change to the review loop. A node type is a blueprint over one of three works: an agent, a review loop, or a person. Review becomes a node, and every planner proposes graph edits that the user approves. A conversation resumes the client's own session, so no process runs while a node waits.
+
 ## Connections have explicit meanings
 
-A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. A review connection names the artifact and revision that a reviewer must accept.
+A dependency means that the predecessor must meet a named completion condition before the successor becomes ready. A context connection shares information without blocking execution. A review connection names the artifact and revision that a reviewer must accept. The [node model](handoffs/2026-10-04-node-model.md#review-is-a-node-and-connections-express-flow) replaces the review connection with a review node.
 
-Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent an endless implementation-review loop.
+Dependencies use all required predecessors by default. Optional or alternative paths need explicit conditions. Failure blocks affected dependents and shows the causal task. It does not stop unrelated work automatically. Retry limits and human escalation prevent endless retries of a failed attempt. A review loop has no round limit and ends when the implementer and the reviewer agree, as the user decided on 2026-10-04.
 
 Task readiness is derived from dependencies, required inputs, approvals, runner availability, and quota constraints. Attempt status is recorded separately as queued, running, waiting for input, succeeded, failed, cancelled, or interrupted. A disconnected runner has an unknown outcome until reconciliation establishes what happened. The interface should say why a task is waiting rather than present a generic spinner.
 
@@ -221,15 +238,16 @@ The [delivery order](#delivery-order) does not yet assign these cases to phases.
 
 ## Delivery order
 
-On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement, which the user confirmed again on 2026-10-04. It moved later, not out of scope. Text marked as a proposal waits for the user's confirmation.
+On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition of phase 3, and described phase 4 as DAG-style linked execution. Each phase ends when its completion condition is observed in the running app. Team synchronization remains a first-release requirement, which the user confirmed again on 2026-10-04. It moved later, not out of scope. On 2026-10-04 the user also put the node model ahead of workflow execution. Text marked as a proposal waits for the user's confirmation.
 
 | Phase | State | Completion condition |
 | --- | --- | --- |
 | 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
 | 3. Single-task execution | Done | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
-| 4. Workflow execution | Next | A workflow runs as a dependency graph, with linked execution across its tasks. |
-| 5. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
+| 4. Node model | Next | Proposal. Every built-in node type works on its own in the window. A node converses on each of the four clients. A planner's proposal fills drawn nodes and adds new ones after the user approves it. A review node and its subject iterate in fresh sessions until the reviewer approves. A user derives a node type, saves it to a library, and places it. |
+| 5. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
+| 6. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
 ### Single-task execution is done
 
@@ -248,9 +266,13 @@ The phase settled its open design questions. The [working decisions](context.md#
 
 iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
 
+### The node model comes next
+
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape.
+
 ### Workflow execution follows
 
-The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. This phase also settles what a review connection blocks.
+The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. The node model settles what a review connection blocks, because a review node replaces it.
 
 ### Team synchronization comes after execution
 
@@ -258,4 +280,4 @@ The current proposal is that synchronization shares a workflow that already carr
 
 ### Later work
 
-The user has not placed these relative to phases 4 and 5, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generate a draft workflow from a natural-language request. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
+The user has not placed these relative to the phases above, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generate a draft workflow from a natural-language request, which the node model proposes to do with a plan node in conversation. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
