@@ -13,6 +13,7 @@ public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly ClientDirectory _clients;
     private readonly Func<string, Task> _copy;
+    private readonly string? _personalBlueprints;
     private readonly RelayCommand _save;
     private readonly RelayCommand _refreshAgents;
     private WorkflowCanvasViewModel? _canvas;
@@ -20,10 +21,12 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _refreshingAgents;
 
     /// <param name="copy">Puts text on the clipboard.</param>
-    public MainWindowViewModel(ClientDirectory clients, Func<string, Task> copy)
+    /// <param name="personalBlueprints">The personal blueprint library's folder, or null for none.</param>
+    public MainWindowViewModel(ClientDirectory clients, Func<string, Task> copy, string? personalBlueprints = null)
     {
         _clients = clients;
         _copy = copy;
+        _personalBlueprints = personalBlueprints;
         _save = new RelayCommand(() => TrySave(), () => Canvas is not null);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
@@ -77,7 +80,7 @@ public sealed class MainWindowViewModel : ObservableObject
         await LeaveProject();
         var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
         document.Changed += (_, _) => OnDocumentChanged();
-        Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice, _copy);
+        Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice, _copy, _personalBlueprints);
         Status = string.Join(" ", [.. document.Converted is { } converted ? [converted] : Array.Empty<string>(), .. runs.Warnings]) is { Length: > 0 } notice
             ? notice
             : null;

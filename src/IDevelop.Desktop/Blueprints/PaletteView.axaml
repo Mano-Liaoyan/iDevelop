@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
+             x:Class="IDevelop.Desktop.Blueprints.PaletteView"
+             x:DataType="blueprints:BlueprintsViewModel">
+  <StackPanel Spacing="12" AutomationProperties.AutomationId="Palette">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="section" Text="BLUEPRINTS" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Classes="icon"
+              Command="{Binding ReloadCommand}"
+              ToolTip.Tip="Read the libraries again"
+              AutomationProperties.AutomationId="ReloadBlueprints"
+              AutomationProperties.Name="Read the libraries again">
+        <PathIcon Data="{StaticResource RefreshIcon}" Width="16" Height="16" />
+      </Button>
+    </Grid>
+    <ItemsControl ItemsSource="{Binding Groups}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="16" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="blueprints:PaletteGroup">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="caption" Text="{Binding Heading}" FontWeight="SemiBold" />
+            <TextBlock Classes="caption" Text="None yet. Derive a blueprint to add one." TextWrapping="Wrap" IsVisible="{Binding IsEmpty}" />
+            <ItemsControl ItemsSource="{Binding Entries}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="8" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="blueprints:BlueprintEntryViewModel">
+                  <Border Padding="10" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                          BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
+                    <StackPanel Spacing="4">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"
+                                   FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Version}" VerticalAlignment="Center" />
+                      </Grid>
+                      <TextBlock Classes="caption" Text="{Binding Description}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                                 IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" Margin="0,4,0,0">
+                        <Button Classes="action" Content="Place" Command="{Binding PlaceCommand}"
+                                AutomationProperties.AutomationId="PlaceBlueprint"
+                                AutomationProperties.Name="{Binding PlaceName}" />
+                        <Button Classes="action" Content="Derive" Command="{Binding DeriveCommand}"
+                                AutomationProperties.AutomationId="DeriveBlueprint"
+                                AutomationProperties.Name="{Binding DeriveName}" />
+                        <Button Classes="action" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}"
+                                AutomationProperties.AutomationId="EditBlueprint"
+                                AutomationProperties.Name="{Binding EditName}" />
+                      </WrapPanel>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <ItemsControl ItemsSource="{Binding Problems}" IsVisible="{Binding HasProblems}"
+                  AutomationProperties.AutomationId="BlueprintProblems">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="x:String">
+          <TextBlock Classes="caption" Text="{Binding}" TextWrapping="Wrap" Margin="0,0,0,4" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

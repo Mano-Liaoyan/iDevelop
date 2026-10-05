@@ -13,6 +13,9 @@ public partial class App : Application
     /// <summary>The per-user file that remembers the theme between runs. Null remembers nothing.</summary>
     public string? PreferencesFile { get; init; }
 
+    /// <summary>The personal blueprint library, beside the preferences file. Null without one.</summary>
+    public string? PersonalBlueprints => PreferencesFile is { } file ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(file))!, "blueprints") : null;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);

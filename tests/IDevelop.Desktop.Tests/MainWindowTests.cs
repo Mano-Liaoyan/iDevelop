@@ -82,7 +82,7 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Before_a_folder_is_open_new_task_and_save_are_unavailable_and_the_inspector_is_empty()
+    public void Before_a_folder_is_open_new_task_and_save_are_unavailable_and_after_it_the_inspector_shows_the_palette()
     {
         var shell = Shell.Show();
 
@@ -94,7 +94,13 @@ public sealed class MainWindowTests : IDisposable
         shell.Render();
 
         Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
-        Assert.Equal(["Inspector", "Select a task or connection to edit it."], Shell.Texts(shell.Find<Control>("Inspector")));
+        Assert.Equal(
+            [
+                "Inspector", "Select a task or connection to edit it.", "BLUEPRINTS", "BUILT-IN", "Implement", "Version 1",
+                "Carries out its instructions with the agent you choose, and may edit the project.", "Place", "Derive",
+                "PROJECT", "None yet. Derive a blueprint to add one.", "PERSONAL", "None yet. Derive a blueprint to add one.",
+            ],
+            Shell.Texts(shell.Find<Control>("Inspector")));
         Assert.Equal("plan", shell.Find<TextBlock>("ProjectName").Text);
     }
 }

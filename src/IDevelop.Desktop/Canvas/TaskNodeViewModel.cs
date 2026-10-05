@@ -64,6 +64,8 @@ public sealed class TaskNodeViewModel : ObservableObject
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => TurnRunsHere && _send.CanExecute(null));
         _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
         _markDone = new RelayCommand(MarkDone, () => IsWaiting);
+        DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
+        SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
     }
 
     public TaskId Id => _task.Id;
@@ -92,6 +94,15 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     /// <summary>The name of the task's blueprint, such as Implement.</summary>
     public string TypeName => _task.Blueprint.Name;
+
+    /// <summary>The version the node was placed from, which it keeps whatever its library does later.</summary>
+    public string TypeVersion => $"{(_task.Blueprint.IsBuiltIn ? "Built-in, version" : "Version")} {_task.Blueprint.Key.Version}";
+
+    /// <summary>Opens the blueprint editor on a new blueprint with this node's structure.</summary>
+    public ICommand DeriveCommand { get; }
+
+    /// <summary>Opens the blueprint editor on a new blueprint whose defaults are this node's values and settings.</summary>
+    public ICommand SaveAsBlueprintCommand { get; }
 
     /// <summary>The blueprint's fields, in its order.</summary>
     public IReadOnlyList<FieldViewModel> Fields { get; }
