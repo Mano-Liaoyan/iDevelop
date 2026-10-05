@@ -52,7 +52,8 @@
                         AutomationProperties.AutomationId="CardKind"
                         AutomationProperties.HelpText="{Binding KindHelp}" />
         <StackPanel Grid.Column="1" Margin="0,14,0,0">
-          <Panel>
+          <!-- The row keeps the title's height while the rename box replaces the title. -->
+          <Panel MinHeight="18">
             <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding !IsRenaming}"
                        AutomationProperties.AutomationId="CardTitle" />

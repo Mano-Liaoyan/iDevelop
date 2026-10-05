@@ -38,18 +38,18 @@
     <Setter Property="Height" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The box is as tall as the title's row, so the subtitle under it stays whole. The margins cancel its border and
-       padding, and the text sits at the top as the title's does, so it stays where the title drew it in any font.
-       Centered, it moved by half the gap between the font's line and the box, 2 px on macOS. -->
+  <!-- The box wraps the font's line, so a tall line keeps its descenders and a short one stays clear of the subtitle,
+       whose text starts lower in a font with a taller line. The top and left margins cancel the box's border and padding,
+       so the text sits where the title drew it in any font. The bottom margin keeps the row at the title's 18 px for a
+       line up to 23 px, so a taller box reaches into the empty top of the subtitle's row. -->
   <Style Selector="TextBox.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Height" Value="18" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="Margin" Value="-5,-1,0,1" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="-5,-1,0,-6" />
     <Setter Property="Padding" Value="4,0" />
     <Setter Property="CornerRadius" Value="5" />
-    <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">
