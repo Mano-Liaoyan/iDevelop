@@ -91,7 +91,7 @@ try {
 
     With-App $project {
         param($process, $window)
-        foreach ($id in $agentRows) { Check ($null -ne (Find-ById $window $id)) "the AGENTS section lists $id" }
+        foreach ($id in $agentRows) { Check ($null -ne (Find-ById $window $id)) "the Agents section lists $id" }
         $settled = Wait-Until { -not (@($agentRows | ForEach-Object { (Find-ById $window $_).Current.Name }) -match 'Checking') } 120
         Check ($settled -eq $true) 'every agent client finished its check within 120 seconds'
         foreach ($id in $agentRows) { $row = Find-ById $window $id; $results.Add("INFO $id says '$($row.Current.Name)'. $($row.Current.HelpText)") }

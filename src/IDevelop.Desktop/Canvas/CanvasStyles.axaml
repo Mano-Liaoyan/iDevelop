@@ -38,7 +38,7 @@
     <Setter Property="Height" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The rename box sits where the title was, its text on the title's line. -->
+  <!-- The left margin cancels the box's padding and border, so the text stays where the title drew it. -->
   <Style Selector="TextBox.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -117,7 +117,8 @@
     <Setter Property="StrokeDashArray" Value="4,3" />
     <Setter Property="Opacity" Value="0.8" />
   </Style>
-  <!-- A proposed connection is dashed and lighter, and a proposed context connection is dotted. -->
+  <!-- Every proposed connection is dashed, so a proposed context connection is dotted to stay apart from a proposed
+       dependency. -->
   <Style Selector="nodify|StepConnection.ghost">
     <Setter Property="StrokeThickness" Value="1.5" />
     <Setter Property="StrokeDashArray" Value="4,3" />

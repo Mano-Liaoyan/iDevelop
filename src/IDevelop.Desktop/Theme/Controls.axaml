@@ -468,7 +468,8 @@
     <Setter Property="MaxWidth" Value="320" />
   </Style>
 
-  <!-- A ticked box fills with the accent and draws its check in white in both themes, as on macOS. -->
+  <!-- Fluent fills a ticked box with the palette accent, which holds a white check at 3.5:1 or less, and shifts it on
+       hover and press. The fill token holds the check at 4.6:1 in every state. -->
   <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
     <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AccentFillBrush}" />
