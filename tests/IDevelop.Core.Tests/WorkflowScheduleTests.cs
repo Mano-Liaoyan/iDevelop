@@ -15,12 +15,17 @@ public class WorkflowScheduleTests
     private static string Name(TaskId id) => Names.Single(name => Id(name) == id);
 
     /// <summary>A workflow of the named nodes, with "A>B" for a dependency and "A~B" for a context connection.</summary>
-    private static Workflow Graph(params string[] connections)
+    private static Workflow Graph(params string[] connections) => Graph(new Dictionary<string, Blueprint>(), connections);
+
+    /// <summary>The same, with each node in <paramref name="types"/> placed from that blueprint instead of Implement.</summary>
+    private static Workflow Graph(Dictionary<string, Blueprint> types, params string[] connections)
     {
         var workflow = Workflow.Empty(new WorkflowId(Guid.Parse("019b0000-0000-7000-8000-0000000000ff")));
         foreach (var name in Names)
         {
-            workflow = workflow.Must(Place(Implement(Id(name), name), new CanvasPoint(0, 0)));
+            workflow = workflow.Must(types.GetValueOrDefault(name) is { } type
+                ? new WorkflowEdit.PlaceNode(Id(name), type, new CanvasPoint(0, 0)) { Title = name }
+                : Place(Implement(Id(name), name), new CanvasPoint(0, 0)));
         }
 
         foreach (var connection in connections)
@@ -32,6 +37,10 @@ public class WorkflowScheduleTests
         return workflow;
     }
 
+    private const string Findings =
+        """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add ignores b", "change": "return a + b"}], "withdrawn": []}""";
+
+    /// <summary>An attempt of the named node that ends in <paramref name="status"/>. One in review reviews A and found a problem.</summary>
     private static AttemptRecord Attempt(string name, AttemptStatus status)
     {
         var at = AttemptEvents.T0;
@@ -41,19 +50,38 @@ public class WorkflowScheduleTests
         };
         AttemptEvent[] events = status switch
         {
-            AttemptStatus.Running => [AttemptEvents.LaunchedAt1s],
-            AttemptStatus.Succeeded => [Said(new AgentEvent.Succeeded("Done.")), new AttemptEvent.Exited(at, 0, "")],
-            AttemptStatus.Failed => [Said(new AgentEvent.Failed("No quota.")), new AttemptEvent.Exited(at, 1, "")],
-            AttemptStatus.Cancelled => [AttemptEvents.LaunchedAt1s, new AttemptEvent.CancelRequested(at), new AttemptEvent.Exited(at, 1, "")],
-            AttemptStatus.Interrupted => [AttemptEvents.LaunchedAt1s, new AttemptEvent.Reconciled(at, null)],
+            AttemptStatus.Running => [requested, AttemptEvents.LaunchedAt1s],
+            AttemptStatus.Succeeded => [requested, Said(new AgentEvent.Succeeded("Done.")), new AttemptEvent.Exited(at, 0, "")],
+            AttemptStatus.Failed => [requested, Said(new AgentEvent.Failed("No quota.")), new AttemptEvent.Exited(at, 1, "")],
+            AttemptStatus.Cancelled => [requested, AttemptEvents.LaunchedAt1s, new AttemptEvent.CancelRequested(at), new AttemptEvent.Exited(at, 1, "")],
+            AttemptStatus.Interrupted => [requested, AttemptEvents.LaunchedAt1s, new AttemptEvent.Reconciled(at, null)],
             AttemptStatus.WaitingForInput =>
-                [Said(new AgentEvent.SessionStarted("thread-1")), Said(new AgentEvent.Succeeded("Which fruit?")), new AttemptEvent.Exited(at, 0, "")],
+                [requested, Said(new AgentEvent.SessionStarted("thread-1")), Said(new AgentEvent.Succeeded("Which fruit?")), new AttemptEvent.Exited(at, 0, "")],
+            AttemptStatus.InReview => Reviewing(name, Findings),
         };
-        var record = AttemptReducer.Replay([requested, .. events])!;
-        Assert.Equal(status, record.Status);
-        return record;
+        return Replay(status, events);
 
         AttemptEvent Said(AgentEvent e) => new AttemptEvent.Agent(at, e);
+    }
+
+    /// <summary>A review by the named node of A whose first reviewer turn ended with this verdict block.</summary>
+    private static AttemptEvent[] Reviewing(string name, string verdict)
+    {
+        var at = AttemptEvents.T0;
+        return
+        [
+            new AttemptEvent.Requested(at, AttemptId.New(), Id(name), name, AttemptEvents.CodexHigh, "p", "codex", []) { Subject = Id("A") },
+            new AttemptEvent.Agent(at, new AgentEvent.SessionStarted("thread-1")),
+            new AttemptEvent.Agent(at, new AgentEvent.Succeeded($"I read the change.\n\n```idevelop\n{verdict}\n```")),
+            new AttemptEvent.Exited(at, 0, ""),
+        ];
+    }
+
+    private static AttemptRecord Replay(AttemptStatus status, AttemptEvent[] events)
+    {
+        var record = AttemptReducer.Replay(events)!;
+        Assert.Equal(status, record.Status);
+        return record;
     }
 
     /// <summary>The ready nodes, then each blocked node with its holders, a holder that has not started as "ready".</summary>
@@ -151,6 +179,7 @@ public class WorkflowScheduleTests
     [InlineData(AttemptStatus.Succeeded, true)]
     [InlineData(AttemptStatus.Running, false)]
     [InlineData(AttemptStatus.WaitingForInput, false)]
+    [InlineData(AttemptStatus.InReview, false)]
     [InlineData(AttemptStatus.Failed, false)]
     [InlineData(AttemptStatus.Cancelled, false)]
     [InlineData(AttemptStatus.Interrupted, false)]
@@ -165,18 +194,88 @@ public class WorkflowScheduleTests
         Assert.False(WorkflowSchedule.HandedOn(null));
     }
 
-    [Theory]
-    [InlineData(AttemptStatus.Succeeded)]
-    [InlineData(AttemptStatus.WaitingForInput)]
-    [InlineData(AttemptStatus.Failed)]
-    [InlineData(AttemptStatus.Cancelled)]
-    [InlineData(AttemptStatus.Interrupted)]
-    public void A_node_hands_on_exactly_when_its_work_finishes(AttemptStatus status)
+    public static TheoryData<string, AttemptStatus> SettledOrResting
     {
-        var attempt = Attempt("A", status);
-        var step = AgentWork.Instance.Next(new NodeContext(Implement(Id("A"), "A"), ""), attempt);
+        get
+        {
+            var data = new TheoryData<string, AttemptStatus>();
+            foreach (var type in new[] { "Implement", "Review", "Approval" })
+            {
+                foreach (var status in Enum.GetValues<AttemptStatus>().Where(status => status != AttemptStatus.Running))
+                {
+                    data.Add(type, status);
+                }
+            }
+
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SettledOrResting))]
+    public void A_node_hands_on_exactly_when_its_work_finishes(string type, AttemptStatus status)
+    {
+        var node = new TaskDefinition(Id("B"), BuiltInBlueprints.All.Single(blueprint => blueprint.Name == type));
+        var attempt = Attempt("B", status);
+        var step = NodeWorks.For(node.Blueprint.Work).Next(new NodeContext(node, ""), attempt);
 
         Assert.Equal(step is NodeStep.Finish, WorkflowSchedule.HandedOn(attempt));
+    }
+
+    [Fact]
+    public void A_review_whose_reviewer_approved_hands_on_once_the_approval_is_recorded()
+    {
+        var review = new TaskDefinition(Id("B"), BuiltInBlueprints.Review);
+        var resting = Reviewing("B", """{"status": "verdict", "verdict": "approve", "findings": [], "withdrawn": []}""");
+        var approved = Replay(AttemptStatus.InReview, resting);
+        var concluded = Replay(AttemptStatus.Succeeded, [.. resting, new AttemptEvent.Concluded(AttemptEvents.T0, null)]);
+
+        Assert.IsType<NodeStep.Finish>(ReviewWork.Instance.Next(new NodeContext(review, ""), approved));
+        Assert.False(WorkflowSchedule.HandedOn(approved));
+        Assert.True(WorkflowSchedule.HandedOn(concluded));
+    }
+
+    [Fact]
+    public void A_review_holds_back_its_own_dependents_until_it_concludes_and_its_subject_releases_its_own()
+    {
+        var workflow = Graph(new Dictionary<string, Blueprint> { ["B"] = BuiltInBlueprints.Review }, "A>B", "B>C", "A>D");
+
+        var fresh = Schedule(workflow);
+        var inReview = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.InReview));
+        var fixing = Schedule(workflow, ("A", AttemptStatus.Running), ("B", AttemptStatus.InReview));
+        var approved = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.Succeeded));
+        var failed = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.Failed));
+
+        Assert.Equal(["A", "E", "F"], fresh.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["B"] = "A ready", ["C"] = "A ready", ["D"] = "A ready" }, fresh.Blocked);
+        Assert.Equal(["D", "E", "F"], inReview.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B InReview" }, inReview.Blocked);
+        Assert.Equal(["E", "F"], fixing.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B InReview", ["D"] = "A Running" }, fixing.Blocked);
+        Assert.Equal(["C", "D", "E", "F"], approved.Ready);
+        Assert.Empty(approved.Blocked);
+        Assert.Equal(["D", "E", "F"], failed.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B Failed" }, failed.Blocked);
+    }
+
+    [Fact]
+    public void An_approval_holds_back_its_dependents_until_the_person_approves()
+    {
+        var workflow = Graph(new Dictionary<string, Blueprint> { ["B"] = BuiltInBlueprints.Approval }, "A>B", "B>C");
+
+        var reached = Schedule(workflow, ("A", AttemptStatus.Succeeded));
+        var waiting = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.WaitingForInput));
+        var approved = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.Succeeded));
+        var sentBack = Schedule(workflow, ("A", AttemptStatus.Succeeded), ("B", AttemptStatus.Failed));
+
+        Assert.Equal(["B", "D", "E", "F"], reached.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B ready" }, reached.Blocked);
+        Assert.Equal(["D", "E", "F"], waiting.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B WaitingForInput" }, waiting.Blocked);
+        Assert.Equal(["C", "D", "E", "F"], approved.Ready);
+        Assert.Empty(approved.Blocked);
+        Assert.Equal(["D", "E", "F"], sentBack.Ready);
+        Assert.Equal(new Dictionary<string, string> { ["C"] = "B Failed" }, sentBack.Blocked);
     }
 
     [Fact]

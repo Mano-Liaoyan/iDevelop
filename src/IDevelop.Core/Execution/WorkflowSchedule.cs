@@ -78,13 +78,14 @@ public sealed record WorkflowSchedule(
 
     /// <summary>
     /// Whether a node finished with a handoff, which releases its dependents. The one place that decides it. Every work's
-    /// <see cref="Nodes.INodeWork.Next"/> finishes exactly when the node's latest attempt succeeded. The switch names every
-    /// status, so a new one fails the build here until it is placed.
+    /// <see cref="Nodes.INodeWork.Next"/> finishes when the node's latest attempt succeeded. A review whose reviewer
+    /// approved finishes while it still rests in review, and it hands on once <see cref="ProjectRuns"/> takes that step and
+    /// records it as succeeded. The switch names every status, so a new one fails the build here until it is placed.
     /// </summary>
     public static bool HandedOn(AttemptRecord? latest) => latest is not null && latest.Status switch
     {
         AttemptStatus.Succeeded => true,
-        AttemptStatus.Running or AttemptStatus.WaitingForInput => false,
+        AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview => false,
         AttemptStatus.Failed or AttemptStatus.Cancelled or AttemptStatus.Interrupted => false,
     };
 }
