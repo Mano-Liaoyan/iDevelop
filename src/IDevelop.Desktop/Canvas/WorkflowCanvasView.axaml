@@ -71,6 +71,11 @@
       <Setter Property="BorderBrush" Value="{DynamicResource StateFailed60Brush}" />
       <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
     </Style>
+    <Style Selector="Border.card.waiting">
+      <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateSelected55Brush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource CardWaitingShadow}" />
+    </Style>
     <Style Selector="TextBlock.cardTitle">
       <Setter Property="FontSize" Value="14" />
       <Setter Property="FontWeight" Value="SemiBold" />
@@ -124,10 +129,6 @@
       <Setter Property="Stroke" Value="{DynamicResource ConnectionContextBrush}" />
       <Setter Property="Fill" Value="{DynamicResource ConnectionContextBrush}" />
       <Setter Property="StrokeDashArray" Value="4,3" />
-    </Style>
-    <Style Selector="nodify|StepConnection.review">
-      <Setter Property="Stroke" Value="{DynamicResource ConnectionReviewBrush}" />
-      <Setter Property="Fill" Value="{DynamicResource ConnectionReviewBrush}" />
     </Style>
     <Style Selector="nodify|StepConnection:pointerover">
       <Setter Property="StrokeThickness" Value="3.2" />
@@ -234,27 +235,33 @@
                     CornerRadius="{StaticResource RadiusXl}"
                     Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                     Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                    Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
+                    Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                    Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
               <StackPanel Spacing="4">
                 <Grid Height="24" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                   <TextBlock Classes="cardTitle" VerticalAlignment="Center" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
                   <Border Grid.Column="1" Classes="pill"
                           Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                           Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
+                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                          Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <PathIcon />
                       <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="CardStatus" />
                     </StackPanel>
                   </Border>
                 </Grid>
-                <TextBlock Classes="cardLabel" Margin="0,6,0,0" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
-                           AutomationProperties.AutomationId="CardAgent" />
+                <Grid Margin="0,6,0,0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Classes="cardLabel" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="CardAgent" />
+                  <TextBlock Grid.Column="1" Classes="cardLabel" Text="{Binding TypeName}"
+                             AutomationProperties.AutomationId="CardType" />
+                </Grid>
                 <Border Classes="prompt" Height="64">
                   <Panel>
-                    <TextBlock Text="{Binding Instructions}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
-                    <TextBlock Classes="placeholder" Text="No instructions yet."
-                               IsVisible="{Binding Instructions, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                    <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
+                    <TextBlock Classes="placeholder" Text="{Binding PreviewPlaceholder}"
+                               IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
                   </Panel>
                 </Border>
               </StackPanel>
@@ -289,7 +296,6 @@
           <nodify:StepConnection Source="{Binding From.Output.Anchor}"
                                  Target="{Binding To.Input.Anchor}"
                                  Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                                 Classes.review="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Review}}"
                                  nodify:BaseConnection.IsSelectable="True">
             <nodify:StepConnection.ContextMenu>
               <ContextMenu>
@@ -299,9 +305,6 @@
                 <MenuItem Header="Context"
                           Command="{Binding SetKindCommand}"
                           CommandParameter="{x:Static workflows:ConnectionKind.Context}" />
-                <MenuItem Header="Review"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Review}" />
                 <Separator />
                 <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
               </ContextMenu>
@@ -339,6 +342,19 @@
         </StackPanel>
       </Border>
     </Border>
+
+    <Button Classes="ghost" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="12"
+            Command="{Binding NextWaitingCommand}"
+            IsVisible="{Binding HasWaiting}"
+            AutomationProperties.AutomationId="NextWaiting"
+            AutomationProperties.Name="Show the next task that waits for you">
+      <Border Classes="pill waiting">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon />
+          <TextBlock Text="{Binding WaitingLabel}" AutomationProperties.AutomationId="WaitingCount" />
+        </StackPanel>
+      </Border>
+    </Button>
 
     <!-- The code-behind sets the margin, so the bar never covers the zoom controls or the minimap. UI Automation shows
          no plain border, so a user control carries the bar's id. -->

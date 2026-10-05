@@ -15,6 +15,8 @@ public static class RejectionText
         EditRejection.UnknownTask => "That task no longer exists.",
         EditRejection.UnknownConnection => "That connection no longer exists.",
         EditRejection.TaskAlreadyExists => "A task with that id already exists.",
+        EditRejection.UnknownField field => $"This task's type has no field {field.Key}.",
+        EditRejection.BlueprintConflict conflict => $"This workflow already holds a different {conflict.Key}.",
         _ => throw new UnreachableException(),
     };
 }

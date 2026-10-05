@@ -8,7 +8,7 @@ This directory is the maintained source for verifying iDevelop's user-facing beh
 - A session started with `Start-IDevelop` runs, and `Test-IDevelop` ends with `Doctor: worth driving`.
 - The session opened its own copy of `samples/storage-change`. Its window title is `project - iDevelop`.
 - The sample holds three tasks in this sidebar order. `Design the workflow file format` asks for Claude Code with `claude-opus-5-5` at `high`. `Implement atomic save` asks for Codex with GPT-6-Sol at `medium`. `Review the storage change` has no agent.
-- Its three connections are a dependency from the first task to the second, a context connection from the first to the third, and a review connection from the second to the third.
+- Its three connections are a dependency from the first task to the second, a context connection from the first to the third, and a dependency from the second to the third. Every task is an Implement node in Autonomous conversation.
 - The fake Codex is `Ready · 3 models`. Claude Code, Pi, and Antigravity CLI are `Not ready`.
 
 ## Driving conventions

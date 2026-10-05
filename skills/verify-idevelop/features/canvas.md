@@ -1,6 +1,6 @@
 # The canvas
 
-The canvas shows each task as a card with its title, status, agent, and instructions, joined by dependency, context, and review connections. A user adds tasks, zooms in and out, fits every task on the screen, and sees the whole workflow in the minimap at the bottom right.
+The canvas shows each task as a card with its title, status, agent, type, and instructions, joined by dependency and context connections. A user adds tasks, zooms in and out, fits every task on the screen, and sees the whole workflow in the minimap at the bottom right.
 
 ## Sub-features
 
@@ -10,7 +10,7 @@ The canvas shows each task as a card with its title, status, agent, and instruct
 - `fit` brings every card into view with `Fit to screen`.
 - `sidebar-reveal` scrolls the canvas to a card chosen in the sidebar when it is out of view.
 - `minimap` shows the whole workflow at the bottom right.
-- `connections` draws the sample's dependency, context, and review connections, which the saved file keeps.
+- `connections` draws the sample's dependency and context connections, which the saved file keeps.
 
 ## How to get to it (user POV)
 
@@ -36,7 +36,7 @@ $card = { (Find-NameOutside $s.Window 'Review the storage change' 'SidebarTasks'
 ```
 
 - **Cards.** Read the three cards. Run `(Find-ById $s.Window 'Editor').FindAll('Children', [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'CardAgent')).Current.Name`. It lists `Claude Code · claude-opus-5-5 · high`, `Codex · GPT-6-Sol · medium`, and `No agent`. With `CardStatus` in place of `CardAgent` it lists `Not run` three times. Claude Code is not ready under the fake clients, so its card shows the model id.
-- **Connections.** Show them and read them from the file. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')` and `Save-Evidence $s 'connections'`. The screenshot shows a solid blue line with an arrow from the first card to the second, a dashed line from the first card to the third that passes under the second card, and a solid orange line from the second card to the third. The copied file under `connections\workflows` lists connection kinds `dependency`, `context`, and `review`.
+- **Connections.** Show them and read them from the file. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')` and `Save-Evidence $s 'connections'`. The screenshot shows a solid blue line with an arrow from the first card to the second, a dashed line from the first card to the third that passes under the second card, and a solid blue line from the second card to the third. The copied file under `connections\workflows` lists connection kinds `dependency`, `context`, and `dependency`.
 - **Zoom in.** Run `$before = & $title`, `Invoke-Element (Find-ById $s.Window 'ZoomIn')`, and `$after = Wait-Until { $v = & $title; if ($v -gt $before) { $v } } 5`. The title grows by about a quarter, one step of 2^(1/3).
 - **Zoom out.** Run `Invoke-Element (Find-ById $s.Window 'ZoomOut')` and `Wait-Until { $v = & $title; if ($v -lt $after) { $v } } 5`. The height returns to `$before`. The window title stays `project - iDevelop`, because the view is not part of the file.
 - **Fit.** Zoom in until the third card leaves the canvas, then fit. Run `1..4 | ForEach-Object { Invoke-Element (Find-ById $s.Window 'ZoomIn') }`. `$editor.Contains((& $card))` is `$false`. Run `Invoke-Element (Find-ById $s.Window 'FitToScreen')`, and `Wait-Until { $editor.Contains((& $card)) } 5` returns `$true`.

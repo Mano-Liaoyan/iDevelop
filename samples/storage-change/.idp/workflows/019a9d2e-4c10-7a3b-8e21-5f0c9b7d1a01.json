@@ -1,49 +1,107 @@
 {
-  "format": "idevelop.workflow/2",
+  "format": "idevelop.workflow/3",
   "id": "019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01",
+  "blueprints": [
+    {
+      "id": "idevelop.implement",
+      "version": 1,
+      "name": "Implement",
+      "description": [
+        "Carries out its instructions with the agent you choose, and may edit the project."
+      ],
+      "derivedFrom": null,
+      "work": {
+        "kind": "agent",
+        "access": "edit",
+        "proposes": false,
+        "template": [
+          "{{#title}}# {{title}}",
+          "",
+          "{{/title}}{{instructions}}",
+          "{{#acceptanceCriteria}}",
+          "## Acceptance criteria",
+          "",
+          "{{acceptanceCriteria}}",
+          "{{/acceptanceCriteria}}"
+        ]
+      },
+      "fields": [
+        {
+          "key": "instructions",
+          "label": "Instructions",
+          "shape": "text",
+          "required": true,
+          "default": []
+        },
+        {
+          "key": "acceptanceCriteria",
+          "label": "Acceptance criteria",
+          "shape": "text",
+          "required": false,
+          "default": []
+        }
+      ],
+      "defaults": {
+        "execution": null,
+        "conversation": "autonomous"
+      }
+    }
+  ],
   "tasks": [
     {
       "id": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
       "title": "Design the workflow file format",
-      "instructions": [
-        "Propose a JSON layout for tasks, connections, and canvas positions.",
-        "Keep multi-line text readable in a plain text editor.",
-        "",
-        "Store no view state other than node positions."
-      ],
-      "acceptanceCriteria": [
-        "A three-task sample opens in a text editor without escaped line breaks.",
-        "Chinese text such as 审查说明 stays readable."
-      ],
+      "blueprint": "idevelop.implement@1",
+      "fields": {
+        "instructions": [
+          "Propose a JSON layout for tasks, connections, and canvas positions.",
+          "Keep multi-line text readable in a plain text editor.",
+          "",
+          "Store no view state other than node positions."
+        ],
+        "acceptanceCriteria": [
+          "A three-task sample opens in a text editor without escaped line breaks.",
+          "Chinese text such as 审查说明 stays readable."
+        ]
+      },
       "execution": {
         "client": "claude-code",
         "model": "claude-opus-5-5",
         "reasoning": "high"
-      }
+      },
+      "conversation": "autonomous"
     },
     {
       "id": "019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22",
       "title": "Implement atomic save",
-      "instructions": [
-        "Write the file to a temporary sibling, flush it to disk, then rename it over the target."
-      ],
-      "acceptanceCriteria": [
-        "Killing the process during save leaves the previous file intact."
-      ],
+      "blueprint": "idevelop.implement@1",
+      "fields": {
+        "instructions": [
+          "Write the file to a temporary sibling, flush it to disk, then rename it over the target."
+        ],
+        "acceptanceCriteria": [
+          "Killing the process during save leaves the previous file intact."
+        ]
+      },
       "execution": {
         "client": "codex",
         "model": "gpt-6-sol",
         "reasoning": "medium"
-      }
+      },
+      "conversation": "autonomous"
     },
     {
       "id": "019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33",
       "title": "Review the storage change",
-      "instructions": [],
-      "acceptanceCriteria": [
-        "The reviewer approves the diff or lists the required changes."
-      ],
-      "execution": null
+      "blueprint": "idevelop.implement@1",
+      "fields": {
+        "instructions": [],
+        "acceptanceCriteria": [
+          "The reviewer approves the diff or lists the required changes."
+        ]
+      },
+      "execution": null,
+      "conversation": "autonomous"
     }
   ],
   "connections": [
@@ -60,7 +118,7 @@
     {
       "from": "019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22",
       "to": "019a9d2e-5c9a-7f05-b1c8-4e6a0d3f8c33",
-      "kind": "review"
+      "kind": "dependency"
     }
   ],
   "layout": {

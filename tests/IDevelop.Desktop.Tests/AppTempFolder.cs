@@ -12,8 +12,10 @@ internal static class AppTempFolder
     public static TempFolder New() =>
         new(Application.Current is App { PreferencesFile: { } file } app && app.CheckAccess() ? Path.GetDirectoryName(file) : null);
 
-    public static WorkflowEdit.CreateTask TaskAt(TaskId id, string title, double x, double y, ExecutionSettings? execution = null, string instructions = "") =>
-        new(new TaskDefinition(id) { Title = title, Instructions = instructions, Execution = execution }, new CanvasPoint(x, y));
+    public static WorkflowEdit.PlaceNode TaskAt(
+        TaskId id, string title, double x, double y, ExecutionSettings? execution = null, string instructions = "",
+        ConversationMode conversation = ConversationMode.Autonomous) =>
+        TestNodes.Place(TestNodes.Implement(id, title, instructions, execution: execution, conversation: conversation), new CanvasPoint(x, y));
 
     /// <summary>Saves the edits as a project in a folder named "seed", which titles such as "seed - iDevelop" rely on.</summary>
     public static string Seed(this TempFolder temp, params WorkflowEdit[] edits)

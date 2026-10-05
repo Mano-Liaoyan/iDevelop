@@ -1,10 +1,10 @@
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -40,6 +40,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     private readonly RelayCommand _send;
     private readonly RelayCommand _stopAndSend;
     private readonly RelayCommand _openInTerminal;
+    private readonly RelayCommand _markDone;
     private TaskDefinition _task;
     private Point _location;
     private AttemptRecord? _attempt;
@@ -52,15 +53,17 @@ public sealed class TaskNodeViewModel : ObservableObject
         _task = task;
         _location = WorkflowCanvasViewModel.ToPoint(position);
         _attempt = canvas.Runs.Latest.GetValueOrDefault(task.Id);
+        Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
         _run = new RelayCommand(Run, () => !RunsHere);
         _cancel = new RelayCommand(
-            () => _canvas.Runs.Cancel(Id),
-            () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
+            () => _canvas.Notice(_canvas.Runs.Cancel(Id) is { } problem ? RunText.Describe(problem) : null),
+            () => IsWaiting || _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
         _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => TurnRunsHere && _send.CanExecute(null));
-        _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: not AttemptStatus.Running, SessionId: not null });
+        _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
+        _markDone = new RelayCommand(MarkDone, () => IsWaiting);
     }
 
     public TaskId Id => _task.Id;
@@ -78,20 +81,41 @@ public sealed class TaskNodeViewModel : ObservableObject
     public string Title
     {
         get => _task.Title;
-        set => RequestEdit(TaskField.Title, value);
+        set
+        {
+            if (_canvas.Edit(new WorkflowEdit.EditTitle(Id, value)) is EditResult.Rejected)
+            {
+                OnPropertyChanged();
+            }
+        }
     }
 
-    public string Instructions
-    {
-        get => _task.Instructions;
-        set => RequestEdit(TaskField.Instructions, value);
-    }
+    /// <summary>The name of the task's blueprint, such as Implement.</summary>
+    public string TypeName => _task.Blueprint.Name;
 
-    public string AcceptanceCriteria
-    {
-        get => _task.AcceptanceCriteria;
-        set => RequestEdit(TaskField.AcceptanceCriteria, value);
-    }
+    /// <summary>The blueprint's fields, in its order.</summary>
+    public IReadOnlyList<FieldViewModel> Fields { get; }
+
+    /// <summary>The card previews the first field.</summary>
+    public string Preview => Fields.Count > 0 ? Fields[0].Text : "";
+
+    public string PreviewPlaceholder => Fields.Count > 0 ? $"No {Fields[0].Label.ToLowerInvariant()} yet." : "";
+
+    public IReadOnlyList<Choice> ConversationChoices =>
+        [.. Enum.GetValues<ConversationMode>().Select(mode => new Choice(Id, mode.ToString(), RunText.ConversationChoice(mode)))];
+
+    public Choice SelectedConversation => ConversationChoices.First(choice => choice.Id == _task.Conversation.ToString());
+
+    public string ConversationNote => RunText.ConversationNote(_task.Conversation);
+
+    /// <summary>The task's latest attempt waits for the person.</summary>
+    public bool IsWaiting => _attempt is { Status: AttemptStatus.WaitingForInput };
+
+    /// <summary>The question or the reason the task waits for the person, or null.</summary>
+    public string? Waiting => _attempt is { Status: AttemptStatus.WaitingForInput, Pending: { } pending } ? RunText.Waiting(pending) : null;
+
+    /// <summary>Records the waiting task as done, with the agent's last reply as its result.</summary>
+    public ICommand MarkDoneCommand => _markDone;
 
     public string AgentLabel => RunText.AgentLabel(_task.Execution, Status);
 
@@ -201,14 +225,21 @@ public sealed class TaskNodeViewModel : ObservableObject
                 OnPropertyChanged(nameof(Title));
             }
 
-            if (old.Instructions != task.Instructions)
+            if (!ReferenceEquals(old.Fields, task.Fields))
             {
-                OnPropertyChanged(nameof(Instructions));
+                foreach (var field in Fields.Where(field => old.Field(field.Spec.Key) != task.Field(field.Spec.Key)))
+                {
+                    field.Refresh();
+                }
+
+                OnPropertyChanged(nameof(Preview));
             }
 
-            if (old.AcceptanceCriteria != task.AcceptanceCriteria)
+            if (old.Conversation != task.Conversation)
             {
-                OnPropertyChanged(nameof(AcceptanceCriteria));
+                OnPropertyChanged(nameof(ConversationChoices));
+                OnPropertyChanged(nameof(SelectedConversation));
+                OnPropertyChanged(nameof(ConversationNote));
             }
 
             if (old.Execution != task.Execution)
@@ -235,11 +266,14 @@ public sealed class TaskNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(StatusLabel));
             OnPropertyChanged(nameof(Tone));
             OnPropertyChanged(nameof(LastAttempt));
+            OnPropertyChanged(nameof(IsWaiting));
+            OnPropertyChanged(nameof(Waiting));
         }
 
         OnPropertyChanged(nameof(StartProblem));
         _run.NotifyCanExecuteChanged();
         _cancel.NotifyCanExecuteChanged();
+        _markDone.NotifyCanExecuteChanged();
         OnConversationChanged();
     }
 
@@ -281,6 +315,30 @@ public sealed class TaskNodeViewModel : ObservableObject
             SetExecution(settings with { Reasoning = choice.Id });
         }
     }
+
+    internal void ChooseConversation(Choice choice)
+    {
+        if (Enum.TryParse<ConversationMode>(choice.Id, out var mode) && mode != _task.Conversation)
+        {
+            if (_canvas.Edit(new WorkflowEdit.SetConversation(Id, mode)) is EditResult.Rejected)
+            {
+                OnPropertyChanged(nameof(SelectedConversation));
+            }
+        }
+    }
+
+    internal string FieldText(string key) => _task.Field(key);
+
+    internal void SetField(string key, string text)
+    {
+        if (_canvas.Edit(new WorkflowEdit.SetField(Id, key, text)) is EditResult.Rejected)
+        {
+            Fields.First(field => field.Spec.Key == key).Refresh();
+        }
+    }
+
+    private void MarkDone() =>
+        _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
 
     private void Run() =>
         _canvas.Notice(_canvas.Runs.Start(_task) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
@@ -339,14 +397,6 @@ public sealed class TaskNodeViewModel : ObservableObject
         if (_canvas.Edit(new WorkflowEdit.SetExecution(Id, settings)) is EditResult.Rejected)
         {
             OnAgentChanged();
-        }
-    }
-
-    private void RequestEdit(TaskField field, string text, [CallerMemberName] string? property = null)
-    {
-        if (_canvas.Edit(new WorkflowEdit.EditTask(Id, field, text)) is EditResult.Rejected)
-        {
-            OnPropertyChanged(property);
         }
     }
 }

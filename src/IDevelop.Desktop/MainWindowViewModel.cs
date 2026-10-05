@@ -78,7 +78,9 @@ public sealed class MainWindowViewModel : ObservableObject
         var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
         document.Changed += (_, _) => OnDocumentChanged();
         Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice, _copy);
-        Status = runs.Warnings.IsEmpty ? null : string.Join(" ", runs.Warnings);
+        Status = string.Join(" ", [.. document.Converted is { } converted ? [converted] : Array.Empty<string>(), .. runs.Warnings]) is { Length: > 0 } notice
+            ? notice
+            : null;
         OnProjectChanged();
     }
 

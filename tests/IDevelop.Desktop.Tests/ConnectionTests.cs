@@ -71,12 +71,12 @@ public sealed class ConnectionTests : IDisposable
 
         Assert.False(shell.Has<TextBox>("TaskTitle"));
         Assert.False(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
-        Assert.True(shell.Find<Button>("KindReview").IsEffectivelyEnabled);
+        Assert.True(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
 
-        shell.Click(shell.Find<Button>("KindReview"));
+        shell.Click(shell.Find<Button>("KindContext"));
 
-        Assert.Equal([("Design", "Build", ConnectionKind.Review)], shell.Drawn());
-        Assert.False(shell.Find<Button>("KindReview").IsEffectivelyEnabled);
+        Assert.Equal([("Design", "Build", ConnectionKind.Context)], shell.Drawn());
+        Assert.False(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
         Assert.True(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
@@ -106,9 +106,9 @@ public sealed class ConnectionTests : IDisposable
             TaskAt(Review, "Review", 705, 250),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
-            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review)));
+            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>(theme));
-        var (dependency, review, contextColor) = (Color.Parse("#2563EB"), Color.Parse("#EA580C"), Color.Parse(context));
+        var (dependency, contextColor) = (Color.Parse("#2563EB"), Color.Parse(context));
         (string From, string To, Color Stroke, Color Arrow, bool Dashed)[] Strokes() =>
         [
             .. shell.Connections()
@@ -124,7 +124,7 @@ public sealed class ConnectionTests : IDisposable
         ];
 
         Assert.Equal(
-            [("Build", "Review", review, review, false), ("Design", "Build", dependency, dependency, false), ("Design", "Review", contextColor, contextColor, true)],
+            [("Build", "Review", dependency, dependency, false), ("Design", "Build", dependency, dependency, false), ("Design", "Review", contextColor, contextColor, true)],
             Strokes());
 
         shell.Click(shell.ConnectionInto("Build"));
@@ -173,12 +173,12 @@ public sealed class ConnectionTests : IDisposable
         shell.Click(shell.ConnectionInto("Design"));
         Assert.False(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
 
-        shell.Click(shell.Find<Button>("KindReview"));
+        shell.Click(shell.Find<Button>("KindDependency"));
 
         Assert.Equal("That would create a cycle: Review → Design → Build → Review.", shell.Status);
         Assert.Contains(("Review", "Design", ConnectionKind.Context), shell.Drawn());
         Assert.False(shell.Find<Button>("KindContext").IsEffectivelyEnabled);
-        Assert.True(shell.Find<Button>("KindReview").IsEffectivelyEnabled);
+        Assert.True(shell.Find<Button>("KindDependency").IsEffectivelyEnabled);
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
 

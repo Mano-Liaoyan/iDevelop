@@ -13,6 +13,10 @@ public abstract record SendResult
     /// client could not be launched.</summary>
     public sealed record Continued(AttemptRecord Attempt) : SendResult;
 
+    /// <summary>The waiting attempt took the message as its next turn. Its status is already Failed when the client could
+    /// not be launched.</summary>
+    public sealed record Answered(AttemptRecord Attempt) : SendResult;
+
     public sealed record Refused(SendProblem Problem) : SendResult;
 }
 
@@ -61,6 +65,9 @@ public abstract record TerminalProblem
     private TerminalProblem() { }
 
     public sealed record NeverRan : TerminalProblem;
+
+    /// <summary>The session goes to a terminal only while the node waits for the person.</summary>
+    public sealed record NotWaiting(string Title) : TerminalProblem;
 
     public sealed record NoSession(ClientId Client) : TerminalProblem;
 

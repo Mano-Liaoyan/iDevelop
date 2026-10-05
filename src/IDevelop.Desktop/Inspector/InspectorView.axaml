@@ -14,21 +14,27 @@
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:TaskNodeViewModel">
           <StackPanel Spacing="6">
+            <TextBlock Classes="section" Text="{Binding TypeName}" Margin="0,0,0,2"
+                       AutomationProperties.AutomationId="TaskType" />
             <TextBlock Classes="caption" Text="Title" />
             <TextBox Text="{Binding Title}"
                      AutomationProperties.AutomationId="TaskTitle"
                      AutomationProperties.Name="Title" />
-            <TextBlock Classes="caption" Text="Instructions" Margin="0,8,0,0" />
-            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
-            <TextBox Text="{Binding Instructions}"
-                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="140"
-                     AutomationProperties.AutomationId="TaskInstructions"
-                     AutomationProperties.Name="Instructions" />
-            <TextBlock Classes="caption" Text="Acceptance criteria" Margin="0,8,0,0" />
-            <TextBox Text="{Binding AcceptanceCriteria}"
-                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="100"
-                     AutomationProperties.AutomationId="TaskAcceptanceCriteria"
-                     AutomationProperties.Name="Acceptance criteria" />
+            <ItemsControl ItemsSource="{Binding Fields}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="canvas:FieldViewModel">
+                  <StackPanel Spacing="6" Margin="0,8,0,0">
+                    <TextBlock Classes="caption" Text="{Binding Label}" />
+                    <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
+                    <TextBox Text="{Binding Text}"
+                             AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
+                             Classes.multiline="{Binding IsMultiline}"
+                             AutomationProperties.AutomationId="{Binding AutomationId}"
+                             AutomationProperties.Name="{Binding Label}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <TextBlock Classes="section" Text="AGENT" Margin="0,20,0,2" />
             <TextBlock Classes="caption" Text="Client" />
@@ -69,6 +75,18 @@
               <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
                          AutomationProperties.AutomationId="PermissionNote" />
             </StackPanel>
+            <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
+            <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
+                      AutomationProperties.AutomationId="TaskConversation"
+                      AutomationProperties.Name="Conversation">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="canvas:Choice">
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="caption" Text="{Binding ConversationNote}" TextWrapping="Wrap"
+                       AutomationProperties.AutomationId="ConversationNote" />
 
             <TextBlock Classes="section" Text="RUN" Margin="0,20,0,2" />
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -101,7 +119,8 @@
                       <Border Grid.Column="1" Classes="pill"
                               Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                               Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                              Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}">
+                              Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                              Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon />
                           <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
@@ -196,6 +215,15 @@
             </ContentControl>
 
             <TextBlock Classes="section" Text="TALK TO THE AGENT" Margin="0,20,0,2" />
+            <Border Classes="pill waiting" HorizontalAlignment="Left" IsVisible="{Binding IsWaiting}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon />
+                <TextBlock Text="Waiting for you" />
+              </StackPanel>
+            </Border>
+            <TextBlock Text="{Binding Waiting}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                       IsVisible="{Binding Waiting, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       AutomationProperties.AutomationId="PendingQuestion" />
             <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
             <TextBox Text="{Binding Draft}"
                      AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
@@ -219,6 +247,11 @@
                   <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" />
                   <TextBlock Text="Stop and send" />
                 </StackPanel>
+              </Button>
+              <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding IsWaiting}"
+                      AutomationProperties.AutomationId="MarkDone"
+                      AutomationProperties.Name="Mark done">
+                <TextBlock Text="Mark done" />
               </Button>
               <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
                       AutomationProperties.AutomationId="OpenInTerminal"
@@ -251,7 +284,7 @@
               <TextBlock Classes="caption" Text="Kind" />
               <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
                 <!-- Each swatch draws its kind's line, so the buttons double as the legend for the canvas. -->
-                <UniformGrid Columns="3">
+                <UniformGrid Columns="2">
                   <Button Classes="segment"
                           Command="{Binding SetKindCommand}"
                           CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
@@ -272,17 +305,6 @@
                       <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" StrokeDashArray="2,1.5" HorizontalAlignment="Center"
                             Stroke="{DynamicResource ConnectionContextBrush}" />
                       <TextBlock Text="Context" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="segment"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Review}"
-                          AutomationProperties.AutomationId="KindReview"
-                          AutomationProperties.Name="Review">
-                    <StackPanel Spacing="4">
-                      <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" HorizontalAlignment="Center"
-                            Stroke="{DynamicResource ConnectionReviewBrush}" />
-                      <TextBlock Text="Review" />
                     </StackPanel>
                   </Button>
                 </UniformGrid>

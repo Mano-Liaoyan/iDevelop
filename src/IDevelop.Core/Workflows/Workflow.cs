@@ -30,19 +30,16 @@ public readonly record struct ConnectionKey(TaskId From, TaskId To) : IComparabl
 
 public readonly record struct CanvasPoint(double X, double Y);
 
-public enum ConnectionKind { Dependency, Context, Review }
+public enum ConnectionKind { Dependency, Context }
 
 public static class ConnectionKindRules
 {
     public static bool Blocks(this ConnectionKind kind) => kind switch
     {
         ConnectionKind.Dependency => true,
-        ConnectionKind.Review => true,
         ConnectionKind.Context => false,
     };
 }
-
-public enum TaskField { Title, Instructions, AcceptanceCriteria }
 
 /// <summary>The coding clients a task can run with.</summary>
 public enum ClientId { ClaudeCode, Codex, Pi, Antigravity }
@@ -63,25 +60,57 @@ public sealed record ExecutionSettings(ClientId Client)
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-public sealed record TaskDefinition(TaskId Id)
+/// <summary>
+/// A node: its id and title, the blueprint version it was placed from, a value for each of that blueprint's fields, and
+/// its settings. The blueprint is the node's own embedded copy, so a later edit of a library blueprint changes nothing
+/// already placed.
+/// </summary>
+public sealed record TaskDefinition
 {
-    public TaskId Id { get; } = Id;
+    /// <summary>A node with the blueprint's field defaults and settings.</summary>
+    public TaskDefinition(TaskId id, Blueprint blueprint)
+    {
+        Id = id;
+        Blueprint = blueprint;
+        Fields = blueprint.Fields.ToImmutableSortedDictionary(field => field.Key, field => field.Default, StringComparer.Ordinal);
+        Execution = blueprint.Defaults.Execution;
+        Conversation = blueprint.Defaults.Conversation;
+    }
+
+    public TaskId Id { get; }
+
+    public Blueprint Blueprint { get; }
 
     public string Title { get; init => field = NormalizeLineBreaks(value); } = "";
 
-    public string Instructions { get; init => field = NormalizeLineBreaks(value); } = "";
-
-    public string AcceptanceCriteria { get; init => field = NormalizeLineBreaks(value); } = "";
+    /// <summary>One value for each of the blueprint's fields, by key.</summary>
+    public ImmutableSortedDictionary<string, string> Fields { get; private init; }
 
     /// <summary>Null when the task has no agent yet.</summary>
     public ExecutionSettings? Execution { get; init; }
 
-    internal TaskDefinition With(TaskField which, string text) => which switch
+    public ConversationMode Conversation { get; init; }
+
+    public string Field(string key) => Fields[key];
+
+    /// <summary>Null when the blueprint has no such field. The same instance when the value does not change.</summary>
+    public TaskDefinition? WithField(string key, string text)
     {
-        TaskField.Title => this with { Title = text },
-        TaskField.Instructions => this with { Instructions = text },
-        TaskField.AcceptanceCriteria => this with { AcceptanceCriteria = text },
-    };
+        if (!Fields.TryGetValue(key, out var current))
+        {
+            return null;
+        }
+
+        text = NormalizeLineBreaks(text);
+        return text == current ? this : this with { Fields = Fields.SetItem(key, text) };
+    }
+
+    // The fields compare by content, which a dictionary does not.
+    public bool Equals(TaskDefinition? other) =>
+        other is not null && Id == other.Id && Blueprint.Equals(other.Blueprint) && Title == other.Title &&
+        Fields.SequenceEqual(other.Fields) && Execution == other.Execution && Conversation == other.Conversation;
+
+    public override int GetHashCode() => HashCode.Combine(Id, Blueprint.Key, Title);
 
     private static string NormalizeLineBreaks(string value) => value.Replace("\r\n", "\n").Replace('\r', '\n');
 }
@@ -92,9 +121,26 @@ public abstract record WorkflowEdit
 {
     private WorkflowEdit() { }
 
-    public sealed record CreateTask(TaskDefinition Task, CanvasPoint Position) : WorkflowEdit;
+    /// <summary>
+    /// Places a node of <paramref name="Blueprint"/>, which the workflow embeds while a node uses it. The node starts with
+    /// the blueprint's field defaults and settings, then takes <see cref="Title"/>, each value in <see cref="Fields"/>, and
+    /// <see cref="Settings"/> when set. A field the blueprint does not have is rejected.
+    /// </summary>
+    public sealed record PlaceNode(TaskId Id, Blueprint Blueprint, CanvasPoint Position) : WorkflowEdit
+    {
+        public string Title { get; init; } = "";
 
-    public sealed record EditTask(TaskId Task, TaskField Field, string Text) : WorkflowEdit;
+        public ImmutableDictionary<string, string> Fields { get; init; } = ImmutableDictionary<string, string>.Empty;
+
+        /// <summary>Null keeps the blueprint's default settings.</summary>
+        public NodeSettings? Settings { get; init; }
+    }
+
+    public sealed record EditTitle(TaskId Task, string Title) : WorkflowEdit;
+
+    public sealed record SetField(TaskId Task, string Key, string Text) : WorkflowEdit;
+
+    public sealed record SetConversation(TaskId Task, ConversationMode Mode) : WorkflowEdit;
 
     /// <summary>Sets or clears a task's agent. A running attempt keeps the settings it started with.</summary>
     public sealed record SetExecution(TaskId Task, ExecutionSettings? Execution) : WorkflowEdit;
@@ -118,6 +164,12 @@ public abstract record EditRejection
 
     public sealed record TaskAlreadyExists(TaskId Task) : EditRejection;
 
+    /// <summary>The task's blueprint has no field with this key.</summary>
+    public sealed record UnknownField(TaskId Task, string Key) : EditRejection;
+
+    /// <summary>The workflow already embeds a different blueprint under this key.</summary>
+    public sealed record BlueprintConflict(BlueprintKey Key) : EditRejection;
+
     public sealed record SelfConnection(TaskId Task) : EditRejection;
 
     public sealed record DuplicateConnection(ConnectionKey Key, ConnectionKind ExistingKind) : EditRejection;
@@ -139,7 +191,8 @@ public abstract record EditResult
 /// <summary>
 /// An immutable workflow snapshot. Only <see cref="Empty"/> and <see cref="Apply"/> create one,
 /// so every instance satisfies the graph rules. Layout lives apart from tasks and connections:
-/// a move keeps their instances.
+/// a move keeps their instances. Each node holds its blueprint, and <see cref="Blueprints"/> is the one copy of each
+/// version that a node uses, so a copy goes when its last node goes.
 /// </summary>
 public sealed class Workflow
 {
@@ -153,6 +206,10 @@ public sealed class Workflow
         Tasks = tasks;
         Connections = connections;
         Positions = positions;
+        Blueprints = tasks.Values
+            .Select(task => task.Blueprint)
+            .DistinctBy(blueprint => blueprint.Key)
+            .ToImmutableSortedDictionary(blueprint => blueprint.Key, blueprint => blueprint);
     }
 
     public WorkflowId Id { get; }
@@ -163,6 +220,8 @@ public sealed class Workflow
 
     public ImmutableSortedDictionary<TaskId, CanvasPoint> Positions { get; }
 
+    public ImmutableSortedDictionary<BlueprintKey, Blueprint> Blueprints { get; }
+
     public static Workflow Empty(WorkflowId id) => new(
         id,
         ImmutableSortedDictionary<TaskId, TaskDefinition>.Empty,
@@ -171,9 +230,11 @@ public sealed class Workflow
 
     public EditResult Apply(WorkflowEdit edit) => edit switch
     {
-        WorkflowEdit.CreateTask e => CreateTask(e),
-        WorkflowEdit.EditTask e => EditTask(e),
-        WorkflowEdit.SetExecution e => SetExecution(e),
+        WorkflowEdit.PlaceNode e => PlaceNode(e),
+        WorkflowEdit.EditTitle e => Edit(e.Task, task => task with { Title = e.Title }),
+        WorkflowEdit.SetField e => Edit(e.Task, task => task.WithField(e.Key, e.Text), new EditRejection.UnknownField(e.Task, e.Key)),
+        WorkflowEdit.SetExecution e => Edit(e.Task, task => task with { Execution = e.Execution }),
+        WorkflowEdit.SetConversation e => Edit(e.Task, task => task with { Conversation = e.Mode }),
         WorkflowEdit.MoveTasks e => MoveTasks(e),
         WorkflowEdit.Connect e => Connect(e),
         WorkflowEdit.SetConnectionKind e => SetConnectionKind(e),
@@ -181,40 +242,60 @@ public sealed class Workflow
         _ => throw new UnreachableException($"Unhandled edit {edit.GetType().Name}"),
     };
 
-    private EditResult CreateTask(WorkflowEdit.CreateTask e)
+    private EditResult PlaceNode(WorkflowEdit.PlaceNode e)
     {
-        var id = e.Task.Id;
-        if (Tasks.ContainsKey(id))
+        if (Tasks.ContainsKey(e.Id))
         {
-            return Reject(new EditRejection.TaskAlreadyExists(id));
+            return Reject(new EditRejection.TaskAlreadyExists(e.Id));
         }
 
-        return Applied(new Workflow(Id, Tasks.Add(id, e.Task), Connections, Positions.Add(id, e.Position)));
-    }
-
-    private EditResult EditTask(WorkflowEdit.EditTask e)
-    {
-        if (!Tasks.TryGetValue(e.Task, out var task))
+        var blueprint = e.Blueprint;
+        if (Blueprints.TryGetValue(blueprint.Key, out var embedded))
         {
-            return Reject(new EditRejection.UnknownTask(e.Task));
+            if (!embedded.Equals(blueprint))
+            {
+                return Reject(new EditRejection.BlueprintConflict(blueprint.Key));
+            }
+
+            blueprint = embedded;
         }
 
-        return Replace(task, task.With(e.Field, e.Text));
-    }
-
-    private EditResult SetExecution(WorkflowEdit.SetExecution e)
-    {
-        if (!Tasks.TryGetValue(e.Task, out var task))
+        var task = new TaskDefinition(e.Id, blueprint) { Title = e.Title };
+        if (e.Settings is { } settings)
         {
-            return Reject(new EditRejection.UnknownTask(e.Task));
+            task = task with { Execution = settings.Execution, Conversation = settings.Conversation };
         }
 
-        return Replace(task, task with { Execution = e.Execution });
+        foreach (var (key, text) in e.Fields)
+        {
+            if (task.WithField(key, text) is not { } filled)
+            {
+                return Reject(new EditRejection.UnknownField(e.Id, key));
+            }
+
+            task = filled;
+        }
+
+        return Applied(new Workflow(Id, Tasks.Add(e.Id, task), Connections, Positions.Add(e.Id, e.Position)));
     }
 
-    private EditResult Replace(TaskDefinition task, TaskDefinition edited) => edited == task
-        ? Applied(this)
-        : Applied(new Workflow(Id, Tasks.SetItem(task.Id, edited), Connections, Positions));
+    /// <param name="edit">Returns the edited task, or null when the edit does not fit it.</param>
+    private EditResult Edit(TaskId id, Func<TaskDefinition, TaskDefinition?> edit, EditRejection? misfit = null)
+    {
+        if (!Tasks.TryGetValue(id, out var task))
+        {
+            return Reject(new EditRejection.UnknownTask(id));
+        }
+
+        if (edit(task) is not { } edited)
+        {
+            return Reject(misfit!);
+        }
+
+        return edited.Equals(task)
+            ? Applied(this)
+            : Applied(new Workflow(Id, Tasks.SetItem(id, edited), Connections, Positions));
+    }
 
     private EditResult MoveTasks(WorkflowEdit.MoveTasks e)
     {

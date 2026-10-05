@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using System.Text;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -25,9 +26,46 @@ public sealed class WorkflowDocumentTests : IDisposable
     {
         var golden = File.ReadAllBytes(SampleFile);
 
-        var workflow = WorkflowFile.Parse(golden, SampleFile);
+        var parsed = WorkflowFile.Parse(golden, SampleFile);
 
-        Assert.Equal(golden, WorkflowFile.Serialize(workflow));
+        Assert.Null(parsed.Converted);
+        Assert.Equal(golden, WorkflowFile.Serialize(parsed.Workflow));
+    }
+
+    [Fact]
+    public void A_format_2_file_opens_converted_says_so_saves_as_format_3_and_reopens()
+    {
+        var folder = _temp.Create("format2");
+        var file = Path.Combine(Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName, SampleFileName);
+        File.Copy(Fixture.Path("storage-change-format2.json"), file);
+
+        var document = WorkflowDocument.Open(folder);
+
+        Assert.Equal(
+            "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
+            document.Converted);
+        Assert.True(document.HasUnsavedChanges);
+        Assert.All(document.Current.Tasks.Values, task => Assert.Same(BuiltInBlueprints.Implement, task.Blueprint));
+        Assert.Equal(ConnectionKind.Dependency, document.Current.Connections[new ConnectionKey(Build, Review)]);
+
+        document.Save();
+        var reopened = WorkflowDocument.Open(folder);
+
+        Assert.Null(reopened.Converted);
+        Assert.False(reopened.HasUnsavedChanges);
+        Assert.Equal(File.ReadAllBytes(SampleFile), File.ReadAllBytes(file));
+        Assert.Equal(document.Current.Tasks.Values, reopened.Current.Tasks.Values);
+        Assert.Equal(document.Current.Connections, reopened.Current.Connections);
+        Assert.Equal(document.Current.Positions, reopened.Current.Positions);
+    }
+
+    [Fact]
+    public void A_format_2_file_without_tasks_says_only_that_it_converted()
+    {
+        var parsed = WorkflowFile.Parse(Encoding.UTF8.GetBytes(Workflow("", "", "").Replace('\'', '"')), SampleFile);
+
+        Assert.Equal("iDevelop converted this workflow from format 2. Save to keep it in format 3.", parsed.Converted);
+        Assert.Empty(parsed.Workflow.Tasks);
     }
 
     [Fact]
@@ -42,15 +80,16 @@ public sealed class WorkflowDocumentTests : IDisposable
             "Keep multi-line text readable in a plain text editor.\n" +
             "\n" +
             "Store no view state other than node positions.",
-            workflow.Tasks[Design].Instructions);
+            workflow.Tasks[Design].Field("instructions"));
         Assert.Equal(
             "A three-task sample opens in a text editor without escaped line breaks.\n" +
             "Chinese text such as 审查说明 stays readable.",
-            workflow.Tasks[Design].AcceptanceCriteria);
-        Assert.Equal("", workflow.Tasks[Review].Instructions);
+            workflow.Tasks[Design].Field("acceptanceCriteria"));
+        Assert.Equal("", workflow.Tasks[Review].Field("instructions"));
         Assert.Equal(new CanvasPoint(720, 247.5), workflow.Positions[Review]);
         Assert.Equal(ConnectionKind.Context, workflow.Connections[new ConnectionKey(Design, Review)]);
-        Assert.Equal(ConnectionKind.Review, workflow.Connections[new ConnectionKey(Build, Review)]);
+        Assert.Equal(ConnectionKind.Dependency, workflow.Connections[new ConnectionKey(Build, Review)]);
+        Assert.Equal([BuiltInBlueprints.Implement], workflow.Blueprints.Values);
         Assert.Equal(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }, workflow.Tasks[Design].Execution);
         Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "medium" }, workflow.Tasks[Build].Execution);
         Assert.Null(workflow.Tasks[Review].Execution);
@@ -76,7 +115,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     {
         var folder = _temp.Create("repository");
         var document = WorkflowDocument.Open(folder);
-        document.Apply(new CreateTask(new TaskDefinition(Design) { Title = "Plan release" }, new CanvasPoint(40, 60)));
+        document.Apply(TestNodes.Place(TestNodes.Implement(Design, "Plan release"), new CanvasPoint(40, 60)));
         Assert.True(document.HasUnsavedChanges);
 
         document.Save();
@@ -99,10 +138,10 @@ public sealed class WorkflowDocumentTests : IDisposable
         var gitignore = Path.Combine(folder, ".idp", ".gitignore");
         File.WriteAllText(gitignore, "# mine\r\n*.tmp\r\nnotes.md");
         var document = WorkflowDocument.Open(folder);
-        document.Apply(new EditTask(Design, TaskField.Title, "Changed"));
+        document.Apply(new EditTitle(Design, "Changed"));
 
         document.Save();
-        document.Apply(new EditTask(Design, TaskField.Title, "Changed again"));
+        document.Apply(new EditTitle(Design, "Changed again"));
         document.Save();
 
         Assert.Equal("# mine\r\n*.tmp\r\nnotes.md\nattempts/\n", File.ReadAllText(gitignore));
@@ -113,7 +152,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     {
         var folder = _temp.CopyOf(Sample);
         var document = WorkflowDocument.Open(folder);
-        document.Apply(new EditTask(Design, TaskField.Title, "Changed"));
+        document.Apply(new EditTitle(Design, "Changed"));
 
         Exception? error;
         using (BlockReplacing(document.FilePath))
@@ -165,7 +204,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     {
         var folder = _temp.Create("repository");
         var document = WorkflowDocument.Open(folder);
-        document.Apply(new CreateTask(new TaskDefinition(Design) { Title = "Plan release" }, new CanvasPoint(40, 60)));
+        document.Apply(TestNodes.Place(TestNodes.Implement(Design, "Plan release"), new CanvasPoint(40, 60)));
         var workflows = Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName;
         var other = Path.Combine(workflows, SampleFileName);
         File.Copy(SampleFile, other);
@@ -214,28 +253,28 @@ public sealed class WorkflowDocumentTests : IDisposable
             "<file> is not a valid workflow file. Expected start of a property name or value, but instead reached end of data. Path: $ | LineNumber: 0 | BytePositionInLine: 32."
         },
         {
-            "{'format': 'idevelop.workflow/3', 'nodes': []}",
-            "<file> has format \"idevelop.workflow/3\". This version of iDevelop reads idevelop.workflow/2."
+            "{'format': 'idevelop.workflow/4', 'nodes': []}",
+            "<file> has format \"idevelop.workflow/4\". This version of iDevelop reads idevelop.workflow/3 and idevelop.workflow/2."
         },
         {
             $"{{'format': 'idevelop.workflow/1', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'tasks': [{{'id': '{A}', 'title': 'Design', 'instructions': [], 'acceptanceCriteria': []}}], 'connections': [], 'layout': {{{At(A)}}}}}",
-            "<file> has format \"idevelop.workflow/1\". This version of iDevelop reads idevelop.workflow/2."
+            "<file> has format \"idevelop.workflow/1\". This version of iDevelop reads idevelop.workflow/3 and idevelop.workflow/2."
         },
         {
             Workflow($"{{'id': '{A}', 'titel': 'Design', 'instructions': [], 'acceptanceCriteria': [], 'execution': null}}", "", At(A)),
-            "<file> is not a valid workflow file. The JSON property 'titel' could not be mapped to any .NET member contained in type 'IDevelop.Projects.WorkflowFile+TaskDto'."
+            "<file> is not a valid workflow file. The JSON property 'titel' could not be mapped to any .NET member contained in type 'IDevelop.Projects.WorkflowFile+TaskDtoV2'."
         },
         {
             Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'execution': null}}", "", At(A)),
-            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDto' was missing required properties including: 'acceptanceCriteria'."
+            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDtoV2' was missing required properties including: 'acceptanceCriteria'."
         },
         {
             Workflow($"{{'id': '{A}', 'title': 'Design', 'title': 'Build', 'instructions': [], 'acceptanceCriteria': [], 'execution': null}}", "", At(A)),
-            "<file> is not a valid workflow file. Duplicate property 'title' encountered during deserialization of type 'IDevelop.Projects.WorkflowFile+TaskDto'."
+            "<file> is not a valid workflow file. Duplicate property 'title' encountered during deserialization of type 'IDevelop.Projects.WorkflowFile+TaskDtoV2'."
         },
         {
             Workflow($"{{'id': '{A}', 'title': 'Design', 'instructions': [], 'acceptanceCriteria': []}}", "", At(A)),
-            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDto' was missing required properties including: 'execution'."
+            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+TaskDtoV2' was missing required properties including: 'execution'."
         },
         {
             Workflow(Task(A, "Design", "{'client': 'cursor', 'model': null, 'reasoning': null}"), "", At(A)),
@@ -243,7 +282,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         },
         {
             Workflow(Task(A, "Design", "{'client': 'codex', 'model': 'gpt-6-sol'}"), "", At(A)),
-            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.WorkflowFile+ExecutionDto' was missing required properties including: 'reasoning'."
+            "<file> is not a valid workflow file. JSON deserialization for type 'IDevelop.Projects.ExecutionDto' was missing required properties including: 'reasoning'."
         },
         {
             Workflow(Task(A, "Design"), "", ""),
@@ -283,6 +322,53 @@ public sealed class WorkflowDocumentTests : IDisposable
         },
     };
 
+    [Theory]
+    [MemberData(nameof(InvalidFormat3Files))]
+    public void An_invalid_format_3_file_fails_to_open_with_a_message(string json, string message)
+    {
+        Assert.Equal(message, OpenFailure(json));
+    }
+
+    public static TheoryData<string, string> InvalidFormat3Files => new()
+    {
+        {
+            Format3(Implement, Node(A, "team.spec@1")),
+            $"<file>: task {A} names blueprint \"team.spec@1\", which the file does not hold."
+        },
+        {
+            Format3($"{Implement}, {Blueprint("team.spec", "'Write it.'")}", Node(A)),
+            "<file>: no task uses blueprint team.spec@1."
+        },
+        {
+            Format3(Implement, Node(A, fields: "'instructions': [], 'acceptanceCriteria': [], 'goal': []")),
+            $"<file>: task {A} has a value for goal, which its blueprint has no field for."
+        },
+        {
+            Format3(Implement, Node(A, conversation: "sometimes")),
+            $"<file>: task {A} has unknown conversation mode \"sometimes\"."
+        },
+        {
+            Format3(Blueprint("team.spec", "'{{#goal}}Write it.'"), Node(A, "team.spec@1", "")),
+            "<file>: blueprint team.spec@1 has a template iDevelop cannot read. {{#goal}} has no {{/goal}}."
+        },
+        {
+            Format3(Blueprint("team.spec", "'Write {{topic}}.'"), Node(A, "team.spec@1", "")),
+            "<file>: Blueprint team.spec@1's template reads {{topic}}, which is not a field."
+        },
+        {
+            Format3($"{Implement}, {Implement}", Node(A)),
+            "<file>: blueprint idevelop.implement@1 appears twice."
+        },
+        {
+            Format3(Implement, Node(A, fields: "'instructions': []")),
+            $"<file>: task {A} has no value for acceptanceCriteria."
+        },
+        {
+            Format3(Implement.Replace("'name': 'Implement'", "'name': 'Do it'"), Node(A)),
+            "<file>: blueprint idevelop.implement@1 differs from the built-in it names."
+        },
+    };
+
     [Fact]
     public void A_file_whose_graph_breaks_a_rule_fails_with_the_rule()
     {
@@ -305,6 +391,21 @@ public sealed class WorkflowDocumentTests : IDisposable
 
         return error.Message.Replace(file, "<file>");
     }
+
+    private static readonly string Implement = Encoding.UTF8.GetString(WorkflowFile.Serialize(IDevelop.Workflows.Workflow.Empty(WorkflowId.New())
+        .Apply(TestNodes.Place(TestNodes.Implement(Design), new CanvasPoint(0, 0))) is EditResult.Applied applied ? applied.Workflow : null!))
+        .Split("\"blueprints\": [")[1].Split("],\n  \"tasks\"")[0].Replace('"', '\'');
+
+    private static string Blueprint(string id, string template) =>
+        $"{{'id': '{id}', 'version': 1, 'name': 'Spec', 'description': [], 'derivedFrom': null, " +
+        $"'work': {{'kind': 'agent', 'access': 'readOnly', 'proposes': false, 'template': [{template}]}}, " +
+        "'fields': [], 'defaults': {'execution': null, 'conversation': 'autonomous'}}";
+
+    private static string Node(string id, string blueprint = "idevelop.implement@1", string fields = "'instructions': [], 'acceptanceCriteria': []", string conversation = "autonomous") =>
+        $"{{'id': '{id}', 'title': 'Design', 'blueprint': '{blueprint}', 'fields': {{{fields}}}, 'execution': null, 'conversation': '{conversation}'}}";
+
+    private static string Format3(string blueprints, string tasks) =>
+        $"{{'format': 'idevelop.workflow/3', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'blueprints': [{blueprints}], 'tasks': [{tasks}], 'connections': [], 'layout': {{{At(A)}}}}}";
 
     private static string Workflow(string tasks, string connections, string layout) =>
         $"{{'format': 'idevelop.workflow/2', 'id': '019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01', 'tasks': [{tasks}], 'connections': [{connections}], 'layout': {{{layout}}}}}";

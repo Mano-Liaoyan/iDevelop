@@ -60,6 +60,7 @@ const brushes = [
   ['StateSelected', 'state-selected'],
   ['StateSelected25', 'state-selected', 25],
   ['StateSelected40', 'state-selected', 40],
+  ['StateSelected55', 'state-selected', 55],
   ['StateSelectedSurface', 'state-selected-surface'],
   ['StateRunning', 'state-running'],
   ['StateRunning45', 'state-running', 45],
@@ -74,7 +75,6 @@ const brushes = [
   ['StateFailed60', 'state-failed', 60],
   ['StateFailedSurface', 'state-failed-surface'],
   ['ConnectionDependency', 'edge-0'],
-  ['ConnectionReview', 'edge-9'],
   ['ConnectionContext', 'text-muted'],
 ];
 
@@ -104,6 +104,7 @@ const themedShadows = [
   ['CardRunningShadow', ringed('state-running', 15), ringed('state-running', 15)],
   ['CardSuccessShadow', ringed('state-success', 15), ringed('state-success', 15)],
   ['CardFailedShadow', ringed('state-failed', 15), ringed('state-failed', 15)],
+  ['CardWaitingShadow', ringed('state-selected', 15), ringed('state-selected', 15)],
   ['FloatingShadow', [[0, 12, 28, 0, 'black', 12]], [[0, 14, 32, 0, 'black', 32]]],
 ];
 

@@ -34,7 +34,7 @@ internal static class ClaudeCode
     [
         "-p", "--output-format", "stream-json", "--verbose", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
-        "--permission-mode", "acceptEdits",
+        "--permission-mode", request.ReadOnly ? "plan" : "acceptEdits",
         .. request.ResumeSession is { } session ? ["--resume", session] : Array.Empty<string>(),
     ],
     request.Prompt);

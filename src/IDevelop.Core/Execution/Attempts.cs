@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -17,7 +18,11 @@ public readonly record struct AttemptId(Guid Value)
     public override string ToString() => Value.ToString("D");
 }
 
-public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted }
+/// <summary>
+/// WaitingForInput holds no process and no lock: the latest turn ended with the node waiting for the person, who replies,
+/// marks it done, or cancels it.
+/// </summary>
+public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted, WaitingForInput }
 
 /// <summary>How one client process ended. Stopped means the person stopped it, with Stop and send or Cancel.</summary>
 public enum TurnOutcome { Running, Succeeded, Failed, Stopped, Interrupted }
@@ -53,6 +58,7 @@ public sealed record TerminalHandoff(DateTimeOffset At, string Folder, string Co
 [JsonDerivedType(typeof(MessageQueued), "messageQueued")]
 [JsonDerivedType(typeof(TurnRequested), "turnRequested")]
 [JsonDerivedType(typeof(HandedToTerminal), "handedToTerminal")]
+[JsonDerivedType(typeof(MarkedDone), "markedDone")]
 internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTimeOffset At)
 {
     /// <summary>
@@ -66,6 +72,10 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>Set when the first turn resumes an earlier attempt's session, and then its prompt is the person's message.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public Continuation? Continues { get; init; }
+
+        /// <summary>Null in logs written before conversation modes, which never waited.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ConversationMode? Conversation { get; init; }
     }
 
     public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At);
@@ -88,15 +98,24 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     public sealed record MessageQueued(DateTimeOffset At, string Text, bool StopsTurn) : AttemptEvent(At);
 
     /// <summary>A turn after the first, which resumes the session with the waiting messages. Launched or LaunchFailed follows it.</summary>
-    public sealed record TurnRequested(DateTimeOffset At, string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At);
+    public sealed record TurnRequested(DateTimeOffset At, string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At)
+    {
+        /// <summary>The node's conversation mode from this turn on, when the person changed it while the node waited.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ConversationMode? Conversation { get; init; }
+    }
+
+    /// <summary>The person ended a waiting attempt as done.</summary>
+    public sealed record MarkedDone(DateTimeOffset At) : AttemptEvent(At);
 
     /// <summary>Appended to a settled attempt. Turns the person takes in the terminal are not in this log.</summary>
     public sealed record HandedToTerminal(DateTimeOffset At, string Folder, string Command) : AttemptEvent(At);
 }
 
 /// <summary>
-/// One attempt as of its log. Only <see cref="AttemptReducer"/> creates one. Once <see cref="Status"/> leaves Running,
-/// the record is final, and later events change nothing but <see cref="Terminal"/>.
+/// One attempt as of its log. Only <see cref="AttemptReducer"/> creates one. A waiting attempt goes on with the
+/// person's reply, or ends when they mark it done or cancel it. Once the attempt is settled, the record is final, and
+/// later events change nothing but <see cref="Terminal"/>.
 /// </summary>
 public sealed record AttemptRecord
 {
@@ -108,6 +127,7 @@ public sealed record AttemptRecord
         Requested = requested.Settings;
         RequestedAt = requested.At;
         Continues = requested.Continues?.Attempt;
+        Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null)];
     }
 
@@ -121,6 +141,12 @@ public sealed record AttemptRecord
     public ExecutionSettings Requested { get; }
 
     public DateTimeOffset RequestedAt { get; }
+
+    /// <summary>When the attempt waits for the person. The latest turn that set it decides.</summary>
+    public ConversationMode Conversation { get; internal init; }
+
+    /// <summary>Why the attempt waits, while its status is WaitingForInput.</summary>
+    public Pending? Pending { get; internal init; }
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
@@ -160,7 +186,7 @@ public sealed record AttemptRecord
     /// <summary>The latest hand-off of the session to the client's terminal interface.</summary>
     public TerminalHandoff? Terminal { get; internal init; }
 
-    /// <summary>True while the attempt runs and its latest turn has ended, until the next turn starts.</summary>
+    /// <summary>True while the latest turn has ended and the attempt goes on: until the next turn starts, or while it waits.</summary>
     internal bool BetweenTurns => Turns[^1].Outcome != TurnOutcome.Running;
 
     internal ProcessIdentity? Process { get; init; }
@@ -211,6 +237,9 @@ internal static partial class AttemptReducer
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e) => (e, record) switch
     {
         (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
+        (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput }) => NextTurn(record with { Status = AttemptStatus.Running, Pending = null }, turn),
+        (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At),
+        (AttemptEvent.CancelRequested cancel, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
         (_, { Status: not AttemptStatus.Running }) => record,
         (AttemptEvent.Requested, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
@@ -225,18 +254,22 @@ internal static partial class AttemptReducer
             Queued = record.Queued.Add(message.Text),
             StopTurnRequested = record.StopTurnRequested || (message.StopsTurn && !record.BetweenTurns),
         },
-        (AttemptEvent.TurnRequested turn, _) => record with
-        {
-            Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)),
-            Queued = [],
-            StopTurnRequested = false,
-            Verdict = null,
-            LastMessage = null,
-        },
+        (AttemptEvent.TurnRequested turn, _) => NextTurn(record, turn),
         (AttemptEvent.Exited exited, _) => AtExit(record, exited),
         (AttemptEvent.Reconciled reconciled, _) =>
             EndAttempt(record, TurnOutcome.Interrupted, AttemptStatus.Interrupted, Reconciliation(record, reconciled.Process), reconciled.At),
+        (AttemptEvent.MarkedDone, _) => record,
         _ => throw new UnreachableException($"Unhandled attempt event {e.GetType().Name}"),
+    };
+
+    private static AttemptRecord NextTurn(AttemptRecord record, AttemptEvent.TurnRequested turn) => record with
+    {
+        Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)),
+        Queued = [],
+        StopTurnRequested = false,
+        Verdict = null,
+        LastMessage = null,
+        Conversation = turn.Conversation ?? record.Conversation,
     };
 
     /// <summary>Ends an attempt whose log can no longer be written. Only the record in memory changes.</summary>
@@ -261,14 +294,26 @@ internal static partial class AttemptReducer
 
     /// <summary>
     /// The exit ends the turn. A message the person sent then starts the next turn, unless a cancel or leave came first
-    /// or there is no session to resume. Otherwise the exit policy settles the attempt.
+    /// or there is no session to resume. A turn that succeeded can leave the node waiting for the person, as its
+    /// conversation mode decides. Otherwise the exit policy settles the attempt.
     /// </summary>
     private static AttemptRecord AtExit(AttemptRecord record, AttemptEvent.Exited exited)
     {
         var (turn, status, detail) = ExitPolicy(record, exited);
-        return record is { Queued.IsEmpty: false, CancelRequested: false, InterruptReason: null, SessionId: not null }
-            ? EndTurn(record, turn, detail)
-            : EndAttempt(record, turn, status, detail, exited.At);
+        if (record is { Queued.IsEmpty: false, CancelRequested: false, InterruptReason: null, SessionId: not null })
+        {
+            return EndTurn(record, turn, detail);
+        }
+
+        if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record)) is { } pending)
+        {
+            return record.SessionId is null
+                ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,
+                    $"{Clients.Name(record.Requested.Client)} reported no session, so iDevelop could not wait for your answer.", exited.At)
+                : EndTurn(record, turn, detail) with { Status = AttemptStatus.WaitingForInput, Pending = pending, Result = FinalText(record) };
+        }
+
+        return EndAttempt(record, turn, status, detail, exited.At);
     }
 
     /// <summary>
@@ -346,6 +391,7 @@ internal static partial class AttemptReducer
         EndedAt = at,
         Stopping = false,
         Result = FinalText(record),
+        Pending = null,
     };
 
     private static string? FinalText(AttemptRecord record) => (record.Verdict as AgentEvent.Succeeded)?.Result ?? record.LastMessage;
