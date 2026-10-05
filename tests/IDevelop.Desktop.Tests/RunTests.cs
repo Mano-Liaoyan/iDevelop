@@ -91,7 +91,7 @@ public sealed class RunTests : IDisposable
 
         shell.Click(shell.InView<Button>("RunTask"));
 
-        Assert.Equal(("Running", Color.Parse("#CDF4F3")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
+        Assert.Equal(("Running", Color.Parse("#1A0088FF")), (shell.CardText("Say hi", "CardStatus"), CardFill(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
         Assert.Equal("", shell.Status);
         Assert.True(shell.Find<Control>("RunBar").IsEffectivelyVisible);
@@ -106,8 +106,8 @@ public sealed class RunTests : IDisposable
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
 
         Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        Assert.Equal(Color.Parse("#D9F4D9"), CardFill(shell));
-        Assert.Equal(Color.Parse("#44984A"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
+        Assert.Equal(Color.Parse("#1A34C759"), CardFill(shell));
+        Assert.Equal(Color.Parse("#25292E"), ((ISolidColorBrush)shell.InCard<TextBlock>("Say hi", "CardStatus").Foreground!).Color);
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
         Assert.Equal("Requested Codex · gpt-5.5 · high.", shell.Find<TextBlock>("LastRunConfiguration").Text);

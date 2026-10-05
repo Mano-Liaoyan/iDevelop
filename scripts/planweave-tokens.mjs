@@ -26,19 +26,71 @@ const planweave = {
   text: ['oklch(0.28 0.01 248)', 'oklch(0.86 0.006 100)'],
   'text-muted': ['oklch(0.49 0.014 248)', 'oklch(0.68 0.008 100)'],
   'text-faint': ['oklch(0.67 0.012 248)', 'oklch(0.5 0.01 100)'],
-  'state-selected': ['oklch(0.58 0.14 250)', 'oklch(0.72 0.13 250)'],
-  'state-selected-surface': ['oklch(0.94 0.035 250)', 'oklch(0.32 0.055 250)'],
-  'state-running': ['oklch(0.63 0.13 195)', 'oklch(0.72 0.12 195)'],
-  'state-running-surface': ['oklch(0.94 0.04 195)', 'oklch(0.31 0.05 195)'],
-  'state-success': ['oklch(0.61 0.14 145)', 'oklch(0.72 0.13 145)'],
-  'state-success-surface': ['oklch(0.94 0.045 145)', 'oklch(0.32 0.055 145)'],
-  'state-failed': ['oklch(0.58 0.2 28)', 'oklch(0.72 0.17 28)'],
-  'state-failed-surface': ['oklch(0.94 0.05 28)', 'oklch(0.32 0.065 28)'],
   'edge-0': ['#2563eb', '#2563eb'],
   'edge-9': ['#ea580c', '#ea580c'],
 };
 
-// Brush key prefix, PlanWeave token, and opacity in percent.
+// Apple's system colors from https://developer.apple.com/design/human-interface-guidelines/color, fetched 2026-10-05,
+// as [light, dark]. A plain value is for tints, dots, the minimap, and dark strokes. A -strong value is the
+// increased-contrast one, for glyphs and light strokes, never text. A -text value is for colored text, a -fill value is
+// a fill under white text, and a -tile value carries a white glyph.
+const apple = {
+  'apple-red': ['#FF383C', '#FF4245'],
+  'apple-red-strong': ['#E9152D', '#FF6165'],
+  'apple-red-text': ['#D70015', '#FF6165'],
+  'apple-red-fill': ['#E9152D', '#E9152D'],
+  'apple-orange': ['#FF8D28', '#FF9230'],
+  'apple-orange-strong': ['#C55300', '#FFA056'],
+  'apple-yellow': ['#FFCC00', '#FFD600'],
+  'apple-yellow-strong': ['#A16A00', '#FEDF43'],
+  'apple-green': ['#34C759', '#30D158'],
+  'apple-green-strong': ['#008932', '#4AD968'],
+  'apple-mint': ['#00C8B3', '#00DAC3'],
+  'apple-mint-strong': ['#008575', '#54DFCB'],
+  'apple-mint-tile': ['#008575', '#008575'],
+  'apple-cyan': ['#00C0E8', '#3CD3FE'],
+  'apple-cyan-strong': ['#007EAE', '#6DD9FF'],
+  'apple-cyan-tile': ['#007EAE', '#007EAE'],
+  'apple-blue': ['#0088FF', '#0091FF'],
+  'apple-blue-strong': ['#1E6EF4', '#5CB8FF'],
+  'apple-blue-text': ['#0040DD', '#5CB8FF'],
+  'apple-blue-fill': ['#1E6EF4', '#1E6EF4'],
+  'apple-indigo': ['#6155F5', '#6D7CFF'],
+  'apple-indigo-strong': ['#564ADE', '#A7AAFF'],
+  'apple-indigo-tile': ['#564ADE', '#6D7CFF'],
+  'apple-purple': ['#CB30E0', '#DB34F2'],
+  'apple-purple-strong': ['#B02FC2', '#EA8DFF'],
+  'apple-purple-tile': ['#B02FC2', '#DB34F2'],
+  'apple-brown': ['#AC7F5E', '#B78A66'],
+  'apple-brown-strong': ['#956D51', '#DBA679'],
+  'apple-brown-tile': ['#956D51', '#B78A66'],
+  'apple-gray': ['#8E8E93', '#8E8E93'],
+  'apple-gray-strong': ['#6C6C70', '#AEAEB2'],
+  'apple-gray-tile': ['#6C6C70', '#8E8E93'],
+  white: ['#FFFFFF', '#FFFFFF'],
+};
+
+const tokens = { ...planweave, ...apple };
+
+// Each node kind and each state has its own hue. Blue is the accent.
+const kinds = [
+  ['Implement', 'indigo'],
+  ['Plan', 'cyan'],
+  ['Architect', 'purple'],
+  ['Review', 'mint'],
+  ['Approval', 'brown'],
+  ['ReadOnlyAgent', 'gray'],
+];
+const states = [
+  ['Waiting', 'orange'],
+  ['Warning', 'yellow'],
+  ['Success', 'green'],
+  ['Failed', 'red'],
+  ['Neutral', 'gray'],
+];
+
+// Brush key prefix, token, and opacity in percent. A pair of tokens is the light theme's and the dark theme's: a stroke
+// takes the increased-contrast value on a light surface and the plain one on a dark surface.
 const brushes = [
   ['AppShell', 'app-shell'],
   ['AppSidebar', 'app-sidebar'],
@@ -57,25 +109,49 @@ const brushes = [
   ['Border100', 'border'],
   ['Border80', 'border', 80],
   ['Border60', 'border', 60],
-  ['StateSelected', 'state-selected'],
-  ['StateSelected25', 'state-selected', 25],
-  ['StateSelected40', 'state-selected', 40],
-  ['StateSelected55', 'state-selected', 55],
-  ['StateSelectedSurface', 'state-selected-surface'],
-  ['StateRunning', 'state-running'],
-  ['StateRunning45', 'state-running', 45],
-  ['StateRunning55', 'state-running', 55],
-  ['StateRunningSurface', 'state-running-surface'],
-  ['StateSuccess', 'state-success'],
-  ['StateSuccess45', 'state-success', 45],
-  ['StateSuccess55', 'state-success', 55],
-  ['StateSuccessSurface', 'state-success-surface'],
-  ['StateFailed', 'state-failed'],
-  ['StateFailed50', 'state-failed', 50],
-  ['StateFailed60', 'state-failed', 60],
-  ['StateFailedSurface', 'state-failed-surface'],
+  ['StateSelected', 'apple-blue'],
+  ['StateSelected25', 'apple-blue', 25],
+  ['StateSelected40', 'apple-blue', 40],
+  ['StateSelected55', 'apple-blue', 55],
+  ['StateSelectedSurface', 'apple-blue', 10],
+  ['StateRunning', 'apple-blue'],
+  ['StateRunning45', 'apple-blue', 45],
+  ['StateRunning55', 'apple-blue', 55],
+  ['StateRunningSurface', 'apple-blue', 10],
+  ['StateSuccess', 'apple-green'],
+  ['StateSuccess45', 'apple-green', 45],
+  ['StateSuccess55', 'apple-green', 55],
+  ['StateSuccessSurface', 'apple-green', 10],
+  ['StateFailed', 'apple-red'],
+  ['StateFailed50', 'apple-red', 50],
+  ['StateFailed60', 'apple-red', 60],
+  ['StateFailedSurface', 'apple-red', 10],
+  ['StateWaiting', 'apple-orange'],
+  ['StateWaiting40', 'apple-orange', 40],
   ['ConnectionDependency', 'edge-0'],
   ['ConnectionContext', 'text-muted'],
+  ...kinds.flatMap(([kind, hue]) => [
+    [`Kind${kind}`, `apple-${hue}`],
+    [`Kind${kind}10`, `apple-${hue}`, 10],
+    [`Kind${kind}Strong`, `apple-${hue}-strong`],
+    [`Kind${kind}Tile`, `apple-${hue}-tile`],
+    [`Kind${kind}Stroke`, [`apple-${hue}-strong`, `apple-${hue}`]],
+  ]),
+  ...states.flatMap(([state, hue]) => [
+    [`State${state}10`, `apple-${hue}`, 10],
+    [`State${state}Strong`, `apple-${hue}-strong`],
+    [`State${state}Stroke`, [`apple-${hue}-strong`, `apple-${hue}`]],
+  ]),
+  ['Accent', 'apple-blue'],
+  ['Accent10', 'apple-blue', 10],
+  ['AccentStrong', 'apple-blue-strong'],
+  ['AccentStroke', ['apple-blue-strong', 'apple-blue']],
+  ['AccentText', 'apple-blue-text'],
+  ['AccentFill', 'apple-blue-fill'],
+  ['DestructiveText', 'apple-red-text'],
+  ['DestructiveFill', 'apple-red-fill'],
+  ['OnAccent', 'white'],
+  ['OnTile', 'white'],
 ];
 
 // Color keys for brushes that must stay the same objects while their color follows the theme. Nodify's control
@@ -83,13 +159,15 @@ const brushes = [
 const colorKeys = [
   ['CanvasGrid.BackgroundColor', 'app-canvas'],
   ['CanvasGrid.DotColor', 'border'],
-  ['NodifyEditor.SelectionRectangleColor', 'state-selected'],
-  ['PendingConnection.StrokeColor', 'state-selected'],
+  ['NodifyEditor.SelectionRectangleColor', 'apple-blue'],
+  ['PendingConnection.StrokeColor', 'apple-blue'],
   ['PendingConnection.BackgroundColor', 'surface-overlay'],
   ['PendingConnection.ForegroundColor', 'text'],
   ['PendingConnection.BorderColor', 'border'],
   ['Minimap.BackgroundColor', 'surface-muted'],
   ['MinimapItem.BackgroundColor', 'text-faint'],
+  ...kinds.map(([kind, hue]) => [`Kind${kind}Color`, `apple-${hue}`]),
+  ['AccentColor', 'apple-blue'],
 ];
 
 // Each layer is x, y, blur, spread, token, and opacity in percent. Tailwind's shadow-sm is two black layers at 10%.
@@ -101,11 +179,14 @@ const shadowSm = [
 const ringed = (token, percent) => [[0, 0, 0, 1, token, percent], ...shadowSm];
 const themedShadows = [
   ['CardShadow', ringed('foreground', 10), ringed('foreground', 10)],
-  ['CardRunningShadow', ringed('state-running', 15), ringed('state-running', 15)],
-  ['CardSuccessShadow', ringed('state-success', 15), ringed('state-success', 15)],
-  ['CardFailedShadow', ringed('state-failed', 15), ringed('state-failed', 15)],
-  ['CardWaitingShadow', ringed('state-selected', 15), ringed('state-selected', 15)],
+  ['CardRunningShadow', ringed('apple-blue', 15), ringed('apple-blue', 15)],
+  ['CardSuccessShadow', ringed('apple-green', 15), ringed('apple-green', 15)],
+  ['CardFailedShadow', ringed('apple-red', 15), ringed('apple-red', 15)],
+  ['CardWaitingShadow', ringed('apple-orange', 15), ringed('apple-orange', 15)],
   ['FloatingShadow', [[0, 12, 28, 0, 'black', 12]], [[0, 14, 32, 0, 'black', 32]]],
+  ['NodeShadow', [[0, 1, 2, 0, 'black', 8], [0, 2, 6, 0, 'black', 6]], [[0, 1, 2, 0, 'black', 40], [0, 2, 8, 0, 'black', 32]]],
+  ['NodeHoverShadow', [[0, 2, 6, 0, 'black', 10], [0, 8, 20, 0, 'black', 10]], [[0, 2, 6, 0, 'black', 45], [0, 10, 24, 0, 'black', 40]]],
+  ['PopoverShadow', [[0, 10, 30, 0, 'black', 16], [0, 2, 6, 0, 'black', 8]], [[0, 12, 32, 0, 'black', 45], [0, 2, 6, 0, 'black', 30]]],
 ];
 
 // --radius is 0.625rem, and Tailwind derives each step from it.
@@ -149,10 +230,15 @@ function toSrgb(l, c, h) {
 
 const byte = (n) => n.toString(16).padStart(2, '0').toUpperCase();
 
+// A color as it is written: sRGB bytes and an alpha byte.
+function rgba(token, theme, percent = 100) {
+  const { rgb, alpha } = parse(tokens[Array.isArray(token) ? token[theme] : token][theme]);
+  return { rgb, a: Math.round(alpha * (percent / 100) * 255) };
+}
+
 // Avalonia puts alpha first.
 function color(token, theme, percent = 100) {
-  const { rgb, alpha } = parse(planweave[token][theme]);
-  const a = Math.round(alpha * (percent / 100) * 255);
+  const { rgb, a } = rgba(token, theme, percent);
   return `#${a === 255 ? '' : byte(a)}${rgb.map(byte).join('')}`;
 }
 
@@ -183,6 +269,73 @@ function generate() {
     '</ResourceDictionary>',
     '',
   ].join('\n');
+}
+
+// Foreground, background, and the least contrast ratio each theme must reach. A background is one key or a stack of keys,
+// top first, that composites over its last, opaque key. Text needs 4.5:1 and a glyph, stroke, or tile needs 3:1.
+const canvas = 'CanvasGrid.BackgroundColor';
+const strokes = [...kinds.map(([kind]) => `Kind${kind}`), ...states.map(([state]) => `State${state}`), 'Accent'];
+const tints = [...states.map(([state]) => `State${state}10Brush`), ...kinds.map(([kind]) => `Kind${kind}10Brush`), 'Accent10Brush'];
+const pairs = (foregrounds, backgrounds, minimum) =>
+  foregrounds.flatMap((foreground) => backgrounds.map((background) => [foreground, background, minimum]));
+const contrast = [
+  ...pairs(['TextBrush', 'TextMutedBrush'], ['SurfaceRaisedBrush', 'SurfaceOverlayBrush', 'AppPanelBrush'], 4.5),
+  ...pairs(['TextBrush'], tints.map((tint) => [tint, 'SurfaceRaisedBrush']), 4.5),
+  ...pairs(['AccentTextBrush', 'DestructiveTextBrush'], ['SurfaceOverlayBrush', 'AppPanelBrush', 'SurfaceRaisedBrush'], 4.5),
+  ...pairs(['OnAccentBrush'], ['AccentFillBrush', 'DestructiveFillBrush'], 4.5),
+  ...pairs(['OnTileBrush'], kinds.map(([kind]) => `Kind${kind}TileBrush`), 3),
+  ...pairs(strokes.map((stroke) => `${stroke}StrokeBrush`), [canvas, 'SurfaceRaisedBrush'], 3),
+  ...strokes.flatMap((hue) => pairs([`${hue}StrongBrush`], ['SurfaceRaisedBrush', [`${hue}10Brush`, 'SurfaceRaisedBrush']], 3)),
+  ['AccentBrush', canvas, 3],
+];
+
+function lookUp(key, theme) {
+  const brush = brushes.find(([name]) => `${name}Brush` === key);
+  const [, token, percent] = brush ?? colorKeys.find(([name]) => name === key) ?? [];
+  if (token === undefined) {
+    throw new Error(`The contrast list names ${key}, which is no brush or color key.`);
+  }
+  return rgba(token, theme, percent);
+}
+
+// Source-over compositing of a straight-alpha color onto an opaque one.
+const over = ({ rgb, a }, below) => rgb.map((channel, i) => (channel * a + below[i] * (255 - a)) / 255);
+
+function composite(keys, theme) {
+  const layers = keys.map((key) => lookUp(key, theme));
+  if (layers.at(-1).a !== 255) {
+    throw new Error(`${keys.at(-1)} is not opaque, so it cannot be the bottom of a contrast pair.`);
+  }
+  return layers.slice(0, -1).reduceRight((below, layer) => over(layer, below), layers.at(-1).rgb);
+}
+
+// WCAG 2 relative luminance and contrast ratio.
+function luminance(rgb) {
+  const [r, g, b] = rgb.map((channel) => {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function ratio(foreground, background) {
+  const [high, low] = [luminance(foreground), luminance(background)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
+}
+
+function lowContrast() {
+  const found = [];
+  ['Light', 'Dark'].forEach((name, theme) => {
+    for (const [foreground, background, minimum] of contrast) {
+      const stack = [background].flat();
+      const below = composite(stack, theme);
+      const value = ratio(over(lookUp(foreground, theme), below), below);
+      if (value < minimum) {
+        found.push(`${name}: ${foreground} on ${stack.join(' over ')} is ${value.toFixed(2)}:1, below ${minimum}:1.`);
+      }
+    }
+  });
+  return found;
 }
 
 // Avalonia's named colors, which it parses without regard to case. Transparent paints nothing, so it may appear anywhere.
@@ -247,12 +400,24 @@ function strayColors() {
   return found;
 }
 
+function reportContrast() {
+  const low = lowContrast();
+  if (low.length > 0) {
+    console.error('These color pairs are too close to read:');
+    low.forEach((line) => console.error(`  ${line}`));
+  }
+  return low.length > 0;
+}
+
 const args = process.argv.slice(2);
 if (args.length === 0) {
   writeFileSync(output, generate());
   console.log(`Wrote ${relative(root, output).replaceAll('\\', '/')}.`);
+  if (reportContrast()) {
+    process.exit(1);
+  }
 } else if (args.length === 1 && args[0] === '--check') {
-  let failed = false;
+  let failed = reportContrast();
   let current = '';
   try {
     current = readFileSync(output, 'utf8').replaceAll('\r\n', '\n');
@@ -270,7 +435,7 @@ if (args.length === 0) {
   if (failed) {
     process.exit(1);
   }
-  console.log('Tokens.axaml is current, and no other desktop XAML or C# file sets a color.');
+  console.log(`Tokens.axaml is current, ${contrast.length * 2} color pairs keep their contrast, and no other desktop XAML or C# file sets a color.`);
 } else {
   console.error('Usage: node scripts/planweave-tokens.mjs [--check]');
   process.exit(2);

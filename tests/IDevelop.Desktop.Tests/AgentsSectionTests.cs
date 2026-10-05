@@ -38,7 +38,7 @@ public sealed class AgentsSectionTests : IDisposable
         var shell = Shell.Show(clients);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         Assert.Equal(["Codex", "Checking…"], Shell.Texts(Row(shell, "AgentCodex")));
-        Assert.Equal(Color.Parse("#00A0A1"), Dot(shell, "AgentCodex"));
+        Assert.Equal(Color.Parse("#0088FF"), Dot(shell, "AgentCodex"));
 
         clients.RefreshAsync().Wait();
         shell.Render();
@@ -50,7 +50,7 @@ public sealed class AgentsSectionTests : IDisposable
             Shell.Texts(Row(shell, "AgentPi")));
         Assert.Equal(["Antigravity CLI", "Not installed", "No agy command was found on PATH."], Shell.Texts(Row(shell, "AgentAntigravity")));
         Assert.Equal(
-            [Color.Parse("#D7352D"), Color.Parse("#44984A"), Color.Parse("#44984A"), Color.Parse("#90969C")],
+            [Color.Parse("#FF383C"), Color.Parse("#34C759"), Color.Parse("#34C759"), Color.Parse("#90969C")],
             new[] { "AgentClaudeCode", "AgentCodex", "AgentPi", "AgentAntigravity" }.Select(row => Dot(shell, row)));
         var claude = ControlAutomationPeer.CreatePeerForElement(shell.Find<TextBlock>("AgentClaudeCode"));
         Assert.Equal(

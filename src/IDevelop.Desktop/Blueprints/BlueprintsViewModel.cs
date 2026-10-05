@@ -93,16 +93,21 @@ public sealed class BlueprintsViewModel : ObservableObject
 
     internal void Notice(string? text) => _canvas.Notice(text);
 
-    private void Reload()
+    /// <summary>Reads both libraries again.</summary>
+    internal void Reload()
     {
         var project = Project.Read();
         var personal = Personal?.Read() ?? new LibraryContents([], []);
+        Blueprint[] libraries = [.. project.Blueprints, .. personal.Blueprints];
+        NodeKind KindOf(Blueprint blueprint) => NodeKinds.Of(
+            blueprint, key => _canvas.Workflow.Blueprints.GetValueOrDefault(key) ?? libraries.FirstOrDefault(library => library.Key == key));
+        BlueprintEntryViewModel Entry(Blueprint blueprint, BlueprintLibrary? library) => new(this, blueprint, library, KindOf(blueprint));
         Groups =
         [
-            new PaletteGroup("BUILT-IN", [.. BuiltInBlueprints.All.Select(blueprint => new BlueprintEntryViewModel(this, blueprint, null))]),
-            new PaletteGroup("PROJECT", [.. project.Blueprints.Select(blueprint => new BlueprintEntryViewModel(this, blueprint, Project))]),
+            new PaletteGroup("BUILT-IN", [.. BuiltInBlueprints.All.Select(blueprint => Entry(blueprint, null))]),
+            new PaletteGroup("PROJECT", [.. project.Blueprints.Select(blueprint => Entry(blueprint, Project))]),
             .. Personal is { } library
-                ? [new PaletteGroup("PERSONAL", [.. personal.Blueprints.Select(blueprint => new BlueprintEntryViewModel(this, blueprint, library))])]
+                ? [new PaletteGroup("PERSONAL", [.. personal.Blueprints.Select(blueprint => Entry(blueprint, library))])]
                 : Array.Empty<PaletteGroup>(),
         ];
         Problems = [.. project.Problems, .. personal.Problems];
@@ -114,16 +119,22 @@ public sealed class BlueprintEntryViewModel
 {
     private readonly BlueprintLibrary? _library;
 
-    internal BlueprintEntryViewModel(BlueprintsViewModel owner, Blueprint blueprint, BlueprintLibrary? library)
+    internal BlueprintEntryViewModel(BlueprintsViewModel owner, Blueprint blueprint, BlueprintLibrary? library, NodeKind kind)
     {
         Blueprint = blueprint;
         _library = library;
+        Kind = kind;
         PlaceCommand = new RelayCommand(() => owner.Place(blueprint));
         DeriveCommand = new RelayCommand(() => owner.Derive(blueprint));
         EditCommand = new RelayCommand(() => owner.Edit(blueprint, library!), () => library is not null);
     }
 
     public Blueprint Blueprint { get; }
+
+    public NodeKind Kind { get; }
+
+    /// <summary>The blueprint comes from a project or personal library, not from the built-ins.</summary>
+    public bool IsLibrary => !NodeKinds.IsBuiltIn(Blueprint);
 
     public string Name => Blueprint.Name;
 

@@ -46,7 +46,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
-  <!-- PlanWeave's status marker: the tone's surface, the tone at 45 to 50% as its border, and the tone as its text. -->
+  <!-- A status marker: the tone's tint, the tone at 40 to 50% as its border, neutral text, and the tone's glyph. -->
   <Style Selector="Border.pill">
     <Setter Property="Height" Value="24" />
     <Setter Property="Padding" Value="8,0" />
@@ -69,10 +69,11 @@
   <Style Selector="Border.pill.running">
     <Setter Property="BorderBrush" Value="{DynamicResource StateRunning45Brush}" />
     <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateRunningBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.running PathIcon">
     <Setter Property="Data" Value="{StaticResource LoaderIcon}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.running PathIcon, PathIcon.spin">
     <Style.Animations>
@@ -89,26 +90,29 @@
   <Style Selector="Border.pill.complete">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess45Brush}" />
     <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateSuccessBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.complete PathIcon">
     <Setter Property="Data" Value="{StaticResource CircleCheckIcon}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateSuccessStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.problem">
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailed50Brush}" />
     <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateFailedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.problem PathIcon">
     <Setter Property="Data" Value="{StaticResource CircleAlertIcon}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateFailedStrongBrush}" />
   </Style>
   <Style Selector="Border.pill.waiting">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelected40Brush}" />
-    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateSelectedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting40Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
   <Style Selector="Border.pill.waiting PathIcon">
     <Setter Property="Data" Value="{StaticResource CircleDotsIcon}" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWaitingStrongBrush}" />
   </Style>
 
   <Style Selector="Ellipse.status">
@@ -126,7 +130,7 @@
     <Setter Property="Fill" Value="{DynamicResource StateFailedBrush}" />
   </Style>
   <Style Selector="Ellipse.status.waiting">
-    <Setter Property="Fill" Value="{DynamicResource StateSelectedBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource StateWaitingBrush}" />
   </Style>
 
   <!-- Buttons without a fill until the pointer is over them. Fluent's own state styles set the template's colors,
@@ -187,6 +191,57 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="Button.action:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+
+  <!-- The one main command of a panel or sheet, filled with the accent under white text. -->
+  <Style Selector="Button.primary">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+  <Style Selector="Button.primary:pressed">
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+
+  <!-- A command that removes something: red text on the neutral button, and a red fill under white text on hover. -->
+  <Style Selector="Button.destructive">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource DestructiveTextBrush}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.destructive:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.destructive:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DestructiveFillBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DestructiveFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="Button.destructive:disabled /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
@@ -309,6 +364,66 @@
   </Style>
   <Style Selector="ComboBox:focus-visible /template/ Border#Background, ComboBox:dropdownopen /template/ Border#Background">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+  </Style>
+
+  <!-- Menus and popovers are opaque overlay surfaces with a hairline border. A highlighted row fills with the accent, and
+       its text, hint, and icon turn white. Fluent's own state styles set the template's parts, so each is restated. -->
+  <!-- Where no compositor makes a popup window transparent, as on a bare X11 server, its corners show this brush. -->
+  <Style Selector="PopupRoot">
+    <Setter Property="TransparencyBackgroundFallback" Value="{DynamicResource SurfaceOverlayBrush}" />
+  </Style>
+  <Style Selector="ContextMenu, MenuFlyoutPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="MinWidth" Value="180" />
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="MenuItem /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="MenuItem.destructive /template/ ContentPresenter#PART_HeaderPresenter, MenuItem.destructive /template/ ContentControl#PART_IconPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource DestructiveTextBrush}" />
+  </Style>
+  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot, MenuItem:pointerover /template/ Border#PART_LayoutRoot, MenuItem:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+  </Style>
+  <Style Selector="MenuItem.destructive:selected /template/ Border#PART_LayoutRoot, MenuItem.destructive:pointerover /template/ Border#PART_LayoutRoot, MenuItem.destructive:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource DestructiveFillBrush}" />
+  </Style>
+  <Style Selector="MenuItem:selected /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pointerover /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:pressed /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:selected /template/ ContentControl#PART_IconPresenter, MenuItem:pointerover /template/ ContentControl#PART_IconPresenter, MenuItem:pressed /template/ ContentControl#PART_IconPresenter, MenuItem:selected /template/ TextBlock#PART_InputGestureText, MenuItem:pointerover /template/ TextBlock#PART_InputGestureText, MenuItem:pressed /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+  <Style Selector="MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter, MenuItem:disabled /template/ ContentControl#PART_IconPresenter, MenuItem:disabled /template/ TextBlock#PART_InputGestureText">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="MenuItem:disabled /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ContextMenu Separator, MenuFlyoutPresenter Separator, MenuItem Separator">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="8,4" />
+    <Setter Property="Background" Value="{DynamicResource Border100Brush}" />
+  </Style>
+  <!-- An in-window popover, such as the Add popover. -->
+  <Style Selector="Border.popover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource PopoverShadow}" />
   </Style>
 
   <!-- The splitter is 8 px wide for the pointer and draws a 1 px line in its middle. -->

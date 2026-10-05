@@ -18,7 +18,8 @@ using Nodify;
 
 namespace IDevelop.Desktop.Tests;
 
-internal sealed class Shell
+/// <summary>Drives a headless window as a person does. Each unit of work adds its own helpers in a Shell.&lt;Unit&gt;.cs file.</summary>
+internal sealed partial class Shell
 {
     private Shell(MainWindow window)
     {
@@ -88,7 +89,9 @@ internal sealed class Shell
 
     public T InCard<T>(string title, string automationId) where T : Control => ById<T>(Node(title), automationId).Single();
 
-    public string CardText(string title, string automationId) => TextOf(InCard<Control>(title, automationId));
+    /// <summary>A text block's text even while it is hidden, as a card shows one of two subtitles at a time.</summary>
+    public string CardText(string title, string automationId) =>
+        InCard<Control>(title, automationId) is TextBlock text ? text.Text ?? "" : TextOf(InCard<Control>(title, automationId));
 
     public ListBoxItem SidebarRow(string title) =>
         Find<ListBox>("SidebarTasks").GetVisualDescendants().OfType<ListBoxItem>().Single(row => ((TaskNodeViewModel)row.DataContext!).Title == title);

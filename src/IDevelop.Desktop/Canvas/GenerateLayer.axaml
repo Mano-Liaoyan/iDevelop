@@ -1,0 +1,6 @@
+<!-- The canvas layer for Generate Workflow. Empty, it has no background, so every input passes through to the canvas. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             x:Class="IDevelop.Desktop.Canvas.GenerateLayer"
+             x:DataType="canvas:WorkflowCanvasViewModel" />

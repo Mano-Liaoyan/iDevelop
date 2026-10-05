@@ -175,7 +175,7 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource StateFailedBrush}"
+                    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
                                IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                AutomationProperties.AutomationId="ProposalProblem" />
                     <StackPanel Orientation="Horizontal" Spacing="8">

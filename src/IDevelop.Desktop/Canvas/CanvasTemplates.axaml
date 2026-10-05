@@ -1,0 +1,143 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:nodify="https://miroiu.github.io/nodify"
+                    xmlns:canvas="using:IDevelop.Desktop.Canvas"
+                    xmlns:execution="using:IDevelop.Desktop.Execution"
+                    xmlns:workflows="using:IDevelop.Workflows">
+  <ControlTheme x:Key="PortTheme" TargetType="nodify:Connector">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <TemplatedControl Name="PART_Connector" Width="20" Height="20"
+                          Background="{DynamicResource TextStrongBrush}"
+                          BorderBrush="{DynamicResource SurfaceBaseBrush}">
+          <TemplatedControl.Template>
+            <ControlTemplate>
+              <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 12 px handle. -->
+              <Panel Background="Transparent">
+                <Ellipse Width="12" Height="12" StrokeThickness="2"
+                         Fill="{TemplateBinding Background}"
+                         Stroke="{TemplateBinding BorderBrush}" />
+              </Panel>
+            </ControlTemplate>
+          </TemplatedControl.Template>
+        </TemplatedControl>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ TemplatedControl#PART_Connector">
+      <Setter Property="Background" Value="{DynamicResource StateSelectedBrush}" />
+    </Style>
+    <Style Selector="^.isOverElement /template/ TemplatedControl#PART_Connector">
+      <Setter Property="Background" Value="{DynamicResource StateSelectedBrush}" />
+    </Style>
+  </ControlTheme>
+  <!-- The minimap's background is PlanWeave's muted mask, and the opaque viewport is the clear window in it. -->
+  <ControlTheme x:Key="MinimapViewportTheme" TargetType="Rectangle">
+    <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
+  </ControlTheme>
+
+  <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
+    <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
+           Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+           ToolTip.Tip="{Binding Title}"
+           AutomationProperties.AutomationId="TaskCard"
+           AutomationProperties.Name="{Binding Title}">
+      <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
+      <!-- A status tint is translucent, so an opaque card lies under it and hides the grid and the wires. -->
+      <Border Margin="10,0" CornerRadius="{StaticResource RadiusXl}" Background="{DynamicResource SurfaceRaisedBrush}" />
+      <Border Classes="card" Margin="10,0" Padding="12" BorderThickness="1"
+              CornerRadius="{StaticResource RadiusXl}"
+              Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+              Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+              Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+              Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+        <StackPanel Spacing="4">
+          <Grid Height="24" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="cardTitle" VerticalAlignment="Center" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+            <Border Grid.Column="1" Classes="pill"
+                    Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                    Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                    Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                    Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon />
+                <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="CardStatus" />
+              </StackPanel>
+            </Border>
+          </Grid>
+          <Grid Margin="0,6,0,0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="cardLabel" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
+                       AutomationProperties.AutomationId="CardAgent" />
+            <TextBlock Grid.Column="1" Classes="cardLabel" Text="{Binding TypeName}"
+                       AutomationProperties.AutomationId="CardType" />
+          </Grid>
+          <Border Classes="prompt" Height="64">
+            <Panel>
+              <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
+              <TextBlock Classes="placeholder" Text="{Binding PreviewPlaceholder}"
+                         IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+            </Panel>
+          </Border>
+        </StackPanel>
+      </Border>
+      <!-- PlanWeave puts the target handle at 56% of the card's height and the source handle at 44%. -->
+      <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,71,0,0">
+        <ContentControl.ContentTemplate>
+          <DataTemplate DataType="canvas:PortViewModel">
+            <nodify:NodeInput Theme="{StaticResource PortTheme}"
+                              Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                              IsConnected="{Binding IsConnected}"
+                              AutomationProperties.Name="Task input" />
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
+      <ContentControl Content="{Binding Output}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,53,0,0">
+        <ContentControl.ContentTemplate>
+          <DataTemplate DataType="canvas:PortViewModel">
+            <nodify:NodeOutput Theme="{StaticResource PortTheme}"
+                               Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                               IsConnected="{Binding IsConnected}"
+                               AutomationProperties.Name="Task output" />
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
+    </Panel>
+  </DataTemplate>
+
+  <!-- A proposal's tasks draw as dashed cards that take no input, over the empty cards they fill. -->
+  <DataTemplate x:Key="GhostCardTemplate" DataType="canvas:GhostCardViewModel">
+    <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
+           Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+           AutomationProperties.AutomationId="GhostCard"
+           AutomationProperties.Name="{Binding Title}">
+      <Rectangle Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+                 Fill="{DynamicResource SurfaceOverlayBrush}" Stroke="{DynamicResource StateSelectedBrush}" />
+      <StackPanel Margin="22,12" Spacing="4">
+        <TextBlock Classes="cardLabel" Text="{Binding Label}" Foreground="{DynamicResource AccentTextBrush}"
+                   AutomationProperties.AutomationId="GhostLabel" />
+        <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                   AutomationProperties.AutomationId="GhostTitle" />
+        <TextBlock Classes="cardLabel" Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
+      </StackPanel>
+    </Panel>
+  </DataTemplate>
+
+  <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
+    <nodify:StepConnection Source="{Binding From.Output.Anchor}"
+                           Target="{Binding To.Input.Anchor}"
+                           Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                           nodify:BaseConnection.IsSelectable="True" />
+  </DataTemplate>
+
+  <DataTemplate x:Key="PendingConnectionTemplate" DataType="canvas:PendingConnectionViewModel">
+    <nodify:PendingConnection Source="{Binding Source, Mode=OneWayToSource}"
+                              PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
+                              EnablePreview="True"
+                              Content="{Binding PreviewText}"
+                              Classes.rejected="{Binding IsRejected}" />
+  </DataTemplate>
+
+  <!-- An empty template, or each minimap item would show its view model's type name. -->
+  <DataTemplate x:Key="MinimapItemTemplate" DataType="canvas:TaskNodeViewModel">
+    <Panel />
+  </DataTemplate>
+</ResourceDictionary>

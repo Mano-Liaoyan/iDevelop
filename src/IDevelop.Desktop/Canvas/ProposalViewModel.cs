@@ -8,15 +8,17 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>A dashed card on the canvas for a task that a proposal adds, or fills in place of the empty card.</summary>
-public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview);
+public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview, NodeKind Kind);
 
 /// <summary>A task that a proposal adds or fills, which the person can untick before accepting.</summary>
-public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen) : ObservableObject
+public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen, NodeKind kind) : ObservableObject
 {
     private bool _isChosen = isChosen;
     private bool _hasStarted;
 
     internal TaskId Id { get; } = id;
+
+    public NodeKind Kind { get; } = kind;
 
     /// <summary>False for a fill of a task that has started, which no proposal changes.</summary>
     public bool CanChoose => !_hasStarted;
@@ -77,9 +79,9 @@ public sealed class ProposalViewModel : ObservableObject
                 Proposal = ready.Proposal;
                 // A slot the person has written in since starts unticked, so Accept never overwrites it unasked. A node an
                 // earlier Accept placed is not offered again.
-                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields), IsEmptySlot(fill.Slot))),
+                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields), IsEmptySlot(fill.Slot), SlotBlueprint(fill.Slot))),
                     .. Proposal.Nodes.Where(node => !workflow.Tasks.ContainsKey(node.Id))
-                        .Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true))];
+                        .Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, node.Blueprint))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -142,15 +144,17 @@ public sealed class ProposalViewModel : ObservableObject
         var chosen = Chosen();
         foreach (var fill in proposal.Fills.Where(fill => chosen.Contains(fill.Slot) && workflow.Positions.ContainsKey(fill.Slot)))
         {
+            var slot = workflow.Tasks[fill.Slot];
             yield return new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? workflow.Tasks[fill.Slot].Title,
-                Preview(workflow.Tasks[fill.Slot].Blueprint, fill.Fields));
+                WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
+                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint));
         }
 
         var layout = proposal.Layout(workflow);
         foreach (var node in proposal.Nodes.Where(node => chosen.Contains(node.Id)))
         {
-            yield return new GhostCardViewModel(WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields));
+            yield return new GhostCardViewModel(
+                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint));
         }
     }
 
@@ -190,7 +194,9 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    private ProposalItemViewModel Item(TaskId id, string label, string preview, bool isChosen) => new(this, id, label, preview, isChosen);
+    /// <param name="blueprint">The blueprint of the task, or null for a fill whose task is gone, which reads as Implement.</param>
+    private ProposalItemViewModel Item(TaskId id, string label, string preview, bool isChosen, Blueprint? blueprint) =>
+        new(this, id, label, preview, isChosen, _canvas.KindOf(blueprint ?? BuiltInBlueprints.Implement));
 
     private bool IsEmptySlot(TaskId slot) => _canvas.Workflow.Tasks.TryGetValue(slot, out var task) && PlanningContext.IsEmpty(task);
 
