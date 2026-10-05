@@ -228,7 +228,6 @@ internal static partial class AttemptReducer
         {
             Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)),
             Queued = [],
-            Process = null,
             StopTurnRequested = false,
             Verdict = null,
             LastMessage = null,

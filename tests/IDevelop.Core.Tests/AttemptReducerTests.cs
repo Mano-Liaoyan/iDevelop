@@ -233,17 +233,6 @@ public class AttemptReducerTests
     }
 
     [Fact]
-    public void A_crash_before_a_later_turn_launched_reconciles_without_the_earlier_turns_process()
-    {
-        var record = Replay([.. AskedWhichFruit, Sent(4, "banana"), Exit(5, 0), NextTurn(6, "banana"), new Reconciled(T0.AddSeconds(9), null)]);
-
-        Assert.Equal(
-            (AttemptStatus.Interrupted, "iDevelop stopped while starting the client. If the client started, it may still be running."),
-            (record.Status, record.Detail));
-        Assert.Equal([TurnOutcome.Succeeded, TurnOutcome.Interrupted], record.Turns.Select(turn => turn.Outcome));
-    }
-
-    [Fact]
     public void A_later_turn_that_cannot_launch_fails_the_attempt()
     {
         var record = Replay([.. AskedWhichFruit, Sent(4, "banana"), Exit(5, 0), NextTurn(6, "banana"), new LaunchFailed(T0.AddSeconds(6), "codex did not start: access denied")]);

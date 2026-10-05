@@ -4,6 +4,7 @@ using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Core.Tests.AttemptEvents;
 using static IDevelop.TestSupport.FakeAgents;
 using static IDevelop.TestSupport.FakeRule;
 using static IDevelop.TestSupport.Processes;
@@ -370,15 +371,7 @@ public sealed class ConversationTests : IDisposable
     public async Task A_session_id_in_an_attempt_log_that_is_not_plain_is_neither_resumed_nor_handed_to_a_terminal(string planted)
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(ReplyLines(ClientId.Codex, "Done.")));
-        var attempts = Path.Combine(_project, ".idp", "attempts");
-        var requested = new AttemptEvent.Requested(
-            DateTimeOffset.UtcNow, AttemptId.New(), SayHiId, "Say hi", Settings[ClientId.Codex], "# Say hi\n", "codex", ["exec", "--json"]);
-        using (var log = AttemptLog.Create(attempts, requested))
-        {
-            log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.SessionStarted(planted)));
-            log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Succeeded("Done.")));
-            log.Append(new AttemptEvent.Exited(DateTimeOffset.UtcNow, 0, ""));
-        }
+        PlantLog(LaunchedAt1s, Said(2, new AgentEvent.SessionStarted(planted)), Said(3, new AgentEvent.Succeeded("Done.")), Exit(4, 0));
 
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var codex = SayHi(Settings[ClientId.Codex]);
@@ -387,7 +380,7 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), runs.Send(codex, "banana", stopTurn: false));
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.NoSession(ClientId.Codex)), runs.OpenInTerminal(SayHiId));
         Assert.Equal(["iDevelop ignored the session id Codex reported, because it is not a plain id."], runs.Latest[SayHiId].Activity.Select(line => line.Text));
-        Assert.Single(Directory.EnumerateDirectories(AttemptLog.TaskFolder(attempts, SayHiId)));
+        Assert.Single(Directory.EnumerateDirectories(AttemptLog.TaskFolder(Path.Combine(_project, ".idp", "attempts"), SayHiId)));
     }
 
     [Fact]
@@ -454,25 +447,8 @@ public sealed class ConversationTests : IDisposable
     [Fact]
     public async Task A_crash_between_turns_reconciles_to_interrupted_without_checking_the_ended_turns_process()
     {
-        // Another program now has the ended turn's process id, as after the id was reused.
-        var shim = _fakes.Install("sleeper", On().Hang());
-        using var other = Process.Start(new ProcessStartInfo(shim)
-        {
-            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-        })!;
-        _spawned.Add(other.Id);
-        var identity = ProcessCheck.Identify(other);
-        var attempts = Path.Combine(_project, ".idp", "attempts");
-        var requested = new AttemptEvent.Requested(
-            DateTimeOffset.UtcNow, AttemptId.New(), SayHiId, "Say hi", Settings[ClientId.Codex], "# Say hi\n", shim, ["exec", "--json"]);
-        using (var log = AttemptLog.Create(attempts, requested))
-        {
-            log.Append(new AttemptEvent.Launched(DateTimeOffset.UtcNow, identity.Id, identity.StartedAt.AddMinutes(-5)));
-            log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.SessionStarted(Session)));
-            log.Append(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, "banana", false));
-            log.Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Succeeded("Which fruit?")));
-            log.Append(new AttemptEvent.Exited(DateTimeOffset.UtcNow, 0, ""));
-        }
+        using var firstTurn = StartAsTheFirstTurn(out var launched);
+        PlantLog(launched, Said(2, new AgentEvent.SessionStarted(Session)), Sent(3, "banana"), Said(4, new AgentEvent.Succeeded("Which fruit?")), Exit(5, 0));
 
         await using var runs = ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver));
 
@@ -480,7 +456,24 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped before the next turn started.", "Which fruit?"), (record.Status, record.Detail, record.Result));
         Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?")], record.Turns);
         Assert.Equal(["banana"], record.Queued);
-        Assert.False(other.HasExited);
+        Assert.False(firstTurn.WaitForExit(TimeSpan.FromSeconds(1)), "reconciliation stopped the ended turn's process");
+    }
+
+    [Fact]
+    public async Task A_crash_before_a_later_turn_launched_reconciles_to_interrupted_without_checking_the_earlier_turns_process()
+    {
+        using var firstTurn = StartAsTheFirstTurn(out var launched);
+        PlantLog(
+            launched,
+            Said(2, new AgentEvent.SessionStarted(Session)), Sent(3, "banana"), Said(4, new AgentEvent.Succeeded("Which fruit?")), Exit(5, 0), NextTurn(6, "banana"));
+
+        await using var runs = ProjectRuns.Open(_project, new ClientDirectory(_fakes.Resolver));
+
+        const string Reason = "iDevelop stopped while starting the client. If the client started, it may still be running.";
+        var record = runs.Latest[SayHiId];
+        Assert.Equal((AttemptStatus.Interrupted, Reason), (record.Status, record.Detail));
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?"), new TurnRecord(2, "banana", TurnOutcome.Interrupted, null, Reason)], record.Turns);
+        Assert.False(firstTurn.WaitForExit(TimeSpan.FromSeconds(1)), "reconciliation stopped the earlier turn's process");
     }
 
     [Fact]
@@ -600,6 +593,33 @@ public sealed class ConversationTests : IDisposable
             }
         };
         return settled.Task.WaitAsync(Patience);
+    }
+
+    /// <summary>
+    /// Starts a process that stays up, and returns the Launched event of a first turn that ran as exactly that process.
+    /// Reconciliation stops the process if it checks that turn's process.
+    /// </summary>
+    private Process StartAsTheFirstTurn(out AttemptEvent.Launched launched)
+    {
+        var process = Process.Start(new ProcessStartInfo(_fakes.Install("sleeper", On().Hang()))
+        {
+            UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+        })!;
+        _spawned.Add(process.Id);
+        var identity = ProcessCheck.Identify(process);
+        launched = new AttemptEvent.Launched(T0.AddSeconds(1), identity.Id, identity.StartedAt);
+        return process;
+    }
+
+    /// <summary>Writes the log of a Codex attempt at Say hi as an earlier instance left it: its request, then <paramref name="events"/>.</summary>
+    private void PlantLog(params AttemptEvent[] events)
+    {
+        var requested = new AttemptEvent.Requested(T0, AttemptId.New(), SayHiId, "Say hi", Settings[ClientId.Codex], "# Say hi\n", "codex", ["exec", "--json"]);
+        using var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"), requested);
+        foreach (var e in events)
+        {
+            log.Append(e);
+        }
     }
 
     private string[] RecordedArguments(string file) => JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence(file)))!;
