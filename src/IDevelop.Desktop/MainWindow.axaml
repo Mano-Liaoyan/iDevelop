@@ -226,6 +226,24 @@
                            FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
                 <Border BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
                   <StackPanel Orientation="Horizontal">
+                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                            Command="{Binding UndoCommand}"
+                            ToolTip.Tip="Undo"
+                            AutomationProperties.AutomationId="Undo"
+                            AutomationProperties.Name="Undo">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconUndo}" />
+                    </Button>
+                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                            Command="{Binding RedoCommand}"
+                            ToolTip.Tip="Redo"
+                            AutomationProperties.AutomationId="Redo"
+                            AutomationProperties.Name="Redo">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRedo}" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+                <Border BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+                  <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Unsaved changes" Margin="10,0,2,0" VerticalAlignment="Center"
                                FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
                                IsVisible="{Binding HasUnsavedChanges}"
