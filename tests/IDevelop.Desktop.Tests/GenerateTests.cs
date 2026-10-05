@@ -302,6 +302,30 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_Add_popover_on_empty_canvas_offers_Generate_Workflow_which_opens_the_sheet()
+    {
+        var shell = OpenEmpty();
+
+        shell.RightClick(shell.InEditor(200, 150));
+        Assert.Equal("Generate Workflow…", shell.AddRows().SkipWhile(row => row.StartsWith("Add ", StringComparison.Ordinal)).First());
+        shell.Click(shell.Window.GetVisualDescendants().OfType<Button>()
+            .Single(row => AutomationProperties.GetAutomationId(row) == "AddNodeAction" && AutomationProperties.GetName(row) == "Generate Workflow…"));
+
+        Assert.False(shell.AddPopoverIsOpen);
+        Assert.True(shell.Find<TextBox>("GeneratePrompt").IsFocused);
+        shell.Press(Key.Escape);
+        Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
+
+        shell.RightClick(shell.InEditor(200, 150));
+        shell.Type("gen");
+        Assert.Equal("Generate Workflow…", shell.Highlighted());
+        shell.Press(Key.Enter);
+
+        Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
+        Assert.Empty(shell.Window.ViewModel.Canvas!.Nodes);
+    }
+
+    [AvaloniaFact]
     public void While_the_sheet_is_open_the_column_splitters_take_no_drag_and_the_sheet_keeps_focus()
     {
         var shell = OpenEmpty();
