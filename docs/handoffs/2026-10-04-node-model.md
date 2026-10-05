@@ -252,4 +252,4 @@ These remain unverified:
 
 ## Next action
 
-Slice 1, talk to a node, starts on its own branch.
+Slice 1, talk to a node, is built. Slice 2, typed nodes and workflow format 3, is next. A Windows session runs `skills/verify-idevelop/features/conversation.md` against slice 1, which no Windows machine has run yet.
