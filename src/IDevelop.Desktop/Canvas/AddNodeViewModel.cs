@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
+using Avalonia.Input;
 using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
@@ -230,6 +231,19 @@ public sealed class AddNodeViewModel : ObservableObject
     private IEnumerable<AddNodeAction> Actions()
     {
         yield return new("Generate Workflow…", "IconSparkle", "", _canvas.OpenGenerateCommand);
+
+        // Shown only while there is a step to take, as the menus hide what they cannot do.
+        var document = _canvas.Document;
+        if (document.CanUndo)
+        {
+            yield return new("Undo", "IconUndo", CanvasKeys.Hint(new KeyGesture(Key.Z, CanvasKeys.Command)), new RelayCommand(document.Undo));
+        }
+
+        if (document.CanRedo)
+        {
+            yield return new("Redo", "IconRedo", CanvasKeys.Hint(new KeyGesture(Key.Z, CanvasKeys.Command | KeyModifiers.Shift)), new RelayCommand(document.Redo));
+        }
+
         yield return new("Select All", "IconSelectAll", CanvasKeys.Hint(CanvasKeys.SelectAll), new RelayCommand(_canvas.SelectAll));
         yield return new("Fit to View", "IconFit", CanvasKeys.Hint(CanvasKeys.Fit), new RelayCommand(() => _canvas.View?.FitToView()));
         yield return new("Zoom to 100%", "IconZoomIn", CanvasKeys.Hint(CanvasKeys.ZoomToActual), new RelayCommand(() => _canvas.View?.ZoomToActual()));
