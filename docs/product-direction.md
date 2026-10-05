@@ -274,6 +274,14 @@ The [node model record](handoffs/2026-10-04-node-model.md) holds the design that
 
 The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. The node model settles what a review connection blocks, because a review node replaces it.
 
+The readiness schedule is built, and the rest of workflow execution waits for the user. `WorkflowSchedule` returns the ready tasks and names the tasks that hold back each blocked one, from each task's latest attempt, and starts nothing. These decisions are open:
+
+- The merge rules, which decide how a dependency's change reaches the tasks after it.
+- The lifecycle of each run's Git worktrees and branches.
+- What approves and stores a run, and which attempts belong to it. Until then the schedule reads each task's latest attempt.
+- The retry limit, and whether a failed or cancelled task can start again within a run.
+- How many tasks run at once.
+
 ### Team synchronization comes after execution
 
 The current proposal is that synchronization shares a workflow that already carries execution configuration and run state. [Shared editing and execution have different owners](#shared-editing-and-execution-have-different-owners) still describes the service.
