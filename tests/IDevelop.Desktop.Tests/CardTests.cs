@@ -168,10 +168,11 @@ public sealed class CardTests : IDisposable
 
         shell.Click(shell.InView<Button>("RunTask"));
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == label, "the run ends");
+        // The ring is the card's 1.5 px border, so the card's top pixel row is the ring alone. The frame that shows it can
+        // come a render tick after the status text, so the test waits for the pixel too.
+        shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
         Assert.Equal(["Design", label], Shell.Texts(shell.Node("Design")));
-        // The ring is the card's 1.5 px border, so the card's top pixel row is the ring alone.
-        Assert.Equal(Color.Parse(ring), shell.ColorAt(shell.Node("Design"), new Point(130, 0)));
     }
 
     [AvaloniaFact]
