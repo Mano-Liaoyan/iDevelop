@@ -269,6 +269,85 @@ public sealed class AddNodeTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_wire_dropped_low_on_the_canvas_opens_the_popover_below_the_drop_when_its_list_fits_there()
+    {
+        var shell = Shell.Open(_temp.Seed(AppTempFolder.TaskAt(TestTasks.Design, "Design", 105, 90)));
+        var canvas = shell.Bounds(shell.Editor);
+        shell.Drag(shell.Thumb(shell.Output("Design")), shell.InEditor(150, 200));
+        var height = shell.Bounds(shell.AddPopover).Height;
+        // A click elsewhere closes the popover, and the next press on the port is not a second click.
+        shell.Click(shell.InEditor(500, 250));
+
+        // The popover's list fits with 4 px to spare above the 8 px it keeps from the canvas's bottom edge.
+        var drop = new Point(canvas.X + 150, canvas.Bottom - 8 - height - 4);
+        shell.Drag(shell.Thumb(shell.Output("Design")), drop);
+
+        var popover = shell.Bounds(shell.AddPopover);
+        Assert.Equal(height, popover.Height);
+        Assert.True(Point.Distance(drop, popover.TopLeft) <= 2, $"{popover} does not open at {drop}");
+    }
+
+    [AvaloniaFact]
+    public void Above_its_anchor_the_popover_keeps_its_search_field_in_place_while_a_query_shortens_the_list()
+    {
+        var shell = Shell.Open(_temp.Create("plan"));
+        var click = shell.InEditor(150, shell.Editor.Bounds.Height - 20);
+
+        shell.RightClick(click);
+        var popover = shell.Bounds(shell.AddPopover);
+        var search = shell.Bounds(shell.Find<TextBox>("AddNodeSearch")).Top;
+        Assert.True(Math.Abs(popover.Bottom - click.Y) <= 2 && Math.Abs(popover.X - click.X) <= 2, $"{popover} does not end at {click}");
+
+        shell.Type("rev");
+
+        Assert.Equal(["Add Review"], shell.AddRows());
+        Assert.Equal(search, shell.Bounds(shell.Find<TextBox>("AddNodeSearch")).Top);
+        Assert.True(shell.Bounds(shell.AddPopover).Bottom < popover.Bottom - 100, $"{shell.Bounds(shell.AddPopover)} did not shorten from {popover}");
+    }
+
+    [AvaloniaFact]
+    public void Every_action_stays_in_view_below_a_library_longer_than_the_popover()
+    {
+        var folder = _temp.Seed(
+            AppTempFolder.TaskAt(TestTasks.Design, "Design", 105, 90), AppTempFolder.TaskAt(TestTasks.Build, "Build", 405, 90));
+        foreach (var number in Enumerable.Range(1, 16))
+        {
+            BlueprintLibrary.Project(folder).Save(new Blueprint(
+                new BlueprintKey($"fix-{number}", 1), $"Fix {number}", BugFix().Work, BugFix().Fields, BugFix().Defaults));
+        }
+
+        var shell = Shell.Open(folder);
+        shell.Click(shell.Header(shell.Node("Build")));
+        shell.Press(Key.Delete);
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Editor.ViewportZoom = 0.5;
+        shell.Render();
+
+        shell.RightClick(shell.InEditor(400, 300));
+
+        string[] actions = ["Generate Workflow…", "Undo", "Select All", "Fit to View", "Zoom to 100%", "Delete Selection"];
+        Assert.Equal(actions, shell.AddRows().SkipWhile(row => row.StartsWith("Add ", StringComparison.Ordinal)));
+        var list = shell.Find<ItemsControl>("AddNodeList").FindAncestorOfType<ScrollViewer>()!;
+        Assert.True(list.Extent.Height > list.Viewport.Height, $"The list shows all of its {list.Extent.Height} px in {list.Viewport.Height} px.");
+        var popover = shell.Bounds(shell.AddPopover);
+        Assert.True(shell.Bounds(shell.Editor).Contains(popover), $"{popover} is not inside the canvas");
+        foreach (var action in actions)
+        {
+            var row = shell.Bounds(Action(shell, action));
+            Assert.True(popover.Contains(row) && !shell.Bounds(list).Intersects(row), $"{action} at {row} is not in view in {popover}");
+        }
+
+        shell.Click(Action(shell, "Zoom to 100%"));
+
+        Assert.False(shell.AddPopoverIsOpen);
+        Assert.Equal(1, shell.Editor.ViewportZoom, 6);
+    }
+
+    private static Button Action(Shell shell, string name) =>
+        shell.Window.GetVisualDescendants().OfType<Button>()
+            .Single(button => Avalonia.Automation.AutomationProperties.GetAutomationId(button) == "AddNodeAction" && Avalonia.Automation.AutomationProperties.GetName(button) == name);
+
+    [AvaloniaFact]
     public void The_actions_select_all_and_zoom_to_100_percent()
     {
         var shell = Shell.Open(_temp.Seed(AppTempFolder.TaskAt(TestTasks.Design, "Design", 105, 90), AppTempFolder.TaskAt(TestTasks.Build, "Build", 405, 90)));

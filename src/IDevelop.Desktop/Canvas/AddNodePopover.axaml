@@ -62,18 +62,68 @@
     </Style>
   </Popup.Styles>
 
-  <!-- The margin leaves room for the shadow, which the popup's host would otherwise clip at the popover's edge. -->
-  <Border x:Name="Root" Classes="popover" Width="300" MaxHeight="440" Margin="24,12,24,36"
+  <!-- The margin leaves room for the shadow, which the popup's host would otherwise clip at the popover's edge. Show caps
+       its height at its bounds' height less a gap at each end, and the popover takes its content's height up to that. -->
+  <Border x:Name="Root" Classes="popover" Width="300" Margin="24,12,24,36"
           AutomationProperties.AutomationId="AddNodePopover"
           AutomationProperties.Name="Add a node">
-    <DockPanel>
-      <TextBox x:Name="Search" DockPanel.Dock="Top" Classes="search" Height="32" Margin="8,8,8,4"
+    <Border.DataTemplates>
+      <DataTemplate DataType="canvas:AddNodeHeader">
+        <TextBlock Text="{Binding Title}" Margin="10,8,10,4" FontSize="11" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextMutedBrush}" />
+      </DataTemplate>
+      <DataTemplate DataType="canvas:BlueprintRow">
+        <Grid>
+          <Button Classes="addRow" Classes.highlighted="{Binding IsHighlighted}"
+                  Command="{Binding Command}"
+                  PointerEntered="OnRowEntered"
+                  AutomationProperties.AutomationId="AddNodeItem"
+                  AutomationProperties.Name="{Binding AutomationName}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,0,52,0">
+              <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Spacing="2"
+                      IsVisible="{Binding IsHighlighted}">
+            <Button Classes="rowTool" Command="{Binding DeriveCommand}" ToolTip.Tip="Derive a blueprint from it"
+                    AutomationProperties.AutomationId="AddNodeDerive"
+                    AutomationProperties.Name="{Binding DeriveName}">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
+            </Button>
+            <Button Classes="rowTool" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" ToolTip.Tip="Edit the blueprint"
+                    AutomationProperties.AutomationId="AddNodeEdit"
+                    AutomationProperties.Name="{Binding EditName}">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" />
+            </Button>
+          </StackPanel>
+        </Grid>
+      </DataTemplate>
+      <DataTemplate DataType="canvas:ActionRow">
+        <Button Classes="addRow" Classes.highlighted="{Binding IsHighlighted}"
+                Command="{Binding Command}"
+                PointerEntered="OnRowEntered"
+                AutomationProperties.AutomationId="AddNodeAction"
+                AutomationProperties.Name="{Binding AutomationName}">
+          <Grid ColumnDefinitions="24,*,Auto" ColumnSpacing="10">
+            <PathIcon Classes="actionGlyph" Theme="{StaticResource Glyph}"
+                      Data="{Binding Icon, Converter={x:Static canvas:AddNodePopover.Glyph}}" />
+            <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Classes="hint" Text="{Binding Hint}" VerticalAlignment="Center" />
+          </Grid>
+        </Button>
+      </DataTemplate>
+    </Border.DataTemplates>
+
+    <!-- Only the list scrolls. The actions below it stay in view however long the libraries grow. -->
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+      <TextBox x:Name="Search" Classes="search" Height="32" Margin="8,8,8,4"
                Watermark="Search nodes and actions"
                Text="{Binding Query}"
                AutomationProperties.AutomationId="AddNodeSearch"
                AutomationProperties.Name="Search nodes and actions" />
 
-      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="14,4,12,4"
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" Margin="14,4,12,4"
             IsVisible="{Binding HasConnect}">
         <TextBlock Classes="caption" Text="{Binding ConnectLabel}" VerticalAlignment="Center" />
         <theme:KindTile Grid.Column="1" Kind="{Binding ConnectNode.Kind}" IsLibrary="{Binding ConnectNode.IsLibrary}" TileSize="18"
@@ -83,7 +133,14 @@
                    AutomationProperties.AutomationId="AddNodeConnect" />
       </Grid>
 
-      <Border DockPanel.Dock="Bottom" Padding="12,8,12,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
+      <ScrollViewer x:Name="List" Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl x:Name="Rows" ItemsSource="{Binding Items}" Margin="4,0"
+                      AutomationProperties.AutomationId="AddNodeList" />
+      </ScrollViewer>
+
+      <ItemsControl x:Name="ActionRows" Grid.Row="3" ItemsSource="{Binding Actions}" Margin="4,0,4,4" />
+
+      <Border Grid.Row="4" Padding="12,8,12,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="6">
           <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
                      MinHeight="28" Foreground="{DynamicResource TextMutedBrush}"
@@ -99,59 +156,6 @@
           </StackPanel>
         </StackPanel>
       </Border>
-
-      <ScrollViewer x:Name="List" HorizontalScrollBarVisibility="Disabled">
-        <ItemsControl x:Name="Rows" ItemsSource="{Binding Items}" Margin="4,0,4,4"
-                      AutomationProperties.AutomationId="AddNodeList">
-          <ItemsControl.DataTemplates>
-            <DataTemplate DataType="canvas:AddNodeHeader">
-              <TextBlock Text="{Binding Title}" Margin="10,8,10,4" FontSize="11" FontWeight="SemiBold"
-                         Foreground="{DynamicResource TextMutedBrush}" />
-            </DataTemplate>
-            <DataTemplate DataType="canvas:BlueprintRow">
-              <Grid>
-                <Button Classes="addRow" Classes.highlighted="{Binding IsHighlighted}"
-                        Command="{Binding Command}"
-                        PointerEntered="OnRowEntered"
-                        AutomationProperties.AutomationId="AddNodeItem"
-                        AutomationProperties.Name="{Binding AutomationName}">
-                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,0,52,0">
-                    <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="24" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  </Grid>
-                </Button>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Spacing="2"
-                            IsVisible="{Binding IsHighlighted}">
-                  <Button Classes="rowTool" Command="{Binding DeriveCommand}" ToolTip.Tip="Derive a blueprint from it"
-                          AutomationProperties.AutomationId="AddNodeDerive"
-                          AutomationProperties.Name="{Binding DeriveName}">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
-                  </Button>
-                  <Button Classes="rowTool" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" ToolTip.Tip="Edit the blueprint"
-                          AutomationProperties.AutomationId="AddNodeEdit"
-                          AutomationProperties.Name="{Binding EditName}">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" />
-                  </Button>
-                </StackPanel>
-              </Grid>
-            </DataTemplate>
-            <DataTemplate DataType="canvas:ActionRow">
-              <Button Classes="addRow" Classes.highlighted="{Binding IsHighlighted}"
-                      Command="{Binding Command}"
-                      PointerEntered="OnRowEntered"
-                      AutomationProperties.AutomationId="AddNodeAction"
-                      AutomationProperties.Name="{Binding AutomationName}">
-                <Grid ColumnDefinitions="24,*,Auto" ColumnSpacing="10">
-                  <PathIcon Classes="actionGlyph" Theme="{StaticResource Glyph}"
-                            Data="{Binding Icon, Converter={x:Static canvas:AddNodePopover.Glyph}}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="2" Classes="hint" Text="{Binding Hint}" VerticalAlignment="Center" />
-                </Grid>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.DataTemplates>
-        </ItemsControl>
-      </ScrollViewer>
-    </DockPanel>
+    </Grid>
   </Border>
 </Popup>

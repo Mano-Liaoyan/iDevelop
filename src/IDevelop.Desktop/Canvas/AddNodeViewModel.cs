@@ -87,7 +87,8 @@ public sealed class ActionRow(AddNodeAction action, Action run) : AddNodeRow(act
 
 /// <summary>
 /// The Add popover: every placeable blueprint by library, and on empty canvas the canvas actions, filtered by what the
-/// person types. Choosing a blueprint places a node for the target in one edit.
+/// person types. Choosing a blueprint places a node for the target in one edit. Without a query the actions sit in a
+/// section of their own below the list, so a long library never scrolls them out of view.
 /// </summary>
 public sealed class AddNodeViewModel : ObservableObject
 {
@@ -96,6 +97,7 @@ public sealed class AddNodeViewModel : ObservableObject
     private readonly ImmutableArray<ActionRow> _actions;
     private string _query = "";
     private IReadOnlyList<AddNodeItem> _items = [];
+    private IReadOnlyList<AddNodeItem> _actionItems = [];
     private List<AddNodeRow> _rows = [];
     private AddNodeRow? _highlighted;
 
@@ -109,7 +111,7 @@ public sealed class AddNodeViewModel : ObservableObject
             Heading(group.Heading),
             group.Entries.Select(entry => new BlueprintRow(entry, () => Run(() => canvas.Add(target, entry.Blueprint)), Run)).ToImmutableArray()))];
         _actions = target is AddTarget.AtPoint
-            ? [.. Actions().Select(action => new ActionRow(action, () => Run(action.Command)))]
+            ? [.. CanvasActions().Select(action => new ActionRow(action, () => Run(action.Command)))]
             : [];
         Problems = canvas.Blueprints.Problems;
         (ConnectLabel, ConnectNode) = target switch
@@ -137,11 +139,18 @@ public sealed class AddNodeViewModel : ObservableObject
         }
     }
 
-    /// <summary>Headers and rows in the order the popover lists them.</summary>
+    /// <summary>The headers and rows of the popover's list, which scrolls when it is taller than the popover.</summary>
     public IReadOnlyList<AddNodeItem> Items
     {
         get => _items;
         private set => SetProperty(ref _items, value);
+    }
+
+    /// <summary>The Actions header and rows below the list, or nothing while a query lists every match in one list.</summary>
+    public IReadOnlyList<AddNodeItem> Actions
+    {
+        get => _actionItems;
+        private set => SetProperty(ref _actionItems, value);
     }
 
     /// <summary>The row Enter chooses, or null when nothing matches.</summary>
@@ -228,7 +237,7 @@ public sealed class AddNodeViewModel : ObservableObject
         return next == query.Length ? 3 : description.Contains(query, ignoreCase) ? 4 : null;
     }
 
-    private IEnumerable<AddNodeAction> Actions()
+    private IEnumerable<AddNodeAction> CanvasActions()
     {
         yield return new("Generate Workflow…", "IconSparkle", "", _canvas.OpenGenerateCommand);
 
@@ -260,11 +269,8 @@ public sealed class AddNodeViewModel : ObservableObject
         var query = _query.Trim();
         if (query.Length == 0)
         {
-            Items =
-            [
-                .. _libraries.SelectMany(library => library.Rows.Cast<AddNodeItem>().Prepend(new AddNodeHeader(library.Heading))),
-                .. _actions.IsEmpty ? Enumerable.Empty<AddNodeItem>() : _actions.Cast<AddNodeItem>().Prepend(new AddNodeHeader("Actions")),
-            ];
+            Items = [.. _libraries.SelectMany(library => library.Rows.Cast<AddNodeItem>().Prepend(new AddNodeHeader(library.Heading)))];
+            Actions = _actions.IsEmpty ? [] : [new AddNodeHeader("Actions"), .. _actions];
         }
         else
         {
@@ -277,9 +283,10 @@ public sealed class AddNodeViewModel : ObservableObject
                     .OrderBy(match => match.Rank)
                     .Select(match => match.Row),
             ];
+            Actions = [];
         }
 
-        _rows = [.. Items.OfType<AddNodeRow>()];
+        _rows = [.. Items.Concat(Actions).OfType<AddNodeRow>()];
         Highlighted = _rows.FirstOrDefault();
     }
 
