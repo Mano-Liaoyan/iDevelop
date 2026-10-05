@@ -1,0 +1,6 @@
+{"type":"requested","at":"2026-10-04T21:49:46.8934001+00:00","attempt":"01a108e4-fc0d-74ad-bdf2-f7b899cbf444","task":"019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11","taskTitle":"Say hi","settings":{"client":"codex","model":"gpt-6-sol","reasoning":"high"},"prompt":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n","command":"/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/codex-cancelled-bin/codex","arguments":["exec","--json","-m","gpt-6-sol","-c","model_reasoning_effort=high","-c","approval_policy=never","--sandbox","workspace-write","--skip-git-repo-check","-"]}
+{"type":"launched","at":"2026-10-04T21:49:46.8936126+00:00","processId":168607,"processStarted":"2026-10-04T21:49:46.8895563+00:00"}
+{"type":"agent","at":"2026-10-04T21:49:46.9123689+00:00","event":{"type":"sessionStarted","sessionId":"01a104d5-d442-71a1-9b08-8938c119e5ae"}}
+{"type":"agent","at":"2026-10-04T21:49:46.9123775+00:00","event":{"type":"toolStarted","tool":"command","detail":"dotnet test"}}
+{"type":"cancelRequested","at":"2026-10-04T21:49:47.3944718+00:00"}
+{"type":"exited","at":"2026-10-04T21:49:47.4475465+00:00","exitCode":137,"stderrTail":""}

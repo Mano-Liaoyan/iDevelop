@@ -1,0 +1,18 @@
+{
+  "id": "01a108e4-fb47-7846-a575-d4f5c413fecd",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "pi",
+  "model": "deepseek/deepseek-v4-pro",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:46.6950328+00:00",
+  "status": "Failed",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:46.7144272+00:00",
+  "result": null,
+  "detail": "OAuth refresh failed for openai-codex: OpenAI Codex token refresh failed (401): {\n  \"error\": {\n    \"message\": \"Could not validate your refresh token. Please try signing in again.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": null,\n    \"code\": \"invalid_refresh_token\"\n  }\n}",
+  "sessionId": "01a104d6-0e5d-7643-b15b-7044586e5c34",
+  "reportedModel": "openai-codex/gpt-5.5",
+  "reportedReasoning": "low",
+  "activity": []
+}

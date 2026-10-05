@@ -53,7 +53,16 @@ public abstract record StartResult
     public sealed record Refused(StartProblem Problem) : StartResult;
 }
 
-internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Command, LaunchArguments Launch, ExecutionSettings Settings, string Prompt);
+internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Command, ExecutionSettings Settings, LaunchRequest Request)
+{
+    public LaunchArguments Launch => Client.Launch(Request);
+
+    /// <summary>A later turn, which resumes the session with the person's message alone. The client holds the context.</summary>
+    public LaunchPlan Resuming(string session, string message) => this with { Request = Request with { Prompt = message, ResumeSession = session } };
+}
+
+/// <summary>A first turn that resumes an earlier attempt's session with the person's message instead of the task's prompt.</summary>
+internal sealed record Resumption(string Session, string Message);
 
 internal abstract record StartVerdict
 {
@@ -67,7 +76,8 @@ internal abstract record StartVerdict
 /// <summary>Pure. The inspector's message before any click and the start itself use the same check.</summary>
 internal static class StartCheck
 {
-    public static StartVerdict Evaluate(TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients)
+    /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no instructions.</param>
+    public static StartVerdict Evaluate(TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null)
     {
         if (task.Execution is not { } settings)
         {
@@ -116,20 +126,19 @@ internal static class StartCheck
             return Block(new StartProblem.ReasoningNotOffered(client, id, settings.Reasoning, model.ReasoningLevels));
         }
 
-        if (string.IsNullOrWhiteSpace(task.Instructions))
+        if (resume is null && string.IsNullOrWhiteSpace(task.Instructions))
         {
             return Block(new StartProblem.NoInstructions());
         }
 
-        var definition = Clients.Get(client);
-        var prompt = Prompt.For(task);
-        var launch = definition.Launch(new LaunchRequest(id, settings.Reasoning, prompt));
-        if (ready.Command.UnsafeArgument(launch.Arguments) is { } argument)
+        var request = new LaunchRequest(id, settings.Reasoning, resume?.Message ?? Prompt.For(task)) { ResumeSession = resume?.Session };
+        var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request);
+        if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)
         {
             return Block(new StartProblem.UnsafeArgument(client, argument));
         }
 
-        return new StartVerdict.Allowed(new LaunchPlan(definition, ready.Command, launch, settings, prompt));
+        return new StartVerdict.Allowed(plan);
     }
 
     private static StartVerdict.Blocked Block(StartProblem problem) => new(problem);

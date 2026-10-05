@@ -24,7 +24,8 @@ public partial class MainWindow : Window
     /// <param name="clients">The app's one directory. The app starts its first refresh.</param>
     public MainWindow(ClientDirectory clients)
     {
-        ViewModel = new MainWindowViewModel(clients);
+        Copy = text => Clipboard?.SetTextAsync(text) ?? Task.FromException(new InvalidOperationException("This window has no clipboard."));
+        ViewModel = new MainWindowViewModel(clients, text => Copy(text));
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
@@ -34,6 +35,9 @@ public partial class MainWindow : Window
 
     /// <summary>Asks for a project folder and returns its path, or null when the user cancels.</summary>
     internal Func<Task<string?>> PickFolder { get; set; }
+
+    /// <summary>Puts text on the clipboard.</summary>
+    internal Func<string, Task> Copy { get; set; }
 
     protected override async void OnClosing(WindowClosingEventArgs e)
     {

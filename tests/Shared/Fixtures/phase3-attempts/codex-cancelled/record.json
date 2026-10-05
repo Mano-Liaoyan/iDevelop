@@ -1,0 +1,23 @@
+{
+  "id": "01a108e4-fc0d-74ad-bdf2-f7b899cbf444",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "codex",
+  "model": "gpt-6-sol",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:46.8934001+00:00",
+  "status": "Cancelled",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:47.4475465+00:00",
+  "result": null,
+  "detail": null,
+  "sessionId": "01a104d5-d442-71a1-9b08-8938c119e5ae",
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": [
+    {
+      "at": "2026-10-04T21:49:46.9123775+00:00",
+      "text": "command: dotnet test"
+    }
+  ]
+}

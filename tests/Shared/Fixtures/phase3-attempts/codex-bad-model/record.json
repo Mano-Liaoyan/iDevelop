@@ -1,0 +1,31 @@
+{
+  "id": "01a108e4-fba9-729f-a211-310e17b44249",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "codex",
+  "model": "gpt-6-sol",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:46.793691+00:00",
+  "status": "Failed",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:46.8138141+00:00",
+  "result": null,
+  "detail": "The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account.",
+  "sessionId": "01a104d9-a009-7be2-838d-52895b1024e6",
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": [
+    {
+      "at": "2026-10-04T21:49:46.813385+00:00",
+      "text": "Configured service tier `priority` is not advertised as supported for model `gpt-bogus-9` and will be omitted from requests."
+    },
+    {
+      "at": "2026-10-04T21:49:46.8133881+00:00",
+      "text": "Model metadata for `gpt-bogus-9` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."
+    },
+    {
+      "at": "2026-10-04T21:49:46.8135054+00:00",
+      "text": "The 'gpt-bogus-9' model is not supported when using Codex with a ChatGPT account."
+    }
+  ]
+}

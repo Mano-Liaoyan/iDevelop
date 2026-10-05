@@ -19,4 +19,9 @@ internal static class AttemptEvents
     public static AttemptEvent Said(int seconds, AgentEvent e) => new AttemptEvent.Agent(T0.AddSeconds(seconds), e);
 
     public static AttemptEvent.Exited Exit(int seconds, int code, string stderr = "") => new(T0.AddSeconds(seconds), code, stderr);
+
+    public static AttemptEvent.MessageQueued Sent(int seconds, string text, bool stopsTurn = false) => new(T0.AddSeconds(seconds), text, stopsTurn);
+
+    public static AttemptEvent.TurnRequested NextTurn(int seconds, string prompt) =>
+        new(T0.AddSeconds(seconds), prompt, "codex", ["exec", "resume", "--json", "thread-1", "-"]);
 }

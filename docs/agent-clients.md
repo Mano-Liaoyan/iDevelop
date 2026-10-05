@@ -14,7 +14,8 @@ These observations come from running each client on Windows on 2026-10-04, first
 
 ## Codex 0.160.0
 
-- `codex exec --json -m <id> -c model_reasoning_effort=<level> --sandbox workspace-write --skip-git-repo-check -` reads the prompt from stdin. The unquoted value works, and the session file under `~/.codex/sessions` recorded the requested effort. The quoted form `model_reasoning_effort="high"` also works, but a quote cannot pass through an npm `codex.cmd` shim.
+- `codex exec --json -m <id> -c model_reasoning_effort=<level> -c approval_policy=never --sandbox workspace-write --skip-git-repo-check -` reads the prompt from stdin. The unquoted value works, and the session file under `~/.codex/sessions` recorded the requested effort. The quoted form `model_reasoning_effort="high"` also works, but a quote cannot pass through an npm `codex.cmd` shim.
+- A user's `~/.codex/config.toml` can set `approval_policy = "on-request"` with an automatic reviewer. On Linux on 2026-10-04 such a configuration let a run with `--sandbox read-only` write a file, because the reviewer approved the escalation. With `-c approval_policy=never` the sandbox held, so iDevelop passes it on every Codex run.
 - `codex debug models` prints the model catalog as JSON, with each model's `visibility` and its supported reasoning levels.
 - The JSON events never name the served model. A turn ends with `turn.completed`, or with `turn.failed` and exit code 1. A top-level `error` event can precede either.
 - `codex login status` exits with code 0 when Codex is signed in.
@@ -32,12 +33,32 @@ These observations come from running each client on Windows on 2026-10-04, first
 ## Antigravity CLI 1.2.16
 
 - `agy --input-format stream-json --output-format stream-json --model <id> --effort <level> --mode accept-edits --print=` reads one line from stdin, `{"event":"user","message":{"role":"user","content":"<prompt>"}}`. The CLI's help documents the input format but not the line's shape, which came from the CLI's own error messages. The argument form `-p "<prompt>"` also works, but the Windows command line limits its length.
-- Print mode (`-p`) cannot ask for permission. On 2026-10-03 it refused to read files in an untrusted folder, and it read them in a repository the user's `agy` settings trust. Commands and file writes stayed blocked. Accept-edits mode let it write a file in a folder that its settings do not trust. No run passed `--dangerously-skip-permissions`, so its effect is unverified.
+- Print mode (`-p`) cannot ask for permission. On 2026-10-03 it refused to read files in an untrusted folder, and it read them in a repository the user's `agy` settings trust. Commands and file writes stayed blocked. Accept-edits mode let it write a file in a folder that its settings do not trust. On Linux on 2026-10-05, print mode without a mode reported `permission_mode` `request-review` and wrote a requested file in an untrusted folder in 2 of 3 runs, so leaving out accept-edits does not keep a turn read-only. A fresh turn with `--mode plan` wrote nothing in 3 of 3 runs. No run passed `--dangerously-skip-permissions`, so its effect is unverified.
 - The final `result` event carries `status` (`SUCCESS` or `ERROR`), `response`, and `error`. An unknown model ID exits with code 1, with no silent fallback.
 - `agy models` prints `<id><TAB><name>` lines. An ID ends with its effort level only when the name ends with the same level in parentheses, such as `gemini-3.8-flash-high` and `Gemini 3.8 Flash (High)`. A model without a level, such as `claude-opus-4-6-thinking`, takes no `--effort`. On 2026-10-03, the bare ID `gemini-3.8-flash` with a separate `--effort high` or `--effort low` reached the matching backend variant.
 - On 2026-10-03, with `--output-format stream-json`, the `init` event reported the requested model ID, and `--log-file` recorded the backend label. The `json` output reported no model.
 
+## Sessions
+
+A person's message resumes the client's own session in a new process. `scripts/probe-clients.mjs` ran each client on Linux on 2026-10-04. Each one resumed its session in a new process with the id it reported itself, including after its first turn was stopped mid tool call. No resumed turn reported a different id. The Claude Code, Pi, and Antigravity CLI rows pass these arguments after the ones above. Codex resumes through its own subcommand, as the table says.
+
+| Client | Session id | Resume | Terminal interface |
+| --- | --- | --- | --- |
+| Claude Code | `session_id` of the `system/init` event | `--resume <id>` | `claude --resume <id>` |
+| Codex | `thread_id` of the `thread.started` event | `codex exec resume` with the same options, `-c sandbox_mode=workspace-write` in place of `--sandbox`, and `<id>` before the final `-` | `codex resume <id>` |
+| Pi | `id` of the `session` event | `--session-id <id>` | `pi --session <id>` |
+| Antigravity CLI | `conversation_id` of the `init` event | `--conversation <id>` | `agy --conversation <id>` |
+
+- Every session id the probe saw was a UUID. iDevelop takes a session id only when it is a plain id: a letter or digit, then letters, digits, `.`, `_`, `:`, and `-`. It ignores any other, whether a client printed it or an attempt log holds it, because a shared repository can carry attempt logs and the id reaches a client's arguments and the command a person pastes in a terminal.
+
+- `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key. On Linux on 2026-10-05, a resumed turn with `-c sandbox_mode=read-only` refused to write a file, so resume honors the key. The probe's `resume-readonly` case repeats this check for Claude Code, Codex, and Antigravity CLI. A write fails the check for Claude Code and Codex. For Antigravity CLI, a write reports `pass: null`, because the next item records that limitation, and a resumed turn that writes nothing passes with a note that this page needs updating.
+- Read-only access on a resumed session depends on the client. On Linux on 2026-10-05 the probe started each session with write access and resumed it read-only. Claude Code in plan mode and Codex with a read-only sandbox wrote nothing. Antigravity CLI kept writing. A conversation started with accept-edits and resumed with `--mode plan` wrote the file in 4 of 4 runs. Antigravity CLI holds read-only only in a fresh session with `--mode plan`. A session that must stay read-only therefore starts read-only. Claude Code's plan mode also writes its plan to `~/.claude/plans/`, outside the project.
+- In the probe, Antigravity CLI's `result` event reported the same `conversation_id` as its `init` event, so the row keeps reading it from `init`.
+- The terminal commands come from each client's `--help`. On Linux on 2026-10-05, run from another folder with the same session flags in print mode, `claude -p --resume <id>` and `agy --conversation <id>` found the session but would work in that folder, and `pi -p --session <id>` printed nothing. From the project folder, Pi resumed the session.
+- Open in terminal therefore copies the command after a change into the project folder. On Linux and macOS it copies `cd '<folder>' && <command>`. On Windows, whose default terminal is PowerShell, it copies `Set-Location -LiteralPath '<folder>'; <command>`. The folder is quoted for that shell.
+
 ## Unverified items
 
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
-- Real client runs on macOS and Linux, and the login shell's PATH there. CI runs the fake client on both.
+- Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
+- Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness that drives `ProjectRuns` ran all four real clients, but the harness inherited a full PATH. CI runs the fake client on both.

@@ -1,0 +1,18 @@
+{
+  "id": "01a108e5-00c5-7363-a219-19a46a3d97eb",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "codex",
+  "model": "gpt-6-sol",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:48.1012167+00:00",
+  "status": "Failed",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:48.1016402+00:00",
+  "result": null,
+  "detail": "/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/launch-bin/codex did not start: An error occurred trying to start process '/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/launch-bin/codex' with working directory '/tmp/idevelop-tests/a21d706908bc4d80baf43be206d3e76f/codex-launch-failed'. No such file or directory",
+  "sessionId": null,
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": []
+}

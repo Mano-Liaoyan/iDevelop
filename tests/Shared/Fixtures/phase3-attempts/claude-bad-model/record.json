@@ -1,0 +1,23 @@
+{
+  "id": "01a108e4-fb6e-7c27-b205-91da8315caab",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "claude-code",
+  "model": "claude-haiku-4-5",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:46.734673+00:00",
+  "status": "Failed",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:46.7547727+00:00",
+  "result": "There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model.",
+  "detail": "There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model.",
+  "sessionId": "0a78e77d-034b-493d-a042-0fe607c70c34",
+  "reportedModel": "claude-bogus-9",
+  "reportedReasoning": null,
+  "activity": [
+    {
+      "at": "2026-10-04T21:49:46.7539982+00:00",
+      "text": "There's an issue with the selected model (claude-bogus-9). It may not exist or you may not have access to it. Run --model to pick a different model."
+    }
+  ]
+}

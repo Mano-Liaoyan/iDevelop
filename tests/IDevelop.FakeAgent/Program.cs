@@ -8,8 +8,9 @@ using System.Text.Json;
 //   IDevelop.FakeAgent --sleep-forever
 //   IDevelop.FakeAgent --spawn-sleeper <file>   start a sleeping copy, write its pid, and exit, as spawnThroughCmd runs it
 //
-// The rules file is {"rules": [{"when": ["auth", "status"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
-// The first rule whose "when" is a prefix of the client arguments runs its steps in order. Steps:
+// The rules file is {"rules": [{"when": ["auth", "status"], "has": ["--resume", "id"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
+// The first rule whose "when" is a prefix of the client arguments, and whose optional "has" appears among them in that
+// order without gaps, runs its steps in order. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
 //   recordWorkingDirectory <file> write the current folder
 //   captureStdin <file>           copy stdin to the file until it closes
@@ -48,7 +49,7 @@ using var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFl
 using var stderr = new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true, NewLine = "\n" };
 using var rules = JsonDocument.Parse(File.ReadAllBytes(rulesFile));
 var rule = rules.RootElement.GetProperty("rules").EnumerateArray()
-    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments))
+    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments))
     .Select(candidate => (JsonElement?)candidate)
     .FirstOrDefault();
 if (rule is not { } matched)
@@ -142,6 +143,17 @@ static bool Matches(JsonElement when, string[] arguments)
 {
     string[] prefix = [.. when.EnumerateArray().Select(part => part.GetString()!)];
     return prefix.Length <= arguments.Length && prefix.SequenceEqual(arguments[..prefix.Length]);
+}
+
+static bool Has(JsonElement rule, string[] arguments)
+{
+    if (!rule.TryGetProperty("has", out var has))
+    {
+        return true;
+    }
+
+    string[] run = [.. has.EnumerateArray().Select(part => part.GetString()!)];
+    return Enumerable.Range(0, Math.Max(0, arguments.Length - run.Length + 1)).Any(start => run.SequenceEqual(arguments[start..(start + run.Length)]));
 }
 
 static Process StartSleeper() =>

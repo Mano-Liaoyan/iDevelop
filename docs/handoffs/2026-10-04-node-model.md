@@ -148,7 +148,7 @@ The person acts from the inspector:
 - **Send** queues a message as the next turn.
 - **Stop and send** stops the running turn's process tree and resumes the session with the message.
 - **Continue** on a finished or interrupted node starts a new attempt whose first turn resumes the old session. The old attempt stays as it was, so a quit during a run still reads Interrupted, as phase 3 promised.
-- **Open in terminal** is offered only while the node waits. It copies the client's own command for its terminal UI on the same session, such as `claude --resume <id>`. iDevelop records the hand-off, and its record says that turns taken in the terminal are not in it.
+- **Open in terminal** is offered only while the node waits. Slice 1 offers it whenever no turn of the task runs in this window, until conversation modes add a waiting state. It copies the client's own command for its terminal UI on the same session, such as `claude --resume <id>`, after a change into the project folder. iDevelop records the hand-off, and its record says that turns taken in the terminal are not in it.
 
 The card's status pill gains "Waiting for you" in a PlanWeave status color. The run bar counts the waiting nodes and jumps to the next one. The inspector shows each turn as the person's message and the agent's final text, with tool activity folded, then a composer, then the section of the current `Pending` case.
 
@@ -173,6 +173,8 @@ An embedded terminal was rejected. It needs a PTY on three operating systems and
 Each slice ends in a check that a reviewer can rerun. The real-window checks use the `verify-idevelop` skill on Windows.
 
 1. **Talk to a node.** First, commit the conversation probe as a real-client check and extend it: the result block from each client, a turn stopped mid-tool-call and resumed, each client's read-only mode, and whether a slash command at the start of a non-interactive prompt runs. Then each client row resumes a session, attempts hold turns, and the inspector gains the composer with Send, Stop and send, Continue, and Open in terminal. No file format changes. *Check.* The probe passes on all four clients. The two-turn exchange runs through the Release window on each client. Every recorded phase 3 fixture folds to the same record.
+
+   *Built.* Each client row maps an optional session to its resume arguments and names its terminal command, as [agent client behavior](../agent-clients.md#sessions) lists. Every Codex run passes `-c approval_policy=never`, because a user's approval policy let a read-only probe run write a file. Attempt logs gain three event types, a queued message, a later turn's request, and a hand-off to the terminal, and `Requested` gains an optional continuation. The reducer folds them into the attempt's turns, its waiting messages, and its hand-off. An exit ends the turn. A waiting message keeps the attempt running for the next turn unless a cancel or leave came first, and otherwise the phase 3 exit policy settles it. A stopped turn is Stopped, and the attempt goes on. A failed turn keeps its reason, which the inspector shows under it. A crash between turns reconciles to Interrupted without checking the ended turn's process. The reducer ignores a session id that is not a plain id, whether a client printed it or an attempt log holds it, because a shared repository can carry attempt logs. `ProjectRuns.Send` queues the message on a running attempt, or continues the latest session in a new attempt, and refuses with a reason when the latest attempt has no session, the task's client changed, or the start check refuses. The run loop starts each turn under the same log, lock, and channel. It closes the run to messages when a turn exits with none waiting or the next turn does not start. Cancel and Stop and send after the turn's client exited stop nothing, so what the turn left running stays up, and Cancel still records the attempt as Cancelled. `ProjectRuns.OpenInTerminal` records the hand-off under the task's lock and refuses while a turn of the task runs in the window. The copied command changes into the project folder first, and when the clipboard fails, the notice shows the command and the folder. Thirteen phase 3 logs fold to the records the phase 3 engine folded. The engine wrote twelve of them whole. In the crashed case, the first three lines were planted to simulate the crash, and only its `reconciled` line and its fold came from the engine. Slice 1 adds no `WaitingForInput` status, because no node type asks yet. Messages sent during one turn reach the next turn together, separated by a blank line. After Continue, the inspector shows the turns of every attempt in the chain, oldest first, each attempt with its own status line, so a question stays above the answer that continued it.
 2. **Typed nodes and format 3.** The node record, embedded blueprints, the built-in Implement, the new `Workflow.Apply` rules, the conversation modes, and the format 2 conversion. *Check.* A test shows that the Implement template renders today's prompt byte for byte. The format 2 sample opens, says what it converted, saves as format 3, and reopens. A May ask node asks and waits on each client.
 3. **Blueprint libraries.** Both libraries, **Save as blueprint**, **Derive**, the blueprint editor with fields and templates, and the palette in the right panel. *Check.* Derive a type into the project library, place it, edit the blueprint to version 2, and place it again. After a save and a reopen, the first node keeps version 1. A built-in offers only **Derive**.
 4. **Planning.** Proposals, the Plan and Architect built-ins, slot and type handles, ghost cards, and accepting a subset as one batch. *Check.* An Architect with two drawn empty nodes fills both and adds one. Accept applies as one undo step. A proposal that would close a cycle names it and applies nothing. A Chat planner shows nodes after its first turn.
@@ -233,18 +235,21 @@ These parts were rejected:
 
 ## Open issues
 
-These are unverified, and slice 1 probes the first four:
+Slice 1's probe answered four questions on Linux on 2026-10-04 and 2026-10-05:
 
-- Whether every model reliably ends with a readable result block, especially through Pi.
-- Whether a turn stopped mid-tool-call leaves a session that resumes cleanly on each client.
-- Whether Claude Code's plan mode, Codex's read-only sandbox, and Antigravity CLI without accept-edits keep a non-interactive turn read-only.
-- Whether each client runs a slash command, such as `/tdd`, at the start of a non-interactive prompt. If one does not, a PStack or Matt Pocock command reaches that agent as plain text.
+- Each client ended its final message with a readable result block in 2 of 2 samples.
+- Each client resumed its session after a turn was stopped mid-tool-call.
+- A fresh read-only turn wrote nothing on Claude Code in plan mode, Codex with a read-only sandbox and approvals off, and Antigravity CLI with `--mode plan`. Without a mode, Antigravity CLI starts in request-review and wrote the file in 2 of 3 runs. Pi has no read-only mode. On a resumed session, Claude Code and Codex held read-only, but Antigravity CLI resumed with `--mode plan` still wrote the file in 4 of 4 runs. A reviewer or planner session must therefore start read-only, and the tree snapshot catches a write.
+- A project-local command ran on each client in one sample: `.claude/commands/` through `/name` on Claude Code, `.agents/skills/` through `$name` on Codex and `/name` on Antigravity CLI, and `.pi/prompts/` through `/name` on Pi. An agent could also have read the command file on its own, so one sample does not rule that out.
+
+These remain unverified:
+
 - Whether each client keeps a long resumed session usable, for example by compacting it. A review loop resumes the same two sessions for as many rounds as agreement takes.
 - Two agents that never agree keep the loop running, because the user chose agreement as the only end. The card shows the round count.
 - `pi auth check` reported a provider ready that then answered 401. iDevelop uses that check for Pi's readiness.
-- The shipped Antigravity CLI row reads the conversation id from the `init` event, and the probe read it from the `result` event. Slice 1 checks which one the row should trust.
+- The shipped Antigravity CLI row reads the conversation id from the `init` event, and the probe read it from the `result` event. In the probe both events reported the same id, so the row keeps `init`.
 - Before workflow execution gives each node its own worktree, tasks that run at once in one project folder blur the tree snapshots. A node's change can then include another task's edits, and a read-only turn can fail because of them.
 
 ## Next action
 
-Slice 1, talk to a node, starts on its own branch.
+Slice 1, talk to a node, is built. Slice 2, typed nodes and workflow format 3, is next. A Windows session runs `skills/verify-idevelop/features/conversation.md` against slice 1, which no Windows machine has run yet.

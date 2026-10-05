@@ -162,6 +162,19 @@ internal sealed class AttemptLog : IDisposable
         }
     }
 
+    /// <summary>One attempt of a task, folded, or null when its log cannot be read.</summary>
+    public static AttemptRecord? ReadAttempt(string attemptsFolder, TaskId task, AttemptId attempt)
+    {
+        try
+        {
+            return AttemptReducer.Replay(Read(FolderOf(attemptsFolder, task, attempt)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)

@@ -1,0 +1,27 @@
+{
+  "id": "01a108e4-fadf-7e83-aa18-35cec9672679",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "pi",
+  "model": "deepseek/deepseek-v4-pro",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:46.5913445+00:00",
+  "status": "Succeeded",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:46.611484+00:00",
+  "result": "DONE",
+  "detail": null,
+  "sessionId": "01a104d6-5d29-70a3-b067-4dea17388eb1",
+  "reportedModel": "deepseek/deepseek-v4-pro",
+  "reportedReasoning": "high",
+  "activity": [
+    {
+      "at": "2026-10-04T21:49:46.610872+00:00",
+      "text": "write: hello.txt"
+    },
+    {
+      "at": "2026-10-04T21:49:46.6109012+00:00",
+      "text": "DONE"
+    }
+  ]
+}

@@ -27,6 +27,7 @@ internal static class ClaudeCode
         Readiness = _ => [new ReadinessProbe(null, new Probe(["auth", "status"]), SignInProblem)],
         Launch = Launch,
         Interpret = Interpret,
+        Terminal = session => $"claude --resume {session}",
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
@@ -34,6 +35,7 @@ internal static class ClaudeCode
         "-p", "--output-format", "stream-json", "--verbose", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
         "--permission-mode", "acceptEdits",
+        .. request.ResumeSession is { } session ? ["--resume", session] : Array.Empty<string>(),
     ],
     request.Prompt);
 

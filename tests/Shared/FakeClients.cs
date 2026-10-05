@@ -45,6 +45,7 @@ internal sealed class FakeClients
             ["rules"] = new JsonArray([.. rules.Select(rule => new JsonObject
             {
                 ["when"] = new JsonArray([.. rule.When.Select(part => JsonValue.Create(part))]),
+                ["has"] = new JsonArray([.. rule.Has.Select(part => JsonValue.Create(part))]),
                 ["steps"] = new JsonArray([.. rule.Steps.Select(step => step.DeepClone())]),
             })]),
         };
@@ -66,10 +67,17 @@ internal sealed class FakeClients
     }
 }
 
-/// <summary>One rule of the fake agent: the steps it runs for client arguments that start with <see cref="When"/>.</summary>
+/// <summary>
+/// One rule of the fake agent: the steps it runs for client arguments that start with <see cref="When"/> and contain
+/// <see cref="Has"/> without gaps.
+/// </summary>
 internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<JsonNode> Steps)
 {
+    public ImmutableArray<string> Has { get; init; } = [];
+
     public static FakeRule On(params string[] argumentPrefix) => new([.. argumentPrefix], []);
+
+    public FakeRule With(params string[] arguments) => this with { Has = [.. arguments] };
 
     public FakeRule RecordArguments(string file) => Step("recordArguments", file);
 
@@ -80,6 +88,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     public FakeRule WaitForStdinEnd() => Step("waitForStdinEnd", true);
 
     public FakeRule Print(string line) => Step("print", line);
+
+    public FakeRule Print(IEnumerable<string> lines) => lines.Aggregate(this, (rule, line) => rule.Print(line));
 
     public FakeRule Stderr(string line) => Step("stderr", line);
 

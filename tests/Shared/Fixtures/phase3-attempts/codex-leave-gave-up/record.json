@@ -1,0 +1,23 @@
+{
+  "id": "01a108e5-00ee-73c2-b729-617ff2df744a",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "codex",
+  "model": "gpt-6-sol",
+  "reasoning": "high",
+  "requestedAt": "2026-10-04T21:49:48.1423463+00:00",
+  "status": "Interrupted",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:51.2111565+00:00",
+  "result": null,
+  "detail": "The project was closed while this task ran. Its client did not stop in time, and iDevelop settled it when the project was opened again.",
+  "sessionId": "01a104d5-d442-71a1-9b08-8938c119e5ae",
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": [
+    {
+      "at": "2026-10-04T21:49:48.1612456+00:00",
+      "text": "command: dotnet test"
+    }
+  ]
+}

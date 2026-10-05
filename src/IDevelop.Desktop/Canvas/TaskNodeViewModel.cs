@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia;
@@ -36,9 +37,14 @@ public sealed class TaskNodeViewModel : ObservableObject
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand _run;
     private readonly RelayCommand _cancel;
+    private readonly RelayCommand _send;
+    private readonly RelayCommand _stopAndSend;
+    private readonly RelayCommand _openInTerminal;
     private TaskDefinition _task;
     private Point _location;
     private AttemptRecord? _attempt;
+    private (AttemptId? Continues, ImmutableArray<AttemptRecord> Attempts) _earlier = (null, []);
+    private string _draft = "";
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -52,6 +58,9 @@ public sealed class TaskNodeViewModel : ObservableObject
         _cancel = new RelayCommand(
             () => _canvas.Runs.Cancel(Id),
             () => _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
+        _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
+        _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => TurnRunsHere && _send.CanExecute(null));
+        _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: not AttemptStatus.Running, SessionId: not null });
     }
 
     public TaskId Id => _task.Id;
@@ -120,7 +129,8 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
     public string? StartProblem => !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
 
-    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, RunsElsewhere);
+    /// <summary>Only the inspector shows it, so only the selected task reads the attempts that its last run continues.</summary>
+    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere);
 
     /// <summary>
     /// Enabled unless this window runs the task. A task that cannot start shows why instead of launching, which is also
@@ -130,11 +140,55 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     public ICommand CancelCommand => _cancel;
 
+    /// <summary>The message the person is writing to the task's agent. Each task keeps its own.</summary>
+    public string Draft
+    {
+        get => _draft;
+        set
+        {
+            if (SetProperty(ref _draft, value))
+            {
+                _send.NotifyCanExecuteChanged();
+                _stopAndSend.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
+    public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem) : null;
+
+    /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
+    public bool TurnRunsHere =>
+        _attempt is { Status: AttemptStatus.Running, Turns: [.., { Outcome: TurnOutcome.Running }] } attempt && _canvas.Runs.StartedHere(attempt.Id);
+
+    /// <summary>Queues the draft for the next turn, or continues the latest session in a new attempt.</summary>
+    public ICommand SendCommand => _send;
+
+    public ICommand StopAndSendCommand => _stopAndSend;
+
+    /// <summary>Copies the client's own command for the latest session, while no turn of the task runs.</summary>
+    public ICommand OpenInTerminalCommand => _openInTerminal;
+
     private ClientStatus Status => _task.Execution is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking();
 
     private bool RunsHere => _attempt is { Status: AttemptStatus.Running } attempt && _canvas.Runs.StartedHere(attempt.Id);
 
     private bool RunsElsewhere => _attempt is { Status: AttemptStatus.Running } && !RunsHere;
+
+    /// <summary>
+    /// The attempts that <paramref name="attempt"/> continues. Their logs are read again only when it continues another
+    /// attempt than before, because a continued attempt never changes.
+    /// </summary>
+    private ImmutableArray<AttemptRecord> Earlier(AttemptRecord attempt)
+    {
+        var continues = attempt.Continues;
+        if (continues != _earlier.Continues)
+        {
+            _earlier = (continues, continues is null ? [] : _canvas.Runs.EarlierAttempts(attempt));
+        }
+
+        return _earlier.Attempts;
+    }
 
     internal void Update(TaskDefinition task, CanvasPoint position)
     {
@@ -163,6 +217,7 @@ public sealed class TaskNodeViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(StartProblem));
+            OnConversationChanged();
         }
 
         Location = WorkflowCanvasViewModel.ToPoint(position);
@@ -185,6 +240,7 @@ public sealed class TaskNodeViewModel : ObservableObject
         OnPropertyChanged(nameof(StartProblem));
         _run.NotifyCanExecuteChanged();
         _cancel.NotifyCanExecuteChanged();
+        OnConversationChanged();
     }
 
     /// <summary>The task's agent changed, or what the clients offer did.</summary>
@@ -196,6 +252,8 @@ public sealed class TaskNodeViewModel : ObservableObject
         {
             OnPropertyChanged(property);
         }
+
+        OnConversationChanged();
     }
 
     internal void ChooseClient(ClientChoice choice)
@@ -226,6 +284,55 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     private void Run() =>
         _canvas.Notice(_canvas.Runs.Start(_task) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
+
+    private void Send(bool stopTurn)
+    {
+        if (_canvas.Runs.Send(_task, _draft, stopTurn) is SendResult.Refused refused)
+        {
+            _canvas.Notice(RunText.Describe(refused.Problem));
+            return;
+        }
+
+        Draft = "";
+        _canvas.Notice(null);
+    }
+
+    /// <summary>The hand-off is recorded either way, because the notice shows the command and the folder.</summary>
+    private async void OpenInTerminal()
+    {
+        switch (_canvas.Runs.OpenInTerminal(Id))
+        {
+            case TerminalResult.HandedOff handedOff:
+                _canvas.Notice(await Copied(handedOff.Command) ? RunText.HandedOff(handedOff) : RunText.NotCopied(handedOff));
+                break;
+            case TerminalResult.Refused refused:
+                _canvas.Notice(RunText.Describe(refused.Problem));
+                break;
+        }
+    }
+
+    /// <summary>The platform's clipboard can fail, such as while another program holds it on Windows.</summary>
+    private async Task<bool> Copied(string text)
+    {
+        try
+        {
+            await _canvas.Copy(text);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private void OnConversationChanged()
+    {
+        OnPropertyChanged(nameof(SendProblem));
+        OnPropertyChanged(nameof(TurnRunsHere));
+        _send.NotifyCanExecuteChanged();
+        _stopAndSend.NotifyCanExecuteChanged();
+        _openInTerminal.NotifyCanExecuteChanged();
+    }
 
     private void SetExecution(ExecutionSettings? settings)
     {

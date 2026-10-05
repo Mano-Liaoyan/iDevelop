@@ -125,6 +125,57 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>One or two sentences for each reason a message cannot go to a task's agent.</summary>
+    public static string Describe(SendProblem problem) => problem switch
+    {
+        SendProblem.EmptyMessage => "Write a message first.",
+        SendProblem.NeverRan => "Run this task first. Then you can write to its agent.",
+        SendProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to continue. Run the task again.",
+        SendProblem.NoSessionYet p => $"{Clients.Name(p.Client)} has not reported its session yet. Send again in a moment.",
+        SendProblem.ClientChanged p =>
+            $"The last run used {Clients.Name(p.Ran)}, and this task now uses {Clients.Name(p.Now)}. Run the task to start a {Clients.Name(p.Now)} session.",
+        SendProblem.Ending p => $"\"{p.Title}\" is finishing. Send your message again to continue it.",
+        SendProblem.CannotStart p => Describe(p.Problem),
+        _ => throw new UnreachableException(),
+    };
+
+    /// <summary>One or two sentences for each reason a task's session cannot go to a terminal.</summary>
+    public static string Describe(TerminalProblem problem) => problem switch
+    {
+        TerminalProblem.NeverRan => "Run this task first.",
+        TerminalProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to open.",
+        TerminalProblem.TurnRunning p => $"\"{p.Title}\" is running. Open it in a terminal after it ends.",
+        TerminalProblem.Blocked p => Describe(p.Problem),
+        _ => throw new UnreachableException(),
+    };
+
+    public static string HandedOff(TerminalResult.HandedOff handedOff) =>
+        $"Copied {handedOff.Command}. Paste it in a terminal to continue this session in {handedOff.Folder}.";
+
+    public static string NotCopied(TerminalResult.HandedOff handedOff) =>
+        $"iDevelop could not copy the command. To continue this session in {handedOff.Folder}, run it in a terminal: {handedOff.Command}";
+
+    /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
+    public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
+    {
+        TurnOutcome.Stopped => "You stopped this turn.",
+        TurnOutcome.Failed => Sentences("This turn failed.", turn.Detail),
+        TurnOutcome.Interrupted => Sentences("This turn was interrupted.", turn.Detail),
+        TurnOutcome.Running or TurnOutcome.Succeeded => null,
+    };
+
+    /// <summary>The heading over the person's messages that wait for a turn, or that a settled attempt never sent.</summary>
+    public static string? WaitingCaption(AttemptRecord attempt) => attempt switch
+    {
+        { Queued.IsEmpty: true } => null,
+        { Status: AttemptStatus.Running } => "Waiting for the turn to end",
+        _ => "Not sent",
+    };
+
+    public static string? TerminalNote(AttemptRecord attempt) => attempt.Terminal is { } handoff
+        ? $"Opened in a terminal in {handoff.Folder} at {handoff.At.ToLocalTime():t}. Turns taken there are not in iDevelop's record."
+        : null;
+
     /// <summary>"Requested Codex · gpt-5.5 · high", then what the client reported when that differs.</summary>
     public static string Configuration(AttemptRecord attempt)
     {
@@ -136,6 +187,12 @@ public static class RunText
             ? text
             : $"{text} Reported {Dotted(model, reasoning)}.";
     }
+
+    /// <summary>
+    /// An attempt's line in a conversation of several attempts, such as "Interrupted · Started 10/5/2026 2:00 PM · took 8 s".
+    /// </summary>
+    /// <param name="elsewhere">Another window runs the attempt.</param>
+    public static string ExchangeLine(AttemptRecord attempt, bool elsewhere) => $"{StatusLabel(attempt, elsewhere)} · {Timing(attempt)}";
 
     public static string Timing(AttemptRecord attempt)
     {
@@ -152,6 +209,9 @@ public static class RunText
     };
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    /// <summary>The sentences that are present, joined by spaces.</summary>
+    private static string Sentences(params string?[] sentences) => string.Join(" ", sentences.OfType<string>());
 
     /// <summary>The parts that are present, joined by middle dots.</summary>
     private static string Dotted(params string?[] parts) => string.Join(" · ", parts.OfType<string>());

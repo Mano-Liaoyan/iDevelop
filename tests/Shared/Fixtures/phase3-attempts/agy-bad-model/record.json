@@ -1,0 +1,18 @@
+{
+  "id": "01a108e4-fbd2-735e-b498-999f159b8aab",
+  "task": "019a9d2e-5a02-7c41-9d3e-2b8f6a1c0e11",
+  "taskTitle": "Say hi",
+  "client": "antigravity",
+  "model": "gemini-3.8-flash",
+  "reasoning": "low",
+  "requestedAt": "2026-10-04T21:49:46.8342969+00:00",
+  "status": "Failed",
+  "stopping": false,
+  "endedAt": "2026-10-04T21:49:46.8544392+00:00",
+  "result": null,
+  "detail": "invalid model selection (--model \"gemini-bogus-9\" --effort \"low\"): --effort is not supported for model \"gemini-bogus-9\"",
+  "sessionId": null,
+  "reportedModel": null,
+  "reportedReasoning": null,
+  "activity": []
+}

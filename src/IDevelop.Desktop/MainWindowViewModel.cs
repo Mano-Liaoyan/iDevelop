@@ -12,15 +12,18 @@ namespace IDevelop.Desktop;
 public sealed class MainWindowViewModel : ObservableObject
 {
     private readonly ClientDirectory _clients;
+    private readonly Func<string, Task> _copy;
     private readonly RelayCommand _save;
     private readonly RelayCommand _refreshAgents;
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
     private bool _refreshingAgents;
 
-    public MainWindowViewModel(ClientDirectory clients)
+    /// <param name="copy">Puts text on the clipboard.</param>
+    public MainWindowViewModel(ClientDirectory clients, Func<string, Task> copy)
     {
         _clients = clients;
+        _copy = copy;
         _save = new RelayCommand(() => TrySave(), () => Canvas is not null);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
@@ -74,7 +77,7 @@ public sealed class MainWindowViewModel : ObservableObject
         await LeaveProject();
         var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
         document.Changed += (_, _) => OnDocumentChanged();
-        Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice);
+        Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice, _copy);
         Status = runs.Warnings.IsEmpty ? null : string.Join(" ", runs.Warnings);
         OnProjectChanged();
     }

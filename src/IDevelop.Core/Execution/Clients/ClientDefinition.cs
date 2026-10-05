@@ -27,6 +27,9 @@ internal sealed record ClientDefinition
 
     /// <summary>One stdout line to normalized events. It may throw <see cref="JsonException"/> on a line that is not JSON.</summary>
     public required Func<string, ImmutableArray<AgentEvent>> Interpret { get; init; }
+
+    /// <summary>The command a person types to open a session in the client's own terminal interface.</summary>
+    public required Func<string, string> Terminal { get; init; }
 }
 
 internal abstract record CatalogSource
@@ -53,7 +56,11 @@ internal abstract record CatalogParse
 /// </summary>
 internal sealed record ReadinessProbe(string? Provider, Probe Probe, Func<ProbeOutput, string?> Problem);
 
-internal sealed record LaunchRequest(string Model, string? Reasoning, string Prompt);
+internal sealed record LaunchRequest(string Model, string? Reasoning, string Prompt)
+{
+    /// <summary>The client's own id of the session this turn continues, or null for a new session.</summary>
+    public string? ResumeSession { get; init; }
+}
 
 internal sealed record LaunchArguments(ImmutableArray<string> Arguments, string Stdin);
 

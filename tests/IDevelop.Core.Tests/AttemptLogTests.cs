@@ -47,6 +47,40 @@ public sealed class AttemptLogTests : IDisposable
     }
 
     [Fact]
+    public void A_continuation_and_its_turns_are_written_as_new_event_types_and_read_back()
+    {
+        var attempts = _temp.Create("attempts");
+        var requested = BuildRequested(Second) with { Prompt = "banana", Continues = new Continuation(First, "thread-1") };
+
+        string folder;
+        using (var log = AttemptLog.Create(attempts, requested))
+        {
+            folder = log.Folder;
+            log.Append(LaunchedAt1s);
+            log.Append(Sent(2, "Stop. Use an apple.", stopsTurn: true));
+            log.Append(Exit(3, 137));
+            log.Append(NextTurn(4, "Stop. Use an apple."));
+            log.Append(new AttemptEvent.HandedToTerminal(T0.AddSeconds(9), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"));
+        }
+
+        Assert.Equal(
+            """
+            {"type":"requested","at":"2026-10-04T05:00:00+00:00","attempt":"019aa000-0000-7000-8000-000000000002","task":"019a9d2e-5b77-7e12-a4f0-7c3d9e2b5f22","taskTitle":"Implement atomic save","settings":{"client":"codex","model":"gpt-6-sol","reasoning":"high"},"prompt":"banana","command":"codex","arguments":["exec","--json"],"continues":{"attempt":"019aa000-0000-7000-8000-000000000001","session":"thread-1"}}
+            {"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00"}
+            {"type":"messageQueued","at":"2026-10-04T05:00:02+00:00","text":"Stop. Use an apple.","stopsTurn":true}
+            {"type":"exited","at":"2026-10-04T05:00:03+00:00","exitCode":137,"stderrTail":""}
+            {"type":"turnRequested","at":"2026-10-04T05:00:04+00:00","prompt":"Stop. Use an apple.","command":"codex","arguments":["exec","resume","--json","thread-1","-"]}
+            {"type":"handedToTerminal","at":"2026-10-04T05:00:09+00:00","folder":"/home/me/fruit","command":"cd '/home/me/fruit' && codex resume thread-1"}
+
+            """.Replace("\r\n", "\n"),
+            File.ReadAllText(Path.Combine(folder, "events.jsonl")));
+        var record = AttemptReducer.Replay(AttemptLog.Read(folder))!;
+        Assert.Equal(((AttemptId?)First, "thread-1"), (record.Continues, record.SessionId));
+        Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Stopped, null), new TurnRecord(2, "Stop. Use an apple.", TurnOutcome.Running, null)], record.Turns);
+        Assert.Equal(new TerminalHandoff(T0.AddSeconds(9), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"), record.Terminal);
+    }
+
+    [Fact]
     public void A_torn_last_line_and_an_event_from_a_newer_version_are_skipped()
     {
         var attempts = _temp.Create("attempts");

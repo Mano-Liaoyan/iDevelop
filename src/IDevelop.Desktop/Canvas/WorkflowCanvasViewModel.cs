@@ -21,6 +21,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
     private readonly Action<string?> _setNotice;
+    private readonly Func<string, Task> _copy;
     private readonly Dictionary<TaskId, TaskNodeViewModel> _nodes = [];
     private readonly Dictionary<ConnectionKey, ConnectionViewModel> _connections = [];
     private Workflow? _projected;
@@ -28,12 +29,13 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
 
-    public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice)
+    public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy)
     {
         Document = document;
         Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
+        _copy = copy;
         ActiveRun = new ActiveRunViewModel(runs, clients);
         runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
@@ -133,6 +135,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     }
 
     internal void Notice(string? text) => _setNotice(text);
+
+    internal Task Copy(string text) => _copy(text);
 
     internal EditResult Edit(WorkflowEdit edit)
     {
