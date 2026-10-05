@@ -148,7 +148,7 @@ internal static class BlueprintJson
 
 // RespectNullableAnnotations does not reach collection elements, so those are nullable here and the reader reports each
 // null with its entry.
-internal sealed class BlueprintDto
+internal class BlueprintDto
 {
     public required string Id { get; init; }
     public required int Version { get; init; }

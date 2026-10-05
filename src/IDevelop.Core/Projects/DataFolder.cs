@@ -13,6 +13,9 @@ internal static class DataFolder
 
     public static string Attempts(string projectFolder) => Path.Combine(projectFolder, Name, "attempts");
 
+    /// <summary>The project's blueprint library, which Git tracks.</summary>
+    public static string Blueprints(string projectFolder) => Path.Combine(projectFolder, Name, "blueprints");
+
     /// <summary>
     /// Makes <c>.idp/.gitignore</c> ignore temporary files and attempts. It keeps the user's lines and appends the
     /// missing ones, so a project saved before attempts existed gains "attempts/".
