@@ -11,6 +11,13 @@ public sealed class WorkflowDocument
     /// <summary>Null while the file holds an older format than <see cref="Save"/> writes.</summary>
     private Workflow? _saved;
 
+    private readonly Stack<Workflow> _undo = new();
+
+    private readonly Stack<Workflow> _redo = new();
+
+    /// <summary>The edit that made <see cref="Current"/>, or null after an undo, a redo, or a save, so the next edit starts its own step.</summary>
+    private WorkflowEdit? _lastEdit;
+
     private WorkflowDocument(string projectFolder, string filePath, Workflow workflow, string? converted = null)
     {
         ProjectFolder = projectFolder;
@@ -26,12 +33,17 @@ public sealed class WorkflowDocument
 
     public Workflow Current { get; private set; }
 
+    /// <summary>Compares with the saved workflow, so undoing back to it reads as saved.</summary>
     public bool HasUnsavedChanges => !ReferenceEquals(Current, _saved);
+
+    public bool CanUndo => _undo.Count > 0;
+
+    public bool CanRedo => _redo.Count > 0;
 
     /// <summary>What opening converted from an older file format, for the user, or null. The first save writes the current format.</summary>
     public string? Converted { get; }
 
-    /// <summary>Raised after <see cref="Current"/> or the saved state changes.</summary>
+    /// <summary>Raised after <see cref="Current"/>, the saved state, <see cref="CanUndo"/>, or <see cref="CanRedo"/> changes.</summary>
     public event EventHandler? Changed;
 
     /// <summary>
@@ -63,18 +75,35 @@ public sealed class WorkflowDocument
         }
     }
 
-    /// <summary>An edit that is rejected or has no effect leaves the document unchanged and raises nothing.</summary>
+    /// <summary>
+    /// An edit that is rejected or has no effect leaves the document unchanged and raises nothing. Each other edit is one
+    /// undo step and clears the redo steps, except that a title or field edit continuing the previous edit of the same text
+    /// joins its step, so a run of typing undoes at once.
+    /// </summary>
     public EditResult Apply(WorkflowEdit edit)
     {
         var result = Current.Apply(edit);
         if (result is EditResult.Applied applied && !ReferenceEquals(applied.Workflow, Current))
         {
+            if (!EditsSameText(_lastEdit, edit))
+            {
+                _undo.Push(Current);
+            }
+
+            _redo.Clear();
+            _lastEdit = edit;
             Current = applied.Workflow;
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
         return result;
     }
+
+    /// <summary>Restores the workflow before the latest undo step. Does nothing when there is none.</summary>
+    public void Undo() => Step(_undo, _redo);
+
+    /// <summary>Applies the latest undone step again. Does nothing when there is none.</summary>
+    public void Redo() => Step(_redo, _undo);
 
     /// <summary>
     /// Writes <see cref="Current"/> atomically. On an I/O error the previous file stays intact,
@@ -94,8 +123,27 @@ public sealed class WorkflowDocument
         DataFolder.EnsureGitIgnore(ProjectFolder);
         AtomicFile.Replace(FilePath, WorkflowFile.Serialize(snapshot));
         _saved = snapshot;
+        _lastEdit = null;
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    private void Step(Stack<Workflow> from, Stack<Workflow> to)
+    {
+        if (from.TryPop(out var workflow))
+        {
+            to.Push(Current);
+            Current = workflow;
+            _lastEdit = null;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private static bool EditsSameText(WorkflowEdit? previous, WorkflowEdit edit) => (previous, edit) switch
+    {
+        (WorkflowEdit.EditTitle p, WorkflowEdit.EditTitle e) => p.Task == e.Task,
+        (WorkflowEdit.SetField p, WorkflowEdit.SetField e) => p.Task == e.Task && p.Key == e.Key,
+        _ => false,
+    };
 
     /// <summary>In ordinal order, so a message names the same file each time.</summary>
     private static string[] WorkflowFiles(string workflowsFolder) =>
