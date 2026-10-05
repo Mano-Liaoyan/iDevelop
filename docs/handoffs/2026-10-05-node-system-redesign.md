@@ -70,8 +70,9 @@ Excluded on purpose, because each needs a product decision or a format change: d
 | [#28](https://github.com/Mano-Liaoyan/iDevelop/pull/28) | U2 | Add popover, node and connection menus, and canvas keys | `a50592e` |
 | [#25](https://github.com/Mano-Liaoyan/iDevelop/pull/25) | U4b | Generate Workflow from a description | `30fbb1e` |
 | [#24](https://github.com/Mano-Liaoyan/iDevelop/pull/24) | U5b | Undo and redo from the keyboard, breadcrumb, and Add popover | `f95bd6e` |
+| [#29](https://github.com/Mano-Liaoyan/iDevelop/pull/29) | U6 | Fluent glyphs for the last hand-drawn icons, dead token and property removal, and this record | The pull request that adds this record |
 
-The table lists the merges in the order they reached `main`. This record and the final cleanup, U6, are the last pull request of the run.
+The table lists the merges in the order they reached `main`. #24 and #29 formed the run's last wave.
 
 ## Changed artifacts
 
