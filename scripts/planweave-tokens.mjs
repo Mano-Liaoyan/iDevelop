@@ -8,17 +8,14 @@ const desktop = join(root, 'src', 'IDevelop.Desktop');
 const output = join(desktop, 'Theme', 'Tokens.axaml');
 
 // PlanWeave packages/desktop/src/renderer/index.css at 8647d015, as [:root, .dark].
-// The edge colors come from graph/dependencyEdgeVisual.ts and are the same in both themes.
 const planweave = {
   black: ['oklch(0 0 0)', 'oklch(0 0 0)'],
-  foreground: ['oklch(0.145 0 0)', 'oklch(0.985 0 0)'],
   border: ['oklch(0.922 0 0)', 'oklch(1 0 0 / 10%)'],
   'app-shell': ['oklch(0.973 0.006 96)', 'oklch(0.18 0.006 80)'],
   'app-sidebar': ['oklch(0.955 0.008 255)', 'oklch(0.205 0.008 250)'],
   'app-topbar': ['oklch(0.982 0.004 106)', 'oklch(0.215 0.006 80)'],
   'app-canvas': ['oklch(0.987 0.003 106)', 'oklch(0.16 0.008 120)'],
   'app-panel': ['oklch(0.99 0.002 106)', 'oklch(0.225 0.006 80)'],
-  'surface-base': ['oklch(0.99 0.002 106)', 'oklch(0.205 0.006 80)'],
   'surface-muted': ['oklch(0.952 0.005 248)', 'oklch(0.265 0.008 248)'],
   'surface-raised': ['oklch(1 0 0)', 'oklch(0.245 0.007 80)'],
   'surface-overlay': ['oklch(0.985 0.004 250)', 'oklch(0.28 0.008 248)'],
@@ -26,8 +23,6 @@ const planweave = {
   text: ['oklch(0.28 0.01 248)', 'oklch(0.86 0.006 100)'],
   'text-muted': ['oklch(0.49 0.014 248)', 'oklch(0.68 0.008 100)'],
   'text-faint': ['oklch(0.67 0.012 248)', 'oklch(0.5 0.01 100)'],
-  'edge-0': ['#2563eb', '#2563eb'],
-  'edge-9': ['#ea580c', '#ea580c'],
 };
 
 // Apple's system colors from https://developer.apple.com/design/human-interface-guidelines/color, fetched 2026-10-05,
@@ -96,7 +91,6 @@ const brushes = [
   ['AppSidebar', 'app-sidebar'],
   ['AppTopbar', 'app-topbar'],
   ['AppPanel', 'app-panel'],
-  ['SurfaceBase', 'surface-base'],
   ['SurfaceMuted', 'surface-muted'],
   ['SurfaceMuted60', 'surface-muted', 60],
   ['SurfaceRaised', 'surface-raised'],
@@ -112,25 +106,18 @@ const brushes = [
   ['StateSelected', 'apple-blue'],
   ['StateSelected25', 'apple-blue', 25],
   ['StateSelected40', 'apple-blue', 40],
-  ['StateSelected55', 'apple-blue', 55],
   ['StateSelectedSurface', 'apple-blue', 10],
   ['StateRunning', 'apple-blue'],
   ['StateRunning45', 'apple-blue', 45],
-  ['StateRunning55', 'apple-blue', 55],
   ['StateRunningSurface', 'apple-blue', 10],
   ['StateSuccess', 'apple-green'],
   ['StateSuccess45', 'apple-green', 45],
-  ['StateSuccess55', 'apple-green', 55],
   ['StateSuccessSurface', 'apple-green', 10],
   ['StateFailed', 'apple-red'],
   ['StateFailed50', 'apple-red', 50],
-  ['StateFailed60', 'apple-red', 60],
   ['StateFailedSurface', 'apple-red', 10],
   ['StateWaiting', 'apple-orange'],
   ['StateWaiting40', 'apple-orange', 40],
-  ['StateWaiting55', 'apple-orange', 55],
-  ['ConnectionDependency', 'edge-0'],
-  ['ConnectionContext', 'text-muted'],
   ...kinds.flatMap(([kind, hue]) => [
     [`Kind${kind}`, `apple-${hue}`],
     [`Kind${kind}10`, `apple-${hue}`, 10],
@@ -168,23 +155,14 @@ const colorKeys = [
   ['PendingConnection.BorderColor', 'border'],
   ['Minimap.BackgroundColor', 'surface-muted'],
   ['MinimapItem.BackgroundColor', 'text-faint'],
-  ...kinds.map(([kind, hue]) => [`Kind${kind}Color`, `apple-${hue}`]),
-  ['AccentColor', 'apple-blue'],
 ];
 
 // Each layer is x, y, blur, spread, token, and opacity in percent. Tailwind's shadow-sm is two black layers at 10%.
-// A status card's ring-1 at 15% is a one-pixel spread layer in the status color.
 const shadowSm = [
   [0, 1, 3, 0, 'black', 10],
   [0, 1, 2, -1, 'black', 10],
 ];
-const ringed = (token, percent) => [[0, 0, 0, 1, token, percent], ...shadowSm];
 const themedShadows = [
-  ['CardShadow', ringed('foreground', 10), ringed('foreground', 10)],
-  ['CardRunningShadow', ringed('apple-blue', 15), ringed('apple-blue', 15)],
-  ['CardSuccessShadow', ringed('apple-green', 15), ringed('apple-green', 15)],
-  ['CardFailedShadow', ringed('apple-red', 15), ringed('apple-red', 15)],
-  ['CardWaitingShadow', ringed('apple-orange', 15), ringed('apple-orange', 15)],
   ['FloatingShadow', [[0, 12, 28, 0, 'black', 12]], [[0, 14, 32, 0, 'black', 32]]],
   ['NodeShadow', [[0, 1, 2, 0, 'black', 8], [0, 2, 6, 0, 'black', 6]], [[0, 1, 2, 0, 'black', 40], [0, 2, 8, 0, 'black', 32]]],
   ['NodeHoverShadow', [[0, 2, 6, 0, 'black', 10], [0, 8, 20, 0, 'black', 10]], [[0, 2, 6, 0, 'black', 45], [0, 10, 24, 0, 'black', 40]]],
