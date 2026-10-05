@@ -107,14 +107,15 @@
   </DataTemplate>
 
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
-    <nodify:StepConnection Source="{Binding From.Output.Anchor}"
-                           Target="{Binding To.Input.Anchor}"
-                           theme:StyleClass.Kind="{Binding SourceKind}"
-                           Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                           canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                           Classes.highlighted="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Highlighted}}"
-                           Classes.dimmed="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Dimmed}}"
-                           nodify:BaseConnection.IsSelectable="True" />
+    <canvas:RoutedConnection Source="{Binding From.Output.Anchor}"
+                             Target="{Binding To.Input.Anchor}"
+                             Route="{Binding Route}"
+                             theme:StyleClass.Kind="{Binding SourceKind}"
+                             Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                             canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                             Classes.highlighted="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Highlighted}}"
+                             Classes.dimmed="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Dimmed}}"
+                             nodify:BaseConnection.IsSelectable="True" />
   </DataTemplate>
 
   <DataTemplate x:Key="PendingConnectionTemplate" DataType="canvas:PendingConnectionViewModel">

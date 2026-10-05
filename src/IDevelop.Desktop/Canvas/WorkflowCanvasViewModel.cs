@@ -66,6 +66,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         InitializeHighlight();
         InitializeAdd();
         InitializeGenerate();
+        InitializeRouting();
     }
 
     public ObservableCollection<TaskNodeViewModel> Nodes { get; } = [];
@@ -484,4 +485,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     partial void InitializeAdd();
 
     partial void InitializeGenerate();
+
+    partial void InitializeRouting();
 }
