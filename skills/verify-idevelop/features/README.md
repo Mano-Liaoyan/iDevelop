@@ -44,4 +44,5 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [The canvas](./canvas.md) covers adding tasks, the zoom and fit buttons, the minimap, and the sample's connections.
 - [The AGENTS section and the agent pickers](./agents.md) covers client readiness and choosing a task's client, model, and reasoning level.
 - [Run and cancel a task](./run-and-cancel.md) covers running, cancelling, and finishing a task through the fake Codex, and a refused start.
+- [Talk to a task's agent](./conversation.md) covers Open in terminal, Continue, the conversation after Continue, Send during a turn, and Stop and send through the fake Codex. It drives `Composer`, `SendMessage`, `StopAndSend`, `OpenInTerminal`, `Conversation`, `TurnReply<n>`, `WaitingMessages`, and `TerminalNote`.
 - [The theme switch](./theme.md) covers the System, Light, and Dark segments and their persistence across a restart.

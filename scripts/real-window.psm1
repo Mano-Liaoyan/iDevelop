@@ -208,14 +208,15 @@ function Restore-Settings([string] $Run) {
     Use-SettingsLock { if ((Get-SettingsOwner).run -eq $Run) { Restore-Backup } }
 }
 
-# A fake Codex for a PATH of its own, so a run needs no agent account. It answers the probes, starts a process whose
-# parent exits, waits until the gate file exists, and then replays a successful turn. Returns the program it runs.
+# A fake Codex for a PATH of its own, so a run needs no agent account. It answers the probes. Each turn, fresh or
+# resumed, starts a process whose parent exits, waits until the gate file exists, and then replays a successful turn
+# that reports the same session. Returns the program it runs.
 function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile, [switch] $BlockOtherClients, [string] $Agent = $FakeAgent) {
     [IO.Directory]::CreateDirectory($Bin) | Out-Null
     $rules = [ordered]@{ rules = @(
         [ordered]@{ when = @('debug', 'models'); steps = @(@{ replay = (Join-Path $Fixtures 'codex-debug-models.json') }) },
         [ordered]@{ when = @('login', 'status'); steps = @(@{ print = 'Logged in using ChatGPT' }) },
-        [ordered]@{ when = @('exec', '--json'); steps = @(@{ spawnThroughCmd = $SleeperPidFile }, @{ waitForFile = $Gate }, @{ replay = (Join-Path $Fixtures 'codex-success.jsonl') }) }
+        [ordered]@{ when = @('exec'); steps = @(@{ spawnThroughCmd = $SleeperPidFile }, @{ waitForFile = $Gate }, @{ replay = (Join-Path $Fixtures 'codex-success.jsonl') }) }
     ) }
     [IO.File]::WriteAllText((Join-Path $Bin 'codex.rules.json'), ($rules | ConvertTo-Json -Depth 6 -Compress))
     [IO.File]::WriteAllText((Join-Path $Bin 'codex.cmd'), "@`"$Agent`" --rules `"$(Join-Path $Bin 'codex.rules.json')`" -- %*`r`n")

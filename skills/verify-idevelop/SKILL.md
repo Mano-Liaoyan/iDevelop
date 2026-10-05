@@ -70,6 +70,7 @@ These ids cover most drives. The feature map lists the rest.
 - Sidebar: `AddTask`, `OpenFolder`, `ProjectName`, `TaskCount`, `SidebarTasks`, `RefreshAgents`, `AgentClaudeCode`, `AgentCodex`, `AgentPi`, `AgentAntigravity`, `ThemeSystem`, `ThemeLight`, `ThemeDark`.
 - Canvas: `Editor`, `CardStatus`, `CardAgent`, `ZoomIn`, `ZoomOut`, `FitToScreen`, `Minimap`, `Save`, `UnsavedChanges`, `Status`, `RunBar`, `RunBarTask`, `RunBarCancel`.
 - Inspector: `TaskTitle`, `TaskInstructions`, `TaskAcceptanceCriteria`, `TaskClient`, `TaskModel`, `TaskReasoning`, `PermissionNote`, `RunTask`, `CancelRun`, `StartProblem`, `LastRunStatus`, `LastRunResult`.
+- Conversation: `Conversation`, `TurnReply<n>`, `WaitingMessages`, `TerminalNote`, `Composer`, `SendMessage`, `StopAndSend`, `OpenInTerminal`, `SendProblem`.
 - Dialogs: `Question` (the dialog's text), `SaveChanges`, `DiscardChanges`, `CancelChanges`, `StopAndLeave`, `KeepRunning`.
 
 UI Automation cannot drag, right-click, press keys, or select a card or connection on the canvas. Choose a task through its sidebar row. The headless tests cover pointer and keyboard input.
