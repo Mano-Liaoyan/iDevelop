@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
@@ -104,6 +106,44 @@ public sealed class CardTests : IDisposable
         Assert.Equal(["Design", "Codex · GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal("Design\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(shell.InCard<Panel>("Design", "TaskCard")));
+    }
+
+    [AvaloniaFact]
+    public void Renaming_on_the_card_keeps_the_box_to_the_title_row_and_the_subtitle_whole()
+    {
+        Install(_fakes, ClientId.Codex);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        var titleDrawnAt = shell.Bounds(shell.InCard<TextBlock>("Design", "CardTitle")).TopLeft;
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        shell.Press(Key.F2);
+
+        var box = shell.InCard<TextBox>("Design", "CardTitleBox");
+        var subtitle = shell.InCard<TextBlock>("Design", "CardAgent");
+        var text = box.GetVisualDescendants().OfType<TextPresenter>().Single();
+        Assert.True(box.IsFocused);
+        Assert.True(subtitle.IsEffectivelyVisible);
+        Assert.False(shell.Bounds(box).Intersects(shell.Bounds(subtitle)), $"The box {shell.Bounds(box)} covers the subtitle {shell.Bounds(subtitle)}.");
+        Assert.True(Point.Distance(titleDrawnAt, shell.Bounds(text).TopLeft) <= 0.5, $"The text moved from {titleDrawnAt} to {shell.Bounds(text).TopLeft}.");
+    }
+
+    [AvaloniaFact]
+    public void The_card_holds_back_its_tooltip_while_its_title_is_renamed()
+    {
+        Install(_fakes, ClientId.Codex);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        var card = shell.InCard<Panel>("Design", "TaskCard");
+        shell.Click(shell.Header(shell.Node("Design")));
+        ToolTip.SetIsOpen(card, true);
+        shell.Render();
+        Assert.True(ToolTip.GetIsOpen(card));
+
+        shell.Press(Key.F2);
+
+        Assert.Equal((false, null), (ToolTip.GetIsOpen(card), ToolTip.GetTip(card)));
+        shell.Type("Parser");
+        shell.Press(Key.Enter);
+        Assert.Equal("Parser\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(card));
     }
 
     [AvaloniaFact]

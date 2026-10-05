@@ -9,7 +9,7 @@ The canvas shows each task as a card with its kind's tile, its title, and one su
 - `card-content` shows each task's kind tile, title, and one subtitle, which reads its agent while idle and otherwise its status or what it needs.
 - `menus` offers Run, Rename, Duplicate, Replace With, Disconnect, Derive Blueprint…, Save as Blueprint…, and Delete on a card, and the kind, `Insert Node…`, and Delete on a connection.
 - `keys` runs N, Delete, Ctrl+D, Ctrl+A, F2, Ctrl+Enter, Esc, F, +, -, and 0 on the canvas.
-- `rename` edits a task's title on its card from F2 or the node menu's Rename. While it is open, `CardTitleBox` holds the title with its text selected and `CardTitle` is hidden. Enter or a click elsewhere keeps the new title, and Esc keeps the old one.
+- `rename` edits a task's title on its card from F2 or the node menu's Rename. While it is open, `CardTitleBox` holds the title with its text selected in the title's own row, `CardTitle` is hidden, and the card shows no tooltip. Enter or a click elsewhere keeps the new title, and Esc keeps the old one.
 - `undo` takes back the last workflow edit with `Undo` in the breadcrumb or Ctrl+Z, and `Redo` or Ctrl+Shift+Z applies it again.
 - `zoom` steps the canvas larger with `Zoom in` and smaller with `Zoom out`.
 - `fit` brings every card into view with `Fit to screen`.
