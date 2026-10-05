@@ -1,11 +1,9 @@
 using System.ComponentModel;
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Workflows;
 using Nodify;
@@ -78,19 +76,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     public void FitToView() => EditorCommands.FitToScreen.Execute(null, Editor);
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
-
-    // The inspector shows the selected node once the selection's change has run, so the box is found after it.
-    public void FocusTitle() => Dispatcher.UIThread.Post(
-        () =>
-        {
-            if (TopLevel.GetTopLevel(this)?.GetVisualDescendants().OfType<TextBox>()
-                    .FirstOrDefault(box => AutomationProperties.GetAutomationId(box) == "TaskTitle") is { } title)
-            {
-                title.Focus();
-                title.SelectAll();
-            }
-        },
-        DispatcherPriority.Background);
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -307,7 +292,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
                 return true;
             case Key.F2 when plain && single is not null:
-                FocusTitle();
+                single.BeginRename();
                 return true;
             case Key.Enter when command && single is not null:
                 if (single.RunCommand.CanExecute(null))

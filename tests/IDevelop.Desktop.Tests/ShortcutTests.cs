@@ -67,18 +67,47 @@ public sealed class ShortcutTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void F2_focuses_the_title_box_with_its_text_selected()
+    public void F2_renames_the_task_on_its_card_and_Enter_keeps_the_new_title_in_one_undo_step()
     {
         var shell = OpenTwo();
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.Press(Key.F2);
 
-        var title = shell.Find<TextBox>("TaskTitle");
-        Assert.True(title.IsFocused);
-        Assert.Equal("Design", title.SelectedText);
-        shell.Type("Renamed");
-        Assert.Equal(["Build", "Renamed"], Titles(shell));
+        var box = shell.InCard<TextBox>("Design", "CardTitleBox");
+        Assert.True(box.IsFocused);
+        Assert.Equal("Design", box.SelectedText);
+        Assert.False(shell.InCard<TextBlock>("Design", "CardTitle").IsVisible);
+        shell.Type("Parser");
+        Assert.Equal(["Build", "Design"], Titles(shell));
+        shell.Press(Key.Enter);
+
+        Assert.Equal(["Build", "Parser"], Titles(shell));
+        Assert.False(box.IsVisible);
+        Assert.True(shell.Editor.IsKeyboardFocusWithin);
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        Assert.Equal(["Build", "Design"], Titles(shell));
+    }
+
+    [AvaloniaFact]
+    public void Escape_ends_a_rename_on_the_card_with_the_old_title_and_a_click_elsewhere_keeps_the_new_one()
+    {
+        var shell = OpenTwo();
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Press(Key.F2);
+        shell.Type("Parser");
+
+        shell.Press(Key.Escape);
+
+        Assert.Equal(["Build", "Design"], Titles(shell));
+        Assert.False(shell.InCard<TextBox>("Design", "CardTitleBox").IsVisible);
+        Assert.Same(shell.Window.ViewModel.Canvas!.SelectedNode, shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "Design"));
+
+        shell.Press(Key.F2);
+        shell.Type("Parser");
+        shell.Click(shell.InEditor(700, 500));
+
+        Assert.Equal(["Build", "Parser"], Titles(shell));
     }
 
     [AvaloniaFact]

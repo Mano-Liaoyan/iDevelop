@@ -52,8 +52,14 @@
                         AutomationProperties.AutomationId="CardKind"
                         AutomationProperties.HelpText="{Binding KindHelp}" />
         <StackPanel Grid.Column="1" Margin="0,14,0,0">
-          <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="CardTitle" />
+          <Panel>
+            <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding !IsRenaming}"
+                       AutomationProperties.AutomationId="CardTitle" />
+            <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
+                                 AutomationProperties.AutomationId="CardTitleBox"
+                                 AutomationProperties.Name="Title" />
+          </Panel>
           <Panel>
             <TextBlock Classes="cardAgent" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding ShowsAgent}"

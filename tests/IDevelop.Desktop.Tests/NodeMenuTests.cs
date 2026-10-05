@@ -200,14 +200,14 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Rename_focuses_the_title_box_with_its_text_selected()
+    public void Rename_opens_the_title_on_the_card_with_its_text_selected()
     {
         var shell = Shell.Open(DesignThenBuild());
 
         shell.RightClick(shell.Header(shell.Node("Build")));
         shell.Click(shell.MenuItem("NodeMenuRename"));
 
-        var title = shell.Find<TextBox>("TaskTitle");
+        var title = shell.InCard<TextBox>("Build", "CardTitleBox");
         Assert.True(title.IsFocused);
         Assert.Equal("Build", title.SelectedText);
     }

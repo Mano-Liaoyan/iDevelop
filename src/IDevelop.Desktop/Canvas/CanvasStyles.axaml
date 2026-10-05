@@ -38,6 +38,18 @@
     <Setter Property="Height" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- The rename box sits where the title was, its text on the title's line. -->
+  <Style Selector="TextBox.cardTitle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="-5,-2,0,-2" />
+    <Setter Property="Padding" Value="4,0" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
   <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="Height" Value="16" />
