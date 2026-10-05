@@ -81,7 +81,8 @@ public sealed class ReviewNodeTests : IDisposable
         Assert.Equal("Round 1 · 1 open finding", shell.Find<TextBlock>("ReviewSummary").Text);
         Assert.Contains("Round 1 · 1 open finding", Shell.Texts(shell.Node("Review add")));
         Assert.Equal(["Finding 1 · Open", "add subtracts.", "Settled by: Return a + b."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
-        Assert.Equal("Running", shell.CardText("Add numbers", "CardStatus"));
+        // The review rests in review while its fix round snapshots the project and starts, off the window's thread.
+        shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Running", "the fix round starts");
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Keep it short.");
         shell.Click(shell.InView<Button>("SendMessage"));

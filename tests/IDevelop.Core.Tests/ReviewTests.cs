@@ -250,7 +250,9 @@ public sealed class ReviewTests : IDisposable
             Assert.IsType<StartResult.Started>(first.Start(SubjectNode));
             await Until(() => first.Latest[Subject].Status == AttemptStatus.Succeeded && first.Active.IsEmpty, "the subject succeeds");
             Assert.IsType<StartResult.Started>(first.Start(ReviewNode));
-            await Until(() => first.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
+            // A fix round's attempt carries the session it resumes from its start, so only the client's own count says
+            // that it took its turn. Leaving earlier would hand the reopened fix round this turn's script.
+            await Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 runs");
         }
 
         await using var runs = ProjectRuns.Open(_project, clients);

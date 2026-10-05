@@ -177,10 +177,13 @@ public sealed partial class ProjectRuns
             var exited = false;
             try
             {
-                await foreach (var e in _events.Reader.ReadAllAsync(_abandon.Token))
+                await foreach (var next in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
                     // Leaving gave up while this drain was busy. Events already queued stay off the log too.
                     _abandon.Token.ThrowIfCancellationRequested();
+                    // The drain, not the exit's watcher, snapshots the project, so no Git process outlives the run in
+                    // the project folder after a drain that ended early released it.
+                    var e = next is AttemptEvent.Exited exit ? exit with { Tree = GitTree.Snapshot(_owner._projectFolder) } : next;
                     Append(e);
                     exited |= e is AttemptEvent.Exited;
                     _owner.Publish(Record);
@@ -333,12 +336,11 @@ public sealed partial class ProjectRuns
                 var code = await turn.Process.WaitForExitAsync();
                 // The turn ends without output that comes later.
                 await turn.Process.WaitForOutputAsync();
-                var tree = GitTree.Snapshot(_owner._projectFolder);
                 lock (_gate)
                 {
                     turn.Open = false;
                     _closed |= !_messageWaiting;
-                    exitQueued = _events.Writer.TryWrite(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text) { Tree = tree });
+                    exitQueued = _events.Writer.TryWrite(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
                 }
             }
             finally
