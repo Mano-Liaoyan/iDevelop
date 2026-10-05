@@ -29,7 +29,7 @@ internal sealed partial class Shell
     public T Shown<T>(string automationId) where T : Control =>
         ById<T>(Window, automationId).Single(control => control.IsEffectivelyVisible);
 
-    public bool Shows(string automationId) => ById<Control>(Window, automationId).Any(control => control.IsEffectivelyVisible);
+    public bool ShowsAny(string automationId) => ById<Control>(Window, automationId).Any(control => control.IsEffectivelyVisible);
 
     /// <summary>The names of the popover's rows, blueprints and actions, in order.</summary>
     public string[] AddRows() =>

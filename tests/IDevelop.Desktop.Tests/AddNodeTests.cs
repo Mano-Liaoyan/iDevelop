@@ -56,7 +56,7 @@ public sealed class AddNodeTests : IDisposable
         Assert.Equal("Add Implement", shell.Highlighted());
         Assert.Equal("Carries out its instructions with the agent you choose, and may edit the project.", shell.Find<TextBlock>("AddNodeDescription").Text);
         Assert.True(shell.Find<TextBox>("AddNodeSearch").IsFocused);
-        Assert.False(shell.Shows("AddNodeProblems"));
+        Assert.False(shell.ShowsAny("AddNodeProblems"));
     }
 
     [AvaloniaFact]
@@ -166,7 +166,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Press(Key.Down);
         Assert.Equal("Add Plan", shell.Highlighted());
         Assert.Equal("Derive from Plan", Avalonia.Automation.AutomationProperties.GetName(shell.Shown<Button>("AddNodeDerive")));
-        Assert.False(shell.Shows("AddNodeEdit"));
+        Assert.False(shell.ShowsAny("AddNodeEdit"));
 
         shell.Click(shell.Shown<Button>("AddNodeDerive"));
 
