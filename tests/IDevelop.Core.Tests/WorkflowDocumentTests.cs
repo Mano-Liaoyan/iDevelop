@@ -410,6 +410,178 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.Equal($"<file>: connection {B} -> {A} would close a cycle: Build -> Design -> Build.", OpenFailure(json));
     }
 
+    [Fact]
+    public void Undoing_a_delete_restores_the_node_and_its_connections()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var changes = 0;
+        document.Changed += (_, _) => changes++;
+        document.Apply(new Delete([Review], []));
+        Assert.Equal([new ConnectionKey(Design, Build)], document.Current.Connections.Keys);
+
+        document.Undo();
+
+        Assert.Equal("Review the storage change", document.Current.Tasks[Review].Title);
+        Assert.Equal(new CanvasPoint(720, 247.5), document.Current.Positions[Review]);
+        Assert.Equal(3, document.Current.Connections.Count);
+        Assert.Equal(ConnectionKind.Context, document.Current.Connections[new ConnectionKey(Design, Review)]);
+        Assert.Equal(ConnectionKind.Dependency, document.Current.Connections[new ConnectionKey(Build, Review)]);
+        Assert.False(document.HasUnsavedChanges);
+        Assert.False(document.CanUndo);
+        Assert.True(document.CanRedo);
+        Assert.Equal(2, changes);
+    }
+
+    [Fact]
+    public void Redo_deletes_the_node_again_until_a_new_edit_drops_the_redo_step()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        document.Apply(new Delete([Review], []));
+        document.Undo();
+
+        document.Redo();
+
+        Assert.Equal([Design, Build], document.Current.Tasks.Keys.Order());
+        Assert.Equal([new ConnectionKey(Design, Build)], document.Current.Connections.Keys);
+        Assert.True(document.HasUnsavedChanges);
+        Assert.False(document.CanRedo);
+
+        document.Undo();
+        document.Apply(new EditTitle(Design, "Changed"));
+        document.Redo();
+
+        Assert.False(document.CanRedo);
+        Assert.Equal("Changed", document.Current.Tasks[Design].Title);
+        Assert.Equal("Review the storage change", document.Current.Tasks[Review].Title);
+    }
+
+    [Fact]
+    public void Ten_characters_typed_into_a_field_undo_as_one_step()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+
+        Type(document, Review, "instructions", "Read diffs");
+        Assert.Equal("Read diffs", document.Current.Tasks[Review].Field("instructions"));
+        document.Undo();
+
+        Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
+        Assert.False(document.CanUndo);
+        Assert.False(document.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void Typing_again_after_an_undo_starts_a_new_step()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        Type(document, Review, "instructions", "Read");
+        document.Undo();
+        Type(document, Review, "instructions", "Skim");
+
+        document.Undo();
+        Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
+
+        document.Redo();
+        Assert.Equal("Skim", document.Current.Tasks[Review].Field("instructions"));
+    }
+
+    [Fact]
+    public void A_move_between_two_runs_of_typing_splits_them_into_three_steps()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        Type(document, Review, "instructions", "Read");
+        document.Apply(new MoveTasks([new TaskPosition(Review, new CanvasPoint(800, 300))]));
+        Type(document, Review, "instructions", " diffs");
+
+        document.Undo();
+        Assert.Equal("Read", document.Current.Tasks[Review].Field("instructions"));
+        Assert.Equal(new CanvasPoint(800, 300), document.Current.Positions[Review]);
+
+        document.Undo();
+        Assert.Equal("Read", document.Current.Tasks[Review].Field("instructions"));
+        Assert.Equal(new CanvasPoint(720, 247.5), document.Current.Positions[Review]);
+
+        document.Undo();
+        Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
+        Assert.False(document.CanUndo);
+    }
+
+    [Fact]
+    public void Typing_into_a_title_then_a_field_then_the_same_field_of_another_task_undoes_as_three_steps()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        Type(document, Review, null, " again");
+        Type(document, Review, "instructions", "Read");
+        Type(document, Build, "instructions", "!");
+
+        document.Undo();
+        Assert.Equal("Read", document.Current.Tasks[Review].Field("instructions"));
+        Assert.Equal("Write the file to a temporary sibling, flush it to disk, then rename it over the target.", document.Current.Tasks[Build].Field("instructions"));
+
+        document.Undo();
+        Assert.Equal("Review the storage change again", document.Current.Tasks[Review].Title);
+        Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
+
+        document.Undo();
+        Assert.Equal("Review the storage change", document.Current.Tasks[Review].Title);
+        Assert.False(document.CanUndo);
+    }
+
+    [Fact]
+    public void Undoing_back_to_the_saved_workflow_reads_as_saved()
+    {
+        var folder = _temp.CopyOf(Sample);
+        var document = WorkflowDocument.Open(folder);
+        Type(document, Review, "instructions", "Read");
+        document.Save();
+        Type(document, Review, "instructions", " diffs");
+
+        document.Undo();
+
+        Assert.Equal("Read", document.Current.Tasks[Review].Field("instructions"));
+        Assert.False(document.HasUnsavedChanges);
+
+        document.Undo();
+
+        Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
+        Assert.True(document.HasUnsavedChanges);
+        Assert.Equal("Read", WorkflowDocument.Open(folder).Current.Tasks[Review].Field("instructions"));
+    }
+
+    [Fact]
+    public void Undo_and_redo_without_a_step_and_edits_that_change_nothing_leave_the_document_alone()
+    {
+        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var opened = document.Current;
+        var changes = 0;
+        document.Changed += (_, _) => changes++;
+
+        document.Undo();
+        document.Redo();
+        document.Apply(new EditTitle(Design, "Design the workflow file format"));
+        Assert.IsType<EditResult.Rejected>(document.Apply(new SetField(Design, "goal", "Ship")));
+
+        Assert.Same(opened, document.Current);
+        Assert.False(document.CanUndo);
+        Assert.Equal(0, changes);
+
+        document.Apply(new EditTitle(Design, "Changed"));
+        document.Undo();
+
+        Assert.Same(opened, document.Current);
+        Assert.Equal(2, changes);
+    }
+
+    /// <summary>Applies one edit per character, as the inspector does while the person types. A null key types into the title.</summary>
+    private static void Type(WorkflowDocument document, TaskId task, string? key, string text)
+    {
+        var start = key is null ? document.Current.Tasks[task].Title : document.Current.Tasks[task].Field(key);
+        for (var length = 1; length <= text.Length; length++)
+        {
+            WorkflowEdit edit = key is null ? new EditTitle(task, start + text[..length]) : new SetField(task, key, start + text[..length]);
+            Assert.IsType<EditResult.Applied>(document.Apply(edit));
+        }
+    }
+
     private string OpenFailure(string json)
     {
         var folder = _temp.Create("invalid");
