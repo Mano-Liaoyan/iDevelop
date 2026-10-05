@@ -39,7 +39,8 @@
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <!-- The box is as tall as the title's row, so the subtitle under it stays whole. The margins cancel its border and
-       padding, so the text stays where the title drew it. -->
+       padding, and the text sits at the top as the title's does, so it stays where the title drew it in any font.
+       Centered, it moved by half the gap between the font's line and the box, 2 px on macOS. -->
   <Style Selector="TextBox.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -48,7 +49,7 @@
     <Setter Property="Margin" Value="-5,-1,0,1" />
     <Setter Property="Padding" Value="4,0" />
     <Setter Property="CornerRadius" Value="5" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">
