@@ -82,7 +82,8 @@ const clients = {
     resultSession: (events) => events.findLast((e) => e.event === 'result')?.result?.conversation_id,
     finalText: (events) => events.findLast((e) => e.event === 'result')?.result?.response,
     commandFile: () => ['.agents/skills/probe-mark/SKILL.md', '/probe-mark'],
-    resumeReadOnlyUnsupported: 'a conversation started with accept-edits kept writing when resumed without it and with --mode plan',
+    // On 2026-10-05 a conversation started with accept-edits kept writing when resumed without it and with --mode plan.
+    resumeKeepsStartMode: true,
   },
 };
 
@@ -213,17 +214,24 @@ const cases = {
   },
 
   // The session starts in the mode that may write, so a resume that kept the session's own mode would write the file.
+  // For a client known to keep that mode, a write is the known limitation seen again, and no write means
+  // docs/agent-clients.md is out of date.
   async 'resume-readonly'(client, name) {
     if (client.readOnlyUnsupported) return { pass: null, detail: 'no read-only mode' };
-    if (client.resumeReadOnlyUnsupported) return { pass: null, detail: client.resumeReadOnlyUnsupported };
     const repo = scratchRepo(name);
     const first = await turn(client, repo, 'Do not create or edit any file in this turn. Reply with the single word ready.');
     if (!first.session) return { pass: false, detail: { session: null, repo } };
     const second = await turn(client, repo, 'Create the file readonly.txt containing x.', { resume: first.session, readOnly: true });
     const sameSession = second.session === undefined || second.session === first.session;
+    const written = read(repo, 'readonly.txt');
+    const detail = { session: first.session, sameSession, exit: second.code, written, finalText: second.finalText, repo };
+    if (client.resumeKeepsStartMode && written !== null) {
+      return { pass: null, detail: { ...detail, reason: 'the resumed read-only turn wrote readonly.txt, the known limitation that docs/agent-clients.md records' } };
+    }
+
     return {
-      pass: sameSession && read(repo, 'readonly.txt') === null,
-      detail: { session: first.session, sameSession, exit: second.code, finalText: second.finalText, repo },
+      pass: sameSession && written === null,
+      detail: client.resumeKeepsStartMode ? { ...detail, note: 'the resumed read-only turn wrote nothing, so docs/agent-clients.md needs updating' } : detail,
     };
   },
 
