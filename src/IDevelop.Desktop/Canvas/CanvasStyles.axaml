@@ -182,6 +182,25 @@
   </Style>
   <Style Selector="Border.minimapItem">
     <Setter Property="Opacity" Value="0.7" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+  </Style>
+  <Style Selector="Border.minimapItem.ghost">
+    <Setter Property="Opacity" Value="0.3" />
+  </Style>
+  <!-- An item is a card in canvas units, which the minimap draws about eight times smaller, so a ring a quarter of the
+       card's height shows as a line of a pixel or two. -->
+  <Style Selector="Border.minimapRing">
+    <Setter Property="BorderThickness" Value="16" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+  </Style>
+  <Style Selector="Border.minimapRing.state-idle:not(.role-proposing), Border.minimapRing.state-needssetup:not(.role-proposing)">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="Rectangle.minimapRing">
+    <Setter Property="StrokeThickness" Value="16" />
+    <Setter Property="StrokeDashArray" Value="2,1.5" />
+    <Setter Property="RadiusX" Value="14" />
+    <Setter Property="RadiusY" Value="14" />
   </Style>
   <Style Selector="Border.minimapItem.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplementBrush}" />

@@ -125,8 +125,4 @@
                               theme:StyleClass.Kind="{Binding $self.Source, Converter={x:Static canvas:PortViewModel.KindOfSource}}"
                               Classes.rejected="{Binding IsRejected}" />
   </DataTemplate>
-
-  <DataTemplate x:Key="MinimapItemTemplate" DataType="canvas:TaskNodeViewModel">
-    <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
-  </DataTemplate>
 </ResourceDictionary>
