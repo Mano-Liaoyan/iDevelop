@@ -28,7 +28,7 @@ public abstract record AddTarget
     public sealed record Between(ConnectionKey Connection, CanvasPoint Point) : AddTarget;
 }
 
-/// <summary>What only the canvas view can do: read the pointer and move the viewport.</summary>
+/// <summary>What only the canvas view can do: read the pointer, move the viewport, and reach the inspector beside it.</summary>
 internal interface ICanvasView
 {
     /// <summary>Where the pointer last was over the canvas, in canvas coordinates.</summary>
@@ -37,6 +37,9 @@ internal interface ICanvasView
     void FitToView();
 
     void ZoomToActual();
+
+    /// <summary>Focuses the inspector's client picker for the selected node and opens its list.</summary>
+    void FocusAgent();
 }
 
 public sealed partial class WorkflowCanvasViewModel

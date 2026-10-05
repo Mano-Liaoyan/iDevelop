@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
@@ -141,6 +142,55 @@ public sealed class NodeMenuTests : IDisposable
         Assert.All(
             ["Design", "Build", "Check"],
             title => Assert.False(shell.CardRect("Design copy").Intersects(shell.CardRect(title)), $"The copy covers {title}."));
+    }
+
+    [AvaloniaFact]
+    public void A_node_without_an_agent_offers_choose_agent_in_place_of_run_which_opens_its_client_picker()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+
+        Assert.Equal(
+            ["Choose Agent…", "Rename", "Duplicate", "Replace With", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"],
+            shell.MenuHeaders());
+        Assert.Same(Application.Current!.FindResource("IconAgent"), ((PathIcon)shell.MenuItem("NodeMenuChooseAgent").Icon!).Data);
+
+        shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+
+        var picker = shell.Find<ComboBox>("TaskClient");
+        var focused = Assert.IsType<ComboBoxItem>(shell.Window.FocusManager!.GetFocusedElement());
+        Assert.Equal(
+            ("Build", "Build", true, "None"),
+            (shell.Window.ViewModel.Canvas!.SelectedNode?.Title, ((TaskNodeViewModel)picker.DataContext!).Title, picker.IsDropDownOpen,
+                ((ClientChoice)focused.DataContext!).Label));
+        Assert.Same(picker, focused.FindLogicalAncestorOfType<ComboBox>());
+
+        shell.Press(Key.Down);
+        shell.Press(Key.Enter);
+
+        Assert.Equal(ClientId.ClaudeCode, Workflow(shell).Tasks[Build].Execution?.Client);
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        Assert.Equal("Run", shell.MenuHeaders()[0]);
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_unfolds_the_agent_section_and_clears_a_filter_that_hides_the_picker()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Click(shell.Header(shell.Node("Build")));
+        shell.Fold("Agent");
+        shell.FilterInspector("acc");
+        Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+
+        var picker = shell.Find<ComboBox>("TaskClient");
+        Assert.Equal(
+            (true, true, false, ""),
+            (picker.IsEffectivelyVisible, picker.IsDropDownOpen, shell.Section("Agent").IsFolded, shell.Find<TextBox>("InspectorFilter").Text));
     }
 
     [AvaloniaFact]

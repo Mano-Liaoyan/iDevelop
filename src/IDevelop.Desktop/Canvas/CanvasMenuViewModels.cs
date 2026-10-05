@@ -20,7 +20,8 @@ public sealed class NodeMenuViewModel
     {
         TaskId[] selection = [.. canvas.SelectedNodes.Select(node => node.Id)];
         Node = canvas.SelectedNodes is [var single] ? single : null;
-        ShowRun = Node is { HasAgent: true } node && node.RunCommand.CanExecute(null);
+        ShowRun = Node is { HasAgent: true, HasClient: true } node && node.RunCommand.CanExecute(null);
+        ShowChooseAgent = Node is { HasAgent: true, HasClient: false };
         ShowCancel = Node?.CancelCommand.CanExecute(null) == true;
         ShowReplace = Node is { } one && !canvas.HasStarted(one.Id);
         ShowDisconnect = canvas.Workflow.Connections.Keys.Any(key => selection.Contains(key.From) || selection.Contains(key.To));
@@ -29,6 +30,7 @@ public sealed class NodeMenuViewModel
                 .Select(blueprint => new ReplaceChoice(
                     blueprint.Name, canvas.KindOf(blueprint), !blueprint.IsBuiltIn, new RelayCommand(() => canvas.Replace(replaced, blueprint))))]
             : [];
+        ChooseAgentCommand = new RelayCommand(() => canvas.View?.FocusAgent());
         RenameCommand = new RelayCommand(() => Node?.BeginRename());
         DuplicateCommand = new RelayCommand(canvas.Duplicate);
         DisconnectCommand = new RelayCommand(() => canvas.Disconnect(selection));
@@ -42,9 +44,12 @@ public sealed class NodeMenuViewModel
 
     public bool ShowRun { get; }
 
+    /// <summary>A node whose work takes an agent but has none would only be refused a run, so the menu leads to the picker.</summary>
+    public bool ShowChooseAgent { get; }
+
     public bool ShowCancel { get; }
 
-    public bool ShowRunGroup => ShowRun || ShowCancel;
+    public bool ShowRunGroup => ShowRun || ShowChooseAgent || ShowCancel;
 
     /// <summary>Only a node that never started can change its blueprint.</summary>
     public bool ShowReplace { get; }
@@ -52,6 +57,8 @@ public sealed class NodeMenuViewModel
     public bool ShowDisconnect { get; }
 
     public IReadOnlyList<ReplaceChoice> ReplaceChoices { get; }
+
+    public ICommand ChooseAgentCommand { get; }
 
     public ICommand RenameCommand { get; }
 
