@@ -3,7 +3,8 @@
      node's ring, tint, and glyph are in the kind's hue. Later rules win, so the state and role rules follow the kind
      rules. No rule colors text. -->
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
   <Style Selector="Border.kindTile.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplementTileBrush}" />
   </Style>
@@ -19,7 +20,10 @@
   <Style Selector="Border.kindTint.kind-implement, Border.stateTint.kind-implement">
     <Setter Property="Background" Value="{DynamicResource KindImplement10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-implement">
+  <Style Selector="PathIcon.kindIcon.kind-implement">
+    <Setter Property="Data" Value="{StaticResource IconKindImplement}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-implement, PathIcon.kindStrong.kind-implement">
     <Setter Property="Foreground" Value="{DynamicResource KindImplementStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-plan">
@@ -37,7 +41,10 @@
   <Style Selector="Border.kindTint.kind-plan, Border.stateTint.kind-plan">
     <Setter Property="Background" Value="{DynamicResource KindPlan10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-plan">
+  <Style Selector="PathIcon.kindIcon.kind-plan">
+    <Setter Property="Data" Value="{StaticResource IconKindPlan}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-plan, PathIcon.kindStrong.kind-plan">
     <Setter Property="Foreground" Value="{DynamicResource KindPlanStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-architect">
@@ -55,7 +62,10 @@
   <Style Selector="Border.kindTint.kind-architect, Border.stateTint.kind-architect">
     <Setter Property="Background" Value="{DynamicResource KindArchitect10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-architect">
+  <Style Selector="PathIcon.kindIcon.kind-architect">
+    <Setter Property="Data" Value="{StaticResource IconKindArchitect}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-architect, PathIcon.kindStrong.kind-architect">
     <Setter Property="Foreground" Value="{DynamicResource KindArchitectStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-review">
@@ -73,7 +83,10 @@
   <Style Selector="Border.kindTint.kind-review, Border.stateTint.kind-review">
     <Setter Property="Background" Value="{DynamicResource KindReview10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-review">
+  <Style Selector="PathIcon.kindIcon.kind-review">
+    <Setter Property="Data" Value="{StaticResource IconKindReview}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-review, PathIcon.kindStrong.kind-review">
     <Setter Property="Foreground" Value="{DynamicResource KindReviewStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-approval">
@@ -91,7 +104,10 @@
   <Style Selector="Border.kindTint.kind-approval, Border.stateTint.kind-approval">
     <Setter Property="Background" Value="{DynamicResource KindApproval10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-approval">
+  <Style Selector="PathIcon.kindIcon.kind-approval">
+    <Setter Property="Data" Value="{StaticResource IconKindApproval}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-approval, PathIcon.kindStrong.kind-approval">
     <Setter Property="Foreground" Value="{DynamicResource KindApprovalStrongBrush}" />
   </Style>
   <Style Selector="Border.kindTile.kind-readonlyagent">
@@ -109,7 +125,10 @@
   <Style Selector="Border.kindTint.kind-readonlyagent, Border.stateTint.kind-readonlyagent">
     <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgent10Brush}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.kind-readonlyagent">
+  <Style Selector="PathIcon.kindIcon.kind-readonlyagent">
+    <Setter Property="Data" Value="{StaticResource IconKindReadOnlyAgent}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.kind-readonlyagent, PathIcon.kindStrong.kind-readonlyagent">
     <Setter Property="Foreground" Value="{DynamicResource KindReadOnlyAgentStrongBrush}" />
   </Style>
 
@@ -149,6 +168,36 @@
   <Style Selector="PathIcon.stateIcon.state-idle">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <Style Selector="PathIcon.stateIcon.state-needssetup">
+    <Setter Property="Data" Value="{StaticResource IconStateNeedsSetup}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-running">
+    <Setter Property="Data" Value="{StaticResource IconStateRunning}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-runningelsewhere">
+    <Setter Property="Data" Value="{StaticResource IconStateElsewhere}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-stopping">
+    <Setter Property="Data" Value="{StaticResource IconStop}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-waiting">
+    <Setter Property="Data" Value="{StaticResource IconStateWaiting}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-inreview">
+    <Setter Property="Data" Value="{StaticResource IconStateInReview}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-succeeded">
+    <Setter Property="Data" Value="{StaticResource IconStateSucceeded}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-failed">
+    <Setter Property="Data" Value="{StaticResource IconStateFailed}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-interrupted">
+    <Setter Property="Data" Value="{StaticResource IconStateInterrupted}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-cancelled">
+    <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
+  </Style>
   <Style Selector="PathIcon.stateIcon.state-needssetup, PathIcon.stateIcon.state-interrupted">
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
@@ -174,6 +223,7 @@
   </Style>
   <Style Selector="PathIcon.stateIcon.role-proposing">
     <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Data" Value="{StaticResource IconSparkle}" />
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
 
@@ -201,5 +251,30 @@
         </KeyFrame>
       </Animation>
     </Style.Animations>
+  </Style>
+
+  <!-- The tile is drawn in a 32 unit frame: a quarter-size corner radius, the glyph at 0.625 of the tile, and the badge
+       at 0.4 of the tile across its top right corner with the Derive glyph at 0.6 of the badge. -->
+  <Style Selector="theme|KindTile">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Width="{TemplateBinding TileSize}" Height="{TemplateBinding TileSize}" ClipToBounds="False">
+          <Canvas Width="32" Height="32">
+            <Border Classes="kindTile" theme:StyleClass.Kind="{TemplateBinding Kind}" Width="32" Height="32" CornerRadius="8">
+              <PathIcon Classes="kindIcon" theme:StyleClass.Kind="{TemplateBinding Kind}" Theme="{StaticResource Glyph}"
+                        Width="20" Height="20" Foreground="{DynamicResource OnTileBrush}" />
+            </Border>
+            <Panel Name="PART_Badge" Canvas.Left="22.4" Canvas.Top="-3.2" Width="12.8" Height="12.8" IsVisible="False">
+              <Ellipse Fill="{DynamicResource SurfaceRaisedBrush}" Stroke="{DynamicResource Border100Brush}" StrokeThickness="1" />
+              <PathIcon Classes="kindStrong" theme:StyleClass.Kind="{TemplateBinding Kind}" Theme="{StaticResource Glyph}"
+                        Data="{StaticResource IconDerive}" Width="7.68" Height="7.68" />
+            </Panel>
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="theme|KindTile:library /template/ Panel#PART_Badge">
+    <Setter Property="IsVisible" Value="True" />
   </Style>
 </Styles>

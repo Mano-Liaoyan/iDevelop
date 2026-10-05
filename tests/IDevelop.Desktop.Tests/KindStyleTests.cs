@@ -88,4 +88,27 @@ public sealed class KindStyleTests
                 Paint(NodeState.Succeeded), Paint(NodeState.Waiting, NodeRole.Proposing),
             ]);
     }
+
+    [AvaloniaFact]
+    public void Each_state_after_idle_has_its_own_glyph_and_a_proposing_planner_shows_the_sparkle()
+    {
+        var glyph = new PathIcon { Classes = { "stateIcon" } };
+        Show(glyph, ThemeVariant.Light);
+        StyleClass.SetKind(glyph, NodeKind.Plan);
+        Geometry? Glyph(NodeState state, NodeRole role = NodeRole.None)
+        {
+            StyleClass.SetState(glyph, state);
+            StyleClass.SetRole(glyph, role);
+            return glyph.Data;
+        }
+
+        string[] icons =
+        [
+            "IconStateNeedsSetup", "IconStateRunning", "IconStateElsewhere", "IconStop", "IconStateWaiting", "IconStateInReview",
+            "IconStateSucceeded", "IconStateFailed", "IconStateInterrupted", "IconStateCancelled", "IconSparkle",
+        ];
+        Assert.Equal(
+            icons.Select(key => Application.Current!.FindResource(key)),
+            [.. Enum.GetValues<NodeState>().Where(state => state != NodeState.Idle).Select(state => Glyph(state)), Glyph(NodeState.Waiting, NodeRole.Proposing)]);
+    }
 }
