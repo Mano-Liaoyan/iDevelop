@@ -29,9 +29,9 @@ public sealed class MainWindowViewModel : ObservableObject
         _clients = clients;
         _copy = copy;
         _personalBlueprints = personalBlueprints;
-        _save = new RelayCommand(() => TrySave(), () => Canvas is not null);
-        _undo = new RelayCommand(() => Canvas?.Document.Undo(), () => Canvas?.Document.CanUndo ?? false);
-        _redo = new RelayCommand(() => Canvas?.Document.Redo(), () => Canvas?.Document.CanRedo ?? false);
+        _save = new RelayCommand(() => TrySave(), () => EditableCanvas is not null);
+        _undo = new RelayCommand(() => EditableCanvas?.Document.Undo(), () => EditableCanvas?.Document.CanUndo ?? false);
+        _redo = new RelayCommand(() => EditableCanvas?.Document.Redo(), () => EditableCanvas?.Document.CanRedo ?? false);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -41,6 +41,9 @@ public sealed class MainWindowViewModel : ObservableObject
         get => _canvas;
         private set => SetProperty(ref _canvas, value);
     }
+
+    // The Generate sheet is modal, so a key or a button under its scrim neither saves nor takes an edit back.
+    private WorkflowCanvasViewModel? EditableCanvas => Canvas is { Sheet: null } canvas ? canvas : null;
 
     public string? ProjectName => Canvas is { } canvas ? Path.GetFileName(Path.TrimEndingDirectorySeparator(canvas.Document.ProjectFolder)) : null;
 
@@ -90,6 +93,13 @@ public sealed class MainWindowViewModel : ObservableObject
         var runs = ProjectRuns.Open(document.ProjectFolder, _clients);
         document.Changed += (_, _) => OnDocumentChanged();
         Canvas = new WorkflowCanvasViewModel(document, runs, _clients, notice => Status = notice, _copy, _personalBlueprints);
+        Canvas.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkflowCanvasViewModel.Sheet))
+            {
+                OnEditableChanged();
+            }
+        };
         Status = string.Join(" ", [.. document.Converted is { } converted ? [converted] : Array.Empty<string>(), .. runs.Warnings]) is { Length: > 0 } notice
             ? notice
             : null;
@@ -157,13 +167,18 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ProjectName));
         OnDocumentChanged();
-        _save.NotifyCanExecuteChanged();
     }
 
     private void OnDocumentChanged()
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnEditableChanged();
+    }
+
+    private void OnEditableChanged()
+    {
+        _save.NotifyCanExecuteChanged();
         _undo.NotifyCanExecuteChanged();
         _redo.NotifyCanExecuteChanged();
     }
