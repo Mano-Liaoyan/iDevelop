@@ -73,7 +73,7 @@ public class AttemptReducerTests
         Assert.Equal(("deepseek/deepseek-v4-pro", "high"), (record.ReportedModel, record.ReportedReasoning));
         Assert.Equal(
             [
-                new ActivityLine(T0.AddSeconds(4), "command: dotnet test"),
+                new ActivityLine(T0.AddSeconds(4), "command: dotnet test", IsTool: true),
                 new ActivityLine(T0.AddSeconds(5), "All tests pass."),
             ],
             record.Activity.ToArray());
