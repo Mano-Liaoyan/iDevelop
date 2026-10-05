@@ -533,9 +533,11 @@ public sealed class ConversationTests : IDisposable
     }
 
     /// <summary>
-    /// The sender races the run for its gate, so a run that stays open after its next turn fails to start loses a
-    /// message in most runs of this test, not in every run. Deleting a running .cmd shim would end its batch early on
-    /// Windows.
+    /// The sender starts once the first turn's exit is visible, which is when the run tries to start the next turn, and
+    /// stops at its first message the run does not queue. So it races the run for its gate only around that launch, and
+    /// it queues a bounded number of messages, each of which the run flushes to disk. A run that stays open after its
+    /// next turn fails to start loses a message in most runs of this test, not in every run. Deleting a running .cmd
+    /// shim would end its batch early on Windows.
     /// </summary>
     [UnixFact]
     public async Task Every_message_accepted_while_a_later_turn_fails_to_start_reaches_the_log()
@@ -550,26 +552,18 @@ public sealed class ConversationTests : IDisposable
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
         File.Delete(shim);
         var accepted = new ConcurrentQueue<string>();
-        var sending = true;
         var sender = Task.Run(() =>
         {
-            for (var i = 0; Volatile.Read(ref sending); i++)
+            SpinWait.SpinUntil(() => runs.Latest[SayHiId].Turns is [{ Outcome: not TurnOutcome.Running }], Patience);
+            for (var i = 0; i < 10_000 && runs.Send(codex, $"message {i}", stopTurn: false) is SendResult.Queued; i++)
             {
-                switch (runs.Send(codex, $"message {i}", stopTurn: false))
-                {
-                    case SendResult.Queued:
-                        accepted.Enqueue($"message {i}");
-                        break;
-                    case SendResult.Continued:
-                        return;
-                }
+                accepted.Enqueue($"message {i}");
             }
         });
 
         File.WriteAllText(_gate, "");
 
         await settled;
-        Volatile.Write(ref sending, false);
         await sender.WaitAsync(Patience);
         var events = AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, started.Attempt.Id));
         var record = AttemptReducer.Replay(events)!;
