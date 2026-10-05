@@ -52,8 +52,8 @@ public sealed class ProposalViewModel : ObservableObject
         {
             case ProposalRead.Ready ready:
                 Proposal = ready.Proposal;
-                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), fill.Fields)),
-                    .. Proposal.Nodes.Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", node.Fields))];
+                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields))),
+                    .. Proposal.Nodes.Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields)))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -118,13 +118,14 @@ public sealed class ProposalViewModel : ObservableObject
         foreach (var fill in proposal.Fills.Where(fill => chosen.Contains(fill.Slot) && workflow.Positions.ContainsKey(fill.Slot)))
         {
             yield return new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? workflow.Tasks[fill.Slot].Title, Preview(fill.Fields));
+                WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? workflow.Tasks[fill.Slot].Title,
+                Preview(workflow.Tasks[fill.Slot].Blueprint, fill.Fields));
         }
 
         var layout = proposal.Layout(workflow);
         foreach (var node in proposal.Nodes.Where(node => chosen.Contains(node.Id)))
         {
-            yield return new GhostCardViewModel(WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Fields));
+            yield return new GhostCardViewModel(WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields));
         }
     }
 
@@ -159,7 +160,9 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    private ProposalItemViewModel Item(TaskId id, string label, IReadOnlyDictionary<string, string> fields) => new(this, id, label, Preview(fields));
+    private ProposalItemViewModel Item(TaskId id, string label, string preview) => new(this, id, label, preview);
+
+    private Blueprint? SlotBlueprint(TaskId slot) => _canvas.Workflow.Tasks.GetValueOrDefault(slot)?.Blueprint;
 
     private string FillLabel(ProposedFill fill)
     {
@@ -171,8 +174,11 @@ public sealed class ProposalViewModel : ObservableObject
     private string Title(TaskId id) =>
         Proposal?.TitleOf(id) ?? (_canvas.Workflow.Tasks.TryGetValue(id, out var task) ? task.Title : "a removed task");
 
-    private static string Preview(IReadOnlyDictionary<string, string> fields) =>
-        fields.Values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
+    /// <summary>The first value the proposal gives, in the blueprint's field order, as a card previews its first field.</summary>
+    private static string Preview(Blueprint? blueprint, IReadOnlyDictionary<string, string> fields) =>
+        (blueprint?.Fields.Select(field => field.Key) ?? fields.Keys)
+            .Select(key => fields.GetValueOrDefault(key))
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 }

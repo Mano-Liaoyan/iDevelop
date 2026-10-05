@@ -75,6 +75,14 @@ public static class RunText
     public static string ReasoningChoice(string level, bool? offered) => offered is false ? $"{level} (not offered)" : level;
 
     /// <summary>What the chosen client may do in the project folder without asking.</summary>
+    public static string PermissionNote(ClientId client, bool readOnly) => !readOnly ? PermissionNote(client) : client switch
+    {
+        ClientId.ClaudeCode => "This task only reads the project. Claude Code runs in plan mode.",
+        ClientId.Codex => "This task only reads the project. Codex runs in its read-only sandbox.",
+        ClientId.Pi => "This task only reads the project, and Pi has no read-only mode, so it does not start on Pi.",
+        ClientId.Antigravity => "This task only reads the project. Antigravity CLI runs in plan mode.",
+    };
+
     public static string PermissionNote(ClientId client) => client switch
     {
         ClientId.ClaudeCode => "Claude Code may edit files in the project folder. It denies any command its settings do not already allow.",

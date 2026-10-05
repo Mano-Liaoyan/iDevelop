@@ -309,7 +309,7 @@
                  AutomationProperties.AutomationId="GhostCard"
                  AutomationProperties.Name="{Binding Title}">
             <Rectangle Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
-                       Fill="{DynamicResource SurfaceOverlay95Brush}" Stroke="{DynamicResource StateSelectedBrush}" />
+                       Fill="{DynamicResource SurfaceOverlayBrush}" Stroke="{DynamicResource StateSelectedBrush}" />
             <StackPanel Margin="22,12" Spacing="4">
               <TextBlock Classes="cardLabel" Text="{Binding Label}" Foreground="{DynamicResource StateSelectedBrush}"
                          AutomationProperties.AutomationId="GhostLabel" />

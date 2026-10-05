@@ -139,6 +139,57 @@
             <TextBlock Classes="caption" Text="{Binding StartProblem}" TextWrapping="Wrap"
                        IsVisible="{Binding StartProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        AutomationProperties.AutomationId="StartProblem" />
+            <ContentControl Content="{Binding Proposal}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate DataType="canvas:ProposalViewModel">
+                  <StackPanel Spacing="6" AutomationProperties.AutomationId="Proposal">
+                    <TextBlock Classes="section" Text="PROPOSAL" Margin="0,20,0,2" />
+                    <TextBlock Classes="caption" Text="Untick a task to leave it out. Accept adds and fills the rest in one change." TextWrapping="Wrap"
+                               IsVisible="{Binding HasItems}" />
+                    <ItemsControl ItemsSource="{Binding Items}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="canvas:ProposalItemViewModel">
+                          <CheckBox IsChecked="{Binding IsChosen}" Margin="0,0,0,4"
+                                    AutomationProperties.AutomationId="ProposalItem"
+                                    AutomationProperties.Name="{Binding Label}">
+                            <StackPanel Spacing="2">
+                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextStrongBrush}" />
+                              <TextBlock Classes="caption" Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                         IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
+                          </CheckBox>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Connections}"
+                                  AutomationProperties.AutomationId="ProposalConnections"
+                                  AutomationProperties.Name="Proposed connections">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource StateFailedBrush}"
+                               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               AutomationProperties.AutomationId="ProposalProblem" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Classes="action" Command="{Binding AcceptCommand}"
+                              AutomationProperties.AutomationId="AcceptProposal"
+                              AutomationProperties.Name="Accept">
+                        <TextBlock Text="Accept" />
+                      </Button>
+                      <Button Classes="action" Command="{Binding DismissCommand}"
+                              AutomationProperties.AutomationId="DismissProposal"
+                              AutomationProperties.Name="Dismiss">
+                        <TextBlock Text="Dismiss" />
+                      </Button>
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+
             <ContentControl Content="{Binding LastAttempt}" Margin="0,6,0,0">
               <ContentControl.ContentTemplate>
                 <DataTemplate DataType="execution:AttemptViewModel">
@@ -238,57 +289,6 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                  </StackPanel>
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
-
-            <ContentControl Content="{Binding Proposal}">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="canvas:ProposalViewModel">
-                  <StackPanel Spacing="6" AutomationProperties.AutomationId="Proposal">
-                    <TextBlock Classes="section" Text="PROPOSAL" Margin="0,20,0,2" />
-                    <TextBlock Classes="caption" Text="Untick a task to leave it out. Accept adds and fills the rest in one change." TextWrapping="Wrap"
-                               IsVisible="{Binding HasItems}" />
-                    <ItemsControl ItemsSource="{Binding Items}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="canvas:ProposalItemViewModel">
-                          <CheckBox IsChecked="{Binding IsChosen}" Margin="0,0,0,4"
-                                    AutomationProperties.AutomationId="ProposalItem"
-                                    AutomationProperties.Name="{Binding Label}">
-                            <StackPanel Spacing="2">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextStrongBrush}" />
-                              <TextBlock Classes="caption" Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                                         IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                            </StackPanel>
-                          </CheckBox>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding Connections}"
-                                  AutomationProperties.AutomationId="ProposalConnections"
-                                  AutomationProperties.Name="Proposed connections">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                          <TextBlock Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource StateFailedBrush}"
-                               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               AutomationProperties.AutomationId="ProposalProblem" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="action" Command="{Binding AcceptCommand}"
-                              AutomationProperties.AutomationId="AcceptProposal"
-                              AutomationProperties.Name="Accept">
-                        <TextBlock Text="Accept" />
-                      </Button>
-                      <Button Classes="action" Command="{Binding DismissCommand}"
-                              AutomationProperties.AutomationId="DismissProposal"
-                              AutomationProperties.Name="Dismiss">
-                        <TextBlock Text="Dismiss" />
-                      </Button>
-                    </StackPanel>
                   </StackPanel>
                 </DataTemplate>
               </ContentControl.ContentTemplate>

@@ -157,7 +157,9 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>False when the model takes no reasoning level, such as an Antigravity model without a level suffix.</summary>
     public bool HasReasoning => ReasoningChoices.Count > 0;
 
-    public string? PermissionNote => _task.Execution is { } settings ? RunText.PermissionNote(settings.Client) : null;
+    public string? PermissionNote => _task.Execution is { } settings
+        ? RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
+        : null;
 
     public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
 
