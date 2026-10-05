@@ -18,6 +18,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private static readonly Thickness AboveCorners = new(12, 12, 12, 174);
     private const double RunBarWidth = 380;
 
+    /// <summary>
+    /// The margin a fitted or first view keeps around its cards. The breadcrumb, the waiting pill, and Generate float
+    /// over the canvas's top 48 px, so the top margin starts below them.
+    /// </summary>
+    private static readonly Thickness ViewInset = new(24, 72, 24, 24);
+
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
     private bool _showingAdd;
@@ -73,7 +79,19 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         _viewModel?.OpenAdd(new AddTarget.InView());
     }
 
-    public void FitToView() => EditorCommands.FitToScreen.Execute(null, Editor);
+    /// <summary>Zooms and pans so every card fits inside the view's inset, within the editor's zoom limits.</summary>
+    public void FitToView()
+    {
+        var extent = Editor.ItemsExtent;
+        var room = new Rect(Editor.Bounds.Size).Deflate(ViewInset);
+        if (extent.Width <= 0 || extent.Height <= 0 || room.Width <= 0 || room.Height <= 0)
+        {
+            return;
+        }
+
+        Editor.ViewportZoom = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
+        Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+    }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
 
@@ -91,9 +109,26 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             canvas.View = this;
             canvas.PropertyChanged += OnViewModelChanged;
+            StartBelowChrome(canvas);
         }
 
         ShowAdd();
+    }
+
+    // A workflow opens at the canvas origin. Where its top cards would sit under the floating breadcrumb, it opens
+    // higher, so they start at the view's top inset as they do after Fit.
+    private void StartBelowChrome(WorkflowCanvasViewModel canvas)
+    {
+        if (canvas.ViewportLocation != default || canvas.Nodes.Count == 0)
+        {
+            return;
+        }
+
+        var top = canvas.Nodes.Min(node => node.Location.Y) - ViewInset.Top / Editor.ViewportZoom;
+        if (top < 0)
+        {
+            canvas.ViewportLocation = new Point(0, top);
+        }
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
