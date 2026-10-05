@@ -281,8 +281,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return result;
     }
 
-    /// <summary>Stops the task's client and every process it started, and records the attempt as cancelled.
-    /// Does nothing unless this window runs that task's attempt.</summary>
+    /// <summary>Stops the task's client and every process it started, unless the client already exited, and records the
+    /// attempt as cancelled. Does nothing unless this window runs that task's attempt.</summary>
     public void Cancel(TaskId task)
     {
         ActiveRun? run;

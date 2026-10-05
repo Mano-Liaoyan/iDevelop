@@ -19,9 +19,9 @@ public sealed partial class ProjectRuns
     /// first.
     /// The lock is released only after the last event is on disk, or after the drain stops and the log is closed, so
     /// nothing appends after another instance could take over. The run disposes each turn's process before it starts the
-    /// next turn or releases the lock, so a late stop does nothing. While a turn runs, Cancel, Stop and send, and leaving
-    /// stop everything its client started, and so does a crash on Windows. What a turn leaves running when it exits on
-    /// its own keeps running, as after a command in a terminal.
+    /// next turn or releases the lock, so a late stop does nothing. While a turn's client runs, Cancel, Stop and send, and
+    /// leaving stop everything it started, and so does a crash on Windows. What the client leaves running when it exits on
+    /// its own keeps running, as after a command in a terminal, even while it still holds the turn's output.
     /// </summary>
     private sealed class ActiveRun
     {
@@ -58,14 +58,14 @@ public sealed partial class ProjectRuns
 
         public void Start() => _ = Task.Run(RunAsync);
 
-        /// <summary>Cancel or leave: no message is accepted after it, and the running turn's process tree stops.</summary>
+        /// <summary>Cancel or leave: no message is accepted after it, and the turn's process tree stops while its client runs.</summary>
         public void Stop(AttemptEvent request)
         {
             lock (_gate)
             {
                 _closed = true;
                 _events.Writer.TryWrite(request);
-                if (_turn.Open)
+                if (_turn.ClientRuns)
                 {
                     _turn.Process.StopTree();
                 }
@@ -81,9 +81,8 @@ public sealed partial class ProjectRuns
                     return new SendResult.Refused(problem);
                 }
 
-                // Once the client exited, the turn has its own outcome, and what it left running, such as a dev server,
-                // stays up.
-                var stops = stopTurn && _turn.Open && !_turn.Process.HasExited;
+                // Once the client exited, the turn keeps its own outcome.
+                var stops = stopTurn && _turn.ClientRuns;
                 _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stops));
                 _messageWaiting = true;
                 if (stops)
@@ -325,6 +324,13 @@ public sealed partial class ProjectRuns
             public ChildProcess Process { get; } = process;
 
             public bool Open { get; set; } = true;
+
+            /// <summary>
+            /// Whether a stop should end the turn's process tree. <see cref="Open"/> stays true for up to 5 seconds after
+            /// the client exits, while a process it left running, such as a dev server, holds its output. That process
+            /// is the person's, as after a command in a terminal, so nothing stops it.
+            /// </summary>
+            public bool ClientRuns => Open && !Process.HasExited;
         }
     }
 

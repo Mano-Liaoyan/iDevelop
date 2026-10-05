@@ -230,6 +230,28 @@ public sealed class ConversationTests : IDisposable
         Assert.False(Exited(serverId), "the process the turn left running was stopped");
     }
 
+    /// <summary>On Linux and macOS, .NET cannot find an exited client's children, so only Windows can see a stop here.</summary>
+    [Fact]
+    public async Task Cancel_after_the_turns_client_exited_stops_nothing_and_records_cancelled()
+    {
+        var server = Evidence("server.pid");
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Which fruit?")).SpawnSleepingChild(server));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var settled = NextSettled(runs);
+        var client = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Settings[ClientId.Codex]))).Attempt.Process!.Value.Id;
+        var serverId = await _spawned.PidAsync(server);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Activity is [.., { Text: "Which fruit?" }] && Exited(client));
+
+        // The sleeping child holds the turn's output open, so the run has not seen the turn end yet.
+        runs.Cancel(SayHiId);
+
+        var record = await settled;
+        Assert.Equal((AttemptStatus.Cancelled, (string?)null, "Which fruit?"), (record.Status, record.Detail, record.Result));
+        Assert.Equal([new TurnRecord(1, null, TurnOutcome.Stopped, "Which fruit?")], record.Turns);
+        using var survivor = Process.GetProcessById(serverId);
+        Assert.False(survivor.WaitForExit(TimeSpan.FromSeconds(1)), "the process the turn left running was stopped");
+    }
+
     [Fact]
     public async Task Cancel_during_a_later_turn_cancels_the_attempt()
     {
