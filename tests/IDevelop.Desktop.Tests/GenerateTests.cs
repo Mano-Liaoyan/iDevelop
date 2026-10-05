@@ -175,14 +175,16 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Accept_places_the_tasks_in_layered_columns_with_the_planners_agent()
+    public void Accept_and_Finish_places_the_tasks_in_layered_columns_with_the_planners_agent_and_ends_the_planner()
     {
         var shell = Generated();
         var canvas = shell.Window.ViewModel.Canvas!;
-        var planner = canvas.SelectedNode!.Id;
+        var node = canvas.SelectedNode!;
+        var planner = node.Id;
         var origin = canvas.Workflow.Positions[planner];
 
-        shell.Click(shell.InView<Button>("AcceptProposal"));
+        shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
+        shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
 
         var workflow = canvas.Workflow;
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);
@@ -258,8 +260,7 @@ public sealed class GenerateTests : IDisposable
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         Assert.Equal("Review Proposal", ButtonLabel(shell));
 
-        shell.Click(shell.InView<Button>("AcceptProposal"));
-        shell.Click(shell.InView<Button>("MarkDone"));
+        shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => planner.State == NodeState.Succeeded, "the planner is done");
         Assert.Equal("Generate", ButtonLabel(shell));
         shell.Click(shell.Find<Button>("GenerateWorkflow"));
