@@ -425,11 +425,48 @@
   <Style Selector="MenuItem:disabled /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- A submenu draws as its menu does, and its chevron follows the row's text. The submenu's border is the template's
+       only other border. A popup's content takes its styles from the popup's host, so no selector reaches it through
+       the popup, and the template sets its colors itself, which only a rule with a state such as :open outranks. -->
+  <Style Selector="MenuItem:open /template/ Border:not(#PART_LayoutRoot)">
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+  <Style Selector="MenuItem /template/ Path#PART_ChevronPath">
+    <Setter Property="Fill" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="MenuItem:selected /template/ Path#PART_ChevronPath, MenuItem:pointerover /template/ Path#PART_ChevronPath, MenuItem:pressed /template/ Path#PART_ChevronPath">
+    <Setter Property="Fill" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
   <Style Selector="ContextMenu Separator, MenuFlyoutPresenter Separator, MenuItem Separator">
     <Setter Property="Height" Value="1" />
     <Setter Property="Margin" Value="8,4" />
     <Setter Property="Background" Value="{DynamicResource Border100Brush}" />
   </Style>
+  <!-- A tooltip is a small popover. No shadow, for the reason menus have none. -->
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="MaxWidth" Value="320" />
+  </Style>
+
+  <!-- A ticked box fills with the accent and draws its check in white in both themes, as on macOS. -->
+  <Style Selector="CheckBox:checked /template/ Border#NormalRectangle">
+    <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentFillBrush}" />
+  </Style>
+  <Style Selector="CheckBox:checked /template/ Path#CheckGlyph">
+    <Setter Property="Fill" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
   <!-- An in-window popover, such as the Add popover. -->
   <Style Selector="Border.popover">
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />

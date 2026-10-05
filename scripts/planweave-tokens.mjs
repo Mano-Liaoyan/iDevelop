@@ -157,6 +157,9 @@ const colorKeys = [
   ['PendingConnection.BorderColor', 'border'],
   ['Minimap.BackgroundColor', 'surface-muted'],
   ['MinimapItem.BackgroundColor', 'text-faint'],
+  // The accent of Fluent's own controls, such as a list's selection and a text selection, which App sets on Fluent's
+  // palettes. Without it they follow the operating system's accent.
+  ['FluentAccentColor', 'apple-blue'],
 ];
 
 // Each layer is x, y, blur, spread, token, and opacity in percent. Tailwind's shadow-sm is two black layers at 10%.

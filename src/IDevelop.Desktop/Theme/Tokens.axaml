@@ -99,6 +99,7 @@
       <Color x:Key="PendingConnection.BorderColor">#E5E5E5</Color>
       <Color x:Key="Minimap.BackgroundColor">#EDEFF2</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#90969C</Color>
+      <Color x:Key="FluentAccentColor">#0088FF</Color>
       <BoxShadows x:Key="FloatingShadow">0 12 28 0 #1F000000</BoxShadows>
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #14000000, 0 2 6 0 #0F000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #1A000000, 0 8 20 0 #1A000000</BoxShadows>
@@ -201,6 +202,7 @@
       <Color x:Key="PendingConnection.BorderColor">#1AFFFFFF</Color>
       <Color x:Key="Minimap.BackgroundColor">#222629</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#64635D</Color>
+      <Color x:Key="FluentAccentColor">#0091FF</Color>
       <BoxShadows x:Key="FloatingShadow">0 14 32 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #66000000, 0 2 8 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #73000000, 0 10 24 0 #66000000</BoxShadows>

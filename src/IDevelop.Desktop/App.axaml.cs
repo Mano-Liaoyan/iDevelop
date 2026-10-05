@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Logging;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 using IDevelop.Desktop.Theme;
 using IDevelop.Execution;
 
@@ -19,6 +21,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        UseAppAccent();
         if (PreferencesFile is { } file)
         {
             RequestedThemeVariant = ThemePreference.Read(file);
@@ -41,6 +44,21 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    // Fluent's controls take their accent from the operating system unless its palette names one.
+    private void UseAppAccent()
+    {
+        foreach (var fluent in Styles.OfType<FluentTheme>())
+        {
+            foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+            {
+                if (TryGetResource("FluentAccentColor", theme, out var accent) && accent is Color color)
+                {
+                    fluent.Palettes[theme] = new ColorPaletteResources { Accent = color };
+                }
+            }
+        }
     }
 
     /// <summary>Applies the theme the user chose and remembers it. Choosing the current theme does nothing.</summary>
