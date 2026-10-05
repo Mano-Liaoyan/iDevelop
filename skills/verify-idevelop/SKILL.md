@@ -67,13 +67,20 @@ Elements are found by automation id and driven through patterns. An element's te
 
 These ids cover most drives. The feature map lists the rest.
 
-- Sidebar: `AddTask`, `OpenFolder`, `ProjectName`, `TaskCount`, `SidebarTasks`, `RefreshAgents`, `AgentClaudeCode`, `AgentCodex`, `AgentPi`, `AgentAntigravity`, `ThemeSystem`, `ThemeLight`, `ThemeDark`.
-- Canvas: `Editor`, `CardStatus`, `CardAgent`, `CardType`, `NextWaiting`, `WaitingCount`, `ZoomIn`, `ZoomOut`, `FitToScreen`, `Minimap`, `Save`, `UnsavedChanges`, `Status`, `RunBar`, `RunBarTask`, `RunBarCancel`.
-- Inspector: `TaskType`, `TaskTitle`, `TaskInstructions`, `TaskAcceptanceCriteria`, `TaskClient`, `TaskModel`, `TaskReasoning`, `PermissionNote`, `TaskConversation`, `ConversationNote`, `RunTask`, `CancelRun`, `StartProblem`, `LastRunStatus`, `LastRunResult`.
+- Sidebar: `AddTask` (the Add Node button, which opens the Add popover), `OpenFolder`, `ProjectName`, `TaskCount`, `SidebarTasks`, `RefreshAgents`, `AgentClaudeCode`, `AgentCodex`, `AgentPi`, `AgentAntigravity`, `ThemeSystem`, `ThemeLight`, `ThemeDark`.
+- Add popover: `AddNodePopover`, `AddNodeSearch`, `AddNodeList`, `AddNodeItem` (one per type, named `Add <type>`, such as `Add Implement`), `AddNodeAction` (one per action, named by its label), `AddNodeConnect`, `AddNodeDerive`, `AddNodeEdit`, `AddNodeDescription`, `AddNodeProblems`.
+- Canvas: `Editor`, `TaskCard`, `CardKind`, `CardTitle`, `CardStatus`, `CardAgent`, `CardStateGlyph`, `CardUnderReview`, `GhostCard`, `GhostLabel`, `GhostTitle`, `NextWaiting`, `WaitingCount`, `ZoomIn`, `ZoomOut`, `FitToScreen`, `Minimap`, `RunBar`, `RunBarTask`, `RunBarAgent`, `RunBarElapsed`, `RunBarActivity`, `RunBarCancel`, `GenerateWorkflow`, `GenerateEmptyState`, `GenerateStart`.
+- Breadcrumb: `Breadcrumb`, `BreadcrumbProject`, `Undo`, `Redo`, `UnsavedChanges`, `Save`, `Status`.
+- Generate sheet: `GenerateSheet`, `GeneratePrompt`, `GenerateClient`, `GenerateModel`, `GenerateReasoning`, `GenerateProblem`, `GenerateCancel`, `GenerateSubmit`.
+- Inspector header: `InspectorHeader`, `TaskTitle`, `InspectorKind`, `TaskType`, `TaskTypeVersion`, `InspectorMore`, `InspectorFilter`, `InspectorTools`.
+- Inspector sections: `Section<Key>` for `Task`, `Agent`, `Run`, `Proposal`, `Findings`, `Conversation`, `Activity`, `Blueprint`, `Connection`, `Overview`, and `Library`. The titles of the Agent section and the Talk to the Agent section are `AgentHeading` and `ComposerHeading`.
+- Inspector rows: `Task<Field>` (such as `TaskInstructions` and `TaskAcceptanceCriteria`), `Revert<Field>`, `TaskClient`, `TaskModel`, `TaskReasoning`, `RevertAgent`, `PermissionNote`, `TaskConversation`, `RevertConversation`, `ConversationNote`, `RunTask`, `CancelRun`, `StartProblem`, `LastRunStatus`, `LastRunConfiguration`, `LastRunTiming`, `LastRunDetail`, `LastRunResult`, `LastRunActivity`.
+- Proposal and review: `Proposal`, `ProposalItem`, `ProposalConnections`, `ProposalProblem`, `ProposalUsePlannerAgent`, `ProposalAcceptFinish`, `AcceptProposal`, `DismissProposal`, `Review`, `ReviewSummary`, `Findings`.
+- Connection and workflow inspectors: `ConnectionFrom`, `ConnectionTo`, `KindDependency`, `KindContext`, `DeleteConnection`, `WorkflowKinds`, `InspectorHint`, `Palette`, `PlaceBlueprint`, `DeriveBlueprint`, `EditBlueprint`, `ReloadBlueprints`, `BlueprintProblems`.
 - Conversation: `Conversation`, `TurnReply<n>`, `WaitingMessages`, `TerminalNote`, `Composer`, `SendMessage`, `StopAndSend`, `OpenInTerminal`, `SendProblem`, `PendingQuestion`, `MarkDone`.
 - Dialogs: `Question` (the dialog's text), `SaveChanges`, `DiscardChanges`, `CancelChanges`, `StopAndLeave`, `KeepRunning`.
 
-UI Automation cannot drag, right-click, press keys, or select a card or connection on the canvas. Choose a task through its sidebar row. The headless tests cover pointer and keyboard input.
+UI Automation cannot drag, right-click, press keys, or select a card or connection on the canvas. Choose a task through its sidebar row. The node menu (`NodeMenu<Action>`) and the connection menu (`ConnectionMenu<Action>`) open only on a right-click, so the headless tests cover them with the other pointer and keyboard input.
 
 ## Evidence
 
