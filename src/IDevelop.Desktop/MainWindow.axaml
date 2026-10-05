@@ -275,5 +275,15 @@
         </ContentControl.DataTemplates>
       </ContentControl>
     </DockPanel>
+
+    <!-- A modal sheet covers every column, so the breadcrumb, Save, and the sidebar take no click while it is open.
+         It sits above the splitters, whose ZIndex 1 would otherwise draw them over the scrim and let them take a drag. -->
+    <ContentControl Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Sheet}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
+          <canvas:GenerateSheet />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
   </Grid>
 </Window>

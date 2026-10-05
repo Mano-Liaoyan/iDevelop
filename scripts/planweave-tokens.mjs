@@ -153,6 +153,7 @@ const brushes = [
   ['DestructiveFill', 'apple-red-fill'],
   ['OnAccent', 'white'],
   ['OnTile', 'white'],
+  ['Scrim', 'black', 30],
 ];
 
 // Color keys for brushes that must stay the same objects while their color follows the theme. Nodify's control

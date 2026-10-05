@@ -46,7 +46,7 @@ public sealed class AddNodeTests : IDisposable
 
         shell.RightClick(shell.InEditor(400, 300));
 
-        Assert.Equal([.. BuiltInRows, "Select All", "Fit to View", "Zoom to 100%"], shell.AddRows());
+        Assert.Equal([.. BuiltInRows, "Generate Workflow…", "Select All", "Fit to View", "Zoom to 100%"], shell.AddRows());
         Assert.Equal(
             [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval],
             BuiltInRows.Select(row => TileKind(shell.AddRow(row[4..]))));
@@ -144,10 +144,11 @@ public sealed class AddNodeTests : IDisposable
         Assert.Contains(":library", tile.Classes);
         Assert.DoesNotContain(":library", shell.AddRow("Implement").GetVisualDescendants().OfType<KindTile>().Single().Classes);
 
-        shell.Press(Key.Up);
-        shell.Press(Key.Up);
-        shell.Press(Key.Up);
-        shell.Press(Key.Up);
+        foreach (var _ in shell.AddRows().SkipWhile(row => row != "Add Bug fix"))
+        {
+            shell.Press(Key.Up);
+        }
+
         Assert.Equal("Add Bug fix", shell.Highlighted());
         Assert.Equal("Fixes one reported bug.", shell.Find<TextBlock>("AddNodeDescription").Text);
         Assert.Equal("Edit Bug fix", Avalonia.Automation.AutomationProperties.GetName(shell.Shown<Button>("AddNodeEdit")));

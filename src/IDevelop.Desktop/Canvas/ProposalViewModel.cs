@@ -100,9 +100,29 @@ public sealed class ProposalViewModel : ObservableObject
 
     public bool HasItems => Items.Count > 0;
 
+    /// <summary>The proposal adds tasks, whose agent <see cref="UsePlannerAgent"/> decides. A fill keeps its task's agent.</summary>
+    public bool AddsTasks => Items.Count > (Proposal?.Fills.Length ?? 0);
+
+    /// <summary>
+    /// Whether each new task whose type has no agent takes the planner's agent. On for a planner that Generate placed
+    /// in this window, and off for any other, so a new task takes its type's default agent unless the person opts in.
+    /// </summary>
+    public bool UsePlannerAgent
+    {
+        get => Proposal is { } proposal && _canvas.UsesPlannerAgent(proposal.Planner);
+        set
+        {
+            if (Proposal is { } proposal && value != UsePlannerAgent)
+            {
+                _canvas.ChoosePlannerAgent(proposal.Planner, value);
+                OnPropertyChanged();
+            }
+        }
+    }
+
     /// <summary>Each connection that Accept adds now, as its two tasks' titles.</summary>
     public IReadOnlyList<string> Connections => Proposal is null ? [] :
-        [.. Proposal.Accept(_canvas.Workflow, Chosen(), _canvas.HasStarted).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
+        [.. AcceptEdit(_canvas.Workflow, Chosen()).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
             $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
 
     /// <summary>Why the proposal cannot be read, or why accepting the chosen tasks would be rejected.</summary>
@@ -166,7 +186,7 @@ public sealed class ProposalViewModel : ObservableObject
             fill.ShowStarted(_canvas.HasStarted(fill.Id));
         }
 
-        Problem = _readProblem ?? (Proposal is { } proposal && _canvas.Workflow.Apply(proposal.Accept(_canvas.Workflow, Chosen(), _canvas.HasStarted)) is EditResult.Rejected rejected
+        Problem = _readProblem ?? (Proposal is not null && _canvas.Workflow.Apply(AcceptEdit(_canvas.Workflow, Chosen())) is EditResult.Rejected rejected
             ? $"Accept would be refused. {RejectionText.Describe(rejected.Reason, Title)}"
             : null);
         OnPropertyChanged(nameof(Connections));
@@ -185,14 +205,18 @@ public sealed class ProposalViewModel : ObservableObject
     {
         var workflow = _canvas.Workflow;
         var chosen = Chosen();
-        if (_canvas.Edit(Proposal!.Accept(workflow, chosen, _canvas.HasStarted), Title) is EditResult.Applied)
+        if (_canvas.Edit(AcceptEdit(workflow, chosen), Title) is EditResult.Applied)
         {
-            var added = Proposal.Nodes.Count(node => chosen.Contains(node.Id));
+            var added = Proposal!.Nodes.Count(node => chosen.Contains(node.Id));
             var filled = Proposal.Fills.Count(fill => chosen.Contains(fill.Slot));
             _canvas.CloseProposal(this);
             _canvas.Notice($"Added {Count(added, "task")} and filled {Count(filled, "task")}.");
         }
     }
+
+    /// <summary>The one edit that accepts the chosen tasks, with the planner's agent as the fallback while the box is ticked.</summary>
+    private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
+        workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null);
 
     /// <param name="blueprint">The blueprint of the task, or null for a fill whose task is gone, which reads as Implement.</param>
     private ProposalItemViewModel Item(TaskId id, string label, string preview, bool isChosen, Blueprint? blueprint) =>

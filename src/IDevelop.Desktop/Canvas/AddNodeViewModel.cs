@@ -229,6 +229,7 @@ public sealed class AddNodeViewModel : ObservableObject
 
     private IEnumerable<AddNodeAction> Actions()
     {
+        yield return new("Generate Workflow…", "IconSparkle", "", _canvas.OpenGenerateCommand);
         yield return new("Select All", "IconSelectAll", CanvasKeys.Hint(CanvasKeys.SelectAll), new RelayCommand(_canvas.SelectAll));
         yield return new("Fit to View", "IconFit", CanvasKeys.Hint(CanvasKeys.Fit), new RelayCommand(() => _canvas.View?.FitToView()));
         yield return new("Zoom to 100%", "IconZoomIn", CanvasKeys.Hint(CanvasKeys.ZoomToActual), new RelayCommand(() => _canvas.View?.ZoomToActual()));
