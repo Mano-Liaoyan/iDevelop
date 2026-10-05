@@ -74,6 +74,24 @@ public partial class MainWindow : Window
         }
     }
 
+    // Window key bindings run before the focused control sees a key, so they would take Ctrl+Z from a text box. A key
+    // reaches this handler only after the focused control left it unhandled, so a text box keeps its own undo. The keys
+    // are the platform's, the same a text box uses.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        var keys = Application.Current?.PlatformSettings?.HotkeyConfiguration;
+        var command = keys is null ? null
+            : keys.Undo.Any(gesture => gesture.Matches(e)) ? ViewModel.UndoCommand
+            : keys.Redo.Any(gesture => gesture.Matches(e)) ? ViewModel.RedoCommand
+            : null;
+        if (command?.CanExecute(null) == true)
+        {
+            command.Execute(null);
+            e.Handled = true;
+        }
+    }
+
     private void OnTitleBandPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)

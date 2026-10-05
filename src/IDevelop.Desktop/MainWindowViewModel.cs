@@ -15,6 +15,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly Func<string, Task> _copy;
     private readonly string? _personalBlueprints;
     private readonly RelayCommand _save;
+    private readonly RelayCommand _undo;
+    private readonly RelayCommand _redo;
     private readonly RelayCommand _refreshAgents;
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
@@ -28,6 +30,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _copy = copy;
         _personalBlueprints = personalBlueprints;
         _save = new RelayCommand(() => TrySave(), () => Canvas is not null);
+        _undo = new RelayCommand(() => Canvas?.Document.Undo(), () => Canvas?.Document.CanUndo ?? false);
+        _redo = new RelayCommand(() => Canvas?.Document.Redo(), () => Canvas?.Document.CanRedo ?? false);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
@@ -51,6 +55,11 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public ICommand SaveCommand => _save;
+
+    /// <summary>Takes back the latest workflow edit. A run of typing in one box is one edit.</summary>
+    public ICommand UndoCommand => _undo;
+
+    public ICommand RedoCommand => _redo;
 
     public IReadOnlyList<AgentRow> Agents => [.. Clients.All.Select(id => new AgentRow(id, _clients.Current[id]))];
 
@@ -155,5 +164,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        _undo.NotifyCanExecuteChanged();
+        _redo.NotifyCanExecuteChanged();
     }
 }

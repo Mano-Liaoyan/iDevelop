@@ -430,9 +430,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             }
             else
             {
+                // In the workflow's order, so a task that an undo brings back returns to its place in the sidebar.
                 node = new TaskNodeViewModel(this, task, current.Positions[id]);
                 _nodes.Add(id, node);
-                Nodes.Add(node);
+                Nodes.Insert(Nodes.Count(other => other.Id.CompareTo(id) < 0), node);
             }
         }
 
