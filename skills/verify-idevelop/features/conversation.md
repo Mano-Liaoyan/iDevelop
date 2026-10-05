@@ -1,6 +1,6 @@
 # Talk to a task's agent
 
-A user writes to a task's agent from the composer under `TALK TO THE AGENT` in the inspector. A message sent while a turn runs waits for that turn to end, and the next turn resumes the client's session with it. Stop and send stops the running turn's process tree first, and the next turn starts at once. A message to a task that is not running continues its last session in a new attempt, and the conversation then shows the earlier attempt above the new one. While a task waits for the person, Open in terminal copies the client's own command for the session, after a change into the project folder, and the inspector says that turns taken there are not in iDevelop's record.
+A user writes to a task's agent from the composer in the `Talk to the Agent` section of the inspector. A message sent while a turn runs waits for that turn to end, and the next turn resumes the client's session with it. Stop and send stops the running turn's process tree first, and the next turn starts at once. A message to a task that is not running continues its last session in a new attempt, and the conversation then shows the earlier attempt above the new one. While a task waits for the person, Open in terminal copies the client's own command for the session, after a change into the project folder, and the inspector says that turns taken there are not in iDevelop's record.
 
 ## Sub-features
 
@@ -13,7 +13,7 @@ A user writes to a task's agent from the composer under `TALK TO THE AGENT` in t
 
 ## How to get to it (user POV)
 
-- Choose a task in the sidebar or on the canvas, write in the composer under `TALK TO THE AGENT`, and choose `Send` or press Ctrl+Enter.
+- Choose a task in the sidebar or on the canvas, write in the composer in the `Talk to the Agent` section, and choose `Send` or press Ctrl+Enter.
 - While the task runs in this window, write in the composer and choose `Stop and send`.
 - While a task waits for you, choose `Open in terminal`. A task waits after a turn when its conversation is `Chat`, or when it is `May ask` and the agent asked.
 

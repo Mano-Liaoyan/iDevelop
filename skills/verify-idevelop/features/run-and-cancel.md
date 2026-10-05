@@ -12,7 +12,7 @@ A user runs a task with its agent client from the inspector. While it runs, the 
 
 ## How to get to it (user POV)
 
-- Choose a task in the sidebar or on the canvas, then choose `Run` under `RUN` in the inspector.
+- Choose a task in the sidebar or on the canvas, then choose `Run` in the `Run` section of the inspector.
 - Choose `Cancel` in the run bar, or `Cancel` beside `Run` in the inspector.
 - Close the window or open another folder while a task runs.
 
