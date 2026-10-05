@@ -58,12 +58,12 @@ public sealed class CardTests : IDisposable
     private string EachKind()
     {
         var project = _temp.Seed(
-            Place(TaskId.New(), BuiltInBlueprints.Implement, "Implement", 105, 90),
-            Place(TaskId.New(), BuiltInBlueprints.Plan, "Plan", 405, 90),
-            Place(TaskId.New(), BuiltInBlueprints.Architect, "Architect", 705, 90),
-            Place(TaskId.New(), BuiltInBlueprints.Review, "Review", 105, 300),
-            Place(TaskId.New(), BuiltInBlueprints.Approval, "Approval", 405, 300),
-            Place(TaskId.New(), Researcher, "Researcher", 705, 300));
+            Place(TaskId.New(), BuiltInBlueprints.Implement, "Implement", 45, 90),
+            Place(TaskId.New(), BuiltInBlueprints.Plan, "Plan", 345, 90),
+            Place(TaskId.New(), BuiltInBlueprints.Architect, "Architect", 645, 90),
+            Place(TaskId.New(), BuiltInBlueprints.Review, "Review", 45, 300),
+            Place(TaskId.New(), BuiltInBlueprints.Approval, "Approval", 345, 300),
+            Place(TaskId.New(), Researcher, "Researcher", 645, 300));
         BlueprintLibrary.Project(project).Save(Researcher);
         return project;
     }
