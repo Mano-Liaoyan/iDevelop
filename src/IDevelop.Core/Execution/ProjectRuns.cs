@@ -411,12 +411,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>
     /// Appends <paramref name="e"/> to the task's latest attempt under its lock, when <paramref name="fits"/> it before and
     /// after the lock is taken. Does nothing otherwise, while this window runs the task, or once the project is leaving.
-    /// Then a review may go on.
+    /// Then a review may go on, off the caller's thread, because its step can run Git and start a client.
     /// </summary>
     private StartProblem? Settle(TaskId task, Func<AttemptRecord, bool> fits, AttemptEvent e)
     {
         var problem = Append(task, fits, e, out _);
-        Advance();
+        ThreadPool.QueueUserWorkItem(_ => Advance());
         return problem;
     }
 
@@ -823,23 +823,28 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             (_, { Status: AttemptStatus.InReview } reviewing) =>
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
             _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
-            _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(subject) is { } problem => new StartVerdict.Blocked(problem),
+            _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(task.Id, subject) is { } problem => new StartVerdict.Blocked(problem),
             _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject),
         };
 
     /// <summary>
     /// The review attempt that goes on with this task as its subject, or null. Its fix rounds are the task's only new
-    /// attempts until it ends, so no other attempt takes the place of a round. Called under the gate.
+    /// attempts until it ends, so no other attempt takes the place of a round. A review deleted from the workflow takes no
+    /// next step, so it no longer holds its subject. Called under the gate.
     /// </summary>
-    private AttemptRecord? ReviewOf(TaskId task) =>
-        Latest.Values.FirstOrDefault(record => record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview);
+    private AttemptRecord? ReviewOf(TaskId task) => Latest.Values.FirstOrDefault(record =>
+        record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview && _workflow?.Tasks.ContainsKey(record.Task) != false);
 
-    /// <summary>Why a review cannot start on its subject as it stands, or null.</summary>
-    private static StartProblem? ReviewProblem(SubjectView? subject) => subject switch
+    /// <summary>
+    /// Why a review cannot start on its subject as it stands, or null. Another review of the subject would take the fix
+    /// rounds' place. Called under the gate.
+    /// </summary>
+    private StartProblem? ReviewProblem(TaskId review, SubjectView? subject) => subject switch
     {
         null => new StartProblem.NoSubject(),
         { Latest.Status: not AttemptStatus.Succeeded } or { Latest: null } => new StartProblem.SubjectNotDone(subject.Node.Title),
         { Change: null } => new StartProblem.NoChange(subject.Node.Title),
+        _ when ReviewOf(subject.Node.Id) is { } other && other.Task != review => new StartProblem.SubjectInReview(subject.Node.Title, other.TaskTitle),
         _ => null,
     };
 

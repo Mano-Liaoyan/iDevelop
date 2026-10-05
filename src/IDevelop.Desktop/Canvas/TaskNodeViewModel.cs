@@ -231,10 +231,10 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
     public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem) : null;
 
-    /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
     /// <summary>A review's guidance never stops the reviewer's turn.</summary>
     public bool CanStopAndSend => TurnRunsHere && !IsReview;
 
+    /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
     public bool TurnRunsHere =>
         _attempt is { Status: AttemptStatus.Running, Turns: [.., { Outcome: TurnOutcome.Running }] } attempt && _canvas.Runs.StartedHere(attempt.Id);
 

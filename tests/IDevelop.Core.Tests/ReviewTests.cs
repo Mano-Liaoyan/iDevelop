@@ -267,6 +267,56 @@ public sealed class ReviewTests : IDisposable
     }
 
     [Fact]
+    public async Task Deleting_a_review_that_goes_on_frees_its_subject()
+    {
+        Reviewer(1, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""));
+        WriteTurn(_implementer, 2, FakeRule.On().Print(SessionLine(ClientId.Codex, ImplementerSession)).Hang());
+        var clients = await _fakes.DiscoverAsync();
+        await using var runs = ProjectRuns.Open(_project, clients);
+        runs.Follow(Workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
+
+        runs.Follow(Workflow.Must(new WorkflowEdit.Delete([Review], [])));
+        Assert.Null(runs.Cancel(Subject));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Cancelled && runs.Active.IsEmpty, "the fix round is cancelled");
+
+        Assert.Null(runs.Check(SubjectNode));
+    }
+
+    [Fact]
+    public async Task A_second_review_of_the_same_task_starts_only_once_the_first_review_ends()
+    {
+        WriteTurn(_reviewer, 1, FakeRule.On()
+            .Print(SessionLine(ClientId.ClaudeCode, ReviewerSession))
+            .WaitForFile(_gate)
+            .Print(ReplyLines(ClientId.ClaudeCode, Verdict("""{"status": "verdict", "verdict": "approve", "findings": []}"""))));
+        var second = new TaskDefinition(TestTasks.Design, BuiltInBlueprints.Review)
+        {
+            Title = "Second review",
+            Execution = ReviewNode.Execution,
+        };
+        var clients = await _fakes.DiscoverAsync();
+        await using var runs = ProjectRuns.Open(_project, clients);
+        runs.Follow(Workflow
+            .Must(TestNodes.Place(second, new CanvasPoint(300, 200)))
+            .Must(new WorkflowEdit.Connect(new ConnectionKey(Subject, TestTasks.Design), ConnectionKind.Dependency)));
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+
+        var refused = new StartProblem.SubjectInReview("Add numbers", "Review add");
+        Assert.Equal(refused, runs.Check(second));
+        Assert.Equal(new StartResult.Refused(refused), runs.Start(second));
+
+        File.WriteAllText(_gate, "");
+        await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the first review approves");
+        Assert.Null(runs.Check(second));
+    }
+
+    [Fact]
     public async Task A_review_starts_only_after_its_subject_succeeded_with_a_recorded_change()
     {
         var clients = await _fakes.DiscoverAsync();

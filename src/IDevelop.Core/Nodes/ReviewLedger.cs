@@ -40,9 +40,7 @@ public sealed record ReviewRound(int Number, int FirstTurn, Verdict? Verdict, st
 /// </summary>
 public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableArray<Finding> Findings)
 {
-    public static readonly ReviewLedger Empty = new([], []);
-
-    /// <summary>The round the review is in, from 1, or 0 before the first verdict.</summary>
+    /// <summary>The round the review is in, from 1. The reviewer's first turn starts round 1.</summary>
     public int Round => Rounds.Length;
 
     public int OpenCount => Findings.Count(finding => finding.IsOpen);
@@ -96,9 +94,10 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
     /// <summary>The verdict at the end of a reviewer's final message, or why it cannot be read.</summary>
     public static (Verdict? Verdict, string? Problem) ReadVerdict(string? finalText)
     {
-        if (ResultBlock.Read(finalText) is not ResultBlock.Readable block)
+        var read = ResultBlock.Read(finalText);
+        if (read is not ResultBlock.Readable block)
         {
-            return (null, ResultBlock.Read(finalText) is ResultBlock.Unreadable unreadable
+            return (null, read is ResultBlock.Unreadable unreadable
                 ? unreadable.Problem
                 : "The message does not end with a verdict block.");
         }

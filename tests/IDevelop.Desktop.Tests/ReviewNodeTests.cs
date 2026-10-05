@@ -20,6 +20,7 @@ public sealed class ReviewNodeTests : IDisposable
     private readonly string _implementer;
     private readonly string _reviewer;
     private readonly string _gate;
+    private readonly string _reading;
 
     public ReviewNodeTests()
     {
@@ -27,11 +28,13 @@ public sealed class ReviewNodeTests : IDisposable
         _implementer = _temp.Create("implementer");
         _reviewer = _temp.Create("reviewer");
         _gate = Path.Combine(_temp.Create("gate"), "go");
+        _reading = Path.Combine(_temp.Create("reading"), "go");
     }
 
     public void Dispose()
     {
         File.WriteAllText(_gate, "");
+        File.WriteAllText(_reading, "");
         _temp.Dispose();
     }
 
@@ -42,7 +45,8 @@ public sealed class ReviewNodeTests : IDisposable
         Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, ReviewerSession).Scripted(_reviewer), Fresh(ClientId.ClaudeCode).Scripted(_reviewer));
         Turn(_implementer, 1, ClientId.Codex, ImplementerSession, "Wrote calc.py.", write: "def add(a, b):\n    return a - b\n");
         Turn(_reviewer, 1, ClientId.ClaudeCode, ReviewerSession,
-            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```");
+            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```",
+            gate: _reading);
         Turn(_implementer, 2, ClientId.Codex, ImplementerSession,
             "Fixed.\n\n```idevelop\n{\"status\": \"answers\", \"answers\": [{\"id\": \"1\", \"answer\": \"fixed\", \"note\": \"It adds now.\"}]}\n```",
             write: "def add(a, b):\n    return a + b\n", gate: _gate);
@@ -69,6 +73,9 @@ public sealed class ReviewNodeTests : IDisposable
         Assert.Equal("GUIDE THE REVIEW", shell.Find<TextBlock>("ComposerHeading").Text);
 
         shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Running", "the reviewer reads");
+        Assert.Equal("The reviewer reads the change.", shell.Find<TextBlock>("ReviewSummary").Text);
+        File.WriteAllText(_reading, "");
         shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "In review", "the review waits for the fix");
 
         Assert.Equal("Round 1 · 1 open finding", shell.Find<TextBlock>("ReviewSummary").Text);

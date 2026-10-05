@@ -42,6 +42,9 @@ public abstract record StartProblem
     /// <summary>A review that goes on reviews this task, so only the review starts its next attempt.</summary>
     public sealed record UnderReview(string Review) : StartProblem;
 
+    /// <summary>Another review goes on with the same subject, which takes only that review's fix rounds until it ends.</summary>
+    public sealed record SubjectInReview(string Subject, string Review) : StartProblem;
+
     /// <summary>The review cannot go on, because its subject cannot start its fix round.</summary>
     public sealed record SubjectBlocked(string Title, StartProblem Problem) : StartProblem;
 
@@ -130,7 +133,6 @@ internal static class StartCheck
         }
 
         var client = settings.Client;
-        // A reviewer only reads.
         var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
         if (readOnly && !Clients.Get(client).HasReadOnlyMode)
         {

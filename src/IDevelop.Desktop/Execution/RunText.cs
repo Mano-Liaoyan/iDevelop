@@ -116,7 +116,7 @@ public static class RunText
     /// <summary>"Round 2 · 1 open finding", "Approved in round 2", or what ended the review, for its card.</summary>
     public static string ReviewSummary(AttemptRecord review, ReviewLedger ledger) => (review.Status, ledger.Round) switch
     {
-        (_, 0) => "The reviewer reads the change.",
+        (AttemptStatus.Running, 1) when ledger.Rounds[0].Verdict is null => "The reviewer reads the change.",
         (AttemptStatus.Succeeded, var round) => $"Approved in round {round}.",
         (AttemptStatus.Running or AttemptStatus.InReview, var round) => $"Round {round} · {Count(ledger.OpenCount, "open finding")}",
         (_, var round) => $"Stopped in round {round} with {Count(ledger.OpenCount, "open finding")}.",
@@ -181,6 +181,7 @@ public static class RunText
             $"iDevelop has no record of what \"{p.Title}\" changed. Run it again in a Git project, then review it.",
         StartProblem.InReview p => $"\"{p.Title}\" goes back and forth until both agents agree. Cancel it to stop.",
         StartProblem.UnderReview p => $"\"{p.Review}\" reviews this task and sends it each fix round. Cancel the review to run it yourself.",
+        StartProblem.SubjectInReview p => $"\"{p.Review}\" is reviewing \"{p.Subject}\". Run this review once that one ends.",
         StartProblem.SubjectBlocked p => $"The review waits, because \"{p.Title}\" cannot start its fix. {Describe(p.Problem)}",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",

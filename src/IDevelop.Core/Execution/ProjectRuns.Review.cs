@@ -192,7 +192,6 @@ public sealed partial class ProjectRuns
         return false;
     }
 
-    /// <summary>The person's guidance to a review, while its reviewer's turn runs or while it rests between turns.</summary>
     /// <summary>
     /// The person's guidance to a review, while its reviewer's turn runs or while it rests between turns. A turn that starts
     /// or ends between the two checks sends it to the other place.

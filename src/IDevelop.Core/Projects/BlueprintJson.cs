@@ -207,7 +207,6 @@ internal class BlueprintDto
     public required SettingsDto Defaults { get; init; }
 }
 
-// Each work writes only its own properties.
 internal sealed class WorkDto
 {
     public required string Kind { get; init; }
