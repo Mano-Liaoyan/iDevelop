@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
+using static IDevelop.TestSupport.TestNodes;
 using static IDevelop.TestSupport.TestTasks;
 using static IDevelop.Workflows.WorkflowEdit;
 
@@ -9,16 +11,99 @@ public class WorkflowTests
     private static readonly TaskId Missing = new(Guid.Parse("019a9d2e-5d00-7000-8000-000000000044"));
 
     private static Workflow ThreeTasks() => Workflow.Empty(new WorkflowId(Guid.Parse("019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01")))
-        .Must(new CreateTask(new TaskDefinition(Design) { Title = "Design" }, new CanvasPoint(120, 90)))
-        .Must(new CreateTask(new TaskDefinition(Build) { Title = "Build" }, new CanvasPoint(420, 90)))
-        .Must(new CreateTask(new TaskDefinition(Review) { Title = "Review" }, new CanvasPoint(720, 247.5)));
+        .Must(Place(Implement(Design, "Design"), new CanvasPoint(120, 90)))
+        .Must(Place(Implement(Build, "Build"), new CanvasPoint(420, 90)))
+        .Must(Place(Implement(Review, "Review"), new CanvasPoint(720, 247.5)));
 
     private static Workflow DesignBuildReview() => ThreeTasks()
         .Must(new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency))
-        .Must(new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review));
+        .Must(new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency));
+
+    /// <summary>A user blueprint with one field, as a library would hold it.</summary>
+    private static Blueprint Spec(int version = 1, string label = "Goal") => new(
+        new BlueprintKey("team.spec", version),
+        "Spec",
+        new WorkSpec.Agent(AgentAccess.ReadOnly, Proposes: false, PromptTemplate.Parse("Write a spec for {{goal}}.")),
+        [new FieldSpec("goal", label, FieldShape.Line, Required: true, "the feature")],
+        new NodeSettings(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol" }, ConversationMode.MayAsk));
 
     [Fact]
-    public void A_dependency_that_closes_a_cycle_through_a_review_is_rejected_with_its_path()
+    public void Placing_a_node_seeds_its_blueprints_defaults_and_embeds_one_copy_of_the_blueprint()
+    {
+        var filled = new TaskId(Guid.Parse("019a9d2e-5e00-7000-8000-000000000055"));
+
+        var workflow = ThreeTasks()
+            .Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)) { Title = "Spec" })
+            .Must(new PlaceNode(filled, Spec(), new CanvasPoint(0, 600)) { Fields = ImmutableDictionary<string, string>.Empty.Add("goal", "export") });
+
+        var placed = workflow.Tasks[Missing];
+        Assert.Equal("Spec", placed.Title);
+        Assert.Equal("the feature", placed.Field("goal"));
+        Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol" }, placed.Execution);
+        Assert.Equal(ConversationMode.MayAsk, placed.Conversation);
+        Assert.Equal("export", workflow.Tasks[filled].Field("goal"));
+        Assert.Same(placed.Blueprint, workflow.Tasks[filled].Blueprint);
+        Assert.Equal(["idevelop.implement@1", "team.spec@1"], workflow.Blueprints.Keys.Select(key => key.ToString()));
+    }
+
+    [Fact]
+    public void Deleting_the_last_node_of_a_blueprint_drops_its_copy()
+    {
+        var workflow = ThreeTasks().Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)));
+
+        var after = workflow.Must(new Delete([Missing], []));
+
+        Assert.Equal([BuiltInBlueprints.Implement.Key], after.Blueprints.Keys);
+    }
+
+    [Fact]
+    public void A_different_blueprint_under_a_key_the_workflow_holds_is_rejected()
+    {
+        var workflow = ThreeTasks().Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)));
+
+        var rejection = workflow.Rejection(new PlaceNode(new TaskId(Guid.NewGuid()), Spec(label: "Changed"), new CanvasPoint(0, 600)));
+
+        Assert.Equal(new EditRejection.BlueprintConflict(new BlueprintKey("team.spec", 1)), rejection);
+    }
+
+    [Fact]
+    public void Two_versions_of_one_blueprint_live_side_by_side()
+    {
+        var workflow = ThreeTasks()
+            .Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)))
+            .Must(new PlaceNode(new TaskId(Guid.NewGuid()), Spec(version: 2, label: "Changed"), new CanvasPoint(0, 600)));
+
+        Assert.Equal(["idevelop.implement@1", "team.spec@1", "team.spec@2"], workflow.Blueprints.Keys.Select(key => key.ToString()));
+        Assert.Equal("Goal", workflow.Tasks[Missing].Blueprint.Fields[0].Label);
+    }
+
+    [Fact]
+    public void A_field_the_blueprint_lacks_is_rejected_when_placing_and_when_editing()
+    {
+        Assert.Equal(
+            new EditRejection.UnknownField(Missing, "goal"),
+            ThreeTasks().Rejection(new PlaceNode(Missing, BuiltInBlueprints.Implement, new CanvasPoint(0, 0))
+            {
+                Fields = ImmutableDictionary<string, string>.Empty.Add("goal", "x"),
+            }));
+        Assert.Equal(new EditRejection.UnknownField(Design, "goal"), ThreeTasks().Rejection(new SetField(Design, "goal", "x")));
+    }
+
+    [Fact]
+    public void Setting_a_field_and_the_conversation_mode_changes_only_that_node()
+    {
+        var workflow = ThreeTasks();
+
+        var edited = workflow.Must(new SetField(Build, "instructions", "Write it")).Must(new SetConversation(Build, ConversationMode.Chat));
+
+        Assert.Equal("Write it", edited.Tasks[Build].Field("instructions"));
+        Assert.Equal(ConversationMode.Chat, edited.Tasks[Build].Conversation);
+        Assert.Same(workflow.Tasks[Design], edited.Tasks[Design]);
+        Assert.Same(edited, edited.Must(new SetConversation(Build, ConversationMode.Chat)));
+    }
+
+    [Fact]
+    public void A_dependency_that_closes_a_cycle_is_rejected_with_its_path()
     {
         var rejection = DesignBuildReview().Rejection(new Connect(new ConnectionKey(Review, Design), ConnectionKind.Dependency));
 
@@ -35,31 +120,21 @@ public class WorkflowTests
             new[]
             {
                 KeyValuePair.Create(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
-                KeyValuePair.Create(new ConnectionKey(Build, Review), ConnectionKind.Review),
+                KeyValuePair.Create(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
                 KeyValuePair.Create(new ConnectionKey(Review, Design), ConnectionKind.Context),
             },
             looped.Connections);
     }
 
-    [Theory]
-    [InlineData(ConnectionKind.Dependency)]
-    [InlineData(ConnectionKind.Review)]
-    public void Changing_a_looping_context_connection_to_an_ordering_kind_is_rejected_with_its_path(ConnectionKind kind)
+    [Fact]
+    public void Changing_a_looping_context_connection_to_a_dependency_is_rejected_with_its_path()
     {
         var looped = DesignBuildReview().Must(new Connect(new ConnectionKey(Review, Design), ConnectionKind.Context));
 
-        var rejection = looped.Rejection(new SetConnectionKind(new ConnectionKey(Review, Design), kind));
+        var rejection = looped.Rejection(new SetConnectionKind(new ConnectionKey(Review, Design), ConnectionKind.Dependency));
 
         var cycle = Assert.IsType<EditRejection.OrderingCycle>(rejection);
         Assert.Equal(new[] { Review, Design, Build, Review }, cycle.Path);
-    }
-
-    [Fact]
-    public void Changing_a_dependency_to_a_review_keeps_the_graph_acyclic_and_applies()
-    {
-        var changed = DesignBuildReview().Must(new SetConnectionKind(new ConnectionKey(Design, Build), ConnectionKind.Review));
-
-        Assert.Equal(ConnectionKind.Review, changed.Connections[new ConnectionKey(Design, Build)]);
     }
 
     [Fact]
@@ -108,7 +183,9 @@ public class WorkflowTests
         var workflow = DesignBuildReview();
         WorkflowEdit[] noEffect =
         [
-            new EditTask(Design, TaskField.Title, "Design"),
+            new EditTitle(Design, "Design"),
+            new SetField(Design, "instructions", ""),
+            new SetConversation(Design, ConversationMode.Autonomous),
             new MoveTasks([new TaskPosition(Design, new CanvasPoint(120, 90))]),
             new MoveTasks([new TaskPosition(Missing, new CanvasPoint(5, 5))]),
             new SetConnectionKind(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
@@ -133,13 +210,13 @@ public class WorkflowTests
     public void Text_line_breaks_are_stored_as_line_feeds()
     {
         var workflow = Workflow.Empty(new WorkflowId(Guid.Parse("019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a01")))
-            .Must(new CreateTask(new TaskDefinition(Design) { Title = "Design", Instructions = "One\r\nTwo\rThree" }, new CanvasPoint(0, 0)));
+            .Must(Place(Implement(Design, "Design", "One\r\nTwo\rThree"), new CanvasPoint(0, 0)));
 
-        var edited = workflow.Must(new EditTask(Design, TaskField.AcceptanceCriteria, "Done\r\nReviewed"));
+        var edited = workflow.Must(new SetField(Design, "acceptanceCriteria", "Done\r\nReviewed"));
 
-        Assert.Equal("One\nTwo\nThree", edited.Tasks[Design].Instructions);
-        Assert.Equal("Done\nReviewed", edited.Tasks[Design].AcceptanceCriteria);
-        Assert.Same(edited, edited.Must(new EditTask(Design, TaskField.AcceptanceCriteria, "Done\nReviewed")));
+        Assert.Equal("One\nTwo\nThree", edited.Tasks[Design].Field("instructions"));
+        Assert.Equal("Done\nReviewed", edited.Tasks[Design].Field("acceptanceCriteria"));
+        Assert.Same(edited, edited.Must(new SetField(Design, "acceptanceCriteria", "Done\nReviewed")));
     }
 
     [Fact]
@@ -174,13 +251,13 @@ public class WorkflowTests
             workflow.Rejection(new Connect(new ConnectionKey(Design, Missing), ConnectionKind.Dependency)));
         Assert.Equal(
             new EditRejection.UnknownTask(Missing),
-            workflow.Rejection(new EditTask(Missing, TaskField.Title, "Ghost")));
+            workflow.Rejection(new EditTitle(Missing, "Ghost")));
         Assert.Equal(
             new EditRejection.UnknownConnection(new ConnectionKey(Build, Design)),
-            workflow.Rejection(new SetConnectionKind(new ConnectionKey(Build, Design), ConnectionKind.Review)));
+            workflow.Rejection(new SetConnectionKind(new ConnectionKey(Build, Design), ConnectionKind.Context)));
         Assert.Equal(
             new EditRejection.TaskAlreadyExists(Design),
-            workflow.Rejection(new CreateTask(new TaskDefinition(Design), new CanvasPoint(0, 0))));
+            workflow.Rejection(new PlaceNode(Design, BuiltInBlueprints.Implement, new CanvasPoint(0, 0))));
         Assert.Equal(
             new EditRejection.UnknownTask(Missing),
             workflow.Rejection(new SetExecution(Missing, new ExecutionSettings(ClientId.Pi))));

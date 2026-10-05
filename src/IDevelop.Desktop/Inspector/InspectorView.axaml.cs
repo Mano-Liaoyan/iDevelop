@@ -29,6 +29,14 @@ public partial class InspectorView : UserControl
         }
     }
 
+    private void OnConversationChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))
+        {
+            task.ChooseConversation(choice);
+        }
+    }
+
     private void OnReasoningChosen(object? sender, SelectionChangedEventArgs e)
     {
         if (sender is ComboBox { DataContext: TaskNodeViewModel task, SelectedItem: Choice choice } picker && IsChoice(picker))

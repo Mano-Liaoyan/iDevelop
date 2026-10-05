@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Execution;
@@ -89,6 +90,7 @@ public static class RunText
         AttemptStatus.Succeeded => StatusTone.Complete,
         AttemptStatus.Failed or AttemptStatus.Interrupted => StatusTone.Problem,
         AttemptStatus.Cancelled => StatusTone.Neutral,
+        AttemptStatus.WaitingForInput => StatusTone.Waiting,
     };
 
     /// <param name="elsewhere">Another window started the attempt.</param>
@@ -97,14 +99,42 @@ public static class RunText
         null => "Not run",
         { Status: AttemptStatus.Running } when elsewhere => "Running in another window",
         { Status: AttemptStatus.Running, Stopping: true } => "Stopping",
+        { Status: AttemptStatus.WaitingForInput } => "Waiting for you",
         _ => attempt.Status.ToString(),
+    };
+
+    /// <summary>The section of a node that waits for the person, for each reason it waits.</summary>
+    public static string Waiting(Pending pending) => pending switch
+    {
+        Pending.Question question => question.Text,
+        Pending.Reply => "The agent replied. Write back, or mark the task done.",
+        Pending.UnreadableBlock unreadable =>
+            $"The agent ended with a block iDevelop could not read. {unreadable.Problem} Reply, or mark the task done.",
+        _ => throw new UnreachableException(),
+    };
+
+    public static string ConversationChoice(ConversationMode mode) => mode switch
+    {
+        ConversationMode.Autonomous => "Autonomous",
+        ConversationMode.MayAsk => "May ask",
+        ConversationMode.Chat => "Chat",
+    };
+
+    /// <summary>What each conversation mode does, under its picker.</summary>
+    public static string ConversationNote(ConversationMode mode) => mode switch
+    {
+        ConversationMode.Autonomous => "The agent works without waiting for you. You can still write to it.",
+        ConversationMode.MayAsk => "The agent may end a turn with a question and wait for your answer.",
+        ConversationMode.Chat => "The task waits for you after every turn, until you mark it done.",
     };
 
     /// <summary>One or two sentences for each reason a task cannot start.</summary>
     public static string Describe(StartProblem problem) => problem switch
     {
         StartProblem.NoAgent => "Choose an agent for this task first.",
-        StartProblem.NoInstructions => "Write instructions for this task first.",
+        StartProblem.FieldMissing p => $"Fill in {p.Label} first.",
+        StartProblem.Waiting p => $"\"{p.Title}\" is waiting for you. Reply, mark it done, or cancel it first.",
+        StartProblem.NoConversation => "This task has no agent to write to.",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",
@@ -143,6 +173,7 @@ public static class RunText
     public static string Describe(TerminalProblem problem) => problem switch
     {
         TerminalProblem.NeverRan => "Run this task first.",
+        TerminalProblem.NotWaiting p => $"\"{p.Title}\" can go to a terminal only while it waits for you.",
         TerminalProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to open.",
         TerminalProblem.TurnRunning p => $"\"{p.Title}\" is running. Open it in a terminal after it ends.",
         TerminalProblem.Blocked p => Describe(p.Problem),

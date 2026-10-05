@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -10,7 +12,14 @@ public abstract record StartProblem
 
     public sealed record NoAgent : StartProblem;
 
-    public sealed record NoInstructions : StartProblem;
+    /// <summary>A required field of the node's blueprint is blank.</summary>
+    public sealed record FieldMissing(string Label) : StartProblem;
+
+    /// <summary>The node waits for the person, who replies, marks it done, or cancels it first.</summary>
+    public sealed record Waiting(string Title) : StartProblem;
+
+    /// <summary>The node's work has no agent to send a message to.</summary>
+    public sealed record NoConversation : StartProblem;
 
     public sealed record NoModel(ClientId Client) : StartProblem;
 
@@ -76,7 +85,7 @@ internal abstract record StartVerdict
 /// <summary>Pure. The inspector's message before any click and the start itself use the same check.</summary>
 internal static class StartCheck
 {
-    /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no instructions.</param>
+    /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no field filled in.</param>
     public static StartVerdict Evaluate(TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null)
     {
         if (task.Execution is not { } settings)
@@ -126,12 +135,30 @@ internal static class StartCheck
             return Block(new StartProblem.ReasoningNotOffered(client, id, settings.Reasoning, model.ReasoningLevels));
         }
 
-        if (resume is null && string.IsNullOrWhiteSpace(task.Instructions))
+        var work = NodeWorks.For(task.Blueprint.Work);
+        string prompt;
+        if (resume is not null)
         {
-            return Block(new StartProblem.NoInstructions());
+            if (work is not IConverses converses)
+            {
+                return Block(new StartProblem.NoConversation());
+            }
+
+            prompt = converses.Reply(resume.Message);
+        }
+        else if (task.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(task.Field(field.Key))) is { } missing)
+        {
+            return Block(new StartProblem.FieldMissing(missing.Label));
+        }
+        else
+        {
+            prompt = work.Next(new NodeContext(task, ""), null) is NodeStep.RunTurn turn
+                ? turn.Prompt
+                : throw new UnreachableException("A fresh start always runs a turn.");
         }
 
-        var request = new LaunchRequest(id, settings.Reasoning, resume?.Message ?? Prompt.For(task)) { ResumeSession = resume?.Session };
+        var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly };
+        var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly };
         var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request);
         if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)
         {
@@ -142,26 +169,4 @@ internal static class StartCheck
     }
 
     private static StartVerdict.Blocked Block(StartProblem problem) => new(problem);
-}
-
-internal static class Prompt
-{
-    /// <summary>The title as a heading, the instructions, and the acceptance criteria under their own heading when present.</summary>
-    public static string For(TaskDefinition task)
-    {
-        List<string> parts = [];
-        if (!string.IsNullOrWhiteSpace(task.Title))
-        {
-            parts.Add($"# {task.Title.Trim()}");
-        }
-
-        parts.Add(task.Instructions.Trim());
-        if (!string.IsNullOrWhiteSpace(task.AcceptanceCriteria))
-        {
-            parts.Add("## Acceptance criteria");
-            parts.Add(task.AcceptanceCriteria.Trim());
-        }
-
-        return string.Join("\n\n", parts) + "\n";
-    }
 }

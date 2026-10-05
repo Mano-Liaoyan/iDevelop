@@ -527,10 +527,10 @@ public sealed class ProjectRunsTests : IDisposable
     }
 
     private static TaskDefinition SayHi(ExecutionSettings settings) =>
-        new(SayHiId) { Title = "Say hi", Instructions = "Create hello.txt containing hi. Then reply with DONE.", Execution = settings };
+        TestNodes.Implement(SayHiId, "Say hi", "Create hello.txt containing hi. Then reply with DONE.", execution: settings);
 
     private static TaskDefinition Review(ExecutionSettings settings) =>
-        new(ReviewId) { Title = "Review", Instructions = "Review hello.txt.", Execution = settings };
+        TestNodes.Implement(ReviewId, "Review", "Review hello.txt.", execution: settings);
 
     private static async Task WaitUntilAsync(Func<bool> done)
     {

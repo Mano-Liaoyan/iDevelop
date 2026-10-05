@@ -44,7 +44,7 @@ public sealed class RunTests : IDisposable
         .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
         .WaitForFile(_gate);
 
-    private static WorkflowEdit.CreateTask SayHiTask(ExecutionSettings execution) =>
+    private static WorkflowEdit.PlaceNode SayHiTask(ExecutionSettings execution) =>
         TaskAt(SayHi, "Say hi", 105, 90, execution, "Create hello.txt containing hi. Then reply with DONE.");
 
     private static Color CardFill(Shell shell) =>

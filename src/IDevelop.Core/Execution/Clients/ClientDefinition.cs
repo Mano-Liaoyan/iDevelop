@@ -60,6 +60,9 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
 {
     /// <summary>The client's own id of the session this turn continues, or null for a new session.</summary>
     public string? ResumeSession { get; init; }
+
+    /// <summary>The turn runs in the client's read-only mode. Pi has none, so its turn can still edit files.</summary>
+    public bool ReadOnly { get; init; }
 }
 
 internal sealed record LaunchArguments(ImmutableArray<string> Arguments, string Stdin);

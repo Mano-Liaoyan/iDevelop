@@ -102,6 +102,14 @@
   <Style Selector="Border.pill.problem PathIcon">
     <Setter Property="Data" Value="{StaticResource CircleAlertIcon}" />
   </Style>
+  <Style Selector="Border.pill.waiting">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelected40Brush}" />
+    <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource StateSelectedBrush}" />
+  </Style>
+  <Style Selector="Border.pill.waiting PathIcon">
+    <Setter Property="Data" Value="{StaticResource CircleDotsIcon}" />
+  </Style>
 
   <Style Selector="Ellipse.status">
     <Setter Property="Width" Value="8" />
@@ -116,6 +124,9 @@
   </Style>
   <Style Selector="Ellipse.status.problem">
     <Setter Property="Fill" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+  <Style Selector="Ellipse.status.waiting">
+    <Setter Property="Fill" Value="{DynamicResource StateSelectedBrush}" />
   </Style>
 
   <!-- Buttons without a fill until the pointer is over them. Fluent's own state styles set the template's colors,
@@ -265,6 +276,9 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
     <Setter Property="CaretBrush" Value="{DynamicResource TextStrongBrush}" />
     <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
+  </Style>
+  <Style Selector="TextBox.multiline">
+    <Setter Property="MinHeight" Value="100" />
   </Style>
   <Style Selector="TextBox:pointerover, TextBox:focus">
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />

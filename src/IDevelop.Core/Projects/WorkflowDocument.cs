@@ -8,14 +8,16 @@ namespace IDevelop.Projects;
 /// </summary>
 public sealed class WorkflowDocument
 {
-    private Workflow _saved;
+    /// <summary>Null while the file holds an older format than <see cref="Save"/> writes.</summary>
+    private Workflow? _saved;
 
-    private WorkflowDocument(string projectFolder, string filePath, Workflow workflow)
+    private WorkflowDocument(string projectFolder, string filePath, Workflow workflow, string? converted = null)
     {
         ProjectFolder = projectFolder;
         FilePath = filePath;
         Current = workflow;
-        _saved = workflow;
+        _saved = converted is null ? workflow : null;
+        Converted = converted;
     }
 
     public string ProjectFolder { get; }
@@ -25,6 +27,9 @@ public sealed class WorkflowDocument
     public Workflow Current { get; private set; }
 
     public bool HasUnsavedChanges => !ReferenceEquals(Current, _saved);
+
+    /// <summary>What opening converted from an older file format, for the user, or null. The first save writes the current format.</summary>
+    public string? Converted { get; }
 
     /// <summary>Raised after <see cref="Current"/> or the saved state changes.</summary>
     public event EventHandler? Changed;
@@ -50,7 +55,8 @@ public sealed class WorkflowDocument
                 var empty = Workflow.Empty(WorkflowId.New());
                 return new WorkflowDocument(projectFolder, Path.Combine(workflowsFolder, $"{empty.Id}.json"), empty);
             case [var file]:
-                return new WorkflowDocument(projectFolder, file, WorkflowFile.Parse(File.ReadAllBytes(file), file));
+                var parsed = WorkflowFile.Parse(File.ReadAllBytes(file), file);
+                return new WorkflowDocument(projectFolder, file, parsed.Workflow, parsed.Converted);
             default:
                 throw new ProjectException(
                     $"{workflowsFolder} holds {files.Length} workflow files. This version of iDevelop opens one workflow per project.");

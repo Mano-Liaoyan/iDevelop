@@ -31,10 +31,11 @@ internal static class Codex
             .. request.Reasoning is { } effort ? ["-c", $"model_reasoning_effort={effort}"] : Array.Empty<string>(),
             "-c", "approval_policy=never",
         ];
+        var sandbox = request.ReadOnly ? "read-only" : "workspace-write";
         return new(
             request.ResumeSession is { } session
-                ? ["exec", "resume", .. common, "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", session, "-"]
-                : ["exec", .. common, "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+                ? ["exec", "resume", .. common, "--skip-git-repo-check", "-c", $"sandbox_mode={sandbox}", session, "-"]
+                : ["exec", .. common, "--sandbox", sandbox, "--skip-git-repo-check", "-"],
             request.Prompt);
     }
 

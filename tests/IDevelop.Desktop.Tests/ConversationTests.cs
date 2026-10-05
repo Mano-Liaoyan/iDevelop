@@ -43,9 +43,9 @@ public sealed class ConversationTests : IDisposable
     private FakeRule Answers(string text) =>
         Resuming(ClientId.Codex, Session).CaptureStdin(Path.Combine(_evidence, "resumed.txt")).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, text));
 
-    private Shell OpenSayHi()
+    private Shell OpenSayHi(ConversationMode conversation = ConversationMode.Autonomous)
     {
-        _project = _temp.Seed(TaskAt(SayHi, "Say hi", 105, 90, Codex, "Create hello.txt containing hi."));
+        _project = _temp.Seed(TaskAt(SayHi, "Say hi", 105, 90, Codex, "Create hello.txt containing hi.", conversation));
         var shell = Shell.Open(_project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Say hi")));
         return shell;
@@ -192,7 +192,7 @@ public sealed class ConversationTests : IDisposable
     public void Open_in_terminal_copies_the_clients_command_and_the_inspector_says_turns_taken_there_are_not_recorded()
     {
         Install(_fakes, ClientId.Codex, Asks().WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Done.")));
-        var shell = OpenSayHi();
+        var shell = OpenSayHi(ConversationMode.Chat);
         var copied = new List<string>();
         shell.Window.Copy = text =>
         {
@@ -203,7 +203,7 @@ public sealed class ConversationTests : IDisposable
         shell.WaitUntil(() => string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
         Assert.False(shell.Find<Button>("OpenInTerminal").IsEffectivelyEnabled);
         File.WriteAllText(_gate, "");
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
 
         Invoke(shell.InView<Button>("OpenInTerminal"));
 
@@ -215,18 +215,18 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal($"Copied {command}. Paste it in a terminal to continue this session in {_project}.", shell.Status);
         var note = shell.InView<TextBlock>("TerminalNote").Text!;
         Assert.Matches($@"^Opened in a terminal in {Regex.Escape(_project)} at .+\. Turns taken there are not in iDevelop's record\.$", note);
-        Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
+        Assert.Equal("Waiting for you", shell.InView<TextBlock>("LastRunStatus").Text);
     }
 
     [AvaloniaFact]
     public void When_the_clipboard_fails_Open_in_terminal_shows_the_command_to_run_and_still_records_the_hand_off()
     {
         Install(_fakes, ClientId.Codex, Asks().Print(ReplyLines(ClientId.Codex, "Done.")));
-        var shell = OpenSayHi();
+        var shell = OpenSayHi(ConversationMode.Chat);
         // What Avalonia's Windows clipboard throws while another program holds the clipboard.
         shell.Window.Copy = _ => Task.FromException(new TimeoutException("Timeout opening clipboard."));
         shell.Click(shell.InView<Button>("RunTask"));
-        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
 
         Invoke(shell.InView<Button>("OpenInTerminal"));
 
@@ -236,5 +236,47 @@ public sealed class ConversationTests : IDisposable
             : $"cd '{_project}' && codex resume {Session}";
         Assert.Equal($"iDevelop could not copy the command. To continue this session in {_project}, run it in a terminal: {command}", shell.Status);
         Assert.Matches($@"^Opened in a terminal in {Regex.Escape(_project)} at ", shell.InView<TextBlock>("TerminalNote").Text);
+    }
+
+    [AvaloniaFact]
+    public void A_May_ask_task_that_asks_shows_its_question_and_the_reply_finishes_it()
+    {
+        const string asking = "I need one answer.\n\n```idevelop\n{\"status\": \"asking\", \"question\": \"Which fruit?\"}\n```";
+        Install(_fakes, ClientId.Codex, Answers("Wrote banana."), Asks().Print(ReplyLines(ClientId.Codex, asking)));
+        var shell = OpenSayHi(ConversationMode.MayAsk);
+        Assert.Equal("May ask", shell.Find<ComboBox>("TaskConversation").SelectedItem!.ToString());
+
+        shell.Click(shell.InView<Button>("RunTask"));
+
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
+        Assert.Equal("Which fruit?", shell.InView<TextBlock>("PendingQuestion").Text);
+        Assert.Equal("1 task waits for you", shell.Find<TextBlock>("WaitingCount").Text);
+        Assert.True(shell.Find<Button>("NextWaiting").IsVisible);
+        Assert.Equal("\"Say hi\" is waiting for you. Reply, mark it done, or cancel it first.", shell.InView<TextBlock>("StartProblem").Text);
+
+        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Type("banana");
+        shell.Click(shell.InView<Button>("SendMessage"));
+
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the reply finishes the task");
+        Assert.Equal("banana", File.ReadAllText(Path.Combine(_evidence, "resumed.txt")));
+        Assert.False(shell.Find<Button>("NextWaiting").IsVisible);
+        Assert.Equal("Wrote banana.", shell.InView<TextBox>("LastRunResult").Text);
+    }
+
+    [AvaloniaFact]
+    public void Mark_done_finishes_a_Chat_task_with_its_last_reply()
+    {
+        Install(_fakes, ClientId.Codex, Asks().Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
+        var shell = OpenSayHi(ConversationMode.Chat);
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
+        Assert.Equal("The agent replied. Write back, or mark the task done.", shell.InView<TextBlock>("PendingQuestion").Text);
+
+        shell.Click(shell.InView<Button>("MarkDone"));
+
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the task is done");
+        Assert.Equal("Here is a plan.", shell.InView<TextBox>("LastRunResult").Text);
+        Assert.False(shell.Find<Button>("MarkDone").IsVisible);
     }
 }

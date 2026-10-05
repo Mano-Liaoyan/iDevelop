@@ -499,14 +499,14 @@ public sealed class ConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_in_a_terminal_is_refused_while_a_turn_runs_and_then_recorded_on_the_settled_attempt()
+    public async Task Opening_in_a_terminal_is_refused_while_a_turn_runs_and_then_recorded_on_the_waiting_attempt()
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Done.")));
         var clients = await _fakes.DiscoverAsync();
         await using var runs = ProjectRuns.Open(_project, clients);
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.NeverRan()), runs.OpenInTerminal(SayHiId));
         var settled = NextSettled(runs);
-        var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Settings[ClientId.Codex])));
+        var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Settings[ClientId.Codex]) with { Conversation = ConversationMode.Chat }));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
 
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.TurnRunning("Say hi")), runs.OpenInTerminal(SayHiId));
@@ -519,7 +519,7 @@ public sealed class ConversationTests : IDisposable
             : $"cd '{_project}' && codex resume {Session}";
         Assert.Equal(new TerminalResult.HandedOff(_project, command), runs.OpenInTerminal(SayHiId));
         var handed = runs.Latest[SayHiId];
-        Assert.Equal((AttemptStatus.Succeeded, "Done.", _project, command), (handed.Status, handed.Result, handed.Terminal?.Folder, handed.Terminal?.Command));
+        Assert.Equal((AttemptStatus.WaitingForInput, "Done.", _project, command), (handed.Status, handed.Result, handed.Terminal?.Folder, handed.Terminal?.Command));
         Assert.InRange(handed.Terminal!.At, before, DateTimeOffset.UtcNow);
         Assert.Equal((record.Id, record.EndedAt, record.Detail), (handed.Id, handed.EndedAt, handed.Detail));
         Assert.Equal(record.Turns, handed.Turns);
@@ -573,7 +573,7 @@ public sealed class ConversationTests : IDisposable
     }
 
     private static TaskDefinition SayHi(ExecutionSettings settings) =>
-        new(SayHiId) { Title = "Say hi", Instructions = "Create hello.txt containing hi. Then reply with DONE.", Execution = settings };
+        TestNodes.Implement(SayHiId, "Say hi", "Create hello.txt containing hi. Then reply with DONE.", execution: settings);
 
     private static async Task WaitUntilAsync(Func<bool> done)
     {

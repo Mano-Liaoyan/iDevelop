@@ -45,6 +45,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
         CommitMovesCommand = new RelayCommand(CommitMoves);
+        NextWaitingCommand = new RelayCommand(SelectNextWaiting);
         Document.Changed += (_, _) => Sync();
         Sync();
     }
@@ -117,6 +118,16 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     public ICommand CommitMovesCommand { get; }
 
+    /// <summary>How many tasks wait for the person.</summary>
+    public int WaitingCount => Nodes.Count(node => node.IsWaiting);
+
+    public bool HasWaiting => WaitingCount > 0;
+
+    public string WaitingLabel => WaitingCount == 1 ? "1 task waits for you" : $"{WaitingCount} tasks wait for you";
+
+    /// <summary>Selects the next task that waits for the person, after the selected one, in the order the sidebar lists them.</summary>
+    public ICommand NextWaitingCommand { get; }
+
     internal WorkflowDocument Document { get; }
 
     internal Workflow Workflow => Document.Current;
@@ -163,6 +174,14 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         }
 
         ActiveRun.Show(Runs.Active);
+        OnWaitingChanged();
+    }
+
+    private void OnWaitingChanged()
+    {
+        OnPropertyChanged(nameof(WaitingCount));
+        OnPropertyChanged(nameof(HasWaiting));
+        OnPropertyChanged(nameof(WaitingLabel));
     }
 
     private void AddTaskInView()
@@ -177,13 +196,29 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         AddTask(position);
     }
 
+    /// <summary>Until the palette lists other blueprints, every new task is an Implement node.</summary>
     private void AddTask(CanvasPoint position)
     {
-        var task = new TaskDefinition(TaskId.New()) { Title = "New task" };
-        if (Edit(new WorkflowEdit.CreateTask(task, position)) is EditResult.Applied)
+        var id = TaskId.New();
+        if (Edit(new WorkflowEdit.PlaceNode(id, BuiltInBlueprints.Implement, position) { Title = "New task" }) is EditResult.Applied)
         {
-            SelectedNodes.Clear();
-            SelectedNodes.Add(_nodes[task.Id]);
+            Select(_nodes[id]);
+        }
+    }
+
+    private void Select(TaskNodeViewModel node)
+    {
+        SelectedNodes.Clear();
+        SelectedNodes.Add(node);
+    }
+
+    private void SelectNextWaiting()
+    {
+        var ordered = Nodes.ToList();
+        var start = SelectedNode is { } selected ? ordered.IndexOf(selected) + 1 : 0;
+        if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(node => node.IsWaiting) is { } next)
+        {
+            Select(next);
         }
     }
 
@@ -229,6 +264,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
         {
             SyncNodes(current);
+            OnWaitingChanged();
         }
 
         if (connectionsChanged)

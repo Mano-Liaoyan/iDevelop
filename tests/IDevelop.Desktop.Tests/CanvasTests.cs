@@ -105,13 +105,13 @@ public sealed class CanvasTests : IDisposable
     public void A_card_previews_its_instructions_and_says_when_there_are_none()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        Assert.Equal(["Build", "Not run", "No agent", "No instructions yet."], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Not run", "No agent", "Implement", "No instructions yet."], Shell.Texts(shell.Node("Build")));
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
-        Assert.Equal(["Build", "Not run", "No agent", "Compile"], Shell.Texts(shell.Node("Build")));
+        Assert.Equal(["Build", "Not run", "No agent", "Implement", "Compile"], Shell.Texts(shell.Node("Build")));
     }
 
     [AvaloniaFact]
@@ -240,7 +240,7 @@ public sealed class CanvasTests : IDisposable
         shell.Press(Key.S, RawInputModifiers.Control);
 
         Assert.Equal("Draft\nReview", shell.Find<TextBox>("TaskInstructions").Text);
-        Assert.Equal("Draft\nReview", WorkflowDocument.Open(folder).Current.Tasks[Design].Instructions);
+        Assert.Equal("Draft\nReview", WorkflowDocument.Open(folder).Current.Tasks[Design].Field("instructions"));
     }
 
     [AvaloniaFact]
@@ -251,7 +251,7 @@ public sealed class CanvasTests : IDisposable
             TaskAt(Build, "Build", 405, 90),
             TaskAt(Review, "Review", 405, 300),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
-            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Review),
+            new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
         shell.Click(shell.Header(shell.Node("Build")));
 

@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
@@ -35,6 +36,7 @@ public sealed partial class ProjectRuns
         private LaunchPlan _plan;
         private Turn _turn;
         private bool _messageWaiting;
+        private ConversationMode? _conversation;
         private bool _closed;
 
         /// <param name="order">Counts this window's launches, so <see cref="Active"/> keeps the order the runs started in.</param>
@@ -72,7 +74,8 @@ public sealed partial class ProjectRuns
             }
         }
 
-        public SendResult Send(string text, bool stopTurn)
+        /// <param name="conversation">The task's mode now, which the next turn takes.</param>
+        public SendResult Send(string text, bool stopTurn, ConversationMode conversation)
         {
             lock (_gate)
             {
@@ -81,6 +84,7 @@ public sealed partial class ProjectRuns
                     return new SendResult.Refused(problem);
                 }
 
+                _conversation = conversation;
                 // Once the client exited, the turn keeps its own outcome.
                 var stops = stopTurn && _turn.ClientRuns;
                 _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stops));
@@ -242,7 +246,10 @@ public sealed partial class ProjectRuns
         private bool Launch(string session)
         {
             var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued));
-            Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments));
+            Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
+            {
+                Conversation = _conversation,
+            });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
             Record = record;
             _messageWaiting = false;

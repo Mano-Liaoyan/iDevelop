@@ -1,4 +1,5 @@
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Execution.StartProblem;
@@ -72,7 +73,7 @@ public class StartCheckTests
             Problem(SayHi(SolHigh), Only(new ClientStatus.Unready("Codex is not signed in. Run codex login in a terminal."))));
         Assert.Equal(new NoModel(ClientId.Codex), Problem(SayHi(new ExecutionSettings(ClientId.Codex)), CodexReady));
         Assert.Equal(new ModelNotOffered(ClientId.Codex, "gpt-4"), Problem(SayHi(SolHigh with { Model = "gpt-4" }), CodexReady));
-        Assert.Equal(new NoInstructions(), Problem(SayHi(SolHigh, instructions: " \n "), CodexReady));
+        Assert.Equal(new FieldMissing("Instructions"), Problem(SayHi(SolHigh, instructions: " \n "), CodexReady));
     }
 
     [Fact]
@@ -136,16 +137,67 @@ public class StartCheckTests
         Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(pi), @"\\server\share\repo", PiAt(@"C:\tools\pi.exe", isBatchShim: false)));
     }
 
-    [Fact]
-    public void The_prompt_leaves_out_a_blank_title_and_blank_acceptance_criteria()
+    [Theory]
+    [InlineData("Say hi", "Create hello.txt containing hi.", "hello.txt holds hi.")]
+    [InlineData(" ", "\nCreate hello.txt.\n", "")]
+    [InlineData("  Two words \n", "  Line one\n\n  Line three  \n", " \n ")]
+    [InlineData("审查", "Write {{title}} and {{#x}}braces{{/x}} literally.\n## Not a heading", "  First\nSecond  ")]
+    [InlineData("", "", "Only criteria")]
+    public void The_built_in_Implement_renders_the_single_task_prompt_byte_for_byte(string title, string instructions, string criteria)
     {
-        var task = new TaskDefinition(TestTasks.Design) { Title = " ", Instructions = "\nCreate hello.txt.\n" };
+        var task = TestNodes.Implement(TestTasks.Design, title, instructions, criteria);
 
-        Assert.Equal("Create hello.txt.\n", Prompt.For(task));
+        Assert.Equal(PhaseThreePrompt(title, instructions, criteria), AgentWork.Prompt(new NodeContext(task, "")));
+    }
+
+    [Fact]
+    public void A_May_ask_node_reads_how_to_ask_after_its_template()
+    {
+        var task = TestNodes.Implement(TestTasks.Design, "Say hi", "Create hello.txt.", conversation: ConversationMode.MayAsk);
+
+        Assert.Equal(
+            "# Say hi\n\nCreate hello.txt.\n\n" +
+            "If you cannot go on without an answer from the person, ask instead of guessing. End your final message with this block and nothing after it, where the question is your own:\n\n" +
+            "```idevelop\n{\"status\": \"asking\", \"question\": \"...\"}\n```\n\n" +
+            "When you have finished the work, end without that block.\n",
+            AgentWork.Prompt(new NodeContext(task, "")));
+    }
+
+    [Fact]
+    public void A_read_only_agent_launches_in_the_clients_read_only_mode()
+    {
+        var reader = new Blueprint(
+            new BlueprintKey("team.reader", 1), "Reader",
+            new WorkSpec.Agent(AgentAccess.ReadOnly, Proposes: false, PromptTemplate.Parse("Read {{title}}.")), [],
+            new NodeSettings(SolHigh, ConversationMode.Autonomous));
+
+        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(new TaskDefinition(TestTasks.Design, reader) { Title = "it" }, Folder, CodexReady)).Plan;
+
+        Assert.Equal("Read it.", plan.Request.Prompt);
+        Assert.Equal("exec --json -m gpt-6-sol -c model_reasoning_effort=high -c approval_policy=never --sandbox read-only --skip-git-repo-check -", string.Join(" ", plan.Launch.Arguments));
+    }
+
+    /// <summary>The prompt single-task execution sent, as it was written before typed nodes.</summary>
+    private static string PhaseThreePrompt(string title, string instructions, string criteria)
+    {
+        List<string> parts = [];
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            parts.Add($"# {title.Trim()}");
+        }
+
+        parts.Add(instructions.Trim());
+        if (!string.IsNullOrWhiteSpace(criteria))
+        {
+            parts.Add("## Acceptance criteria");
+            parts.Add(criteria.Trim());
+        }
+
+        return string.Join("\n\n", parts) + "\n";
     }
 
     private static TaskDefinition SayHi(ExecutionSettings? execution, string instructions = "Create hello.txt containing hi.") =>
-        new(TestTasks.Design) { Title = "Say hi", Instructions = instructions, AcceptanceCriteria = "hello.txt holds hi.", Execution = execution };
+        TestNodes.Implement(TestTasks.Design, "Say hi", instructions, "hello.txt holds hi.", execution);
 
     private static StartProblem Problem(TaskDefinition task, IReadOnlyDictionary<ClientId, ClientStatus> clients, string folder = Folder) =>
         Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(task, folder, clients)).Problem;

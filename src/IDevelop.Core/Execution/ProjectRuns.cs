@@ -68,11 +68,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// Raised after <see cref="Latest"/> or <see cref="Active"/> changes: at each new state of an attempt this window
-    /// starts, at a hand-off to the terminal, and at a start, a continuation, or a hand-off that another window's run
-    /// refuses, which reads every task's newest attempt again. A start, a continuation, and a hand-off raise it on the
-    /// caller's thread and a run from a worker thread, in order. By a run's last one,
-    /// <see cref="Active"/> no longer holds it and its task is free. The attempt is settled, unless leaving gave up on a client
-    /// that did not end; that attempt stays on record as running, and the next open settles it.
+    /// starts, at a hand-off to the terminal, at marking a waiting task done or cancelling it, and at a start, a
+    /// continuation, or a hand-off that another window's run refuses, which reads every task's newest attempt again. A
+    /// start, a continuation, a hand-off, and a waiting task's end raise it on the caller's thread and a run from a worker
+    /// thread, in order. By a run's last one, <see cref="Active"/> no longer holds it and its task is free. The attempt is
+    /// settled or waits for the person, unless leaving gave up on a client that did not end; that attempt stays on record
+    /// as running, and the next open settles it.
     /// </summary>
     public event EventHandler? Changed;
 
@@ -122,6 +123,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 case LockTake.HeldElsewhere elsewhere:
                     result = new StartResult.Refused(elsewhere.Problem);
                     break;
+                // The read under the lock can find that another window's run ended waiting for the person.
+                case LockTake.Taken taken when Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting:
+                    taken.Lock.Dispose();
+                    return new StartResult.Refused(new StartProblem.Waiting(waiting.TaskTitle));
                 case LockTake.Taken taken:
                     (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null);
                     if (result is StartResult.Refused)
@@ -142,8 +147,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>
     /// Sends the person's message to the task's agent. While this window runs the task, the message waits for the running
     /// turn to end, or <paramref name="stopTurn"/> stops that turn's process tree first, and the next turn resumes the
-    /// session with it. Otherwise a new attempt resumes the latest attempt's session with it, which leaves that attempt as
-    /// it was. Every reason not to send comes back as <see cref="SendResult.Refused"/>.
+    /// session with it. A task that waits for the person takes it as the next turn of its waiting attempt. Otherwise a new
+    /// attempt resumes the latest attempt's session with it, which leaves that attempt as it was. Every reason not to send
+    /// comes back as <see cref="SendResult.Refused"/>.
     /// </summary>
     public SendResult Send(TaskDefinition task, string text, bool stopTurn)
     {
@@ -161,7 +167,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         if (active is not null)
         {
-            return active.Send(text, stopTurn);
+            return active.Send(text, stopTurn, task.Conversation);
         }
 
         SendResult result;
@@ -182,7 +188,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     result = new SendResult.Refused(new SendProblem.CannotStart(elsewhere.Problem));
                     break;
                 case LockTake.Taken taken:
-                    (result, run) = Continue(task, text, taken.Lock);
+                    (result, run) = Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
+                        ? Answer(task, text, waiting, taken.Lock)
+                        : Continue(task, text, taken.Lock);
                     break;
                 default:
                     throw new UnreachableException();
@@ -245,7 +253,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// Records on the task's latest attempt that the person took its session to the client's own terminal interface, and
-    /// returns the command that opens it there. Refused while a turn of the task runs, and without a session.
+    /// returns the command that opens it there. Refused unless the task waits for the person with a session.
     /// </summary>
     public TerminalResult OpenInTerminal(TaskId task)
     {
@@ -282,8 +290,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>Stops the task's client and every process it started, unless the client already exited, and records the
-    /// attempt as cancelled. Does nothing unless this window runs that task's attempt.</summary>
-    public void Cancel(TaskId task)
+    /// attempt as cancelled. A task that waits for the person is recorded as cancelled at once. Does nothing otherwise,
+    /// unless this window runs that task's attempt. Returns why a waiting task could not be cancelled, or null.</summary>
+    public StartProblem? Cancel(TaskId task)
     {
         ActiveRun? run;
         lock (_gate)
@@ -291,7 +300,64 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active.TryGetValue(task, out run);
         }
 
-        run?.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+        if (run is null)
+        {
+            return SettleWaiting(task, new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+        }
+
+        run.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+        return null;
+    }
+
+    /// <summary>Records a task that waits for the person as succeeded, with its last reply as its result. Null when it is
+    /// done, else why not.</summary>
+    public StartProblem? MarkDone(TaskId task) => SettleWaiting(task, new AttemptEvent.MarkedDone(DateTimeOffset.UtcNow));
+
+    /// <summary>Appends <paramref name="e"/> to the task's waiting attempt under its lock. Does nothing unless it waits, or
+    /// once the project is leaving.</summary>
+    private StartProblem? SettleWaiting(TaskId task, AttemptEvent e)
+    {
+        StartProblem? problem = null;
+        lock (_gate)
+        {
+            if (_leaving is not null || _active.ContainsKey(task) || Latest.GetValueOrDefault(task) is not { Status: AttemptStatus.WaitingForInput })
+            {
+                return null;
+            }
+
+            switch (TakeLock(task))
+            {
+                case LockTake.Failed failed:
+                    return failed.Problem;
+                case LockTake.HeldElsewhere elsewhere:
+                    problem = elsewhere.Problem;
+                    break;
+                case LockTake.Taken taken:
+                    using (taken.Lock)
+                    {
+                        if (Latest.GetValueOrDefault(task) is { Status: AttemptStatus.WaitingForInput } waiting)
+                        {
+                            try
+                            {
+                                using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, waiting.Id));
+                                log.Append(e);
+                                Latest = Latest.SetItem(task, AttemptReducer.Apply(waiting, e));
+                            }
+                            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                            {
+                                problem = CannotRecord(error);
+                            }
+                        }
+                    }
+
+                    break;
+                default:
+                    throw new UnreachableException();
+            }
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        return problem;
     }
 
     /// <summary>
@@ -464,6 +530,72 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         };
     }
 
+    /// <summary>
+    /// Starts the next turn of the task's waiting attempt with the message, under the same log. Called under the gate with
+    /// the task's lock, which it releases unless the turn runs.
+    /// </summary>
+    private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, RunLock held)
+    {
+        if (!TryContinue(task, waiting, out var from, out var problem))
+        {
+            held.Dispose();
+            return (new SendResult.Refused(problem), null);
+        }
+
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        if (verdict is StartVerdict.Blocked blocked)
+        {
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(blocked.Problem)), null);
+        }
+
+        var plan = ((StartVerdict.Allowed)verdict).Plan;
+        AttemptLog log;
+        AttemptRecord record;
+        try
+        {
+            log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task.Id, waiting.Id));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(CannotRecord(e))), null);
+        }
+
+        try
+        {
+            var turn = new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
+            {
+                Conversation = task.Conversation,
+            };
+            log.Append(turn);
+            record = AttemptReducer.Apply(waiting, turn);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Dispose();
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(CannotRecord(e))), null);
+        }
+
+        var (launched, process) = LaunchTurn(plan, record, log);
+        _started.Add(launched.Id);
+        ActiveRun? run = null;
+        if (process is null)
+        {
+            log.Dispose();
+            held.Dispose();
+        }
+        else
+        {
+            run = new ActiveRun(this, ++_launches, plan, process, log, held, launched);
+            _active[task.Id] = run;
+        }
+
+        Latest = Latest.SetItem(task.Id, launched);
+        return (new SendResult.Answered(launched), run);
+    }
+
     /// <summary>The session of the task's latest attempt that a message can resume, or why there is none.</summary>
     private static bool TryContinue(
         TaskDefinition task, AttemptRecord? last, [NotNullWhen(true)] out Continuation? from, [NotNullWhen(false)] out SendProblem? problem)
@@ -490,6 +622,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         if (last.SessionId is not { } session)
         {
             return new TerminalResult.Refused(new TerminalProblem.NoSession(last.Requested.Client));
+        }
+
+        if (last.Status != AttemptStatus.WaitingForInput)
+        {
+            return new TerminalResult.Refused(new TerminalProblem.NotWaiting(last.TaskTitle));
         }
 
         var command = TerminalCommand.For(_projectFolder, Clients.Get(last.Requested.Client).Terminal(session), TerminalCommand.Current);
@@ -523,6 +660,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Continues = continues,
+                Conversation = task.Conversation,
             };
             log = AttemptLog.Create(_attempts, requested);
         }
@@ -550,10 +688,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return (new StartResult.Started(record), run);
     }
 
-    /// <summary>Whether this window runs the task, then what <see cref="StartCheck"/> says. Called under the gate.</summary>
-    private StartVerdict Verdict(TaskDefinition task) => _active.TryGetValue(task.Id, out var run)
-        ? new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run.Record.Task, run.Record.TaskTitle))
-        : StartCheck.Evaluate(task, _projectFolder, _clients.Current);
+    /// <summary>Whether this window runs the task, then whether it waits for the person, then what <see cref="StartCheck"/>
+    /// says. Called under the gate.</summary>
+    private StartVerdict Verdict(TaskDefinition task) => (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
+    {
+        (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
+        (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
+        _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current),
+    };
 
     /// <summary>
     /// Starts a turn's client and records its process. A client that does not start fails the attempt, and so does a log
