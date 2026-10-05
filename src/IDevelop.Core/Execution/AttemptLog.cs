@@ -30,6 +30,7 @@ internal sealed class AttemptLog : IDisposable
             new IdConverter<TaskId>(id => id.Value, value => new TaskId(value)),
             new IdConverter<AttemptId>(id => id.Value, value => new AttemptId(value)),
             new SettingsConverter(),
+            new BlueprintKeyConverter(),
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false),
         },
     };
@@ -249,6 +250,15 @@ internal sealed class AttemptLog : IDisposable
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => create(reader.GetGuid());
 
         public override void Write(Utf8JsonWriter writer, T id, JsonSerializerOptions options) => writer.WriteStringValue(value(id));
+    }
+
+    /// <summary>Stores a key as <c>id@version</c>, as the workflow file does.</summary>
+    private sealed class BlueprintKeyConverter : JsonConverter<BlueprintKey>
+    {
+        public override BlueprintKey Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            BlueprintKey.Parse(reader.GetString() ?? "") ?? throw new JsonException("The blueprint key is not an id and a version.");
+
+        public override void Write(Utf8JsonWriter writer, BlueprintKey key, JsonSerializerOptions options) => writer.WriteStringValue(key.ToString());
     }
 
     /// <summary>Stores the client by its wire name, as the workflow file does.</summary>

@@ -177,6 +177,21 @@ public class StartCheckTests
         Assert.Equal("exec --json -m gpt-6-sol -c model_reasoning_effort=high -c approval_policy=never --sandbox read-only --skip-git-repo-check -", string.Join(" ", plan.Launch.Arguments));
     }
 
+    [Fact]
+    public void A_read_only_node_does_not_start_on_a_client_without_a_read_only_mode()
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var ready = new Dictionary<ClientId, ClientStatus>
+        {
+            [ClientId.Pi] = new ClientStatus.Ready(new ResolvedCommand("/usr/local/bin/pi", IsBatchShim: false), [new ModelOption("deepseek/deepseek-v4-pro", "DeepSeek V4 Pro", ["high"])]),
+        };
+        var architect = new TaskDefinition(TestTasks.Design, BuiltInBlueprints.Architect) { Title = "Design", Execution = pi }.WithField("brief", "Export as CSV.")!;
+
+        Assert.Equal(new NoReadOnlyMode(ClientId.Pi), Problem(architect, ready));
+        Assert.Equal(new NoReadOnlyMode(ClientId.Pi), Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(architect, Folder, ready, new Resumption("s-1", "Go on."))).Problem);
+        Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(SayHi(pi), Folder, ready));
+    }
+
     /// <summary>The prompt single-task execution sent, as it was written before typed nodes.</summary>
     private static string PhaseThreePrompt(string title, string instructions, string criteria)
     {

@@ -135,6 +135,7 @@ public static class RunText
         StartProblem.FieldMissing p => $"Fill in {p.Label} first.",
         StartProblem.Waiting p => $"\"{p.Title}\" is waiting for you. Reply, mark it done, or cancel it first.",
         StartProblem.NoConversation => "This task has no agent to write to.",
+        StartProblem.NoReadOnlyMode p => $"This task may only read the project, and {Clients.Name(p.Client)} has no read-only mode. Choose another client.",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",

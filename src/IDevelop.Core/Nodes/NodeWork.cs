@@ -35,7 +35,11 @@ public abstract record NodeStep
 }
 
 /// <summary>A node and what earlier nodes handed on to it.</summary>
-public sealed record NodeContext(TaskDefinition Node, string Inputs);
+public sealed record NodeContext(TaskDefinition Node, string Inputs)
+{
+    /// <summary>What a node whose agent proposes may fill and place. Null reads as <see cref="PlanningContext.None"/>.</summary>
+    public PlanningContext? Planning { get; init; }
+}
 
 /// <summary>
 /// The base node interface: what one <see cref="WorkKind"/> does. <see cref="Next"/> is a pure decider. It starts no

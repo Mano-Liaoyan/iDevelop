@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -103,14 +104,18 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Checks the task, takes the task's run lock, settles any attempt a crash left running, records the attempt, and
     /// launches the client. Every reason not to launch comes back as <see cref="StartResult.Refused"/>.
     /// </summary>
-    public StartResult Start(TaskDefinition task)
+    /// <param name="planning">
+    /// What a node whose agent proposes may fill and place. Its prompt lists them by handle, and the attempt records the
+    /// handles. Other nodes ignore it.
+    /// </param>
+    public StartResult Start(TaskDefinition task, PlanningContext? planning = null)
     {
         StartResult result;
         ActiveRun? run = null;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
-            var verdict = Verdict(task);
+            var verdict = Verdict(task, planning);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);
@@ -128,7 +133,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     taken.Lock.Dispose();
                     return new StartResult.Refused(new StartProblem.Waiting(waiting.TaskTitle));
                 case LockTake.Taken taken:
-                    (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null);
+                    var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles : null;
+                    (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null, handles);
                     if (result is StartResult.Refused)
                     {
                         return result;
@@ -509,7 +515,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private (SendResult Result, ActiveRun? Run) Continue(TaskDefinition task, string message, RunLock held)
     {
-        if (!TryContinue(task, Latest.GetValueOrDefault(task.Id), out var from, out var problem))
+        var last = Latest.GetValueOrDefault(task.Id);
+        if (!TryContinue(task, last, out var from, out var problem))
         {
             held.Dispose();
             return (new SendResult.Refused(problem), null);
@@ -522,7 +529,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(new SendProblem.CannotStart(blocked.Problem)), null);
         }
 
-        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, from);
+        // The session read the handles the continued attempt recorded, so its proposals name them.
+        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, from, last?.Planning);
         return result switch
         {
             StartResult.Started started => (new SendResult.Continued(started.Attempt), run),
@@ -650,7 +658,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Records the attempt and launches its first turn. An attempt that cannot be recorded is refused, and the lock is
     /// released. Called under the gate with the task's lock.
     /// </summary>
-    private (StartResult Result, ActiveRun? Run) RecordAndLaunch(TaskDefinition task, LaunchPlan plan, RunLock held, Continuation? continues)
+    private (StartResult Result, ActiveRun? Run) RecordAndLaunch(
+        TaskDefinition task, LaunchPlan plan, RunLock held, Continuation? continues, PlanningHandles? planning)
     {
         AttemptLog log;
         AttemptEvent.Requested requested;
@@ -662,6 +671,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             {
                 Continues = continues,
                 Conversation = task.Conversation,
+                Planning = planning,
             };
             log = AttemptLog.Create(_attempts, requested);
         }
@@ -691,12 +701,13 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     /// <summary>Whether this window runs the task, then whether it waits for the person, then what <see cref="StartCheck"/>
     /// says. Called under the gate.</summary>
-    private StartVerdict Verdict(TaskDefinition task) => (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
-    {
-        (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
-        (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
-        _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current),
-    };
+    private StartVerdict Verdict(TaskDefinition task, PlanningContext? planning = null) =>
+        (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
+        {
+            (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
+            (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
+            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning),
+        };
 
     /// <summary>
     /// Starts a turn's client and records its process. A client that does not start fails the attempt, and so does a log

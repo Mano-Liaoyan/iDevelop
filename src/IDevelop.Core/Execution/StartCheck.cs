@@ -21,6 +21,9 @@ public abstract record StartProblem
     /// <summary>The node's work has no agent to send a message to.</summary>
     public sealed record NoConversation : StartProblem;
 
+    /// <summary>The node's agent may only read, and the client has no mode that keeps it from writing.</summary>
+    public sealed record NoReadOnlyMode(ClientId Client) : StartProblem;
+
     public sealed record NoModel(ClientId Client) : StartProblem;
 
     public sealed record ClientChecking(ClientId Client) : StartProblem;
@@ -86,7 +89,9 @@ internal abstract record StartVerdict
 internal static class StartCheck
 {
     /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no field filled in.</param>
-    public static StartVerdict Evaluate(TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null)
+    /// <param name="planning">What a node whose agent proposes may fill and place, which its first prompt lists.</param>
+    public static StartVerdict Evaluate(
+        TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null, PlanningContext? planning = null)
     {
         if (task.Execution is not { } settings)
         {
@@ -94,6 +99,12 @@ internal static class StartCheck
         }
 
         var client = settings.Client;
+        var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly };
+        if (readOnly && !Clients.Get(client).HasReadOnlyMode)
+        {
+            return Block(new StartProblem.NoReadOnlyMode(client));
+        }
+
         ClientStatus.Ready ready;
         switch (clients.GetValueOrDefault(client))
         {
@@ -152,12 +163,11 @@ internal static class StartCheck
         }
         else
         {
-            prompt = work.Next(new NodeContext(task, ""), null) is NodeStep.RunTurn turn
+            prompt = work.Next(new NodeContext(task, "") { Planning = planning }, null) is NodeStep.RunTurn turn
                 ? turn.Prompt
                 : throw new UnreachableException("A fresh start always runs a turn.");
         }
 
-        var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly };
         var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly };
         var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request);
         if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)

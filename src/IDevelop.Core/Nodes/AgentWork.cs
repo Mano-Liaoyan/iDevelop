@@ -9,11 +9,10 @@ public sealed class AgentWork : IConverses
     public static readonly AgentWork Instance = new();
 
     /// <summary>What a May ask agent reads after its template.</summary>
-    internal static readonly string AskContract =
+    private const string Ask =
         "If you cannot go on without an answer from the person, ask instead of guessing. End your final message with " +
         "this block and nothing after it, where the question is your own:\n\n" +
-        "```idevelop\n{\"status\": \"asking\", \"question\": \"...\"}\n```\n\n" +
-        "When you have finished the work, end without that block.";
+        "```idevelop\n{\"status\": \"asking\", \"question\": \"...\"}\n```\n\n";
 
     private AgentWork() { }
 
@@ -31,8 +30,9 @@ public sealed class AgentWork : IConverses
     public string Reply(string message) => message;
 
     /// <summary>
-    /// The rendered template, then iDevelop's contract for the node's conversation mode, which no blueprint can remove.
-    /// An Autonomous node has no contract, so the built-in Implement's prompt is single-task execution's.
+    /// The rendered template, then iDevelop's contract for the node's conversation mode and for a proposal, which no
+    /// blueprint can remove. An Autonomous node that proposes nothing has no contract, so the built-in Implement's prompt
+    /// is single-task execution's.
     /// </summary>
     internal static string Prompt(NodeContext context)
     {
@@ -44,7 +44,7 @@ public sealed class AgentWork : IConverses
             "inputs" => context.Inputs,
             _ => node.Field(name),
         });
-        return Contract(node.Conversation) is { } contract ? $"{rendered.TrimEnd()}\n\n{contract}\n" : rendered;
+        return Contract(node, context.Planning) is { } contract ? $"{rendered.TrimEnd()}\n\n{contract}\n" : rendered;
     }
 
     /// <summary>
@@ -65,9 +65,18 @@ public sealed class AgentWork : IConverses
         },
     };
 
-    private static string? Contract(ConversationMode mode) => mode switch
+    private static string? Contract(TaskDefinition node, PlanningContext? planning)
     {
-        ConversationMode.Autonomous or ConversationMode.Chat => null,
-        ConversationMode.MayAsk => AskContract,
-    };
+        var proposes = node.Blueprint.Work is WorkSpec.Agent { Proposes: true };
+        var ask = node.Conversation switch
+        {
+            ConversationMode.Autonomous or ConversationMode.Chat => null,
+            ConversationMode.MayAsk => Ask + (proposes
+                ? "When you have finished, end with the proposal block below instead."
+                : "When you have finished the work, end without that block."),
+        };
+        var proposal = proposes ? (planning ?? PlanningContext.None).Contract(node.Conversation) : null;
+        string[] parts = [.. new[] { ask, proposal }.OfType<string>()];
+        return parts.Length == 0 ? null : string.Join("\n\n", parts);
+    }
 }
