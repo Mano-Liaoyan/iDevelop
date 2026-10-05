@@ -43,19 +43,41 @@ public sealed class AgentsSectionTests : IDisposable
         clients.RefreshAsync().Wait();
         shell.Render();
 
-        Assert.Equal(["Claude Code", "Not ready", "Claude Code is not signed in. Run claude in a terminal and sign in."], Shell.Texts(Row(shell, "AgentClaudeCode")));
+        Assert.Equal(["Claude Code", "Not signed in"], Shell.Texts(Row(shell, "AgentClaudeCode")));
         Assert.Equal(["Codex", "Ready · 3 models"], Shell.Texts(Row(shell, "AgentCodex")));
+        Assert.Equal(["Pi", "Ready · 2 of 5 models"], Shell.Texts(Row(shell, "AgentPi")));
+        Assert.Equal(["Antigravity CLI", "Not installed"], Shell.Texts(Row(shell, "AgentAntigravity")));
         Assert.Equal(
-            ["Pi", "Ready · 2 of 5 models", "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again."],
-            Shell.Texts(Row(shell, "AgentPi")));
-        Assert.Equal(["Antigravity CLI", "Not installed", "No agy command was found on PATH."], Shell.Texts(Row(shell, "AgentAntigravity")));
+            ["Claude Code is not signed in. Run claude in a terminal and sign in.", null,
+             "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again.", "No agy command was found on PATH."],
+            new[] { "AgentClaudeCode", "AgentCodex", "AgentPi", "AgentAntigravity" }.Select(row => ToolTip.GetTip((Control)Row(shell, row))));
         Assert.Equal(
             [Color.Parse("#FF383C"), Color.Parse("#34C759"), Color.Parse("#34C759"), Color.Parse("#90969C")],
             new[] { "AgentClaudeCode", "AgentCodex", "AgentPi", "AgentAntigravity" }.Select(row => Dot(shell, row)));
         var claude = ControlAutomationPeer.CreatePeerForElement(shell.Find<TextBlock>("AgentClaudeCode"));
         Assert.Equal(
-            ("Not ready", "Claude Code is not signed in. Run claude in a terminal and sign in."),
+            ("Not signed in", "Claude Code is not signed in. Run claude in a terminal and sign in."),
             (claude.GetName(), claude.GetHelpText()));
+    }
+
+    [AvaloniaFact]
+    public void A_check_that_fails_reads_not_ready_under_a_title_case_header_and_keeps_its_error_off_the_row()
+    {
+        _fakes.Install("claude", On("auth", "status").Stderr("fake").Exit(99));
+        var clients = new ClientDirectory(_fakes.Resolver);
+        var shell = Shell.Show(clients);
+        clients.RefreshAsync().Wait();
+        shell.Render();
+
+        var row = Row(shell, "AgentClaudeCode");
+        var claude = ControlAutomationPeer.CreatePeerForElement(shell.Find<TextBlock>("AgentClaudeCode"));
+        Assert.Equal(["Claude Code", "Not ready"], Shell.Texts(row));
+        Assert.Equal(
+            ("claude auth status exited with code 99: fake", "claude auth status exited with code 99: fake"),
+            (ToolTip.GetTip((Control)row), claude.GetHelpText()));
+        Assert.Equal(
+            ["Project", "Agents", "Appearance"],
+            shell.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Classes.Contains("section")).Select(text => text.Text));
     }
 
     [AvaloniaFact]
@@ -69,8 +91,8 @@ public sealed class AgentsSectionTests : IDisposable
 
         shell.Click(shell.Find<Button>("RefreshAgents"));
 
-        shell.WaitUntil(() => Shell.Texts(Row(shell, "AgentCodex")) is [_, "Not ready", ..], "Codex shows that it is signed out");
-        Assert.Equal(["Codex", "Not ready", "Codex is not signed in. Run codex login in a terminal."], Shell.Texts(Row(shell, "AgentCodex")));
+        shell.WaitUntil(() => Shell.Texts(Row(shell, "AgentCodex")) is [_, "Not signed in"], "Codex shows that it is signed out");
+        Assert.Equal("Codex is not signed in. Run codex login in a terminal.", ToolTip.GetTip((Control)Row(shell, "AgentCodex")));
         shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
     }
 }

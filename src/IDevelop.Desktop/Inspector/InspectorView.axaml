@@ -200,8 +200,9 @@
                         </ComboBox>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasClient}">
-                        <TextBlock Classes="note" Text="{Binding PermissionNote}" ToolTip.Tip="{Binding PermissionNote}"
-                                   AutomationProperties.AutomationId="PermissionNote" />
+                        <TextBlock Classes="note" Text="{Binding PermissionSummary}" ToolTip.Tip="{Binding PermissionNote}"
+                                   AutomationProperties.AutomationId="PermissionNote"
+                                   AutomationProperties.HelpText="{Binding PermissionNote}" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Conversation" IsShown="{Binding HasConversation}" Info="{Binding ConversationNote}"
                                               RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation">
@@ -216,8 +217,9 @@
                         </ComboBox>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding HasConversation}">
-                        <TextBlock Classes="note" Text="{Binding ConversationNote}" ToolTip.Tip="{Binding ConversationNote}"
-                                   AutomationProperties.AutomationId="ConversationNote" />
+                        <TextBlock Classes="note" Text="{Binding ConversationSummary}" ToolTip.Tip="{Binding ConversationNote}"
+                                   AutomationProperties.AutomationId="ConversationNote"
+                                   AutomationProperties.HelpText="{Binding ConversationNote}" />
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>

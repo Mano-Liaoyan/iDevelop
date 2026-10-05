@@ -1,11 +1,11 @@
-# The AGENTS section and the agent pickers
+# The Agents section and the agent pickers
 
-The sidebar's AGENTS section shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
+The sidebar's Agents section shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
 
 ## Sub-features
 
-- `agents-rows` lists the four clients with a readiness summary and, for a client that is not ready, the reason.
-- `agents-refresh` checks the clients again from the refresh button beside `AGENTS`.
+- `agents-rows` lists the four clients, each with a readiness summary in a few words, such as `Ready · 3 models`, `Not signed in`, `Not installed`, or `Not ready`. The row's tooltip and the summary's help text hold the whole reason.
+- `agents-refresh` checks the clients again from the refresh button beside `Agents`.
 - `picker-shows` shows the selected task's saved client, model, and level, and marks a model this machine does not offer.
 - `picker-follow` follows the task chosen in the sidebar and edits nothing.
 - `picker-client` offers `None` and the four clients, marks the ones that are not ready, and takes the chosen client's first model at its default level.
@@ -16,8 +16,8 @@ The sidebar's AGENTS section shows whether Claude Code, Codex, Pi, and Antigravi
 
 ## How to get to it (user POV)
 
-- Read the AGENTS section at the bottom of the sidebar.
-- Choose the refresh button beside `AGENTS`.
+- Read the Agents section at the bottom of the sidebar.
+- Choose the refresh button beside `Agents`.
 - Choose a task in the sidebar or on the canvas, then use the `Client`, `Model`, and `Reasoning` pickers in the `Agent` section of the inspector.
 
 ## Driving it with real-window.psm1
@@ -27,9 +27,9 @@ Preconditions:
 - A new session on the sample, started with `$s = Start-IDevelop`, so Codex is the fake and the other clients are blocked.
 - `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60` has returned `$true`.
 
-- **Rows.** Read each row. Run `foreach ($id in 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity') { $row = Find-ById $s.Window $id; "$id $($row.Current.Name) $($row.Current.HelpText)" }`. Codex reads `Ready · 3 models`. The other three read `Not ready`, and each reason names the probe that failed, such as `claude auth status exited with code 99`.
+- **Rows.** Read each row. Run `foreach ($id in 'AgentClaudeCode', 'AgentCodex', 'AgentPi', 'AgentAntigravity') { $row = Find-ById $s.Window $id; "$id $($row.Current.Name) $($row.Current.HelpText)" }`. Codex reads `Ready · 3 models`. The other three read `Not ready`, and each `HelpText` names the probe that failed, such as `claude auth status exited with code 99`. No row shows that reason as text.
 - **Refresh.** Run `Invoke-Element (Find-ById $s.Window 'RefreshAgents')` and `Wait-Until { (Find-ById $s.Window 'AgentCodex').Current.Name -like 'Ready*' } 60`. Codex reads `Ready · 3 models` again.
-- **Saved agent.** Choose the second task. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`. `Get-Value` on `TaskClient`, `TaskModel`, and `TaskReasoning` gives `Codex`, `GPT-6-Sol`, and `medium`. `(Find-ById $s.Window 'PermissionNote').Current.Name` is `Codex may edit files in the project folder. Its commands run in its workspace sandbox.`. The window title stays `project - iDevelop`.
+- **Saved agent.** Choose the second task. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`. `Get-Value` on `TaskClient`, `TaskModel`, and `TaskReasoning` gives `Codex`, `GPT-6-Sol`, and `medium`. `(Find-ById $s.Window 'PermissionNote').Current.Name` is `Edits files. Runs commands in a sandbox.`, and its `Current.HelpText` is `Codex may edit files in the project folder. Its commands run in its workspace sandbox.`. The window title stays `project - iDevelop`.
 - **Model not offered.** Choose the first task. Run `Select-Element (Get-SidebarTasks $s.Window)[0]`. The pickers give `Claude Code · not ready`, `claude-opus-5-5 (not offered on this machine)`, and `high`. The window title stays `project - iDevelop`.
 - **No agent.** Choose the third task. Run `Select-Element (Get-SidebarTasks $s.Window)[2]`. `TaskClient` gives `None`, and `Find-ById $s.Window 'TaskModel' 1` returns `$null`.
 - **Choose a client.** Run `Select-PickerEntry $s 'TaskClient' 'Codex'`. `TaskModel` gives `GPT-6.1-Sol`, `TaskReasoning` gives `low`, and the window title becomes `project* - iDevelop`.
@@ -43,4 +43,4 @@ Preconditions:
 - A picker's list closes as soon as the window loses the foreground, such as when the user clicks another application. `Get-PickerEntries` and `Select-PickerEntry` open it again on each try.
 - An entry's name is its label, followed by ` · ` and a note for a client that is not ready. Pass `Select-PickerEntry` the label alone.
 - The `Checking…` summary after a refresh can be too brief to see. Wait for the settled text instead of asserting it.
-- The fake clients make every row except Codex `Not ready`. To read this machine's real clients, start with `Start-IDevelop -RealClients` and run no task. The probes start each client to read its sign-in state and models, as `scripts/check-real-window.ps1` does.
+- The fake clients make every row except Codex `Not ready`, because their checks fail rather than answer. A client that answers that it is signed out reads `Not signed in`. To read this machine's real clients, start with `Start-IDevelop -RealClients` and run no task. The probes start each client to read its sign-in state and models, as `scripts/check-real-window.ps1` does.

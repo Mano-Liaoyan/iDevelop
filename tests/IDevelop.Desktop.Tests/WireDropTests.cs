@@ -6,6 +6,7 @@ using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 
 namespace IDevelop.Desktop.Tests;
@@ -80,4 +81,38 @@ public sealed class WireDropTests : IDisposable
         Assert.Empty(shell.Window.ViewModel.Canvas!.Workflow.Connections);
         Assert.Equal("seed - iDevelop", shell.Window.Title);
     }
+
+    [AvaloniaFact]
+    public void While_the_popover_is_open_the_dropped_wire_stays_from_its_port_to_the_drop_in_the_ports_hue()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
+        var drop = shell.InEditor(700, 420);
+
+        shell.Drag(shell.Thumb(shell.Output("Design")), drop);
+
+        var wire = Assert.Single(Dangling(shell));
+        var (source, target) = shell.Ends(wire);
+        Assert.True(Point.Distance(shell.Thumb(shell.Output("Design")), source) <= 1, $"The wire leaves {source}, not the port.");
+        Assert.True(Point.Distance(drop, target) <= 2, $"The wire ends at {target}, not at the drop.");
+        Assert.Contains("kind-implement", wire.Classes);
+
+        shell.Press(Avalonia.Input.Key.Escape);
+        Assert.Empty(Dangling(shell));
+    }
+
+    [AvaloniaFact]
+    public void The_dropped_wire_gives_way_to_the_connection_of_the_node_the_popover_adds()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 505, 290)));
+
+        shell.Drag(shell.Thumb(shell.Input("Design")), shell.InEditor(150, 120));
+        Assert.Contains("kind-implement", Assert.Single(Dangling(shell)).Classes);
+        shell.Click(shell.AddRow("Plan"));
+
+        Assert.Empty(Dangling(shell));
+        Assert.Single(shell.Drawn());
+    }
+
+    private static IEnumerable<LineConnection> Dangling(Shell shell) =>
+        shell.Window.GetVisualDescendants().OfType<LineConnection>().Where(line => Avalonia.Automation.AutomationProperties.GetAutomationId(line) == "DanglingWire");
 }

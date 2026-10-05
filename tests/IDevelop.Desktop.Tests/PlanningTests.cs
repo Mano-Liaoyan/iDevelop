@@ -28,6 +28,15 @@ public sealed class PlanningTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
+    [Theory]
+    [InlineData(3, 0, "Added 3 tasks.")]
+    [InlineData(0, 1, "Filled 1 task.")]
+    [InlineData(1, 2, "Added 1 task and filled 2 tasks.")]
+    public void The_accept_notice_names_only_what_accepting_did(int added, int filled, string notice)
+    {
+        Assert.Equal(notice, IDevelop.Desktop.Canvas.ProposalViewModel.AcceptedNotice(added, filled));
+    }
+
     [AvaloniaFact]
     public void A_Chat_Architect_shows_ghost_cards_after_its_first_turn_and_Accept_applies_the_chosen_ones()
     {

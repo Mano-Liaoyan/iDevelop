@@ -9,6 +9,32 @@ public sealed partial class TaskNodeViewModel
 {
     private const int TipFieldLines = 3;
 
+    private bool _isRenaming;
+
+    /// <summary>The card's title is a box that takes a new title.</summary>
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        private set => SetProperty(ref _isRenaming, value);
+    }
+
+    internal void BeginRename() => IsRenaming = true;
+
+    /// <summary>Ends a rename with the new title, or with null to keep the old one. A blank title keeps the old one too.</summary>
+    internal void EndRename(string? title)
+    {
+        if (!IsRenaming)
+        {
+            return;
+        }
+
+        IsRenaming = false;
+        if (!string.IsNullOrWhiteSpace(title) && title.Trim() != Title)
+        {
+            Title = title.Trim();
+        }
+    }
+
     /// <summary>An idle node's subtitle is its agent. Every other node's is its status.</summary>
     public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None;
 

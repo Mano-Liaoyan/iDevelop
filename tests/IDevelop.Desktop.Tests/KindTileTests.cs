@@ -97,7 +97,7 @@ public sealed class KindTileTests
         }
 
         Assert.Equal(["#564ADE", "#007EAE", "#B02FC2", "#008575", "#956D51", "#6C6C70"], Hues(ThemeVariant.Light));
-        Assert.Equal(["#6D7CFF", "#007EAE", "#DB34F2", "#008575", "#B78A66", "#8E8E93"], Hues(ThemeVariant.Dark));
+        Assert.Equal(["#6D7CFF", "#1894C2", "#DB34F2", "#009B89", "#B78A66", "#8E8E93"], Hues(ThemeVariant.Dark));
     }
 
     [AvaloniaFact]

@@ -72,8 +72,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public ObservableCollection<ConnectionViewModel> Connections { get; } = [];
 
-    /// <summary>The dashed cards of the tasks that open proposals add or fill.</summary>
-    public ObservableCollection<GhostCardViewModel> Ghosts { get; } = [];
+    /// <summary>The tasks and connections that open proposals add or fill, and a dropped wire while the Add popover is open.</summary>
+    public ObservableCollection<Ghost> Ghosts { get; } = [];
 
     public ObservableCollection<TaskNodeViewModel> SelectedNodes { get; } = [];
 
@@ -211,11 +211,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     internal bool IsClosed(ProposalViewModel proposal) => _closedProposals.Contains(proposal.Identity) || proposal.IsSettled(Workflow);
 
-    /// <summary>Draws the chosen tasks of every open proposal.</summary>
+    /// <summary>Draws the chosen tasks of every open proposal, with their connections, and a dropped wire.</summary>
     internal void ShowGhosts()
     {
         Ghosts.Clear();
-        foreach (var ghost in Nodes.Select(node => node.Proposal).OfType<ProposalViewModel>().SelectMany(proposal => proposal.Ghosts(Workflow)))
+        var proposals = Nodes.Select(node => node.Proposal).OfType<ProposalViewModel>().SelectMany(proposal => proposal.Ghosts(Workflow));
+        foreach (var ghost in DanglingWire() is { } wire ? proposals.Prepend(wire) : proposals)
         {
             Ghosts.Add(ghost);
         }
@@ -294,7 +295,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     private void SelectNextWaiting()
     {
-        var ordered = Nodes.ToList();
+        var ordered = Outline.ToList();
         var start = SelectedNode is { } selected ? ordered.IndexOf(selected) + 1 : 0;
         if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(node => node.IsWaiting) is { } next)
         {
@@ -355,6 +356,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (connectionsChanged)
         {
             SyncConnections(current);
+        }
+
+        if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
+        {
+            ArrangeOutline();
         }
 
         if (!ReferenceEquals(previous, current))
@@ -430,7 +436,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             }
             else
             {
-                // In the workflow's order, so a task that an undo brings back returns to its place in the sidebar.
+                // In the workflow's order, so a task that an undo brings back returns to its place among the cards.
                 node = new TaskNodeViewModel(this, task, current.Positions[id]);
                 _nodes.Add(id, node);
                 Nodes.Insert(Nodes.Count(other => other.Id.CompareTo(id) < 0), node);

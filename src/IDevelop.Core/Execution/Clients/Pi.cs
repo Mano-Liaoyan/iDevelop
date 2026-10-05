@@ -104,21 +104,23 @@ internal static class Pi
         ]);
     }
 
-    private static string? SignInProblem(string provider, ProbeOutput output)
+    private static ReadinessProblem? SignInProblem(string provider, ProbeOutput output)
     {
         try
         {
             using var json = JsonDocument.Parse(output.Stdout);
             if (json.RootElement.String("status") is { } status)
             {
-                return status == "ready" ? null : $"Pi's sign-in for {provider} is {status}. Sign in to {provider} in Pi again.";
+                return status == "ready"
+                    ? null
+                    : new ReadinessProblem($"Pi's sign-in for {provider} is {status}. Sign in to {provider} in Pi again.", SignedOut: true);
             }
         }
         catch (JsonException)
         {
         }
 
-        return Probes.Failure($"pi auth check --provider {provider}", output);
+        return new ReadinessProblem(Probes.Failure($"pi auth check --provider {provider}", output), SignedOut: false);
     }
 
     private static ImmutableArray<AgentEvent> Interpret(string line)

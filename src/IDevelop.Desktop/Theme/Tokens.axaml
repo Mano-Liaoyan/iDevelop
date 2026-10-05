@@ -99,6 +99,7 @@
       <Color x:Key="PendingConnection.BorderColor">#E5E5E5</Color>
       <Color x:Key="Minimap.BackgroundColor">#EDEFF2</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#90969C</Color>
+      <Color x:Key="FluentAccentColor">#0088FF</Color>
       <BoxShadows x:Key="FloatingShadow">0 12 28 0 #1F000000</BoxShadows>
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #14000000, 0 2 6 0 #0F000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #1A000000, 0 8 20 0 #1A000000</BoxShadows>
@@ -144,7 +145,7 @@
       <SolidColorBrush x:Key="KindPlanBrush" Color="#3CD3FE" />
       <SolidColorBrush x:Key="KindPlan10Brush" Color="#1A3CD3FE" />
       <SolidColorBrush x:Key="KindPlanStrongBrush" Color="#6DD9FF" />
-      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#1894C2" />
       <SolidColorBrush x:Key="KindPlanStrokeBrush" Color="#3CD3FE" />
       <SolidColorBrush x:Key="KindArchitectBrush" Color="#DB34F2" />
       <SolidColorBrush x:Key="KindArchitect10Brush" Color="#1ADB34F2" />
@@ -154,7 +155,7 @@
       <SolidColorBrush x:Key="KindReviewBrush" Color="#00DAC3" />
       <SolidColorBrush x:Key="KindReview10Brush" Color="#1A00DAC3" />
       <SolidColorBrush x:Key="KindReviewStrongBrush" Color="#54DFCB" />
-      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#009B89" />
       <SolidColorBrush x:Key="KindReviewStrokeBrush" Color="#00DAC3" />
       <SolidColorBrush x:Key="KindApprovalBrush" Color="#B78A66" />
       <SolidColorBrush x:Key="KindApproval10Brush" Color="#1AB78A66" />
@@ -201,6 +202,7 @@
       <Color x:Key="PendingConnection.BorderColor">#1AFFFFFF</Color>
       <Color x:Key="Minimap.BackgroundColor">#222629</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#64635D</Color>
+      <Color x:Key="FluentAccentColor">#0091FF</Color>
       <BoxShadows x:Key="FloatingShadow">0 14 32 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeShadow">0 1 2 0 #66000000, 0 2 8 0 #52000000</BoxShadows>
       <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #73000000, 0 10 24 0 #66000000</BoxShadows>

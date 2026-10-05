@@ -52,8 +52,14 @@
                         AutomationProperties.AutomationId="CardKind"
                         AutomationProperties.HelpText="{Binding KindHelp}" />
         <StackPanel Grid.Column="1" Margin="0,14,0,0">
-          <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="CardTitle" />
+          <Panel>
+            <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding !IsRenaming}"
+                       AutomationProperties.AutomationId="CardTitle" />
+            <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
+                                 AutomationProperties.AutomationId="CardTitleBox"
+                                 AutomationProperties.Name="Title" />
+          </Panel>
           <Panel>
             <TextBlock Classes="cardAgent" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding ShowsAgent}"
@@ -100,32 +106,12 @@
     </Panel>
   </DataTemplate>
 
-  <!-- A proposal's tasks draw as dashed cards that take no input, over the empty cards they fill. -->
-  <DataTemplate x:Key="GhostCardTemplate" DataType="canvas:GhostCardViewModel">
-    <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
-           Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-           AutomationProperties.AutomationId="GhostCard"
-           AutomationProperties.Name="{Binding Title}">
-      <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-      <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
-                 theme:StyleClass.Kind="{Binding Kind}" />
-      <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
-        <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
-        <StackPanel Grid.Column="1" Margin="0,14,0,0">
-          <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="GhostTitle" />
-          <TextBlock Classes="cardStatus" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="GhostLabel" />
-        </StackPanel>
-      </Grid>
-    </Panel>
-  </DataTemplate>
-
   <DataTemplate x:Key="ConnectionTemplate" DataType="canvas:ConnectionViewModel">
     <nodify:StepConnection Source="{Binding From.Output.Anchor}"
                            Target="{Binding To.Input.Anchor}"
                            theme:StyleClass.Kind="{Binding SourceKind}"
                            Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
+                           canvas:WireLayer.IsBelow="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
                            Classes.highlighted="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Highlighted}}"
                            Classes.dimmed="{Binding Emphasis, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static canvas:WireEmphasis.Dimmed}}"
                            nodify:BaseConnection.IsSelectable="True" />

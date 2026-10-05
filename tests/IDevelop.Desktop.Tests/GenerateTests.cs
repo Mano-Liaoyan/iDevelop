@@ -11,6 +11,7 @@ using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.TestSupport.FakeAgents;
 
@@ -23,8 +24,9 @@ public sealed class GenerateTests : IDisposable
     private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
     private const string Prompt = "Add CSV export to the reports page.";
 
-    // The fake Codex's first model without a problem, at that model's default level, as the sheet picks it.
-    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" };
+    // The fake Codex's first model without a problem, at the high level the sheet picks for planning. The model's own
+    // default level is low.
+    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "high" };
 
     private static readonly string Reply = """
         Here is the plan.
@@ -82,7 +84,7 @@ public sealed class GenerateTests : IDisposable
         var shell = OpenEmpty();
         OpenSheet(shell);
 
-        Assert.Equal(("Codex", "GPT-6.1-Sol", "low"), (shell.Picked("GenerateClient"), shell.Picked("GenerateModel"), shell.Picked("GenerateReasoning")));
+        Assert.Equal(("Codex", "GPT-6.1-Sol", "high"), (shell.Picked("GenerateClient"), shell.Picked("GenerateModel"), shell.Picked("GenerateReasoning")));
         Assert.Equal(["Claude Code · not installed", "Codex", "Antigravity CLI · not installed"], shell.Pick("GenerateClient", "Codex"));
         Assert.Equal("", shell.Find<TextBlock>("GenerateProblem").Text ?? "");
     }
@@ -175,6 +177,41 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_proposal_draws_its_connections_as_ghost_wires_from_port_to_port_until_it_is_accepted()
+    {
+        var shell = Generated();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var origin = WorkflowCanvasViewModel.ToPoint(canvas.Workflow.Positions[canvas.SelectedNode!.Id]);
+        var api = origin + new Point(Proposal.ColumnStep, 0);
+        var button = origin + new Point(2 * Proposal.ColumnStep, 0);
+        var tests = origin + new Point(2 * Proposal.ColumnStep, Proposal.RowStep);
+        var output = WorkflowCanvasViewModel.OutputPortCenter;
+        var input = WorkflowCanvasViewModel.InputPortCenter;
+
+        Assert.Equal(
+            [(origin + output, api + input), (api + output, button + input), (api + output, tests + input)],
+            GhostWires(shell));
+        Assert.Equal(
+            ["kind-implement", "kind-implement", "kind-plan"],
+            GhostWireLines(shell).Select(wire => wire.Classes.Single(name => name.StartsWith("kind-", StringComparison.Ordinal))).Order());
+        Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
+
+        shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
+
+        Assert.Empty(GhostWires(shell));
+        Assert.Equal(3, canvas.Workflow.Connections.Count);
+    }
+
+    [AvaloniaFact]
+    public void The_planners_reply_shows_its_prose_and_the_Proposal_section_stands_for_its_block()
+    {
+        var shell = Generated();
+
+        Assert.Equal("Here is the plan.", shell.InView<TextBox>("LastRunResult").Text);
+        Assert.Equal(3, shell.InView<StackPanel>("Proposal").GetVisualDescendants().OfType<CheckBox>().Count(box => box.IsChecked == true && AutomationProperties.GetAutomationId(box) != "ProposalUsePlannerAgent"));
+    }
+
+    [AvaloniaFact]
     public void Accept_and_Finish_places_the_tasks_in_layered_columns_with_the_planners_agent_and_ends_the_planner()
     {
         var shell = Generated();
@@ -185,6 +222,8 @@ public sealed class GenerateTests : IDisposable
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
+        Assert.Equal("Added 3 tasks.", shell.Status);
+        Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         var workflow = canvas.Workflow;
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);
@@ -302,6 +341,35 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void While_the_sheet_is_open_the_save_undo_and_redo_keys_leave_the_workflow_and_its_file_alone()
+    {
+        var shell = OpenEmpty();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        canvas.PlaceInView(BuiltInBlueprints.Implement);
+        canvas.PlaceInView(BuiltInBlueprints.Review);
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        var workflow = canvas.Workflow;
+        OpenSheet(shell);
+        shell.Find<ComboBox>("GenerateClient").Focus();
+
+        shell.Press(Key.S, RawInputModifiers.Control);
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        shell.Press(Key.Z, RawInputModifiers.Control | RawInputModifiers.Shift);
+        shell.Press(Key.Y, RawInputModifiers.Control);
+
+        Assert.True(shell.Has<GenerateSheet>("GenerateSheet"));
+        Assert.Same(workflow, canvas.Workflow);
+        Assert.True(shell.ShowsUnsavedChanges);
+        Assert.False(Directory.Exists(DataFolder.Workflows(canvas.Document.ProjectFolder)));
+        Assert.Equal([false, false, false], new[] { "Save", "Undo", "Redo" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
+
+        shell.Press(Key.Escape);
+        shell.Press(Key.S, RawInputModifiers.Control);
+        Assert.False(shell.ShowsUnsavedChanges);
+        Assert.True(Directory.Exists(DataFolder.Workflows(canvas.Document.ProjectFolder)));
+    }
+
+    [AvaloniaFact]
     public void The_Add_popover_on_empty_canvas_offers_Generate_Workflow_which_opens_the_sheet()
     {
         var shell = OpenEmpty();
@@ -388,6 +456,16 @@ public sealed class GenerateTests : IDisposable
         shell.Type(prompt);
         shell.Click(shell.Find<Button>("GenerateSubmit"));
     }
+
+    private static IEnumerable<StepConnection> GhostWireLines(Shell shell) =>
+        shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire");
+
+    /// <summary>Each ghost wire's two ends on the canvas.</summary>
+    private static (Point From, Point To)[] GhostWires(Shell shell) =>
+        [.. GhostWireLines(shell)
+            .Select(wire => shell.Ends(wire))
+            .Select(ends => (From: Shell.Rounded(shell.CanvasPointAt(ends.Source)), To: Shell.Rounded(shell.CanvasPointAt(ends.Target))))
+            .OrderBy(wire => (wire.From.X, wire.From.Y, wire.To.X, wire.To.Y))];
 
     private static string? ButtonLabel(Shell shell) => AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"));
 

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -23,7 +24,12 @@ public sealed class ConnectionMenuTests : IDisposable
         TaskAt(Build, "Build", 605, 90),
         new WorkflowEdit.Connect(new ConnectionKey(Design, Build), kind)));
 
-    private static bool Checked(MenuItem item) => Assert.IsType<PathIcon>(item.Icon).IsVisible;
+    private static bool Checked(MenuItem item) =>
+        item.GetVisualDescendants().OfType<ContentControl>().Single(part => part.Name == "PART_ToggleIconPresenter")
+            is { IsVisible: true, Content: PathIcon { Data: var mark } } && Equals(mark, item.FindResource("IconCheckmark"));
+
+    private static (bool Dependency, bool Context) Marks(Shell shell) =>
+        (Checked(shell.MenuItem("ConnectionMenuDependency")), Checked(shell.MenuItem("ConnectionMenuContext")));
 
     [AvaloniaTheory]
     [InlineData(ConnectionKind.Dependency)]
@@ -35,10 +41,30 @@ public sealed class ConnectionMenuTests : IDisposable
         shell.RightClick(shell.ConnectionInto("Build"));
 
         Assert.Equal(["Dependency", "Context", "Insert Node…", "Delete"], shell.MenuHeaders());
-        Assert.Equal(
-            (kind == ConnectionKind.Dependency, kind == ConnectionKind.Context),
-            (Checked(shell.MenuItem("ConnectionMenuDependency")), Checked(shell.MenuItem("ConnectionMenuContext"))));
+        Assert.Equal((kind == ConnectionKind.Dependency, kind == ConnectionKind.Context), Marks(shell));
         Assert.Contains("destructive", shell.MenuItem("ConnectionMenuDelete").Classes);
+        Assert.Equal(
+            (shell.Window.FindResource("IconWireDependency"), shell.Window.FindResource("IconWireContext")),
+            (Assert.IsType<PathIcon>(shell.MenuItem("ConnectionMenuDependency").Icon).Data, Assert.IsType<PathIcon>(shell.MenuItem("ConnectionMenuContext").Icon).Data));
+    }
+
+    [AvaloniaFact]
+    public void Where_a_context_connection_shares_a_run_with_a_dependency_the_right_click_reaches_the_dependency_and_selects_it()
+    {
+        var review = TestTasks.Review;
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 605, 90),
+            TaskAt(review, "Review", 605, 330),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, review), ConnectionKind.Context),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+
+        shell.RightClick(shell.Thumb(shell.Output("Design")) + new Vector(14, 0));
+
+        Assert.Equal((true, false), Marks(shell));
+        var selected = shell.Window.ViewModel.Canvas!.SelectedConnection;
+        Assert.Equal(new ConnectionKey(Design, Build), selected?.Key);
+        Assert.True(Nodify.BaseConnection.GetIsSelected(shell.Connections().Single(wire => wire.DataContext == selected)));
     }
 
     [AvaloniaFact]
@@ -54,6 +80,31 @@ public sealed class ConnectionMenuTests : IDisposable
         shell.RightClick(shell.ConnectionInto("Build"));
         shell.Click(shell.MenuItem("ConnectionMenuContext"));
         Assert.Equal([("Design", "Build", ConnectionKind.Context)], shell.Drawn());
+    }
+
+    [AvaloniaFact]
+    public void After_a_choice_each_menu_marks_only_its_connections_kind()
+    {
+        var review = TestTasks.Review;
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90),
+            TaskAt(Build, "Build", 605, 90),
+            TaskAt(review, "Review", 605, 330),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, review), ConnectionKind.Dependency)));
+
+        shell.RightClick(shell.ConnectionInto("Build"));
+        shell.Click(shell.MenuItem("ConnectionMenuContext"));
+        shell.RightClick(shell.ConnectionInto("Review"));
+        Assert.Equal((true, false), Marks(shell));
+
+        shell.Click(shell.MenuItem("ConnectionMenuDependency"));
+        shell.RightClick(shell.ConnectionInto("Review"));
+        Assert.Equal((true, false), Marks(shell));
+
+        shell.Click(shell.MenuItem("ConnectionMenuContext"));
+        shell.RightClick(shell.ConnectionInto("Build"));
+        Assert.Equal((false, true), Marks(shell));
     }
 
     [AvaloniaFact]

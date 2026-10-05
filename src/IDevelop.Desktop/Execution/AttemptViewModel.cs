@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 
 namespace IDevelop.Desktop.Execution;
 
@@ -60,7 +61,8 @@ public sealed record ExchangeViewModel(string? StatusLine, IReadOnlyList<TurnVie
 
 /// <summary>
 /// One turn in the inspector. The agent's final text sits in a read-only box so it can be selected and copied. The latest
-/// turn's box is the run's result, under the automation id the result has always had.
+/// turn's box is the run's result, under the automation id the result has always had. A block iDevelop read stays out of
+/// the box, because its question, proposal, or verdict has its own section.
 /// </summary>
 /// <param name="number">The turn's place in the whole conversation, from 1.</param>
 public sealed class TurnViewModel(TurnRecord turn, int number, bool latest, string author = "You")
@@ -69,7 +71,7 @@ public sealed class TurnViewModel(TurnRecord turn, int number, bool latest, stri
 
     public string? Message => turn.Message;
 
-    public string? Reply => turn.FinalText;
+    public string? Reply => turn.FinalText is null ? null : ResultBlock.Prose(turn.FinalText);
 
     public string? Note => latest ? null : RunText.EarlierTurnNote(turn);
 

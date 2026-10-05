@@ -98,16 +98,16 @@
   </ContextMenu>
 
   <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionMenuViewModel">
-    <MenuItem Header="Dependency" Command="{Binding DependencyCommand}"
+    <MenuItem Header="Dependency" Command="{Binding DependencyCommand}" Classes.current="{Binding IsDependency}"
               AutomationProperties.AutomationId="ConnectionMenuDependency">
       <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" IsVisible="{Binding IsDependency}" />
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" />
       </MenuItem.Icon>
     </MenuItem>
-    <MenuItem Header="Context" Command="{Binding ContextCommand}"
+    <MenuItem Header="Context" Command="{Binding ContextCommand}" Classes.current="{Binding IsContext}"
               AutomationProperties.AutomationId="ConnectionMenuContext">
       <MenuItem.Icon>
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" IsVisible="{Binding IsContext}" />
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconWireContext}" />
       </MenuItem.Icon>
     </MenuItem>
     <Separator />

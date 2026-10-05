@@ -29,7 +29,7 @@ public sealed class NodeMenuViewModel
                 .Select(blueprint => new ReplaceChoice(
                     blueprint.Name, canvas.KindOf(blueprint), !blueprint.IsBuiltIn, new RelayCommand(() => canvas.Replace(replaced, blueprint))))]
             : [];
-        RenameCommand = new RelayCommand(() => canvas.View?.FocusTitle());
+        RenameCommand = new RelayCommand(() => Node?.BeginRename());
         DuplicateCommand = new RelayCommand(canvas.Duplicate);
         DisconnectCommand = new RelayCommand(() => canvas.Disconnect(selection));
         DeleteCommand = canvas.DeleteSelectionCommand;

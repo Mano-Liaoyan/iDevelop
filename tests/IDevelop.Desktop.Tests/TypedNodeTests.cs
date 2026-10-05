@@ -52,7 +52,9 @@ public sealed class TypedNodeTests : IDisposable
         Assert.Equal("", shell.Find<TextBox>("TaskAcceptanceCriteria").Text);
         Assert.Equal(["Autonomous", "May ask", "Chat"], shell.Pick("TaskConversation", "Chat"));
 
-        Assert.Equal("The task waits for you after every turn, until you mark it done.", shell.Find<TextBlock>("ConversationNote").Text);
+        Assert.Equal(
+            ("Waits for you after every turn.", "The task waits for you after every turn, until you mark it done."),
+            (shell.Find<TextBlock>("ConversationNote").Text, ToolTip.GetTip(shell.Find<TextBlock>("ConversationNote"))));
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(ConversationMode.Chat, WorkflowDocument.Open(folder).Current.Tasks[TestTasks.Design].Conversation);
     }

@@ -58,9 +58,12 @@ internal abstract record CatalogParse
 
 /// <summary>
 /// A sign-in check. <see cref="Provider"/> is null when it covers the whole client, or names the Pi provider whose
-/// models it covers. <see cref="Problem"/> returns null when the client is ready, or the reason it is not.
+/// models it covers. <see cref="Problem"/> returns null when the client is ready, or why it is not.
 /// </summary>
-internal sealed record ReadinessProbe(string? Provider, Probe Probe, Func<ProbeOutput, string?> Problem);
+internal sealed record ReadinessProbe(string? Provider, Probe Probe, Func<ProbeOutput, ReadinessProblem?> Problem);
+
+/// <summary>Why a sign-in check did not pass. <see cref="SignedOut"/> is false when the check itself failed.</summary>
+internal sealed record ReadinessProblem(string Reason, bool SignedOut);
 
 internal sealed record LaunchRequest(string Model, string? Reasoning, string Prompt)
 {

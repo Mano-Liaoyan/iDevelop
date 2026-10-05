@@ -48,6 +48,8 @@
     { "key": "IconRefresh", "asset": "Arrow Clockwise", "file": "ic_fluent_arrow_clockwise_16_regular.svg" },
     { "key": "IconLink", "asset": "Link", "file": "ic_fluent_link_16_regular.svg" },
     { "key": "IconFlowchart", "asset": "Flowchart", "file": "ic_fluent_flowchart_16_regular.svg" },
-    { "key": "IconCheckmark", "asset": "Checkmark", "file": "ic_fluent_checkmark_16_regular.svg" }
+    { "key": "IconCheckmark", "asset": "Checkmark", "file": "ic_fluent_checkmark_16_regular.svg" },
+    { "key": "IconWireDependency", "asset": "Line Horizontal 1", "file": "ic_fluent_line_horizontal_1_16_regular.svg" },
+    { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" }
   ]
 }

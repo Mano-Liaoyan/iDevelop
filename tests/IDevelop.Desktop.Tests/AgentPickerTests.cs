@@ -68,7 +68,7 @@ public sealed class AgentPickerTests : IDisposable
             ["Codex", "GPT-5.5", "high"],
             new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(id =>
                 ControlAutomationPeer.CreatePeerForElement(shell.Find<ComboBox>(id)).GetProvider<IValueProvider>()!.Value));
-        Assert.Equal("Codex may edit files in the project folder. Its commands run in its workspace sandbox.", shell.Find<TextBlock>("PermissionNote").Text);
+        Assert.Equal("Edits files. Runs commands in a sandbox.", shell.Find<TextBlock>("PermissionNote").Text);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(

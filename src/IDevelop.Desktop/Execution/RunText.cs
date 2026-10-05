@@ -17,7 +17,8 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
-    /// <summary>"Ready · 4 models", "Ready · 2 of 5 models", "Checking…", "Not installed", or "Not ready".</summary>
+    /// <summary>"Ready · 4 models", "Ready · 2 of 5 models", "Checking…", "Not installed", "Not signed in", or "Not ready".
+    /// <see cref="Detail"/> holds the whole reason.</summary>
     public static string Summary(ClientStatus status) => status switch
     {
         ClientStatus.Ready ready when ready.Models.Count(model => model.Problem is null) is var usable && usable < ready.Models.Length =>
@@ -25,6 +26,7 @@ public static class RunText
         ClientStatus.Ready ready => $"Ready · {Count(ready.Models.Length, "model")}",
         ClientStatus.Checking => "Checking…",
         ClientStatus.Missing => "Not installed",
+        ClientStatus.Unready { SignedOut: true } => "Not signed in",
         ClientStatus.Unready => "Not ready",
         _ => throw new UnreachableException(),
     };
@@ -89,6 +91,26 @@ public static class RunText
         ClientId.Codex => "Codex may edit files in the project folder. Its commands run in its workspace sandbox.",
         ClientId.Pi => "Pi has no permission system. It may edit any file and run any command that your account can.",
         ClientId.Antigravity => "Antigravity CLI may edit files in the project folder. It blocks commands in its accept-edits mode.",
+    };
+
+    /// <summary>The permission note in one short line under the pickers. The info glyph holds the whole note.</summary>
+    public static string PermissionSummary(ClientId client, bool readOnly) => (client, readOnly) switch
+    {
+        (ClientId.Pi, true) => "Can't run read-only tasks.",
+        (ClientId.Codex, true) => "Reads only, in a read-only sandbox.",
+        (_, true) => "Reads only, in plan mode.",
+        (ClientId.ClaudeCode, false) => "Edits files. Runs only allowed commands.",
+        (ClientId.Codex, false) => "Edits files. Runs commands in a sandbox.",
+        (ClientId.Pi, false) => "Edits files and runs any command.",
+        (ClientId.Antigravity, false) => "Edits files. Runs no commands.",
+    };
+
+    /// <summary>The reviewer note in one short line.</summary>
+    public static string ReviewerSummary(ClientId client) => client switch
+    {
+        ClientId.Pi => "Can't review without a read-only mode.",
+        ClientId.Codex => "Reviews in a read-only sandbox.",
+        ClientId.ClaudeCode or ClientId.Antigravity => "Reviews in plan mode.",
     };
 
     /// <summary>A cancelled attempt is neutral: the user chose that outcome.</summary>
@@ -164,6 +186,14 @@ public static class RunText
         ConversationMode.Autonomous => "The agent works without waiting for you. You can still write to it.",
         ConversationMode.MayAsk => "The agent may end a turn with a question and wait for your answer.",
         ConversationMode.Chat => "The task waits for you after every turn, until you mark it done.",
+    };
+
+    /// <summary>The conversation note in one short line under its picker.</summary>
+    public static string ConversationSummary(ConversationMode mode) => mode switch
+    {
+        ConversationMode.Autonomous => "Works without waiting for you.",
+        ConversationMode.MayAsk => "May stop to ask you a question.",
+        ConversationMode.Chat => "Waits for you after every turn.",
     };
 
     /// <summary>One or two sentences for each reason a task cannot start.</summary>

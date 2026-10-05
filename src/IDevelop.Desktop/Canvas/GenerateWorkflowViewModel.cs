@@ -32,6 +32,9 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
         nameof(ReasoningChoices), nameof(SelectedReasoning), nameof(HasReasoning), nameof(Problem),
     ];
 
+    // Planning a whole workflow is the deepest task an agent does here, so the planner starts at its model's high level.
+    private const string PlanningLevel = "high";
+
     private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand _submit;
     private string _prompt = "";
@@ -112,7 +115,7 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
         if (choice.Id != _planner?.Client)
         {
             _clientChosen = true;
-            Choose(ExecutionChoices.ForClient(choice.Id, Status(choice.Id)));
+            Choose(ForPlanning(choice.Id));
         }
     }
 
@@ -138,7 +141,16 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
 
     /// <summary>The first ready client that can plan, in the clients' order, with its first usable model.</summary>
     private ExecutionSettings? DefaultPlanner() =>
-        PlanningClients.Where(id => Status(id) is ClientStatus.Ready).Select(id => ExecutionChoices.ForClient(id, Status(id))).FirstOrDefault();
+        PlanningClients.Where(id => Status(id) is ClientStatus.Ready).Select(ForPlanning).FirstOrDefault();
+
+    /// <summary>The client's first usable model at the planning level, or at the model's own default when it lacks that level.</summary>
+    private ExecutionSettings ForPlanning(ClientId client)
+    {
+        var settings = ExecutionChoices.ForClient(client, Status(client));
+        return ExecutionChoices.OfferedModel(Status(client), settings.Model) is { } model && model.ReasoningLevels.Contains(PlanningLevel)
+            ? settings with { Reasoning = PlanningLevel }
+            : settings;
+    }
 
     private ClientStatus Status(ClientId client) => _canvas.Clients.Current[client];
 
@@ -163,7 +175,7 @@ public sealed class GenerateWorkflowViewModel : ObservableObject
     private void OnClientsChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
     {
         _planner = !_clientChosen ? DefaultPlanner()
-            : _planner is { Model: null } planner ? ExecutionChoices.ForClient(planner.Client, Status(planner.Client))
+            : _planner is { Model: null } planner ? ForPlanning(planner.Client)
             : _planner;
         ShowPlanner();
     });
