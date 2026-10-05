@@ -67,10 +67,10 @@ public sealed class ReviewNodeTests : IDisposable
         shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Succeeded", "the subject succeeds");
         shell.Click(shell.Header(shell.Node("Review add")));
 
-        Assert.Equal("REVIEWER", shell.Find<TextBlock>("AgentHeading").Text);
+        Assert.Equal("Reviewer", shell.Find<TextBlock>("AgentHeading").Text);
         Assert.Equal("Claude Code reviews in plan mode, which edits no file.", shell.Find<TextBlock>("PermissionNote").Text);
         Assert.False(shell.Find<ComboBox>("TaskConversation").IsEffectivelyVisible);
-        Assert.Equal("GUIDE THE REVIEW", shell.Find<TextBlock>("ComposerHeading").Text);
+        Assert.Equal("Guide the Review", shell.Find<TextBlock>("ComposerHeading").Text);
 
         shell.Click(shell.InView<Button>("RunTask"));
         shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Running", "the reviewer reads");

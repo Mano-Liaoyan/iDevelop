@@ -1,0 +1,261 @@
+<!-- The inspector's look: a pinned header, foldable Title Case sections, and two-column rows on the panel's surface.
+     Godot's inspector gives the structure; the type sizes, radii, and colors come from the app's tokens. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:inspector="using:IDevelop.Desktop.Inspector">
+
+  <Style Selector="Border.inspectorHeader">
+    <Setter Property="Padding" Value="12,12,8,8" />
+  </Style>
+  <Style Selector="TextBox.headerTitle">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.kindLine">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.headerName">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <!-- A tile for what has no kind, such as a connection or the workflow: neutral, so it never reads as a node kind. -->
+  <Style Selector="Border.neutralTile">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+  <Style Selector="Border.neutralTile > PathIcon">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Border.filterBar">
+    <Setter Property="Padding" Value="12,0,8,8" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Border.filterBar TextBox">
+    <Setter Property="MinHeight" Value="28" />
+  </Style>
+
+  <Style Selector="Button.glyph">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.glyph:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.glyph:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="Button.glyph:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="Button.glyph.revert">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
+  </Style>
+  <Style Selector="Border.infoGlyph">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.infoGlyph > PathIcon">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+
+  <!-- Folded, a section's chevron points to the leading edge, as Apple's disclosure controls do. -->
+  <Style Selector="inspector|InspectorSection">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel>
+          <Button Name="PART_Header" Classes="sectionHeader" AutomationProperties.Name="{TemplateBinding Title}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+              <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="sectionTitle" Text="{TemplateBinding Title}"
+                         AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
+              <TextBlock Grid.Column="2" Classes="sectionBadge" Text="{TemplateBinding Badge}" />
+            </Grid>
+          </Button>
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Margin="0,0,0,10" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="inspector|InspectorSection /template/ PathIcon#PART_Chevron">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:folded /template/ PathIcon#PART_Chevron">
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:folded /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:unmatched /template/ Button#PART_Header">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="inspector|InspectorSection:unmatched /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Margin" Value="0" />
+  </Style>
+  <Style Selector="Button.sectionHeader">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="0,8,0,6" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Button.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+  </Style>
+  <Style Selector="Button.sectionHeader:pointerover PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.sectionTitle">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.sectionBadge">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- Rows: the label at 40 percent, the editor at 60, and a fixed column for the revert and info glyphs after it, so
+       every editor lines up whether or not its row has them. -->
+  <Style Selector="inspector|InspectorRow">
+    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="2*,3*,46" RowDefinitions="Auto,Auto">
+          <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            VerticalAlignment="Center" />
+          <StackPanel Name="PART_Trail" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <Button Classes="glyph revert" Margin="4,0,0,0"
+                    Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
+                    ToolTip.Tip="Revert to the blueprint's default"
+                    AutomationProperties.AutomationId="{TemplateBinding RevertId}"
+                    AutomationProperties.Name="Revert">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRevert}" Width="14" Height="14" />
+            </Button>
+            <Border Classes="infoGlyph" Margin="2,0,0,0" ToolTip.Tip="{TemplateBinding Info}"
+                    IsVisible="{TemplateBinding Info, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" />
+            </Border>
+          </StackPanel>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="inspector|InspectorRow /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Grid.Column" Value="1" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label">
+    <Setter Property="Grid.ColumnSpan" Value="2" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Grid.Row" Value="1" />
+    <Setter Property="Grid.Column" Value="0" />
+    <Setter Property="Grid.ColumnSpan" Value="3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:full /template/ TextBlock#PART_Label">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:full /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Grid.Column" Value="0" />
+    <Setter Property="Grid.ColumnSpan" Value="3" />
+  </Style>
+  <Style Selector="TextBlock.rowLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBlock.value">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <!-- A one-line note whose tooltip holds the whole text, where a paragraph used to be. -->
+  <Style Selector="TextBlock.note">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="inspector|InspectorRow CheckBox">
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="28" />
+  </Style>
+  <Style Selector="inspector|InspectorRow TextBox.multiline">
+    <Setter Property="MinHeight" Value="72" />
+  </Style>
+  <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="Button.rowLink">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="4,2" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+  </Style>
+  <Style Selector="Button.rowLink:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rowLink:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.entryName">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="TextBlock.groupHeading">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Margin" Value="0,6,0,2" />
+  </Style>
+</Styles>

@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
@@ -15,14 +16,21 @@ public sealed class FieldViewModel : ObservableObject
     {
         _node = node;
         Spec = spec;
+        RevertCommand = new RelayCommand(() => _node.SetField(Spec.Key, Spec.Default));
     }
 
     public string Label => Spec.Label;
 
+    /// <summary>The label's tooltip, which says when the field is required.</summary>
+    public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
+
     public bool IsMultiline => Spec.Shape == FieldShape.Text;
 
     /// <summary>"Task" and the key with its first letter raised, such as TaskInstructions, the ids the inspector's boxes always had.</summary>
-    public string AutomationId => $"Task{char.ToUpperInvariant(Spec.Key[0])}{Spec.Key[1..]}";
+    public string AutomationId => $"Task{KeyName}";
+
+    /// <summary>The id of the field's revert arrow, such as RevertInstructions.</summary>
+    public string RevertId => $"Revert{KeyName}";
 
     public string Text
     {
@@ -30,7 +38,19 @@ public sealed class FieldViewModel : ObservableObject
         set => _node.SetField(Spec.Key, value);
     }
 
+    /// <summary>The text differs from the blueprint's default for the field.</summary>
+    public bool CanRevert => Text != Spec.Default;
+
+    /// <summary>Puts the blueprint's default back in one edit.</summary>
+    public ICommand RevertCommand { get; }
+
     internal FieldSpec Spec { get; }
 
-    internal void Refresh() => OnPropertyChanged(nameof(Text));
+    private string KeyName => $"{char.ToUpperInvariant(Spec.Key[0])}{Spec.Key[1..]}";
+
+    internal void Refresh()
+    {
+        OnPropertyChanged(nameof(Text));
+        OnPropertyChanged(nameof(CanRevert));
+    }
 }

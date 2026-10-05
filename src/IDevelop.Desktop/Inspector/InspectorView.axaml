@@ -3,435 +3,694 @@
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              xmlns:execution="using:IDevelop.Desktop.Execution"
+             xmlns:inspector="using:IDevelop.Desktop.Inspector"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
              xmlns:workflows="using:IDevelop.Workflows"
              x:Class="IDevelop.Desktop.Inspector.InspectorView"
              x:DataType="canvas:WorkflowCanvasViewModel">
+  <UserControl.Styles>
+    <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
+  </UserControl.Styles>
   <Panel>
-    <!-- The blueprint editor takes the panel while it is open. Otherwise the selection does, or the palette when nothing is selected. -->
-    <ContentControl Content="{Binding Blueprints.Editor}">
-      <ContentControl.DataTemplates>
-        <DataTemplate DataType="blueprints:BlueprintEditorViewModel">
-          <blueprints:BlueprintEditorView />
-        </DataTemplate>
-      </ContentControl.DataTemplates>
-    </ContentControl>
-    <StackPanel Spacing="20">
-      <StackPanel.IsVisible>
-        <MultiBinding Converter="{x:Static BoolConverters.And}">
-          <Binding Path="Inspected" Converter="{x:Static ObjectConverters.IsNull}" />
-          <Binding Path="Blueprints.Editor" Converter="{x:Static ObjectConverters.IsNull}" />
-        </MultiBinding>
-      </StackPanel.IsVisible>
-      <TextBlock Text="Select a task or connection to edit it."
-                 TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                 AutomationProperties.AutomationId="InspectorHint" />
-      <blueprints:PaletteView DataContext="{Binding Blueprints}" />
-    </StackPanel>
-    <ContentControl Content="{Binding Inspected}" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
-      <ContentControl.DataTemplates>
-        <DataTemplate DataType="canvas:TaskNodeViewModel">
-          <StackPanel Spacing="6">
-            <TextBlock Classes="section" Text="{Binding TypeName}" Margin="0,0,0,2"
-                       AutomationProperties.AutomationId="TaskType" />
-            <TextBlock Classes="caption" Text="{Binding TypeVersion}"
-                       AutomationProperties.AutomationId="TaskTypeVersion" />
-            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" Margin="0,2,0,6">
-              <Button Classes="action" Content="Derive" Command="{Binding DeriveCommand}"
-                      ToolTip.Tip="A new blueprint with this type's fields and template"
-                      AutomationProperties.AutomationId="DeriveTaskType"
-                      AutomationProperties.Name="Derive" />
-              <Button Classes="action" Content="Save as blueprint" Command="{Binding SaveAsBlueprintCommand}"
-                      ToolTip.Tip="A new blueprint whose defaults are this task's values and agent"
-                      AutomationProperties.AutomationId="SaveAsBlueprint"
-                      AutomationProperties.Name="Save as blueprint" />
-            </WrapPanel>
-            <TextBlock Classes="caption" Text="Title" />
-            <TextBox Text="{Binding Title}"
-                     AutomationProperties.AutomationId="TaskTitle"
-                     AutomationProperties.Name="Title" />
-            <ItemsControl ItemsSource="{Binding Fields}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="canvas:FieldViewModel">
-                  <StackPanel Spacing="6" Margin="0,8,0,0">
-                    <TextBlock Classes="caption" Text="{Binding Label}" />
-                    <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
-                    <TextBox Text="{Binding Text}"
-                             AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
-                             Classes.multiline="{Binding IsMultiline}"
-                             AutomationProperties.AutomationId="{Binding AutomationId}"
-                             AutomationProperties.Name="{Binding Label}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+    <!-- The blueprint editor takes the panel while it is open. Its sections fold apart from the inspector's. -->
+    <ScrollViewer x:Name="EditorHost" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl x:Name="Editor" Content="{Binding Blueprints.Editor}" Margin="12,12,12,16">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="blueprints:BlueprintEditorViewModel">
+            <blueprints:BlueprintEditorView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </ScrollViewer>
 
-            <StackPanel Spacing="6" IsVisible="{Binding HasAgent}">
-              <TextBlock Classes="section" Text="{Binding AgentHeading}" Margin="0,20,0,2"
-                         AutomationProperties.AutomationId="AgentHeading" />
-              <TextBlock Classes="caption" Text="Client" />
-              <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
-                        AutomationProperties.AutomationId="TaskClient"
-                        AutomationProperties.Name="Client">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="canvas:ClientChoice">
-                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
-                <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
-                <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
-                          PlaceholderText="Choose a model"
-                          AutomationProperties.AutomationId="TaskModel"
-                          AutomationProperties.Name="Model">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate DataType="canvas:Choice">
-                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                    </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-                <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
-                  <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
-                  <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
-                            PlaceholderText="Choose a level"
-                            AutomationProperties.AutomationId="TaskReasoning"
-                            AutomationProperties.Name="Reasoning">
-                    <ComboBox.ItemTemplate>
-                      <DataTemplate DataType="canvas:Choice">
-                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                      </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                  </ComboBox>
+    <!-- The header and the filter stay put while the sections scroll. The selection fills both, or the workflow
+         when nothing is selected. -->
+    <DockPanel IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
+      <ContentControl DockPanel.Dock="Top">
+        <ContentControl.Content>
+          <MultiBinding Converter="{x:Static inspector:InspectorConverters.FirstSet}">
+            <Binding Path="Inspected" />
+            <Binding Path="Overview" />
+          </MultiBinding>
+        </ContentControl.Content>
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="canvas:TaskNodeViewModel">
+            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
+              <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+                <theme:KindTile Grid.RowSpan="2" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32"
+                                VerticalAlignment="Top" Margin="0,2,0,0" />
+                <TextBox Grid.Column="1" Classes="headerTitle" Text="{Binding Title}" Margin="-6,0,0,0"
+                         AutomationProperties.AutomationId="TaskTitle"
+                         AutomationProperties.Name="Title" />
+                <Button Grid.Column="2" Classes="glyph" ToolTip.Tip="More"
+                        AutomationProperties.AutomationId="InspectorMore"
+                        AutomationProperties.Name="More">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}">
+                        <MenuItem.Icon>
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                      <MenuItem Header="Save as Blueprint…" Command="{Binding SaveAsBlueprintCommand}">
+                        <MenuItem.Icon>
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
+                        </MenuItem.Icon>
+                      </MenuItem>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal"
+                            AutomationProperties.AutomationId="InspectorKind">
+                  <TextBlock Classes="kindLine" Text="{Binding TypeName}" MaxWidth="140" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="TaskType" />
+                  <TextBlock Classes="kindLine" Text=" · " />
+                  <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
+                             AutomationProperties.AutomationId="TaskTypeVersion" />
+                  <Border Classes="infoGlyph" Margin="4,0,0,0" ToolTip.Tip="{Binding Description}"
+                          IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
+                  </Border>
                 </StackPanel>
-                <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
-                           AutomationProperties.AutomationId="PermissionNote" />
-              </StackPanel>
-            </StackPanel>
-            <StackPanel Spacing="6" IsVisible="{Binding HasConversation}">
-              <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
-              <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
-                        AutomationProperties.AutomationId="TaskConversation"
-                        AutomationProperties.Name="Conversation">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="canvas:Choice">
-                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Classes="caption" Text="{Binding ConversationNote}" TextWrapping="Wrap"
-                         AutomationProperties.AutomationId="ConversationNote" />
-            </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+          <DataTemplate DataType="canvas:ConnectionViewModel">
+            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+                <Border Grid.RowSpan="2" Classes="neutralTile" VerticalAlignment="Top">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
+                </Border>
+                <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding Kind}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="kindLine" Text="Connection" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+          <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
+            <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+                <Border Grid.RowSpan="2" Classes="neutralTile" VerticalAlignment="Top">
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
+                </Border>
+                <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding ProjectName}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Classes="kindLine" Text="{Binding TaskCount}" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
 
-            <TextBlock Classes="section" Text="RUN" Margin="0,20,0,2" />
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <Button Classes="action" Command="{Binding RunCommand}"
-                      AutomationProperties.AutomationId="RunTask"
-                      AutomationProperties.Name="Run">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Data="{StaticResource PlayIcon}" Width="12" Height="12" />
-                  <TextBlock Text="Run" />
-                </StackPanel>
-              </Button>
-              <Button Classes="action" Command="{Binding CancelCommand}"
-                      AutomationProperties.AutomationId="CancelRun"
-                      AutomationProperties.Name="Cancel run">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" />
-                  <TextBlock Text="Cancel" />
-                </StackPanel>
-              </Button>
-            </StackPanel>
-            <TextBlock Classes="caption" Text="{Binding StartProblem}" TextWrapping="Wrap"
-                       IsVisible="{Binding StartProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       AutomationProperties.AutomationId="StartProblem" />
-            <ContentControl Content="{Binding Proposal}">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="canvas:ProposalViewModel">
-                  <StackPanel Spacing="6" AutomationProperties.AutomationId="Proposal">
-                    <TextBlock Classes="section" Text="PROPOSAL" Margin="0,20,0,2" />
-                    <TextBlock Classes="caption" Text="Untick a task to leave it out. Accept adds and fills the rest in one change." TextWrapping="Wrap"
-                               IsVisible="{Binding HasItems}" />
-                    <ItemsControl ItemsSource="{Binding Items}">
+      <Border DockPanel.Dock="Top" Classes="filterBar">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+          <TextBox x:Name="Filter" Classes="search clearButton" Watermark="Filter properties"
+                   TextChanged="OnFilterChanged" KeyDown="OnFilterKeyDown"
+                   AutomationProperties.AutomationId="InspectorFilter"
+                   AutomationProperties.Name="Filter properties" />
+          <Button Grid.Column="1" Classes="glyph" ToolTip.Tip="Expand or collapse sections"
+                  AutomationProperties.AutomationId="InspectorTools"
+                  AutomationProperties.Name="Sections">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFilter}" />
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="Expand All" Click="OnExpandAll">
+                  <MenuItem.Icon>
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Collapse All" Click="OnCollapseAll">
+                  <MenuItem.Icon>
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+
+      <ScrollViewer>
+        <StackPanel Margin="12,0,12,16">
+          <ContentControl>
+            <ContentControl.Content>
+              <MultiBinding Converter="{x:Static inspector:InspectorConverters.FirstSet}">
+                <Binding Path="Inspected" />
+                <Binding Path="Overview" />
+              </MultiBinding>
+            </ContentControl.Content>
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="canvas:TaskNodeViewModel">
+                <StackPanel>
+                  <inspector:InspectorSection Key="Task" Title="Task" Changes="{Binding TaskChanges}" IsShown="{Binding HasFields}">
+                    <ItemsControl ItemsSource="{Binding Fields}">
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="canvas:ProposalItemViewModel">
-                          <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" Margin="0,0,0,4"
-                                    AutomationProperties.AutomationId="ProposalItem"
-                                    AutomationProperties.Name="{Binding Label}">
-                            <StackPanel Spacing="2">
-                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextStrongBrush}" />
-                              <TextBlock Classes="caption" Text="{Binding Preview}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                                         IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                            </StackPanel>
-                          </CheckBox>
+                        <DataTemplate DataType="canvas:FieldViewModel">
+                          <inspector:InspectorRow Label="{Binding Label}" LabelTip="{Binding LabelTip}"
+                                                  Layout="{Binding IsMultiline, Converter={x:Static inspector:InspectorConverters.StackedWhen}}"
+                                                  RevertCommand="{Binding RevertCommand}" CanRevert="{Binding CanRevert}" RevertId="{Binding RevertId}">
+                            <!-- Enter must insert the line break the domain stores, or each keystroke's round trip would rewrite the box. -->
+                            <TextBox Text="{Binding Text}"
+                                     AcceptsReturn="{Binding IsMultiline}" TextWrapping="Wrap" NewLine="&#10;"
+                                     Classes.multiline="{Binding IsMultiline}"
+                                     AutomationProperties.AutomationId="{Binding AutomationId}"
+                                     AutomationProperties.Name="{Binding Label}" />
+                          </inspector:InspectorRow>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding Connections}"
-                                  AutomationProperties.AutomationId="ProposalConnections"
-                                  AutomationProperties.Name="Proposed connections">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                          <TextBlock Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
-                               IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               AutomationProperties.AutomationId="ProposalProblem" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Classes="action" Command="{Binding AcceptCommand}"
-                              AutomationProperties.AutomationId="AcceptProposal"
-                              AutomationProperties.Name="Accept">
-                        <TextBlock Text="Accept" />
-                      </Button>
-                      <Button Classes="action" Command="{Binding DismissCommand}"
-                              AutomationProperties.AutomationId="DismissProposal"
-                              AutomationProperties.Name="Dismiss">
-                        <TextBlock Text="Dismiss" />
-                      </Button>
-                    </StackPanel>
-                  </StackPanel>
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
+                  </inspector:InspectorSection>
 
-            <ContentControl Content="{Binding LastAttempt}" Margin="0,6,0,0">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="execution:AttemptViewModel">
-                  <StackPanel Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Classes="caption" Text="Last run" VerticalAlignment="Center" />
-                      <Border Grid.Column="1" Classes="pill"
-                              Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                              Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                              Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                              Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                          <PathIcon />
-                          <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
-                        </StackPanel>
-                      </Border>
-                    </Grid>
-                    <TextBlock Classes="caption" Text="{Binding Configuration}" TextWrapping="Wrap"
-                               AutomationProperties.AutomationId="LastRunConfiguration" />
-                    <TextBlock Classes="caption" Text="{Binding Timing}"
-                               AutomationProperties.AutomationId="LastRunTiming" />
-                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                               IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               AutomationProperties.AutomationId="LastRunDetail" />
-                    <ItemsControl ItemsSource="{Binding Conversation}"
-                                  AutomationProperties.AutomationId="Conversation"
+                  <inspector:InspectorSection Key="Agent" Title="{Binding AgentSectionTitle}" TitleId="AgentHeading"
+                                              Changes="{Binding AgentChanges}" IsShown="{Binding HasAgent}">
+                    <StackPanel>
+                      <inspector:InspectorRow Label="Client" Info="{Binding PermissionNote}"
+                                              RevertCommand="{Binding RevertAgentCommand}" CanRevert="{Binding CanRevertAgent}" RevertId="RevertAgent">
+                        <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
+                                  AutomationProperties.AutomationId="TaskClient"
+                                  AutomationProperties.Name="Client">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:ClientChoice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Model" IsShown="{Binding HasClient}">
+                        <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
+                                  PlaceholderText="Choose a model"
+                                  AutomationProperties.AutomationId="TaskModel"
+                                  AutomationProperties.Name="Model">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:Choice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Reasoning" IsShown="{Binding HasReasoning}">
+                        <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
+                                  PlaceholderText="Choose a level"
+                                  AutomationProperties.AutomationId="TaskReasoning"
+                                  AutomationProperties.Name="Reasoning">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:Choice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding HasClient}">
+                        <TextBlock Classes="note" Text="{Binding PermissionNote}" ToolTip.Tip="{Binding PermissionNote}"
+                                   AutomationProperties.AutomationId="PermissionNote" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Conversation" IsShown="{Binding HasConversation}" Info="{Binding ConversationNote}"
+                                              RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation">
+                        <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
+                                  AutomationProperties.AutomationId="TaskConversation"
                                   AutomationProperties.Name="Conversation">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <StackPanel Spacing="12" />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="execution:ExchangeViewModel">
-                          <StackPanel Spacing="6">
-                            <TextBlock Classes="caption" Text="{Binding StatusLine}" TextWrapping="Wrap"
-                                       IsVisible="{Binding StatusLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                            <ItemsControl ItemsSource="{Binding Turns}">
-                              <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                  <StackPanel Spacing="6" />
-                                </ItemsPanelTemplate>
-                              </ItemsControl.ItemsPanel>
-                              <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="execution:TurnViewModel">
-                                  <StackPanel Spacing="6">
-                                    <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
-                                            IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                      <StackPanel Spacing="2">
-                                        <TextBlock Classes="caption" Text="{Binding Author}" />
-                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                                      </StackPanel>
-                                    </Border>
-                                    <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240"
-                                             IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                             AutomationProperties.AutomationId="{Binding ReplyId}"
-                                             AutomationProperties.Name="{Binding ReplyName}" />
-                                    <TextBlock Classes="caption" Text="{Binding Note}" TextWrapping="Wrap"
-                                               IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="canvas:Choice">
+                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding HasConversation}">
+                        <TextBlock Classes="note" Text="{Binding ConversationNote}" ToolTip.Tip="{Binding ConversationNote}"
+                                   AutomationProperties.AutomationId="ConversationNote" />
+                      </inspector:InspectorRow>
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Key="Run" Title="Run">
+                    <StackPanel>
+                      <inspector:InspectorRow Layout="Full">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Button Classes="primary" Command="{Binding RunCommand}"
+                                  AutomationProperties.AutomationId="RunTask"
+                                  AutomationProperties.Name="Run">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
+                              <TextBlock Text="Run" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="action" Command="{Binding CancelCommand}"
+                                  AutomationProperties.AutomationId="CancelRun"
+                                  AutomationProperties.Name="Cancel run">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                              <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </StackPanel>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding StartProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StartProblem}" Background="Transparent">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
+                                    VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
+                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                     FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                     AutomationProperties.AutomationId="StartProblem" />
+                        </Grid>
+                      </inspector:InspectorRow>
+                      <ContentControl Content="{Binding LastRun}">
+                        <ContentControl.ContentTemplate>
+                          <DataTemplate DataType="execution:AttemptViewModel">
+                            <StackPanel>
+                              <inspector:InspectorRow Label="Status">
+                                <Border Classes="pill" HorizontalAlignment="Left"
+                                        Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                                        Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                                        Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                                        Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+                                  <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <PathIcon />
+                                    <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
                                   </StackPanel>
+                                </Border>
+                              </inspector:InspectorRow>
+                              <inspector:InspectorRow Label="Agent">
+                                <TextBlock Classes="value" Text="{Binding Configuration}" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="LastRunConfiguration" />
+                              </inspector:InspectorRow>
+                              <inspector:InspectorRow Label="Time">
+                                <TextBlock Classes="value" Text="{Binding Timing}" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="LastRunTiming" />
+                              </inspector:InspectorRow>
+                              <inspector:InspectorRow Layout="Full" IsShown="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                           AutomationProperties.AutomationId="LastRunDetail" />
+                              </inspector:InspectorRow>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                      </ContentControl>
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Key="Proposal" Title="Proposal" IsShown="{Binding Proposal, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <StackPanel>
+                      <ContentControl Content="{Binding Proposal}">
+                        <ContentControl.ContentTemplate>
+                          <DataTemplate DataType="canvas:ProposalViewModel">
+                            <StackPanel AutomationProperties.AutomationId="Proposal">
+                              <ItemsControl ItemsSource="{Binding Items}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate DataType="canvas:ProposalItemViewModel">
+                                    <inspector:InspectorRow Layout="Full" Label="{Binding Label}">
+                                      <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}"
+                                                ToolTip.Tip="Untick a task to leave it out. Accept adds and fills the rest in one change."
+                                                AutomationProperties.AutomationId="ProposalItem"
+                                                AutomationProperties.Name="{Binding Label}">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                          <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Center" />
+                                          <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextStrongBrush}" />
+                                            <TextBlock Classes="note" Text="{Binding Preview}" ToolTip.Tip="{Binding Preview}"
+                                                       IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                          </StackPanel>
+                                        </Grid>
+                                      </CheckBox>
+                                    </inspector:InspectorRow>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <inspector:InspectorRow Layout="Full">
+                                <ItemsControl ItemsSource="{Binding Connections}"
+                                              AutomationProperties.AutomationId="ProposalConnections"
+                                              AutomationProperties.Name="Proposed connections">
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                      <TextBlock Classes="caption" Text="{Binding}" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                              </inspector:InspectorRow>
+                              <inspector:InspectorRow Layout="Full" IsShown="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource DestructiveTextBrush}"
+                                           AutomationProperties.AutomationId="ProposalProblem" />
+                              </inspector:InspectorRow>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                      </ContentControl>
+                      <!-- A waiting Chat planner ends its conversation by accepting, so Accept and Finish leads there. -->
+                      <inspector:InspectorRow Layout="Full">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="primary" Command="{Binding AcceptAndFinishCommand}" IsVisible="{Binding ShowsAcceptAndFinish}"
+                                  ToolTip.Tip="Adds and fills the chosen tasks, then marks the planner done"
+                                  AutomationProperties.AutomationId="ProposalAcceptFinish"
+                                  AutomationProperties.Name="Accept and Finish">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" Width="14" Height="14" />
+                              <TextBlock Text="Accept and Finish" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes.primary="{Binding !ShowsAcceptAndFinish}" Classes.action="{Binding ShowsAcceptAndFinish}"
+                                  Command="{Binding Proposal.AcceptCommand}"
+                                  ToolTip.Tip="Adds and fills the chosen tasks in one change"
+                                  AutomationProperties.AutomationId="AcceptProposal"
+                                  AutomationProperties.Name="Accept">
+                            <TextBlock Text="Accept" />
+                          </Button>
+                          <Button Classes="action" Command="{Binding Proposal.DismissCommand}"
+                                  ToolTip.Tip="Hides the proposal until the planner proposes again"
+                                  AutomationProperties.AutomationId="DismissProposal"
+                                  AutomationProperties.Name="Dismiss">
+                            <TextBlock Text="Dismiss" />
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <inspector:InspectorRow Layout="Full">
+                      <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
+                        <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                                   AutomationProperties.AutomationId="ReviewSummary" />
+                        <ItemsControl ItemsSource="{Binding Findings}"
+                                      AutomationProperties.AutomationId="Findings"
+                                      AutomationProperties.Name="Findings">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="execution:FindingViewModel">
+                              <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                                      BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
+                                      Opacity="{Binding Emphasis}">
+                                <StackPanel Spacing="4">
+                                  <TextBlock Classes="caption" Text="{Binding Heading}" />
+                                  <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                  <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                             IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                  <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                             IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                </StackPanel>
+                              </Border>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </inspector:InspectorRow>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Key="Conversation" Title="{Binding ComposerSectionTitle}" TitleId="ComposerHeading">
+                    <StackPanel>
+                      <ContentControl Content="{Binding LastRun}">
+                        <ContentControl.ContentTemplate>
+                          <DataTemplate DataType="execution:AttemptViewModel">
+                            <inspector:InspectorRow Layout="Full">
+                              <StackPanel Spacing="8">
+                                <ItemsControl ItemsSource="{Binding Conversation}"
+                                              AutomationProperties.AutomationId="Conversation"
+                                              AutomationProperties.Name="Conversation">
+                                  <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                      <StackPanel Spacing="12" />
+                                    </ItemsPanelTemplate>
+                                  </ItemsControl.ItemsPanel>
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="execution:ExchangeViewModel">
+                                      <StackPanel Spacing="6">
+                                        <TextBlock Classes="caption" Text="{Binding StatusLine}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding StatusLine, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                        <ItemsControl ItemsSource="{Binding Turns}">
+                                          <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                              <StackPanel Spacing="6" />
+                                            </ItemsPanelTemplate>
+                                          </ItemsControl.ItemsPanel>
+                                          <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="execution:TurnViewModel">
+                                              <StackPanel Spacing="6">
+                                                <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
+                                                        IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                  <StackPanel Spacing="2">
+                                                    <TextBlock Classes="caption" Text="{Binding Author}" />
+                                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                                  </StackPanel>
+                                                </Border>
+                                                <TextBox Text="{Binding Reply, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240" FontSize="13"
+                                                         IsVisible="{Binding Reply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                         AutomationProperties.AutomationId="{Binding ReplyId}"
+                                                         AutomationProperties.Name="{Binding ReplyName}" />
+                                                <TextBlock Classes="caption" Text="{Binding Note}" TextWrapping="Wrap"
+                                                           IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                              </StackPanel>
+                                            </DataTemplate>
+                                          </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                      </StackPanel>
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Spacing="4" IsVisible="{Binding WaitingCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                            AutomationProperties.AutomationId="Waiting">
+                                  <TextBlock Classes="caption" Text="{Binding WaitingCaption}" />
+                                  <ItemsControl ItemsSource="{Binding Waiting}"
+                                                AutomationProperties.AutomationId="WaitingMessages"
+                                                AutomationProperties.Name="{Binding WaitingCaption}">
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate x:DataType="x:String">
+                                        <Border Background="{DynamicResource SurfaceMuted60Brush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,4">
+                                          <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
+                                        </Border>
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
+                                </StackPanel>
+                                <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
+                                           IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           AutomationProperties.AutomationId="TerminalNote" />
+                              </StackPanel>
+                            </inspector:InspectorRow>
+                          </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                      </ContentControl>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding IsWaiting}">
+                        <StackPanel Spacing="6">
+                          <Border Classes="pill waiting" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon />
+                              <TextBlock Text="Waiting for you" />
+                            </StackPanel>
+                          </Border>
+                          <TextBlock Text="{Binding Waiting}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                                     IsVisible="{Binding Waiting, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="PendingQuestion" />
+                        </StackPanel>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full">
+                        <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
+                        <TextBox Text="{Binding Draft}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
+                                 Watermark="{Binding ComposerHint}"
+                                 AutomationProperties.AutomationId="Composer"
+                                 AutomationProperties.Name="Message">
+                          <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
+                          </TextBox.KeyBindings>
+                        </TextBox>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="action" Command="{Binding SendCommand}"
+                                  AutomationProperties.AutomationId="SendMessage"
+                                  AutomationProperties.Name="Send">
+                            <TextBlock Text="Send" />
+                          </Button>
+                          <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding CanStopAndSend}"
+                                  AutomationProperties.AutomationId="StopAndSend"
+                                  AutomationProperties.Name="Stop and send">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                              <TextBlock Text="Stop and send" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding IsWaiting}"
+                                  AutomationProperties.AutomationId="MarkDone"
+                                  AutomationProperties.Name="Mark done">
+                            <TextBlock Text="Mark done" />
+                          </Button>
+                          <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
+                                  AutomationProperties.AutomationId="OpenInTerminal"
+                                  AutomationProperties.Name="Open in terminal">
+                            <TextBlock Text="Open in terminal" />
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding SendProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="caption" Text="{Binding SendProblem}" TextWrapping="Wrap"
+                                   AutomationProperties.AutomationId="SendProblem" />
+                      </inspector:InspectorRow>
+                    </StackPanel>
+                  </inspector:InspectorSection>
+
+                  <inspector:InspectorSection Key="Activity" Title="Activity" IsShown="{Binding LastRun.HasActivity, FallbackValue=False}">
+                    <ContentControl Content="{Binding LastRun}">
+                      <ContentControl.ContentTemplate>
+                        <DataTemplate DataType="execution:AttemptViewModel">
+                          <inspector:InspectorRow Layout="Full">
+                            <ItemsControl ItemsSource="{Binding Activity}"
+                                          AutomationProperties.AutomationId="LastRunActivity"
+                                          AutomationProperties.Name="Recent activity">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                  <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
                                 </DataTemplate>
                               </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
-                                       IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                          </StackPanel>
+                          </inspector:InspectorRow>
                         </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <StackPanel Spacing="4" IsVisible="{Binding WaitingCaption, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                AutomationProperties.AutomationId="Waiting">
+                      </ContentControl.ContentTemplate>
+                    </ContentControl>
+                  </inspector:InspectorSection>
 
-                      <TextBlock Classes="caption" Text="{Binding WaitingCaption}" />
-                      <ItemsControl ItemsSource="{Binding Waiting}"
-                                    AutomationProperties.AutomationId="WaitingMessages"
-                                    AutomationProperties.Name="{Binding WaitingCaption}">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="x:String">
-                            <Border Background="{DynamicResource SurfaceMuted60Brush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,4">
-                              <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" />
-                            </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                  <inspector:InspectorSection Key="Blueprint" Title="Blueprint">
+                    <StackPanel>
+                      <inspector:InspectorRow Label="Type">
+                        <TextBlock Classes="value" Text="{Binding TypeName}" ToolTip.Tip="{Binding TypeName}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Version">
+                        <TextBlock Classes="value" Text="{Binding BlueprintVersion}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Derived from" IsShown="{Binding DerivedFrom, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="value" Text="{Binding DerivedFrom}" ToolTip.Tip="{Binding DerivedFrom}" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Label="Description" Layout="Stacked" IsShown="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Classes="value" Text="{Binding Description}" TextWrapping="Wrap" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" Margin="0,4,0,0">
+                          <Button Classes="action" Command="{Binding DeriveCommand}"
+                                  ToolTip.Tip="A new blueprint with this type's fields and template"
+                                  AutomationProperties.AutomationId="DeriveTaskType"
+                                  AutomationProperties.Name="Derive">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" Width="14" Height="14" />
+                              <TextBlock Text="Derive…" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="action" Command="{Binding SaveAsBlueprintCommand}"
+                                  ToolTip.Tip="A new blueprint whose defaults are this task's values and agent"
+                                  AutomationProperties.AutomationId="SaveAsBlueprint"
+                                  AutomationProperties.Name="Save as blueprint">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" Width="14" Height="14" />
+                              <TextBlock Text="Save as Blueprint…" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
                     </StackPanel>
-                    <TextBlock Classes="caption" Text="{Binding TerminalNote}" TextWrapping="Wrap"
-                               IsVisible="{Binding TerminalNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                               AutomationProperties.AutomationId="TerminalNote" />
-                    <TextBlock Classes="caption" Text="Recent activity" Margin="0,4,0,0" IsVisible="{Binding HasActivity}" />
-                    <ItemsControl ItemsSource="{Binding Activity}"
-                                  AutomationProperties.AutomationId="LastRunActivity"
-                                  AutomationProperties.Name="Recent activity">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                          <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                     TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
-
-            <StackPanel Spacing="6" IsVisible="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                        AutomationProperties.AutomationId="Review">
-              <TextBlock Classes="section" Text="FINDINGS" Margin="0,20,0,2" />
-              <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                         AutomationProperties.AutomationId="ReviewSummary" />
-              <ItemsControl ItemsSource="{Binding Findings}"
-                            AutomationProperties.AutomationId="Findings"
-                            AutomationProperties.Name="Findings">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Spacing="8" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="execution:FindingViewModel">
-                    <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                            BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
-                            Opacity="{Binding Emphasis}">
-                      <StackPanel Spacing="4">
-                        <TextBlock Classes="caption" Text="{Binding Heading}" />
-                        <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                        <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                   IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                        <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                   IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-
-            <TextBlock Classes="section" Text="{Binding ComposerHeading}" Margin="0,20,0,2"
-                       AutomationProperties.AutomationId="ComposerHeading" />
-            <Border Classes="pill waiting" HorizontalAlignment="Left" IsVisible="{Binding IsWaiting}">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon />
-                <TextBlock Text="Waiting for you" />
-              </StackPanel>
-            </Border>
-            <TextBlock Text="{Binding Waiting}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                       IsVisible="{Binding Waiting, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       AutomationProperties.AutomationId="PendingQuestion" />
-            <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
-            <TextBox Text="{Binding Draft}"
-                     AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
-                     Watermark="{Binding ComposerHint}"
-                     AutomationProperties.AutomationId="Composer"
-                     AutomationProperties.Name="Message">
-              <TextBox.KeyBindings>
-                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
-              </TextBox.KeyBindings>
-            </TextBox>
-            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
-              <Button Classes="action" Command="{Binding SendCommand}"
-                      AutomationProperties.AutomationId="SendMessage"
-                      AutomationProperties.Name="Send">
-                <TextBlock Text="Send" />
-              </Button>
-              <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding CanStopAndSend}"
-                      AutomationProperties.AutomationId="StopAndSend"
-                      AutomationProperties.Name="Stop and send">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" />
-                  <TextBlock Text="Stop and send" />
+                  </inspector:InspectorSection>
                 </StackPanel>
-              </Button>
-              <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding IsWaiting}"
-                      AutomationProperties.AutomationId="MarkDone"
-                      AutomationProperties.Name="Mark done">
-                <TextBlock Text="Mark done" />
-              </Button>
-              <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
-                      AutomationProperties.AutomationId="OpenInTerminal"
-                      AutomationProperties.Name="Open in terminal">
-                <TextBlock Text="Open in terminal" />
-              </Button>
-            </WrapPanel>
-            <TextBlock Classes="caption" Text="{Binding SendProblem}" TextWrapping="Wrap"
-                       IsVisible="{Binding SendProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       AutomationProperties.AutomationId="SendProblem" />
-          </StackPanel>
-        </DataTemplate>
-        <DataTemplate DataType="canvas:ConnectionViewModel">
-          <StackPanel Spacing="12">
-            <Border Padding="12" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                    BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
-              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Classes="caption" Text="From" />
-                <TextBlock Grid.Column="1" Text="{Binding From.Title}" TextTrimming="CharacterEllipsis"
-                           FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
-                <TextBlock Grid.Row="1" Classes="caption" Text="Type" />
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Kind}"
-                           FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
-                <TextBlock Grid.Row="2" Classes="caption" Text="To" />
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding To.Title}" TextTrimming="CharacterEllipsis"
-                           FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
-              </Grid>
-            </Border>
-            <StackPanel Spacing="6">
-              <TextBlock Classes="caption" Text="Kind" />
-              <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
-                <!-- Each swatch draws its kind's line, so the buttons double as the legend for the canvas. -->
-                <UniformGrid Columns="2">
-                  <Button Classes="segment"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
-                          AutomationProperties.AutomationId="KindDependency"
-                          AutomationProperties.Name="Dependency">
-                    <StackPanel Spacing="4">
-                      <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" HorizontalAlignment="Center"
-                            Stroke="{DynamicResource ConnectionDependencyBrush}" />
-                      <TextBlock Text="Dependency" />
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="segment"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Context}"
-                          AutomationProperties.AutomationId="KindContext"
-                          AutomationProperties.Name="Context">
-                    <StackPanel Spacing="4">
-                      <Line StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" StrokeDashArray="2,1.5" HorizontalAlignment="Center"
-                            Stroke="{DynamicResource ConnectionContextBrush}" />
-                      <TextBlock Text="Context" />
-                    </StackPanel>
-                  </Button>
-                </UniformGrid>
-              </Border>
-            </StackPanel>
-            <Button Classes="nav" Content="Delete connection" Command="{Binding DeleteCommand}" />
-          </StackPanel>
-        </DataTemplate>
-      </ContentControl.DataTemplates>
-    </ContentControl>
+              </DataTemplate>
+
+              <DataTemplate DataType="canvas:ConnectionViewModel">
+                <inspector:InspectorSection Key="Connection" Title="Connection">
+                  <StackPanel>
+                    <inspector:InspectorRow Label="From">
+                      <Button Classes="rowLink" Command="{Binding From.SelectCommand}" ToolTip.Tip="Select this task"
+                              AutomationProperties.AutomationId="ConnectionFrom"
+                              AutomationProperties.Name="{Binding From.Title}">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                          <theme:KindTile Kind="{Binding From.Kind}" TileSize="18" />
+                          <TextBlock Grid.Column="1" Classes="value" Text="{Binding From.Title}" />
+                        </Grid>
+                      </Button>
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Label="To">
+                      <Button Classes="rowLink" Command="{Binding To.SelectCommand}" ToolTip.Tip="Select this task"
+                              AutomationProperties.AutomationId="ConnectionTo"
+                              AutomationProperties.Name="{Binding To.Title}">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                          <theme:KindTile Kind="{Binding To.Kind}" TileSize="18" />
+                          <TextBlock Grid.Column="1" Classes="value" Text="{Binding To.Title}" />
+                        </Grid>
+                      </Button>
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Label="Kind" Layout="Stacked">
+                      <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
+                        <!-- Each swatch draws its kind's line in the wire's hue, so the buttons double as the legend for the canvas. -->
+                        <UniformGrid Columns="2">
+                          <Button Classes="segment"
+                                  Command="{Binding SetKindCommand}"
+                                  CommandParameter="{x:Static workflows:ConnectionKind.Dependency}"
+                                  AutomationProperties.AutomationId="KindDependency"
+                                  AutomationProperties.Name="Dependency">
+                            <StackPanel Spacing="4">
+                              <Line Classes="kindStroke" theme:StyleClass.Kind="{Binding SourceKind}"
+                                    StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" HorizontalAlignment="Center" />
+                              <TextBlock Text="Dependency" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="segment"
+                                  Command="{Binding SetKindCommand}"
+                                  CommandParameter="{x:Static workflows:ConnectionKind.Context}"
+                                  AutomationProperties.AutomationId="KindContext"
+                                  AutomationProperties.Name="Context">
+                            <StackPanel Spacing="4">
+                              <Line Classes="kindStroke" theme:StyleClass.Kind="{Binding SourceKind}"
+                                    StartPoint="0,1" EndPoint="18,1" StrokeThickness="2" StrokeDashArray="2,1.5" HorizontalAlignment="Center" />
+                              <TextBlock Text="Context" />
+                            </StackPanel>
+                          </Button>
+                        </UniformGrid>
+                      </Border>
+                    </inspector:InspectorRow>
+                    <inspector:InspectorRow Layout="Full">
+                      <Button Classes="destructive" Command="{Binding DeleteCommand}" Margin="0,6,0,0"
+                              AutomationProperties.AutomationId="DeleteConnection"
+                              AutomationProperties.Name="Delete Connection">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" Width="14" Height="14" />
+                          <TextBlock Text="Delete Connection" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </inspector:InspectorRow>
+                  </StackPanel>
+                </inspector:InspectorSection>
+              </DataTemplate>
+
+              <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
+                <StackPanel>
+                  <inspector:InspectorSection Key="Overview" Title="Overview" IsShown="{Binding HasKinds}">
+                    <ItemsControl ItemsSource="{Binding Kinds}" AutomationProperties.AutomationId="WorkflowKinds">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="inspector:KindCount">
+                          <inspector:InspectorRow Layout="Full" Label="{Binding Label}">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                              <theme:KindTile Kind="{Binding Kind}" TileSize="18" />
+                              <TextBlock Grid.Column="1" Classes="entryName" Text="{Binding Label}" />
+                              <TextBlock Grid.Column="2" Classes="value" Text="{Binding Count}" />
+                            </Grid>
+                          </inspector:InspectorRow>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </inspector:InspectorSection>
+                  <inspector:InspectorSection Key="Library" Title="Library">
+                    <blueprints:PaletteView DataContext="{Binding Blueprints}" />
+                  </inspector:InspectorSection>
+                </StackPanel>
+              </DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+          <!-- Outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
+          <TextBlock Text="Select a task or connection to edit it." Margin="0,4,0,0"
+                     TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
+                     IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
+                     AutomationProperties.AutomationId="InspectorHint" />
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
   </Panel>
 </UserControl>

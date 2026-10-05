@@ -23,7 +23,7 @@
       <ColumnDefinition Width="1" />
       <ColumnDefinition Width="*" />
       <ColumnDefinition Width="1" />
-      <ColumnDefinition Width="300" MinWidth="260" MaxWidth="480" />
+      <ColumnDefinition Width="320" MinWidth="280" MaxWidth="520" />
     </Grid.ColumnDefinitions>
 
     <!-- The sidebar has no fill of its own. The window's sidebar color shows through it.
@@ -260,15 +260,14 @@
         <TextBlock Text="Inspector" VerticalAlignment="Center"
                    FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
       </Border>
-      <ScrollViewer>
-        <ContentControl Content="{Binding Canvas}" Margin="12,16,12,12">
-          <ContentControl.DataTemplates>
-            <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-              <inspector:InspectorView />
-            </DataTemplate>
-          </ContentControl.DataTemplates>
-        </ContentControl>
-      </ScrollViewer>
+      <!-- The inspector scrolls its own sections, so its header and filter stay in place. -->
+      <ContentControl Content="{Binding Canvas}">
+        <ContentControl.DataTemplates>
+          <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+            <inspector:InspectorView />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
     </DockPanel>
   </Grid>
 </Window>

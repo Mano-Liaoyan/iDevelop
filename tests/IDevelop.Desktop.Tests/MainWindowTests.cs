@@ -96,13 +96,10 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
-                "Inspector", "Select a task or connection to edit it.", "BLUEPRINTS", "BUILT-IN", "Implement", "Version 1",
-                "Carries out its instructions with the agent you choose, and may edit the project.", "Place", "Derive",
-                "Plan", "Version 1", "Plans the work toward a goal and proposes the tasks that carry it out. It changes no file.", "Place", "Derive",
-                "Architect", "Version 1", "Designs from a brief, reports the design, and proposes the tasks that build it. It changes no file.", "Place", "Derive",
-                "Review", "Version 1", "Reviews the change of the task before it. The reviewer and that task's agent go back and forth until both agree.", "Place", "Derive",
-                "Approval", "Version 1", "Waits for you to approve what the tasks before it handed on, or to send it back.", "Place", "Derive",
-                "PROJECT", "None yet. Derive a blueprint to add one.", "PERSONAL", "None yet. Derive a blueprint to add one.",
+                "Inspector", "plan", "0 tasks", "Filter properties", "Library",
+                "Built-in", "Implement", "Plan", "Architect", "Review", "Approval",
+                "Project", "None yet. Derive a blueprint to add one.", "Personal", "None yet. Derive a blueprint to add one.",
+                "Reload Libraries", "Select a task or connection to edit it.",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));
         Assert.Equal("plan", shell.Find<TextBlock>("ProjectName").Text);
