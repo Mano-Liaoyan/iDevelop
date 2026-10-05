@@ -49,6 +49,8 @@ A person's message resumes the client's own session in a new process. `scripts/p
 | Pi | `id` of the `session` event | `--session-id <id>` | `pi --session <id>` |
 | Antigravity CLI | `conversation_id` of the `init` event | `--conversation <id>` | `agy --conversation <id>` |
 
+- Every session id the probe saw was a UUID. iDevelop takes a session id only when it is a plain id: a letter or digit, then letters, digits, `.`, `_`, `:`, and `-`. It ignores any other, whether a client printed it or an attempt log holds it, because a shared repository can carry attempt logs and the id reaches a client's arguments and the command a person pastes in a terminal.
+
 - `codex exec resume` takes no `--sandbox` option, so a resumed turn sets the sandbox through its configuration key. On Linux on 2026-10-05, a resumed turn with `-c sandbox_mode=read-only` refused to write a file, so resume honors the key. The probe's `resume-readonly` case repeats this check for each client that has a read-only mode.
 - Read-only access on a resumed session depends on the client. On Linux on 2026-10-05 the probe started each session with write access and resumed it read-only. Claude Code in plan mode and Codex with a read-only sandbox wrote nothing. Antigravity CLI kept writing. A conversation started with accept-edits wrote the file when resumed without the flag, and again when resumed with `--mode plan`. A session that must stay read-only therefore starts read-only. Claude Code's plan mode also writes its plan to `~/.claude/plans/`, outside the project.
 - In the probe, Antigravity CLI's `result` event reported the same `conversation_id` as its `init` event, so the row keeps reading it from `init`.

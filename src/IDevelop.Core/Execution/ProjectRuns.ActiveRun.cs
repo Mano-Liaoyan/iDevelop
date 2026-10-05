@@ -1,17 +1,12 @@
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
 namespace IDevelop.Execution;
 
 public sealed partial class ProjectRuns
 {
-    /// <summary>A client's own session ids are UUIDs. Anything else could read as an option or as shell syntax.</summary>
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
-    private static partial Regex PlainSessionId();
-
     /// <summary>
     /// One attempt while it runs. Its turns run one after another, each one client process, under one log, one lock, and
     /// one channel. The channel puts every event in one order: stdout lines, the person's messages, stop requests, and
@@ -289,21 +284,14 @@ public sealed partial class ProjectRuns
 
         private static ImmutableArray<AgentEvent> Parse(LaunchPlan plan, string line)
         {
-            var client = Clients.Name(plan.Settings.Client);
-            ImmutableArray<AgentEvent> events;
             try
             {
-                events = plan.Client.Interpret(line);
+                return plan.Client.Interpret(line);
             }
             catch (JsonException)
             {
-                return [new AgentEvent.Notice($"iDevelop could not read a line that {client} printed.")];
+                return [new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(plan.Settings.Client)} printed.")];
             }
-
-            // A session id goes into the next turn's arguments and into the command a person pastes in a terminal.
-            return [.. events.Select(e => e is AgentEvent.SessionStarted session && !PlainSessionId().IsMatch(session.SessionId)
-                ? new AgentEvent.Notice($"iDevelop ignored the session id {client} reported, because it is not a plain id.")
-                : e)];
         }
 
         private async Task WatchExitAsync(Turn turn, Tail stderrTail)

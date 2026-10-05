@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -107,7 +108,6 @@ public sealed record AttemptRecord
         Requested = requested.Settings;
         RequestedAt = requested.At;
         Continues = requested.Continues;
-        SessionId = requested.Continues?.Session;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null)];
     }
 
@@ -137,7 +137,10 @@ public sealed record AttemptRecord
     /// <summary>Why the attempt failed or was interrupted, in the client's words when it gave any.</summary>
     public string? Detail { get; internal init; }
 
-    /// <summary>The client's session, which every turn shares. The client reported it, or a continuation resumed it.</summary>
+    /// <summary>
+    /// The client's session, which every turn shares. The client reported it, or a continuation resumed it. Always a plain
+    /// id, safe in a command line.
+    /// </summary>
     public string? SessionId { get; internal init; }
 
     public string? ReportedModel { get; internal init; }
@@ -174,9 +177,17 @@ public sealed record AttemptRecord
 }
 
 /// <summary>The only writer of <see cref="AttemptRecord"/>. Pure.</summary>
-internal static class AttemptReducer
+internal static partial class AttemptReducer
 {
     private const int ActivityLimit = 100;
+
+    /// <summary>
+    /// A client's own session ids are UUIDs. Anything else could read as an option or as shell syntax in the next turn's
+    /// arguments and in the command a person pastes in a terminal. A session id reaches the record only through this
+    /// reducer, from client output and from attempt logs, which a shared repository can carry.
+    /// </summary>
+    [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._:-]*\z")]
+    private static partial Regex PlainSessionId();
 
     /// <summary>Null when the log has no Requested line.</summary>
     public static AttemptRecord? Replay(IEnumerable<AttemptEvent> events)
@@ -190,7 +201,11 @@ internal static class AttemptReducer
         return record;
     }
 
-    public static AttemptRecord Start(AttemptEvent.Requested requested) => new(requested) { Status = AttemptStatus.Running };
+    public static AttemptRecord Start(AttemptEvent.Requested requested) => new(requested)
+    {
+        Status = AttemptStatus.Running,
+        SessionId = requested.Continues is { Session: var session } && PlainSessionId().IsMatch(session) ? session : null,
+    };
 
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e) => (e, record) switch
     {
@@ -230,7 +245,8 @@ internal static class AttemptReducer
 
     private static AttemptRecord ApplyAgent(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
     {
-        AgentEvent.SessionStarted session => record with { SessionId = session.SessionId },
+        AgentEvent.SessionStarted session when PlainSessionId().IsMatch(session.SessionId) => record with { SessionId = session.SessionId },
+        AgentEvent.SessionStarted => Log(record, at, $"iDevelop ignored the session id {Clients.Name(record.Requested.Client)} reported, because it is not a plain id."),
         AgentEvent.Reported reported => record with
         {
             ReportedModel = reported.Model ?? record.ReportedModel,
