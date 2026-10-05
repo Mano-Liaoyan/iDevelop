@@ -125,7 +125,6 @@ public sealed class GenerateTests : IDisposable
         shell.Type("Add CSV export to the reports page.");
         shell.Press(Key.Enter);
         shell.Type("Include tests.");
-        var prompt = shell.Find<TextBox>("GeneratePrompt").Text;
         var viewport = (shell.Editor.ViewportLocation, shell.Editor.ViewportSize);
 
         shell.Click(shell.Find<Button>("GenerateSubmit"));
@@ -133,7 +132,7 @@ public sealed class GenerateTests : IDisposable
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
         var planner = Assert.Single(canvas.Workflow.Tasks.Values);
         Assert.Equal(
-            (BuiltInBlueprints.Plan.Key, "Add CSV export to the reports page.", prompt, ConversationMode.Chat, Codex),
+            (BuiltInBlueprints.Plan.Key, "Add CSV export to the reports page.", "Add CSV export to the reports page.\nInclude tests.", ConversationMode.Chat, Codex),
             (planner.Blueprint.Key, planner.Title, planner.Field("goal"), planner.Conversation, planner.Execution));
         Assert.Equal(
             new CanvasPoint(viewport.ViewportLocation.X + 60, viewport.ViewportLocation.Y + viewport.ViewportSize.Height / 2 - WorkflowCanvasViewModel.TaskCardHeight / 2),
