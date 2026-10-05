@@ -300,6 +300,30 @@ public sealed class GenerateTests : IDisposable
         Assert.False(Directory.Exists(DataFolder.Workflows(canvas.Document.ProjectFolder)));
     }
 
+    [AvaloniaFact]
+    public void While_the_sheet_is_open_the_column_splitters_take_no_drag_and_the_sheet_keeps_focus()
+    {
+        var shell = OpenEmpty();
+        OpenSheet(shell);
+        var sheet = shell.Find<GenerateSheet>("GenerateSheet");
+        var columns = ((Grid)shell.Window.Content!).ColumnDefinitions;
+        var widths = columns.Select(column => column.ActualWidth).ToArray();
+        var splitters = shell.Window.GetVisualDescendants().OfType<GridSplitter>().ToArray();
+        Assert.Equal(2, splitters.Length);
+
+        foreach (var splitter in splitters)
+        {
+            var center = shell.Center(splitter);
+            Assert.True(shell.Window.InputHitTest(center) is Visual hit && sheet.IsVisualAncestorOf(hit), "the scrim takes the splitter's point");
+            shell.Drag(center, center + new Vector(-120, 0));
+        }
+
+        Assert.Equal(widths, columns.Select(column => column.ActualWidth));
+        Assert.True(shell.Find<TextBox>("GeneratePrompt").IsFocused);
+        shell.Press(Key.Escape);
+        Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
+    }
+
     [Theory]
     [InlineData("Add CSV export.", "Add CSV export.")]
     [InlineData("\n   \n  Add CSV export.  \r\nWith tests.", "Add CSV export.")]
