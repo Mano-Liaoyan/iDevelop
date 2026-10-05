@@ -25,7 +25,7 @@ public partial class MainWindow : Window
     public MainWindow(ClientDirectory clients)
     {
         Copy = text => Clipboard?.SetTextAsync(text) ?? Task.FromException(new InvalidOperationException("This window has no clipboard."));
-        ViewModel = new MainWindowViewModel(clients, text => Copy(text));
+        ViewModel = new MainWindowViewModel(clients, text => Copy(text), (Application.Current as App)?.PersonalBlueprints);
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;

@@ -1,21 +1,50 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:workflows="using:IDevelop.Workflows"
              x:Class="IDevelop.Desktop.Inspector.InspectorView"
              x:DataType="canvas:WorkflowCanvasViewModel">
   <Panel>
-    <TextBlock Text="Select a task or connection to edit it."
-               TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-               IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
-               AutomationProperties.AutomationId="InspectorHint" />
-    <ContentControl Content="{Binding Inspected}">
+    <!-- The blueprint editor takes the panel while it is open. Otherwise the selection does, or the palette when nothing is selected. -->
+    <ContentControl Content="{Binding Blueprints.Editor}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="blueprints:BlueprintEditorViewModel">
+          <blueprints:BlueprintEditorView />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
+    <StackPanel Spacing="20">
+      <StackPanel.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Inspected" Converter="{x:Static ObjectConverters.IsNull}" />
+          <Binding Path="Blueprints.Editor" Converter="{x:Static ObjectConverters.IsNull}" />
+        </MultiBinding>
+      </StackPanel.IsVisible>
+      <TextBlock Text="Select a task or connection to edit it."
+                 TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                 AutomationProperties.AutomationId="InspectorHint" />
+      <blueprints:PaletteView DataContext="{Binding Blueprints}" />
+    </StackPanel>
+    <ContentControl Content="{Binding Inspected}" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNull}}">
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:TaskNodeViewModel">
           <StackPanel Spacing="6">
             <TextBlock Classes="section" Text="{Binding TypeName}" Margin="0,0,0,2"
                        AutomationProperties.AutomationId="TaskType" />
+            <TextBlock Classes="caption" Text="{Binding TypeVersion}"
+                       AutomationProperties.AutomationId="TaskTypeVersion" />
+            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" Margin="0,2,0,6">
+              <Button Classes="action" Content="Derive" Command="{Binding DeriveCommand}"
+                      ToolTip.Tip="A new blueprint with this type's fields and template"
+                      AutomationProperties.AutomationId="DeriveTaskType"
+                      AutomationProperties.Name="Derive" />
+              <Button Classes="action" Content="Save as blueprint" Command="{Binding SaveAsBlueprintCommand}"
+                      ToolTip.Tip="A new blueprint whose defaults are this task's values and agent"
+                      AutomationProperties.AutomationId="SaveAsBlueprint"
+                      AutomationProperties.Name="Save as blueprint" />
+            </WrapPanel>
             <TextBlock Classes="caption" Text="Title" />
             <TextBox Text="{Binding Title}"
                      AutomationProperties.AutomationId="TaskTitle"

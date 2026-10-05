@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Threading;
+using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
@@ -29,7 +30,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
 
-    public WorkflowCanvasViewModel(WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy)
+    /// <param name="personalBlueprints">The personal library's folder, or null for none.</param>
+    public WorkflowCanvasViewModel(
+        WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy, string? personalBlueprints = null)
     {
         Document = document;
         Runs = runs;
@@ -39,8 +42,10 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         ActiveRun = new ActiveRunViewModel(runs, clients);
         runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
-        AddTaskCommand = new RelayCommand(AddTaskInView);
-        AddTaskAtCommand = new RelayCommand<Point>(location => AddTask(new CanvasPoint(location.X, location.Y)));
+        Blueprints = new BlueprintsViewModel(
+            this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
+        AddTaskCommand = new RelayCommand(() => PlaceInView(BuiltInBlueprints.Implement));
+        AddTaskAtCommand = new RelayCommand<Point>(location => Place(BuiltInBlueprints.Implement, new CanvasPoint(location.X, location.Y)));
         DeleteSelectionCommand = new RelayCommand(DeleteSelection);
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
@@ -99,6 +104,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     public PendingConnectionViewModel PendingConnection { get; }
 
     public ActiveRunViewModel ActiveRun { get; }
+
+    /// <summary>The palette and the blueprint editor.</summary>
+    public BlueprintsViewModel Blueprints { get; }
 
     public Point ViewportLocation
     {
@@ -184,7 +192,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         OnPropertyChanged(nameof(WaitingLabel));
     }
 
-    private void AddTaskInView()
+    /// <summary>Places a node of the blueprint near the top left of the view, below any card already there, and selects it.</summary>
+    internal void PlaceInView(Blueprint blueprint)
     {
         var position = new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60);
         while (Workflow.Positions.Values.Any(other =>
@@ -193,14 +202,13 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
             position = position with { Y = position.Y + TaskFootprint.Height };
         }
 
-        AddTask(position);
+        Place(blueprint, position);
     }
 
-    /// <summary>Until the palette lists other blueprints, every new task is an Implement node.</summary>
-    private void AddTask(CanvasPoint position)
+    private void Place(Blueprint blueprint, CanvasPoint position)
     {
         var id = TaskId.New();
-        if (Edit(new WorkflowEdit.PlaceNode(id, BuiltInBlueprints.Implement, position) { Title = "New task" }) is EditResult.Applied)
+        if (Edit(new WorkflowEdit.PlaceNode(id, blueprint, position) { Title = "New task" }) is EditResult.Applied)
         {
             Select(_nodes[id]);
         }

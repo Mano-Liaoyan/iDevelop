@@ -18,7 +18,8 @@ internal static class WorkflowFile
     /// <summary>Read and converted. It goes once no format 2 file remains.</summary>
     public const string FormatV2 = "idevelop.workflow/2";
 
-    private static readonly JsonSerializerOptions Options = new()
+    /// <summary>Strict, readable JSON, which a blueprint file shares.</summary>
+    internal static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
@@ -31,7 +32,7 @@ internal static class WorkflowFile
         AllowDuplicateProperties = false,
     };
 
-    private static readonly JsonSerializerOptions HeaderOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions HeaderOptions = new(JsonSerializerDefaults.Web);
 
     public static byte[] Serialize(Workflow workflow)
     {
@@ -265,7 +266,7 @@ internal static class WorkflowFile
     private static ConnectionKind? ParseKind(string name) =>
         Enum.GetValues<ConnectionKind>().Where(kind => KindName(kind) == name).Select(kind => (ConnectionKind?)kind).FirstOrDefault();
 
-    private sealed class HeaderDto
+    internal sealed class HeaderDto
     {
         public string? Format { get; init; }
     }

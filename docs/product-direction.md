@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its first two slices are built. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its first three slices are built. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -268,7 +268,7 @@ iDevelop starts the official clients, so each run uses the sign-in that client a
 
 ### The node model comes next
 
-The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, and slice 2, typed nodes with workflow format 3 and conversation modes, are built. Blueprint libraries and planning come next.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, and slice 3, blueprint libraries, are built. Planning and review come next.
 
 ### Workflow execution follows
 
