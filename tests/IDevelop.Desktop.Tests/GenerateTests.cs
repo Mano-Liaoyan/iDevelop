@@ -11,6 +11,7 @@ using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.TestSupport.FakeAgents;
 
@@ -172,6 +173,32 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(NodeRole.Proposing, planner.Role);
         Assert.Equal("Review Proposal", ButtonLabel(shell));
         Assert.True(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
+    }
+
+    [AvaloniaFact]
+    public void The_proposal_draws_its_connections_as_ghost_wires_from_port_to_port_until_it_is_accepted()
+    {
+        var shell = Generated();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var origin = WorkflowCanvasViewModel.ToPoint(canvas.Workflow.Positions[canvas.SelectedNode!.Id]);
+        var api = origin + new Point(Proposal.ColumnStep, 0);
+        var button = origin + new Point(2 * Proposal.ColumnStep, 0);
+        var tests = origin + new Point(2 * Proposal.ColumnStep, Proposal.RowStep);
+        var output = WorkflowCanvasViewModel.OutputPortCenter;
+        var input = WorkflowCanvasViewModel.InputPortCenter;
+
+        Assert.Equal(
+            [(origin + output, api + input), (api + output, button + input), (api + output, tests + input)],
+            GhostWires(shell));
+        Assert.Equal(
+            ["kind-implement", "kind-implement", "kind-plan"],
+            GhostWireLines(shell).Select(wire => wire.Classes.Single(name => name.StartsWith("kind-", StringComparison.Ordinal))).Order());
+        Assert.All(GhostWireLines(shell), wire => Assert.Equal([4.0, 3.0], wire.StrokeDashArray!));
+
+        shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
+
+        Assert.Empty(GhostWires(shell));
+        Assert.Equal(3, canvas.Workflow.Connections.Count);
     }
 
     [AvaloniaFact]
@@ -426,6 +453,16 @@ public sealed class GenerateTests : IDisposable
         shell.Type(prompt);
         shell.Click(shell.Find<Button>("GenerateSubmit"));
     }
+
+    private static IEnumerable<StepConnection> GhostWireLines(Shell shell) =>
+        shell.Window.GetVisualDescendants().OfType<StepConnection>().Where(wire => AutomationProperties.GetAutomationId(wire) == "GhostWire");
+
+    /// <summary>Each ghost wire's two ends on the canvas.</summary>
+    private static (Point From, Point To)[] GhostWires(Shell shell) =>
+        [.. GhostWireLines(shell)
+            .Select(wire => shell.Ends(wire))
+            .Select(ends => (From: Shell.Rounded(shell.CanvasPointAt(ends.Source)), To: Shell.Rounded(shell.CanvasPointAt(ends.Target))))
+            .OrderBy(wire => (wire.From.X, wire.From.Y, wire.To.X, wire.To.Y))];
 
     private static string? ButtonLabel(Shell shell) => AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"));
 

@@ -52,7 +52,13 @@ public sealed partial class WorkflowCanvasViewModel
     public AddNodeViewModel? AddNode
     {
         get => _addNode;
-        private set => SetProperty(ref _addNode, value);
+        private set
+        {
+            if (SetProperty(ref _addNode, value))
+            {
+                ShowGhosts();
+            }
+        }
     }
 
     internal ICanvasView? View { get; set; }
@@ -164,6 +170,16 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Whether no card covers the point, so a click or a drop there is on the canvas itself.</summary>
     internal bool IsEmptyAt(CanvasPoint point) => !Workflow.Positions.Values.Any(position =>
         point.X >= position.X && point.X < position.X + TaskCardWidth && point.Y >= position.Y && point.Y < position.Y + TaskCardHeight);
+
+    /// <summary>While the Add popover offers a node for a dropped wire, the wire stays from its port to the drop.</summary>
+    private DanglingWireViewModel? DanglingWire() => AddNode?.Target switch
+    {
+        AddTarget.FromOutput from when _nodes.TryGetValue(from.Source, out var source) =>
+            DanglingWireViewModel.Between(source.Location + OutputPortCenter, ToPoint(from.Drop), source.Kind),
+        AddTarget.ToInput to when _nodes.TryGetValue(to.Target, out var target) =>
+            DanglingWireViewModel.Between(target.Location + InputPortCenter, ToPoint(to.Drop), target.Kind),
+        _ => null,
+    };
 
     // A wire dropped on empty canvas offers to add the node at its other end.
     private void DropWire(PortViewModel port)

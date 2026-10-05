@@ -1,14 +1,10 @@
 using System.Windows.Input;
-using Avalonia;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
-
-/// <summary>A dashed card on the canvas for a task that a proposal adds, or fills in place of the empty card.</summary>
-public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview, NodeKind Kind);
 
 /// <summary>A task that a proposal adds or fills, which the person can untick before accepting.</summary>
 public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen, NodeKind kind) : ObservableObject
@@ -153,29 +149,45 @@ public sealed class ProposalViewModel : ObservableObject
     internal bool IsSettled(Workflow workflow) => Proposal is { } proposal &&
         workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet(), _canvas.HasStarted)) is EditResult.Applied applied && ReferenceEquals(applied.Workflow, workflow);
 
-    /// <summary>The chosen tasks as ghost cards: a new task where accepting places it, and a fill over its empty card.</summary>
-    internal IEnumerable<GhostCardViewModel> Ghosts(Workflow workflow)
+    /// <summary>
+    /// The chosen tasks as ghost cards, a new task where accepting places it and a fill over its empty card, after the
+    /// connections accepting adds as ghost wires, so the cards draw over the wires.
+    /// </summary>
+    internal IEnumerable<Ghost> Ghosts(Workflow workflow)
     {
         if (Proposal is not { } proposal)
         {
-            yield break;
+            return [];
         }
 
         var chosen = Chosen();
+        var layout = proposal.Layout(workflow);
+        var cards = new List<Ghost>();
         foreach (var fill in proposal.Fills.Where(fill => chosen.Contains(fill.Slot) && workflow.Positions.ContainsKey(fill.Slot)))
         {
             var slot = workflow.Tasks[fill.Slot];
-            yield return new GhostCardViewModel(
+            cards.Add(new GhostCardViewModel(
                 WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
-                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint));
+                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint)));
         }
 
-        var layout = proposal.Layout(workflow);
-        foreach (var node in proposal.Nodes.Where(node => chosen.Contains(node.Id)))
+        var added = proposal.Nodes.Where(node => chosen.Contains(node.Id)).ToDictionary(node => node.Id);
+        foreach (var node in added.Values)
         {
-            yield return new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint));
+            cards.Add(new GhostCardViewModel(
+                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint)));
         }
+
+        CanvasPoint? At(TaskId id) => layout.TryGetValue(id, out var position) ? position : workflow.Positions.TryGetValue(id, out position) ? position : null;
+        Blueprint? BlueprintOf(TaskId id) => added.TryGetValue(id, out var node) ? node.Blueprint : workflow.Tasks.GetValueOrDefault(id)?.Blueprint;
+        var wires = AcceptEdit(workflow, chosen).Edits.OfType<WorkflowEdit.Connect>()
+            .Where(connect => At(connect.Key.From) is not null && At(connect.Key.To) is not null && BlueprintOf(connect.Key.From) is not null)
+            .Select(connect => GhostWireViewModel.Between(
+                WorkflowCanvasViewModel.ToPoint(At(connect.Key.From)!.Value) + WorkflowCanvasViewModel.OutputPortCenter,
+                WorkflowCanvasViewModel.ToPoint(At(connect.Key.To)!.Value) + WorkflowCanvasViewModel.InputPortCenter,
+                _canvas.KindOf(BlueprintOf(connect.Key.From)!),
+                connect.Kind));
+        return [.. wires, .. cards];
     }
 
     /// <summary>Checks the chosen tasks against the workflow and the runs as they are now.</summary>

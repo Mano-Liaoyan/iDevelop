@@ -77,33 +77,52 @@
   </Style>
   <!-- A wire's stroke and arrow take its source node's kind. Nodify's connections are not Avalonia shapes, so Kinds.axaml's
        shape rules miss them. -->
-  <Style Selector="nodify|StepConnection.kind-implement">
+  <Style Selector=":is(nodify|BaseConnection).kind-implement">
     <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.kind-plan">
+  <Style Selector=":is(nodify|BaseConnection).kind-plan">
     <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.kind-architect">
+  <Style Selector=":is(nodify|BaseConnection).kind-architect">
     <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.kind-review">
+  <Style Selector=":is(nodify|BaseConnection).kind-review">
     <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.kind-approval">
+  <Style Selector=":is(nodify|BaseConnection).kind-approval">
     <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
   </Style>
-  <Style Selector="nodify|StepConnection.kind-readonlyagent">
+  <Style Selector=":is(nodify|BaseConnection).kind-readonlyagent">
     <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
     <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
   <Style Selector="nodify|StepConnection.context">
     <Setter Property="StrokeDashArray" Value="4,3" />
     <Setter Property="Opacity" Value="0.8" />
+  </Style>
+  <!-- A proposed connection is dashed and lighter, and a proposed context connection is dotted. -->
+  <Style Selector="nodify|StepConnection.ghost">
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+    <Setter Property="Opacity" Value="0.7" />
+    <Setter Property="ArrowSize" Value="7,7" />
+  </Style>
+  <Style Selector="nodify|StepConnection.ghost.context">
+    <Setter Property="StrokeDashArray" Value="1,3" />
+  </Style>
+  <!-- The line Nodify's pending connection draws while a wire is dragged. -->
+  <Style Selector="nodify|LineConnection.dangling">
+    <Setter Property="StrokeThickness" Value="3" />
+    <Setter Property="StrokeDashArray" Value="4,4" />
+    <Setter Property="Spacing" Value="0" />
+    <Setter Property="ArrowSize" Value="0,0" />
+    <Setter Property="SourceOffsetMode" Value="None" />
+    <Setter Property="TargetOffsetMode" Value="None" />
   </Style>
   <Style Selector="nodify|StepConnection.highlighted">
     <Setter Property="StrokeThickness" Value="2.5" />

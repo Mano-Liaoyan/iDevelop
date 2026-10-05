@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
 
@@ -33,7 +34,6 @@
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
                          Decorators="{Binding Ghosts}"
                          ItemTemplate="{StaticResource TaskCardTemplate}"
-                         DecoratorTemplate="{StaticResource GhostCardTemplate}"
                          ConnectionTemplate="{StaticResource ConnectionTemplate}"
                          PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
                          GridCellSize="15">
@@ -62,6 +62,41 @@
         </DrawingBrush>
       </nodify:NodifyEditor.Background>
 
+      <!-- Nodify gives every decorator one template, so the ghosts leave it unset and take theirs by type from here.
+           A proposal's tasks draw as dashed cards over the empty cards they fill, and its connections as dashed wires.
+           A wire dropped on empty canvas stays as the line it was while the Add popover is open. -->
+      <nodify:NodifyEditor.DataTemplates>
+        <DataTemplate DataType="canvas:GhostCardViewModel">
+          <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
+                 Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+                 AutomationProperties.AutomationId="GhostCard"
+                 AutomationProperties.Name="{Binding Title}">
+            <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
+            <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+                       theme:StyleClass.Kind="{Binding Kind}" />
+            <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
+              <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Margin="0,14,0,0">
+                <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="GhostTitle" />
+                <TextBlock Classes="cardStatus" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="GhostLabel" />
+              </StackPanel>
+            </Grid>
+          </Panel>
+        </DataTemplate>
+        <DataTemplate DataType="canvas:GhostWireViewModel">
+          <nodify:StepConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
+                                 theme:StyleClass.Kind="{Binding Kind}" Classes.context="{Binding IsContext}"
+                                 AutomationProperties.AutomationId="GhostWire" />
+        </DataTemplate>
+        <DataTemplate DataType="canvas:DanglingWireViewModel">
+          <nodify:LineConnection Classes="dangling" Source="{Binding Source}" Target="{Binding Target}"
+                                 theme:StyleClass.Kind="{Binding Kind}"
+                                 AutomationProperties.AutomationId="DanglingWire" />
+        </DataTemplate>
+      </nodify:NodifyEditor.DataTemplates>
+
       <nodify:NodifyEditor.ItemContainerTheme>
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
@@ -74,11 +109,11 @@
         </ControlTheme>
       </nodify:NodifyEditor.ItemContainerTheme>
 
-      <!-- A proposal's tasks draw as dashed cards that take no input, over the empty cards they fill. -->
+      <!-- A proposal's tasks and connections, and a dropped wire, draw as ghosts that take no input. -->
       <nodify:NodifyEditor.DecoratorContainerStyle>
         <ControlTheme TargetType="nodify:DecoratorContainer"
                       BasedOn="{StaticResource {x:Type nodify:DecoratorContainer}}"
-                      x:DataType="canvas:GhostCardViewModel">
+                      x:DataType="canvas:Ghost">
           <Setter Property="Location" Value="{Binding Location}" />
           <Setter Property="IsHitTestVisible" Value="False" />
         </ControlTheme>
