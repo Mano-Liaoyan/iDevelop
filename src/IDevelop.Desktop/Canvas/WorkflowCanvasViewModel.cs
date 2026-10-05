@@ -56,8 +56,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         PendingConnection = new PendingConnectionViewModel(this);
         Blueprints = new BlueprintsViewModel(
             this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
-        AddTaskCommand = new RelayCommand(() => PlaceInView(BuiltInBlueprints.Implement));
-        AddTaskAtCommand = new RelayCommand<Point>(location => Place(NewTask(BuiltInBlueprints.Implement, new CanvasPoint(location.X, location.Y))));
         DeleteSelectionCommand = new RelayCommand(DeleteSelection);
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
@@ -131,10 +129,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         get => _viewportLocation;
         set => SetProperty(ref _viewportLocation, value);
     }
-
-    public ICommand AddTaskCommand { get; }
-
-    public ICommand AddTaskAtCommand { get; }
 
     public ICommand DeleteSelectionCommand { get; }
 
@@ -312,11 +306,16 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         [.. SelectedNodes.Select(node => node.Id)],
         [.. SelectedConnections.Select(connection => connection.Key)]));
 
+    // Nodify passes a null target for a wire dropped anywhere but on a port.
     private void Connect(object source, object? target)
     {
         if (ResolveEndpoints(source, target) is { } key)
         {
             Edit(new WorkflowEdit.Connect(key, ConnectionKind.Dependency));
+        }
+        else if (target is null && source is PortViewModel port)
+        {
+            DropWire(port);
         }
     }
 

@@ -31,7 +31,7 @@ public sealed class CanvasTests : IDisposable
         var folder = _temp.Create("plan");
         var shell = Shell.Open(folder);
 
-        shell.Click(shell.Find<Button>("AddTask"));
+        shell.AddNode();
 
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
         shell.Click(shell.Find<TextBox>("TaskTitle"));
@@ -58,7 +58,7 @@ public sealed class CanvasTests : IDisposable
 
         for (var click = 0; click < 3; click++)
         {
-            shell.Click(shell.Find<Button>("AddTask"));
+            shell.AddNode();
         }
 
         var bounds = shell.Nodes().Select(node => node.Bounds).ToList();
@@ -76,7 +76,7 @@ public sealed class CanvasTests : IDisposable
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
         shell.Pan(canvasOrigin + new Vector(700, 400), new Vector(-pan, 0));
-        shell.Click(shell.Find<Button>("AddTask"));
+        shell.AddNode();
 
         var (existing, added) = (shell.Node(title), shell.Node("New task"));
         Assert.Equal(60 + pan, added.Location.X);
@@ -200,16 +200,16 @@ public sealed class CanvasTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_canvas_menu_adds_a_task_where_the_canvas_was_right_clicked()
+    public void The_add_popover_centers_a_task_where_the_canvas_was_right_clicked()
     {
         var shell = Shell.Open(_temp.Create("plan"));
         var canvasOrigin = shell.Editor.TranslatePoint(default, shell.Window)!.Value;
 
         shell.RightClick(canvasOrigin + new Vector(300, 405));
-        shell.Click(shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(item => (string?)item.Header == "Add task"));
+        shell.Click(shell.AddRow("Implement"));
 
         var node = Assert.Single(shell.Nodes());
-        Assert.Equal(new Point(300, 405), node.Location);
+        Assert.Equal(new Point(300 - WorkflowCanvasViewModel.TaskCardWidth / 2, 405 - WorkflowCanvasViewModel.TaskCardHeight / 2), node.Location);
         Assert.Equal("New task", shell.Find<TextBox>("TaskTitle").Text);
         Assert.Equal("plan* - iDevelop", shell.Window.Title);
     }

@@ -62,11 +62,6 @@
         </DrawingBrush>
       </nodify:NodifyEditor.Background>
 
-      <nodify:NodifyEditor.KeyBindings>
-        <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectionCommand}" />
-        <KeyBinding Gesture="Back" Command="{Binding DeleteSelectionCommand}" />
-      </nodify:NodifyEditor.KeyBindings>
-
       <nodify:NodifyEditor.ItemContainerTheme>
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
@@ -92,20 +87,22 @@
 
     <canvas:GenerateLayer />
 
+    <canvas:AddNodePopover x:Name="AddPopover" />
+
     <Border Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12">
       <Border>
         <StackPanel>
-          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in"
+          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
                   AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
-            <PathIcon Data="{StaticResource PlusIcon}" Width="12" Height="12" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
           </Button>
-          <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out"
+          <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
                   AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
-            <PathIcon Data="{StaticResource MinusIcon}" Width="12" Height="12" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
           </Button>
-          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to screen"
+          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
                   AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
-            <PathIcon Data="{StaticResource FitIcon}" Width="12" Height="12" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
           </Button>
         </StackPanel>
       </Border>
