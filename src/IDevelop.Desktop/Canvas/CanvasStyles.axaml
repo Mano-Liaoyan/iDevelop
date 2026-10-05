@@ -1,3 +1,6 @@
+<!-- The canvas's own styles. Kinds.axaml paints the kind, state, and role classes. Styles here are nearer the canvas's
+     elements, so they win over Kinds.axaml where both set a property, which is why the neutral rules here exclude the
+     kind classes they would otherwise hide. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nodify="https://miroiu.github.io/nodify">
@@ -5,70 +8,57 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
   <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
-  <!-- PlanWeave's status card: the tone's surface, the tone at 55 to 60% as its border, and a ring of the tone at 15%. -->
   <Style Selector="Border.card">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />
   </Style>
-  <Style Selector="Border.card.running">
-    <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning55Brush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource CardRunningShadow}" />
+  <Style Selector="nodify|ItemContainer:pointerover Border.card">
+    <Setter Property="BoxShadow" Value="{DynamicResource NodeHoverShadow}" />
   </Style>
-  <Style Selector="Border.card.complete">
-    <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess55Brush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource CardSuccessShadow}" />
+  <Style Selector="nodify|ItemContainer:pointerover Border.stateStroke.state-idle:not(.role-proposing), nodify|ItemContainer:pointerover Border.stateStroke.state-needssetup:not(.role-proposing)">
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
   </Style>
-  <Style Selector="Border.card.problem">
-    <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateFailed60Brush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
+  <Style Selector="Border.roleBadge">
+    <Setter Property="Padding" Value="1.5" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
-  <Style Selector="Border.card.waiting">
-    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting55Brush}" />
-    <Setter Property="BoxShadow" Value="{DynamicResource CardWaitingShadow}" />
+  <Style Selector="Border.ghost">
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+    <Setter Property="Opacity" Value="0.85" />
   </Style>
   <Style Selector="TextBlock.cardTitle">
-    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <Style Selector="TextBlock.cardLabel">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-  </Style>
-  <Style Selector="Border.prompt">
-    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-    <Setter Property="Padding" Value="10,8" />
-  </Style>
-  <Style Selector="Border.prompt TextBlock">
-    <Setter Property="FontSize" Value="12" />
+  <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Height" Value="16" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
   </Style>
-  <Style Selector="Border.prompt TextBlock.placeholder">
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  <Style Selector="TextBlock.cardAgent">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+
+  <!-- A port's ring is neutral until a connection uses it. Then Kinds.axaml paints it in its node's kind. -->
+  <Style Selector="Ellipse.port:not(.kindStroke)">
+    <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+  </Style>
+
   <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
   <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
     <Setter Property="ZIndex" Value="-1" />
   </Style>
   <Style Selector="nodify|StepConnection">
-    <Setter Property="Stroke" Value="{DynamicResource ConnectionDependencyBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource ConnectionDependencyBrush}" />
-    <Setter Property="StrokeThickness" Value="2.2" />
-    <Setter Property="Opacity" Value="0.56" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Opacity" Value="1" />
     <Setter Property="Spacing" Value="20" />
     <Setter Property="CornerRadius" Value="5" />
     <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->
@@ -85,26 +75,101 @@
       </Transitions>
     </Setter>
   </Style>
+  <!-- A wire's stroke and arrow take its source node's kind. Nodify's connections are not Avalonia shapes, so Kinds.axaml's
+       shape rules miss them. -->
+  <Style Selector="nodify|StepConnection.kind-implement">
+    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindImplementStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.kind-plan">
+    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindPlanStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.kind-architect">
+    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindArchitectStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.kind-review">
+    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindReviewStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.kind-approval">
+    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|StepConnection.kind-readonlyagent">
+    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
+  </Style>
   <Style Selector="nodify|StepConnection.context">
-    <Setter Property="Stroke" Value="{DynamicResource ConnectionContextBrush}" />
-    <Setter Property="Fill" Value="{DynamicResource ConnectionContextBrush}" />
     <Setter Property="StrokeDashArray" Value="4,3" />
+    <Setter Property="Opacity" Value="0.8" />
+  </Style>
+  <Style Selector="nodify|StepConnection.highlighted">
+    <Setter Property="StrokeThickness" Value="2.5" />
+  </Style>
+  <Style Selector="nodify|StepConnection.dimmed">
+    <Setter Property="Opacity" Value="0.35" />
   </Style>
   <Style Selector="nodify|StepConnection:pointerover">
-    <Setter Property="StrokeThickness" Value="3.2" />
-    <Setter Property="Opacity" Value="0.96" />
+    <Setter Property="StrokeThickness" Value="3" />
+    <Setter Property="Opacity" Value="1" />
   </Style>
   <Style Selector="nodify|StepConnection[(nodify|BaseConnection.IsSelected)=true]">
-    <Setter Property="StrokeThickness" Value="3.2" />
-    <Setter Property="Opacity" Value="0.96" />
+    <Setter Property="StrokeThickness" Value="3" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-implement">
+    <Setter Property="Stroke" Value="{DynamicResource KindImplementStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-plan">
+    <Setter Property="Stroke" Value="{DynamicResource KindPlanStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-architect">
+    <Setter Property="Stroke" Value="{DynamicResource KindArchitectStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-review">
+    <Setter Property="Stroke" Value="{DynamicResource KindReviewStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-approval">
+    <Setter Property="Stroke" Value="{DynamicResource KindApprovalStrokeBrush}" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.kind-readonlyagent">
+    <Setter Property="Stroke" Value="{DynamicResource KindReadOnlyAgentStrokeBrush}" />
   </Style>
   <Style Selector="nodify|PendingConnection.rejected">
-    <Setter Property="Stroke" Value="{DynamicResource StateFailedBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
+
   <!-- Nodify draws the viewport over the items, and this viewport is opaque. -->
   <Style Selector="nodify|Minimap /template/ ItemsPresenter#PART_ItemsPresenter">
     <Setter Property="ZIndex" Value="1" />
   </Style>
+  <Style Selector="nodify|MinimapItem">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.minimapItem">
+    <Setter Property="Opacity" Value="0.7" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-implement">
+    <Setter Property="Background" Value="{DynamicResource KindImplementBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-plan">
+    <Setter Property="Background" Value="{DynamicResource KindPlanBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-architect">
+    <Setter Property="Background" Value="{DynamicResource KindArchitectBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-review">
+    <Setter Property="Background" Value="{DynamicResource KindReviewBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-approval">
+    <Setter Property="Background" Value="{DynamicResource KindApprovalBrush}" />
+  </Style>
+  <Style Selector="Border.minimapItem.kind-readonlyagent">
+    <Setter Property="Background" Value="{DynamicResource KindReadOnlyAgentBrush}" />
+  </Style>
+
   <Style Selector="Button.zoom">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />

@@ -1,6 +1,8 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -28,7 +30,8 @@ public sealed class TypedNodeTests : IDisposable
             "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
             shell.Status);
         Assert.True(shell.ShowsUnsavedChanges);
-        Assert.Equal("Implement", shell.CardText("Review the storage change", "CardType"));
+        var kind = shell.InCard<KindTile>("Review the storage change", "CardKind");
+        Assert.Equal(("Implement", "Implement version 1"), (AutomationProperties.GetName(kind), AutomationProperties.GetHelpText(kind)));
 
         shell.Press(Key.S, RawInputModifiers.Control);
 

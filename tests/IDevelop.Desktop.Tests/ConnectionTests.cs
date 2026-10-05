@@ -96,19 +96,20 @@ public sealed class ConnectionTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData("ThemeLight", "#5A6168")]
-    [InlineData("ThemeDark", "#999893")]
-    public void Each_connection_kind_draws_in_its_theme_color(string theme, string context)
+    [InlineData("ThemeLight", "#564ADE")]
+    [InlineData("ThemeDark", "#6D7CFF")]
+    public void A_connection_draws_in_its_source_kinds_stroke_and_a_context_connection_is_dashed(string theme, string stroke)
     {
+        // Review sits below Build, so the connection from Design to Review leaves the row before it reaches Build's input.
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90),
             TaskAt(Build, "Build", 405, 90),
-            TaskAt(Review, "Review", 705, 250),
+            TaskAt(Review, "Review", 405, 300),
             new Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Context),
             new Connect(new ConnectionKey(Build, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>(theme));
-        var (dependency, contextColor) = (Color.Parse("#2563EB"), Color.Parse(context));
+        var implement = Color.Parse(stroke);
         (string From, string To, Color Stroke, Color Arrow, bool Dashed)[] Strokes() =>
         [
             .. shell.Connections()
@@ -124,13 +125,13 @@ public sealed class ConnectionTests : IDisposable
         ];
 
         Assert.Equal(
-            [("Build", "Review", dependency, dependency, false), ("Design", "Build", dependency, dependency, false), ("Design", "Review", contextColor, contextColor, true)],
+            [("Build", "Review", implement, implement, false), ("Design", "Build", implement, implement, false), ("Design", "Review", implement, implement, true)],
             Strokes());
 
         shell.Click(shell.ConnectionInto("Build"));
         shell.Click(shell.Find<Button>("KindContext"));
 
-        Assert.Contains(("Design", "Build", contextColor, contextColor, true), Strokes());
+        Assert.Contains(("Design", "Build", implement, implement, true), Strokes());
     }
 
     [AvaloniaFact]
@@ -143,10 +144,10 @@ public sealed class ConnectionTests : IDisposable
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
 
-        // The connection turns down at x = 535, halfway between its ends, and passes under Build's instructions box.
-        // On the open canvas it is #2563EB at 56% opacity over #FBFBF9.
-        Assert.Equal(Color.Parse("#83A6F1"), shell.ColorAt(shell.Editor, new Point(535, 280)));
-        Assert.Equal(Color.Parse("#FCFCFA"), shell.ColorAt(shell.Editor, new Point(535, 200)));
+        // The connection turns down at x = 535, halfway between its ends, and passes under Build's card below its text.
+        // On the open canvas it is Implement's stroke.
+        Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 220)));
+        Assert.Equal(Color.Parse("#FFFFFF"), shell.ColorAt(shell.Editor, new Point(535, 146)));
     }
 
     [AvaloniaFact]
