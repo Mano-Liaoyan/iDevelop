@@ -45,7 +45,7 @@ public sealed class SidebarTests : IDisposable
         Assert.Equal("3", shell.Find<TextBlock>("TaskCount").Text);
         Assert.Equal(["Design", "Build", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
-        shell.Click(shell.Find<Button>("AddTask"));
+        shell.AddNode();
 
         Assert.Equal("4", shell.Find<TextBlock>("TaskCount").Text);
         Assert.Equal(["Design", "Build", "Review", "New task"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));

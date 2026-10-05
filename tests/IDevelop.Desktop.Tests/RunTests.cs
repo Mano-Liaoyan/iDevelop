@@ -192,7 +192,7 @@ public sealed class RunTests : IDisposable
     public void The_running_prompt_comes_before_the_save_prompt_and_cancelling_the_save_prompt_stops_nothing()
     {
         var (shell, _, _) = StartWaitingRun();
-        shell.Click(shell.Find<Button>("AddTask"));
+        shell.AddNode();
         shell.Window.Close();
         shell.Render();
         Assert.IsType<RunningTaskDialog>(shell.Dialog);

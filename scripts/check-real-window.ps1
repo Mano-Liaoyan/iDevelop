@@ -39,8 +39,12 @@ try {
         Check ($window.Current.Name -eq 'edit-project - iDevelop') "title before edits is '$($window.Current.Name)'"
         Check ($null -eq (Get-SettingsTheme)) 'a first launch writes no theme preference'
 
-        Invoke-Element (Find-ById $window 'AddTask')
-        Invoke-Element (Find-ById $window 'AddTask')
+        foreach ($add in 1..2) {
+            Invoke-Element (Find-ById $window 'AddTask')
+            $implement = Find-ById $window 'AddNodeItem'
+            Check ($implement.Current.Name -eq 'Add Implement') "the Add popover lists Implement first: '$($implement.Current.Name)'"
+            Invoke-Element $implement
+        }
         $titleBox = Find-ById $window 'TaskTitle'
         Check ($null -ne $titleBox) 'inspector title box appeared for the new task'
         Set-Text $titleBox $title

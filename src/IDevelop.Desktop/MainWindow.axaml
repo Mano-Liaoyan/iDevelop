@@ -4,6 +4,7 @@
         xmlns:canvas="using:IDevelop.Desktop.Canvas"
         xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:inspector="using:IDevelop.Desktop.Inspector"
+        xmlns:theme="using:IDevelop.Desktop.Theme"
         x:Class="IDevelop.Desktop.MainWindow"
         x:DataType="local:MainWindowViewModel"
         Title="{Binding Title}" Width="1280" Height="800" MinWidth="900" MinHeight="600"
@@ -35,14 +36,15 @@
               PointerPressed="OnTitleBandPressed" />
 
       <Border Grid.Row="1" Padding="12,8,12,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Border60Brush}">
-        <Button Classes="nav"
-                Command="{Binding Canvas.AddTaskCommand}"
+        <Button x:Name="AddNode" Classes="nav"
+                Click="OnAddNode"
                 IsEnabled="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
+                ToolTip.Tip="Add a node (N on the canvas)"
                 AutomationProperties.AutomationId="AddTask"
-                AutomationProperties.Name="New task">
+                AutomationProperties.Name="Add node">
           <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="{StaticResource PlusIcon}" Width="16" Height="16" />
-            <TextBlock Text="New task" />
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+            <TextBlock Text="Add Node" />
           </StackPanel>
         </Button>
       </Border>
@@ -97,7 +99,11 @@
             </ListBox.ItemsPanel>
             <ListBox.ItemTemplate>
               <DataTemplate DataType="canvas:TaskNodeViewModel">
-                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                  <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                             ToolTip.Tip="{Binding Title}" />
+                </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>

@@ -40,7 +40,7 @@ public sealed class UnsavedChangesTests : IDisposable
     private Shell OpenWithUnsavedChanges()
     {
         var shell = OpenWithCountingPicker();
-        shell.Click(shell.Find<Button>("AddTask"));
+        shell.AddNode();
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         return shell;
     }

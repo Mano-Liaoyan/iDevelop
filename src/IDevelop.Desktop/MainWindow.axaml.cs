@@ -102,6 +102,9 @@ public partial class MainWindow : Window
 
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
 
+    private void OnAddNode(object? sender, RoutedEventArgs e) =>
+        CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);
+
     // The list also follows the canvas's selection, so only a change made while the list has focus is a choice in it.
     private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

@@ -1,24 +1,128 @@
-<!-- The canvas's context menus. The view opens each from code, with its DataContext set, so one menu serves every target. -->
+<!-- The canvas's context menus. The view opens each from code with a fresh subject as its DataContext. A menu hides
+     what its subject cannot do rather than dimming it. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:canvas="using:IDevelop.Desktop.Canvas"
-                    xmlns:workflows="using:IDevelop.Workflows">
-  <!-- The view puts the canvas point of the right-click in the menu's Tag. -->
-  <ContextMenu x:Key="CanvasMenu" x:DataType="canvas:WorkflowCanvasViewModel">
-    <MenuItem Header="Add task"
-              Command="{Binding AddTaskAtCommand}"
-              CommandParameter="{Binding $parent[ContextMenu].Tag}" />
-    <MenuItem Header="Delete" InputGesture="Delete" Command="{Binding DeleteSelectionCommand}" />
+                    xmlns:theme="using:IDevelop.Desktop.Theme">
+  <ContextMenu x:Key="NodeMenu" x:DataType="canvas:NodeMenuViewModel" Classes="hints">
+    <!-- Avalonia's own hint names Enter "Return" outside macOS, so the hints come from CanvasKeys.Hint. The class
+         makes this style a trigger, which outranks the template's own binding of the hint text. -->
+    <ContextMenu.Styles>
+      <Style Selector="ContextMenu.hints MenuItem /template/ TextBlock#PART_InputGestureText">
+        <Setter Property="Text" Value="{Binding $parent[MenuItem].InputGesture, Converter={x:Static canvas:CanvasKeys.HintConverter}}" />
+      </Style>
+    </ContextMenu.Styles>
+    <MenuItem Header="Run" InputGesture="{x:Static canvas:CanvasKeys.Run}"
+              Command="{Binding Node.RunCommand}" IsVisible="{Binding ShowRun}"
+              AutomationProperties.AutomationId="NodeMenuRun">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <MenuItem Header="Cancel Run"
+              Command="{Binding Node.CancelCommand}" IsVisible="{Binding ShowCancel}"
+              AutomationProperties.AutomationId="NodeMenuCancel">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <Separator IsVisible="{Binding ShowRunGroup}" />
+    <MenuItem Header="Rename" InputGesture="{x:Static canvas:CanvasKeys.Rename}"
+              Command="{Binding RenameCommand}" IsVisible="{Binding IsSingle}"
+              AutomationProperties.AutomationId="NodeMenuRename">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRename}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <MenuItem Header="Duplicate" InputGesture="{x:Static canvas:CanvasKeys.Duplicate}"
+              Command="{Binding DuplicateCommand}"
+              AutomationProperties.AutomationId="NodeMenuDuplicate">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDuplicate}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <MenuItem Header="Replace With" ItemsSource="{Binding ReplaceChoices}" IsVisible="{Binding ShowReplace}"
+              AutomationProperties.AutomationId="NodeMenuReplace">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconReplace}" />
+      </MenuItem.Icon>
+      <MenuItem.ItemContainerTheme>
+        <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="canvas:ReplaceChoice">
+          <Setter Property="Header" Value="{Binding Name}" />
+          <Setter Property="Command" Value="{Binding Command}" />
+          <Setter Property="AutomationProperties.AutomationId" Value="ReplaceWithItem" />
+          <Setter Property="AutomationProperties.Name" Value="{Binding AutomationName}" />
+          <Setter Property="Icon">
+            <Template>
+              <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" />
+            </Template>
+          </Setter>
+          <!-- The menu's icon column is 16 px, and a list's kind tile is 18. -->
+          <Style Selector="^ /template/ ContentControl#PART_IconPresenter">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+          </Style>
+        </ControlTheme>
+      </MenuItem.ItemContainerTheme>
+    </MenuItem>
+    <MenuItem Header="Disconnect"
+              Command="{Binding DisconnectCommand}" IsVisible="{Binding ShowDisconnect}"
+              AutomationProperties.AutomationId="NodeMenuDisconnect">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDisconnect}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <Separator IsVisible="{Binding IsSingle}" />
+    <MenuItem Header="Derive Blueprint…"
+              Command="{Binding Node.DeriveCommand}" IsVisible="{Binding IsSingle}"
+              AutomationProperties.AutomationId="NodeMenuDerive">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <MenuItem Header="Save as Blueprint…"
+              Command="{Binding Node.SaveAsBlueprintCommand}" IsVisible="{Binding IsSingle}"
+              AutomationProperties.AutomationId="NodeMenuSaveAs">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <Separator />
+    <MenuItem Classes="destructive" Header="Delete" InputGesture="{x:Static canvas:CanvasKeys.Delete}"
+              Command="{Binding DeleteCommand}"
+              AutomationProperties.AutomationId="NodeMenuDelete">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" />
+      </MenuItem.Icon>
+    </MenuItem>
   </ContextMenu>
 
-  <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionViewModel">
-    <MenuItem Header="Dependency"
-              Command="{Binding SetKindCommand}"
-              CommandParameter="{x:Static workflows:ConnectionKind.Dependency}" />
-    <MenuItem Header="Context"
-              Command="{Binding SetKindCommand}"
-              CommandParameter="{x:Static workflows:ConnectionKind.Context}" />
+  <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionMenuViewModel">
+    <MenuItem Header="Dependency" Command="{Binding DependencyCommand}"
+              AutomationProperties.AutomationId="ConnectionMenuDependency">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" IsVisible="{Binding IsDependency}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <MenuItem Header="Context" Command="{Binding ContextCommand}"
+              AutomationProperties.AutomationId="ConnectionMenuContext">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" IsVisible="{Binding IsContext}" />
+      </MenuItem.Icon>
+    </MenuItem>
     <Separator />
-    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+    <MenuItem Header="Insert Node…" Command="{Binding InsertCommand}"
+              AutomationProperties.AutomationId="ConnectionMenuInsert">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInsert}" />
+      </MenuItem.Icon>
+    </MenuItem>
+    <Separator />
+    <MenuItem Classes="destructive" Header="Delete" Command="{Binding Connection.DeleteCommand}"
+              AutomationProperties.AutomationId="ConnectionMenuDelete">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" />
+      </MenuItem.Icon>
+    </MenuItem>
   </ContextMenu>
 </ResourceDictionary>
