@@ -1,0 +1,18 @@
+<!-- Every Fluent geometry is drawn in a 16 unit frame. A fixed canvas keeps that frame, so each glyph keeps its drawn
+     size and position, where the default PathIcon theme would stretch each geometry to fill the icon. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ControlTheme x:Key="Glyph" TargetType="PathIcon">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox>
+          <Canvas Width="16" Height="16">
+            <Path Data="{TemplateBinding Data}" Fill="{TemplateBinding Foreground}" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

@@ -8,6 +8,8 @@
         <ResourceInclude Source="avares://Nodify/Theme.axaml" />
         <ResourceInclude Source="/Theme/Tokens.axaml" />
         <ResourceInclude Source="/Theme/Icons.axaml" />
+        <ResourceInclude Source="/Theme/FluentIcons.axaml" />
+        <ResourceInclude Source="/Theme/Glyph.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
