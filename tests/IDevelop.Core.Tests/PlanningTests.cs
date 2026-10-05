@@ -21,6 +21,15 @@ public sealed class PlanningTests : IDisposable
     private static readonly ExecutionSettings Sol = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private static readonly Guid Plan = Guid.Parse("019a9d2e-6100-7000-8000-000000000088");
+    private static readonly ExecutionSettings Haiku = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5" };
+
+    /// <summary>A library blueprint with a default agent of its own.</summary>
+    private static readonly Blueprint Careful = new(
+        new BlueprintKey("team.careful", 1), "Careful implement", BuiltInBlueprints.Implement.Work, BuiltInBlueprints.Implement.Fields,
+        new NodeSettings(Haiku, ConversationMode.MayAsk));
+
+    /// <summary>The types a scripted proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-6</c>.</summary>
+    private static readonly ImmutableArray<Blueprint> Types = [.. BuiltInBlueprints.All, Careful];
 
     private const string FillsBothAndAddsOne = """
         The design splits into a backend and a frontend, which a third task wires together.
@@ -379,6 +388,34 @@ public sealed class PlanningTests : IDisposable
     }
 
     [Fact]
+    public void With_a_fallback_a_new_agent_or_review_whose_type_has_no_default_agent_takes_it()
+    {
+        Assert.Equal(
+            [
+                ("build", Sol, ConversationMode.Autonomous),
+                ("check", Sol, ConversationMode.Autonomous),
+                ("sign", null, ConversationMode.Autonomous),
+                ("careful", Haiku, ConversationMode.MayAsk),
+                ("slot-1", null, ConversationMode.Autonomous),
+            ],
+            AcceptedAgents(Sol));
+    }
+
+    [Fact]
+    public void Without_a_fallback_every_new_task_keeps_its_types_default_agent()
+    {
+        Assert.Equal(
+            [
+                ("build", null, ConversationMode.Autonomous),
+                ("check", null, ConversationMode.Autonomous),
+                ("sign", null, ConversationMode.Autonomous),
+                ("careful", Haiku, ConversationMode.MayAsk),
+                ("slot-1", null, ConversationMode.Autonomous),
+            ],
+            AcceptedAgents(null));
+    }
+
+    [Fact]
     public void A_node_that_proposes_nothing_or_a_reply_without_a_proposal_has_none()
     {
         var implement = AttemptReducer.Replay(
@@ -425,19 +462,40 @@ public sealed class PlanningTests : IDisposable
     private static CanvasPoint[] Places(Workflow accepted, Proposal proposal, params string[] names) =>
         [.. names.Select(name => accepted.Positions[proposal.Nodes.Single(node => node.Name == name).Id])];
 
+    /// <summary>
+    /// The agent and conversation mode of each task after accepting a proposal that fills slot-1 and adds an Implement, a
+    /// Review, an Approval, and a <see cref="Careful"/> node, with <paramref name="fallback"/>.
+    /// </summary>
+    private static (string Task, ExecutionSettings? Execution, ConversationMode Conversation)[] AcceptedAgents(ExecutionSettings? fallback)
+    {
+        var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
+        var proposal = Ready(Proposed("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
+             "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
+            ```
+            """));
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, fallback));
+
+        return [.. proposal.Nodes.Select(node => (node.Name, node.Id)).Append((Name: "slot-1", Id: Backend))
+            .Select(task => (task.Name, accepted.Tasks[task.Id].Execution, accepted.Tasks[task.Id].Conversation))];
+    }
+
     private static (string Title, string Instructions, string Criteria) Summary(TaskDefinition task) =>
         task.Blueprint == BuiltInBlueprints.Architect
             ? (task.Title, task.Field("brief"), "")
             : (task.Title, task.Field("instructions"), task.Field("acceptanceCriteria"));
 
-    private static Blueprint? Find(BlueprintKey key) => BuiltInBlueprints.Find(key);
+    private static Blueprint? Find(BlueprintKey key) => Types.FirstOrDefault(blueprint => blueprint.Key == key);
 
     private static Proposal Ready(AttemptRecord record) => Assert.IsType<ProposalRead.Ready>(Proposal.Read(record, Find)).Proposal;
 
     /// <summary>An Architect attempt whose one turn ended with <paramref name="reply"/>.</summary>
     private static AttemptRecord Proposed(string reply) => AttemptReducer.Replay(
     [
-        Requested(new PlanningHandles(Plan, [Backend, Frontend], [.. BuiltInBlueprints.All.Select(blueprint => blueprint.Key)])),
+        Requested(new PlanningHandles(Plan, [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)])),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.SessionStarted(Session)),
         new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.Succeeded(reply)),
         new AttemptEvent.Exited(AttemptEvents.T0, 0, ""),

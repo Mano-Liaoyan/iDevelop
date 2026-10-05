@@ -130,7 +130,11 @@ public sealed record Proposal(
     /// chosen, and counts as left out.
     /// </summary>
     /// <param name="started">Whether a task has an attempt.</param>
-    public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started)
+    /// <param name="fallback">
+    /// The agent that a new Agent or Review node takes when its blueprint has no default agent, with the blueprint's
+    /// default conversation mode. Null keeps every blueprint's defaults. A fill never changes its node's agent.
+    /// </param>
+    public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started, ExecutionSettings? fallback = null)
     {
         var layout = Layout(workflow);
         var placed = Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id).ToHashSet();
@@ -141,7 +145,12 @@ public sealed record Proposal(
         return new(
         [
             .. Nodes.Where(node => chosen.Contains(node.Id) && !placed.Contains(node.Id)).Select(node =>
-                new WorkflowEdit.PlaceNode(node.Id, node.Blueprint, layout[node.Id]) { Title = node.Title, Fields = node.Fields.ToImmutableDictionary() }),
+                new WorkflowEdit.PlaceNode(node.Id, node.Blueprint, layout[node.Id])
+                {
+                    Title = node.Title,
+                    Fields = node.Fields.ToImmutableDictionary(),
+                    Settings = FallbackSettings(node.Blueprint, fallback),
+                }),
             .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(Fill),
             .. Connections
                 .Where(connection => Kept(connection.From) && Kept(connection.To))
@@ -190,6 +199,14 @@ public sealed record Proposal(
 
         return depths;
     }
+
+    /// <summary>A new node's settings when <paramref name="fallback"/> gives it an agent, or null to keep its blueprint's defaults.</summary>
+    private static NodeSettings? FallbackSettings(Blueprint blueprint, ExecutionSettings? fallback) =>
+        fallback is null || blueprint.Defaults.Execution is not null ? null : blueprint.Work.Kind switch
+        {
+            WorkKind.Agent or WorkKind.Review => blueprint.Defaults with { Execution = fallback },
+            WorkKind.Person => null,
+        };
 
     private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill) =>
     [
