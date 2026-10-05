@@ -179,6 +179,9 @@ public abstract record EditRejection
 
     /// <summary>The cycle the edit would close, from the new connection's source back to it.</summary>
     public sealed record OrderingCycle(ImmutableArray<TaskId> Path) : EditRejection;
+
+    /// <summary>The review already depends on <paramref name="Subject"/>, the one node that edits the project it reviews.</summary>
+    public sealed record SecondSubject(TaskId Review, TaskId Subject) : EditRejection;
 }
 
 public abstract record EditResult
@@ -340,6 +343,11 @@ public sealed class Workflow
             return Reject(new EditRejection.OrderingCycle([from, .. path]));
         }
 
+        if (e.Kind == ConnectionKind.Dependency && SecondSubject(e.Key) is { } second)
+        {
+            return Reject(second);
+        }
+
         return Applied(new Workflow(Id, Tasks, Connections.Add(e.Key, e.Kind), Positions));
     }
 
@@ -358,6 +366,11 @@ public sealed class Workflow
         if (e.Kind.Blocks() && !current.Blocks() && FindOrderingPath(e.Key.To, e.Key.From) is { } path)
         {
             return Reject(new EditRejection.OrderingCycle([e.Key.From, .. path]));
+        }
+
+        if (e.Kind == ConnectionKind.Dependency && SecondSubject(e.Key) is { } second)
+        {
+            return Reject(second);
         }
 
         return Applied(new Workflow(Id, Tasks, Connections.SetItem(e.Key, e.Kind), Positions));
@@ -399,6 +412,27 @@ public sealed class Workflow
 
         return Applied(workflow);
     }
+
+    /// <summary>
+    /// The review's subject: its one dependency predecessor that edits the project. Null when the task is not a review or
+    /// has none.
+    /// </summary>
+    public TaskId? SubjectOf(TaskId review) =>
+        Tasks.TryGetValue(review, out var task) && task.Blueprint.Work is WorkSpec.Review
+            ? Connections
+                .Where(connection => connection.Key.To == review && connection.Value == ConnectionKind.Dependency && ProducesChange(Tasks[connection.Key.From]))
+                .Select(connection => (TaskId?)connection.Key.From)
+                .FirstOrDefault()
+            : null;
+
+    /// <summary>A node whose agent may edit the project, which a review can take as its subject.</summary>
+    public static bool ProducesChange(TaskDefinition task) => task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
+
+    /// <summary>Why a dependency would give a review a second subject, or null.</summary>
+    private EditRejection? SecondSubject(ConnectionKey key) =>
+        ProducesChange(Tasks[key.From]) && SubjectOf(key.To) is { } subject && subject != key.From
+            ? new EditRejection.SecondSubject(key.To, subject)
+            : null;
 
     private ImmutableArray<TaskId>? FindOrderingPath(TaskId start, TaskId goal)
     {

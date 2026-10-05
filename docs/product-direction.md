@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its first four slices are built. Workflow execution and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its five slices are built. Workflow execution, which comes next, and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -245,7 +245,7 @@ On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition 
 | 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
 | 3. Single-task execution | Done | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
-| 4. Node model | In progress | Proposal. Every built-in node type works on its own in the window. A node converses on each of the four clients. A planner's proposal fills drawn nodes and adds new ones after the user approves it. A review node and its subject iterate in fresh sessions until the reviewer approves. A user derives a node type, saves it to a library, and places it. |
+| 4. Node model | In progress | Proposal. Every built-in node type works on its own in the window. A node converses on each of the four clients. A planner's proposal fills drawn nodes and adds new ones after the user approves it. A review node and its subject iterate in their own continuing sessions until both agree. A user derives a node type, saves it to a library, and places it. |
 | 5. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
 | 6. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
@@ -268,7 +268,7 @@ iDevelop starts the official clients, so each run uses the sign-in that client a
 
 ### The node model comes next
 
-The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, and slice 4, planning, are built. Review comes next.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, slice 4, planning, and slice 5, review and approval, are built. Workflow execution is next.
 
 ### Workflow execution follows
 

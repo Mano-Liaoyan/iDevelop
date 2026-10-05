@@ -25,6 +25,9 @@ using System.Text.Json;
 //   spawnThroughCmd <file>        Windows only: run a copy through cmd.exe /c that starts a sleeping copy, writes its
 //                                 pid, and exits, so the sleeper shares the pipes and its parent is gone
 //   hang                          wait until killed
+//   write [<file>, <text>]        write the text to the file, relative to the current folder
+//   scripted <folder>             count this call in <folder>/count, copy stdin to <folder>/<n>.stdin, and run the steps in
+//                                 <folder>/<n>.json, so each turn of a conversation can answer differently
 //   exit <code>
 
 if (args is ["--sleep-forever"])
@@ -59,85 +62,113 @@ if (rule is not { } matched)
 }
 
 List<FileStream> held = [];
-foreach (var step in matched.GetProperty("steps").EnumerateArray())
+return Run(matched.GetProperty("steps")) ?? 0;
+
+int? Run(JsonElement steps)
 {
-    var (name, value) = step.EnumerateObject().Select(property => (property.Name, property.Value)).Single();
-    switch (name)
+    foreach (var step in steps.EnumerateArray())
     {
-        case "recordArguments":
-            File.WriteAllText(value.GetString()!, JsonSerializer.Serialize(clientArguments));
-            break;
-        case "recordWorkingDirectory":
-            File.WriteAllText(value.GetString()!, Environment.CurrentDirectory);
-            break;
-        case "captureStdin":
-            using (var input = Console.OpenStandardInput())
-            using (var file = File.Create(value.GetString()!))
-            {
-                input.CopyTo(file);
-            }
-
-            break;
-        case "waitForStdinEnd":
-            using (var input = Console.OpenStandardInput())
-            {
-                input.CopyTo(Stream.Null);
-            }
-
-            break;
-        case "print":
-            stdout.WriteLine(value.GetString());
-            break;
-        case "stderr":
-            stderr.WriteLine(value.GetString());
-            break;
-        case "replay":
-            foreach (var line in File.ReadLines(value.GetString()!))
-            {
-                stdout.WriteLine(line);
-            }
-
-            break;
-        case "sleep":
-            Thread.Sleep(value.GetInt32());
-            break;
-        case "lockFile":
-            held.Add(new FileStream(value.GetString()!, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
-            break;
-        case "waitForFile":
-            var gate = value.GetString()!;
-            while (!File.Exists(gate))
-            {
-                if (!Directory.Exists(Path.GetDirectoryName(gate)))
+        var (name, value) = step.EnumerateObject().Select(property => (property.Name, property.Value)).Single();
+        switch (name)
+        {
+            case "recordArguments":
+                File.WriteAllText(value.GetString()!, JsonSerializer.Serialize(clientArguments));
+                break;
+            case "recordWorkingDirectory":
+                File.WriteAllText(value.GetString()!, Environment.CurrentDirectory);
+                break;
+            case "captureStdin":
+                using (var input = Console.OpenStandardInput())
+                using (var file = File.Create(value.GetString()!))
                 {
-                    return 97;
+                    input.CopyTo(file);
                 }
 
-                Thread.Sleep(20);
-            }
+                break;
+            case "waitForStdinEnd":
+                using (var input = Console.OpenStandardInput())
+                {
+                    input.CopyTo(Stream.Null);
+                }
 
-            break;
-        case "spawnSleepingChild":
-            File.WriteAllText(value.GetString()!, StartSleeper().Id.ToString());
-            break;
-        case "spawnThroughCmd":
-            // /s makes cmd.exe strip only the outer quotes, so each quoted part reaches the copy intact.
-            string[] parts = [Environment.ProcessPath!, .. HostArguments(), "--spawn-sleeper", value.GetString()!];
-            var copy = string.Join(' ', parts.Select(part => $"\"{part}\""));
-            Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, $"/s /c \"{copy}\"") { UseShellExecute = false })!.Dispose();
-            break;
-        case "hang":
-            Thread.Sleep(Timeout.Infinite);
-            break;
-        case "exit":
-            return value.GetInt32();
-        default:
-            stderr.WriteLine($"fake agent: unknown step {name}");
-            return 98;
+                break;
+            case "print":
+                stdout.WriteLine(value.GetString());
+                break;
+            case "stderr":
+                stderr.WriteLine(value.GetString());
+                break;
+            case "replay":
+                foreach (var line in File.ReadLines(value.GetString()!))
+                {
+                    stdout.WriteLine(line);
+                }
+
+                break;
+            case "sleep":
+                Thread.Sleep(value.GetInt32());
+                break;
+            case "lockFile":
+                held.Add(new FileStream(value.GetString()!, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+                break;
+            case "waitForFile":
+                var gate = value.GetString()!;
+                while (!File.Exists(gate))
+                {
+                    if (!Directory.Exists(Path.GetDirectoryName(gate)))
+                    {
+                        return 97;
+                    }
+
+                    Thread.Sleep(20);
+                }
+
+                break;
+            case "spawnSleepingChild":
+                File.WriteAllText(value.GetString()!, StartSleeper().Id.ToString());
+                break;
+            case "spawnThroughCmd":
+                // /s makes cmd.exe strip only the outer quotes, so each quoted part reaches the copy intact.
+                string[] parts = [Environment.ProcessPath!, .. HostArguments(), "--spawn-sleeper", value.GetString()!];
+                var copy = string.Join(' ', parts.Select(part => $"\"{part}\""));
+                Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, $"/s /c \"{copy}\"") { UseShellExecute = false })!.Dispose();
+                break;
+            case "hang":
+                Thread.Sleep(Timeout.Infinite);
+                break;
+            case "write":
+                File.WriteAllText(value[0].GetString()!, value[1].GetString());
+                break;
+            case "scripted":
+                var folder = value.GetString()!;
+                var counter = Path.Combine(folder, "count");
+                var turn = (File.Exists(counter) ? int.Parse(File.ReadAllText(counter)) : 0) + 1;
+                File.WriteAllText(counter, turn.ToString());
+                using (var input = Console.OpenStandardInput())
+                using (var file = File.Create(Path.Combine(folder, $"{turn}.stdin")))
+                {
+                    input.CopyTo(file);
+                }
+
+                using (var script = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(folder, $"{turn}.json"))))
+                {
+                    if (Run(script.RootElement) is { } code)
+                    {
+                        return code;
+                    }
+                }
+
+                break;
+            case "exit":
+                return value.GetInt32();
+            default:
+                stderr.WriteLine($"fake agent: unknown step {name}");
+                return 98;
+        }
     }
-}
 
-return 0;
+    return null;
+}
 
 static bool Matches(JsonElement when, string[] arguments)
 {

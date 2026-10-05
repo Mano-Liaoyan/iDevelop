@@ -44,11 +44,15 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
         var number = 0;
         ExchangeViewModel Exchange(AttemptRecord attempt, bool latest) => new(
             earlier.IsEmpty ? null : RunText.ExchangeLine(attempt, latest && elsewhere),
-            [.. attempt.Turns.Select(turn => new TurnViewModel(turn, ++number, latest && turn.Number == attempt.Turns.Count))],
+            [.. attempt.Turns.Select(turn => new TurnViewModel(turn, ++number, latest && turn.Number == attempt.Turns.Count, Author(attempt, turn)))],
             latest ? null : RunText.TerminalNote(attempt));
 
         return [.. earlier.Select(attempt => Exchange(attempt, latest: false)), Exchange(record, latest: true)];
     }
+
+    /// <summary>A review writes its reviewer's later messages and the first message of each fix round. The person writes the rest.</summary>
+    private static string Author(AttemptRecord attempt, TurnRecord turn) =>
+        attempt.Subject is not null || attempt.Fix is not null && turn.Number == 1 ? "iDevelop" : "You";
 }
 
 /// <summary>One attempt of a conversation: its status line, its turns, and its hand-off to a terminal.</summary>
@@ -59,8 +63,10 @@ public sealed record ExchangeViewModel(string? StatusLine, IReadOnlyList<TurnVie
 /// turn's box is the run's result, under the automation id the result has always had.
 /// </summary>
 /// <param name="number">The turn's place in the whole conversation, from 1.</param>
-public sealed class TurnViewModel(TurnRecord turn, int number, bool latest)
+public sealed class TurnViewModel(TurnRecord turn, int number, bool latest, string author = "You")
 {
+    public string Author => author;
+
     public string? Message => turn.Message;
 
     public string? Reply => turn.FinalText;

@@ -99,6 +99,7 @@ public static class RunText
         AttemptStatus.Failed or AttemptStatus.Interrupted => StatusTone.Problem,
         AttemptStatus.Cancelled => StatusTone.Neutral,
         AttemptStatus.WaitingForInput => StatusTone.Waiting,
+        AttemptStatus.InReview => StatusTone.Running,
     };
 
     /// <param name="elsewhere">Another window started the attempt.</param>
@@ -108,7 +109,35 @@ public static class RunText
         { Status: AttemptStatus.Running } when elsewhere => "Running in another window",
         { Status: AttemptStatus.Running, Stopping: true } => "Stopping",
         { Status: AttemptStatus.WaitingForInput } => "Waiting for you",
+        { Status: AttemptStatus.InReview } => "In review",
         _ => attempt.Status.ToString(),
+    };
+
+    /// <summary>"Round 2 · 1 open finding", "Approved in round 2", or what ended the review, for its card.</summary>
+    public static string ReviewSummary(AttemptRecord review, ReviewLedger ledger) => (review.Status, ledger.Round) switch
+    {
+        (AttemptStatus.Running, 1) when ledger.Rounds[0].Verdict is null => "The reviewer reads the change.",
+        (AttemptStatus.Succeeded, var round) => $"Approved in round {round}.",
+        (AttemptStatus.Running or AttemptStatus.InReview, var round) => $"Round {round} · {Count(ledger.OpenCount, "open finding")}",
+        (_, var round) => $"Stopped in round {round} with {Count(ledger.OpenCount, "open finding")}.",
+    };
+
+    public static string FindingState(FindingState state) => state switch
+    {
+        Nodes.FindingState.Open => "Open",
+        Nodes.FindingState.Fixed => "Fixed, waiting for the reviewer",
+        Nodes.FindingState.Disputed => "Disputed, waiting for the reviewer",
+        Nodes.FindingState.Resolved => "Resolved",
+        Nodes.FindingState.Withdrawn => "Withdrawn",
+    };
+
+    /// <summary>How the chosen client keeps a reviewer from editing the project.</summary>
+    public static string ReviewerNote(ClientId client) => client switch
+    {
+        ClientId.ClaudeCode => "Claude Code reviews in plan mode, which edits no file.",
+        ClientId.Codex => "Codex reviews in its read-only sandbox.",
+        ClientId.Pi => "Pi has no read-only mode, so a review does not start on Pi.",
+        ClientId.Antigravity => "Antigravity CLI reviews in plan mode, and a review turn that changes a file fails.",
     };
 
     /// <summary>The section of a node that waits for the person, for each reason it waits.</summary>
@@ -118,6 +147,7 @@ public static class RunText
         Pending.Reply => "The agent replied. Write back, or mark the task done.",
         Pending.UnreadableBlock unreadable =>
             $"The agent ended with a block iDevelop could not read. {unreadable.Problem} Reply, or mark the task done.",
+        Pending.Approval => "Approve what the tasks before it handed on, or send it back.",
         _ => throw new UnreachableException(),
     };
 
@@ -144,6 +174,15 @@ public static class RunText
         StartProblem.Waiting p => $"\"{p.Title}\" is waiting for you. Reply, mark it done, or cancel it first.",
         StartProblem.NoConversation => "This task has no agent to write to.",
         StartProblem.NoReadOnlyMode p => $"This task may only read the project, and {Clients.Name(p.Client)} has no read-only mode. Choose another client.",
+        StartProblem.RunsInWorkflow => "An approval has no agent. It waits for you when a workflow run reaches it.",
+        StartProblem.NoSubject => "Connect the task to review into this review with a dependency first.",
+        StartProblem.SubjectNotDone p => $"Run \"{p.Title}\" first. The review starts once it succeeds.",
+        StartProblem.NoChange p =>
+            $"iDevelop has no record of what \"{p.Title}\" changed. Run it again in a Git project, then review it.",
+        StartProblem.InReview p => $"\"{p.Title}\" goes back and forth until both agents agree. Cancel it to stop.",
+        StartProblem.UnderReview p => $"\"{p.Review}\" reviews this task and sends it each fix round. Cancel the review to run it yourself.",
+        StartProblem.SubjectInReview p => $"\"{p.Review}\" is reviewing \"{p.Subject}\". Run this review once that one ends.",
+        StartProblem.SubjectBlocked p => $"The review waits, because \"{p.Title}\" cannot start its fix. {Describe(p.Problem)}",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",
@@ -175,6 +214,7 @@ public static class RunText
             $"The last run used {Clients.Name(p.Ran)}, and this task now uses {Clients.Name(p.Now)}. Run the task to start a {Clients.Name(p.Now)} session.",
         SendProblem.Ending p => $"\"{p.Title}\" is finishing. Send your message again to continue it.",
         SendProblem.CannotStart p => Describe(p.Problem),
+        SendProblem.NotReviewing p => $"Guidance reaches \"{p.Title}\" only while its review goes on.",
         _ => throw new UnreachableException(),
     };
 

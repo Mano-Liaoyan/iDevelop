@@ -123,6 +123,107 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         return text.Trim();
     }
 
+    /// <summary>
+    /// The ticket seeds a defect, a leap-year rule that ignores centuries, and the review's focus names the full rule. Set
+    /// IDEVELOP_REAL_REVIEW to run it. It spends quota on Codex and Claude Code, and gives up after six rounds.
+    /// </summary>
+    [RealReviewFact]
+    public async Task A_seeded_defect_is_found_fixed_and_approved_and_every_round_resumes_the_same_two_sessions()
+    {
+        var project = _temp.Create("project");
+        Process.Start(new ProcessStartInfo("git", ["init", "-q", project]) { UseShellExecute = false })!.WaitForExit();
+        var clients = new ClientDirectory(CommandResolver.FromEnvironment());
+        await clients.RefreshAsync();
+        ExecutionSettings Small(ClientId client)
+        {
+            var model = SmallModels[client];
+            var option = ExecutionChoices.OfferedModel(clients.Current[client], model)
+                ?? throw new InvalidOperationException($"{Clients.Name(client)} does not offer {model}: {clients.Current[client]}");
+            return new ExecutionSettings(client) { Model = model, Reasoning = option.ReasoningLevels.Contains("low") ? "low" : option.DefaultReasoning };
+        }
+
+        var implement = TestNodes.Implement(
+            TestTasks.Build, "Leap years",
+            "Create leap.py in the current folder with exactly this function, and change nothing else:\n\n" +
+            "def is_leap(year):\n    return year % 4 == 0\n",
+            execution: Small(ClientId.Codex));
+        var review = new TaskDefinition(TestTasks.Review, BuiltInBlueprints.Review) { Title = "Review leap years", Execution = Small(ClientId.ClaudeCode) }
+            .WithField("focus", "is_leap must follow the Gregorian calendar: a year divisible by 100 is a leap year only when it is also divisible by 400.")!;
+        var workflow = Workflow.Empty(WorkflowId.New())
+            .Must(TestNodes.Place(implement, new CanvasPoint(0, 0)))
+            .Must(TestNodes.Place(review, new CanvasPoint(300, 0)))
+            .Must(new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Build, TestTasks.Review), ConnectionKind.Dependency));
+        await using var runs = ProjectRuns.Open(project, clients);
+        runs.Follow(workflow);
+
+        Assert.IsType<StartResult.Started>(runs.Start(implement));
+        await Until(() => runs.Latest[TestTasks.Build].Status != AttemptStatus.Running, TimeSpan.FromMinutes(5));
+        Assert.Equal(AttemptStatus.Succeeded, runs.Latest[TestTasks.Build].Status);
+        Assert.IsType<StartResult.Started>(runs.Start(review));
+        await Until(
+            () => runs.Latest[TestTasks.Review].Status is not (AttemptStatus.Running or AttemptStatus.InReview) || ReviewLedger.Fold(runs.Latest[TestTasks.Review]).Round > 6,
+            TimeSpan.FromMinutes(30));
+        var reviewed = runs.Latest[TestTasks.Review];
+        if (reviewed.Status is AttemptStatus.Running or AttemptStatus.InReview)
+        {
+            runs.Cancel(TestTasks.Review);
+        }
+
+        var ledger = ReviewLedger.Fold(reviewed);
+        var attempts = runs.EarlierAttempts(runs.Latest[TestTasks.Build]).Add(runs.Latest[TestTasks.Build]);
+        foreach (var (turn, index) in reviewed.Turns.Select((turn, index) => (turn, index)))
+        {
+            output.WriteLine($"Reviewer turn {index + 1}:\n{turn.FinalText}\n");
+        }
+
+        foreach (var attempt in attempts)
+        {
+            output.WriteLine($"Implementer attempt, fix round {attempt.Fix?.Round}, session {attempt.SessionId}: {attempt.Status}\n{attempt.Result}\n");
+        }
+
+        output.WriteLine(File.ReadAllText(Path.Combine(project, "leap.py")));
+        Assert.Equal(AttemptStatus.Succeeded, reviewed.Status);
+        Assert.NotEmpty(ledger.Findings);
+        Assert.All(ledger.Findings, finding => Assert.False(finding.IsOpen));
+        Assert.True(attempts.Length >= 2, "at least one fix round ran");
+        Assert.Single(attempts.Select(attempt => attempt.SessionId).Distinct());
+        Assert.All(attempts.Skip(1), attempt => Assert.Equal(reviewed.Id, attempt.Fix!.Attempt));
+        Assert.Single(SessionsReported(project, reviewed));
+        Assert.All(TurnArguments(project, reviewed), arguments => Assert.Contains(reviewed.SessionId!, arguments));
+        var check = Process.Start(new ProcessStartInfo("python3", ["-c", "from leap import is_leap; print([is_leap(y) for y in (1900, 2000, 2023, 2024)])"])
+        {
+            WorkingDirectory = project, RedirectStandardOutput = true, UseShellExecute = false,
+        })!;
+        Assert.Equal("[False, True, False, True]", (await check.StandardOutput.ReadToEndAsync()).Trim());
+    }
+
+    /// <summary>Every session id the reviewer's client reported, across all of the review attempt's turns.</summary>
+    private static string[] SessionsReported(string project, AttemptRecord attempt) =>
+        [.. Events(project, attempt)
+            .Where(e => e.GetProperty("type").GetString() == "agent" && e.GetProperty("event").GetProperty("type").GetString() == "sessionStarted")
+            .Select(e => e.GetProperty("event").GetProperty("sessionId").GetString()!)
+            .Distinct()];
+
+    /// <summary>The client arguments of each turn after the first.</summary>
+    private static string[][] TurnArguments(string project, AttemptRecord attempt) =>
+        [.. Events(project, attempt)
+            .Where(e => e.GetProperty("type").GetString() == "turnRequested")
+            .Select(e => e.GetProperty("arguments").EnumerateArray().Select(argument => argument.GetString()!).ToArray())];
+
+    private static IEnumerable<System.Text.Json.JsonElement> Events(string project, AttemptRecord attempt) =>
+        File.ReadLines(Path.Combine(project, ".idp", "attempts", attempt.Task.ToString(), attempt.Id.ToString(), "events.jsonl"))
+            .Select(line => System.Text.Json.JsonDocument.Parse(line).RootElement.Clone());
+
+    private static async Task Until(Func<bool> condition, TimeSpan patience)
+    {
+        var watch = Stopwatch.StartNew();
+        while (!condition())
+        {
+            Assert.True(watch.Elapsed < patience, "Timed out.");
+            await Task.Delay(500);
+        }
+    }
+
     private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<object> act)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -144,6 +245,17 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         finally
         {
             runs.Changed -= OnChanged;
+        }
+    }
+}
+
+internal sealed class RealReviewFactAttribute : FactAttribute
+{
+    public RealReviewFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("IDEVELOP_REAL_REVIEW")))
+        {
+            Skip = "Set IDEVELOP_REAL_REVIEW to run a review with the installed Codex and Claude Code.";
         }
     }
 }

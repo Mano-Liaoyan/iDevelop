@@ -370,6 +370,36 @@ public sealed class WorkflowDocumentTests : IDisposable
     };
 
     [Fact]
+    public void Review_and_approval_nodes_save_their_built_ins_and_reopen_the_same()
+    {
+        var folder = _temp.Create("review");
+        var document = WorkflowDocument.Open(folder);
+        var review = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
+        var approval = new TaskId(Guid.Parse("019a9d2e-6000-7000-8000-000000000077"));
+        WorkflowEdit[] edits =
+        [
+            TestNodes.Place(TestNodes.Implement(TestTasks.Design, "Build", "Build it."), new CanvasPoint(0, 0)),
+            new WorkflowEdit.PlaceNode(review, BuiltInBlueprints.Review, new CanvasPoint(300, 0)) { Title = "Review" },
+            new WorkflowEdit.PlaceNode(approval, BuiltInBlueprints.Approval, new CanvasPoint(600, 0)) { Title = "Approve" },
+            new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, review), ConnectionKind.Dependency),
+            new WorkflowEdit.Connect(new ConnectionKey(review, approval), ConnectionKind.Dependency),
+        ];
+        foreach (var edit in edits)
+        {
+            Assert.IsType<EditResult.Applied>(document.Apply(edit));
+        }
+
+        document.Save();
+        var text = File.ReadAllText(Directory.GetFiles(Path.Combine(folder, ".idp", "workflows")).Single());
+        var reopened = WorkflowDocument.Open(folder).Current;
+
+        Assert.Contains("\"kind\": \"review\",\n        \"reviewer\": [", text);
+        Assert.Contains("\"work\": {\n        \"kind\": \"person\"\n      }", text);
+        Assert.Equal([BuiltInBlueprints.Approval, BuiltInBlueprints.Implement, BuiltInBlueprints.Review], reopened.Blueprints.Values);
+        Assert.Equal(TestTasks.Design, reopened.SubjectOf(review));
+    }
+
+    [Fact]
     public void A_file_whose_graph_breaks_a_rule_fails_with_the_rule()
     {
         var json = Workflow(

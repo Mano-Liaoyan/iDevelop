@@ -109,5 +109,14 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule Exit(int code) => Step("exit", code);
 
+    /// <summary>Writes <paramref name="text"/> to <paramref name="file"/>, relative to the client's current folder.</summary>
+    public FakeRule Write(string file, string text) => Step("write", new JsonArray(JsonValue.Create(file), JsonValue.Create(text)));
+
+    /// <summary>Runs the steps of <c>&lt;n&gt;.json</c> in <paramref name="folder"/> on the n-th call, after copying stdin to <c>&lt;n&gt;.stdin</c>.</summary>
+    public FakeRule Scripted(string folder) => Step("scripted", folder);
+
+    /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
+    public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();
+
     private FakeRule Step(string name, JsonNode value) => this with { Steps = Steps.Add(new JsonObject { [name] = value }) };
 }

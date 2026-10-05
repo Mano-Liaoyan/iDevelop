@@ -27,7 +27,15 @@ public sealed class AgentWork : IConverses
         _ => new NodeStep.Fail(latest.Detail ?? $"The attempt ended {latest.Status}."),
     };
 
-    public string Reply(string message) => message;
+    public MessageUse Receive(string message) => new MessageUse.Turn(message);
+
+    /// <summary>The rendered template alone, without a contract: what a reviewer reads as the node's ticket.</summary>
+    internal static string Ticket(TaskDefinition node) => ((WorkSpec.Agent)node.Blueprint.Work).Template.Render(name => name switch
+    {
+        "title" => node.Title,
+        "inputs" => "",
+        _ => node.Field(name),
+    }).TrimEnd();
 
     /// <summary>
     /// The rendered template, then iDevelop's contract for the node's conversation mode and for a proposal, which no

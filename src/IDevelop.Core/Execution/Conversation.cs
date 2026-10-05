@@ -18,6 +18,9 @@ public abstract record SendResult
     public sealed record Answered(AttemptRecord Attempt) : SendResult;
 
     public sealed record Refused(SendProblem Problem) : SendResult;
+
+    /// <summary>The review recorded the message as guidance, which both agents read in their next message.</summary>
+    public sealed record Guided : SendResult;
 }
 
 /// <summary>Why a message cannot go to a task's agent now. Every case is shown instead of sending.</summary>
@@ -44,6 +47,9 @@ public abstract record SendProblem
 
     /// <summary>The start check, another window's run, or the attempt log refused the continuation.</summary>
     public sealed record CannotStart(StartProblem Problem) : SendProblem;
+
+    /// <summary>Guidance reaches a review only while it goes back and forth.</summary>
+    public sealed record NotReviewing(string Title) : SendProblem;
 }
 
 public abstract record TerminalResult

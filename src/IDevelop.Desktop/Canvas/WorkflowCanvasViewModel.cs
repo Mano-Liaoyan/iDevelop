@@ -156,6 +156,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         {
             node.OnAgentChanged();
         }
+
+        // A review whose fix round waited for a client goes on.
+        Runs.Follow(Document.Current);
     }
 
     internal void Notice(string? text) => _setNotice(text);
@@ -337,6 +340,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
             ShowGhosts();
         }
+
+        Runs.Follow(current);
     }
 
     private void DropConnections(Workflow current)

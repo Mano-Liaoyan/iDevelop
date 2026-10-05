@@ -98,6 +98,29 @@ public sealed partial class ProjectRuns
             }
         }
 
+        /// <summary>A review's guidance, which the reducer adds to the attempt's ledger without starting a turn.</summary>
+        public SendResult Guide(string text)
+        {
+            lock (_gate)
+            {
+                if (_closed)
+                {
+                    return new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle));
+                }
+
+                _events.Writer.TryWrite(new AttemptEvent.GuidanceAdded(DateTimeOffset.UtcNow, text));
+                return new SendResult.Guided();
+            }
+        }
+
+        public SendProblem? GuideProblem()
+        {
+            lock (_gate)
+            {
+                return _closed ? new SendProblem.Ending(Record.TaskTitle) : null;
+            }
+        }
+
         public SendProblem? SendProblem()
         {
             lock (_gate)
@@ -154,10 +177,13 @@ public sealed partial class ProjectRuns
             var exited = false;
             try
             {
-                await foreach (var e in _events.Reader.ReadAllAsync(_abandon.Token))
+                await foreach (var next in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
                     // Leaving gave up while this drain was busy. Events already queued stay off the log too.
                     _abandon.Token.ThrowIfCancellationRequested();
+                    // The drain, not the exit's watcher, snapshots the project, so no Git process outlives the run in
+                    // the project folder after a drain that ended early released it.
+                    var e = next is AttemptEvent.Exited exit ? exit with { Tree = GitTree.Snapshot(_owner._projectFolder) } : next;
                     Append(e);
                     exited |= e is AttemptEvent.Exited;
                     _owner.Publish(Record);
@@ -222,6 +248,7 @@ public sealed partial class ProjectRuns
         {
             _turn.Process.LeaveDescendantsRunning();
             _turn.Process.Dispose();
+            var tree = GitTree.Snapshot(_owner._projectFolder);
             lock (_gate)
             {
                 var started = false;
@@ -232,7 +259,7 @@ public sealed partial class ProjectRuns
                         Append(e);
                     }
 
-                    started = Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session);
+                    started = Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session, tree);
                     return started;
                 }
                 finally
@@ -243,12 +270,13 @@ public sealed partial class ProjectRuns
         }
 
         /// <summary>Called under the gate. False when the client did not start, which ended the attempt.</summary>
-        private bool Launch(string session)
+        private bool Launch(string session, string? tree)
         {
             var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued));
             Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Conversation = _conversation,
+                Tree = tree,
             });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
             Record = record;

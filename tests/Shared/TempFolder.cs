@@ -31,6 +31,17 @@ internal sealed class TempFolder(string? root = null) : IDisposable
     {
         if (Directory.Exists(_root))
         {
+            // Git writes its objects read-only, and Windows deletes no read-only file. Links stay as they are, so a
+            // target outside the folder keeps its attributes.
+            var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            foreach (var file in new DirectoryInfo(_root).EnumerateFiles("*", options))
+            {
+                if (file.Attributes.HasFlag(FileAttributes.ReadOnly))
+                {
+                    file.Attributes &= ~FileAttributes.ReadOnly;
+                }
+            }
+
             Directory.Delete(_root, recursive: true);
         }
     }

@@ -20,9 +20,10 @@ public readonly record struct AttemptId(Guid Value)
 
 /// <summary>
 /// WaitingForInput holds no process and no lock: the latest turn ended with the node waiting for the person, who replies,
-/// marks it done, or cancels it.
+/// marks it done, or cancels it. InReview also holds none: a review's reviewer turn ended, and its subject fixes the
+/// findings, or iDevelop starts the reviewer's next turn or settles the review.
 /// </summary>
-public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted, WaitingForInput }
+public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted, WaitingForInput, InReview }
 
 /// <summary>How one client process ended. Stopped means the person stopped it, with Stop and send or Cancel.</summary>
 public enum TurnOutcome { Running, Succeeded, Failed, Stopped, Interrupted }
@@ -34,7 +35,30 @@ public sealed record ActivityLine(DateTimeOffset At, string Text);
 /// and null for a first turn whose prompt is the task. <see cref="FinalText"/> is null while the turn runs.
 /// <see cref="Detail"/> says why the turn failed or was interrupted, in the client's words when it gave any.
 /// </summary>
-public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome, string? FinalText, string? Detail = null);
+public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome, string? FinalText, string? Detail = null)
+{
+    /// <summary>The project's files as a Git tree when the turn started, or null outside Git.</summary>
+    public string? StartTree { get; init; }
+
+    /// <summary>The project's files as a Git tree when the turn ended, or null while it runs or outside Git.</summary>
+    public string? EndTree { get; init; }
+
+    /// <summary>A review's turn after a fix round: what the subject reported in that round.</summary>
+    public FixReport? Report { get; init; }
+}
+
+/// <summary>
+/// Marks an attempt of a review's subject as fix round <paramref name="Round"/> of the review attempt
+/// <paramref name="Attempt"/>. <paramref name="Guidance"/> counts the review's guidance notes up to this round, which
+/// the round's prompt carried the rest of.
+/// </summary>
+public sealed record ReviewLink(TaskId Review, AttemptId Attempt, int Round, int Guidance);
+
+/// <summary>What the subject's fix attempt reported, which the reviewer's next turn reads.</summary>
+public sealed record FixReport(AttemptId Attempt, string? Text, int Guidance);
+
+/// <summary>The person's guidance to a review. <paramref name="AfterTurn"/> is the number of reviewer turns requested before it.</summary>
+public sealed record GuidanceNote(DateTimeOffset At, string Text, int AfterTurn);
 
 /// <summary>The settled attempt whose client session an attempt resumes, and that session's id.</summary>
 public sealed record Continuation(AttemptId Attempt, string Session);
@@ -59,6 +83,8 @@ public sealed record TerminalHandoff(DateTimeOffset At, string Folder, string Co
 [JsonDerivedType(typeof(TurnRequested), "turnRequested")]
 [JsonDerivedType(typeof(HandedToTerminal), "handedToTerminal")]
 [JsonDerivedType(typeof(MarkedDone), "markedDone")]
+[JsonDerivedType(typeof(GuidanceAdded), "guidanceAdded")]
+[JsonDerivedType(typeof(Concluded), "concluded")]
 internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTimeOffset At)
 {
     /// <summary>
@@ -80,6 +106,22 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>The handles a planner's prompt listed. Null for a node that proposes nothing.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public PlanningHandles? Planning { get; init; }
+
+        /// <summary>The project's files as a Git tree before the first turn started. Null outside Git and in older logs.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Tree { get; init; }
+
+        /// <summary>The turns run in the client's read-only mode, so a turn that changes the project's files fails.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ReadOnly { get; init; }
+
+        /// <summary>Set on a review's attempt: the node whose change it reviews.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public TaskId? Subject { get; init; }
+
+        /// <summary>Set on an attempt of a review's subject that fixes a round of the review's findings.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ReviewLink? Fix { get; init; }
     }
 
     public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At);
@@ -93,7 +135,12 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     /// <summary>Leaving the project: opening another folder or closing the window.</summary>
     public sealed record InterruptRequested(DateTimeOffset At, string Reason) : AttemptEvent(At);
 
-    public sealed record Exited(DateTimeOffset At, int ExitCode, string StderrTail) : AttemptEvent(At);
+    public sealed record Exited(DateTimeOffset At, int ExitCode, string StderrTail) : AttemptEvent(At)
+    {
+        /// <summary>The project's files as a Git tree after the client exited. Null outside Git and in older logs.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Tree { get; init; }
+    }
 
     /// <summary>Written by whoever next takes the run lock and finds the attempt still running. Null when it never launched.</summary>
     public sealed record Reconciled(DateTimeOffset At, ProcessMatch? Process) : AttemptEvent(At);
@@ -107,6 +154,14 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>The node's conversation mode from this turn on, when the person changed it while the node waited.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ConversationMode? Conversation { get; init; }
+
+        /// <summary>The project's files as a Git tree before the turn started.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Tree { get; init; }
+
+        /// <summary>A review's turn after a fix round: what the subject reported in that round.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public FixReport? Report { get; init; }
     }
 
     /// <summary>The person ended a waiting attempt as done.</summary>
@@ -114,6 +169,12 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
 
     /// <summary>Appended to a settled attempt. Turns the person takes in the terminal are not in this log.</summary>
     public sealed record HandedToTerminal(DateTimeOffset At, string Folder, string Command) : AttemptEvent(At);
+
+    /// <summary>The person's guidance to a running review, which both agents read in their next message.</summary>
+    public sealed record GuidanceAdded(DateTimeOffset At, string Text) : AttemptEvent(At);
+
+    /// <summary>Settles a review between its turns: succeeded when <paramref name="Failure"/> is null, otherwise failed with it.</summary>
+    public sealed record Concluded(DateTimeOffset At, string? Failure) : AttemptEvent(At);
 }
 
 /// <summary>
@@ -133,7 +194,10 @@ public sealed record AttemptRecord
         Continues = requested.Continues?.Attempt;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Planning = requested.Planning;
-        Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null)];
+        ReadOnly = requested.ReadOnly;
+        Subject = requested.Subject;
+        Fix = requested.Fix;
+        Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null) { StartTree = requested.Tree }];
     }
 
     public AttemptId Id { get; }
@@ -158,6 +222,24 @@ public sealed record AttemptRecord
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
+
+    /// <summary>Every turn ran in the client's read-only mode.</summary>
+    public bool ReadOnly { get; }
+
+    /// <summary>Set on a review's attempt: the node whose change it reviews.</summary>
+    public TaskId? Subject { get; }
+
+    /// <summary>Set on an attempt of a review's subject that fixes a round of the review's findings.</summary>
+    public ReviewLink? Fix { get; }
+
+    /// <summary>A review's guidance from the person, oldest first.</summary>
+    public ImmutableList<GuidanceNote> Guidance { get; internal init; } = [];
+
+    /// <summary>The project's files when the first turn started, or null outside Git.</summary>
+    public string? StartTree => Turns[0].StartTree;
+
+    /// <summary>The project's files when the latest ended turn ended, or null.</summary>
+    public string? EndTree => Turns.LastOrDefault(turn => turn.Outcome != TurnOutcome.Running)?.EndTree;
 
     public AttemptStatus Status { get; internal init; }
 
@@ -245,9 +327,14 @@ internal static partial class AttemptReducer
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e) => (e, record) switch
     {
         (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
-        (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput }) => NextTurn(record with { Status = AttemptStatus.Running, Pending = null }, turn),
+        (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) =>
+            NextTurn(record with { Status = AttemptStatus.Running, Pending = null }, turn),
         (AttemptEvent.MarkedDone done, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Succeeded, null, done.At),
-        (AttemptEvent.CancelRequested cancel, { Status: AttemptStatus.WaitingForInput }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
+        (AttemptEvent.CancelRequested cancel, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) => Settle(record, AttemptStatus.Cancelled, null, cancel.At),
+        (AttemptEvent.Concluded concluded, { Status: AttemptStatus.InReview }) =>
+            Settle(record, concluded.Failure is null ? AttemptStatus.Succeeded : AttemptStatus.Failed, concluded.Failure, concluded.At),
+        (AttemptEvent.GuidanceAdded guidance, { Status: AttemptStatus.Running or AttemptStatus.InReview }) =>
+            record with { Guidance = record.Guidance.Add(new GuidanceNote(guidance.At, guidance.Text, record.Turns.Count)) },
         (_, { Status: not AttemptStatus.Running }) => record,
         (AttemptEvent.Requested, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
@@ -266,13 +353,13 @@ internal static partial class AttemptReducer
         (AttemptEvent.Exited exited, _) => AtExit(record, exited),
         (AttemptEvent.Reconciled reconciled, _) =>
             EndAttempt(record, TurnOutcome.Interrupted, AttemptStatus.Interrupted, Reconciliation(record, reconciled.Process), reconciled.At),
-        (AttemptEvent.MarkedDone, _) => record,
+        (AttemptEvent.MarkedDone or AttemptEvent.Concluded or AttemptEvent.GuidanceAdded, _) => record,
         _ => throw new UnreachableException($"Unhandled attempt event {e.GetType().Name}"),
     };
 
     private static AttemptRecord NextTurn(AttemptRecord record, AttemptEvent.TurnRequested turn) => record with
     {
-        Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)),
+        Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null) { StartTree = turn.Tree, Report = turn.Report }),
         Queued = [],
         StopTurnRequested = false,
         Verdict = null,
@@ -307,10 +394,26 @@ internal static partial class AttemptReducer
     /// </summary>
     private static AttemptRecord AtExit(AttemptRecord record, AttemptEvent.Exited exited)
     {
+        record = record with { Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with { EndTree = exited.Tree }) };
         var (turn, status, detail) = ExitPolicy(record, exited);
+        if (status == AttemptStatus.Succeeded && record.ReadOnly && record.Turns[^1] is { StartTree: { } before, EndTree: { } after } && before != after)
+        {
+            return EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,
+                "The turn changed files in the project, although this node's agent may only read.", exited.At);
+        }
+
         if (record is { Queued.IsEmpty: false, CancelRequested: false, InterruptReason: null, SessionId: not null })
         {
             return EndTurn(record, turn, detail);
+        }
+
+        // A review rests between its reviewer's turns, while its subject fixes the findings. Its work decides what comes next.
+        if (status == AttemptStatus.Succeeded && record.Subject is not null)
+        {
+            return record.SessionId is null
+                ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,
+                    $"{Clients.Name(record.Requested.Client)} reported no session, so the review could not go on.", exited.At)
+                : EndTurn(record, turn, detail) with { Status = AttemptStatus.InReview, Result = FinalText(record) };
         }
 
         if (status == AttemptStatus.Succeeded && AgentWork.AfterTurn(record.Conversation, FinalText(record)) is { } pending)
