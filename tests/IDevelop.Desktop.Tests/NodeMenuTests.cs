@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -191,6 +192,38 @@ public sealed class NodeMenuTests : IDisposable
         Assert.Equal(
             (true, true, false, ""),
             (picker.IsEffectivelyVisible, picker.IsDropDownOpen, shell.Section("Agent").IsFolded, shell.Find<TextBox>("InspectorFilter").Text));
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Window.Height = shell.Window.MinHeight;
+        shell.Click(shell.Header(shell.Node("Build")));
+        var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
+        viewport.ScrollToEnd();
+        shell.Render();
+        Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
+        Rect? placedAgainst = null;
+
+        // A window places the list against where the picker was last laid out. A headless list is an overlay that lays the
+        // window out before placing it, so the test reads the picker's laid-out place as the list opens.
+        using (ComboBox.IsDropDownOpenProperty.Changed.AddClassHandler<ComboBox>((picker, e) =>
+        {
+            if (AutomationProperties.GetAutomationId(picker) == "TaskClient" && e.NewValue is true)
+            {
+                placedAgainst = shell.Bounds(picker);
+            }
+        }))
+        {
+            shell.RightClick(shell.Header(shell.Node("Build")));
+            shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+        }
+
+        Assert.True(shell.Find<ComboBox>("TaskClient").IsDropDownOpen);
+        Assert.True(
+            placedAgainst is { } picker && shell.Bounds(viewport).Contains(picker),
+            $"The list opened against the picker at {placedAgainst}, outside the inspector's view {shell.Bounds(viewport)}.");
     }
 
     [AvaloniaFact]
