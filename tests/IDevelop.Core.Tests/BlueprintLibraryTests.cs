@@ -131,6 +131,23 @@ public sealed class BlueprintLibraryTests : IDisposable
     }
 
     [Fact]
+    public void A_new_blueprint_never_replaces_a_file_and_a_next_version_needs_the_file_it_follows()
+    {
+        var library = BlueprintLibrary.Personal(_temp.Create("personal"));
+        var key = new BlueprintKey("bug-fix-0a1b2c3d", 1);
+        var path = Path.Combine(library.Folder, "bug-fix-0a1b2c3d.json");
+        library.Save(BugFix(key));
+
+        var taken = Assert.Throws<ProjectException>(() => library.Save(BugFix(key, template: "Another.\n")));
+        File.Delete(path);
+        var gone = Assert.Throws<ProjectException>(() => library.Save(BugFix(key with { Version = 2 })));
+
+        Assert.Equal($"Not saved. {path} already holds a blueprint.", taken.Message);
+        Assert.Equal($"Not saved. Bug fix is no longer in the personal library at {path}.", gone.Message);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void A_built_in_is_never_saved_to_a_library()
     {
         var library = BlueprintLibrary.Personal(_temp.Create("personal"));

@@ -17,16 +17,7 @@ public sealed class BlueprintTests : IDisposable
 {
     private readonly TempFolder _temp = AppTempFolder.New();
 
-    // The App's personal library outlives a test, so a test that saves there leaves it empty for the next one.
-    public void Dispose()
-    {
-        if (Application.Current is App { PersonalBlueprints: { } personal } && Directory.Exists(personal))
-        {
-            Directory.Delete(personal, recursive: true);
-        }
-
-        _temp.Dispose();
-    }
+    public void Dispose() => _temp.Dispose();
 
     [AvaloniaFact]
     public void A_built_in_offers_place_and_derive_and_no_edit()
@@ -101,6 +92,7 @@ public sealed class BlueprintTests : IDisposable
 
         Assert.Equal("Saved Design, version 1, to the personal library.", shell.Status);
         var personal = ((App)Application.Current!).PersonalBlueprints!;
+        Assert.StartsWith(Path.Combine(Path.GetTempPath(), "idevelop-tests"), personal);
         var saved = Assert.Single(BlueprintLibrary.Personal(personal).Read().Blueprints);
         Assert.Equal(BuiltInBlueprints.Implement.Key, saved.DerivedFrom);
         Assert.Empty(BlueprintLibrary.Project(shell.Window.ViewModel.Canvas!.Document.ProjectFolder).Read().Blueprints);

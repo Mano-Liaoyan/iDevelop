@@ -256,4 +256,4 @@ These remain unverified:
 
 ## Next action
 
-Slices 1 to 3, talking to a node, typed nodes with workflow format 3, and blueprint libraries, are built. Planning and review are next. The palette lists every entry of `BuiltInBlueprints.All`, so a new built-in appears there without palette changes. A Windows session runs `skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet, and checks slice 3's palette and editor in the real window. A Windows session runs `skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet.
+Slices 1 to 3, talking to a node, typed nodes with workflow format 3, and blueprint libraries, are built. Planning and review are next. The palette lists every entry of `BuiltInBlueprints.All`, so a new built-in appears there without palette changes. A Windows session runs `skills/verify-idevelop/features/conversation.md` against slices 1 and 2, which no Windows machine has run yet, and checks slice 3's palette and editor in the real window.
