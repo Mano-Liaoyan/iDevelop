@@ -18,7 +18,7 @@ The sidebar's AGENTS section shows whether Claude Code, Codex, Pi, and Antigravi
 
 - Read the AGENTS section at the bottom of the sidebar.
 - Choose the refresh button beside `AGENTS`.
-- Choose a task in the sidebar or on the canvas, then use the `Client`, `Model`, and `Reasoning` pickers under `AGENT` in the inspector.
+- Choose a task in the sidebar or on the canvas, then use the `Client`, `Model`, and `Reasoning` pickers in the `Agent` section of the inspector.
 
 ## Driving it with real-window.psm1
 
