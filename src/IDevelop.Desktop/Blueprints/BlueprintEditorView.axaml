@@ -121,7 +121,7 @@
     </StackPanel>
 
     <TextBlock Classes="caption" Text="{Binding Problem}" TextWrapping="Wrap" Margin="0,12,0,0"
-               Foreground="{DynamicResource StateFailedBrush}"
+               Foreground="{DynamicResource DestructiveTextBrush}"
                IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                AutomationProperties.AutomationId="BlueprintProblem" />
     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">

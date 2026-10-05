@@ -1,0 +1,24 @@
+<!-- The canvas's context menus. The view opens each from code, with its DataContext set, so one menu serves every target. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:canvas="using:IDevelop.Desktop.Canvas"
+                    xmlns:workflows="using:IDevelop.Workflows">
+  <!-- The view puts the canvas point of the right-click in the menu's Tag. -->
+  <ContextMenu x:Key="CanvasMenu" x:DataType="canvas:WorkflowCanvasViewModel">
+    <MenuItem Header="Add task"
+              Command="{Binding AddTaskAtCommand}"
+              CommandParameter="{Binding $parent[ContextMenu].Tag}" />
+    <MenuItem Header="Delete" InputGesture="Delete" Command="{Binding DeleteSelectionCommand}" />
+  </ContextMenu>
+
+  <ContextMenu x:Key="ConnectionMenu" x:DataType="canvas:ConnectionViewModel">
+    <MenuItem Header="Dependency"
+              Command="{Binding SetKindCommand}"
+              CommandParameter="{x:Static workflows:ConnectionKind.Dependency}" />
+    <MenuItem Header="Context"
+              Command="{Binding SetKindCommand}"
+              CommandParameter="{x:Static workflows:ConnectionKind.Context}" />
+    <Separator />
+    <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
+  </ContextMenu>
+</ResourceDictionary>

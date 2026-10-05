@@ -95,10 +95,10 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(Color.Parse("#FBFBF9"), Ring());
 
         shell.Click(shell.Header(shell.Node("Design")));
-        Assert.Equal(Color.Parse("#2B7EC9"), Ring());
+        Assert.Equal(Color.Parse("#0088FF"), Ring());
 
         shell.Click(shell.Find<RadioButton>("ThemeDark"));
-        Assert.Equal(Color.Parse("#60AAF3"), Ring());
+        Assert.Equal(Color.Parse("#0091FF"), Ring());
     }
 
     [AvaloniaFact]

@@ -1,0 +1,119 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:nodify="https://miroiu.github.io/nodify">
+  <Style Selector="Border.ring">
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+  </Style>
+  <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
+  </Style>
+  <!-- PlanWeave's status card: the tone's surface, the tone at 55 to 60% as its border, and a ring of the tone at 15%. -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+  </Style>
+  <Style Selector="Border.card.running">
+    <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateRunning55Brush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardRunningShadow}" />
+  </Style>
+  <Style Selector="Border.card.complete">
+    <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess55Brush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardSuccessShadow}" />
+  </Style>
+  <Style Selector="Border.card.problem">
+    <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateFailed60Brush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
+  </Style>
+  <Style Selector="Border.card.waiting">
+    <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWaiting55Brush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource CardWaitingShadow}" />
+  </Style>
+  <Style Selector="TextBlock.cardTitle">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="TextBlock.cardLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Border.prompt">
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+    <Setter Property="Padding" Value="10,8" />
+  </Style>
+  <Style Selector="Border.prompt TextBlock">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Border.prompt TextBlock.placeholder">
+    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+  </Style>
+  <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
+  <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
+    <Setter Property="ZIndex" Value="-1" />
+  </Style>
+  <Style Selector="nodify|StepConnection">
+    <Setter Property="Stroke" Value="{DynamicResource ConnectionDependencyBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource ConnectionDependencyBrush}" />
+    <Setter Property="StrokeThickness" Value="2.2" />
+    <Setter Property="Opacity" Value="0.56" />
+    <Setter Property="Spacing" Value="20" />
+    <Setter Property="CornerRadius" Value="5" />
+    <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->
+    <Setter Property="SourceOffset" Value="6,0" />
+    <Setter Property="TargetOffset" Value="6,0" />
+    <Setter Property="ArrowSize" Value="9,9" />
+    <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
+    <Setter Property="OutlineBrush" Value="Transparent" />
+    <Setter Property="OutlineThickness" Value="5" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="StrokeThickness" Duration="0:0:0.12" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="nodify|StepConnection.context">
+    <Setter Property="Stroke" Value="{DynamicResource ConnectionContextBrush}" />
+    <Setter Property="Fill" Value="{DynamicResource ConnectionContextBrush}" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+  </Style>
+  <Style Selector="nodify|StepConnection:pointerover">
+    <Setter Property="StrokeThickness" Value="3.2" />
+    <Setter Property="Opacity" Value="0.96" />
+  </Style>
+  <Style Selector="nodify|StepConnection[(nodify|BaseConnection.IsSelected)=true]">
+    <Setter Property="StrokeThickness" Value="3.2" />
+    <Setter Property="Opacity" Value="0.96" />
+  </Style>
+  <Style Selector="nodify|PendingConnection.rejected">
+    <Setter Property="Stroke" Value="{DynamicResource StateFailedBrush}" />
+  </Style>
+  <!-- Nodify draws the viewport over the items, and this viewport is opaque. -->
+  <Style Selector="nodify|Minimap /template/ ItemsPresenter#PART_ItemsPresenter">
+    <Setter Property="ZIndex" Value="1" />
+  </Style>
+  <Style Selector="Button.zoom">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="Button.zoom:nth-last-child(1)">
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+</Styles>

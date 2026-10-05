@@ -16,5 +16,6 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="/Theme/Controls.axaml" />
+    <StyleInclude Source="/Theme/Kinds.axaml" />
   </Application.Styles>
 </Application>

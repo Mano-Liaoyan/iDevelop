@@ -2,160 +2,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nodify="https://miroiu.github.io/nodify"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
-             xmlns:execution="using:IDevelop.Desktop.Execution"
-             xmlns:workflows="using:IDevelop.Workflows"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
 
   <UserControl.Resources>
-    <ControlTheme x:Key="PortTheme" TargetType="nodify:Connector">
-      <Setter Property="Template">
-        <ControlTemplate>
-          <TemplatedControl Name="PART_Connector" Width="20" Height="20"
-                            Background="{DynamicResource TextStrongBrush}"
-                            BorderBrush="{DynamicResource SurfaceBaseBrush}">
-            <TemplatedControl.Template>
-              <ControlTemplate>
-                <!-- The transparent panel lets the whole 20 px square take the pointer, not only the 12 px handle. -->
-                <Panel Background="Transparent">
-                  <Ellipse Width="12" Height="12" StrokeThickness="2"
-                           Fill="{TemplateBinding Background}"
-                           Stroke="{TemplateBinding BorderBrush}" />
-                </Panel>
-              </ControlTemplate>
-            </TemplatedControl.Template>
-          </TemplatedControl>
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover /template/ TemplatedControl#PART_Connector">
-        <Setter Property="Background" Value="{DynamicResource StateSelectedBrush}" />
-      </Style>
-      <Style Selector="^.isOverElement /template/ TemplatedControl#PART_Connector">
-        <Setter Property="Background" Value="{DynamicResource StateSelectedBrush}" />
-      </Style>
-    </ControlTheme>
-    <!-- The minimap's background is PlanWeave's muted mask, and the opaque viewport is the clear window in it. -->
-    <ControlTheme x:Key="MinimapViewportTheme" TargetType="Rectangle">
-      <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
-    </ControlTheme>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Canvas/CanvasTemplates.axaml" />
+        <ResourceInclude Source="/Canvas/CanvasMenus.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
   </UserControl.Resources>
 
   <UserControl.Styles>
-    <Style Selector="Border.ring">
-      <Setter Property="BorderBrush" Value="Transparent" />
-    </Style>
-    <Style Selector="nodify|ItemContainer:selected:null-previewing-selection Border.ring">
-      <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
-    </Style>
-    <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
-      <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
-    </Style>
-    <!-- PlanWeave's status card: the tone's surface, the tone at 55 to 60% as its border, and a ring of the tone at 15%. -->
-    <Style Selector="Border.card">
-      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
-    </Style>
-    <Style Selector="Border.card.running">
-      <Setter Property="Background" Value="{DynamicResource StateRunningSurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource StateRunning55Brush}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource CardRunningShadow}" />
-    </Style>
-    <Style Selector="Border.card.complete">
-      <Setter Property="Background" Value="{DynamicResource StateSuccessSurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource StateSuccess55Brush}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource CardSuccessShadow}" />
-    </Style>
-    <Style Selector="Border.card.problem">
-      <Setter Property="Background" Value="{DynamicResource StateFailedSurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource StateFailed60Brush}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource CardFailedShadow}" />
-    </Style>
-    <Style Selector="Border.card.waiting">
-      <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource StateSelected55Brush}" />
-      <Setter Property="BoxShadow" Value="{DynamicResource CardWaitingShadow}" />
-    </Style>
-    <Style Selector="TextBlock.cardTitle">
-      <Setter Property="FontSize" Value="14" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    </Style>
-    <Style Selector="TextBlock.cardLabel">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="FontWeight" Value="Medium" />
-      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    </Style>
-    <Style Selector="Border.prompt">
-      <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
-      <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-      <Setter Property="Padding" Value="10,8" />
-    </Style>
-    <Style Selector="Border.prompt TextBlock">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    </Style>
-    <Style Selector="Border.prompt TextBlock.placeholder">
-      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
-    </Style>
-    <!-- Nodify's own rule that draws connections below the cards never matches its internal host type. -->
-    <Style Selector="nodify|NodifyEditor /template/ :is(Control)#PART_ConnectionsHost">
-      <Setter Property="ZIndex" Value="-1" />
-    </Style>
-    <Style Selector="nodify|StepConnection">
-      <Setter Property="Stroke" Value="{DynamicResource ConnectionDependencyBrush}" />
-      <Setter Property="Fill" Value="{DynamicResource ConnectionDependencyBrush}" />
-      <Setter Property="StrokeThickness" Value="2.2" />
-      <Setter Property="Opacity" Value="0.56" />
-      <Setter Property="Spacing" Value="20" />
-      <Setter Property="CornerRadius" Value="5" />
-      <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->
-      <Setter Property="SourceOffset" Value="6,0" />
-      <Setter Property="TargetOffset" Value="6,0" />
-      <Setter Property="ArrowSize" Value="9,9" />
-      <!-- An invisible solid outline gives the pointer a 12 px target around the line, gaps in a dash included. -->
-      <Setter Property="OutlineBrush" Value="Transparent" />
-      <Setter Property="OutlineThickness" Value="5" />
-      <Setter Property="Transitions">
-        <Transitions>
-          <DoubleTransition Property="StrokeThickness" Duration="0:0:0.12" />
-          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
-        </Transitions>
-      </Setter>
-    </Style>
-    <Style Selector="nodify|StepConnection.context">
-      <Setter Property="Stroke" Value="{DynamicResource ConnectionContextBrush}" />
-      <Setter Property="Fill" Value="{DynamicResource ConnectionContextBrush}" />
-      <Setter Property="StrokeDashArray" Value="4,3" />
-    </Style>
-    <Style Selector="nodify|StepConnection:pointerover">
-      <Setter Property="StrokeThickness" Value="3.2" />
-      <Setter Property="Opacity" Value="0.96" />
-    </Style>
-    <Style Selector="nodify|StepConnection[(nodify|BaseConnection.IsSelected)=true]">
-      <Setter Property="StrokeThickness" Value="3.2" />
-      <Setter Property="Opacity" Value="0.96" />
-    </Style>
-    <Style Selector="nodify|PendingConnection.rejected">
-      <Setter Property="Stroke" Value="{DynamicResource StateFailedBrush}" />
-    </Style>
-    <!-- Nodify draws the viewport over the items, and this viewport is opaque. -->
-    <Style Selector="nodify|Minimap /template/ ItemsPresenter#PART_ItemsPresenter">
-      <Setter Property="ZIndex" Value="1" />
-    </Style>
-    <Style Selector="Button.zoom">
-      <Setter Property="Width" Value="30" />
-      <Setter Property="Height" Value="30" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
-      <Setter Property="BorderThickness" Value="0,0,0,1" />
-    </Style>
-    <Style Selector="Button.zoom:nth-last-child(1)">
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
+    <StyleInclude Source="/Canvas/CanvasStyles.axaml" />
   </UserControl.Styles>
 
   <Panel>
@@ -172,6 +32,10 @@
                          RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
                          Decorators="{Binding Ghosts}"
+                         ItemTemplate="{StaticResource TaskCardTemplate}"
+                         DecoratorTemplate="{StaticResource GhostCardTemplate}"
+                         ConnectionTemplate="{StaticResource ConnectionTemplate}"
+                         PendingConnectionTemplate="{StaticResource PendingConnectionTemplate}"
                          GridCellSize="15">
 
       <nodify:NodifyEditor.Background>
@@ -203,15 +67,6 @@
         <KeyBinding Gesture="Back" Command="{Binding DeleteSelectionCommand}" />
       </nodify:NodifyEditor.KeyBindings>
 
-      <nodify:NodifyEditor.ContextMenu>
-        <ContextMenu>
-          <MenuItem Header="Add task"
-                    Command="{Binding AddTaskAtCommand}"
-                    CommandParameter="{Binding #Editor.MouseLocation}" />
-          <MenuItem Header="Delete" InputGesture="Delete" Command="{Binding DeleteSelectionCommand}" />
-        </ContextMenu>
-      </nodify:NodifyEditor.ContextMenu>
-
       <nodify:NodifyEditor.ItemContainerTheme>
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
@@ -224,74 +79,6 @@
         </ControlTheme>
       </nodify:NodifyEditor.ItemContainerTheme>
 
-      <nodify:NodifyEditor.ItemTemplate>
-        <DataTemplate DataType="canvas:TaskNodeViewModel">
-          <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
-                 Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-                 ToolTip.Tip="{Binding Title}"
-                 AutomationProperties.AutomationId="TaskCard"
-                 AutomationProperties.Name="{Binding Title}">
-            <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
-            <Border Classes="card" Margin="10,0" Padding="12" BorderThickness="1"
-                    CornerRadius="{StaticResource RadiusXl}"
-                    Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                    Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                    Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                    Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-              <StackPanel Spacing="4">
-                <Grid Height="24" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                  <TextBlock Classes="cardTitle" VerticalAlignment="Center" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                  <Border Grid.Column="1" Classes="pill"
-                          Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                          Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                          Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                          Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon />
-                      <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="CardStatus" />
-                    </StackPanel>
-                  </Border>
-                </Grid>
-                <Grid Margin="0,6,0,0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                  <TextBlock Classes="cardLabel" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
-                             AutomationProperties.AutomationId="CardAgent" />
-                  <TextBlock Grid.Column="1" Classes="cardLabel" Text="{Binding TypeName}"
-                             AutomationProperties.AutomationId="CardType" />
-                </Grid>
-                <Border Classes="prompt" Height="64">
-                  <Panel>
-                    <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
-                    <TextBlock Classes="placeholder" Text="{Binding PreviewPlaceholder}"
-                               IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
-                  </Panel>
-                </Border>
-              </StackPanel>
-            </Border>
-            <!-- PlanWeave puts the target handle at 56% of the card's height and the source handle at 44%. -->
-            <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,71,0,0">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="canvas:PortViewModel">
-                  <nodify:NodeInput Theme="{StaticResource PortTheme}"
-                                    Anchor="{Binding Anchor, Mode=OneWayToSource}"
-                                    IsConnected="{Binding IsConnected}"
-                                    AutomationProperties.Name="Task input" />
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
-            <ContentControl Content="{Binding Output}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,53,0,0">
-              <ContentControl.ContentTemplate>
-                <DataTemplate DataType="canvas:PortViewModel">
-                  <nodify:NodeOutput Theme="{StaticResource PortTheme}"
-                                     Anchor="{Binding Anchor, Mode=OneWayToSource}"
-                                     IsConnected="{Binding IsConnected}"
-                                     AutomationProperties.Name="Task output" />
-                </DataTemplate>
-              </ContentControl.ContentTemplate>
-            </ContentControl>
-          </Panel>
-        </DataTemplate>
-      </nodify:NodifyEditor.ItemTemplate>
-
       <!-- A proposal's tasks draw as dashed cards that take no input, over the empty cards they fill. -->
       <nodify:NodifyEditor.DecoratorContainerStyle>
         <ControlTheme TargetType="nodify:DecoratorContainer"
@@ -301,58 +88,9 @@
           <Setter Property="IsHitTestVisible" Value="False" />
         </ControlTheme>
       </nodify:NodifyEditor.DecoratorContainerStyle>
-
-      <nodify:NodifyEditor.DecoratorTemplate>
-        <DataTemplate DataType="canvas:GhostCardViewModel">
-          <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
-                 Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-                 AutomationProperties.AutomationId="GhostCard"
-                 AutomationProperties.Name="{Binding Title}">
-            <Rectangle Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
-                       Fill="{DynamicResource SurfaceOverlayBrush}" Stroke="{DynamicResource StateSelectedBrush}" />
-            <StackPanel Margin="22,12" Spacing="4">
-              <TextBlock Classes="cardLabel" Text="{Binding Label}" Foreground="{DynamicResource StateSelectedBrush}"
-                         AutomationProperties.AutomationId="GhostLabel" />
-              <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                         AutomationProperties.AutomationId="GhostTitle" />
-              <TextBlock Classes="cardLabel" Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
-            </StackPanel>
-          </Panel>
-        </DataTemplate>
-      </nodify:NodifyEditor.DecoratorTemplate>
-
-      <nodify:NodifyEditor.ConnectionTemplate>
-        <DataTemplate DataType="canvas:ConnectionViewModel">
-          <nodify:StepConnection Source="{Binding From.Output.Anchor}"
-                                 Target="{Binding To.Input.Anchor}"
-                                 Classes.context="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static workflows:ConnectionKind.Context}}"
-                                 nodify:BaseConnection.IsSelectable="True">
-            <nodify:StepConnection.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="Dependency"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Dependency}" />
-                <MenuItem Header="Context"
-                          Command="{Binding SetKindCommand}"
-                          CommandParameter="{x:Static workflows:ConnectionKind.Context}" />
-                <Separator />
-                <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
-              </ContextMenu>
-            </nodify:StepConnection.ContextMenu>
-          </nodify:StepConnection>
-        </DataTemplate>
-      </nodify:NodifyEditor.ConnectionTemplate>
-
-      <nodify:NodifyEditor.PendingConnectionTemplate>
-        <DataTemplate DataType="canvas:PendingConnectionViewModel">
-          <nodify:PendingConnection Source="{Binding Source, Mode=OneWayToSource}"
-                                    PreviewTarget="{Binding PreviewTarget, Mode=OneWayToSource}"
-                                    EnablePreview="True"
-                                    Content="{Binding PreviewText}"
-                                    Classes.rejected="{Binding IsRejected}" />
-        </DataTemplate>
-      </nodify:NodifyEditor.PendingConnectionTemplate>
     </nodify:NodifyEditor>
+
+    <canvas:GenerateLayer />
 
     <Border Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12">
       <Border>
@@ -432,6 +170,7 @@
                         ViewportLocation="{Binding ViewportLocation}"
                         ViewportSize="{Binding #Editor.ViewportSize}"
                         ViewportStyle="{StaticResource MinimapViewportTheme}"
+                        ItemTemplate="{StaticResource MinimapItemTemplate}"
                         AutomationProperties.AutomationId="Minimap"
                         AutomationProperties.Name="Minimap">
           <nodify:Minimap.ItemContainerTheme>
@@ -443,12 +182,6 @@
               <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
             </ControlTheme>
           </nodify:Minimap.ItemContainerTheme>
-          <!-- An empty template, or each item would show its view model's type name. -->
-          <nodify:Minimap.ItemTemplate>
-            <DataTemplate DataType="canvas:TaskNodeViewModel">
-              <Panel />
-            </DataTemplate>
-          </nodify:Minimap.ItemTemplate>
         </nodify:Minimap>
       </Border>
     </Border>

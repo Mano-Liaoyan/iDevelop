@@ -13,12 +13,22 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
-public sealed class WorkflowCanvasViewModel : ObservableObject
+/// <summary>
+/// The canvas: its nodes, connections, and selection, kept in step with the workflow document and the project's runs.
+/// The card highlight, the add surfaces, and Generate each extend it in a file of their own.
+/// </summary>
+public sealed partial class WorkflowCanvasViewModel : ObservableObject
 {
     // The visible card is 240 wide. The container adds a 10 px gutter on each side, where the ports sit on the card's edge.
     public const double TaskCardWidth = 260;
 
     public const double TaskCardHeight = 144;
+
+    /// <summary>The input port's center in the card's container. The card template places the port here.</summary>
+    public static readonly Point InputPortCenter = new(10, 81);
+
+    /// <summary>The output port's center in the card's container. The card template places the port here.</summary>
+    public static readonly Point OutputPortCenter = new(250, 63);
 
     private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
@@ -47,7 +57,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         Blueprints = new BlueprintsViewModel(
             this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
         AddTaskCommand = new RelayCommand(() => PlaceInView(BuiltInBlueprints.Implement));
-        AddTaskAtCommand = new RelayCommand<Point>(location => Place(BuiltInBlueprints.Implement, new CanvasPoint(location.X, location.Y)));
+        AddTaskAtCommand = new RelayCommand<Point>(location => Place(NewTask(BuiltInBlueprints.Implement, new CanvasPoint(location.X, location.Y))));
         DeleteSelectionCommand = new RelayCommand(DeleteSelection);
         ConnectCommand = new RelayCommand<(object Source, object? Target)>(drop => Connect(drop.Source, drop.Target));
         RemoveConnectionCommand = new RelayCommand<ConnectionViewModel>(connection => Edit(new WorkflowEdit.Delete([], [connection.Key])));
@@ -55,6 +65,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         NextWaitingCommand = new RelayCommand(SelectNextWaiting);
         Document.Changed += (_, _) => Sync();
         Sync();
+        InitializeHighlight();
+        InitializeAdd();
+        InitializeGenerate();
     }
 
     public ObservableCollection<TaskNodeViewModel> Nodes { get; } = [];
@@ -155,6 +168,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         foreach (var node in Nodes)
         {
             node.OnAgentChanged();
+            node.RecheckProblem();
         }
 
         // A review whose fix round waited for a client goes on.
@@ -178,6 +192,10 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     /// <summary>A blueprint the palette offers, or a copy the workflow embeds, by key.</summary>
     internal Blueprint? FindBlueprint(BlueprintKey key) =>
         Blueprints.Placeable.FirstOrDefault(blueprint => blueprint.Key == key) ?? Workflow.Blueprints.GetValueOrDefault(key);
+
+    /// <summary>The kind of a blueprint, following its derivation through the workflow's copies and then the libraries.</summary>
+    internal NodeKind KindOf(Blueprint blueprint) =>
+        NodeKinds.Of(blueprint, key => Workflow.Blueprints.GetValueOrDefault(key) ?? Blueprints.Placeable.FirstOrDefault(placeable => placeable.Key == key));
 
     /// <summary>What the planner may fill and place when it starts now: the palette's blueprints are its types.</summary>
     internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted);
@@ -221,10 +239,8 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     // may have left running.
     private void ShowAttempts()
     {
-        foreach (var node in Nodes)
-        {
-            node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id));
-        }
+        var changed = Nodes.Where(node => node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id))).Select(node => node.Id).ToList();
+        RecheckProblems(changed.Concat(changed.SelectMany(DependencyNeighbors)));
 
         foreach (var node in Nodes)
         {
@@ -244,26 +260,37 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     }
 
     /// <summary>Places a node of the blueprint near the top left of the view, below any card already there, and selects it.</summary>
-    internal void PlaceInView(Blueprint blueprint)
+    internal void PlaceInView(Blueprint blueprint) =>
+        Place(NewTask(blueprint, FreeSpot(new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60))));
+
+    /// <summary>Applies the placement, selects the new node, and returns it, or returns null when the edit was rejected.</summary>
+    internal TaskNodeViewModel? Place(WorkflowEdit.PlaceNode edit)
     {
-        var position = new CanvasPoint(ViewportLocation.X + 60, ViewportLocation.Y + 60);
+        if (Edit(edit) is not EditResult.Applied)
+        {
+            return null;
+        }
+
+        var node = _nodes[edit.Id];
+        Select(node);
+        return node;
+    }
+
+    /// <summary>The first spot at or below <paramref name="start"/>, in steps of a card's footprint, that no card is near.</summary>
+    internal CanvasPoint FreeSpot(CanvasPoint start)
+    {
+        var position = start;
         while (Workflow.Positions.Values.Any(other =>
             Math.Abs(other.X - position.X) < TaskFootprint.Width && Math.Abs(other.Y - position.Y) < TaskFootprint.Height))
         {
             position = position with { Y = position.Y + TaskFootprint.Height };
         }
 
-        Place(blueprint, position);
+        return position;
     }
 
-    private void Place(Blueprint blueprint, CanvasPoint position)
-    {
-        var id = TaskId.New();
-        if (Edit(new WorkflowEdit.PlaceNode(id, blueprint, position) { Title = "New task" }) is EditResult.Applied)
-        {
-            Select(_nodes[id]);
-        }
-    }
+    private static WorkflowEdit.PlaceNode NewTask(Blueprint blueprint, CanvasPoint position) =>
+        new(TaskId.New(), blueprint, position) { Title = "New task" };
 
     private void Select(TaskNodeViewModel node)
     {
@@ -341,7 +368,45 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
             ShowGhosts();
         }
 
+        // The runs check a review's subject in the workflow they follow, so the checks come after it. A move changes no
+        // reason not to start.
         Runs.Follow(current);
+        if (!ReferenceEquals(previous?.Tasks, current.Tasks) || connectionsChanged)
+        {
+            RecheckProblems(Changed(previous, current));
+        }
+    }
+
+    /// <summary>
+    /// The tasks whose reason not to start may differ between the two workflows: a new or edited task, both ends of an
+    /// added, removed, or retyped connection, and every review, whose subject is whatever it depends on now.
+    /// </summary>
+    private static IEnumerable<TaskId> Changed(Workflow? previous, Workflow current)
+    {
+        var tasks = current.Tasks
+            .Where(task => previous?.Tasks.GetValueOrDefault(task.Key) is not { } old || !ReferenceEquals(old, task.Value) || task.Value.Blueprint.Work is WorkSpec.Review)
+            .Select(task => task.Key);
+        var connections = previous is null ? current.Connections.Keys : current.Connections
+            .Where(connection => !previous.Connections.TryGetValue(connection.Key, out var kind) || kind != connection.Value)
+            .Select(connection => connection.Key)
+            .Concat(previous.Connections.Keys.Where(key => !current.Connections.ContainsKey(key)));
+        return tasks.Concat(connections.SelectMany(key => new[] { key.From, key.To }));
+    }
+
+    /// <summary>The tasks connected to this one by a dependency in either direction.</summary>
+    private IEnumerable<TaskId> DependencyNeighbors(TaskId task) =>
+        Workflow.Connections.Where(connection => connection.Value.Blocks() && (connection.Key.From == task || connection.Key.To == task))
+            .Select(connection => connection.Key.From == task ? connection.Key.To : connection.Key.From);
+
+    private void RecheckProblems(IEnumerable<TaskId> tasks)
+    {
+        foreach (var id in tasks.Distinct().ToList())
+        {
+            if (_nodes.TryGetValue(id, out var node))
+            {
+                node.RecheckProblem();
+            }
+        }
     }
 
     private void DropConnections(Workflow current)
@@ -349,6 +414,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         foreach (var key in _connections.Keys.Where(key => !current.Connections.ContainsKey(key)).ToList())
         {
             var connection = _connections[key];
+            connection.Detach();
             SelectedConnections.Remove(connection);
             Connections.Remove(connection);
             _connections.Remove(key);
@@ -406,4 +472,10 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     }
 
     internal static Point ToPoint(CanvasPoint point) => new(point.X, point.Y);
+
+    partial void InitializeHighlight();
+
+    partial void InitializeAdd();
+
+    partial void InitializeGenerate();
 }

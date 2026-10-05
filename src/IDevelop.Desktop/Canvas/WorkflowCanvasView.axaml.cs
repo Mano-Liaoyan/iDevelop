@@ -26,6 +26,7 @@ public partial class WorkflowCanvasView : UserControl
     public WorkflowCanvasView()
     {
         InitializeComponent();
+        Editor.ContextRequested += OpenCanvasMenu;
         // NodifyAvalonia 6.6.0 connections handle pointer release without calling the base
         // handler, so Avalonia never raises ContextRequested for them and their menu never opens.
         Editor.AddHandler(PointerReleasedEvent, OpenConnectionMenu, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -62,12 +63,27 @@ public partial class WorkflowCanvasView : UserControl
         e.Handled = true;
     }
 
-    private static void OpenConnectionMenu(object? sender, PointerReleasedEventArgs e)
+    private void OpenCanvasMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if (e.InitialPressMouseButton == MouseButton.Right && e.Source is BaseConnection { ContextMenu: { } menu } connection)
+        // The pointer leaves the canvas for the menu, so the menu keeps the point it was opened at.
+        Open("CanvasMenu", DataContext, Editor, Editor.MouseLocation);
+        e.Handled = true;
+    }
+
+    private void OpenConnectionMenu(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Right && e.Source is BaseConnection { DataContext: ConnectionViewModel connection } line)
         {
-            menu.Open(connection);
+            Open("ConnectionMenu", connection, line);
             e.Handled = true;
         }
+    }
+
+    private void Open(string menu, object? target, Control at, object? tag = null)
+    {
+        var contextMenu = (ContextMenu)this.FindResource(menu)!;
+        contextMenu.DataContext = target;
+        contextMenu.Tag = tag;
+        contextMenu.Open(at);
     }
 }

@@ -20,40 +20,108 @@
       <SolidColorBrush x:Key="Border100Brush" Color="#E5E5E5" />
       <SolidColorBrush x:Key="Border80Brush" Color="#CCE5E5E5" />
       <SolidColorBrush x:Key="Border60Brush" Color="#99E5E5E5" />
-      <SolidColorBrush x:Key="StateSelectedBrush" Color="#2B7EC9" />
-      <SolidColorBrush x:Key="StateSelected25Brush" Color="#402B7EC9" />
-      <SolidColorBrush x:Key="StateSelected40Brush" Color="#662B7EC9" />
-      <SolidColorBrush x:Key="StateSelected55Brush" Color="#8C2B7EC9" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#DAEEFF" />
-      <SolidColorBrush x:Key="StateRunningBrush" Color="#00A0A1" />
-      <SolidColorBrush x:Key="StateRunning45Brush" Color="#7300A0A1" />
-      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C00A0A1" />
-      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#CDF4F3" />
-      <SolidColorBrush x:Key="StateSuccessBrush" Color="#44984A" />
-      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#7344984A" />
-      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C44984A" />
-      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#D9F4D9" />
-      <SolidColorBrush x:Key="StateFailedBrush" Color="#D7352D" />
-      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80D7352D" />
-      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99D7352D" />
-      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#FFDFD9" />
+      <SolidColorBrush x:Key="StateSelectedBrush" Color="#0088FF" />
+      <SolidColorBrush x:Key="StateSelected25Brush" Color="#400088FF" />
+      <SolidColorBrush x:Key="StateSelected40Brush" Color="#660088FF" />
+      <SolidColorBrush x:Key="StateSelected55Brush" Color="#8C0088FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0088FF" />
+      <SolidColorBrush x:Key="StateRunningBrush" Color="#0088FF" />
+      <SolidColorBrush x:Key="StateRunning45Brush" Color="#730088FF" />
+      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C0088FF" />
+      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0088FF" />
+      <SolidColorBrush x:Key="StateSuccessBrush" Color="#34C759" />
+      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#7334C759" />
+      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C34C759" />
+      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#1A34C759" />
+      <SolidColorBrush x:Key="StateFailedBrush" Color="#FF383C" />
+      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80FF383C" />
+      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99FF383C" />
+      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#1AFF383C" />
+      <SolidColorBrush x:Key="StateWaitingBrush" Color="#FF8D28" />
+      <SolidColorBrush x:Key="StateWaiting40Brush" Color="#66FF8D28" />
+      <SolidColorBrush x:Key="StateWaiting55Brush" Color="#8CFF8D28" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#5A6168" />
+      <SolidColorBrush x:Key="KindImplementBrush" Color="#6155F5" />
+      <SolidColorBrush x:Key="KindImplement10Brush" Color="#1A6155F5" />
+      <SolidColorBrush x:Key="KindImplementStrongBrush" Color="#564ADE" />
+      <SolidColorBrush x:Key="KindImplementTileBrush" Color="#564ADE" />
+      <SolidColorBrush x:Key="KindImplementStrokeBrush" Color="#564ADE" />
+      <SolidColorBrush x:Key="KindPlanBrush" Color="#00C0E8" />
+      <SolidColorBrush x:Key="KindPlan10Brush" Color="#1A00C0E8" />
+      <SolidColorBrush x:Key="KindPlanStrongBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindPlanStrokeBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindArchitectBrush" Color="#CB30E0" />
+      <SolidColorBrush x:Key="KindArchitect10Brush" Color="#1ACB30E0" />
+      <SolidColorBrush x:Key="KindArchitectStrongBrush" Color="#B02FC2" />
+      <SolidColorBrush x:Key="KindArchitectTileBrush" Color="#B02FC2" />
+      <SolidColorBrush x:Key="KindArchitectStrokeBrush" Color="#B02FC2" />
+      <SolidColorBrush x:Key="KindReviewBrush" Color="#00C8B3" />
+      <SolidColorBrush x:Key="KindReview10Brush" Color="#1A00C8B3" />
+      <SolidColorBrush x:Key="KindReviewStrongBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindReviewStrokeBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindApprovalBrush" Color="#AC7F5E" />
+      <SolidColorBrush x:Key="KindApproval10Brush" Color="#1AAC7F5E" />
+      <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#956D51" />
+      <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#956D51" />
+      <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#956D51" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
+      <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#6C6C70" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentTileBrush" Color="#6C6C70" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentStrokeBrush" Color="#6C6C70" />
+      <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF8D28" />
+      <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#C55300" />
+      <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#C55300" />
+      <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFCC00" />
+      <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#A16A00" />
+      <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#A16A00" />
+      <SolidColorBrush x:Key="StateSuccess10Brush" Color="#1A34C759" />
+      <SolidColorBrush x:Key="StateSuccessStrongBrush" Color="#008932" />
+      <SolidColorBrush x:Key="StateSuccessStrokeBrush" Color="#008932" />
+      <SolidColorBrush x:Key="StateFailed10Brush" Color="#1AFF383C" />
+      <SolidColorBrush x:Key="StateFailedStrongBrush" Color="#E9152D" />
+      <SolidColorBrush x:Key="StateFailedStrokeBrush" Color="#E9152D" />
+      <SolidColorBrush x:Key="StateNeutral10Brush" Color="#1A8E8E93" />
+      <SolidColorBrush x:Key="StateNeutralStrongBrush" Color="#6C6C70" />
+      <SolidColorBrush x:Key="StateNeutralStrokeBrush" Color="#6C6C70" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#0088FF" />
+      <SolidColorBrush x:Key="Accent10Brush" Color="#1A0088FF" />
+      <SolidColorBrush x:Key="AccentStrongBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentStrokeBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#0040DD" />
+      <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="DestructiveTextBrush" Color="#D70015" />
+      <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
+      <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
       <Color x:Key="CanvasGrid.BackgroundColor">#FBFBF9</Color>
       <Color x:Key="CanvasGrid.DotColor">#E5E5E5</Color>
-      <Color x:Key="NodifyEditor.SelectionRectangleColor">#2B7EC9</Color>
-      <Color x:Key="PendingConnection.StrokeColor">#2B7EC9</Color>
+      <Color x:Key="NodifyEditor.SelectionRectangleColor">#0088FF</Color>
+      <Color x:Key="PendingConnection.StrokeColor">#0088FF</Color>
       <Color x:Key="PendingConnection.BackgroundColor">#F8FAFD</Color>
       <Color x:Key="PendingConnection.ForegroundColor">#25292E</Color>
       <Color x:Key="PendingConnection.BorderColor">#E5E5E5</Color>
       <Color x:Key="Minimap.BackgroundColor">#EDEFF2</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#90969C</Color>
+      <Color x:Key="KindImplementColor">#6155F5</Color>
+      <Color x:Key="KindPlanColor">#00C0E8</Color>
+      <Color x:Key="KindArchitectColor">#CB30E0</Color>
+      <Color x:Key="KindReviewColor">#00C8B3</Color>
+      <Color x:Key="KindApprovalColor">#AC7F5E</Color>
+      <Color x:Key="KindReadOnlyAgentColor">#8E8E93</Color>
+      <Color x:Key="AccentColor">#0088FF</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1A0A0A0A, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #2600A0A1, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #2644984A, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26D7352D, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardWaitingShadow">0 0 0 1 #262B7EC9, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #260088FF, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #2634C759, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26FF383C, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardWaitingShadow">0 0 0 1 #26FF8D28, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 12 28 0 #1F000000</BoxShadows>
+      <BoxShadows x:Key="NodeShadow">0 1 2 0 #14000000, 0 2 6 0 #0F000000</BoxShadows>
+      <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #1A000000, 0 8 20 0 #1A000000</BoxShadows>
+      <BoxShadows x:Key="PopoverShadow">0 10 30 0 #29000000, 0 2 6 0 #14000000</BoxShadows>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="AppShellBrush" Color="#13110F" />
@@ -73,40 +141,108 @@
       <SolidColorBrush x:Key="Border100Brush" Color="#1AFFFFFF" />
       <SolidColorBrush x:Key="Border80Brush" Color="#14FFFFFF" />
       <SolidColorBrush x:Key="Border60Brush" Color="#0FFFFFFF" />
-      <SolidColorBrush x:Key="StateSelectedBrush" Color="#60AAF3" />
-      <SolidColorBrush x:Key="StateSelected25Brush" Color="#4060AAF3" />
-      <SolidColorBrush x:Key="StateSelected40Brush" Color="#6660AAF3" />
-      <SolidColorBrush x:Key="StateSelected55Brush" Color="#8C60AAF3" />
-      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1C354E" />
-      <SolidColorBrush x:Key="StateRunningBrush" Color="#16BBBC" />
-      <SolidColorBrush x:Key="StateRunning45Brush" Color="#7316BBBC" />
-      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C16BBBC" />
-      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#053838" />
-      <SolidColorBrush x:Key="StateSuccessBrush" Color="#6DBA70" />
-      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#736DBA70" />
-      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C6DBA70" />
-      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#203A21" />
-      <SolidColorBrush x:Key="StateFailedBrush" Color="#FD7466" />
-      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80FD7466" />
-      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99FD7466" />
-      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#4F2420" />
+      <SolidColorBrush x:Key="StateSelectedBrush" Color="#0091FF" />
+      <SolidColorBrush x:Key="StateSelected25Brush" Color="#400091FF" />
+      <SolidColorBrush x:Key="StateSelected40Brush" Color="#660091FF" />
+      <SolidColorBrush x:Key="StateSelected55Brush" Color="#8C0091FF" />
+      <SolidColorBrush x:Key="StateSelectedSurfaceBrush" Color="#1A0091FF" />
+      <SolidColorBrush x:Key="StateRunningBrush" Color="#0091FF" />
+      <SolidColorBrush x:Key="StateRunning45Brush" Color="#730091FF" />
+      <SolidColorBrush x:Key="StateRunning55Brush" Color="#8C0091FF" />
+      <SolidColorBrush x:Key="StateRunningSurfaceBrush" Color="#1A0091FF" />
+      <SolidColorBrush x:Key="StateSuccessBrush" Color="#30D158" />
+      <SolidColorBrush x:Key="StateSuccess45Brush" Color="#7330D158" />
+      <SolidColorBrush x:Key="StateSuccess55Brush" Color="#8C30D158" />
+      <SolidColorBrush x:Key="StateSuccessSurfaceBrush" Color="#1A30D158" />
+      <SolidColorBrush x:Key="StateFailedBrush" Color="#FF4245" />
+      <SolidColorBrush x:Key="StateFailed50Brush" Color="#80FF4245" />
+      <SolidColorBrush x:Key="StateFailed60Brush" Color="#99FF4245" />
+      <SolidColorBrush x:Key="StateFailedSurfaceBrush" Color="#1AFF4245" />
+      <SolidColorBrush x:Key="StateWaitingBrush" Color="#FF9230" />
+      <SolidColorBrush x:Key="StateWaiting40Brush" Color="#66FF9230" />
+      <SolidColorBrush x:Key="StateWaiting55Brush" Color="#8CFF9230" />
       <SolidColorBrush x:Key="ConnectionDependencyBrush" Color="#2563EB" />
       <SolidColorBrush x:Key="ConnectionContextBrush" Color="#999893" />
+      <SolidColorBrush x:Key="KindImplementBrush" Color="#6D7CFF" />
+      <SolidColorBrush x:Key="KindImplement10Brush" Color="#1A6D7CFF" />
+      <SolidColorBrush x:Key="KindImplementStrongBrush" Color="#A7AAFF" />
+      <SolidColorBrush x:Key="KindImplementTileBrush" Color="#6D7CFF" />
+      <SolidColorBrush x:Key="KindImplementStrokeBrush" Color="#6D7CFF" />
+      <SolidColorBrush x:Key="KindPlanBrush" Color="#3CD3FE" />
+      <SolidColorBrush x:Key="KindPlan10Brush" Color="#1A3CD3FE" />
+      <SolidColorBrush x:Key="KindPlanStrongBrush" Color="#6DD9FF" />
+      <SolidColorBrush x:Key="KindPlanTileBrush" Color="#007EAE" />
+      <SolidColorBrush x:Key="KindPlanStrokeBrush" Color="#3CD3FE" />
+      <SolidColorBrush x:Key="KindArchitectBrush" Color="#DB34F2" />
+      <SolidColorBrush x:Key="KindArchitect10Brush" Color="#1ADB34F2" />
+      <SolidColorBrush x:Key="KindArchitectStrongBrush" Color="#EA8DFF" />
+      <SolidColorBrush x:Key="KindArchitectTileBrush" Color="#DB34F2" />
+      <SolidColorBrush x:Key="KindArchitectStrokeBrush" Color="#DB34F2" />
+      <SolidColorBrush x:Key="KindReviewBrush" Color="#00DAC3" />
+      <SolidColorBrush x:Key="KindReview10Brush" Color="#1A00DAC3" />
+      <SolidColorBrush x:Key="KindReviewStrongBrush" Color="#54DFCB" />
+      <SolidColorBrush x:Key="KindReviewTileBrush" Color="#008575" />
+      <SolidColorBrush x:Key="KindReviewStrokeBrush" Color="#00DAC3" />
+      <SolidColorBrush x:Key="KindApprovalBrush" Color="#B78A66" />
+      <SolidColorBrush x:Key="KindApproval10Brush" Color="#1AB78A66" />
+      <SolidColorBrush x:Key="KindApprovalStrongBrush" Color="#DBA679" />
+      <SolidColorBrush x:Key="KindApprovalTileBrush" Color="#B78A66" />
+      <SolidColorBrush x:Key="KindApprovalStrokeBrush" Color="#B78A66" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentBrush" Color="#8E8E93" />
+      <SolidColorBrush x:Key="KindReadOnlyAgent10Brush" Color="#1A8E8E93" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentStrongBrush" Color="#AEAEB2" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentTileBrush" Color="#8E8E93" />
+      <SolidColorBrush x:Key="KindReadOnlyAgentStrokeBrush" Color="#8E8E93" />
+      <SolidColorBrush x:Key="StateWaiting10Brush" Color="#1AFF9230" />
+      <SolidColorBrush x:Key="StateWaitingStrongBrush" Color="#FFA056" />
+      <SolidColorBrush x:Key="StateWaitingStrokeBrush" Color="#FF9230" />
+      <SolidColorBrush x:Key="StateWarning10Brush" Color="#1AFFD600" />
+      <SolidColorBrush x:Key="StateWarningStrongBrush" Color="#FEDF43" />
+      <SolidColorBrush x:Key="StateWarningStrokeBrush" Color="#FFD600" />
+      <SolidColorBrush x:Key="StateSuccess10Brush" Color="#1A30D158" />
+      <SolidColorBrush x:Key="StateSuccessStrongBrush" Color="#4AD968" />
+      <SolidColorBrush x:Key="StateSuccessStrokeBrush" Color="#30D158" />
+      <SolidColorBrush x:Key="StateFailed10Brush" Color="#1AFF4245" />
+      <SolidColorBrush x:Key="StateFailedStrongBrush" Color="#FF6165" />
+      <SolidColorBrush x:Key="StateFailedStrokeBrush" Color="#FF4245" />
+      <SolidColorBrush x:Key="StateNeutral10Brush" Color="#1A8E8E93" />
+      <SolidColorBrush x:Key="StateNeutralStrongBrush" Color="#AEAEB2" />
+      <SolidColorBrush x:Key="StateNeutralStrokeBrush" Color="#8E8E93" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#0091FF" />
+      <SolidColorBrush x:Key="Accent10Brush" Color="#1A0091FF" />
+      <SolidColorBrush x:Key="AccentStrongBrush" Color="#5CB8FF" />
+      <SolidColorBrush x:Key="AccentStrokeBrush" Color="#0091FF" />
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#5CB8FF" />
+      <SolidColorBrush x:Key="AccentFillBrush" Color="#1E6EF4" />
+      <SolidColorBrush x:Key="DestructiveTextBrush" Color="#FF6165" />
+      <SolidColorBrush x:Key="DestructiveFillBrush" Color="#E9152D" />
+      <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="OnTileBrush" Color="#FFFFFF" />
       <Color x:Key="CanvasGrid.BackgroundColor">#0D0E0A</Color>
       <Color x:Key="CanvasGrid.DotColor">#1AFFFFFF</Color>
-      <Color x:Key="NodifyEditor.SelectionRectangleColor">#60AAF3</Color>
-      <Color x:Key="PendingConnection.StrokeColor">#60AAF3</Color>
+      <Color x:Key="NodifyEditor.SelectionRectangleColor">#0091FF</Color>
+      <Color x:Key="PendingConnection.StrokeColor">#0091FF</Color>
       <Color x:Key="PendingConnection.BackgroundColor">#26292D</Color>
       <Color x:Key="PendingConnection.ForegroundColor">#D2D1CD</Color>
       <Color x:Key="PendingConnection.BorderColor">#1AFFFFFF</Color>
       <Color x:Key="Minimap.BackgroundColor">#222629</Color>
       <Color x:Key="MinimapItem.BackgroundColor">#64635D</Color>
+      <Color x:Key="KindImplementColor">#6D7CFF</Color>
+      <Color x:Key="KindPlanColor">#3CD3FE</Color>
+      <Color x:Key="KindArchitectColor">#DB34F2</Color>
+      <Color x:Key="KindReviewColor">#00DAC3</Color>
+      <Color x:Key="KindApprovalColor">#B78A66</Color>
+      <Color x:Key="KindReadOnlyAgentColor">#8E8E93</Color>
+      <Color x:Key="AccentColor">#0091FF</Color>
       <BoxShadows x:Key="CardShadow">0 0 0 1 #1AFAFAFA, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #2616BBBC, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #266DBA70, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26FD7466, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
-      <BoxShadows x:Key="CardWaitingShadow">0 0 0 1 #2660AAF3, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardRunningShadow">0 0 0 1 #260091FF, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardSuccessShadow">0 0 0 1 #2630D158, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardFailedShadow">0 0 0 1 #26FF4245, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
+      <BoxShadows x:Key="CardWaitingShadow">0 0 0 1 #26FF9230, 0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>
       <BoxShadows x:Key="FloatingShadow">0 14 32 0 #52000000</BoxShadows>
+      <BoxShadows x:Key="NodeShadow">0 1 2 0 #66000000, 0 2 8 0 #52000000</BoxShadows>
+      <BoxShadows x:Key="NodeHoverShadow">0 2 6 0 #73000000, 0 10 24 0 #66000000</BoxShadows>
+      <BoxShadows x:Key="PopoverShadow">0 12 32 0 #73000000, 0 2 6 0 #4D000000</BoxShadows>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
   <BoxShadows x:Key="SmallShadow">0 1 3 0 #1A000000, 0 1 2 -1 #1A000000</BoxShadows>

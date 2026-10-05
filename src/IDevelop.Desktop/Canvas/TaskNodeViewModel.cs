@@ -25,7 +25,11 @@ public sealed record Choice(TaskId Task, string Id, string Label)
     public override string ToString() => Label;
 }
 
-public sealed class TaskNodeViewModel : ObservableObject
+/// <summary>
+/// A node on the canvas. The card, the canvas actions, and the inspector each extend it in a file of their own and react
+/// to its changes through its own <see cref="ObservableObject.PropertyChanged"/>.
+/// </summary>
+public sealed partial class TaskNodeViewModel : ObservableObject
 {
     // A new list clears its picker's selection, so each list is raised before its selection.
     private static readonly string[] PickerProperties =
@@ -49,6 +53,11 @@ public sealed class TaskNodeViewModel : ObservableObject
     private AttemptRecord? _proposed;
     private ProposalRead _proposalRead = new ProposalRead.None();
     private ProposalViewModel? _proposal;
+    private NodeKind _kind;
+    private bool _isLibrary;
+    private StartProblem? _problem;
+    private NodeState _state;
+    private NodeRole _role;
 
     internal TaskNodeViewModel(WorkflowCanvasViewModel canvas, TaskDefinition task, CanvasPoint position)
     {
@@ -70,9 +79,48 @@ public sealed class TaskNodeViewModel : ObservableObject
         _markDone = new RelayCommand(MarkDone, () => IsWaiting);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
+        (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
+        _state = NodeStates.Of(_attempt, RunsElsewhere, null);
+        InitializeCard();
+        InitializeActions();
+        InitializeInspector();
     }
 
     public TaskId Id => _task.Id;
+
+    public NodeKind Kind
+    {
+        get => _kind;
+        private set => SetProperty(ref _kind, value);
+    }
+
+    /// <summary>The node's blueprint comes from a project or personal library, not from the built-ins.</summary>
+    public bool IsLibrary
+    {
+        get => _isLibrary;
+        private set => SetProperty(ref _isLibrary, value);
+    }
+
+    /// <summary>
+    /// Why the task cannot start now, or null, also while this window runs it. It is kept rather than computed on each
+    /// read, because the card shows it for every node and each check takes the runs' lock.
+    /// </summary>
+    public StartProblem? Problem => _problem;
+
+    public NodeState State
+    {
+        get => _state;
+        private set => SetProperty(ref _state, value);
+    }
+
+    public NodeRole Role
+    {
+        get => _role;
+        private set => SetProperty(ref _role, value);
+    }
+
+    /// <summary>How often the node asked the runs why it cannot start.</summary>
+    internal int ProblemChecks { get; private set; }
 
     public PortViewModel Input { get; }
 
@@ -211,7 +259,13 @@ public sealed class TaskNodeViewModel : ObservableObject
     public ProposalViewModel? Proposal
     {
         get => _proposal;
-        private set => SetProperty(ref _proposal, value);
+        private set
+        {
+            if (SetProperty(ref _proposal, value))
+            {
+                ShowState();
+            }
+        }
     }
 
     /// <summary>The message the person is writing to the task's agent. Each task keeps its own.</summary>
@@ -273,6 +327,8 @@ public sealed class TaskNodeViewModel : ObservableObject
         {
             var old = _task;
             _task = task;
+            Kind = _canvas.KindOf(task.Blueprint);
+            IsLibrary = !NodeKinds.IsBuiltIn(task.Blueprint);
             if (old.Title != task.Title)
             {
                 OnPropertyChanged(nameof(Title));
@@ -309,11 +365,12 @@ public sealed class TaskNodeViewModel : ObservableObject
 
     /// <summary>
     /// Called on the UI thread with the task's newest attempt after any attempt of the project changes. A run anywhere in
-    /// the project can keep this task from starting.
+    /// the project can keep this task from starting. Returns whether the attempt changed.
     /// </summary>
-    internal void ShowAttempt(AttemptRecord? attempt)
+    internal bool ShowAttempt(AttemptRecord? attempt)
     {
-        if (!ReferenceEquals(attempt, _attempt))
+        var changed = !ReferenceEquals(attempt, _attempt);
+        if (changed)
         {
             _attempt = attempt;
             OnPropertyChanged(nameof(StatusLabel));
@@ -333,6 +390,25 @@ public sealed class TaskNodeViewModel : ObservableObject
         _cancel.NotifyCanExecuteChanged();
         _markDone.NotifyCanExecuteChanged();
         OnConversationChanged();
+        return changed;
+    }
+
+    /// <summary>
+    /// Asks the runs again why the task cannot start, and shows the state that follows. The canvas calls it only after a
+    /// change that can alter the answer: the task, its agent, what the clients offer, or an attempt of the task or of a
+    /// task connected to it by a dependency.
+    /// </summary>
+    internal void RecheckProblem()
+    {
+        ProblemChecks++;
+        var problem = RunsHere ? null : _canvas.Runs.Check(_task);
+        if (problem != _problem)
+        {
+            _problem = problem;
+            OnPropertyChanged(nameof(Problem));
+        }
+
+        ShowState();
     }
 
     /// <summary>
@@ -478,6 +554,18 @@ public sealed class TaskNodeViewModel : ObservableObject
         _stopAndSend.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();
     }
+
+    private void ShowState()
+    {
+        State = NodeStates.Of(_attempt, RunsElsewhere, _problem);
+        Role = NodeStates.RoleOf(_problem, _proposal is { HasItems: true });
+    }
+
+    partial void InitializeCard();
+
+    partial void InitializeActions();
+
+    partial void InitializeInspector();
 
     private void SetExecution(ExecutionSettings? settings)
     {
