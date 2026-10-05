@@ -65,6 +65,64 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         Assert.Equal("banana", File.ReadAllText(Path.Combine(project, "answer.txt")).Trim());
     }
 
+    [RealClientsTheory]
+    [MemberData(nameof(Chosen))]
+    public async Task An_Architect_fills_the_two_empty_tasks_after_it_and_changes_no_file(string wireName)
+    {
+        var client = Clients.ParseWireName(wireName) ?? throw new ArgumentException($"Unknown client {wireName}.");
+        var project = _temp.Create("project");
+        File.WriteAllText(Path.Combine(project, "README.md"), "# sum\n\nA command-line tool that prints the sum of two integers.\n");
+        Git(project, "init", "-q");
+        Git(project, "add", ".");
+        Git(project, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
+        var clients = new ClientDirectory(CommandResolver.FromEnvironment());
+        await clients.RefreshAsync();
+        var model = Environment.GetEnvironmentVariable($"IDEVELOP_REAL_MODEL_{wireName.Replace('-', '_').ToUpperInvariant()}") ?? SmallModels[client];
+        var option = ExecutionChoices.OfferedModel(clients.Current[client], model)
+            ?? throw new InvalidOperationException($"{Clients.Name(client)} does not offer {model}: {clients.Current[client]}");
+        var settings = new ExecutionSettings(client) { Model = model, Reasoning = option.ReasoningLevels.Contains("low") ? "low" : option.DefaultReasoning };
+        var workflow = Workflow.Empty(WorkflowId.New())
+            .Apply(new WorkflowEdit.Batch(
+            [
+                new WorkflowEdit.PlaceNode(TestTasks.Design, BuiltInBlueprints.Architect, new CanvasPoint(0, 0))
+                {
+                    Title = "Design sum",
+                    Fields = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add(
+                        "brief", "Design the tool the README describes, in at most five sentences. Fill both empty tasks, one for parsing the arguments and one for printing the sum, and add one task that writes a test."),
+                    Settings = new NodeSettings(settings, ConversationMode.Autonomous),
+                },
+                new WorkflowEdit.PlaceNode(TestTasks.Build, BuiltInBlueprints.Implement, new CanvasPoint(320, 0)),
+                new WorkflowEdit.PlaceNode(TestTasks.Review, BuiltInBlueprints.Implement, new CanvasPoint(320, 190)),
+                new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, TestTasks.Build), ConnectionKind.Dependency),
+                new WorkflowEdit.Connect(new ConnectionKey(TestTasks.Design, TestTasks.Review), ConnectionKind.Dependency),
+            ])) is EditResult.Applied { Workflow: var drawn } ? drawn : throw new InvalidOperationException("The workflow did not build.");
+        await using var runs = ProjectRuns.Open(project, clients);
+
+        var record = await Settles(runs, () => runs.Start(workflow.Tasks[TestTasks.Design], PlanningContext.For(workflow, TestTasks.Design, BuiltInBlueprints.All)));
+        output.WriteLine($"{Clients.Name(client)}: {record.Status} {record.Detail}\n{record.Result}");
+
+        Assert.Equal(AttemptStatus.Succeeded, record.Status);
+        var proposal = Assert.IsType<ProposalRead.Ready>(Proposal.Read(record, BuiltInBlueprints.Find)).Proposal;
+        var accepted = Assert.IsType<EditResult.Applied>(workflow.Apply(proposal.Accept(workflow, proposal.Items.ToHashSet()))).Workflow;
+        foreach (var task in accepted.Tasks.Values)
+        {
+            output.WriteLine($"{task.Blueprint.Name} \"{task.Title}\": {string.Join(" | ", task.Fields.Select(field => $"{field.Key}={field.Value}"))}");
+        }
+
+        Assert.Equal([TestTasks.Build, TestTasks.Review], proposal.Fills.Select(fill => fill.Slot).Order().ToArray());
+        Assert.NotEmpty(proposal.Nodes);
+        Assert.All([TestTasks.Build, TestTasks.Review], slot => Assert.False(string.IsNullOrWhiteSpace(accepted.Tasks[slot].Field("instructions"))));
+        Assert.Equal("", Git(project, "status", "--porcelain", "--untracked-files=all", "--", ".", ":!.idp", ":!.gitignore"));
+    }
+
+    private static string Git(string folder, params string[] arguments)
+    {
+        var git = Process.Start(new ProcessStartInfo("git", ["-C", folder, .. arguments]) { UseShellExecute = false, RedirectStandardOutput = true })!;
+        var text = git.StandardOutput.ReadToEnd();
+        git.WaitForExit();
+        return text.Trim();
+    }
+
     private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<object> act)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);

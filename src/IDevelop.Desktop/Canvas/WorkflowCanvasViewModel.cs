@@ -7,6 +7,7 @@ using IDevelop.Desktop.Blueprints;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -25,6 +26,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     private readonly Func<string, Task> _copy;
     private readonly Dictionary<TaskId, TaskNodeViewModel> _nodes = [];
     private readonly Dictionary<ConnectionKey, ConnectionViewModel> _connections = [];
+    private readonly HashSet<object> _closedProposals = [];
     private Workflow? _projected;
     private TaskNodeViewModel? _selectedNode;
     private ConnectionViewModel? _selectedConnection;
@@ -58,6 +60,9 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
     public ObservableCollection<TaskNodeViewModel> Nodes { get; } = [];
 
     public ObservableCollection<ConnectionViewModel> Connections { get; } = [];
+
+    /// <summary>The dashed cards of the tasks that open proposals add or fill.</summary>
+    public ObservableCollection<GhostCardViewModel> Ghosts { get; } = [];
 
     public ObservableCollection<TaskNodeViewModel> SelectedNodes { get; } = [];
 
@@ -157,11 +162,51 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
     internal Task Copy(string text) => _copy(text);
 
-    internal EditResult Edit(WorkflowEdit edit)
+    /// <param name="title">Names a task in a rejection, for an edit that adds tasks. Null names them from the workflow.</param>
+    internal EditResult Edit(WorkflowEdit edit, Func<TaskId, string>? title = null)
     {
         var result = Document.Apply(edit);
-        _setNotice(result is EditResult.Rejected rejected ? RejectionText.Describe(rejected.Reason, Document.Current) : null);
+        _setNotice(result is EditResult.Rejected rejected
+            ? title is null ? RejectionText.Describe(rejected.Reason, Document.Current) : RejectionText.Describe(rejected.Reason, title)
+            : null);
         return result;
+    }
+
+    /// <summary>
+    /// The blueprints a person or a planner can place, in the order a palette lists them. The built-ins until blueprint
+    /// libraries add theirs here.
+    /// </summary>
+    internal IEnumerable<Blueprint> PlaceableBlueprints() => BuiltInBlueprints.All;
+
+    /// <summary>A placeable blueprint, or a copy the workflow embeds, by key.</summary>
+    internal Blueprint? FindBlueprint(BlueprintKey key) =>
+        PlaceableBlueprints().FirstOrDefault(blueprint => blueprint.Key == key) ?? Workflow.Blueprints.GetValueOrDefault(key);
+
+    /// <summary>What the planner may fill and place when it starts now.</summary>
+    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, PlaceableBlueprints());
+
+    /// <summary>Hides a proposal until its planner proposes again. Only this window forgets it.</summary>
+    internal void CloseProposal(ProposalViewModel proposal)
+    {
+        _closedProposals.Add(proposal.Identity);
+        foreach (var node in Nodes)
+        {
+            node.ShowProposal();
+        }
+
+        ShowGhosts();
+    }
+
+    internal bool IsClosed(ProposalViewModel proposal) => _closedProposals.Contains(proposal.Identity) || proposal.IsSettled(Workflow);
+
+    /// <summary>Draws the chosen tasks of every open proposal.</summary>
+    internal void ShowGhosts()
+    {
+        Ghosts.Clear();
+        foreach (var ghost in Nodes.Select(node => node.Proposal).OfType<ProposalViewModel>().SelectMany(proposal => proposal.Ghosts(Workflow)))
+        {
+            Ghosts.Add(ghost);
+        }
     }
 
     internal static ConnectionKey? ResolveEndpoints(object? source, object? target) => (source, target) switch
@@ -183,6 +228,7 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
 
         ActiveRun.Show(Runs.Active);
         OnWaitingChanged();
+        ShowGhosts();
     }
 
     private void OnWaitingChanged()
@@ -278,6 +324,16 @@ public sealed class WorkflowCanvasViewModel : ObservableObject
         if (connectionsChanged)
         {
             SyncConnections(current);
+        }
+
+        if (!ReferenceEquals(previous, current))
+        {
+            foreach (var node in Nodes)
+            {
+                node.ShowProposal();
+            }
+
+            ShowGhosts();
         }
     }
 

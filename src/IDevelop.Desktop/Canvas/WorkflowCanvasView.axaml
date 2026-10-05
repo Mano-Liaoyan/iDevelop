@@ -171,6 +171,7 @@
                          ConnectionCompletedCommand="{Binding ConnectCommand}"
                          RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"
+                         Decorators="{Binding Ghosts}"
                          GridCellSize="15">
 
       <nodify:NodifyEditor.Background>
@@ -290,6 +291,35 @@
           </Panel>
         </DataTemplate>
       </nodify:NodifyEditor.ItemTemplate>
+
+      <!-- A proposal's tasks draw as dashed cards that take no input, over the empty cards they fill. -->
+      <nodify:NodifyEditor.DecoratorContainerStyle>
+        <ControlTheme TargetType="nodify:DecoratorContainer"
+                      BasedOn="{StaticResource {x:Type nodify:DecoratorContainer}}"
+                      x:DataType="canvas:GhostCardViewModel">
+          <Setter Property="Location" Value="{Binding Location}" />
+          <Setter Property="IsHitTestVisible" Value="False" />
+        </ControlTheme>
+      </nodify:NodifyEditor.DecoratorContainerStyle>
+
+      <nodify:NodifyEditor.DecoratorTemplate>
+        <DataTemplate DataType="canvas:GhostCardViewModel">
+          <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
+                 Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+                 AutomationProperties.AutomationId="GhostCard"
+                 AutomationProperties.Name="{Binding Title}">
+            <Rectangle Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+                       Fill="{DynamicResource SurfaceOverlay95Brush}" Stroke="{DynamicResource StateSelectedBrush}" />
+            <StackPanel Margin="22,12" Spacing="4">
+              <TextBlock Classes="cardLabel" Text="{Binding Label}" Foreground="{DynamicResource StateSelectedBrush}"
+                         AutomationProperties.AutomationId="GhostLabel" />
+              <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                         AutomationProperties.AutomationId="GhostTitle" />
+              <TextBlock Classes="cardLabel" Text="{Binding Preview}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
+            </StackPanel>
+          </Panel>
+        </DataTemplate>
+      </nodify:NodifyEditor.DecoratorTemplate>
 
       <nodify:NodifyEditor.ConnectionTemplate>
         <DataTemplate DataType="canvas:ConnectionViewModel">

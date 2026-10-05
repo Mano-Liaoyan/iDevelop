@@ -113,13 +113,14 @@ public sealed record Proposal(
     }
 
     /// <summary>
-    /// The one edit that accepts the chosen items: their nodes, their fills, and each connection whose two ends are the
-    /// planner or chosen. A connection the workflow already holds is left as it is.
+    /// The one edit that accepts the chosen items: their nodes, their fills, and each connection that touches no item the
+    /// person left out. A connection the workflow already holds is left as it is.
     /// </summary>
     public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen)
     {
         var layout = Layout(workflow);
-        bool Kept(TaskId end) => end == Planner || chosen.Contains(end);
+        var unchosen = Items.Where(item => !chosen.Contains(item)).ToHashSet();
+        bool Kept(TaskId end) => !unchosen.Contains(end);
         return new(
         [
             .. Nodes.Where(node => chosen.Contains(node.Id)).Select(node =>
