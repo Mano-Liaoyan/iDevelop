@@ -285,7 +285,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(finish);
 
         Assert.Single(shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values, task => task.Title == "Wire export");
-        Assert.Equal("Added 1 task and filled 0 tasks.", shell.Status);
+        Assert.Equal("Added 1 task.", shell.Status);
         shell.WaitUntil(() => shell.CardText("Design export", "CardStatus") == "Succeeded", "the planner is done");
         Assert.False(shell.Has<StackPanel>("Proposal"));
     }

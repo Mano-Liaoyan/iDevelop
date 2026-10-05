@@ -24,8 +24,9 @@ public sealed class GenerateTests : IDisposable
     private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";
     private const string Prompt = "Add CSV export to the reports page.";
 
-    // The fake Codex's first model without a problem, at that model's default level, as the sheet picks it.
-    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" };
+    // The fake Codex's first model without a problem, at the high level the sheet picks for planning. The model's own
+    // default level is low.
+    private static readonly ExecutionSettings Codex = new(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "high" };
 
     private static readonly string Reply = """
         Here is the plan.
@@ -83,7 +84,7 @@ public sealed class GenerateTests : IDisposable
         var shell = OpenEmpty();
         OpenSheet(shell);
 
-        Assert.Equal(("Codex", "GPT-6.1-Sol", "low"), (shell.Picked("GenerateClient"), shell.Picked("GenerateModel"), shell.Picked("GenerateReasoning")));
+        Assert.Equal(("Codex", "GPT-6.1-Sol", "high"), (shell.Picked("GenerateClient"), shell.Picked("GenerateModel"), shell.Picked("GenerateReasoning")));
         Assert.Equal(["Claude Code · not installed", "Codex", "Antigravity CLI · not installed"], shell.Pick("GenerateClient", "Codex"));
         Assert.Equal("", shell.Find<TextBlock>("GenerateProblem").Text ?? "");
     }
@@ -221,6 +222,7 @@ public sealed class GenerateTests : IDisposable
 
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
+        Assert.Equal("Added 3 tasks.", shell.Status);
 
         var workflow = canvas.Workflow;
         var added = workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title);

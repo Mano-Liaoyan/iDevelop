@@ -222,7 +222,7 @@ public sealed class ProposalViewModel : ObservableObject
             var added = Proposal!.Nodes.Count(node => chosen.Contains(node.Id));
             var filled = Proposal.Fills.Count(fill => chosen.Contains(fill.Slot));
             _canvas.CloseProposal(this);
-            _canvas.Notice($"Added {Count(added, "task")} and filled {Count(filled, "task")}.");
+            _canvas.Notice(AcceptedNotice(added, filled));
         }
     }
 
@@ -254,6 +254,14 @@ public sealed class ProposalViewModel : ObservableObject
         (blueprint?.Fields.Select(field => field.Key) ?? fields.Keys)
             .Select(key => fields.GetValueOrDefault(key))
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
+
+    /// <summary>"Added 3 tasks.", "Filled 1 task.", or both, leaving out a count of none.</summary>
+    internal static string AcceptedNotice(int added, int filled) => (added, filled) switch
+    {
+        (> 0, > 0) => $"Added {Count(added, "task")} and filled {Count(filled, "task")}.",
+        (> 0, _) => $"Added {Count(added, "task")}.",
+        _ => $"Filled {Count(filled, "task")}.",
+    };
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 }
