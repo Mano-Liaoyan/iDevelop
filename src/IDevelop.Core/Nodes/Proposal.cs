@@ -42,8 +42,8 @@ public sealed record Proposal(
     public const string PlannerHandle = "planner";
 
     // A card's footprint with its gutter, so new cards never touch.
-    private const double ColumnStep = 320;
-    private const double RowStep = 190;
+    public const double ColumnStep = 320;
+    public const double RowStep = 190;
 
     /// <summary>
     /// Reads the latest proposal of a planner's attempt. The same attempt always gives the same proposal and the same new
@@ -83,21 +83,32 @@ public sealed record Proposal(
     public IEnumerable<TaskId> Items => Fills.Select(fill => fill.Slot).Concat(Nodes.Select(node => node.Id));
 
     /// <summary>
-    /// The new nodes' places: a column to the right of the planner and the slots it fills, from the planner's height
-    /// down, skipping any place a card already takes.
+    /// Each proposed node's place. A node the workflow holds stays where it is. A new node goes into the first column,
+    /// right of the planner and the slots it fills, unless it depends on other proposed nodes. Then it goes one column
+    /// right of the deepest of them. Each column fills from the planner's height down, skipping any place a card takes.
     /// </summary>
     public ImmutableDictionary<TaskId, CanvasPoint> Layout(Workflow workflow)
     {
         var anchor = workflow.Positions.GetValueOrDefault(Planner);
-        var x = Fills
+        var firstColumn = Fills
             .Select(fill => workflow.Positions.TryGetValue(fill.Slot, out var slot) ? slot.X : anchor.X)
             .Append(anchor.X)
             .Max() + ColumnStep;
+        var depths = Depths();
         var taken = workflow.Positions.Values.ToList();
-        var y = anchor.Y;
+        var nextY = new Dictionary<int, double>();
         var layout = ImmutableDictionary.CreateBuilder<TaskId, CanvasPoint>();
         foreach (var node in Nodes)
         {
+            if (workflow.Positions.TryGetValue(node.Id, out var placed))
+            {
+                layout.Add(node.Id, placed);
+                continue;
+            }
+
+            var depth = depths[node.Id];
+            var x = firstColumn + (depth - 1) * ColumnStep;
+            var y = nextY.GetValueOrDefault(depth, anchor.Y);
             while (taken.Any(card => Math.Abs(card.X - x) < ColumnStep - 20 && Math.Abs(card.Y - y) < RowStep - 16))
             {
                 y += RowStep;
@@ -106,7 +117,7 @@ public sealed record Proposal(
             var place = new CanvasPoint(x, y);
             layout.Add(node.Id, place);
             taken.Add(place);
-            y += RowStep;
+            nextY[depth] = y + RowStep;
         }
 
         return layout.ToImmutable();
@@ -142,6 +153,43 @@ public sealed record Proposal(
     /// <summary>The title the proposal gives a node it adds or fills, or null.</summary>
     public string? TitleOf(TaskId id) =>
         Nodes.FirstOrDefault(node => node.Id == id)?.Title ?? Fills.FirstOrDefault(fill => fill.Slot == id)?.Title;
+
+    /// <summary>
+    /// Each proposed node's depth: one more than the deepest proposed node it depends on, so 1 when it depends only on the
+    /// planner and slots, or on nothing. Context connections add no depth. A dependency cycle, which Accept refuses, is
+    /// cut where it closes.
+    /// </summary>
+    private Dictionary<TaskId, int> Depths()
+    {
+        var predecessors = Connections
+            .Where(connection => connection.Kind == ConnectionKind.Dependency)
+            .ToLookup(connection => connection.To, connection => connection.From);
+        var proposed = Nodes.Select(node => node.Id).ToHashSet();
+        var depths = new Dictionary<TaskId, int>();
+        int Depth(TaskId id)
+        {
+            if (!proposed.Contains(id))
+            {
+                return 0;
+            }
+
+            if (depths.TryGetValue(id, out var known))
+            {
+                return known;
+            }
+
+            // A node in progress reads 0, so a cycle back to it ends there.
+            depths[id] = 0;
+            return depths[id] = 1 + predecessors[id].Select(Depth).DefaultIfEmpty().Max();
+        }
+
+        foreach (var node in Nodes)
+        {
+            Depth(node.Id);
+        }
+
+        return depths;
+    }
 
     private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill) =>
     [
