@@ -257,7 +257,7 @@ public class AttemptReducerTests
         var record = AttemptReducer.Replay([requested, LaunchedAt1s])!;
 
         Assert.Equal("thread-1", record.SessionId);
-        Assert.Equal(new Continuation(new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa")), "thread-1"), record.Continues);
+        Assert.Equal(new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa")), record.Continues);
         Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Running, null)], record.Turns);
     }
 
@@ -272,7 +272,7 @@ public class AttemptReducerTests
 
         var record = AttemptReducer.Replay([requested, LaunchedAt1s, Said(2, new SessionStarted(id))])!;
 
-        Assert.Equal(((string?)null, continues), (record.SessionId, record.Continues));
+        Assert.Equal(((string?)null, continues.Attempt), (record.SessionId, record.Continues));
         Assert.Equal([new ActivityLine(T0.AddSeconds(2), "iDevelop ignored the session id Codex reported, because it is not a plain id.")], record.Activity);
     }
 

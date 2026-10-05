@@ -234,7 +234,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         // An edited log could link back to an attempt already read.
         HashSet<AttemptId> seen = [attempt.Id];
         var link = attempt.Continues;
-        while (link is not null && seen.Add(link.Attempt) && AttemptLog.ReadAttempt(_attempts, attempt.Task, link.Attempt) is { } continued)
+        while (link is { } id && seen.Add(id) && AttemptLog.ReadAttempt(_attempts, attempt.Task, id) is { } continued)
         {
             earlier.Insert(0, continued);
             link = continued.Continues;

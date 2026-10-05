@@ -296,7 +296,7 @@ public sealed class ConversationTests : IDisposable
 
         var continued = Assert.IsType<SendResult.Continued>(runs.Send(SayHi(Settings[ClientId.Codex]), "Go on.", stopTurn: false)).Attempt;
 
-        Assert.Equal((AttemptStatus.Running, new Continuation(interrupted.Id, Session)), (continued.Status, continued.Continues));
+        Assert.Equal((AttemptStatus.Running, (AttemptId?)interrupted.Id, Session), (continued.Status, continued.Continues, continued.SessionId));
         var record = await settled;
         Assert.Equal((continued.Id, AttemptStatus.Succeeded, "Picked up where I stopped."), (record.Id, record.Status, record.Result));
         Assert.Equal([new TurnRecord(1, "Go on.", TurnOutcome.Succeeded, "Picked up where I stopped.")], record.Turns);
@@ -335,7 +335,7 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal([asked.Id, answered.Id], earlier.Select(attempt => attempt.Id));
         Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?")], earlier[0].Turns);
         Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Succeeded, "Noted.")], earlier[1].Turns);
-        Assert.Equal(new Continuation(answered.Id, Session), latest.Continues);
+        Assert.Equal(((AttemptId?)answered.Id, Session), (latest.Continues, latest.SessionId));
         Assert.Empty(runs.EarlierAttempts(asked));
         Assert.Empty(runs.EarlierAttempts(unrelated));
     }

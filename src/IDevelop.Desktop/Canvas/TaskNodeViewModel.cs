@@ -181,7 +181,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// </summary>
     private ImmutableArray<AttemptRecord> Earlier(AttemptRecord attempt)
     {
-        var continues = attempt.Continues?.Attempt;
+        var continues = attempt.Continues;
         if (continues != _earlier.Continues)
         {
             _earlier = (continues, continues is null ? [] : _canvas.Runs.EarlierAttempts(attempt));

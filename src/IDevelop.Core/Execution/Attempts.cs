@@ -107,7 +107,7 @@ public sealed record AttemptRecord
         TaskTitle = requested.TaskTitle;
         Requested = requested.Settings;
         RequestedAt = requested.At;
-        Continues = requested.Continues;
+        Continues = requested.Continues?.Attempt;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null)];
     }
 
@@ -122,7 +122,8 @@ public sealed record AttemptRecord
 
     public DateTimeOffset RequestedAt { get; }
 
-    public Continuation? Continues { get; }
+    /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
+    public AttemptId? Continues { get; }
 
     public AttemptStatus Status { get; internal init; }
 

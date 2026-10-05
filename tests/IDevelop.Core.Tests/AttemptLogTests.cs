@@ -75,7 +75,7 @@ public sealed class AttemptLogTests : IDisposable
             """.Replace("\r\n", "\n"),
             File.ReadAllText(Path.Combine(folder, "events.jsonl")));
         var record = AttemptReducer.Replay(AttemptLog.Read(folder))!;
-        Assert.Equal((new Continuation(First, "thread-1"), "thread-1"), (record.Continues, record.SessionId));
+        Assert.Equal(((AttemptId?)First, "thread-1"), (record.Continues, record.SessionId));
         Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Stopped, null), new TurnRecord(2, "Stop. Use an apple.", TurnOutcome.Running, null)], record.Turns);
         Assert.Equal(new TerminalHandoff(T0.AddSeconds(9), "/home/me/fruit", "cd '/home/me/fruit' && codex resume thread-1"), record.Terminal);
     }
