@@ -120,7 +120,7 @@ try {
         Select-Element (@($entries) | Where-Object { $_.Current.Name -like 'Codex*' })
         try { $client.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse() } catch {}
         Check ((Wait-Until { (Get-Value $client) -like 'Codex*' }) -eq $true) "choosing Codex selects it (found '$(Get-Value $client)')"
-        Check ((Wait-Until { (Find-ById $window 'PermissionNote').Current.Name -like 'Codex may edit*' }) -eq $true) 'the permission note follows the chosen client'
+        Check ((Wait-Until { (Find-ById $window 'PermissionNote').Current.HelpText -like 'Codex may edit*' }) -eq $true) 'the permission note follows the chosen client'
         Check ((Wait-Until { $window.Current.Name -eq 'agents-project* - iDevelop' }) -eq $true) "choosing an agent is an unsaved edit: '$($window.Current.Name)'"
         Save-Screenshot $window (Join-Path $run 'pickers.png')
         Close-Window $window

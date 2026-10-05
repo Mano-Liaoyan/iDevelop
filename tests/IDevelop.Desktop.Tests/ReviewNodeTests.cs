@@ -68,7 +68,9 @@ public sealed class ReviewNodeTests : IDisposable
         shell.Click(shell.Header(shell.Node("Review add")));
 
         Assert.Equal("Reviewer", shell.Find<TextBlock>("AgentHeading").Text);
-        Assert.Equal("Claude Code reviews in plan mode, which edits no file.", shell.Find<TextBlock>("PermissionNote").Text);
+        Assert.Equal(
+            ("Reviews in plan mode.", "Claude Code reviews in plan mode, which edits no file."),
+            (shell.Find<TextBlock>("PermissionNote").Text, ToolTip.GetTip(shell.Find<TextBlock>("PermissionNote"))));
         Assert.False(shell.Find<ComboBox>("TaskConversation").IsEffectivelyVisible);
         Assert.Equal("Guide the Review", shell.Find<TextBlock>("ComposerHeading").Text);
 

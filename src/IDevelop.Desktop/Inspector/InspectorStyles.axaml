@@ -211,7 +211,7 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
-  <!-- A one-line note whose tooltip holds the whole text, where a paragraph used to be. -->
+  <!-- A one-line note, short enough to show whole, whose tooltip holds the full text where a paragraph used to be. -->
   <Style Selector="TextBlock.note">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />

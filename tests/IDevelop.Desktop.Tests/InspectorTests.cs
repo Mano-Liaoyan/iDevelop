@@ -177,17 +177,27 @@ public sealed class InspectorTests : IDisposable
         Assert.False(shell.Find<Button>("RevertConversation").IsEffectivelyVisible);
     }
 
-    [AvaloniaFact]
-    public void The_permission_note_keeps_its_whole_text_on_one_line_with_a_tooltip()
+    [AvaloniaTheory]
+    [InlineData(ClientId.Codex, "Autonomous")]
+    [InlineData(ClientId.ClaudeCode, "May ask")]
+    [InlineData(ClientId.Pi, "Chat")]
+    [InlineData(ClientId.Antigravity, "Autonomous")]
+    public void Each_note_shows_a_short_line_whole_and_its_tooltip_and_info_glyph_hold_the_full_note(ClientId client, string conversation)
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(client))));
         shell.Click(shell.Header(shell.Node("Design")));
-        const string note = "Codex may edit files in the project folder. Its commands run in its workspace sandbox.";
+        shell.Pick("TaskConversation", conversation);
 
-        var permission = shell.Find<TextBlock>("PermissionNote");
-
-        Assert.Equal((note, note, 1), (permission.Text, ToolTip.GetTip(permission), permission.MaxLines));
-        Assert.True(permission.IsEffectivelyVisible);
+        foreach (var (id, info) in new[] { ("PermissionNote", "TaskClient"), ("ConversationNote", "TaskConversation") })
+        {
+            var note = shell.Find<TextBlock>(id);
+            var full = ToolTip.GetTip(note) as string;
+            Assert.True(note.IsEffectivelyVisible);
+            Assert.True(note.Text!.Length < full!.Length, $"{id} shows \"{note.Text}\", no shorter than \"{full}\".");
+            Assert.False(note.TextLayout.TextLines.Any(line => line.HasCollapsed), $"{id} cuts \"{note.Text}\" short.");
+            Assert.Equal(full, Avalonia.Automation.AutomationProperties.GetHelpText(note));
+            Assert.Equal(full, Info(shell, info));
+        }
     }
 
     [AvaloniaFact]
@@ -290,6 +300,10 @@ public sealed class InspectorTests : IDisposable
         tools.Flyout!.Hide();
         shell.Render();
     }
+
+    /// <summary>The tooltip of the info glyph in the row that holds the editor.</summary>
+    private static object? Info(Shell shell, string editor) =>
+        ToolTip.GetTip(shell.Find<Control>(editor).FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("infoGlyph")));
 
     private static KindTile HeaderTile(Shell shell) => shell.Find<Control>("InspectorHeader").GetVisualDescendants().OfType<KindTile>().Single();
 }

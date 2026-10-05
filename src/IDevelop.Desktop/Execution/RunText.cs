@@ -91,6 +91,26 @@ public static class RunText
         ClientId.Antigravity => "Antigravity CLI may edit files in the project folder. It blocks commands in its accept-edits mode.",
     };
 
+    /// <summary>The permission note in one short line under the pickers. The info glyph holds the whole note.</summary>
+    public static string PermissionSummary(ClientId client, bool readOnly) => (client, readOnly) switch
+    {
+        (ClientId.Pi, true) => "Can't run read-only tasks.",
+        (ClientId.Codex, true) => "Reads only, in a read-only sandbox.",
+        (_, true) => "Reads only, in plan mode.",
+        (ClientId.ClaudeCode, false) => "Edits files. Runs only allowed commands.",
+        (ClientId.Codex, false) => "Edits files. Runs commands in a sandbox.",
+        (ClientId.Pi, false) => "Edits files and runs any command.",
+        (ClientId.Antigravity, false) => "Edits files. Runs no commands.",
+    };
+
+    /// <summary>The reviewer note in one short line.</summary>
+    public static string ReviewerSummary(ClientId client) => client switch
+    {
+        ClientId.Pi => "Can't review without a read-only mode.",
+        ClientId.Codex => "Reviews in a read-only sandbox.",
+        ClientId.ClaudeCode or ClientId.Antigravity => "Reviews in plan mode.",
+    };
+
     /// <summary>A cancelled attempt is neutral: the user chose that outcome.</summary>
     public static StatusTone Tone(AttemptRecord? attempt) => attempt is null ? StatusTone.Neutral : attempt.Status switch
     {
@@ -164,6 +184,14 @@ public static class RunText
         ConversationMode.Autonomous => "The agent works without waiting for you. You can still write to it.",
         ConversationMode.MayAsk => "The agent may end a turn with a question and wait for your answer.",
         ConversationMode.Chat => "The task waits for you after every turn, until you mark it done.",
+    };
+
+    /// <summary>The conversation note in one short line under its picker.</summary>
+    public static string ConversationSummary(ConversationMode mode) => mode switch
+    {
+        ConversationMode.Autonomous => "Works without waiting for you.",
+        ConversationMode.MayAsk => "May stop to ask you a question.",
+        ConversationMode.Chat => "Waits for you after every turn.",
     };
 
     /// <summary>One or two sentences for each reason a task cannot start.</summary>
