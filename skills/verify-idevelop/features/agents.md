@@ -1,11 +1,11 @@
-# The AGENTS section and the agent pickers
+# The Agents section and the agent pickers
 
-The sidebar's AGENTS section shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
+The sidebar's Agents section shows whether Claude Code, Codex, Pi, and Antigravity CLI are ready on this machine, and why a client is not. The inspector's Agent pickers show the selected task's client, model, and reasoning level, offer only what each client offers here, and save the user's choice into the task.
 
 ## Sub-features
 
 - `agents-rows` lists the four clients with a readiness summary and, for a client that is not ready, the reason.
-- `agents-refresh` checks the clients again from the refresh button beside `AGENTS`.
+- `agents-refresh` checks the clients again from the refresh button beside `Agents`.
 - `picker-shows` shows the selected task's saved client, model, and level, and marks a model this machine does not offer.
 - `picker-follow` follows the task chosen in the sidebar and edits nothing.
 - `picker-client` offers `None` and the four clients, marks the ones that are not ready, and takes the chosen client's first model at its default level.
@@ -16,8 +16,8 @@ The sidebar's AGENTS section shows whether Claude Code, Codex, Pi, and Antigravi
 
 ## How to get to it (user POV)
 
-- Read the AGENTS section at the bottom of the sidebar.
-- Choose the refresh button beside `AGENTS`.
+- Read the Agents section at the bottom of the sidebar.
+- Choose the refresh button beside `Agents`.
 - Choose a task in the sidebar or on the canvas, then use the `Client`, `Model`, and `Reasoning` pickers in the `Agent` section of the inspector.
 
 ## Driving it with real-window.psm1

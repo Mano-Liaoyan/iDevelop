@@ -47,8 +47,31 @@ public sealed class SidebarTests : IDisposable
 
         shell.AddNode();
 
+        // The new task lands under Design, above Review, and the list reads the canvas from the top.
         Assert.Equal("4", shell.Find<TextBlock>("TaskCount").Text);
-        Assert.Equal(["Design", "Build", "Review", "New task"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
+        Assert.Equal(["Design", "Build", "New task", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
+    }
+
+    [AvaloniaFact]
+    public void The_sidebar_lists_each_task_after_the_tasks_it_depends_on_and_then_from_the_top_of_the_canvas()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 705, 90),
+            TaskAt(Build, "Build", 405, 90),
+            TaskAt(Review, "Review", 105, 300),
+            new WorkflowEdit.Connect(new ConnectionKey(Review, Design), ConnectionKind.Dependency),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var sidebar = shell.Find<ListBox>("SidebarTasks");
+        Assert.Equal(["Build", "Review", "Design"], Shell.Texts(sidebar));
+        shell.Click(shell.SidebarRow("Review"));
+
+        canvas.Edit(new WorkflowEdit.MoveTasks([new TaskPosition(Review, new CanvasPoint(105, 0))]));
+        shell.Render();
+
+        Assert.Equal(["Review", "Build", "Design"], Shell.Texts(sidebar));
+        Assert.Equal(("Review", "Review"), (canvas.SelectedNode?.Title, ((TaskNodeViewModel?)sidebar.SelectedItem)?.Title));
+        Assert.True(shell.Node("Review").IsSelected);
     }
 
     [AvaloniaFact]

@@ -59,6 +59,24 @@ public sealed class AgentsSectionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_reason_takes_one_line_under_its_title_case_header_and_the_rows_tooltip_holds_all_of_it()
+    {
+        _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
+        var clients = new ClientDirectory(_fakes.Resolver);
+        var shell = Shell.Show(clients);
+        clients.RefreshAsync().Wait();
+        shell.Render();
+
+        const string reason = "Claude Code is not signed in. Run claude in a terminal and sign in.";
+        var row = Row(shell, "AgentClaudeCode");
+        var lines = row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == reason);
+        Assert.Equal((1, reason), (lines.MaxLines, ToolTip.GetTip((Control)row)));
+        Assert.Equal(
+            ["Project", "Agents", "Appearance"],
+            shell.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Classes.Contains("section")).Select(text => text.Text));
+    }
+
+    [AvaloniaFact]
     public void Checking_again_shows_a_client_that_signed_out_since_the_last_check()
     {
         FakeAgents.Install(_fakes, ClientId.Codex);

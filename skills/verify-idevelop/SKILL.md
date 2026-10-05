@@ -44,7 +44,7 @@ $s = Connect-IDevelop
 
 Run `Test-IDevelop` first, and again whenever anything looks off. It changes nothing.
 
-It checks that the session's process is alive and runs this checkout's Release exe. It checks that each assembly in the build folder is newer than every file of its project under `src/`. It prints the window title, each AGENTS row, the session's fake processes, and who holds the theme backup. The last line is `Doctor: worth driving` or `Doctor: not worth driving`.
+It checks that the session's process is alive and runs this checkout's Release exe. It checks that each assembly in the build folder is newer than every file of its project under `src/`. It prints the window title, each Agents row, the session's fake processes, and who holds the theme backup. The last line is `Doctor: worth driving` or `Doctor: not worth driving`.
 
 - A stale assembly needs `Stop-IDevelop`, `dotnet build -c Release`, and a new session.
 - A `WARN` about a leftover backup means a run was killed. The next `Start-IDevelop` restores it first.
@@ -113,7 +113,7 @@ $s = Start-IDevelop -RealClients
 Test-IDevelop
 ```
 
-1. Pick a client whose AGENTS row reads `Ready`.
+1. Pick a client whose Agents row reads `Ready`.
 2. Select the third task with `Select-Element (Get-SidebarTasks $s.Window)[2]`.
 3. Set a small instruction with `Set-Text (Find-ById $s.Window 'TaskInstructions') 'Create hello.txt containing hi. Change nothing else.'`.
 4. Choose the client, its cheapest model, and its lowest reasoning level with `Select-PickerEntry` on `TaskClient`, `TaskModel`, and `TaskReasoning`.

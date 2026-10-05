@@ -295,7 +295,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     private void SelectNextWaiting()
     {
-        var ordered = Nodes.ToList();
+        var ordered = Outline.ToList();
         var start = SelectedNode is { } selected ? ordered.IndexOf(selected) + 1 : 0;
         if (Enumerable.Range(0, ordered.Count).Select(step => ordered[(start + step) % ordered.Count]).FirstOrDefault(node => node.IsWaiting) is { } next)
         {
@@ -356,6 +356,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (connectionsChanged)
         {
             SyncConnections(current);
+        }
+
+        if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
+        {
+            ArrangeOutline();
         }
 
         if (!ReferenceEquals(previous, current))
@@ -431,7 +436,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             }
             else
             {
-                // In the workflow's order, so a task that an undo brings back returns to its place in the sidebar.
+                // In the workflow's order, so a task that an undo brings back returns to its place among the cards.
                 node = new TaskNodeViewModel(this, task, current.Positions[id]);
                 _nodes.Add(id, node);
                 Nodes.Insert(Nodes.Count(other => other.Id.CompareTo(id) < 0), node);

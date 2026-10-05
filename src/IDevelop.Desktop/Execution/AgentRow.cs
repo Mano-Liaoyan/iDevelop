@@ -3,7 +3,7 @@ using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Execution;
 
-/// <summary>One client in the sidebar's AGENTS section: whether it is installed and ready, and why not.</summary>
+/// <summary>One client in the sidebar's Agents section: whether it is installed and ready, and why not.</summary>
 public sealed record AgentRow(ClientId Id, ClientStatus Status)
 {
     public string Name => Clients.Name(Id);

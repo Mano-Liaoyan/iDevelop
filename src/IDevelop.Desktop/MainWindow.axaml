@@ -52,7 +52,7 @@
       <Grid Grid.Row="2" RowDefinitions="Auto,*" Margin="12" RowSpacing="12">
         <StackPanel Spacing="12">
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="section" Text="PROJECT" VerticalAlignment="Center" />
+            <TextBlock Classes="section" Text="Project" VerticalAlignment="Center" />
             <Button Grid.Column="1" Classes="icon"
                     Click="OnOpenFolder"
                     ToolTip.Tip="Open folder"
@@ -86,7 +86,7 @@
         <Border Grid.Row="1" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}" VerticalAlignment="Top"
                 Margin="12,0,0,0" Padding="12,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border60Brush}">
           <ListBox x:Name="SidebarTasks" Classes="tasks"
-                   ItemsSource="{Binding Canvas.Nodes}"
+                   ItemsSource="{Binding Canvas.Outline}"
                    SelectedItem="{Binding Canvas.SelectedNode}"
                    SelectionChanged="OnSidebarSelectionChanged"
                    Tapped="OnSidebarTapped"
@@ -113,7 +113,7 @@
       <Border Grid.Row="3" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="section" Text="AGENTS" VerticalAlignment="Center" />
+            <TextBlock Classes="section" Text="Agents" VerticalAlignment="Center" />
             <Button Grid.Column="1" Classes="icon"
                     Command="{Binding RefreshAgentsCommand}"
                     ToolTip.Tip="Check agents again"
@@ -132,7 +132,8 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="execution:AgentRow">
-                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. -->
+                <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. The reason
+                     takes one line, and the row's tooltip holds all of it. -->
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
                       Background="Transparent"
                       ToolTip.Tip="{Binding Detail}">
@@ -147,7 +148,7 @@
                              AutomationProperties.AutomationId="{Binding AutomationId}"
                              AutomationProperties.HelpText="{Binding Detail}" />
                   <TextBlock Grid.Row="2" Grid.Column="1" Classes="caption" Text="{Binding Detail}"
-                             TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
+                             TextTrimming="CharacterEllipsis" MaxLines="1"
                              IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </Grid>
               </DataTemplate>
@@ -158,7 +159,7 @@
 
       <Border Grid.Row="4" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
         <StackPanel Spacing="8">
-          <TextBlock Classes="section" Text="APPEARANCE" />
+          <TextBlock Classes="section" Text="Appearance" />
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
             <UniformGrid Columns="3">
               <RadioButton Classes="segment" GroupName="Theme" Content="System"
