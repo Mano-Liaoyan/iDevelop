@@ -275,4 +275,39 @@ public class WorkflowTests
             new EditRejection.UnknownTask(Missing),
             workflow.Rejection(new SetExecution(Missing, new ExecutionSettings(ClientId.Pi))));
     }
+
+    [Fact]
+    public void A_review_takes_its_one_dependency_predecessor_that_edits_as_its_subject_and_rejects_a_second()
+    {
+        var reviewer = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
+        var workflow = ThreeTasks()
+            .Must(new PlaceNode(reviewer, BuiltInBlueprints.Review, new CanvasPoint(1000, 90)) { Title = "Check" })
+            .Must(new PlaceNode(Missing, Spec(), new CanvasPoint(0, 400)) { Title = "Spec" });
+        Assert.Null(workflow.SubjectOf(reviewer));
+
+        workflow = workflow
+            .Must(new Connect(new ConnectionKey(Missing, reviewer), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Build, reviewer), ConnectionKind.Dependency))
+            .Must(new Connect(new ConnectionKey(Design, reviewer), ConnectionKind.Context));
+
+        Assert.Equal(Build, workflow.SubjectOf(reviewer));
+        Assert.Null(workflow.SubjectOf(Build));
+        Assert.Equal(
+            new EditRejection.SecondSubject(reviewer, Build),
+            workflow.Rejection(new SetConnectionKind(new ConnectionKey(Design, reviewer), ConnectionKind.Dependency)));
+        Assert.Equal(
+            new EditRejection.SecondSubject(reviewer, Build),
+            workflow.Rejection(new Connect(new ConnectionKey(Review, reviewer), ConnectionKind.Dependency)));
+        Assert.Equal(Review, workflow.Must(new Delete([Build], [])).Must(new Connect(new ConnectionKey(Review, reviewer), ConnectionKind.Dependency)).SubjectOf(reviewer));
+    }
+
+    [Fact]
+    public void An_approval_waits_for_the_person_and_passes_its_inputs_on_once_approved()
+    {
+        var node = new IDevelop.Nodes.NodeContext(new TaskDefinition(Design, BuiltInBlueprints.Approval), "The plan is ready.");
+
+        Assert.Equal(new IDevelop.Nodes.NodeStep.WaitForPerson(new IDevelop.Nodes.Pending.Approval()), IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Approval.Work).Next(node, null));
+        Assert.IsNotAssignableFrom<IDevelop.Nodes.IConverses>(IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Approval.Work));
+        Assert.IsAssignableFrom<IDevelop.Nodes.IConverses>(IDevelop.Nodes.NodeWorks.For(BuiltInBlueprints.Review.Work));
+    }
 }

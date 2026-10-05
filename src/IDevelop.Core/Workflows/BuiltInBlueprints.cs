@@ -65,8 +65,42 @@ public static class BuiltInBlueprints
         Description = "Designs from a brief, reports the design, and proposes the tasks that build it. It changes no file.",
     };
 
+    /// <summary>
+    /// Reviews the change of the one node before it that edits the project, with a reviewer that only reads, and sends
+    /// each finding back to that node's own session until the two agree. Its agent is the reviewer.
+    /// </summary>
+    public static Blueprint Review { get; } = new(
+        new BlueprintKey("idevelop.review", 1),
+        "Review",
+        new WorkSpec.Review(
+            PromptTemplate.Parse(
+                "{{#title}}# {{title}}\n\n{{/title}}" +
+                "Review the change another agent made for the ticket below. Read the project as you need, but do not change any file.\n" +
+                "{{#focus}}\n## What to check\n\n{{focus}}\n{{/focus}}" +
+                "\n## The ticket\n\n{{ticket}}\n" +
+                "\n## The implementer's report\n\n{{report}}\n" +
+                "\n## The change\n\n{{change}}\n"),
+            PromptTemplate.Parse(
+                "A reviewer read your change and raised the findings below. Fix each one, or dispute it with your reason.\n\n{{findings}}\n")),
+        [new FieldSpec("focus", "What to check", FieldShape.Text, Required: false, "")],
+        new NodeSettings(null, ConversationMode.Autonomous))
+    {
+        Description = "Reviews the change of the task before it. The reviewer and that task's agent go back and forth until both agree.",
+    };
+
+    /// <summary>A person approves what earlier nodes handed on, or sends it back. It has no agent.</summary>
+    public static Blueprint Approval { get; } = new(
+        new BlueprintKey("idevelop.approval", 1),
+        "Approval",
+        new WorkSpec.Person(),
+        [new FieldSpec("checklist", "What to check", FieldShape.Text, Required: false, "")],
+        new NodeSettings(null, ConversationMode.Autonomous))
+    {
+        Description = "Waits for you to approve what the tasks before it handed on, or to send it back.",
+    };
+
     /// <summary>Every built-in, in the order a palette lists them.</summary>
-    public static ImmutableArray<Blueprint> All { get; } = [Implement, Plan, Architect];
+    public static ImmutableArray<Blueprint> All { get; } = [Implement, Plan, Architect, Review, Approval];
 
     public static Blueprint? Find(BlueprintKey key) => All.FirstOrDefault(blueprint => blueprint.Key == key);
 }

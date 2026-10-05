@@ -100,6 +100,8 @@ public sealed class MainWindowTests : IDisposable
                 "Carries out its instructions with the agent you choose, and may edit the project.", "Place", "Derive",
                 "Plan", "Version 1", "Plans the work toward a goal and proposes the tasks that carry it out. It changes no file.", "Place", "Derive",
                 "Architect", "Version 1", "Designs from a brief, reports the design, and proposes the tasks that build it. It changes no file.", "Place", "Derive",
+                "Review", "Version 1", "Reviews the change of the task before it. The reviewer and that task's agent go back and forth until both agree.", "Place", "Derive",
+                "Approval", "Version 1", "Waits for you to approve what the tasks before it handed on, or to send it back.", "Place", "Derive",
                 "PROJECT", "None yet. Derive a blueprint to add one.", "PERSONAL", "None yet. Derive a blueprint to add one.",
             ],
             Shell.Texts(shell.Find<Control>("Inspector")));

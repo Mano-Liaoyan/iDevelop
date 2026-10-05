@@ -30,6 +30,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     private string _name;
     private string _description;
     private string _template;
+    private string _fixTemplate;
     private bool _readOnly;
     private Option<ConversationMode> _conversation;
     private Option<ClientId?> _client;
@@ -47,9 +48,12 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         _name = name;
         _newKey = BlueprintLibrary.NewKey(name);
         _description = source.Description;
-        var work = Agent(source.Work);
-        _template = work.Template.Text;
-        _readOnly = work.Access == AgentAccess.ReadOnly;
+        (_template, _fixTemplate, _readOnly) = source.Work switch
+        {
+            WorkSpec.Agent agent => (agent.Template.Text, "", agent.Access == AgentAccess.ReadOnly),
+            WorkSpec.Review review => (review.Reviewer.Text, review.Fix.Text, true),
+            _ => ("", "", false),
+        };
         _conversation = ConversationChoices.First(choice => choice.Value == defaults.Conversation);
         _client = ClientChoices.First(choice => choice.Value == defaults.Execution?.Client);
         _model = defaults.Execution?.Model ?? "";
@@ -122,14 +126,32 @@ public sealed class BlueprintEditorViewModel : ObservableObject
 
     public ObservableCollection<FieldRowViewModel> Fields { get; } = [];
 
+    /// <summary>An agent work's access and conversation are the blueprint's to set. A review's reviewer only reads.</summary>
+    public bool IsAgent => _source.Work.Kind == WorkKind.Agent;
+
+    public bool IsReview => _source.Work.Kind == WorkKind.Review;
+
+    /// <summary>A person's work has no template and no agent.</summary>
+    public bool HasTemplate => _source.Work.Kind != WorkKind.Person;
+
+    public string TemplateHeading => IsReview ? "REVIEWER TEMPLATE" : "TEMPLATE";
+
     public string Template
     {
         get => _template;
         set => Set(ref _template, value);
     }
 
+    /// <summary>A review's message to the implementer with the findings that stand.</summary>
+    public string FixTemplate
+    {
+        get => _fixTemplate;
+        set => Set(ref _fixTemplate, value);
+    }
+
     public string TemplateHelp =>
         "{{title}} inserts the node's title, {{inputs}} what earlier nodes handed on, and {{key}} a field's value. " +
+        (IsReview ? "{{ticket}}, {{report}}, and {{change}} insert the reviewed task's ticket, its report, and its change, and {{findings}} the findings that stand. " : "") +
         "{{#key}}…{{/key}} keeps its text only when the value is not blank.";
 
     public IReadOnlyList<Option<ConversationMode>> ConversationChoices { get; } =
@@ -204,12 +226,6 @@ public sealed class BlueprintEditorViewModel : ObservableObject
 
     private BlueprintLibrary Library => _editing ?? (_inPersonal && _owner.Personal is { } personal ? personal : _owner.Project);
 
-    /// <summary>The editor edits agent works, the only work so far. A new work fails the build here.</summary>
-    private static WorkSpec.Agent Agent(WorkSpec work) => work.Kind switch
-    {
-        WorkKind.Agent => (WorkSpec.Agent)work,
-    };
-
     private static string LibraryName(LibraryKind kind) => kind switch
     {
         LibraryKind.Project => "project",
@@ -230,14 +246,19 @@ public sealed class BlueprintEditorViewModel : ObservableObject
     private Blueprint? Build(out string? problem)
     {
         problem = null;
-        PromptTemplate template;
+        WorkSpec work;
         try
         {
-            template = PromptTemplate.Parse(_template);
+            work = _source.Work.Kind switch
+            {
+                WorkKind.Agent => new WorkSpec.Agent(_readOnly ? AgentAccess.ReadOnly : AgentAccess.Edit, ((WorkSpec.Agent)_source.Work).Proposes, Parse(_template, "The template")),
+                WorkKind.Review => new WorkSpec.Review(Parse(_template, "The reviewer template"), Parse(_fixTemplate, "The fix template")),
+                WorkKind.Person => new WorkSpec.Person(),
+            };
         }
         catch (FormatException e)
         {
-            problem = $"The template: {e.Message}";
+            problem = e.Message;
             return null;
         }
 
@@ -247,7 +268,7 @@ public sealed class BlueprintEditorViewModel : ObservableObject
             return new Blueprint(
                 Key,
                 _name,
-                new WorkSpec.Agent(_readOnly ? AgentAccess.ReadOnly : AgentAccess.Edit, Agent(_source.Work).Proposes, template),
+                work,
                 [.. Fields.Select(field => field.Spec)],
                 new NodeSettings(execution, _conversation.Value))
             {
@@ -259,6 +280,18 @@ public sealed class BlueprintEditorViewModel : ObservableObject
         {
             problem = e.Message;
             return null;
+        }
+    }
+
+    private static PromptTemplate Parse(string text, string name)
+    {
+        try
+        {
+            return PromptTemplate.Parse(text);
+        }
+        catch (FormatException e)
+        {
+            throw new FormatException($"{name}: {e.Message}", e);
         }
     }
 

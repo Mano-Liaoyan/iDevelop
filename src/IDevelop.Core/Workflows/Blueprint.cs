@@ -34,7 +34,7 @@ public readonly partial record struct BlueprintKey(string Id, int Version) : ICo
 /// What a node does. A closed set: a new work needs code, which is one <see cref="WorkSpec"/> case, one value here, and
 /// one implementation of <c>INodeWork</c>. The build fails on an enum switch that misses a value.
 /// </summary>
-public enum WorkKind { Agent }
+public enum WorkKind { Agent, Review, Person }
 
 /// <summary>What an agent work may do in the project folder.</summary>
 public enum AgentAccess { ReadOnly, Edit }
@@ -53,6 +53,27 @@ public abstract record WorkSpec
     public sealed record Agent(AgentAccess Access, bool Proposes, PromptTemplate Template) : WorkSpec
     {
         public override WorkKind Kind => WorkKind.Agent;
+
+        public override ImmutableArray<string> Variables => [];
+    }
+
+    /// <summary>
+    /// A back-and-forth between a reviewer, which only reads, and the implementer of the review's subject.
+    /// <paramref name="Reviewer"/> starts the reviewer's session, and <paramref name="Fix"/> sends the reviewer's findings
+    /// to the implementer's session.
+    /// </summary>
+    public sealed record Review(PromptTemplate Reviewer, PromptTemplate Fix) : WorkSpec
+    {
+        public override WorkKind Kind => WorkKind.Review;
+
+        /// <summary>The subject's ticket, its implementer's report, its change as a diff, and the findings to fix.</summary>
+        public override ImmutableArray<string> Variables => ["ticket", "report", "change", "findings"];
+    }
+
+    /// <summary>No agent. A person approves or sends back.</summary>
+    public sealed record Person : WorkSpec
+    {
+        public override WorkKind Kind => WorkKind.Person;
 
         public override ImmutableArray<string> Variables => [];
     }
@@ -166,6 +187,8 @@ public sealed partial record Blueprint
     private static IEnumerable<PromptTemplate> Templates(WorkSpec work) => work.Kind switch
     {
         WorkKind.Agent => [((WorkSpec.Agent)work).Template],
+        WorkKind.Review => [((WorkSpec.Review)work).Reviewer, ((WorkSpec.Review)work).Fix],
+        WorkKind.Person => [],
     };
 
     [GeneratedRegex(@"\A[A-Za-z][A-Za-z0-9]*\z")]

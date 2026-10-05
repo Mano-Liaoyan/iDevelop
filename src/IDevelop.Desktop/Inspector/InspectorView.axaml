@@ -65,57 +65,62 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Classes="section" Text="AGENT" Margin="0,20,0,2" />
-            <TextBlock Classes="caption" Text="Client" />
-            <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
-                      AutomationProperties.AutomationId="TaskClient"
-                      AutomationProperties.Name="Client">
-              <ComboBox.ItemTemplate>
-                <DataTemplate DataType="canvas:ClientChoice">
-                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
-              <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
-              <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
-                        PlaceholderText="Choose a model"
-                        AutomationProperties.AutomationId="TaskModel"
-                        AutomationProperties.Name="Model">
+            <StackPanel Spacing="6" IsVisible="{Binding HasAgent}">
+              <TextBlock Classes="section" Text="{Binding AgentHeading}" Margin="0,20,0,2"
+                         AutomationProperties.AutomationId="AgentHeading" />
+              <TextBlock Classes="caption" Text="Client" />
+              <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnClientChosen"
+                        AutomationProperties.AutomationId="TaskClient"
+                        AutomationProperties.Name="Client">
                 <ComboBox.ItemTemplate>
-                  <DataTemplate DataType="canvas:Choice">
+                  <DataTemplate DataType="canvas:ClientChoice">
                     <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
-                <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
-                <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
-                          PlaceholderText="Choose a level"
-                          AutomationProperties.AutomationId="TaskReasoning"
-                          AutomationProperties.Name="Reasoning">
+              <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
+                <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
+                <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnModelChosen"
+                          PlaceholderText="Choose a model"
+                          AutomationProperties.AutomationId="TaskModel"
+                          AutomationProperties.Name="Model">
                   <ComboBox.ItemTemplate>
                     <DataTemplate DataType="canvas:Choice">
                       <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
+                <StackPanel Spacing="6" IsVisible="{Binding HasReasoning}">
+                  <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
+                  <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnReasoningChosen"
+                            PlaceholderText="Choose a level"
+                            AutomationProperties.AutomationId="TaskReasoning"
+                            AutomationProperties.Name="Reasoning">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate DataType="canvas:Choice">
+                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           AutomationProperties.AutomationId="PermissionNote" />
               </StackPanel>
-              <TextBlock Classes="caption" Text="{Binding PermissionNote}" TextWrapping="Wrap" Margin="0,4,0,0"
-                         AutomationProperties.AutomationId="PermissionNote" />
             </StackPanel>
-            <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
-            <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
-                      AutomationProperties.AutomationId="TaskConversation"
-                      AutomationProperties.Name="Conversation">
-              <ComboBox.ItemTemplate>
-                <DataTemplate DataType="canvas:Choice">
-                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Classes="caption" Text="{Binding ConversationNote}" TextWrapping="Wrap"
-                       AutomationProperties.AutomationId="ConversationNote" />
+            <StackPanel Spacing="6" IsVisible="{Binding HasConversation}">
+              <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
+              <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding SelectedConversation, Mode=OneWay}" SelectionChanged="OnConversationChosen"
+                        AutomationProperties.AutomationId="TaskConversation"
+                        AutomationProperties.Name="Conversation">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate DataType="canvas:Choice">
+                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="caption" Text="{Binding ConversationNote}" TextWrapping="Wrap"
+                         AutomationProperties.AutomationId="ConversationNote" />
+            </StackPanel>
 
             <TextBlock Classes="section" Text="RUN" Margin="0,20,0,2" />
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -239,7 +244,7 @@
                                     <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
                                             IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                                       <StackPanel Spacing="2">
-                                        <TextBlock Classes="caption" Text="You" />
+                                        <TextBlock Classes="caption" Text="{Binding Author}" />
                                         <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
                                       </StackPanel>
                                     </Border>
@@ -294,7 +299,40 @@
               </ContentControl.ContentTemplate>
             </ContentControl>
 
-            <TextBlock Classes="section" Text="TALK TO THE AGENT" Margin="0,20,0,2" />
+            <StackPanel Spacing="6" IsVisible="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        AutomationProperties.AutomationId="Review">
+              <TextBlock Classes="section" Text="FINDINGS" Margin="0,20,0,2" />
+              <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                         AutomationProperties.AutomationId="ReviewSummary" />
+              <ItemsControl ItemsSource="{Binding Findings}"
+                            AutomationProperties.AutomationId="Findings"
+                            AutomationProperties.Name="Findings">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="execution:FindingViewModel">
+                    <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+                            BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
+                            Opacity="{Binding Emphasis}">
+                      <StackPanel Spacing="4">
+                        <TextBlock Classes="caption" Text="{Binding Heading}" />
+                        <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                   IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                                   IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Classes="section" Text="{Binding ComposerHeading}" Margin="0,20,0,2"
+                       AutomationProperties.AutomationId="ComposerHeading" />
             <Border Classes="pill waiting" HorizontalAlignment="Left" IsVisible="{Binding IsWaiting}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <PathIcon />
@@ -307,7 +345,7 @@
             <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
             <TextBox Text="{Binding Draft}"
                      AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
-                     Watermark="Write to the agent. Ctrl+Enter sends."
+                     Watermark="{Binding ComposerHint}"
                      AutomationProperties.AutomationId="Composer"
                      AutomationProperties.Name="Message">
               <TextBox.KeyBindings>
@@ -320,7 +358,7 @@
                       AutomationProperties.Name="Send">
                 <TextBlock Text="Send" />
               </Button>
-              <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding TurnRunsHere}"
+              <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding CanStopAndSend}"
                       AutomationProperties.AutomationId="StopAndSend"
                       AutomationProperties.Name="Stop and send">
                 <StackPanel Orientation="Horizontal" Spacing="6">

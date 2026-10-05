@@ -62,9 +62,10 @@ public sealed class TaskNodeViewModel : ObservableObject
         _run = new RelayCommand(Run, () => !RunsHere);
         _cancel = new RelayCommand(
             () => _canvas.Notice(_canvas.Runs.Cancel(Id) is { } problem ? RunText.Describe(problem) : null),
-            () => IsWaiting || _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
+            () => IsWaiting || _attempt is { Status: AttemptStatus.InReview } ||
+                _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
         _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
-        _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => TurnRunsHere && _send.CanExecute(null));
+        _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
         _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
         _markDone = new RelayCommand(MarkDone, () => IsWaiting);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
@@ -110,8 +111,34 @@ public sealed class TaskNodeViewModel : ObservableObject
     /// <summary>The blueprint's fields, in its order.</summary>
     public IReadOnlyList<FieldViewModel> Fields { get; }
 
-    /// <summary>The card previews the first field.</summary>
-    public string Preview => Fields.Count > 0 ? Fields[0].Text : "";
+    /// <summary>The card previews the first field, or a review's round and open findings once it ran.</summary>
+    public string Preview => ReviewSummary ?? (Fields.Count > 0 ? Fields[0].Text : "");
+
+    public bool IsReview => _task.Blueprint.Work is WorkSpec.Review;
+
+    /// <summary>An approval has no agent.</summary>
+    public bool HasAgent => _task.Blueprint.Work is not WorkSpec.Person;
+
+    /// <summary>Only an agent work waits for the person as its conversation mode says.</summary>
+    public bool HasConversation => _task.Blueprint.Work is WorkSpec.Agent;
+
+    public string AgentHeading => IsReview ? "REVIEWER" : "AGENT";
+
+    public string ComposerHeading => IsReview ? "GUIDE THE REVIEW" : "TALK TO THE AGENT";
+
+    public string ComposerHint => IsReview
+        ? "Both agents read your guidance in their next message. Ctrl+Enter sends."
+        : "Write to the agent. Ctrl+Enter sends.";
+
+    /// <summary>"Round 2 · 1 open finding" for a review's latest attempt, or null.</summary>
+    public string? ReviewSummary => _attempt is { Subject: not null } review ? RunText.ReviewSummary(review, ReviewLedger.Fold(review)) : null;
+
+    /// <summary>A review's findings, with both sides' latest words.</summary>
+    public IReadOnlyList<FindingViewModel> Findings => _attempt is { Subject: not null } review
+        ? [.. ReviewLedger.Fold(review).Findings.Select(finding => new FindingViewModel(finding))]
+        : [];
+
+    public bool HasFindings => Findings.Count > 0;
 
     public string PreviewPlaceholder => Fields.Count > 0 ? $"No {Fields[0].Label.ToLowerInvariant()} yet." : "";
 
@@ -158,7 +185,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     public bool HasReasoning => ReasoningChoices.Count > 0;
 
     public string? PermissionNote => _task.Execution is { } settings
-        ? RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
+        ? IsReview ? RunText.ReviewerNote(settings.Client) : RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
     public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
@@ -205,6 +232,9 @@ public sealed class TaskNodeViewModel : ObservableObject
     public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem) : null;
 
     /// <summary>A turn of the task runs in this window, which Stop and send can stop.</summary>
+    /// <summary>A review's guidance never stops the reviewer's turn.</summary>
+    public bool CanStopAndSend => TurnRunsHere && !IsReview;
+
     public bool TurnRunsHere =>
         _attempt is { Status: AttemptStatus.Running, Turns: [.., { Outcome: TurnOutcome.Running }] } attempt && _canvas.Runs.StartedHere(attempt.Id);
 
@@ -292,6 +322,10 @@ public sealed class TaskNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(IsWaiting));
             OnPropertyChanged(nameof(Waiting));
             ShowProposal();
+            OnPropertyChanged(nameof(Preview));
+            OnPropertyChanged(nameof(ReviewSummary));
+            OnPropertyChanged(nameof(Findings));
+            OnPropertyChanged(nameof(HasFindings));
         }
 
         OnPropertyChanged(nameof(StartProblem));
@@ -439,6 +473,7 @@ public sealed class TaskNodeViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(SendProblem));
         OnPropertyChanged(nameof(TurnRunsHere));
+        OnPropertyChanged(nameof(CanStopAndSend));
         _send.NotifyCanExecuteChanged();
         _stopAndSend.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();

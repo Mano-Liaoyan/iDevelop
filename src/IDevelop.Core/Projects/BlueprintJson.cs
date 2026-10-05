@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json.Serialization;
 using IDevelop.Execution;
 using IDevelop.Workflows;
 
@@ -37,17 +38,6 @@ internal static class BlueprintJson
         var kind = Enum.GetValues<WorkKind>().Where(kind => KindName(kind) == dto.Work.Kind).Select(kind => (WorkKind?)kind).FirstOrDefault()
             ?? throw new ProjectException($"{entry} has unknown work \"{dto.Work.Kind}\".");
 
-        PromptTemplate template;
-        try
-        {
-            template = PromptTemplate.Parse(Text(dto.Work.Template, entry, "template"));
-        }
-        catch (FormatException e)
-        {
-            throw new ProjectException($"{entry} has a template iDevelop cannot read. {e.Message}", e);
-        }
-
-        var access = ParseAccess(dto.Work.Access) ?? throw new ProjectException($"{entry} has unknown access \"{dto.Work.Access}\".");
         var fields = ImmutableArray.CreateBuilder<FieldSpec>();
         foreach (var (index, field) in dto.Fields.Index())
         {
@@ -73,10 +63,7 @@ internal static class BlueprintJson
             : BlueprintKey.Parse(dto.DerivedFrom) ?? throw new ProjectException($"{entry} is derived from \"{dto.DerivedFrom}\", which is not a blueprint id and version.");
         try
         {
-            WorkSpec work = kind switch
-            {
-                WorkKind.Agent => new WorkSpec.Agent(access, dto.Work.Proposes, template),
-            };
+            var work = Work(kind, dto.Work, entry);
             return new Blueprint(key, dto.Name, work, fields.ToImmutable(), defaults)
             {
                 Description = Text(dto.Description, entry, "description"),
@@ -129,11 +116,71 @@ internal static class BlueprintJson
             Proposes = ((WorkSpec.Agent)work).Proposes,
             Template = Lines(((WorkSpec.Agent)work).Template.Text),
         },
+        WorkKind.Review => new WorkDto
+        {
+            Kind = KindName(WorkKind.Review),
+            Reviewer = Lines(((WorkSpec.Review)work).Reviewer.Text),
+            Fix = Lines(((WorkSpec.Review)work).Fix.Text),
+        },
+        WorkKind.Person => new WorkDto { Kind = KindName(WorkKind.Person) },
     };
+
+    /// <summary>Each work reads only its own properties, and a property of another work is an error.</summary>
+    /// <exception cref="ProjectException">The work's properties do not fit its kind.</exception>
+    private static WorkSpec Work(WorkKind kind, WorkDto dto, string entry)
+    {
+        string[] present =
+        [
+            .. dto.Access is null ? [] : new[] { "access" },
+            .. dto.Proposes is null ? [] : new[] { "proposes" },
+            .. dto.Template is null ? [] : new[] { "template" },
+            .. dto.Reviewer is null ? [] : new[] { "reviewer" },
+            .. dto.Fix is null ? [] : new[] { "fix" },
+        ];
+        string[] takes = kind switch
+        {
+            WorkKind.Agent => ["access", "proposes", "template"],
+            WorkKind.Review => ["reviewer", "fix"],
+            WorkKind.Person => [],
+        };
+        if (takes.FirstOrDefault(name => !present.Contains(name)) is { } missing)
+        {
+            throw new ProjectException($"{entry}'s {KindName(kind)} work has no {missing}.");
+        }
+
+        if (present.FirstOrDefault(name => !takes.Contains(name)) is { } extra)
+        {
+            throw new ProjectException($"{entry}'s {KindName(kind)} work has a {extra}, which only another work takes.");
+        }
+
+        return kind switch
+        {
+            WorkKind.Agent => new WorkSpec.Agent(
+                ParseAccess(dto.Access!) ?? throw new ProjectException($"{entry} has unknown access \"{dto.Access}\"."),
+                dto.Proposes!.Value,
+                Template(dto.Template!, entry, "template")),
+            WorkKind.Review => new WorkSpec.Review(Template(dto.Reviewer!, entry, "reviewer template"), Template(dto.Fix!, entry, "fix template")),
+            WorkKind.Person => new WorkSpec.Person(),
+        };
+    }
+
+    private static PromptTemplate Template(string?[] lines, string entry, string property)
+    {
+        try
+        {
+            return PromptTemplate.Parse(Text(lines, entry, property));
+        }
+        catch (FormatException e)
+        {
+            throw new ProjectException($"{entry} has a {property} iDevelop cannot read. {e.Message}", e);
+        }
+    }
 
     private static string KindName(WorkKind kind) => kind switch
     {
         WorkKind.Agent => "agent",
+        WorkKind.Review => "review",
+        WorkKind.Person => "person",
     };
 
     private static string AccessName(AgentAccess access) => access switch
@@ -160,12 +207,15 @@ internal class BlueprintDto
     public required SettingsDto Defaults { get; init; }
 }
 
+// Each work writes only its own properties.
 internal sealed class WorkDto
 {
     public required string Kind { get; init; }
-    public required string Access { get; init; }
-    public required bool Proposes { get; init; }
-    public required string?[] Template { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Access { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Proposes { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string?[]? Template { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string?[]? Reviewer { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string?[]? Fix { get; init; }
 }
 
 internal sealed class FieldDto

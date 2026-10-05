@@ -22,8 +22,13 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
     private readonly Dictionary<TaskId, ActiveRun> _active = [];
+    private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;
+    private Workflow? _workflow;
+
+    /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
+    private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
 
     private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings)
     {
@@ -96,8 +101,26 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            return Verdict(task) is StartVerdict.Blocked blocked ? blocked.Problem : null;
+            return Verdict(task, null, task.Blueprint.Work is WorkSpec.Review ? Subject(task.Id, _workflow, Latest, readChanges: false) : null) is StartVerdict.Blocked blocked
+                ? blocked.Problem
+                : null;
         }
+    }
+
+    /// <summary>
+    /// The workflow whose reviews this project's runs drive. A review's loop goes on from each change of an attempt and
+    /// from each call of this, which also retries a step that could not start, such as a fix round whose client was still
+    /// being checked. A review that rests between its turns when the project opens goes on once this is first called.
+    /// </summary>
+    public void Follow(Workflow workflow)
+    {
+        lock (_gate)
+        {
+            _workflow = workflow;
+        }
+
+        // A step can run Git and start a client, so the window's thread does not wait for it.
+        ThreadPool.QueueUserWorkItem(_ => Advance());
     }
 
     /// <summary>
@@ -112,10 +135,30 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         StartResult result;
         ActiveRun? run = null;
+        SubjectView? subject = null;
+        if (task.Blueprint.Work is WorkSpec.Review)
+        {
+            // Git reads the subject's change outside the gate. Under it, the subject's attempt must still be the one read.
+            (Workflow? Workflow, ImmutableDictionary<TaskId, AttemptRecord> Latest) now;
+            lock (_gate)
+            {
+                now = (_workflow, Latest);
+            }
+
+            subject = Subject(task.Id, now.Workflow, now.Latest, readChanges: true);
+        }
+
+        // Git runs outside the gate, so a slow work tree holds up no other run.
+        var tree = GitTree.Snapshot(_projectFolder);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
-            var verdict = Verdict(task, planning);
+            if (subject is not null && Latest.GetValueOrDefault(subject.Node.Id)?.Id != subject.Latest?.Id)
+            {
+                return new StartResult.Refused(new StartProblem.SubjectNotDone(subject.Node.Title));
+            }
+
+            var verdict = Verdict(task, planning, subject);
             if (verdict is StartVerdict.Blocked blocked)
             {
                 return new StartResult.Refused(blocked.Problem);
@@ -132,9 +175,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 case LockTake.Taken taken when Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting:
                     taken.Lock.Dispose();
                     return new StartResult.Refused(new StartProblem.Waiting(waiting.TaskTitle));
+                case LockTake.Taken taken when Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.InReview } reviewing:
+                    taken.Lock.Dispose();
+                    return new StartResult.Refused(new StartProblem.InReview(reviewing.TaskTitle));
                 case LockTake.Taken taken:
                     var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles(Guid.CreateVersion7()) : null;
-                    (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null, handles);
+                    (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, taken.Lock, continues: null, tree, handles, subject: subject?.Node.Id);
                     if (result is StartResult.Refused)
                     {
                         return result;
@@ -164,6 +210,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return new SendResult.Refused(new SendProblem.EmptyMessage());
         }
 
+        switch ((NodeWorks.For(task.Blueprint.Work) as IConverses)?.Receive(text))
+        {
+            case null:
+                return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.NoConversation()));
+            case MessageUse.Guidance guidance:
+                return Guide(task, guidance.Text);
+            case MessageUse.Turn turn:
+                text = turn.Prompt;
+                break;
+        }
+
         ActiveRun? active;
         lock (_gate)
         {
@@ -178,6 +235,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         SendResult result;
         ActiveRun? run = null;
+        var tree = GitTree.Snapshot(_projectFolder);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
@@ -195,8 +253,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     break;
                 case LockTake.Taken taken:
                     (result, run) = Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
-                        ? Answer(task, text, waiting, taken.Lock)
-                        : Continue(task, text, taken.Lock);
+                        ? Answer(task, text, waiting, taken.Lock, tree)
+                        : Continue(task, text, taken.Lock, tree);
                     break;
                 default:
                     throw new UnreachableException();
@@ -215,6 +273,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
+            switch (task.Blueprint.Work)
+            {
+                case WorkSpec.Person:
+                    return new SendProblem.CannotStart(new StartProblem.NoConversation());
+                case WorkSpec.Review when _active.TryGetValue(task.Id, out var reviewing):
+                    return reviewing.GuideProblem();
+                case WorkSpec.Review:
+                    return Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.InReview } ? null : new SendProblem.NotReviewing(task.Title);
+            }
+
             if (_active.TryGetValue(task.Id, out var run))
             {
                 return run.SendProblem();
@@ -224,6 +292,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             if (last is { Status: AttemptStatus.Running })
             {
                 return new SendProblem.CannotStart(new StartProblem.AlreadyRunning(last.Task, last.TaskTitle));
+            }
+
+            if (last is not { Status: AttemptStatus.WaitingForInput } && ReviewOf(task.Id) is { } review)
+            {
+                return new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle));
             }
 
             if (!TryContinue(task, last, out var from, out var problem))
@@ -307,27 +380,53 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active.TryGetValue(task, out run);
         }
 
-        if (run is null)
+        if (run is not null)
         {
-            return SettleWaiting(task, new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+            run.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+            return null;
         }
 
-        run.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
-        return null;
+        AttemptRecord? before;
+        lock (_gate)
+        {
+            before = Latest.GetValueOrDefault(task);
+        }
+
+        var problem = Settle(task, record => record.Status is AttemptStatus.WaitingForInput or AttemptStatus.InReview, new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+        // Cancelling a review between its turns also cancels the fix round its subject runs or waits in.
+        if (problem is null && before is { Status: AttemptStatus.InReview, Subject: { } subject } && Latest.GetValueOrDefault(subject) is { Fix: { } link } fix
+            && link.Attempt == before.Id && fix.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput)
+        {
+            return Cancel(subject);
+        }
+
+        return problem;
     }
 
     /// <summary>Records a task that waits for the person as succeeded, with its last reply as its result. Null when it is
     /// done, else why not.</summary>
-    public StartProblem? MarkDone(TaskId task) => SettleWaiting(task, new AttemptEvent.MarkedDone(DateTimeOffset.UtcNow));
+    public StartProblem? MarkDone(TaskId task) =>
+        Settle(task, record => record.Status == AttemptStatus.WaitingForInput, new AttemptEvent.MarkedDone(DateTimeOffset.UtcNow));
 
-    /// <summary>Appends <paramref name="e"/> to the task's waiting attempt under its lock. Does nothing unless it waits, or
-    /// once the project is leaving.</summary>
-    private StartProblem? SettleWaiting(TaskId task, AttemptEvent e)
+    /// <summary>
+    /// Appends <paramref name="e"/> to the task's latest attempt under its lock, when <paramref name="fits"/> it before and
+    /// after the lock is taken. Does nothing otherwise, while this window runs the task, or once the project is leaving.
+    /// Then a review may go on.
+    /// </summary>
+    private StartProblem? Settle(TaskId task, Func<AttemptRecord, bool> fits, AttemptEvent e)
     {
+        var problem = Append(task, fits, e, out _);
+        Advance();
+        return problem;
+    }
+
+    private StartProblem? Append(TaskId task, Func<AttemptRecord, bool> fits, AttemptEvent e, out bool appended)
+    {
+        appended = false;
         StartProblem? problem = null;
         lock (_gate)
         {
-            if (_leaving is not null || _active.ContainsKey(task) || Latest.GetValueOrDefault(task) is not { Status: AttemptStatus.WaitingForInput })
+            if (_leaving is not null || _active.ContainsKey(task) || Latest.GetValueOrDefault(task) is not { } current || !fits(current))
             {
                 return null;
             }
@@ -342,13 +441,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 case LockTake.Taken taken:
                     using (taken.Lock)
                     {
-                        if (Latest.GetValueOrDefault(task) is { Status: AttemptStatus.WaitingForInput } waiting)
+                        if (Latest.GetValueOrDefault(task) is { } waiting && fits(waiting))
                         {
                             try
                             {
                                 using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, waiting.Id));
                                 log.Append(e);
                                 Latest = Latest.SetItem(task, AttemptReducer.Apply(waiting, e));
+                                appended = true;
                             }
                             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                             {
@@ -513,8 +613,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Starts a new attempt whose first turn resumes the task's latest session with the message. Called under the gate
     /// with the task's lock, which it releases on a refusal.
     /// </summary>
-    private (SendResult Result, ActiveRun? Run) Continue(TaskDefinition task, string message, RunLock held)
+    private (SendResult Result, ActiveRun? Run) Continue(TaskDefinition task, string message, RunLock held, string? tree)
     {
+        if (ReviewOf(task.Id) is { } review)
+        {
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle))), null);
+        }
+
         var last = Latest.GetValueOrDefault(task.Id);
         if (!TryContinue(task, last, out var from, out var problem))
         {
@@ -530,7 +636,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         // The session read the handles the continued attempt recorded, so its proposals name them.
-        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, from, last?.Planning);
+        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, from, tree, last?.Planning);
         return result switch
         {
             StartResult.Started started => (new SendResult.Continued(started.Attempt), run),
@@ -543,7 +649,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Starts the next turn of the task's waiting attempt with the message, under the same log and with the model and
     /// reasoning the attempt started with. Called under the gate with the task's lock, which it releases unless the turn runs.
     /// </summary>
-    private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, RunLock held)
+    /// <param name="tree">The project's files before the turn, read outside the gate.</param>
+    private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, RunLock held, string? tree, FixReport? report = null)
     {
         if (!TryContinue(task, waiting, out var from, out var problem))
         {
@@ -576,6 +683,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             var turn = new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Conversation = task.Conversation,
+                Tree = tree,
+                Report = report,
             };
             log.Append(turn);
             record = AttemptReducer.Apply(waiting, turn);
@@ -659,7 +768,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// released. Called under the gate with the task's lock.
     /// </summary>
     private (StartResult Result, ActiveRun? Run) RecordAndLaunch(
-        TaskDefinition task, LaunchPlan plan, RunLock held, Continuation? continues, PlanningHandles? planning)
+        TaskDefinition task, LaunchPlan plan, RunLock held, Continuation? continues, string? tree, PlanningHandles? planning = null,
+        TaskId? subject = null, ReviewLink? fix = null)
     {
         AttemptLog log;
         AttemptEvent.Requested requested;
@@ -672,6 +782,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Continues = continues,
                 Conversation = task.Conversation,
                 Planning = planning,
+                Tree = tree,
+                ReadOnly = plan.Request.ReadOnly,
+                Subject = subject,
+                Fix = fix,
             };
             log = AttemptLog.Create(_attempts, requested);
         }
@@ -699,15 +813,69 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return (new StartResult.Started(record), run);
     }
 
-    /// <summary>Whether this window runs the task, then whether it waits for the person, then what <see cref="StartCheck"/>
-    /// says. Called under the gate.</summary>
-    private StartVerdict Verdict(TaskDefinition task, PlanningContext? planning = null) =>
+    /// <summary>Whether this window runs the task, then whether it waits for the person or reviews, then whether a review
+    /// has a finished subject, then what <see cref="StartCheck"/> says. Called under the gate.</summary>
+    private StartVerdict Verdict(TaskDefinition task, PlanningContext? planning = null, SubjectView? subject = null) =>
         (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
         {
             (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
             (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
-            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning),
+            (_, { Status: AttemptStatus.InReview } reviewing) =>
+                new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
+            _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
+            _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(subject) is { } problem => new StartVerdict.Blocked(problem),
+            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject),
         };
+
+    /// <summary>
+    /// The review attempt that goes on with this task as its subject, or null. Its fix rounds are the task's only new
+    /// attempts until it ends, so no other attempt takes the place of a round. Called under the gate.
+    /// </summary>
+    private AttemptRecord? ReviewOf(TaskId task) =>
+        Latest.Values.FirstOrDefault(record => record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview);
+
+    /// <summary>Why a review cannot start on its subject as it stands, or null.</summary>
+    private static StartProblem? ReviewProblem(SubjectView? subject) => subject switch
+    {
+        null => new StartProblem.NoSubject(),
+        { Latest.Status: not AttemptStatus.Succeeded } or { Latest: null } => new StartProblem.SubjectNotDone(subject.Node.Title),
+        { Change: null } => new StartProblem.NoChange(subject.Node.Title),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The subject of <paramref name="review"/> as the review reads it, or null when it has none. With
+    /// <paramref name="readChanges"/>, Git reads its changes. Without, <see cref="SubjectView.Change"/> is only empty
+    /// rather than null when the latest attempt recorded its trees, which is enough to check a start before any click.
+    /// </summary>
+    private SubjectView? Subject(TaskId review, Workflow? workflow, ImmutableDictionary<TaskId, AttemptRecord> latest, bool readChanges, TaskId? recorded = null)
+    {
+        if ((recorded ?? workflow?.SubjectOf(review)) is not { } id || workflow?.Tasks.GetValueOrDefault(id) is not { } node)
+        {
+            return null;
+        }
+
+        var last = latest.GetValueOrDefault(id);
+        var canResume = last is { SessionId: not null } && (node.Execution is null || node.Execution.Client == last.Requested.Client);
+        var view = new SubjectView(node, last) { CanResume = canResume };
+        if (last is not { Status: AttemptStatus.Succeeded, StartTree: { } start, EndTree: { } end })
+        {
+            return view;
+        }
+
+        if (!readChanges)
+        {
+            return view with { Change = "", LatestChange = "" };
+        }
+
+        // The whole change starts where the conversation that the latest attempt continues started.
+        var first = EarlierAttempts(last).FirstOrDefault() ?? last;
+        return view with
+        {
+            Change = first.StartTree is { } origin ? GitTree.Diff(_projectFolder, origin, end) : null,
+            LatestChange = GitTree.Diff(_projectFolder, start, end),
+        };
+    }
 
     /// <summary>
     /// Starts a turn's client and records its process. A client that does not start fails the attempt, and so does a log
@@ -788,6 +956,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
+        Advance();
     }
 
     private abstract record LockTake

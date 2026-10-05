@@ -20,6 +20,8 @@ public static class RejectionText
         EditRejection.TaskAlreadyExists => "A task with that id already exists.",
         EditRejection.UnknownField field => $"\"{title(field.Task)}\" has no field {field.Key}.",
         EditRejection.BlueprintConflict conflict => $"This workflow already holds a different {conflict.Key}.",
+        EditRejection.SecondSubject second =>
+            $"\"{title(second.Review)}\" already reviews \"{title(second.Subject)}\". A review takes one task that edits the project.",
         _ => throw new UnreachableException(),
     };
 }

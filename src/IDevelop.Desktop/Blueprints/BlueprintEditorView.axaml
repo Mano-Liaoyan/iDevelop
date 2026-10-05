@@ -33,6 +33,7 @@
              AutomationProperties.AutomationId="BlueprintDescription"
              AutomationProperties.Name="Description" />
     <CheckBox Content="Read-only: the agent may not edit the project" IsChecked="{Binding ReadOnly}" Margin="0,4,0,0"
+              IsVisible="{Binding IsAgent}"
               AutomationProperties.AutomationId="BlueprintReadOnly" />
 
     <TextBlock Classes="section" Text="FIELDS" Margin="0,16,0,2" />
@@ -83,29 +84,41 @@
       </StackPanel>
     </Button>
 
-    <TextBlock Classes="section" Text="TEMPLATE" Margin="0,16,0,2" />
-    <TextBox Classes="multiline" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
-             AutomationProperties.AutomationId="BlueprintTemplate"
-             AutomationProperties.Name="Template" />
-    <TextBlock Classes="caption" Text="{Binding TemplateHelp}" TextWrapping="Wrap" />
-
-    <TextBlock Classes="section" Text="DEFAULTS" Margin="0,16,0,2" />
-    <TextBlock Classes="caption" Text="Client" />
-    <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding Client}"
-              AutomationProperties.AutomationId="BlueprintClient"
-              AutomationProperties.Name="Client" />
-    <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
-      <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
-      <TextBox Text="{Binding Model}" Watermark="The client's default"
-               AutomationProperties.AutomationId="BlueprintModel" AutomationProperties.Name="Model" />
-      <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
-      <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
-               AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
+    <StackPanel Spacing="6" IsVisible="{Binding HasTemplate}">
+      <TextBlock Classes="section" Text="{Binding TemplateHeading}" Margin="0,16,0,2" />
+      <TextBox Classes="multiline" Text="{Binding Template}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="120"
+               AutomationProperties.AutomationId="BlueprintTemplate"
+               AutomationProperties.Name="Template" />
+      <StackPanel Spacing="6" IsVisible="{Binding IsReview}">
+        <TextBlock Classes="section" Text="FIX TEMPLATE" Margin="0,16,0,2" />
+        <TextBox Classes="multiline" Text="{Binding FixTemplate}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="80"
+                 AutomationProperties.AutomationId="BlueprintFixTemplate"
+                 AutomationProperties.Name="Fix template" />
+      </StackPanel>
+      <TextBlock Classes="caption" Text="{Binding TemplateHelp}" TextWrapping="Wrap" />
     </StackPanel>
-    <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
-    <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
-              AutomationProperties.AutomationId="BlueprintConversation"
-              AutomationProperties.Name="Conversation" />
+
+    <StackPanel Spacing="6" IsVisible="{Binding HasTemplate}">
+      <TextBlock Classes="section" Text="DEFAULTS" Margin="0,16,0,2" />
+      <TextBlock Classes="caption" Text="Client" />
+      <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding Client}"
+                AutomationProperties.AutomationId="BlueprintClient"
+                AutomationProperties.Name="Client" />
+      <StackPanel Spacing="6" IsVisible="{Binding HasClient}">
+        <TextBlock Classes="caption" Text="Model" Margin="0,8,0,0" />
+        <TextBox Text="{Binding Model}" Watermark="The client's default"
+                 AutomationProperties.AutomationId="BlueprintModel" AutomationProperties.Name="Model" />
+        <TextBlock Classes="caption" Text="Reasoning" Margin="0,8,0,0" />
+        <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
+                 AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
+      </StackPanel>
+    </StackPanel>
+    <StackPanel Spacing="6" IsVisible="{Binding IsAgent}">
+      <TextBlock Classes="caption" Text="Conversation" Margin="0,8,0,0" />
+      <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
+                AutomationProperties.AutomationId="BlueprintConversation"
+                AutomationProperties.Name="Conversation" />
+    </StackPanel>
 
     <TextBlock Classes="caption" Text="{Binding Problem}" TextWrapping="Wrap" Margin="0,12,0,0"
                Foreground="{DynamicResource StateFailedBrush}"

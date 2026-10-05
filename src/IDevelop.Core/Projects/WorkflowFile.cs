@@ -254,6 +254,7 @@ internal static class WorkflowFile
         EditRejection.DuplicateConnection => "repeats an earlier connection between the same tasks",
         EditRejection.OrderingCycle cycle =>
             $"would close a cycle: {string.Join(" -> ", cycle.Path.Select(id => workflow.Tasks[id].Title))}",
+        EditRejection.SecondSubject second => $"gives review {second.Review} a second task to review beside {second.Subject}",
         _ => reason.ToString(),
     };
 

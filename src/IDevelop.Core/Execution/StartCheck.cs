@@ -24,6 +24,27 @@ public abstract record StartProblem
     /// <summary>The node's agent may only read, and the client has no mode that keeps it from writing.</summary>
     public sealed record NoReadOnlyMode(ClientId Client) : StartProblem;
 
+    /// <summary>The node has no agent. A workflow run reaches it and waits for the person.</summary>
+    public sealed record RunsInWorkflow : StartProblem;
+
+    /// <summary>The review depends on no node that edits the project.</summary>
+    public sealed record NoSubject : StartProblem;
+
+    /// <summary>The review's subject has not succeeded yet.</summary>
+    public sealed record SubjectNotDone(string Title) : StartProblem;
+
+    /// <summary>iDevelop has no record of the subject's change: the project is not in Git, or the subject ran before iDevelop recorded changes.</summary>
+    public sealed record NoChange(string Title) : StartProblem;
+
+    /// <summary>The review goes back and forth with its subject until both agents agree, or the person cancels it.</summary>
+    public sealed record InReview(string Title) : StartProblem;
+
+    /// <summary>A review that goes on reviews this task, so only the review starts its next attempt.</summary>
+    public sealed record UnderReview(string Review) : StartProblem;
+
+    /// <summary>The review cannot go on, because its subject cannot start its fix round.</summary>
+    public sealed record SubjectBlocked(string Title, StartProblem Problem) : StartProblem;
+
     public sealed record NoModel(ClientId Client) : StartProblem;
 
     public sealed record ClientChecking(ClientId Client) : StartProblem;
@@ -73,8 +94,11 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
     public LaunchPlan Resuming(string session, string message) => this with { Request = Request with { Prompt = message, ResumeSession = session } };
 }
 
-/// <summary>A first turn that resumes an earlier attempt's session with the person's message instead of the task's prompt.</summary>
-internal sealed record Resumption(string Session, string Message);
+/// <summary>
+/// A first turn whose prompt is given instead of rendered from the node: the person's message, a review's next message,
+/// or a fix round. It resumes <paramref name="Session"/> when set.
+/// </summary>
+internal sealed record Resumption(string? Session, string Message);
 
 internal abstract record StartVerdict
 {
@@ -90,16 +114,24 @@ internal static class StartCheck
 {
     /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no field filled in.</param>
     /// <param name="planning">What a node whose agent proposes may fill and place, which its first prompt lists.</param>
+    /// <param name="subject">A review's subject, which its first prompt reads.</param>
     public static StartVerdict Evaluate(
-        TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null, PlanningContext? planning = null)
+        TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null,
+        PlanningContext? planning = null, SubjectView? subject = null)
     {
+        if (task.Blueprint.Work is WorkSpec.Person)
+        {
+            return Block(new StartProblem.RunsInWorkflow());
+        }
+
         if (task.Execution is not { } settings)
         {
             return Block(new StartProblem.NoAgent());
         }
 
         var client = settings.Client;
-        var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly };
+        // A reviewer only reads.
+        var readOnly = task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
         if (readOnly && !Clients.Get(client).HasReadOnlyMode)
         {
             return Block(new StartProblem.NoReadOnlyMode(client));
@@ -150,12 +182,12 @@ internal static class StartCheck
         string prompt;
         if (resume is not null)
         {
-            if (work is not IConverses converses)
+            if (work is not IConverses)
             {
                 return Block(new StartProblem.NoConversation());
             }
 
-            prompt = converses.Reply(resume.Message);
+            prompt = resume.Message;
         }
         else if (task.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(task.Field(field.Key))) is { } missing)
         {
@@ -163,9 +195,16 @@ internal static class StartCheck
         }
         else
         {
-            prompt = work.Next(new NodeContext(task, "") { Planning = planning }, null) is NodeStep.RunTurn turn
-                ? turn.Prompt
-                : throw new UnreachableException("A fresh start always runs a turn.");
+            switch (work.Next(new NodeContext(task, "") { Planning = planning, Subject = subject }, null))
+            {
+                case NodeStep.RunTurn turn:
+                    prompt = turn.Prompt;
+                    break;
+                case NodeStep.Fail:
+                    return Block(new StartProblem.NoSubject());
+                default:
+                    throw new UnreachableException("A fresh start runs a turn or fails.");
+            }
         }
 
         var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly };
