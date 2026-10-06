@@ -219,7 +219,7 @@ public sealed class BlueprintLibraryTests : IDisposable
 
             """.ReplaceLineEndings("\n"),
             File.ReadAllText(Path.Combine(project, ".idp", "blueprints", "bug-fix-0a1b2c3d.json")));
-        Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(project, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(project, ".idp", ".gitignore")));
     }
 
     [Fact]
