@@ -3,8 +3,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Blueprints;
+using IDevelop.Desktop.Inspector;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -20,7 +22,7 @@ public sealed class BlueprintTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaFact]
-    public void A_built_in_offers_place_and_derive_and_no_edit()
+    public void A_built_in_offers_Place_and_a_More_menu_with_Derive_and_no_Edit()
     {
         var shell = Shell.Open(_temp.Create("plan"));
 
@@ -28,8 +30,7 @@ public sealed class BlueprintTests : IDisposable
         Assert.All(new[] { "Implement", "Plan", "Architect", "Review", "Approval" }, name =>
         {
             Assert.True(Button(shell, name, "PlaceBlueprint").IsEffectivelyVisible);
-            Assert.True(Button(shell, name, "DeriveBlueprint").IsEffectivelyVisible);
-            Assert.False(Button(shell, name, "EditBlueprint").IsEffectivelyVisible);
+            Assert.Equal(["Derive Blueprint…"], MenuEntries(shell, name));
         });
         Assert.Empty(EntryNames(shell, "PROJECT"));
     }
@@ -130,6 +131,8 @@ public sealed class BlueprintTests : IDisposable
 
         Press(shell, "Implement copy", "PlaceBlueprint");
         Assert.Equal("Bug", shell.Find<TextBox>("TaskBug").GetValue(AutomationProperties.NameProperty));
+        var icons = new[] { "TaskInstructions", "TaskBug" }.Select(id => shell.Find<TextBox>(id).FindAncestorOfType<InspectorRow>()!.Icon);
+        Assert.Equal([Resource("IconEdit"), Resource("IconField")], icons);
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.Open(project).Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
     }
@@ -169,11 +172,11 @@ public sealed class BlueprintTests : IDisposable
             shell.Render();
 
             var glyphs = host.GetVisualDescendants().OfType<Button>()
-                .Where(button => AutomationProperties.GetAutomationId(button) is "PlaceBlueprint" or "DeriveBlueprint" or "RemoveField")
+                .Where(button => AutomationProperties.GetAutomationId(button) is "PlaceBlueprint" or "BlueprintMore" or "RemoveField")
                 .ToLookup(button => AutomationProperties.GetAutomationId(button)!);
             Assert.Equal(
                 (true, true, 2),
-                (glyphs["PlaceBlueprint"].Any(), glyphs["DeriveBlueprint"].Any(), glyphs["RemoveField"].Count()));
+                (glyphs["PlaceBlueprint"].Any(), glyphs["BlueprintMore"].Any(), glyphs["RemoveField"].Count()));
             Assert.Equal([new Size(24, 24)], glyphs.SelectMany(group => group).Select(button => button.Bounds.Size).Distinct().ToArray());
         }
         finally
@@ -200,13 +203,46 @@ public sealed class BlueprintTests : IDisposable
             Containers(shell.Find<StackPanel>("Palette")).Single(container => container.DataContext is BlueprintEntryViewModel entry && entry.Name == name),
             automationId);
 
+    /// <summary>Clicks Place, or chooses Derive or Edit from the entry's More menu. A headless popup takes no clicks, so the entry raises its own.</summary>
     private static void Press(Shell shell, string name, string automationId)
     {
-        var button = Button(shell, name, automationId);
-        button.BringIntoView();
+        if (automationId == "PlaceBlueprint")
+        {
+            var button = Button(shell, name, automationId);
+            button.BringIntoView();
+            shell.Render();
+            shell.Click(button);
+            return;
+        }
+
+        var more = OpenMore(shell, name);
+        var item = ById<MenuItem>(shell.Window, automationId);
+        Assert.True(item.IsVisible, $"{automationId} is not in {name}'s More menu.");
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        more.Flyout!.Hide();
         shell.Render();
-        shell.Click(button);
     }
+
+    /// <summary>The headers of the entries that the blueprint's More menu shows.</summary>
+    private static string[] MenuEntries(Shell shell, string name)
+    {
+        var more = OpenMore(shell, name);
+        string[] entries = [.. shell.Window.GetVisualDescendants().OfType<MenuItem>().Where(item => item.IsVisible).Select(item => (string)item.Header!)];
+        more.Flyout!.Hide();
+        shell.Render();
+        return entries;
+    }
+
+    private static Button OpenMore(Shell shell, string name)
+    {
+        var more = Button(shell, name, "BlueprintMore");
+        more.BringIntoView();
+        shell.Render();
+        shell.Click(more);
+        return more;
+    }
+
+    private static object? Resource(string key) => Application.Current!.TryGetResource(key, null, out var resource) ? resource : null;
 
     private static Control[] Rows(Shell shell) => Containers(shell.Find<ItemsControl>("BlueprintFields"));
 

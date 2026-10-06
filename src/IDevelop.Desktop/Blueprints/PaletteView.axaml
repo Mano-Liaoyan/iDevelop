@@ -1,5 +1,5 @@
-<!-- The Library section of the workflow inspector: one line per blueprint with its kind tile, and Place, Derive, and Edit
-     as glyph buttons. The Add popover is where people add nodes; this is where they manage blueprints. -->
+<!-- The Library section of the workflow inspector: one line per blueprint with its kind tile, Place as a glyph button,
+     and Derive and Edit in its More menu. The Add popover is where people add nodes; this is where they manage blueprints. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
@@ -24,36 +24,50 @@
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="blueprints:BlueprintEntryViewModel">
-                  <inspector:InspectorRow Layout="Full" Label="{Binding Name}">
-                    <!-- Edit keeps its column while hidden, so every row's buttons line up. -->
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,24" ColumnSpacing="2">
-                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" Margin="0,0,6,0" />
-                      <TextBlock Grid.Column="1" Classes="entryName" Text="{Binding Name}" Background="Transparent">
-                        <ToolTip.Tip>
-                          <StackPanel Spacing="2" MaxWidth="280">
-                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Version}" />
-                            <TextBlock Text="{Binding Description}" TextWrapping="Wrap"
-                                       IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                          </StackPanel>
-                        </ToolTip.Tip>
-                      </TextBlock>
-                      <Button Grid.Column="2" Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
-                              AutomationProperties.AutomationId="PlaceBlueprint"
-                              AutomationProperties.Name="{Binding PlaceName}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" Width="14" Height="14" />
-                      </Button>
-                      <Button Grid.Column="3" Classes="glyph" Command="{Binding DeriveCommand}" ToolTip.Tip="Derive a blueprint"
-                              AutomationProperties.AutomationId="DeriveBlueprint"
-                              AutomationProperties.Name="{Binding DeriveName}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" Width="14" Height="14" />
-                      </Button>
-                      <Button Grid.Column="4" Classes="glyph" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" ToolTip.Tip="Edit"
-                              AutomationProperties.AutomationId="EditBlueprint"
-                              AutomationProperties.Name="{Binding EditName}">
-                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" Width="14" Height="14" />
-                      </Button>
-                    </Grid>
+                  <inspector:InspectorRow Layout="Title" Classes="entry" Label="{Binding Name}">
+                    <ToolTip.Tip>
+                      <StackPanel Spacing="2" MaxWidth="280">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Version}" />
+                        <TextBlock Text="{Binding Description}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      </StackPanel>
+                    </ToolTip.Tip>
+                    <inspector:InspectorRow.Lead>
+                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="16" />
+                    </inspector:InspectorRow.Lead>
+                    <inspector:InspectorRow.Actions>
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
+                                AutomationProperties.AutomationId="PlaceBlueprint"
+                                AutomationProperties.Name="{Binding PlaceName}">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" Width="14" Height="14" />
+                        </Button>
+                        <Button Classes="glyph" ToolTip.Tip="More"
+                                AutomationProperties.AutomationId="BlueprintMore"
+                                AutomationProperties.Name="{Binding MoreName}">
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" Width="14" Height="14" />
+                          <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                              <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}"
+                                        AutomationProperties.AutomationId="DeriveBlueprint"
+                                        AutomationProperties.Name="{Binding DeriveName}">
+                                <MenuItem.Icon>
+                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDerive}" />
+                                </MenuItem.Icon>
+                              </MenuItem>
+                              <MenuItem Header="Edit Blueprint…" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}"
+                                        AutomationProperties.AutomationId="EditBlueprint"
+                                        AutomationProperties.Name="{Binding EditName}">
+                                <MenuItem.Icon>
+                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" />
+                                </MenuItem.Icon>
+                              </MenuItem>
+                            </MenuFlyout>
+                          </Button.Flyout>
+                        </Button>
+                      </StackPanel>
+                    </inspector:InspectorRow.Actions>
                   </inspector:InspectorRow>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
