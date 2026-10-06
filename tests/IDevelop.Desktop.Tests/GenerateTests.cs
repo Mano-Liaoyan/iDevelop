@@ -45,7 +45,18 @@ public sealed class GenerateTests : IDisposable
 
     public GenerateTests() => _fakes = new FakeClients(_temp.Create("bin"));
 
-    public void Dispose() => _temp.Dispose();
+    private readonly List<Shell> _shells = [];
+
+    // A test may end while its planner's turn still writes the attempt log, which Windows will not delete.
+    public void Dispose()
+    {
+        foreach (var shell in _shells)
+        {
+            SpinWait.SpinUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, TimeSpan.FromSeconds(30));
+        }
+
+        _temp.Dispose();
+    }
 
     [AvaloniaFact]
     public void An_empty_workflow_offers_to_start_from_a_description_until_it_has_a_task()
@@ -433,7 +444,9 @@ public sealed class GenerateTests : IDisposable
     private Shell OpenEmpty(params FakeRule[] runs)
     {
         Install(_fakes, ClientId.Codex, runs);
-        return Shell.Open(_temp.Create("seed"), _fakes.DiscoverAsync().Result);
+        var shell = Shell.Open(_temp.Create("seed"), _fakes.DiscoverAsync().Result);
+        _shells.Add(shell);
+        return shell;
     }
 
     /// <summary>Generates from an empty project and waits for the planner's proposal.</summary>
