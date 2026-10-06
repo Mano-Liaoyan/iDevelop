@@ -30,7 +30,11 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime protoDesktop && Environment.GetEnvironmentVariable("IDEVELOP_D0_PROTO") is { Length: > 0 } protoDir)
+        {
+            protoDesktop.MainWindow = new D0.ProtoWindow(protoDir);
+        }
+        else if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var clients = new ClientDirectory(CommandResolver.FromEnvironment());
             _ = clients.RefreshAsync();

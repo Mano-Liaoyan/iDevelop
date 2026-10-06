@@ -29,6 +29,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
+        D0Probe.Attach(this);
     }
 
     public MainWindowViewModel ViewModel { get; }
