@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -97,6 +98,13 @@ public sealed class WireRoutingTests : IDisposable
         Assert.True(canvas.Nodes.Single(node => node.Title == "Build").Location.Y > 330, "Build moved below the wire");
 
         Assert.Equal((Design, Review), Clicked(new Point(550, 215)) is { } step ? (step.Key.From, step.Key.To) : default);
+
+        shell.Press(Key.Z, RawInputModifiers.Control);
+        Assert.Equal(new Point(420, 90), canvas.Nodes.Single(node => node.Title == "Build").Location);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        Assert.Null(Clicked(new Point(550, 215)));
+        Assert.Equal((Design, Review), Clicked(new Point(396, 215)) is { } aroundAgain ? (aroundAgain.Key.From, aroundAgain.Key.To) : default);
     }
 
     private static Rect Card(double x, double y) => new(x, y, 260, 64);

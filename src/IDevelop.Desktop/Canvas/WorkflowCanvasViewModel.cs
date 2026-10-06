@@ -66,7 +66,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         InitializeHighlight();
         InitializeAdd();
         InitializeGenerate();
-        InitializeRouting();
     }
 
     public ObservableCollection<TaskNodeViewModel> Nodes { get; } = [];
@@ -359,6 +358,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             SyncConnections(current);
         }
 
+        if (!ReferenceEquals(previous?.Positions, current.Positions))
+        {
+            Reroute();
+        }
+
         if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
         {
             ArrangeOutline();
@@ -485,6 +489,4 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     partial void InitializeAdd();
 
     partial void InitializeGenerate();
-
-    partial void InitializeRouting();
 }
