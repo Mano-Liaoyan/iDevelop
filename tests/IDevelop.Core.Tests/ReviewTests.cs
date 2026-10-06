@@ -257,7 +257,10 @@ public sealed class ReviewTests : IDisposable
 
         await using var runs = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
-        Assert.Null(runs.Check(SubjectNode));
+        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
+        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), runs.Send(SubjectNode, "Go on.", stopTurn: false));
+        runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
+        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
 
         runs.Follow(Workflow);
 
@@ -265,6 +268,19 @@ public sealed class ReviewTests : IDisposable
         Assert.True(Has(Arguments(_implementer, 3), ImplementerSession, "-"), "the fix round resumes the implementer's session");
         Assert.Equal((1, AttemptStatus.Succeeded), (runs.Latest[Subject].Fix!.Round, runs.Latest[Subject].Status));
         Assert.Equal(2, runs.Latest[Review].Turns.Count);
+    }
+
+    [Fact]
+    public async Task Following_a_second_workflow_that_holds_a_followed_task_is_refused()
+    {
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var first = Workflow;
+        runs.Follow(first);
+
+        var error = Assert.Throws<InvalidOperationException>(() => runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(SubjectNode, new CanvasPoint(0, 0)))));
+
+        Assert.StartsWith("Workflow ", error.Message);
+        Assert.EndsWith($"shares a task with workflow {first.Id}. A task belongs to one workflow of a project.", error.Message);
     }
 
     [Fact]

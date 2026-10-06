@@ -146,7 +146,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal bool IsPositioned { get; set; }
 
     /// <summary>The workflow's name as the sidebar and the breadcrumb show it.</summary>
-    public string Name => Workflow.Name ?? "Workflow";
+    public string Name => Workflow.DisplayName;
 
     public bool HasUnsavedChanges => Document.HasUnsavedChanges;
 

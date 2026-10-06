@@ -209,7 +209,7 @@ public sealed class Workflow
         ImmutableSortedDictionary<TaskId, TaskDefinition> tasks,
         ImmutableSortedDictionary<ConnectionKey, ConnectionKind> connections,
         ImmutableSortedDictionary<TaskId, CanvasPoint> positions,
-        string? name = null)
+        string? name)
     {
         Id = id;
         Name = name;
@@ -224,7 +224,12 @@ public sealed class Workflow
 
     public WorkflowId Id { get; }
 
+    /// <summary>What a workflow without a name is called.</summary>
+    public const string UnnamedName = "Workflow";
+
     public string? Name { get; }
+
+    public string DisplayName => Name ?? UnnamedName;
 
     public ImmutableSortedDictionary<TaskId, TaskDefinition> Tasks { get; }
 
@@ -238,7 +243,8 @@ public sealed class Workflow
         id,
         ImmutableSortedDictionary<TaskId, TaskDefinition>.Empty,
         ImmutableSortedDictionary<ConnectionKey, ConnectionKind>.Empty,
-        ImmutableSortedDictionary<TaskId, CanvasPoint>.Empty);
+        ImmutableSortedDictionary<TaskId, CanvasPoint>.Empty,
+        null);
 
     public EditResult Apply(WorkflowEdit edit) => edit switch
     {

@@ -116,6 +116,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
+            if (_workflows.Values.FirstOrDefault(other => other.Id != workflow.Id && other.Tasks.Keys.Any(workflow.Tasks.ContainsKey)) is { } other)
+            {
+                throw new InvalidOperationException($"Workflow {workflow.Id} shares a task with workflow {other.Id}. A task belongs to one workflow of a project.");
+            }
+
             _workflows = _workflows.SetItem(workflow.Id, workflow);
         }
 
@@ -832,10 +837,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>
     /// The review attempt that goes on with this task as its subject, or null. Its fix rounds are the task's only new
     /// attempts until it ends, so no other attempt takes the place of a round. A review held by no followed workflow takes no
-    /// next step, so it no longer holds its subject. Called under the gate.
+    /// next step, so it no longer holds a subject that a followed workflow holds. Until the subject's workflow is followed,
+    /// the review still holds it. Called under the gate.
     /// </summary>
     private AttemptRecord? ReviewOf(TaskId task) => Latest.Values.FirstOrDefault(record =>
-        record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview && WorkflowOf(record.Task) is not null);
+        record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview && (WorkflowOf(record.Task) is not null || WorkflowOf(task) is null));
 
     /// <summary>
     /// Why a review cannot start on its subject as it stands, or null. Another review of the subject would take the fix
