@@ -4,7 +4,7 @@
 
 On 2026-10-06 the user authorized D0 and lifted the execution plan's deferral of implementation. D0 validates the designs before the [approved delivery slices](2026-10-06-workspace-execution-plan.md#approved-delivery-slices) build them.
 
-D0 has three workstreams. The Git input delivery probe and the UI prototypes are done. The client capability probe has not run because its real-client runs wait for the user's explicit approval. C1 remains gated on that probe.
+D0's three workstreams are done. They cover Git input delivery, UI prototypes, and client capabilities. C1 can start after W1 with the probe's results.
 
 No application code, test, script, or skill changed on `main`. The UI prototypes live on the local branch `d0/ui-prototypes` at commit `65efddd`. That branch is never pushed or merged.
 
@@ -153,7 +153,7 @@ These measured facts support the contract:
 
 The final nested-worktree probe used isolated Git configuration and `.worktrees/r1/b`. Before the exclude line, main reported `?? .worktrees/`, and `git add -A --dry-run` warned "adding embedded git repository". After appending `/.worktrees/` to `.git/info/exclude`, main's status was empty. `git add -A --dry-run` added nothing and exited 0. The nested worktree still reported its own `?? f.txt`.
 
-The UI measurements came from the Release app on Linux under Xvfb. The reproduction used `samples/storage-change` plus five placed blueprints, at inspector widths of 280 and 520 px in both themes. Prototype bounds and screenshots supplied the layout, card, and conversation measurements above. They do not establish Windows behavior or interaction correctness.
+The UI measurements came from the Release app on Linux under Xvfb. The reproduction used `samples/storage-change` plus five placed blueprints, at inspector widths of 280 and 520 px in both themes. Prototype bounds and screenshots supplied the layout, card, and conversation measurements above. They do not establish Windows behavior or interaction correctness. The conversation prototype used a synthetic transcript, hand-built Markdown, and a placeholder capability line. It proves no client capability.
 
 ### The remaining platform and implementation claims are inferred
 
@@ -173,11 +173,99 @@ The UI measurements came from the Release app on Linux under Xvfb. The reproduct
 4. Strategy 2 skipped strategy 1's salvage and reset, and `review_unlocked_*` violated its own one-writer rule. Its lost line 10 came from a scripted writer that overwrites blindly. A real agent on a serialized branch sees the earlier edit and decides itself. `review_b2_in_original_d_result` was `no` in both strategies.
 5. "No join ref on conflict" applies only until a resolution is accepted. The recorded `join_ref_already_at_resolution=yes` requires that qualification.
 
+## The client probe found structured requests only in Claude Code and Codex app-server
+
+### The probe ran nine cases against four clients
+
+The user approved the real-client runs on 2026-10-06. The probe ran nine interaction cases against Claude Code, Codex, Pi, and Antigravity CLI. Codex ran in two modes, with app-server as a candidate beside Codex exec. Each verdict rests on one sample.
+
+### Support varies by client and launch mode
+
+| Case | Claude Code | Codex exec | Codex app-server (candidate) | Pi | Antigravity CLI |
+| --- | --- | --- | --- | --- | --- |
+| 1. Streamed reply | Supported, text deltas | Unsupported, whole messages only | Supported, text deltas | Supported, text deltas | Supported, text deltas |
+| 2. User question | Supported, structured answer | Partial, not run, text only | Supported, experimental structured answer | Partial, text only | Partial, text only |
+| 3. Permission request | Supported, request before action | Unsupported, policy rejected | Supported, request before action | Unsupported, not run | Unsupported, write without request |
+| 4. Allow and deny | Supported, allow wrote, deny did not | Unsupported, not run, policy rejected | Supported, allow wrote, deny did not | Unsupported, not run | Unsupported, no channel, deny not run |
+| 5. Stale response | Supported, ignored without write | Unsupported, not run, policy rejected | Supported, ignored without write | Unsupported, not run | Unsupported, not run, no channel |
+| 6. Live or queued input | Partial, next turn only | Unsupported, not run, one prompt | Supported, same turn | Supported, same agent run | Partial, next turn only |
+| 7. Stop and send | Supported, same process | Partial, signal then resume | Supported, same process | Supported, same process | Partial, signal then resume |
+| 8. Resume in new process | Supported, same session recalled | Supported, same session recalled | Supported, same session recalled | Supported, same session recalled | Supported, same session recalled |
+| 9. Cancellation | Supported, acknowledgement then result | Partial, exit evidence only | Supported, terminal interruption | Supported, terminal abort | Supported, terminal interruption |
+
+### The probe used installed versions and low effort on Linux
+
+The captured versions were `claude` 2.1.291, `codex-cli` 0.160.0 for both Codex modes, `pi` 1.0.4, and `agy` 1.3.0. All runs used Linux and scratch Git repositories. Each session started in a fresh repository. Resume reused that session's repository. The probe models differ from the project's configured models.
+
+The launch modes used these arguments, with session IDs and scratch paths omitted:
+
+- Claude Code print mode used `claude -p --output-format stream-json --verbose --include-partial-messages --permission-mode default --model claude-haiku-4-5 --effort low`. The prompt went over stdin. The served model was `claude-haiku-4-5-20251001`.
+- Claude Code bidirectional mode used `claude -p --output-format stream-json --verbose --include-partial-messages --permission-mode default --model claude-haiku-4-5 --effort low --input-format stream-json --permission-prompt-tool stdio`. The probe initialized the control channel, sent user lines, answered requests, and sent interrupts.
+- Codex exec used `codex exec --json -m gpt-5.6-luna -c model_reasoning_effort=low -c approval_policy=never --skip-git-repo-check --sandbox workspace-write -`. The approval run replaced `-c approval_policy=never` with `-c approval_policy=untrusted -c approvals_reviewer=user`. Resume used `codex exec resume` and replaced `--sandbox workspace-write` with `-c sandbox_mode=workspace-write`.
+- Codex app-server used `codex app-server -c sandbox_mode=workspace-write -c approval_policy=never -c approvals_reviewer=user -c model_reasoning_effort=low -c features.default_mode_request_user_input=true`. Protocol requests selected `gpt-5.6-luna` at `low` over stdio JSON-RPC. Initialization enabled `capabilities.experimentalApi`. `thread/start` set `approvalPolicy` to `untrusted` for approval and `never` otherwise, with `approvalsReviewer` `user` and `sandbox` `workspace-write`.
+- Pi used `pi --no-tools --no-mcp --model openai-codex/gpt-5.6-luna --thinking low -p --mode json`. RPC runs replaced `-p --mode json` with `--mode rpc`. Both passed `--session-dir` with the scratch session path.
+- Antigravity CLI used `agy --input-format stream-json --output-format stream-json --model gemini-3.8-flash --effort low --print=`. Each turn arrived as a user event line. These runs used the default mode without `--mode`. iDevelop launches it with `--mode accept-edits`.
+
+### C1 needs five additive event cases whatever protocol it selects
+
+The current `AgentEvent` cases are `SessionStarted`, `Reported`, `Message`, `ToolStarted`, `Notice`, `Succeeded`, and `Failed`. The report proposes the cases below as additive `JsonDerivedType` entries, so existing attempt logs still replay. They are proposals for C1, not implemented code.
+
+1. `MessageDelta(string Text)` presents text deltas from Claude Code, Codex app-server, Pi, and Antigravity CLI. Codex exec has no delta source, and `Message` stays the authoritative complete text.
+2. `QuestionAsked(string RequestId, IReadOnlyList<AskedQuestion> Questions)` carries Claude Code's `can_use_tool` for `AskUserQuestion` and Codex app-server's experimental `item/tool/requestUserInput`. Questions from Pi, Antigravity CLI, and Codex exec stay as `Message` text.
+3. `PermissionRequested(string RequestId, string Action, string? Detail)` carries Claude Code's `can_use_tool` for any other tool and Codex app-server's `item/commandExecution/requestApproval`. Questions and approvals render differently, so they are separate cases. The `item/fileChange/requestApproval` source comes from the generated protocol schema, not an observed event.
+4. `RequestClosed(string RequestId)` comes from Codex app-server's `serverRequest/resolved` and from Claude Code's `tool_result` for the request's `tool_use_id`, which arrives after an answer and after an interrupt. Any turn-ending event also closes open requests. The composer disables a closed request, so iDevelop prevents stale answers rather than relying on clients to ignore them.
+5. `Interrupted` distinguishes a person's stop from `Failed`. Sources are Codex app-server's interrupted `turn/completed`, Pi's `stopReason` `aborted`, Antigravity CLI's `result` error `interrupted`, and Claude Code's interrupt acknowledgement followed by `error_during_execution`.
+
+`TurnEnded` and `UserMessageDelivered` are needed only if C1 keeps one client process across several turns, which in-process Stop and send and live input require. No allow, deny, or stale-response event is needed.
+
+### Codex app-server remains a candidate for C1
+
+Codex app-server alone supported all nine cases in this sample, with an experimental question channel. It is a candidate for C1's Codex adapter. The execution plan reserves protocol selection for C1, and Codex exec remains iDevelop's current adapter. App-server accepted `approvalPolicy` `untrusted` with `approvalsReviewer` `user` and a `workspaceWrite` sandbox with network access off. `codex exec` rejects `approval_policy=untrusted` with exit 1 and "no longer supported".
+
+### Raw logs establish sample behavior but not general support
+
+The raw logs establish these measured facts:
+
+- Claude Code print mode in `default` permission mode never asks. It denied the write and wrote nothing. Only bidirectional mode with `--permission-prompt-tool stdio` exposes `can_use_tool`.
+- Claude Code acknowledged an interrupt, then returned `error_during_execution`. That result alone does not say it was a stop. The interrupt rejected a pending tool request without a request cancellation notice.
+- Claude Code queued input during a turn as the next turn.
+- Claude Code ignored duplicate, unknown, and post-interrupt answers without a write. Codex app-server ignored duplicate and unknown answers without a write.
+- Codex app-server accepted `decline` although `availableDecisions` listed `accept`, `acceptWithExecpolicyAmendment`, and `cancel`. The command ended as `declined`. Answers produced `serverRequest/resolved`.
+- Codex app-server questions required `capabilities.experimentalApi` and `features.default_mode_request_user_input=true`. The server emitted a `warning` about under-development features.
+- Codex app-server delivered `turn/steer` input within the running turn. `turn/interrupt` ended that turn with status `interrupted`.
+- Codex exec exited 1 on SIGINT without a terminal JSON event. `codex exec resume` recalled the turn.
+- Pi's `steer` ran at the next turn boundary inside the same agent run. Its `abort` ended the message with `stopReason` `aborted`, and the process still accepted the next prompt.
+- Antigravity CLI 1.3.0 reported `permission_mode` `request-review` without `--mode`. It wrote `probe.txt` through `write_to_file`, an edit tool, without a permission event. This agrees with `docs/context.md`, which allows project-file edits and says Antigravity CLI blocks commands.
+- Antigravity CLI's `init` tool list included `ask_question`, `ask_permission`, and `ask_custom_permission`. Print mode skipped `ask_question` within 16 ms as a `step_update` with step type `unknown`. The model's reply said the question was skipped. No input event for answers, approvals, or interrupts was confirmed. Print mode therefore offers no usable question or permission channel, and the probe did not spawn `agy-deny`.
+- Antigravity CLI queued a second stdin line as the next turn. SIGINT produced a `result` with status `ERROR` and error `interrupted`, then exit 1.
+- Every client resumed the same session in a new process. The process check found no leftover processes.
+
+These claims remain inferred or proposed:
+
+- Pi's permission, allow and deny, and stale-response verdicts use the report's citation of `docs/agent-clients.md`. Those cases did not run.
+- Codex exec's question and live-input verdicts follow its protocol limits. Those cases did not run.
+- Codex app-server's `item/fileChange/requestApproval` comes from the generated protocol schema. The probe observed only shell-command approval requests.
+- The normalized event mapping is a design proposal for C1.
+- No verdict was measured with the project's configured models or on Windows.
+
+### Protocol limits left several cases unrun
+
+These cases did not run:
+
+- Codex exec question. Exec has no request channel, so a question can only be `agent_message` text. The existing `scripts/probe-clients.mjs` block case already relies on that behavior.
+- Codex exec live input. Exec reads one prompt from stdin.
+- Codex exec allow, deny, and stale response. The one `untrusted` run exited 1. The probe did not try `on-request` because it is not stricter than `never`.
+- Pi permission, allow and deny, and stale response. The report cites `docs/agent-clients.md` for Pi's lack of a permission system.
+- Antigravity CLI `agy-deny`. No answer or approval input was confirmed, so the probe did not spawn the run.
+- Antigravity CLI stale response. It has no request channel.
+
+No run covered Windows, Antigravity CLI's `accept-edits` and `plan` modes, Codex app-server file-change approvals, the project's configured models, or repeated samples.
+
 ## Changed artifacts
 
 This documentation change touches only these repository files:
 
-- `docs/handoffs/2026-10-06-d0-design-validation.md` records the decisions, corrected evidence, and remaining gates.
+- `docs/handoffs/2026-10-06-d0-design-validation.md` records the decisions, corrected evidence, client capability results, and remaining gates.
 - `docs/product-direction.md` records D0's state and the accepted direction.
 - `docs/handoffs/2026-10-06-workspace-execution-plan.md` updates authority, slice status, and next actions.
 - `docs/handoffs/2026-10-05-node-system-redesign.md` records the user's two decisions on its open issues.
@@ -190,6 +278,7 @@ The evidence sits in the D0 session's throwaway scratch folder outside the repos
 - `ui/report.md`, `ui/index.html`, and `ui/shots/` hold the UI report and the 50-shot comparison page.
 - `ui/evidence/` and `ui/tools/` hold the bounds, page renders, and capture tools.
 - `ui/wt/` holds the throwaway prototype worktree on `d0/ui-prototypes`.
+- `clients/results/capabilities.md`, `clients/results/raw/`, and `clients/probe-interaction.mjs` hold the client report, raw logs with metadata, and the probe. `clients/explore/protocols.md` holds delegate exploration notes.
 
 ## Commands and observed results
 
@@ -204,22 +293,27 @@ The evidence sits in the D0 session's throwaway scratch folder outside the repos
 | `ui/index.html` and its 50 shots | The page compared the three inspector layouts, expanded-card sizes and overlap, and dock and main-area conversation. Evidence includes page renders at 375 and 1280 px. |
 | Fairness fixes before the UI comparison | The UI workstream attached cards before measurement to retain button styles. It removed a leaked width that laid out dark 280 px shots at 320 px. It fixed status text overflow and a dock breadcrumb that overlapped the attempt selector. |
 | Source and fact checks against `main` at `11a0b22` | The XAML constants and port locations matched the report. The facts file had 616 rows. The recorded conflict-wait flag, resolution ref, wall times, and absence of B2 in D's original result matched the report. The corrections above limit what those values prove. |
+| `node probe-interaction.mjs --clients claude,codex,codex-app,pi,agy` | Six invocations recorded 30 runs, one of them skipped, `agy-deny`. No run reached its hard timeout of 150 s, 240 s for `codex-app-live`, or 90 s for `agy-question-tool`. |
+| Client process check | No run left a process to kill. Each invocation ended with 0 owned processes and 0 new client processes not tied to a run. |
+| Checks against the client raw logs | Antigravity CLI wrote `probe.txt` through `write_to_file`. `agy-deny` recorded its skip and never spawned. No log contains `item/fileChange/requestApproval`. The Codex app-server question run emitted the under-development feature `warning`. |
 | `node scripts/check-handoffs.mjs` and `git diff --check` on this change | The handoff check reported seven records, each linked from `docs/context.md` or `docs/product-direction.md`, and exited 0. `git diff --check` reported nothing and exited 0. |
 
 ## Open issues
 
-1. The client capability probe has not run. Its real-client runs wait for the user's explicit approval, so C1 is gated on it. The conversation prototype used a synthetic transcript, hand-built Markdown, and a placeholder capability line. It proves no client capability.
-2. Neither workstream ran in a real Windows window. The Git workstream still needs file-handle, `autocrlf`, and Job Object kill checks. U1 needs Segoe UI at 125% and 150% scaling in both themes.
-3. The UI prototypes did not test drag, focus, or typing. U1, C1, and N1 need interaction evidence against their implemented controls.
-4. The Markdown renderer is not chosen. C1 must select and validate it against the plan's rendering, history, and content-safety requirements.
-5. Four of 16 inspector rows use the neutral fallback icon. Model, Reasoning, Report, and Attempt have candidates Brain Circuit, Gauge, Document Text, and History. U1 must check those candidates against the pinned Fluent commit before adding them.
-6. N1 must anchor ports to the header row. `src/IDevelop.Desktop/Canvas/CanvasTemplates.axaml` lines 86 and 96 center them vertically on `main`, so a taller card moves every wire. The disclosure chevron costs about 32 px of title width.
-7. Nested worktrees add about 27 characters per path by inference. E2 must test Windows path length without assuming long-path support.
-8. D0 did not establish behavior for rename, delete, binary, or LFS conflicts, network submodules, real agents, the minimum Git version, large repositories, or concurrency limits. E2 and E3 need evidence before claiming support for those cases.
+1. None of the three workstreams ran on Windows. The Git workstream still needs file-handle, `autocrlf`, and Job Object kill checks. U1 needs Segoe UI at 125% and 150% scaling in both themes. C1 needs the selected client protocols checked on Windows, where `docs/agent-clients.md` recorded its observations.
+2. The UI prototypes did not test drag, focus, or typing. U1, C1, and N1 need interaction evidence against their implemented controls.
+3. The Markdown renderer is not chosen. C1 must select and validate it against the plan's rendering, history, and content-safety requirements.
+4. Four of 16 inspector rows use the neutral fallback icon. Model, Reasoning, Report, and Attempt have candidates Brain Circuit, Gauge, Document Text, and History. U1 must check those candidates against the pinned Fluent commit before adding them.
+5. N1 must anchor ports to the header row. `src/IDevelop.Desktop/Canvas/CanvasTemplates.axaml` lines 86 and 96 center them vertically on `main`, so a taller card moves every wire. The disclosure chevron costs about 32 px of title width.
+6. Nested worktrees add about 27 characters per path by inference. E2 must test Windows path length without assuming long-path support.
+7. D0 did not establish behavior for rename, delete, binary, or LFS conflicts, network submodules, real agents, the minimum Git version, large repositories, or concurrency limits. E2 and E3 need evidence before claiming support for those cases.
+8. `docs/agent-clients.md` names Claude Code 2.1.289, Pi 1.0.1, and Antigravity CLI 1.2.16. The probe ran 2.1.291, 1.0.4, and 1.3.0. Codex is 0.160.0 in both. The page's headings and observations predate the installed versions. C1 must recheck the behavior it relies on against installed versions or record which version each observation covers.
+9. Codex app-server's question channel depends on an under-development feature. C1 must not rely on it without a fallback.
+10. Antigravity CLI offers no question or permission channel in print mode. Its conversation must show that limit truthfully and keep its questions as messages.
 
 ## Next action
 
-The user decides whether to approve the client probe's real-client runs. The client workstream then records the capability table before C1 starts.
+C1 can start after W1 from the capability table, the five event cases, and the Codex app-server candidate. C1 selects each client's protocol.
 
 U1 can start from layout A and the shared column definition. W1 can start and includes the blueprint icon and color field in its format and migration review. E2 builds on this contract after E1. E3 still needs its writer-isolation and join gate verified on the demo-shaped diamond in the implementation.
 
