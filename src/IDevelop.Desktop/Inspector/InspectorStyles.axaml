@@ -167,6 +167,15 @@
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
+  <!-- The label's look comes before the row styles that move it, which a later style of the same weight would undo. -->
+  <Style Selector="TextBlock.rowLabel">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
   <!-- Rows: a glyph or tile, the label, the editor, and a trailing column for the revert and info glyphs or a row's
        actions, so every editor lines up whether or not its row has them. -->
   <Style Selector="inspector|InspectorRow">
@@ -174,9 +183,10 @@
     <Setter Property="Template">
       <ControlTemplate>
         <inspector:InspectorGrid RowDefinitions="Auto,Auto">
-          <PathIcon Name="PART_Icon" Theme="{StaticResource Glyph}" Data="{TemplateBinding Icon}"
+          <PathIcon Name="PART_Icon" Theme="{StaticResource Glyph}" Data="{TemplateBinding Icon}" AutomationProperties.AccessibilityView="Raw"
                     IsVisible="{TemplateBinding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <ContentPresenter Name="PART_Lead" Content="{TemplateBinding Lead}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw"
                             IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <TextBlock Name="PART_Label" Grid.Column="2" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
           <ContentPresenter Name="PART_ContentPresenter" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -209,12 +219,11 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <Style Selector="inspector|InspectorRow:wide /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Grid.ColumnSpan" Value="2" />
-  </Style>
+  <!-- A label over its editor sits on the line's floor, so the gap stays 4 px when a revert or info glyph makes the line taller. -->
   <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label, inspector|InspectorRow:editor:narrow /template/ TextBlock#PART_Label">
     <Setter Property="Grid.ColumnSpan" Value="2" />
     <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Row" Value="1" />
@@ -243,14 +252,6 @@
   <Style Selector="inspector|InspectorRow.entry /template/ TextBlock#PART_Label">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-  </Style>
-  <Style Selector="TextBlock.rowLabel">
-    <Setter Property="FontSize" Value="12" />
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="Margin" Value="0,0,8,0" />
-    <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="TextBlock.value">
     <Setter Property="FontSize" Value="13" />
@@ -281,7 +282,9 @@
     <Setter Property="FontSize" Value="13" />
   </Style>
 
+  <!-- The hover fill reaches 4 px before the text, which stays on the value column's edge like any other value. -->
   <Style Selector="Button.rowLink">
+    <Setter Property="Margin" Value="-4,0,0,0" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Padding" Value="4,2" />

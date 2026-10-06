@@ -295,7 +295,7 @@
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="execution:AttemptViewModel">
                             <StackPanel>
-                              <inspector:InspectorRow Label="Agent" Layout="Wide" Icon="{StaticResource IconAgent}">
+                              <inspector:InspectorRow Label="Agent" Layout="Editor" Icon="{StaticResource IconAgent}">
                                 <ItemsControl ItemsSource="{Binding Agent}" ToolTip.Tip="{Binding Configuration}" Background="Transparent"
                                               AutomationProperties.AutomationId="LastRunConfiguration"
                                               AutomationProperties.Name="{Binding Configuration}">
@@ -313,7 +313,7 @@
                                   </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                               </inspector:InspectorRow>
-                              <inspector:InspectorRow Label="Time" Layout="Wide" Icon="{StaticResource IconTime}">
+                              <inspector:InspectorRow Label="Time" Layout="Editor" Icon="{StaticResource IconTime}">
                                 <WrapPanel Classes="chips" ToolTip.Tip="{Binding Timing}" Background="Transparent"
                                            AutomationProperties.AutomationId="LastRunTiming"
                                            AutomationProperties.Name="{Binding Timing}">

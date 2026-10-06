@@ -15,8 +15,6 @@ public enum RowLayout
     /// <summary>As <see cref="Columns"/>, with the editor under its label once the row is narrower than <see cref="InspectorGrid.NarrowWidth"/>.</summary>
     Editor,
 
-    /// <summary>As <see cref="Columns"/>, with the value also across the glyph column, for a value with no glyphs, such as chips.</summary>
-    Wide,
 
     /// <summary>The label on its own line, the editor under it from the glyph column to the value edge, for text of several lines.</summary>
     Stacked,
@@ -173,7 +171,6 @@ public sealed class InspectorRow : InspectorPart
         if (change.Property == LayoutProperty)
         {
             PseudoClasses.Set(":editor", Layout == RowLayout.Editor);
-            PseudoClasses.Set(":wide", Layout == RowLayout.Wide);
             PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked);
             PseudoClasses.Set(":full", Layout == RowLayout.Full);
             PseudoClasses.Set(":title", Layout == RowLayout.Title);

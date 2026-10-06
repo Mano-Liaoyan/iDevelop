@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Inspector;
 using IDevelop.Execution;
@@ -70,12 +71,24 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        foreach (var id in new[] { "TaskClient", "TaskModel", "TaskReasoning", "TaskConversation" })
+        AssertUnder(shell, under, "TaskClient", "TaskModel", "TaskReasoning", "TaskConversation");
+
+        shell.Window.ViewModel.Canvas!.Blueprints.Derive(BuiltInBlueprints.Implement);
+        shell.Render();
+
+        AssertUnder(shell, under, "BlueprintName", "BlueprintClient", "BlueprintConversation");
+    }
+
+    /// <summary>Each editor sits 4 px under its label and starts where the label starts, or sits beside it.</summary>
+    private static void AssertUnder(Shell shell, bool under, params string[] ids)
+    {
+        foreach (var id in ids)
         {
-            var picker = shell.Find<ComboBox>(id);
-            var label = picker.FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label");
-            Assert.Equal(under, shell.Bounds(picker).Top >= shell.Bounds(label).Bottom);
-            Assert.Equal(under, shell.Bounds(picker).Left == shell.Bounds(label).Left);
+            var editor = shell.Find<Control>(id);
+            var label = editor.FindAncestorOfType<InspectorRow>()!.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label");
+            var (top, bottom) = (shell.Bounds(editor).Top, shell.Bounds(label).Bottom);
+            Assert.True(under ? Math.Abs(top - bottom - 4) < 0.5 : top < bottom, $"{id} starts at {top}, and its label ends at {bottom}.");
+            Assert.Equal(under, shell.Bounds(editor).Left == shell.Bounds(label).Left);
         }
     }
 
@@ -95,6 +108,23 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal(
             ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconConversation", null, "IconVersion", "IconDescription"],
             rows.Select(row => IconKey(row.Icon)));
+    }
+
+    [AvaloniaFact]
+    public void Kinds_and_blueprints_read_as_names_in_strong_text()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
+        shell.Click(shell.Find<RadioButton>("ThemeLight"));
+
+        var labels = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
+            .Where(row => row.IsEffectivelyVisible && row.Classes.Contains("entry"))
+            .Select(row => (row.Label, ((ISolidColorBrush)row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label").Foreground!).Color))
+            .ToArray();
+
+        var strong = ((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "TextStrongBrush")!).Color;
+        Assert.Equal(
+            [("Implement", strong), ("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong)],
+            labels);
     }
 
     /// <summary>
