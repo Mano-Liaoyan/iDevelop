@@ -53,9 +53,9 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// The card's tooltip: the title, the blueprint and agent, a review's summary, the start of the first field, and why the
-    /// node cannot start.
+    /// node cannot start. None while the title is renamed, so it never covers the box.
     /// </summary>
-    public string CardTip => string.Join("\n", new[]
+    public string? CardTip => IsRenaming ? null : string.Join("\n", new[]
     {
         Title,
         HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName,
@@ -94,7 +94,7 @@ public sealed partial class TaskNodeViewModel
                 OnPropertyChanged(nameof(ReviewerTip));
                 OnPropertyChanged(nameof(CardTip));
                 break;
-            case nameof(Title) or nameof(AgentLabel) or nameof(ReviewSummary):
+            case nameof(Title) or nameof(AgentLabel) or nameof(ReviewSummary) or nameof(IsRenaming):
                 OnPropertyChanged(nameof(CardTip));
                 break;
         }

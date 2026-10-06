@@ -135,19 +135,26 @@ public sealed class ConnectionTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_connection_runs_under_the_cards_it_crosses()
+    public void A_card_held_over_a_connection_covers_it()
     {
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90),
-            TaskAt(Build, "Build", 405, 90),
-            TaskAt(Review, "Review", 705, 250),
+            TaskAt(Build, "Build", 405, 250),
+            TaskAt(Review, "Review", 705, 90),
             new Connect(new ConnectionKey(Design, Review), ConnectionKind.Dependency)));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
+        Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 122)));
 
-        // The connection turns down at x = 535, halfway between its ends, and passes under Build's card below its text.
-        // On the open canvas it is Implement's stroke.
-        Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 220)));
-        Assert.Equal(Color.Parse("#FFFFFF"), shell.ColorAt(shell.Editor, new Point(535, 146)));
+        // Held 180 px higher, Build's card spans y = 70 to 134, so the connection lies under its blank bottom row. The
+        // connection keeps its straight route along the row, so the card covers it rather than the connection going around.
+        var connection = shell.Window.ViewModel.Canvas!.Connections.Single();
+        (Color Under, IReadOnlyList<Point> Route)? held = null;
+        var header = shell.Header(shell.Node("Build"));
+        shell.Drag(header, header + new Vector(0, -186), beforeRelease: () =>
+            held = (shell.ColorAt(shell.Editor, new Point(535, 122)), connection.Route));
+
+        Assert.Equal(Color.Parse("#FFFFFF"), held?.Under);
+        Assert.Equal<Point>([new Point(381, 122), new Point(689, 122)], held?.Route);
     }
 
     [AvaloniaFact]

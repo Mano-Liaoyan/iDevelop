@@ -19,6 +19,13 @@
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
       </MenuItem.Icon>
     </MenuItem>
+    <MenuItem Header="Choose Agent…"
+              Command="{Binding ChooseAgentCommand}" IsVisible="{Binding ShowChooseAgent}"
+              AutomationProperties.AutomationId="NodeMenuChooseAgent">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" />
+      </MenuItem.Icon>
+    </MenuItem>
     <MenuItem Header="Cancel Run"
               Command="{Binding Node.CancelCommand}" IsVisible="{Binding ShowCancel}"
               AutomationProperties.AutomationId="NodeMenuCancel">

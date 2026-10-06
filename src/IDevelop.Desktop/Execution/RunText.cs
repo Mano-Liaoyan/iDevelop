@@ -298,6 +298,29 @@ public static class RunText
             : $"{text} Reported {Dotted(model, reasoning)}.";
     }
 
+    /// <summary>What ran, as short parts such as "Codex", "gpt-5.5", and "high": what the client reported, else what was requested.</summary>
+    public static IReadOnlyList<string> Agent(AttemptRecord attempt) =>
+        [.. new[] { Clients.Name(attempt.Requested.Client), attempt.ReportedModel ?? attempt.Requested.Model, attempt.ReportedReasoning ?? attempt.Requested.Reasoning }.OfType<string>()];
+
+    /// <summary>
+    /// When something happened, as people say it in <paramref name="zone"/>: "Just now", "5 min ago", "Today 9:41 AM",
+    /// "Yesterday 9:41 AM", or the date and time.
+    /// </summary>
+    public static string Ago(DateTimeOffset at, DateTimeOffset now, TimeZoneInfo zone)
+    {
+        var age = now - at;
+        var local = TimeZoneInfo.ConvertTime(at, zone);
+        var today = TimeZoneInfo.ConvertTime(now, zone).Date;
+        return age switch
+        {
+            { TotalMinutes: < 1 } => "Just now",
+            { TotalHours: < 1 } => $"{(int)age.TotalMinutes} min ago",
+            _ when local.Date == today => $"Today {local:t}",
+            _ when local.Date == today.AddDays(-1) => $"Yesterday {local:t}",
+            _ => $"{local:g}",
+        };
+    }
+
     /// <summary>
     /// An attempt's line in a conversation of several attempts, such as "Interrupted · Started 10/5/2026 2:00 PM · took 8 s".
     /// </summary>

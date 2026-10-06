@@ -30,7 +30,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// <summary>The output port's center in the card's container. The card template places the port here.</summary>
     public static readonly Point OutputPortCenter = new(250, 32);
 
-    private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
+    internal static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
     private readonly Action<string?> _setNotice;
     private readonly Func<string, Task> _copy;
@@ -272,16 +272,22 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     }
 
     /// <summary>The first spot at or below <paramref name="start"/>, in steps of a card's footprint, that no card is near.</summary>
-    internal CanvasPoint FreeSpot(CanvasPoint start)
+    internal CanvasPoint FreeSpot(CanvasPoint start) => Offset(start, FreeShift([start]));
+
+    /// <summary>
+    /// The shortest shift down, in steps of a card's footprint, after which no card is near any of the spots. The spots move
+    /// together, so a group keeps its layout.
+    /// </summary>
+    private Vector FreeShift(IReadOnlyCollection<CanvasPoint> spots)
     {
-        var position = start;
-        while (Workflow.Positions.Values.Any(other =>
-            Math.Abs(other.X - position.X) < TaskFootprint.Width && Math.Abs(other.Y - position.Y) < TaskFootprint.Height))
+        var shift = default(Vector);
+        while (spots.Any(spot => Workflow.Positions.Values.Any(other =>
+            Math.Abs(other.X - spot.X - shift.X) < TaskFootprint.Width && Math.Abs(other.Y - spot.Y - shift.Y) < TaskFootprint.Height)))
         {
-            position = position with { Y = position.Y + TaskFootprint.Height };
+            shift += new Vector(0, TaskFootprint.Height);
         }
 
-        return position;
+        return shift;
     }
 
     private static WorkflowEdit.PlaceNode NewTask(Blueprint blueprint, CanvasPoint position) =>
@@ -356,6 +362,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (connectionsChanged)
         {
             SyncConnections(current);
+        }
+
+        if (!ReferenceEquals(previous?.Positions, current.Positions))
+        {
+            Reroute();
         }
 
         if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))

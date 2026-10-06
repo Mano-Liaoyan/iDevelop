@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows.Input;
+using Avalonia;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Workflows;
 
@@ -10,12 +11,15 @@ public enum WireEmphasis { Normal, Highlighted, Dimmed }
 
 public sealed class ConnectionViewModel : ObservableObject
 {
+    private readonly WorkflowCanvasViewModel _canvas;
     private readonly RelayCommand<ConnectionKind> _setKind;
     private ConnectionKind _kind;
     private WireEmphasis _emphasis;
+    private IReadOnlyList<Point> _route = [];
 
     internal ConnectionViewModel(WorkflowCanvasViewModel canvas, ConnectionKey key, TaskNodeViewModel from, TaskNodeViewModel to, ConnectionKind kind)
     {
+        _canvas = canvas;
         Key = key;
         From = from;
         To = to;
@@ -25,6 +29,9 @@ public sealed class ConnectionViewModel : ObservableObject
             newKind => newKind != Kind);
         DeleteCommand = new RelayCommand(() => canvas.Edit(new WorkflowEdit.Delete([], [Key])));
         from.PropertyChanged += OnSourceChanged;
+        from.Output.PropertyChanged += OnEndMoved;
+        to.Input.PropertyChanged += OnEndMoved;
+        Reroute();
     }
 
     public ConnectionKey Key { get; }
@@ -44,6 +51,9 @@ public sealed class ConnectionViewModel : ObservableObject
         internal set => SetProperty(ref _emphasis, value);
     }
 
+    /// <summary>The corners the wire turns at, from the end of its source stub to the start of its target stub.</summary>
+    public IReadOnlyList<Point> Route => _route;
+
     public ICommand SetKindCommand => _setKind;
 
     public ICommand DeleteCommand { get; }
@@ -56,8 +66,39 @@ public sealed class ConnectionViewModel : ObservableObject
         }
     }
 
-    /// <summary>Called once the connection leaves the canvas, so its source node no longer holds it.</summary>
-    internal void Detach() => From.PropertyChanged -= OnSourceChanged;
+    /// <summary>Finds the wire's path again, as any card may have moved into it or out of it.</summary>
+    internal void Reroute()
+    {
+        // The wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
+        Rect[] cards =
+        [
+            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => WireRouting.Card(node.Location)),
+            WireRouting.Card(From.Output.Anchor - (Vector)WorkflowCanvasViewModel.OutputPortCenter),
+            WireRouting.Card(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter),
+        ];
+        var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);
+        if (!route.SequenceEqual(_route))
+        {
+            _route = route;
+            OnPropertyChanged(nameof(Route));
+        }
+    }
+
+    /// <summary>Called once the connection leaves the canvas, so its nodes no longer hold it.</summary>
+    internal void Detach()
+    {
+        From.PropertyChanged -= OnSourceChanged;
+        From.Output.PropertyChanged -= OnEndMoved;
+        To.Input.PropertyChanged -= OnEndMoved;
+    }
+
+    private void OnEndMoved(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PortViewModel.Anchor))
+        {
+            Reroute();
+        }
+    }
 
     private void OnSourceChanged(object? sender, PropertyChangedEventArgs e)
     {
