@@ -69,11 +69,11 @@ internal sealed class RunFixtures : IDisposable
         Workflow = workflow ?? FixtureWorkflow();
     }
 
-    public RunStore NewStore() => RunStore.Open(Project, new FixedClock(), () => Id(++_id));
+    public RunStore NewStore() => RunStore.Open(Project, new FixedClock(), () => Id(Interlocked.Increment(ref _id)));
 
     public string AnotherProject() => _temp.Create("other");
 
-    public OperationId Op() => new(Id(++_operation));
+    public OperationId Op() => new(Id(Interlocked.Increment(ref _operation)));
 
     public static Guid Id(int number) => Guid.Parse($"00000000-0000-0000-0000-{number:000000000000}");
 
