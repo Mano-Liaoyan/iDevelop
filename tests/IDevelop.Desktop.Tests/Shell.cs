@@ -283,7 +283,7 @@ internal sealed partial class Shell
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static IEnumerable<T> ById<T>(Visual root, string automationId) where T : Control =>
+    public static IEnumerable<T> ById<T>(Visual root, string automationId) where T : Control =>
         root.GetVisualDescendants().OfType<T>().Where(control => AutomationProperties.GetAutomationId(control) == automationId);
 
     private Point At(Visual visual, Point local) =>

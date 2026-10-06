@@ -173,6 +173,7 @@ public sealed class AgentPickerTests : IDisposable
             TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" }),
             TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "xhigh" }),
             TaskAt(Review, "Review", 705, 90, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })), _clients);
+        shell.ShowTasks();
 
         foreach (var title in new[] { "Design", "Review", "Build", "Design", "Review" })
         {
@@ -201,6 +202,7 @@ public sealed class AgentPickerTests : IDisposable
             ["Build"] = ["Codex", "GPT-5.5", "low"],
             ["Review"] = ["Antigravity CLI", "Gemini 3.8 Flash", "medium"],
         };
+        shell.ShowTasks();
         shell.Click(shell.Header(shell.Node("Design")));
 
         string[] order = ["Build", "Review", "Design", "Review", "Build", "Design"];
@@ -227,6 +229,7 @@ public sealed class AgentPickerTests : IDisposable
         var shell = Shell.Open(_temp.Seed(
             TaskAt(Design, "Design", 105, 90, PiAtHigh),
             TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" })), WithPi());
+        shell.ShowTasks();
         shell.Click(shell.Header(shell.Node("Design")));
         var reasoning = shell.Find<ComboBox>("TaskReasoning");
         reasoning.Focus();

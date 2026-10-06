@@ -214,19 +214,21 @@ public sealed class RunTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Opening_another_folder_during_a_run_asks_first_and_records_the_run_as_interrupted()
+    public void Opening_another_folder_during_a_run_asks_nothing_and_the_run_goes_on_in_its_own_project()
     {
-        var (shell, folder, clients) = StartWaitingRun();
+        var (shell, _, _) = StartWaitingRun();
         var other = _temp.Create("other");
         shell.Window.PickFolder = () => Task.FromResult<string?>(other);
 
         shell.Click(shell.Find<Button>("OpenFolder"));
-        Assert.IsType<RunningTaskDialog>(shell.Dialog);
-        shell.Choose("StopAndLeave");
 
-        shell.WaitUntil(() => shell.Window.Title == "other - iDevelop", "the other folder opens");
+        Assert.Null(shell.Dialog);
+        Assert.Equal("other - iDevelop", shell.Window.Title);
         Assert.False(shell.Find<Control>("RunBar").IsEffectivelyVisible);
-        Assert.Equal("Interrupted", Shell.Open(folder, clients).CardText("Say hi", "CardStatus"));
+        shell.Click(shell.WorkflowRow("seed", "Workflow"));
+        Assert.Equal(("Running", "Say hi"), (shell.CardText("Say hi", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
+        shell.Click(shell.Find<Button>("RunBarCancel"));
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Cancelled", "the run is cancelled");
     }
 
     [AvaloniaFact]

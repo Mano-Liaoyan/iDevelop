@@ -29,6 +29,7 @@
                          SelectedConnections="{Binding SelectedConnections}"
                          PendingConnection="{Binding PendingConnection}"
                          ViewportLocation="{Binding ViewportLocation}"
+                         ViewportZoom="{Binding ViewportZoom, Mode=TwoWay}"
                          ConnectionCompletedCommand="{Binding ConnectCommand}"
                          RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                          ItemsDragCompletedCommand="{Binding CommitMovesCommand}"

@@ -41,18 +41,24 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private TaskNodeViewModel? _selectedNode;
     private ConnectionViewModel? _selectedConnection;
     private Point _viewportLocation;
+    private double _viewportZoom = 1;
+    private bool _isExpanded;
+    private bool _isSelected;
+    private bool _isRunning;
+    private bool _isRenamingWorkflow;
 
+    /// <param name="project">The open project whose runner and task owners this canvas shares.</param>
     /// <param name="personalBlueprints">The personal library's folder, or null for none.</param>
-    public WorkflowCanvasViewModel(
-        WorkflowDocument document, ProjectRuns runs, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy, string? personalBlueprints = null)
+    internal WorkflowCanvasViewModel(
+        ProjectViewModel project, WorkflowDocument document, ClientDirectory clients, Action<string?> setNotice, Func<string, Task> copy, string? personalBlueprints = null)
     {
+        Project = project;
         Document = document;
-        Runs = runs;
         Clients = clients;
         _setNotice = setNotice;
         _copy = copy;
-        ActiveRun = new ActiveRunViewModel(runs, clients);
-        runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
+        ActiveRun = new ActiveRunViewModel(Runs, clients);
+        Runs.Changed += (_, _) => Dispatcher.UIThread.Post(ShowAttempts);
         PendingConnection = new PendingConnectionViewModel(this);
         Blueprints = new BlueprintsViewModel(
             this, BlueprintLibrary.Project(document.ProjectFolder), personalBlueprints is null ? null : BlueprintLibrary.Personal(personalBlueprints));
@@ -130,6 +136,48 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         set => SetProperty(ref _viewportLocation, value);
     }
 
+    public double ViewportZoom
+    {
+        get => _viewportZoom;
+        set => SetProperty(ref _viewportZoom, value);
+    }
+
+    /// <summary>Whether a view has shown this canvas yet. The first view places the cards below the floating chrome.</summary>
+    internal bool IsPositioned { get; set; }
+
+    /// <summary>The workflow's name as the sidebar and the breadcrumb show it.</summary>
+    public string Name => Workflow.Name ?? "Workflow";
+
+    public bool HasUnsavedChanges => Document.HasUnsavedChanges;
+
+    /// <summary>Whether the sidebar lists this workflow's tasks under its row.</summary>
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
+
+    /// <summary>Whether the window shows this canvas.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => SetProperty(ref _isSelected, value);
+    }
+
+    /// <summary>Whether a task this workflow holds or held this session runs in this window.</summary>
+    public bool IsRunning
+    {
+        get => _isRunning;
+        private set => SetProperty(ref _isRunning, value);
+    }
+
+    /// <summary>The sidebar row's name is a box that takes a new name.</summary>
+    public bool IsRenamingWorkflow
+    {
+        get => _isRenamingWorkflow;
+        private set => SetProperty(ref _isRenamingWorkflow, value);
+    }
+
     public ICommand DeleteSelectionCommand { get; }
 
     public ICommand ConnectCommand { get; }
@@ -148,11 +196,13 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// <summary>Selects the next task that waits for the person, after the selected one, in the order the sidebar lists them.</summary>
     public ICommand NextWaitingCommand { get; }
 
+    internal ProjectViewModel Project { get; }
+
     internal WorkflowDocument Document { get; }
 
     internal Workflow Workflow => Document.Current;
 
-    internal ProjectRuns Runs { get; }
+    internal ProjectRuns Runs => Project.Runs;
 
     internal ClientDirectory Clients { get; }
 
@@ -164,9 +214,53 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             node.OnAgentChanged();
             node.RecheckProblem();
         }
+    }
 
-        // A review whose fix round waited for a client goes on.
-        Runs.Follow(Document.Current);
+    /// <summary>Clears the selection and returns it, for <see cref="RestoreSelection"/>.</summary>
+    internal (TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections) TakeSelection()
+    {
+        (TaskNodeViewModel[], ConnectionViewModel[]) selection = ([.. SelectedNodes], [.. SelectedConnections]);
+        SelectedNodes.Clear();
+        SelectedConnections.Clear();
+        SelectedNode = null;
+        SelectedConnection = null;
+        return selection;
+    }
+
+    /// <summary>Selects again what was selected, leaving out what the workflow no longer holds.</summary>
+    internal void RestoreSelection((TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections) selection)
+    {
+        SelectedNodes.Clear();
+        SelectedConnections.Clear();
+        foreach (var node in selection.Nodes.Where(Nodes.Contains))
+        {
+            SelectedNodes.Add(node);
+        }
+
+        foreach (var connection in selection.Connections.Where(Connections.Contains))
+        {
+            SelectedConnections.Add(connection);
+        }
+    }
+
+    internal void BeginRenameWorkflow() => IsRenamingWorkflow = true;
+
+    /// <summary>
+    /// Ends a rename with the new name, or with null to keep the old one. A new name is an edit that Undo takes back, and a
+    /// blank one leaves the workflow unnamed.
+    /// </summary>
+    internal void EndRenameWorkflow(string? name)
+    {
+        if (!IsRenamingWorkflow)
+        {
+            return;
+        }
+
+        IsRenamingWorkflow = false;
+        if (name is not null && name.Trim() != Name)
+        {
+            Edit(new WorkflowEdit.Rename(name));
+        }
     }
 
     internal void Notice(string? text) => _setNotice(text);
@@ -242,7 +336,9 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             node.Proposal?.Refresh();
         }
 
-        ActiveRun.Show(Runs.Active);
+        var own = Runs.Active.Where(run => Project.Owns(this, run.Task)).ToImmutableArray();
+        ActiveRun.Show(own);
+        IsRunning = !own.IsEmpty;
         OnWaitingChanged();
         ShowGhosts();
     }
@@ -384,9 +480,14 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             ShowGhosts();
         }
 
-        // The runs check a review's subject in the workflow they follow, so the checks come after it. A move changes no
-        // reason not to start.
-        Runs.Follow(current);
+        if (!ReferenceEquals(previous?.Name, current.Name))
+        {
+            OnPropertyChanged(nameof(Name));
+        }
+
+        OnPropertyChanged(nameof(HasUnsavedChanges));
+
+        // The project's runner already follows this change, so the checks see it. A move changes no reason not to start.
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || connectionsChanged)
         {
             RecheckProblems(Changed(previous, current));
