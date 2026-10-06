@@ -52,6 +52,12 @@ function Find-ById($Root, [string] $Id, [int] $Seconds = 10) {
     Wait-Until { $Root.FindFirst([TreeScope]::Descendants, $condition) } $Seconds
 }
 
+# Each open project and workflow repeats its row's ids, so a window with several returns them in sidebar order.
+function Find-AllById($Root, [string] $Id) {
+    $condition = [PropertyCondition]::new([AutomationElement]::AutomationIdProperty, $Id)
+    @($Root.FindAll([TreeScope]::Descendants, $condition))
+}
+
 # The sidebar repeats each task title, so a title found inside the excluded element does not prove the card shows it.
 function Find-NameOutside($Root, [string] $Name, [string] $ExcludedId) {
     $condition = [PropertyCondition]::new([AutomationElement]::NameProperty, $Name)
@@ -288,7 +294,7 @@ function New-Session($State, $Process, $Window) {
     }
 }
 
-function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $Run, [switch] $Reopen, [switch] $Empty, [switch] $RealClients) {
+function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $Run, [switch] $Reopen, [switch] $Empty, [switch] $KeepProjects, [switch] $RealClients) {
     if (-not [IO.File]::Exists($ReleaseExe)) { throw "No Release build at $ReleaseExe. Run dotnet build -c Release first." }
     if ($Run -or $Reopen) {
         $previous = Get-SessionState $Run
@@ -329,7 +335,8 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
 
     # The preference moves aside only once nothing is left to refuse the start, and comes back if the launch fails.
     Backup-Settings $Run
-    Clear-Session
+    # -KeepProjects reopens the projects the window had open, as a restart does. Otherwise the window starts with none.
+    if (-not $KeepProjects) { Clear-Session }
     $savedPath = $env:PATH
     if (-not $RealClients) { $env:PATH = $bin }
     try {
@@ -511,7 +518,7 @@ function Stop-IDevelop([string] $Run) {
     }
 }
 
-Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Get-PickerEntries,
+Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-AllById, Find-NameOutside, Find-InProcessWindows, Get-PickerEntries,
     Get-Value, Invoke-Element, Select-Element, Test-Selected, Set-Text, Save-Screenshot, Close-Window,
     Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Clear-Session, Restore-Settings, New-FakeCodex,
     Start-IDevelop, Connect-IDevelop, Test-IDevelop, Get-SidebarTasks, Select-PickerEntry, Assert-Step, Save-Evidence, Stop-IDevelop
