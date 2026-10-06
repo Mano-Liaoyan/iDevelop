@@ -259,6 +259,7 @@ public sealed class InspectorTests : IDisposable
         (string?, bool?) Shown() => (shell.Window.ViewModel.Canvas!.SelectedNode?.Title, shell.InView<ToggleButton>("ToolCallsToggle").IsChecked);
         shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));
 
+        shell.ShowTasks();
         shell.Click(shell.Header(shell.Node("Two")));
         var two = Shown();
         shell.Click(shell.SidebarRow("One"));

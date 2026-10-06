@@ -223,6 +223,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
+        shell.ShowTasks();
         Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         var workflow = canvas.Workflow;

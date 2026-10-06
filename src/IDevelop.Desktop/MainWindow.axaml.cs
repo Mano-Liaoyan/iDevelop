@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Execution;
+using IDevelop.Projects;
 
 namespace IDevelop.Desktop;
 
@@ -25,10 +26,15 @@ public partial class MainWindow : Window
     public MainWindow(ClientDirectory clients)
     {
         Copy = text => Clipboard?.SetTextAsync(text) ?? Task.FromException(new InvalidOperationException("This window has no clipboard."));
-        ViewModel = new MainWindowViewModel(clients, text => Copy(text), (Application.Current as App)?.PersonalBlueprints);
+        var app = Application.Current as App;
+        ViewModel = new MainWindowViewModel(clients, text => Copy(text), app?.PersonalBlueprints, app?.SessionFile);
         InitializeComponent();
         DataContext = ViewModel;
         PickFolder = PickFolderWithStorageProvider;
+        // A press or the focus in a workflow's task list shows that workflow first, so the list's choice selects a card
+        // on the canvas that shows it.
+        AddHandler(PointerPressedEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     public MainWindowViewModel ViewModel { get; }
@@ -53,17 +59,22 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!ViewModel.HasUnsavedChanges && ViewModel.ActiveRuns.IsEmpty)
+        // With nothing to ask, leaving starts at once, and the window closes now unless a run is still stopping.
+        if (ViewModel.ActiveRuns.IsEmpty && !ViewModel.Projects.Any(project => project.UnsavedDocuments.Any()))
         {
-            return;
+            var leaving = ViewModel.Leave();
+            if (leaving.IsCompleted)
+            {
+                return;
+            }
         }
 
         e.Cancel = true;
         _waitingForUser = true;
-        var leave = await ConfirmLeaving();
+        var leave = await ConfirmLeaving([.. ViewModel.Projects], "leave");
         if (leave)
         {
-            await ViewModel.LeaveProject();
+            await ViewModel.Leave();
         }
 
         _waitingForUser = false;
@@ -123,13 +134,81 @@ public partial class MainWindow : Window
     private void OnAddNode(object? sender, RoutedEventArgs e) =>
         CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);
 
-    // The list also follows the canvas's selection, so only a change made while the list has focus is a choice in it.
+    // The list also follows its canvas's selection, so only a change made while the list has focus is a choice in it.
     private void OnSidebarSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (SidebarTasks.IsKeyboardFocusWithin && SidebarTasks.SelectedItem is TaskNodeViewModel task)
+        if (sender is ListBox { IsKeyboardFocusWithin: true, SelectedItem: TaskNodeViewModel task })
         {
             CanvasView?.BringIntoViewIfHidden(task);
         }
+    }
+
+    private void ShowWorkflowOf(object? source)
+    {
+        if ((source as Visual)?.FindAncestorOfType<ListBox>(includeSelf: true) is { DataContext: WorkflowCanvasViewModel canvas } list
+            && list.Classes.Contains("tasks") && canvas != ViewModel.Canvas)
+        {
+            ViewModel.Select(canvas);
+            // The new canvas view lays out now, so a card it brings into view is measured against its real size.
+            UpdateLayout();
+        }
+    }
+
+    private void OnWorkflowClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
+        {
+            ViewModel.Select(canvas);
+        }
+    }
+
+    private void OnWorkflowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F2 && e.KeyModifiers == KeyModifiers.None && (sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
+        {
+            RenameWorkflow(canvas);
+            e.Handled = true;
+        }
+    }
+
+    private void OnRenameWorkflow(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is WorkflowCanvasViewModel canvas)
+        {
+            RenameWorkflow(canvas);
+        }
+    }
+
+    // The renamed workflow is shown, so Undo takes the rename back.
+    private void RenameWorkflow(WorkflowCanvasViewModel canvas)
+    {
+        ViewModel.Select(canvas);
+        canvas.BeginRenameWorkflow();
+    }
+
+    private void OnNewWorkflow(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ProjectViewModel project)
+        {
+            ViewModel.NewWorkflow(project);
+        }
+    }
+
+    // Both questions come before either answer acts, and the project's runs stop only once it closes.
+    private async void OnCloseProject(object? sender, RoutedEventArgs e)
+    {
+        if (_waitingForUser || (sender as Control)?.DataContext is not ProjectViewModel project)
+        {
+            return;
+        }
+
+        _waitingForUser = true;
+        if (await ConfirmLeaving([project], $"close {project.Name}"))
+        {
+            await ViewModel.Close(project);
+        }
+
+        _waitingForUser = false;
     }
 
     // Choosing the task that is already selected changes no selection, so a tap on a row and Space or Enter on the
@@ -153,8 +232,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // A question, the folder picker, or a run that is still stopping can hold an earlier open or close, which would
-    // replace whatever a second open loaded.
+    // A question, the folder picker, or a project that is still closing holds a second open or close until it ends.
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {
         if (_waitingForUser)
@@ -163,48 +241,50 @@ public partial class MainWindow : Window
         }
 
         _waitingForUser = true;
-        var folder = await ConfirmLeaving() ? await PickFolder() : null;
-        if (folder is not null)
+        if (await PickFolder() is { } folder)
         {
-            await ViewModel.Open(folder);
+            ViewModel.Open(folder);
         }
 
         _waitingForUser = false;
     }
 
-    // Both questions come before either answer acts, so a Cancel at the second leaves the run going. The run stops only
-    // when the project is actually left.
-    private async Task<bool> ConfirmLeaving() => await ConfirmStoppingRun() && await ConfirmLeavingDocument();
-
-    private async Task<bool> ConfirmStoppingRun()
+    /// <summary>
+    /// Asks whether to stop the projects' running tasks, then whether to save each project's unsaved workflows. Every
+    /// question comes before any answer acts, so a Cancel at the last leaves every run going and saves nothing. The
+    /// chosen saves then run, and a failed one keeps the projects open.
+    /// </summary>
+    /// <param name="leave">What the questions ask to do, such as "leave" or "close seed".</param>
+    private async Task<bool> ConfirmLeaving(IReadOnlyList<ProjectViewModel> projects, string leave)
     {
-        var question = ViewModel.ActiveRuns switch
+        var question = projects.SelectMany(project => project.Runs.Active).ToList() switch
         {
             [] => null,
-            [var run] => $"\"{run.TaskTitle}\" is running. Stop it and leave?",
-            var runs => $"{runs.Length} tasks are running. Stop them and leave?",
+            [var run] => $"\"{run.TaskTitle}\" is running. Stop it and {leave}?",
+            var runs => $"{runs.Count} tasks are running. Stop them and {leave}?",
         };
-        if (question is null)
+        if (question is not null
+            && await new RunningTaskDialog(question).ShowDialog<RunningTaskChoice?>(this) != RunningTaskChoice.StopAndLeave)
         {
-            return true;
+            return false;
         }
 
-        return await new RunningTaskDialog(question).ShowDialog<RunningTaskChoice?>(this) == RunningTaskChoice.StopAndLeave;
-    }
-
-    private async Task<bool> ConfirmLeavingDocument()
-    {
-        if (ViewModel is not { HasUnsavedChanges: true, ProjectName: { } projectName })
+        List<WorkflowDocument> saves = [];
+        foreach (var project in projects.Where(project => project.UnsavedDocuments.Any()))
         {
-            return true;
+            switch (await new UnsavedChangesDialog(project.Name).ShowDialog<UnsavedChangesChoice?>(this))
+            {
+                case UnsavedChangesChoice.Save:
+                    saves.AddRange(project.UnsavedDocuments);
+                    break;
+                case UnsavedChangesChoice.Discard:
+                    break;
+                default:
+                    return false;
+            }
         }
 
-        return await new UnsavedChangesDialog(projectName).ShowDialog<UnsavedChangesChoice?>(this) switch
-        {
-            UnsavedChangesChoice.Save => ViewModel.TrySave(),
-            UnsavedChangesChoice.Discard => true,
-            UnsavedChangesChoice.Cancel or null => false,
-        };
+        return saves.Count == 0 || ViewModel.TrySave(saves);
     }
 
     private async Task<string?> PickFolderWithStorageProvider()
