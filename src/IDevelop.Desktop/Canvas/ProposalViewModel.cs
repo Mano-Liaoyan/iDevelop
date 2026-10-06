@@ -80,6 +80,7 @@ public sealed class ProposalViewModel : ObservableObject
     private readonly string? _readProblem;
     private readonly RelayCommand _accept;
     private string? _problem;
+    private IReadOnlyList<string> _connections = [];
 
     /// <param name="attempt">The attempt the proposal was read from.</param>
     internal ProposalViewModel(WorkflowCanvasViewModel canvas, ProposalRead read, AttemptId attempt)
@@ -135,13 +136,11 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    /// <summary>Each connection that Accept adds now, as its two tasks' titles.</summary>
-    public IReadOnlyList<string> Connections => Proposal is null ? [] :
-        [.. AcceptEdit(_canvas.Workflow, Chosen()).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
-            $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
+    /// <summary>Each connection that Accept adds now, as its two tasks' titles, as of the last <see cref="Refresh"/>.</summary>
+    public IReadOnlyList<string> Connections => _connections;
 
     /// <summary>"1 connection" or "3 connections", which the inspector shows in place of <see cref="Connections"/> until asked, or null for none.</summary>
-    public string? ConnectionCount => Connections.Count switch
+    public string? ConnectionCount => _connections.Count switch
     {
         0 => null,
         1 => "1 connection",
@@ -225,9 +224,12 @@ public sealed class ProposalViewModel : ObservableObject
             fill.ShowStarted(_canvas.HasStarted(fill.Id));
         }
 
-        Problem = _readProblem ?? (Proposal is not null && _canvas.Workflow.Apply(AcceptEdit(_canvas.Workflow, Chosen())) is EditResult.Rejected rejected
+        var edit = Proposal is null ? null : AcceptEdit(_canvas.Workflow, Chosen());
+        Problem = _readProblem ?? (edit is not null && _canvas.Workflow.Apply(edit) is EditResult.Rejected rejected
             ? $"Accept would be refused. {RejectionText.Describe(rejected.Reason, Title)}"
             : null);
+        _connections = edit is null ? [] : [.. edit.Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
+            $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
         OnPropertyChanged(nameof(Connections));
         OnPropertyChanged(nameof(ConnectionCount));
         _accept.NotifyCanExecuteChanged();
@@ -264,16 +266,13 @@ public sealed class ProposalViewModel : ObservableObject
         var task = _canvas.Workflow.Tasks.GetValueOrDefault(fill.Slot);
         var slot = task is not null && !string.IsNullOrWhiteSpace(task.Title) ? task.Title.Trim() : null;
         var empty = task is not null && PlanningContext.IsEmpty(task);
+        var hasText = task is not null && !empty;
+        var named = slot is null ? "an untitled task" : $"\"{slot}\"";
+        var label = fill.Title is { } title && title != task?.Title.Trim() ? $"Fill {named} as \"{title}\"" : $"Fill {named}";
         return new ProposalItemViewModel(
-            this, fill.Slot, fill.Title ?? slot ?? "Untitled task", FillLabel(fill), Preview(task?.Blueprint, fill.Fields), empty,
-            _canvas.KindOf(task?.Blueprint ?? BuiltInBlueprints.Implement), slot ?? "an untitled task", hasText: task is not null && !empty);
-    }
-
-    private string FillLabel(ProposedFill fill)
-    {
-        var slot = _canvas.Workflow.Tasks.TryGetValue(fill.Slot, out var task) && !string.IsNullOrWhiteSpace(task.Title) ? $"\"{task.Title.Trim()}\"" : "an untitled task";
-        var label = fill.Title is { } title && title != task?.Title.Trim() ? $"Fill {slot} as \"{title}\"" : $"Fill {slot}";
-        return task is null || PlanningContext.IsEmpty(task) ? label : $"{label}. It has text of yours now";
+            this, fill.Slot, fill.Title ?? slot ?? "Untitled task", hasText ? $"{label}. It has text of yours now" : label,
+            Preview(task?.Blueprint, fill.Fields), empty, _canvas.KindOf(task?.Blueprint ?? BuiltInBlueprints.Implement), slot ?? "an untitled task",
+            hasText);
     }
 
     /// <summary>A title the proposal gives, else the workflow's, for a message about a task.</summary>
