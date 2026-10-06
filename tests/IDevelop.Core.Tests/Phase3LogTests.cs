@@ -52,6 +52,7 @@ public class Phase3LogTests
         Assert.Equal(File.ReadAllText(Path.Combine(folder, "record.json")).Replace("\r\n", "\n"), Phase3Fields(record));
         Assert.Equal([new TurnRecord(1, null, Outcomes[log], record.Result, record.Detail)], record.Turns);
         Assert.Equal((0, null, null), (record.Queued.Count, record.Continues, record.Terminal));
+        Assert.Null(record.RunBinding);
     }
 
     /// <summary>The public fields a phase 3 record had, in the shape record.json stores them.</summary>

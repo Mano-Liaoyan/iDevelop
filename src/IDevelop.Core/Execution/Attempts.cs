@@ -103,6 +103,14 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         DateTimeOffset At, AttemptId Attempt, TaskId Task, string TaskTitle, ExecutionSettings Settings,
         string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At)
     {
+        /// <summary>The task as a fresh standalone attempt ran it, which a run can check before reusing the report. Null in older logs.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public StandaloneCapture? StandaloneCapture { get; init; }
+
+        /// <summary>The run that owns the attempt. Null for a standalone attempt.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public RunBinding? RunBinding { get; init; }
+
         /// <summary>Set when the first turn resumes an earlier attempt's session, and then its prompt is the person's message.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public Continuation? Continues { get; init; }
@@ -233,6 +241,7 @@ public sealed record AttemptRecord
         ReadOnly = requested.ReadOnly;
         Subject = requested.Subject;
         Fix = requested.Fix;
+        RunBinding = requested.RunBinding;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null) { StartTree = requested.Tree }];
     }
 
@@ -267,6 +276,8 @@ public sealed record AttemptRecord
 
     /// <summary>Set on an attempt of a review's subject that fixes a round of the review's findings.</summary>
     public ReviewLink? Fix { get; }
+
+    internal RunBinding? RunBinding { get; }
 
     /// <summary>A review's guidance from the person, oldest first.</summary>
     public ImmutableList<GuidanceNote> Guidance { get; internal init; } = [];
