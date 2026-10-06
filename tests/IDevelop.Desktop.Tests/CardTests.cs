@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
@@ -104,6 +106,49 @@ public sealed class CardTests : IDisposable
         Assert.Equal(["Design", "Codex · GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal("Design\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(shell.InCard<Panel>("Design", "TaskCard")));
+    }
+
+    [AvaloniaFact]
+    public void Renaming_on_the_card_shows_the_whole_title_line_where_the_title_was_and_leaves_the_subtitle_whole()
+    {
+        Install(_fakes, ClientId.Codex);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        var titleDrawnAt = shell.Bounds(shell.InCard<TextBlock>("Design", "CardTitle")).TopLeft;
+        var subtitle = shell.Bounds(shell.InCard<TextBlock>("Design", "CardAgent"));
+        shell.Click(shell.Header(shell.Node("Design")));
+        var subtitleRows = shell.PixelRows(subtitle);
+        int[] inked = [.. Enumerable.Range(0, subtitleRows.Length).Where(row => subtitleRows[row].Distinct().Count() > 1)];
+
+        shell.Press(Key.F2);
+
+        var box = shell.InCard<TextBox>("Design", "CardTitleBox");
+        var text = box.GetVisualDescendants().OfType<TextPresenter>().Single();
+        var shown = shell.Bounds(text.FindAncestorOfType<ScrollContentPresenter>()!).Intersect(shell.Bounds(box).Deflate(box.BorderThickness));
+        var subtitleRowsWhileRenaming = shell.PixelRows(subtitle);
+        Assert.True(box.IsFocused);
+        Assert.True(Point.Distance(titleDrawnAt, shell.Bounds(text).TopLeft) <= 0.5, $"The text moved from {titleDrawnAt} to {shell.Bounds(text).TopLeft}.");
+        Assert.True(shown.Contains(shell.Bounds(text)), $"The box shows {shown} of its line at {shell.Bounds(text)}.");
+        Assert.NotEmpty(inked);
+        Assert.All(inked, row => Assert.True(subtitleRows[row].SequenceEqual(subtitleRowsWhileRenaming[row]), $"The box covers the subtitle's row {subtitle.Top + row}."));
+    }
+
+    [AvaloniaFact]
+    public void The_card_holds_back_its_tooltip_while_its_title_is_renamed()
+    {
+        Install(_fakes, ClientId.Codex);
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
+        var card = shell.InCard<Panel>("Design", "TaskCard");
+        shell.Click(shell.Header(shell.Node("Design")));
+        ToolTip.SetIsOpen(card, true);
+        shell.Render();
+        Assert.True(ToolTip.GetIsOpen(card));
+
+        shell.Press(Key.F2);
+
+        Assert.Equal((false, null), (ToolTip.GetIsOpen(card), ToolTip.GetTip(card)));
+        shell.Type("Parser");
+        shell.Press(Key.Enter);
+        Assert.Equal("Parser\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(card));
     }
 
     [AvaloniaFact]

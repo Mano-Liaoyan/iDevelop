@@ -1,7 +1,9 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Theme;
@@ -103,7 +105,7 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Duplicate_copies_the_selection_and_the_connections_among_it_and_selects_the_copies()
+    public void Duplicate_copies_the_selection_and_the_connections_among_it_below_the_originals_and_selects_the_copies()
     {
         var shell = Shell.Open(DesignThenBuild(
             TaskAt(Check, "Check", 905, 90),
@@ -119,10 +121,147 @@ public sealed class NodeMenuTests : IDisposable
         var buildCopy = workflow.Tasks.Values.Single(task => task.Title == "Build copy");
         Assert.Equal(5, workflow.Tasks.Count);
         Assert.Equal(("Write the parser.", Codex), (designCopy.Field("instructions"), designCopy.Execution));
-        Assert.Equal(new CanvasPoint(135, 120), workflow.Positions[designCopy.Id]);
+        Assert.Equal((new CanvasPoint(105, 184), new CanvasPoint(505, 184)), (workflow.Positions[designCopy.Id], workflow.Positions[buildCopy.Id]));
         Assert.Equal(ConnectionKind.Dependency, workflow.Connections[new ConnectionKey(designCopy.Id, buildCopy.Id)]);
         Assert.Equal(3, workflow.Connections.Count);
         Assert.Equal(["Build copy", "Design copy"], shell.Window.ViewModel.Canvas!.SelectedNodes.Select(node => node.Title).Order());
+    }
+
+    [AvaloniaFact]
+    public void Duplicate_puts_the_copy_at_the_first_free_spot_below_its_original()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90, Codex),
+            TaskAt(Build, "Build", 105, 184),
+            TaskAt(Check, "Check", 305, 278)));
+
+        shell.RightClick(shell.Header(shell.Node("Design")));
+        shell.Click(shell.MenuItem("NodeMenuDuplicate"));
+
+        var copy = Workflow(shell).Tasks.Values.Single(task => task.Title == "Design copy");
+        Assert.Equal(new CanvasPoint(105, 372), Workflow(shell).Positions[copy.Id]);
+        Assert.All(
+            ["Design", "Build", "Check"],
+            title => Assert.False(shell.CardRect("Design copy").Intersects(shell.CardRect(title)), $"The copy covers {title}."));
+    }
+
+    [AvaloniaFact]
+    public void A_node_without_an_agent_offers_choose_agent_in_place_of_run_which_opens_its_client_picker()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+
+        Assert.Equal(
+            ["Choose Agent…", "Rename", "Duplicate", "Replace With", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"],
+            shell.MenuHeaders());
+        Assert.Same(Application.Current!.FindResource("IconAgent"), ((PathIcon)shell.MenuItem("NodeMenuChooseAgent").Icon!).Data);
+
+        shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+
+        var picker = shell.Find<ComboBox>("TaskClient");
+        var focused = Assert.IsType<ComboBoxItem>(shell.Window.FocusManager!.GetFocusedElement());
+        Assert.Equal(
+            ("Build", "Build", true, "None"),
+            (shell.Window.ViewModel.Canvas!.SelectedNode?.Title, ((TaskNodeViewModel)picker.DataContext!).Title, picker.IsDropDownOpen,
+                ((ClientChoice)focused.DataContext!).Label));
+        Assert.Same(picker, focused.FindLogicalAncestorOfType<ComboBox>());
+
+        shell.Press(Key.Down);
+        shell.Press(Key.Enter);
+
+        Assert.Equal(ClientId.ClaudeCode, Workflow(shell).Tasks[Build].Execution?.Client);
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        Assert.Equal("Run", shell.MenuHeaders()[0]);
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_unfolds_the_agent_section_and_clears_a_filter_that_hides_the_picker()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Click(shell.Header(shell.Node("Build")));
+        shell.Fold("Agent");
+        shell.FilterInspector("acc");
+        Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+
+        var picker = shell.Find<ComboBox>("TaskClient");
+        Assert.Equal(
+            (true, true, false, ""),
+            (picker.IsEffectivelyVisible, picker.IsDropDownOpen, shell.Section("Agent").IsFolded, shell.Find<TextBox>("InspectorFilter").Text));
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_waits_while_the_blueprint_editor_holds_the_inspector()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        shell.Click(shell.MenuItem("NodeMenuSaveAs"));
+        Assert.True(shell.Find<StackPanel>("BlueprintEditor").IsEffectivelyVisible);
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        var whileEditing = shell.MenuHeaders();
+        shell.Press(Key.Escape);
+        shell.Click(shell.InView<Button>("CancelBlueprint"));
+        shell.RightClick(shell.Header(shell.Node("Build")));
+
+        Assert.Equal(["Rename", "Duplicate", "Replace With", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], whileEditing);
+        Assert.Equal("Choose Agent…", shell.MenuHeaders()[0]);
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_opens_the_client_list_only_once_the_node_menu_has_closed()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        bool? menuShown = null;
+        using (ComboBox.IsDropDownOpenProperty.Changed.AddClassHandler<ComboBox>((picker, e) =>
+        {
+            if (AutomationProperties.GetAutomationId(picker) == "TaskClient" && e.NewValue is true)
+            {
+                menuShown = shell.Has<MenuItem>("NodeMenuChooseAgent") && shell.Find<MenuItem>("NodeMenuChooseAgent").IsEffectivelyVisible;
+            }
+        }))
+        {
+            shell.RightClick(shell.Header(shell.Node("Build")));
+            shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+        }
+
+        Assert.Equal(false, menuShown);
+    }
+
+    [AvaloniaFact]
+    public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.Window.Height = shell.Window.MinHeight;
+        shell.Click(shell.Header(shell.Node("Build")));
+        var viewport = shell.Find<ComboBox>("TaskClient").FindAncestorOfType<ScrollViewer>()!;
+        viewport.ScrollToEnd();
+        shell.Render();
+        Assert.False(shell.Bounds(viewport).Contains(shell.Bounds(shell.Find<ComboBox>("TaskClient"))), "The picker is already in view.");
+        Rect? placedAgainst = null;
+
+        // A window places the list against where the picker was last laid out. A headless list is an overlay that lays the
+        // window out before placing it, so the test reads the picker's laid-out place as the list opens.
+        using (ComboBox.IsDropDownOpenProperty.Changed.AddClassHandler<ComboBox>((picker, e) =>
+        {
+            if (AutomationProperties.GetAutomationId(picker) == "TaskClient" && e.NewValue is true)
+            {
+                placedAgainst = shell.Bounds(picker);
+            }
+        }))
+        {
+            shell.RightClick(shell.Header(shell.Node("Build")));
+            shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+        }
+
+        Assert.True(shell.Find<ComboBox>("TaskClient").IsDropDownOpen);
+        Assert.True(
+            placedAgainst is { } picker && shell.Bounds(viewport).Contains(picker),
+            $"The list opened against the picker at {placedAgainst}, outside the inspector's view {shell.Bounds(viewport)}.");
     }
 
     [AvaloniaFact]

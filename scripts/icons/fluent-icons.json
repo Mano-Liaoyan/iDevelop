@@ -18,6 +18,7 @@
     { "key": "IconStateElsewhere", "asset": "Window Multiple", "file": "ic_fluent_window_multiple_16_regular.svg" },
     { "key": "IconRun", "asset": "Play", "file": "ic_fluent_play_16_filled.svg" },
     { "key": "IconStop", "asset": "Stop", "file": "ic_fluent_stop_16_filled.svg" },
+    { "key": "IconAgent", "asset": "Bot", "file": "ic_fluent_bot_16_regular.svg" },
     { "key": "IconAdd", "asset": "Add", "file": "ic_fluent_add_16_regular.svg" },
     { "key": "IconSparkle", "asset": "Sparkle", "file": "ic_fluent_sparkle_16_filled.svg" },
     { "key": "IconRename", "asset": "Rename", "file": "ic_fluent_rename_16_regular.svg" },
