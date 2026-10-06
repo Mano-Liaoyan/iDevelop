@@ -45,17 +45,23 @@ public sealed class GenerateTests : IDisposable
 
     public GenerateTests() => _fakes = new FakeClients(_temp.Create("bin"));
 
-    private readonly List<Shell> _shells = [];
-
-    // A test may end while its planner's turn still writes the attempt log, which Windows will not delete.
+    // A test may end while its planner's turn still writes the attempt log, which Windows will not delete while it is
+    // open, so the folder goes once the run lets go of it.
     public void Dispose()
     {
-        foreach (var shell in _shells)
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
         {
-            SpinWait.SpinUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, TimeSpan.FromSeconds(30));
+            try
+            {
+                _temp.Dispose();
+                return;
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(100);
+            }
         }
-
-        _temp.Dispose();
     }
 
     [AvaloniaFact]
@@ -444,9 +450,7 @@ public sealed class GenerateTests : IDisposable
     private Shell OpenEmpty(params FakeRule[] runs)
     {
         Install(_fakes, ClientId.Codex, runs);
-        var shell = Shell.Open(_temp.Create("seed"), _fakes.DiscoverAsync().Result);
-        _shells.Add(shell);
-        return shell;
+        return Shell.Open(_temp.Create("seed"), _fakes.DiscoverAsync().Result);
     }
 
     /// <summary>Generates from an empty project and waits for the planner's proposal.</summary>
