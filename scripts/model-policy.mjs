@@ -6,13 +6,13 @@ import { fileURLToPath } from 'node:url';
 const efforts = ['low', 'medium', 'high', 'xhigh'];
 const clientProviders = { codex: 'openai', claude: 'anthropic', agy: 'google' };
 const requiredRoles = {
-  'backend-implementation': ['anthropic'],
+  'backend-implementation': ['openai'],
   'frontend-implementation': ['anthropic'],
   'backend-review': ['anthropic'],
   'frontend-review': ['anthropic'],
-  judgment: ['anthropic'],
-  'difficult-task-review': ['anthropic'],
-  exploration: ['anthropic'],
+  judgment: ['openai'],
+  'difficult-task-review': ['openai'],
+  exploration: ['openai'],
 };
 
 function object(value, label) {
@@ -33,7 +33,7 @@ function nonemptyString(value, label) {
 
 export function validateModelPolicy(config) {
   fields(config, ['schemaVersion', 'policy', 'budget', 'reasoningPolicy', 'reviewPolicy', 'models', 'roles'], 'config');
-  assert.equal(config.schemaVersion, 2, 'schemaVersion must be 2');
+  assert.equal(config.schemaVersion, 3, 'schemaVersion must be 3');
   assert.equal(config.policy, 'quality-first', 'policy must be quality-first');
   assert.equal(config.budget, 'large', 'budget must be large');
   fields(config.reasoningPolicy, ['ceiling', 'allowImplicit'], 'reasoningPolicy');
@@ -41,14 +41,18 @@ export function validateModelPolicy(config) {
   assert.ok(ceiling >= 0, 'reasoningPolicy.ceiling must be low, medium, high, or xhigh');
   assert.equal(config.reasoningPolicy.allowImplicit, false, 'reasoningPolicy.allowImplicit must be false');
   fields(config.reviewPolicy, ['crossProvider', 'onUnavailable'], 'reviewPolicy');
-  assert.equal(config.reviewPolicy.crossProvider, false, 'reviewPolicy.crossProvider must be false while every role requires anthropic');
+  fields(config.reviewPolicy.crossProvider, ['backend', 'frontend'], 'reviewPolicy.crossProvider');
+  for (const scope of ['backend', 'frontend']) {
+    assert.equal(typeof config.reviewPolicy.crossProvider[scope], 'boolean',
+      `reviewPolicy.crossProvider.${scope} must be a boolean`);
+  }
   assert.equal(config.reviewPolicy.onUnavailable, 'block', 'reviewPolicy.onUnavailable must be block');
   object(config.models, 'models');
   const seenModels = new Set();
   for (const [key, entry] of Object.entries(config.models)) {
     assert.match(key, /^[a-z][a-z0-9-]*$/, 'model keys must be lowercase names');
     const label = `models.${key}`;
-    fields(entry, ['provider', 'client', 'requestedName', 'requestedModel', 'model', 'reasoningEffort', 'verification'], label);
+    fields(entry, ['provider', 'client', 'requestedName', 'requestedModel', 'model', 'verifiedEfforts', 'verification'], label);
     nonemptyString(entry.requestedName, `${label}.requestedName`);
     nonemptyString(entry.requestedModel, `${label}.requestedModel`);
     assert.ok(!['auto', 'default', 'inherit', 'inherit-parent'].includes(entry.requestedModel),
@@ -59,33 +63,59 @@ export function validateModelPolicy(config) {
     const identity = JSON.stringify([entry.provider, entry.requestedModel]);
     assert.ok(!seenModels.has(identity), `${label} duplicates a model identity`);
     seenModels.add(identity);
-    const effort = efforts.indexOf(entry.reasoningEffort);
-    assert.ok(effort >= 0, `${label}.reasoningEffort must be explicitly low, medium, high, or xhigh`);
-    assert.ok(effort <= ceiling, `${label}.reasoningEffort exceeds the policy ceiling`);
-    assert.ok(entry.provider !== 'google' || effort <= efforts.indexOf('high'),
-      `${label}.reasoningEffort exceeds Gemini's high limit`);
+    assert.ok(Array.isArray(entry.verifiedEfforts), `${label}.verifiedEfforts must be an array`);
+    assert.equal(new Set(entry.verifiedEfforts).size, entry.verifiedEfforts.length,
+      `${label}.verifiedEfforts must not contain duplicates`);
+    for (const value of entry.verifiedEfforts) {
+      const effort = efforts.indexOf(value);
+      assert.ok(effort >= 0, `${label}.verifiedEfforts must contain only low, medium, high, or xhigh`);
+      assert.ok(entry.provider !== 'google' || effort <= efforts.indexOf('high'),
+        `${label}.verifiedEfforts exceeds Gemini's high limit`);
+    }
     if (entry.verification === 'pending-client') {
       assert.equal(entry.model, null, `${label}.model must be null while verification is pending-client`);
     } else {
       const verification = entry.client === 'codex' ? 'native-catalog' : 'client-catalog';
       assert.equal(entry.verification, verification, `${label}.verification must be pending-client or ${verification}`);
       assert.equal(entry.model, entry.requestedModel, `${label}.model must match the verified requestedModel`);
+      assert.ok(entry.verifiedEfforts.length > 0, `${label}.verifiedEfforts must not be empty for a verified model`);
     }
   }
   fields(config.roles, Object.keys(requiredRoles), 'roles');
-  for (const [role, keys] of Object.entries(config.roles)) {
-    assert.ok(Array.isArray(keys) && keys.length > 0, `roles.${role} must be a nonempty array`);
-    assert.equal(new Set(keys).size, keys.length, `roles.${role} must not contain duplicate participants`);
-    for (const key of keys) {
+  for (const [role, assignments] of Object.entries(config.roles)) {
+    assert.ok(Array.isArray(assignments) && assignments.length > 0, `roles.${role} must be a nonempty array`);
+    const selected = new Set();
+    for (const [index, assignment] of assignments.entries()) {
+      const label = `roles.${role}[${index}]`;
+      fields(assignment, ['model', 'reasoningEffort'], label);
+      const key = assignment.model;
       assert.ok(typeof key === 'string' && Object.hasOwn(config.models, key), `roles.${role} references unknown model ${key}`);
+      assert.ok(!selected.has(key), `roles.${role} must not contain duplicate participants`);
+      selected.add(key);
+      const entry = config.models[key];
+      const effort = efforts.indexOf(assignment.reasoningEffort);
+      assert.ok(effort >= 0, `${label}.reasoningEffort must be explicitly low, medium, high, or xhigh`);
+      assert.ok(effort <= ceiling, `${label}.reasoningEffort exceeds the policy ceiling`);
+      assert.ok(entry.provider !== 'google' || effort <= efforts.indexOf('high'),
+        `${label}.reasoningEffort exceeds Gemini's high limit`);
+      assert.ok(entry.verification === 'pending-client' || entry.verifiedEfforts.includes(assignment.reasoningEffort),
+        `${label}.reasoningEffort has not been verified for models.${key}`);
     }
   }
   for (const scope of ['backend', 'frontend']) {
-    assert.equal(config.roles[`${scope}-implementation`].length, 1, `${scope} implementation must have a single owner`);
+    const authors = config.roles[`${scope}-implementation`];
+    assert.equal(authors.length, 1, `${scope} implementation must have a single owner`);
+    if (config.reviewPolicy.crossProvider[scope]) {
+      const author = config.models[authors[0].model];
+      for (const reviewer of config.roles[`${scope}-review`]) {
+        assert.notEqual(config.models[reviewer.model].provider, author.provider,
+          `${scope} review must use providers different from its author`);
+      }
+    }
   }
   for (const [role, providers] of Object.entries(requiredRoles)) {
-    const entries = config.roles[role].map(key => config.models[key]);
-    assert.deepEqual(entries.map(entry => entry.provider).sort(), [...providers].sort(),
+    const selectedProviders = new Set(config.roles[role].map(assignment => config.models[assignment.model].provider));
+    assert.deepEqual([...selectedProviders].sort(), [...providers].sort(),
       `roles.${role} must select exactly these providers: ${providers.join(', ')}`);
   }
 }
@@ -93,7 +123,8 @@ export function validateModelPolicy(config) {
 export function resolveRole(config, role) {
   validateModelPolicy(config);
   assert.ok(typeof role === 'string' && Object.hasOwn(config.roles, role), `Unknown role ${role}`);
-  const selected = config.roles[role].map(key => ({ key, ...config.models[key] }));
+  const selected = config.roles[role].map(({ model: key, reasoningEffort }) =>
+    ({ key, ...config.models[key], reasoningEffort }));
   const missing = selected.filter(entry => entry.verification === 'pending-client');
   if (missing.length > 0) {
     return {

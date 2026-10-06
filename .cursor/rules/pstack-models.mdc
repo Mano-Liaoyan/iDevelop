@@ -4,7 +4,7 @@ alwaysApply: true
 ---
 # budget: large (xhigh ceiling)
 
-Read `.pstack/compatibility.md` and `.pstack/models.json` before delegating. The version 2 JSON policy is authoritative. Run `node scripts/model-policy.mjs resolve <role>` and dispatch only a ready result. The following names refer to policy roles, not model slugs.
+Read `.pstack/compatibility.md` and `.pstack/models.json` before delegating. The version 3 JSON policy is authoritative. Each role assignment specifies its own model reference and reasoning effort. Run `node scripts/model-policy.mjs resolve <role>` and dispatch only a ready result. The following names refer to policy roles, not model slugs.
 
 | Workflow roles | Resolve |
 | --- | --- |
@@ -16,4 +16,4 @@ Read `.pstack/compatibility.md` and `.pstack/models.json` before delegating. The
 | arena cross-judge pool; interrogate reviewers | `frontend-review` or `backend-review`, excluding the authoring session; review in a fresh Opus session |
 | swarm workers | The worker's explicit exploration, implementation, or review role |
 
-Set the returned model and effort explicitly. Do not inherit effort, use max or higher, substitute missing providers, or run only the available members of a blocked panel. Upstream default slugs and fallback instructions do not override this policy.
+Set the returned model and effort explicitly. The large budget is an xhigh ceiling, not permission to raise a role's high or low effort. Backend review must use another provider. Frontend review intentionally uses the same Opus model in a fresh session, never the authoring session. Difficult-task review supplements the scope-specific review. Do not inherit effort, use max or higher, substitute missing providers, or run only the available members of a blocked panel. Upstream default slugs and fallback instructions do not override this policy.
