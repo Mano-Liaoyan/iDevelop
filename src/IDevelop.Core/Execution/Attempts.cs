@@ -28,7 +28,8 @@ public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted, 
 /// <summary>How one client process ended. Stopped means the person stopped it, with Stop and send or Cancel.</summary>
 public enum TurnOutcome { Running, Succeeded, Failed, Stopped, Interrupted }
 
-public sealed record ActivityLine(DateTimeOffset At, string Text);
+/// <summary>One line of what an attempt did. <paramref name="IsTool"/> marks a tool call, such as a command, rather than what the agent or iDevelop said.</summary>
+public sealed record ActivityLine(DateTimeOffset At, string Text, bool IsTool = false);
 
 /// <summary>
 /// One client process of an attempt. <see cref="Message"/> is what the person sent, which is the turn's whole prompt,
@@ -381,7 +382,7 @@ internal static partial class AttemptReducer
             ReportedReasoning = reported.Reasoning ?? record.ReportedReasoning,
         },
         AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, TextLines.FirstLine(message.Text) ?? ""),
-        AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}"),
+        AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}", isTool: true),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
         _ => throw new UnreachableException($"Unhandled agent event {e.GetType().Name}"),
@@ -507,9 +508,9 @@ internal static partial class AttemptReducer
 
     private static string? FinalText(AttemptRecord record) => (record.Verdict as AgentEvent.Succeeded)?.Result ?? record.LastMessage;
 
-    private static AttemptRecord Log(AttemptRecord record, DateTimeOffset at, string text)
+    private static AttemptRecord Log(AttemptRecord record, DateTimeOffset at, string text, bool isTool = false)
     {
         var activity = record.Activity.Count < ActivityLimit ? record.Activity : record.Activity.RemoveAt(0);
-        return record with { Activity = activity.Add(new ActivityLine(at, text)) };
+        return record with { Activity = activity.Add(new ActivityLine(at, text, isTool)) };
     }
 }

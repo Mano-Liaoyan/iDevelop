@@ -19,22 +19,32 @@ public sealed partial class TaskNodeViewModel
         [nameof(Proposal)] = [nameof(ShowsAcceptAndFinish)],
         [nameof(PermissionNote)] = [nameof(PermissionSummary)],
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
+        [nameof(Role)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
+        [nameof(State)] = [nameof(ShowsCancel)],
     };
 
     private RelayCommand _acceptAndFinish = null!;
     private ProposalViewModel? _watchedProposal;
     private AttemptViewModel? _lastRun;
+    private bool _showsToolCalls;
 
     public string AgentSectionTitle => IsReview ? "Reviewer" : "Agent";
 
+    /// <summary>Whether the inspector lists this task's tool calls in its activity. Each task keeps its own choice across its runs.</summary>
+    public bool ShowsToolCalls
+    {
+        get => _showsToolCalls;
+        set => SetProperty(ref _showsToolCalls, value);
+    }
+
     public string ComposerSectionTitle => IsReview ? "Guide the Review" : "Talk to the Agent";
 
-    /// <summary>The permission note as one short line, under the pickers. The client's info glyph holds the whole note.</summary>
+    /// <summary>The permission note as one short line, which names the client's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string? PermissionSummary => _task.Execution is { } settings
         ? IsReview ? RunText.ReviewerSummary(settings.Client) : RunText.PermissionSummary(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
-    /// <summary>The conversation note as one short line. The conversation's info glyph holds the whole note.</summary>
+    /// <summary>The conversation note as one short line, which names the conversation's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string ConversationSummary => RunText.ConversationSummary(_task.Conversation);
 
     /// <summary>What the blueprint is for, which the header's help glyph shows.</summary>
@@ -72,6 +82,15 @@ public sealed partial class TaskNodeViewModel
     public string? DerivedFrom => _task.Blueprint.DerivedFrom is { } key
         ? $"{_canvas.FindBlueprint(key)?.Name ?? BuiltInBlueprints.Find(key)?.Name ?? key.Id}, version {key.Version}"
         : null;
+
+    /// <summary>
+    /// Run and the reason it cannot start. While a proposal is open, accepting it is the node's one primary action, so
+    /// the Run section keeps only the run's status.
+    /// </summary>
+    public bool ShowsRunControls => Role != NodeRole.Proposing;
+
+    /// <summary>Cancel shows with Run, and while a proposal is open only during a turn that this window runs.</summary>
+    public bool ShowsCancel => ShowsRunControls || State is NodeState.Running or NodeState.Stopping;
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the

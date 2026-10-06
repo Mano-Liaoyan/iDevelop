@@ -11,6 +11,9 @@ public enum RowLayout
     /// <summary>The label on the left at 40 percent, the editor on the right.</summary>
     Columns,
 
+    /// <summary>As <see cref="Columns"/>, with the value also across the glyph column, for a value with no glyphs, such as chips.</summary>
+    Wide,
+
     /// <summary>The label on its own line, the editor under it at full width, for text of several lines.</summary>
     Stacked,
 
@@ -20,8 +23,8 @@ public enum RowLayout
 
 /// <summary>
 /// One property in an inspector section: its label, its editor, a revert arrow while the value differs from the
-/// blueprint's default, and an info glyph whose tooltip holds what a paragraph used to say. While the filter has text,
-/// a row shows when its label or its section's title matches. A row without a label shows only with its section's title.
+/// blueprint's default, and an info glyph whose tooltip holds the property's note. While the filter has text, a row shows
+/// when its label or its section's title matches. A row without a label shows only with its section's title.
 /// </summary>
 public sealed class InspectorRow : InspectorPart
 {
@@ -32,6 +35,10 @@ public sealed class InspectorRow : InspectorPart
     public static readonly StyledProperty<RowLayout> LayoutProperty = AvaloniaProperty.Register<InspectorRow, RowLayout>(nameof(Layout));
 
     public static readonly StyledProperty<string?> InfoProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(Info));
+
+    public static readonly StyledProperty<string?> InfoNameProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(InfoName));
+
+    public static readonly StyledProperty<string?> InfoIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(InfoId));
 
     public static readonly StyledProperty<ICommand?> RevertCommandProperty = AvaloniaProperty.Register<InspectorRow, ICommand?>(nameof(RevertCommand));
 
@@ -65,6 +72,20 @@ public sealed class InspectorRow : InspectorPart
     {
         get => GetValue(InfoProperty);
         set => SetValue(InfoProperty, value);
+    }
+
+    /// <summary>The info glyph's name for UI Automation: the note in one short line, whose whole text is <see cref="Info"/>.</summary>
+    public string? InfoName
+    {
+        get => GetValue(InfoNameProperty);
+        set => SetValue(InfoNameProperty, value);
+    }
+
+    /// <summary>The info glyph's automation id, such as PermissionNote.</summary>
+    public string? InfoId
+    {
+        get => GetValue(InfoIdProperty);
+        set => SetValue(InfoIdProperty, value);
     }
 
     public ICommand? RevertCommand
@@ -111,6 +132,7 @@ public sealed class InspectorRow : InspectorPart
         base.OnPropertyChanged(change);
         if (change.Property == LayoutProperty)
         {
+            PseudoClasses.Set(":wide", Layout == RowLayout.Wide);
             PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked);
             PseudoClasses.Set(":full", Layout == RowLayout.Full);
         }
