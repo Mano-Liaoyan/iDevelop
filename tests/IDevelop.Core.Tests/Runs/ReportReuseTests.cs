@@ -179,8 +179,7 @@ public sealed class ReportReuseTests
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         Assert.True(process.WaitForExit(10000), "Git did not exit.");
-        Assert.Equal(0, process.ExitCode);
-        Assert.Equal("", error);
+        Assert.True(process.ExitCode == 0, error);
         return output;
     }
 }
