@@ -226,4 +226,31 @@ public sealed class RecoveryAndResultTests
         Assert.Equal(A1, f.Reserve().Attempt.Id);
         Assert.Equal(V1, f.Read().Revision.Id.Sha256);
     }
+
+    [Fact]
+    public void Reconciled_turn_cannot_release_ownership_after_abandonment()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        var reservation = f.Reserve();
+        f.Claim(reservation);
+        var folder = f.Store.AttemptFolder(W, Run, T, A1);
+        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!,
+            new AttemptEvent.Requested(At, A1, T, "Plan", Task().Execution!, "Inspect", "codex", [])
+            {
+                RunBinding = new(W, Run, new(V1), reservation.Inputs.Id),
+                ReadOnly = true,
+                Conversation = ConversationMode.Autonomous,
+            }))
+        {
+            log.Append(new AttemptEvent.Reconciled(At, ProcessMatch.Gone));
+        }
+        Assert.Equal(RunProblem.RecoveryEvidenceInsufficient,
+            Problem(f.Store.CloseTurn(W, Run, f.Op(), new(A1, 1), Checkpoint(folder))));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Administrative closure."));
+        f.Approve(run: OtherRun);
+        var next = f.Reserve(run: OtherRun);
+        Assert.Equal(RunProblem.UnresolvedOwnership,
+            Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
+    }
 }

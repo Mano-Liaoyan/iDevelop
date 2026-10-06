@@ -197,6 +197,11 @@ internal sealed class RunStore
                 return new Mutation.Rejected(rejection);
             }
 
+            if (read.Events.Any(e => e is AttemptEvent.Reconciled))
+            {
+                return Refuse(RunProblem.RecoveryEvidenceInsufficient);
+            }
+
             if (key.Turn < 1 || read.Record!.Turns.Count < key.Turn || read.Record.Turns[key.Turn - 1].Outcome == TurnOutcome.Running)
             {
                 return Refuse(RunProblem.OutcomeMismatch);
