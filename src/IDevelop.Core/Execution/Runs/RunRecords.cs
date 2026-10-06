@@ -210,6 +210,15 @@ internal abstract record RunDecision
     internal sealed record Rejected(RunRejection Reason) : RunDecision;
 }
 
+internal abstract record RecoveryRead
+{
+    private RecoveryRead() { }
+
+    internal sealed record Loaded(ImmutableArray<AttemptRecovery> Attempts) : RecoveryRead;
+
+    internal sealed record Rejected(RunRejection Reason) : RecoveryRead;
+}
+
 internal enum RecoveryState { RequestMissing, Reserved, Uncertain, Closed }
 
 internal sealed record AttemptRecovery(AttemptId Attempt, RecoveryState State, ImmutableArray<LaunchKey> Claims);

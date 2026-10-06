@@ -250,16 +250,24 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.AttemptClosed(attempt, end));
         });
 
-    public ImmutableArray<AttemptRecovery> InspectRecovery(WorkflowId workflow, RunId run) => Read(workflow, run) is RunRead.Loaded loaded
-        ? [.. loaded.Record.Attempts.Values.OrderBy(attempt => attempt.Id.Value).Select(attempt =>
+    public RecoveryRead InspectRecovery(WorkflowId workflow, RunId run)
+    {
+        var read = Read(workflow, run);
+        if (read is RunRead.Rejected rejected)
         {
-            var claims = loaded.Record.UnresolvedClaims.Where(key => key.Attempt == attempt.Id).ToImmutableArray();
-            var state = loaded.Record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Length != 0 ? RecoveryState.Uncertain :
+            return new RecoveryRead.Rejected(rejected.Reason);
+        }
+
+        var record = ((RunRead.Loaded)read).Record;
+        return new RecoveryRead.Loaded([.. record.Attempts.Values.OrderBy(attempt => attempt.Id.Value).Select(attempt =>
+        {
+            var claims = record.UnresolvedClaims.Where(key => key.Attempt == attempt.Id).ToImmutableArray();
+            var state = record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Length != 0 ? RecoveryState.Uncertain :
                 File.Exists(Path.Combine(AttemptFolder(workflow, run, attempt.Task, attempt.Id), "events.jsonl")) ? RecoveryState.Reserved :
                     RecoveryState.RequestMissing;
             return new AttemptRecovery(attempt.Id, state, claims);
-        })]
-        : [];
+        })]);
+    }
 
     public RunDecision Recover(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
         RecoveryOutcome? outcome = null, OperationId? confirmation = null, string? reason = null)
@@ -525,9 +533,6 @@ internal sealed class RunStore
             confirmation,
             reason
         }), (_, _) => new Mutation.Append(new RunEvent.Abandoned(confirmation, reason)));
-
-    public static (InputRecord? Inputs, RunRejection? Rejection) CaptureInputs(RunRecord record, TaskId task, RevisionId revision,
-        InputId id, CommitId codeBase, string text) => Inputs(record, task, revision, id, codeBase, text);
 
     private static (InputRecord? Inputs, RunRejection? Rejection) Inputs(RunRecord record, TaskId task, RevisionId revision,
         InputId id, CommitId codeBase, string text)

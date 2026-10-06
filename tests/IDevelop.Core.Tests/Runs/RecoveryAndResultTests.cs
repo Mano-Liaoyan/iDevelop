@@ -36,7 +36,7 @@ public sealed class RecoveryAndResultTests
         {
             Assert.Equal("locked", await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped.")));
-            Assert.Equal(RecoveryState.Uncertain, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+            Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
         }
         finally
         {
@@ -44,7 +44,7 @@ public sealed class RecoveryAndResultTests
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
-        Assert.Equal(RecoveryState.Closed, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class RecoveryAndResultTests
         f.WriteLog(reservation);
         var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1));
         Assert.Equal(TerminalAttemptOutcome.Succeeded, Assert.IsType<AttemptEnd.Logged>(recovered.Record.Closures[A1]).Outcome);
-        Assert.Equal(RecoveryState.Closed, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
         Assert.Equal(4, f.Read().Sequence);
     }
 
@@ -75,7 +75,7 @@ public sealed class RecoveryAndResultTests
         var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1));
         Assert.Equal(TerminalAttemptOutcome.Succeeded, Assert.IsType<AttemptEnd.Logged>(recovered.Record.Closures[A1]).Outcome);
         Assert.Equal(RunPhase.Abandoned, recovered.Record.Phase);
-        Assert.Equal(RecoveryState.Closed, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
 
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
@@ -252,5 +252,15 @@ public sealed class RecoveryAndResultTests
         var next = f.Reserve(run: OtherRun);
         Assert.Equal(RunProblem.UnresolvedOwnership,
             Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
+    }
+
+    [Fact]
+    public void Recovery_inspection_reports_a_sequence_gap()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        File.AppendAllText(f.Journal(W, Run), """{"schema":1,"sequence":3,"event":{"type":"stopRequested"}}""" + "\n");
+        Assert.Equal(new RunRejection(RunProblem.SequenceGap, 2),
+            Assert.IsType<RecoveryRead.Rejected>(f.Store.InspectRecovery(W, Run)).Reason);
     }
 }
