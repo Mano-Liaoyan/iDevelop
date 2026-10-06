@@ -953,6 +953,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,
+                StandaloneCapture = continues is null ? new StandaloneCapture(task, "") : null,
             };
             log = AttemptLog.Create(_attempts, requested);
         }
