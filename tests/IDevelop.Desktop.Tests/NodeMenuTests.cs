@@ -213,6 +213,26 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Choose_agent_opens_the_client_list_only_once_the_node_menu_has_closed()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        bool? menuShown = null;
+        using (ComboBox.IsDropDownOpenProperty.Changed.AddClassHandler<ComboBox>((picker, e) =>
+        {
+            if (AutomationProperties.GetAutomationId(picker) == "TaskClient" && e.NewValue is true)
+            {
+                menuShown = shell.Has<MenuItem>("NodeMenuChooseAgent") && shell.Find<MenuItem>("NodeMenuChooseAgent").IsEffectivelyVisible;
+            }
+        }))
+        {
+            shell.RightClick(shell.Header(shell.Node("Build")));
+            shell.Click(shell.MenuItem("NodeMenuChooseAgent"));
+        }
+
+        Assert.Equal(false, menuShown);
+    }
+
+    [AvaloniaFact]
     public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
     {
         var shell = Shell.Open(DesignThenBuild());
