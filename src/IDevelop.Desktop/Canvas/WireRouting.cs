@@ -18,8 +18,9 @@ internal static class WireRouting
     /// </summary>
     public const double Stub = 26;
 
-    // How far a detour keeps from a card's container. A stub ends exactly this far outside its own card's container.
-    private const double Clearance = 16;
+    // How far a detour keeps from a card's container: half the gap that FreeSpot leaves between the cards it stacks, so a
+    // detour can still pass between them.
+    private static readonly double Clearance = (WorkflowCanvasViewModel.TaskFootprint.Height - WorkflowCanvasViewModel.TaskCardHeight) / 2;
 
     // One turn weighs as much as this much length, so a detour turns no more than it has to.
     private const double TurnCost = 60;

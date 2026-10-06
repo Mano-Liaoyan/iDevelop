@@ -46,7 +46,16 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(370, 122), new Point(730, 122), [Card(120, 90), Card(420, 90), Card(720, 90)]);
 
-        Assert.Equal<Point>([new Point(396, 122), new Point(396, 170), new Point(704, 170), new Point(704, 122)], route);
+        Assert.Equal<Point>([new Point(396, 122), new Point(396, 169), new Point(704, 169), new Point(704, 122)], route);
+    }
+
+    [Fact]
+    public void A_detour_passes_between_cards_stacked_one_footprint_apart()
+    {
+        // The second card sits one footprint below Build, where FreeSpot stacks cards, which leaves a 30 px gap.
+        var route = WireRouting.Route(new Point(370, 122), new Point(730, 232), [Card(120, 90), Card(420, 90), Card(420, 184), Card(720, 200)]);
+
+        Assert.Equal<Point>([new Point(396, 122), new Point(396, 169), new Point(704, 169), new Point(704, 232)], route);
     }
 
     [Fact]
@@ -54,7 +63,7 @@ public sealed class WireRoutingTests : IDisposable
     {
         var route = WireRouting.Route(new Point(670, 122), new Point(70, 152), [Card(420, 90), Card(60, 120)]);
 
-        Assert.Equal<Point>([new Point(696, 122), new Point(696, 200), new Point(44, 200), new Point(44, 152)], route);
+        Assert.Equal<Point>([new Point(696, 122), new Point(696, 199), new Point(44, 199), new Point(44, 152)], route);
     }
 
     [Fact]
