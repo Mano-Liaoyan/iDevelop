@@ -369,14 +369,12 @@ function Connect-IDevelop([string] $Run) {
     New-Session $state $process $window
 }
 
-# A workflow's row starts collapsed, so the first workflow's row is expanded before its task rows are listed.
+# A workflow's row starts collapsed, so the first workflow's row is expanded before its task rows are listed. A row that
+# is already expanded stays expanded.
 function Get-SidebarTasks($Window) {
-    $list = Find-ById $Window 'SidebarTasks' 1
-    if (-not $list) {
-        (Find-ById $Window 'WorkflowExpand').GetCurrentPattern([TogglePattern]::Pattern).Toggle()
-        $list = Find-ById $Window 'SidebarTasks'
-    }
-    $list.FindAll([TreeScope]::Children, [Condition]::TrueCondition)
+    $toggle = (Find-ById $Window 'WorkflowExpand').GetCurrentPattern([TogglePattern]::Pattern)
+    if ($toggle.Current.ToggleState -eq [ToggleState]::Off) { $toggle.Toggle() }
+    (Find-ById $Window 'SidebarTasks').FindAll([TreeScope]::Children, [Condition]::TrueCondition)
 }
 
 # An entry chosen in the open list counts as the user's choice. An entry's name is its label, then " · " and a note.
