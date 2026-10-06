@@ -546,7 +546,13 @@ internal sealed class RunStore
             {
                 if (record.StaleResults.Contains(result.Id))
                 {
-                    return (null, new(RunProblem.StaleInput, Task: result.Task));
+                    if (edge.Value == ConnectionKind.Dependency)
+                    {
+                        return (null, new(RunProblem.StaleInput, Task: result.Task));
+                    }
+
+                    bindings.Add(new InputBinding.MissingContext(edge.Key));
+                    continue;
                 }
 
                 bindings.Add(new InputBinding.Provided(edge.Key, edge.Value, result.Id));
