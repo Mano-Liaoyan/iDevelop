@@ -21,7 +21,7 @@ public sealed class NodeMenuViewModel
         TaskId[] selection = [.. canvas.SelectedNodes.Select(node => node.Id)];
         Node = canvas.SelectedNodes is [var single] ? single : null;
         ShowRun = Node is { HasAgent: true, HasClient: true } node && node.RunCommand.CanExecute(null);
-        ShowChooseAgent = Node is { HasAgent: true, HasClient: false };
+        ShowChooseAgent = Node is { HasAgent: true, HasClient: false } && canvas.Blueprints.Editor is null;
         ShowCancel = Node?.CancelCommand.CanExecute(null) == true;
         ShowReplace = Node is { } one && !canvas.HasStarted(one.Id);
         ShowDisconnect = canvas.Workflow.Connections.Keys.Any(key => selection.Contains(key.From) || selection.Contains(key.To));
@@ -44,7 +44,10 @@ public sealed class NodeMenuViewModel
 
     public bool ShowRun { get; }
 
-    /// <summary>A node whose work takes an agent but has none would only be refused a run, so the menu leads to the picker.</summary>
+    /// <summary>
+    /// A node whose work takes an agent but has none would only be refused a run, so the menu leads to the picker. The
+    /// blueprint editor hides the picker while it is open, so the menu leaves the entry out until it closes.
+    /// </summary>
     public bool ShowChooseAgent { get; }
 
     public bool ShowCancel { get; }

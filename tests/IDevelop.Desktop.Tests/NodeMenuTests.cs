@@ -195,6 +195,24 @@ public sealed class NodeMenuTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Choose_agent_waits_while_the_blueprint_editor_holds_the_inspector()
+    {
+        var shell = Shell.Open(DesignThenBuild());
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        shell.Click(shell.MenuItem("NodeMenuSaveAs"));
+        Assert.True(shell.Find<StackPanel>("BlueprintEditor").IsEffectivelyVisible);
+
+        shell.RightClick(shell.Header(shell.Node("Build")));
+        var whileEditing = shell.MenuHeaders();
+        shell.Press(Key.Escape);
+        shell.Click(shell.InView<Button>("CancelBlueprint"));
+        shell.RightClick(shell.Header(shell.Node("Build")));
+
+        Assert.Equal(["Rename", "Duplicate", "Replace With", "Disconnect", "Derive Blueprint…", "Save as Blueprint…", "Delete"], whileEditing);
+        Assert.Equal("Choose Agent…", shell.MenuHeaders()[0]);
+    }
+
+    [AvaloniaFact]
     public void Choose_agent_opens_the_client_list_against_the_picker_once_it_is_scrolled_into_view()
     {
         var shell = Shell.Open(DesignThenBuild());
