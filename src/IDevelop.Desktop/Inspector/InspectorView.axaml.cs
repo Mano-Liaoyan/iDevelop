@@ -1,7 +1,9 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 
 namespace IDevelop.Desktop.Inspector;
@@ -22,6 +24,37 @@ public partial class InspectorView : UserControl
                 EditorHost.ScrollToHome();
             }
         };
+    }
+
+    /// <summary>
+    /// Focuses the selected node's client picker and opens its list, as the person would: a folded Agent section opens,
+    /// and a filter that hides the picker clears.
+    /// </summary>
+    internal void FocusClientPicker()
+    {
+        _state.Fold(["Agent"], folded: false);
+        UpdateLayout();
+        if (this.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(box => AutomationProperties.GetAutomationId(box) == "TaskClient") is not { } picker)
+        {
+            return;
+        }
+
+        if (!picker.IsEffectivelyVisible)
+        {
+            // The box reports its new text to the state only later.
+            Filter.Text = "";
+            _state.Filter("");
+            UpdateLayout();
+        }
+
+        // A list opens against where its picker was last laid out, so the picker scrolls into view and is laid out first.
+        // A hidden picker's list cannot open, so it opens only once the picker has the focus.
+        picker.BringIntoView();
+        UpdateLayout();
+        if (picker.Focus(NavigationMethod.Tab))
+        {
+            picker.IsDropDownOpen = true;
+        }
     }
 
     // A click, a key, and UI Automation each choose in a picker their own way, and a picker's binding only shows the
