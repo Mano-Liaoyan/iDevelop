@@ -492,7 +492,8 @@ internal static class RunReducer
             switch (input.Bindings[index])
             {
                 case InputBinding.MissingContext missing when missing.Edge == edge.Key && edge.Value == ConnectionKind.Context:
-                    if (fresh && record.CurrentResults.ContainsKey(edge.Key.From))
+                    if (fresh && record.CurrentResults.TryGetValue(edge.Key.From, out var context) &&
+                        !record.StaleResults.Contains(context.Id))
                     {
                         return new(RunProblem.InputConflict);
                     }

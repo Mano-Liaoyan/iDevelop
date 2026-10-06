@@ -434,4 +434,24 @@ public sealed class RunStoreTests
         Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, Run, f.Op(), A1, reservation.Inputs.Id, "Checked."));
         Assert.Equal(RunPhase.Completed, Assert.IsType<RunDecision.Recorded>(f.Store.Settle(W, Run, f.Op(), RunOutcome.Completed)).Record.Phase);
     }
+
+    [Fact]
+    public void Stale_context_is_missing_while_stale_dependency_rejects()
+    {
+        var workflow = Connect(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C), Task(D)), T, U),
+            U, C, ConnectionKind.Context), U, D);
+        using var f = new RunFixtures(workflow);
+        f.Approve();
+        var first = f.Reserve();
+        var r1 = f.Complete(first);
+        f.Complete(f.Reserve(U));
+        f.Complete(f.Reserve(cause: new AttemptCause.Retry(A1, f.Op())), "Updated.", r1.Id);
+        var context = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, f.Op(), C, f.Read().Revision.Id,
+            new AttemptCause.Initial(), Base, ""));
+        Assert.Equal<InputBinding>([new InputBinding.MissingContext(new(U, C))],
+            Assert.IsType<RunEvent.Reserved>(context.Event).Inputs.Bindings);
+        Assert.Equal(new RunRejection(RunProblem.StaleInput, Task: U),
+            Assert.IsType<RunDecision.Rejected>(f.Store.Reserve(W, Run, f.Op(), D, f.Read().Revision.Id,
+                new AttemptCause.Initial(), Base, "")).Reason);
+    }
 }
