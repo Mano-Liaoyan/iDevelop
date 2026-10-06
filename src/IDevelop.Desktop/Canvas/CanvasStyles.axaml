@@ -73,6 +73,8 @@
   <Style Selector="nodify|StepConnection">
     <Setter Property="StrokeThickness" Value="2" />
     <Setter Property="Opacity" Value="1" />
+    <!-- A routed wire ignores the spacing. WireRouting.Stub is the spacing plus the offset, one value for both ends, so
+         a change to the spacing or to both offsets needs the same change in Stub. -->
     <Setter Property="Spacing" Value="20" />
     <Setter Property="CornerRadius" Value="5" />
     <!-- Half a handle's width, so each end meets the edge of its 12 px handle. -->

@@ -30,7 +30,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// <summary>The output port's center in the card's container. The card template places the port here.</summary>
     public static readonly Point OutputPortCenter = new(250, 32);
 
-    private static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
+    internal static readonly Size TaskFootprint = new(TaskCardWidth + 40, TaskCardHeight + 30);
 
     private readonly Action<string?> _setNotice;
     private readonly Func<string, Task> _copy;
@@ -362,6 +362,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (connectionsChanged)
         {
             SyncConnections(current);
+        }
+
+        if (!ReferenceEquals(previous?.Positions, current.Positions))
+        {
+            Reroute();
         }
 
         if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
