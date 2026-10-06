@@ -96,7 +96,7 @@ public sealed class ProjectRunsTests : IDisposable
                 : "# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n",
             File.ReadAllText(Evidence("stdin.txt")));
         Assert.Equal(Fixture.Text(expected.Fixture), File.ReadAllText(Path.Combine(folder, "output.jsonl")));
-        Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
         Assert.Empty(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (reopened.Latest[SayHiId].Status, reopened.Latest[SayHiId].Result));
