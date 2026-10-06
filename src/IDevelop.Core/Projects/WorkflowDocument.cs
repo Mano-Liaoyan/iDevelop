@@ -109,8 +109,8 @@ public sealed class WorkflowDocument
 
     /// <summary>
     /// An edit that is rejected or has no effect leaves the document unchanged and raises nothing. Each other edit is one
-    /// undo step and clears the redo steps, except that a name, title, or field edit continuing the previous edit of the same text
-    /// joins its step, so a run of typing undoes at once.
+    /// undo step and clears the redo steps, except that a title or field edit continuing the previous edit of the same text
+    /// joins its step, so a run of typing undoes at once. A rename commits a whole name, so each rename is a step.
     /// </summary>
     public EditResult Apply(WorkflowEdit edit)
     {
@@ -166,7 +166,6 @@ public sealed class WorkflowDocument
 
     private static bool EditsSameText(WorkflowEdit? previous, WorkflowEdit edit) => (previous, edit) switch
     {
-        (WorkflowEdit.Rename, WorkflowEdit.Rename) => true,
         (WorkflowEdit.EditTitle p, WorkflowEdit.EditTitle e) => p.Task == e.Task,
         (WorkflowEdit.SetField p, WorkflowEdit.SetField e) => p.Task == e.Task && p.Key == e.Key,
         _ => false,

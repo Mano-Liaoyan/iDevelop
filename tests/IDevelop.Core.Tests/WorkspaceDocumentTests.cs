@@ -165,14 +165,14 @@ public sealed class WorkspaceDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Rename_is_one_undo_step_and_consecutive_renames_fold()
+    public void Each_rename_is_its_own_undo_step()
     {
         var document = WorkflowDocument.OpenProject(_temp.Create("project")).Single();
-        foreach (var name in new[] { "B", "Bu", "Build" })
-        {
-            document.Apply(new Rename(name));
-        }
+        document.Apply(new Rename("Build"));
+        document.Apply(new Rename("Release"));
 
+        Assert.Equal("Release", document.Current.Name);
+        document.Undo();
         Assert.Equal("Build", document.Current.Name);
         Assert.True(document.HasUnsavedChanges);
         document.Undo();
@@ -182,7 +182,7 @@ public sealed class WorkspaceDocumentTests : IDisposable
         document.Redo();
         Assert.Equal("Build", document.Current.Name);
         document.Save();
-        document.Apply(new Rename("Release"));
+        document.Apply(new Rename("Checks"));
         document.Undo();
         Assert.Equal("Build", document.Current.Name);
         Assert.False(document.HasUnsavedChanges);
