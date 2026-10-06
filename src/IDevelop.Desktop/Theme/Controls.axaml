@@ -342,6 +342,11 @@
     <Setter Property="BoxShadow" Value="{StaticResource SmallShadow}" />
   </Style>
 
+  <!-- UI Automation reads which workflow the window shows from its row's status. -->
+  <Style Selector="Button.nav.workflow.selected">
+    <Setter Property="AutomationProperties.ItemStatus" Value="Shown" />
+  </Style>
+
   <!-- The chevron that shows or hides a sidebar row's children. -->
   <Style Selector="ToggleButton.chevron">
     <Setter Property="Width" Value="20" />

@@ -26,6 +26,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _undo;
     private readonly RelayCommand _redo;
     private readonly RelayCommand _refreshAgents;
+    // Remembered folders the last start could not open, such as a drive that was not mounted. They stay remembered, so a
+    // later start opens them once they are back.
+    private readonly List<string> _unopened = [];
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
     private bool _refreshingAgents;
@@ -112,7 +115,7 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    /// <summary>Shows the workflow. Its palette reads the libraries again, which a sibling may have changed.</summary>
+    /// <summary>Shows the workflow.</summary>
     public void Select(WorkflowCanvasViewModel canvas)
     {
         if (canvas == Canvas)
@@ -121,7 +124,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Show(canvas);
-        canvas.Blueprints.Reload();
         Persist();
     }
 
@@ -143,12 +145,11 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Stops the project's running tasks, which records them as interrupted, and closes it without saving. The window then
-    /// shows a neighbour's workflow, or nothing. The next start does not reopen it.
+    /// Closes the project without saving. The window shows a neighbour's workflow, or nothing, at once, and the project's
+    /// running tasks then stop, which records them as interrupted. The next start does not reopen it.
     /// </summary>
     public async Task Close(ProjectViewModel project)
     {
-        await project.Runs.DisposeAsync();
         var index = Projects.IndexOf(project);
         if (index < 0)
         {
@@ -162,14 +163,16 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Persist();
+        await project.CloseAsync();
     }
 
     /// <summary>Stops every running task, as closing the window does. The open projects stay remembered for the next start.</summary>
-    public Task Leave() => Task.WhenAll(Projects.Select(project => project.Runs.DisposeAsync().AsTask()));
+    public Task Leave() => Task.WhenAll(Projects.Select(project => project.CloseAsync().AsTask()));
 
     /// <summary>
     /// Opens the projects the last session left open, with the workflow rows it left expanded and the workflow it showed,
-    /// then the folder, if any. A folder that is missing or fails to open is skipped with a status line.
+    /// then the folder, if any. A folder that is missing or fails to open is skipped with a status line, and stays
+    /// remembered, so a later start opens it once it is back.
     /// </summary>
     public void Restore(string? folder)
     {
@@ -180,7 +183,11 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             foreach (var saved in session.Projects)
             {
-                TryAdd(saved, $"Couldn't reopen {saved}", out var notice);
+                if (TryAdd(saved, $"Couldn't reopen {saved}", out var notice) is null)
+                {
+                    _unopened.Add(saved);
+                }
+
                 if (notice is not null)
                 {
                     notes.Add(notice);
@@ -268,6 +275,7 @@ public sealed class MainWindowViewModel : ObservableObject
         var runs = ProjectRuns.Open(identity, _clients);
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
         Projects.Add(project);
+        _unopened.RemoveAll(unopened => ProjectFolders.Comparer.Equals(unopened, identity));
         notices = string.Join(" ", [.. documents.Select(document => document.Converted).OfType<string>(), .. runs.Warnings]) is { Length: > 0 } notice
             ? notice
             : null;
@@ -304,6 +312,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    // Every switch comes here, so the shown palette reads the libraries again, which a sibling may have changed.
     private void Show(WorkflowCanvasViewModel? canvas)
     {
         if (Canvas is { } shown)
@@ -315,6 +324,7 @@ public sealed class MainWindowViewModel : ObservableObject
         if (canvas is not null)
         {
             canvas.IsSelected = true;
+            canvas.Blueprints.Reload();
         }
 
         OnPropertyChanged(nameof(ProjectName));
@@ -330,7 +340,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var session = new WorkspaceSession(
-            [.. Projects.Select(project => project.Folder)],
+            [.. Projects.Select(project => project.Folder), .. _unopened],
             Canvas is { } canvas ? new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id) : null,
             [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))]);
         try

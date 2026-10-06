@@ -96,14 +96,14 @@
                             Click="OnNewWorkflow"
                             ToolTip.Tip="New workflow"
                             AutomationProperties.AutomationId="NewWorkflow"
-                            AutomationProperties.Name="New workflow">
+                            AutomationProperties.Name="{Binding Name, StringFormat='New workflow in {0}'}">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                     </Button>
                     <Button Grid.Column="4" Classes="icon"
                             Click="OnCloseProject"
                             ToolTip.Tip="Close project"
                             AutomationProperties.AutomationId="CloseProject"
-                            AutomationProperties.Name="Close project">
+                            AutomationProperties.Name="{Binding Name, StringFormat='Close {0}'}">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
                     </Button>
                   </Grid>
@@ -119,9 +119,9 @@
                           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="2">
                             <ToggleButton Classes="chevron"
                                           IsChecked="{Binding IsExpanded}"
-                                          ToolTip.Tip="Show tasks"
+                                          ToolTip.Tip="{Binding ExpandLabel}"
                                           AutomationProperties.AutomationId="WorkflowExpand"
-                                          AutomationProperties.Name="Show tasks">
+                                          AutomationProperties.Name="{Binding ExpandLabel}">
                               <PathIcon Theme="{StaticResource Glyph}" />
                             </ToggleButton>
                             <Panel Grid.Column="1">

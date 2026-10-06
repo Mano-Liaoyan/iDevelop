@@ -28,7 +28,6 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private Point? _windowAnchor;
     private bool _showingAdd;
     private bool _addOnRelease;
-    private (WorkflowCanvasViewModel Canvas, (TaskNodeViewModel[], ConnectionViewModel[]) Selection)? _kept;
 
     static WorkflowCanvasView()
     {
@@ -45,7 +44,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// </param>
     public WorkflowCanvasView(WorkflowCanvasViewModel? canvas) : this()
     {
-        _kept = canvas is null ? null : (canvas, canvas.TakeSelection());
+        canvas?.HoldSelection();
     }
 
     public WorkflowCanvasView()
@@ -120,10 +119,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             canvas.View = this;
             canvas.PropertyChanged += OnViewModelChanged;
             StartBelowChrome(canvas);
-            if (_kept is { } kept && kept.Canvas == canvas)
-            {
-                Editor.LayoutUpdated += RestoreSelection;
-            }
+            Editor.LayoutUpdated += RestoreSelection;
         }
 
         ShowAdd();
@@ -133,12 +129,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private void RestoreSelection(object? sender, EventArgs e)
     {
         Editor.LayoutUpdated -= RestoreSelection;
-        if (_kept is { } kept && kept.Canvas == _viewModel)
-        {
-            kept.Canvas.RestoreSelection(kept.Selection);
-        }
-
-        _kept = null;
+        _viewModel?.RestoreSelection();
     }
 
     // The window builds a new view for each workflow it shows, so a view that leaves the window lets its canvas go.
