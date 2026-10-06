@@ -4,7 +4,7 @@
 
 The user's feedback on 2026-10-06 changes the next product milestone. A person needs to run a workflow, manage several projects, and talk to agents without treating the inspector as a log viewer. The current compact canvas remains the visual baseline.
 
-On 2026-10-06, the user approved this execution plan and explicitly deferred implementation. The scope, delivery sequence, and verification gates are approved. Choices listed as open still require the design validation described below. No application change, prototype, client run, or test infrastructure work may begin until the user resumes implementation in a later request.
+On 2026-10-06, the user approved this execution plan and explicitly deferred implementation. The scope, delivery sequence, and verification gates are approved. Choices listed as open still require the design validation described below. Later on 2026-10-06, the user authorized D0 and lifted the deferral. The [D0 design validation record](2026-10-06-d0-design-validation.md) records the completed Git and UI workstreams. The client probe's real-client runs still wait for the user's explicit approval.
 
 ## Planning checklist
 
@@ -181,6 +181,8 @@ The data shape comes before new UI handlers. Existing immutable workflow edits a
 
 These are proposed responsibilities, not instructions to create one service per row. A module must remove duplicated rules or own a real boundary to earn its place. No message broker, distributed actor system, generic plug-in framework, or new application language is proposed.
 
+D0 settled two of the bullets below, Git inputs and worktree lifecycle. It also settled the conversation comparison in the Interaction bullet. Conversation uses the main area by default, with a dock as an option. The Interaction bullet's client capability table is still pending. The [D0 design validation record](2026-10-06-d0-design-validation.md) holds the decisions.
+
 These choices require a design gate before E2 or E3:
 
 - Git inputs. Compare isolated task branches with an explicit integration step against a run integration branch with serialized writers. The preferred direction is isolated writers with explicit input materialization. Conflicts block with evidence instead of an agent silently overwriting another branch.
@@ -193,14 +195,14 @@ These choices require a design gate before E2 or E3:
 
 ## Approved delivery slices
 
-The user approved these delivery units on 2026-10-06 but deferred all execution, including D0, until a later request. They are not PRs created by this task. Each slice ends with headless tests, Windows real-window evidence where applicable, independent review, and the repository's required checks. D0's checks are per workstream, so inspector prototypes need not wait for Git integration research. Interaction changes require the user's visual review before merge.
+The user approved these delivery units on 2026-10-06 and later authorized D0, lifting the deferral. They are not PRs created by this task. Each slice ends with headless tests, Windows real-window evidence where applicable, independent review, and the repository's required checks. D0's checks are per workstream, so inspector prototypes need not wait for Git integration research. Interaction changes require the user's visual review before merge.
 
 | Slice | Depends on | Scope and visible completion condition |
 | --- | --- | --- |
-| D0. Validate the designs | None | Reproduce inspector alignment. Compare inspector, expanded-card, and conversation layouts in throwaway prototypes. Probe client interaction and Git input delivery in scratch repositories. Capture baseline evidence. No production behavior yet. |
+| D0. Validate the designs | None | Reproduce inspector alignment. Compare inspector, expanded-card, and conversation layouts in throwaway prototypes. Probe client interaction and Git input delivery in scratch repositories. Capture baseline evidence. No production behavior yet. The Git and UI workstreams are done, and the [D0 design validation record](2026-10-06-d0-design-validation.md) holds their results. The client probe is pending the user's approval of real-client runs. |
 | U1. Repair the inspector | D0 | Selected and unselected views use consistent grids, insets, icons, folds, and filters in both themes and at narrow widths. Keep the current conversation accessible until C1 replaces its presentation. |
 | W1. Open multiple projects and workflows | D0 | Two projects with multiple workflows remain open. Workflow rows hide nodes by default. Switching preserves unsaved state, history, and run ownership. Existing projects still load. |
-| C1. Build conversation and attention | D0, W1 | The selected task has durable, correctly routed history, Markdown, a composer, structured requests, and honest client capability limits. Inspector and compact-card attention open the same conversation. |
+| C1. Build conversation and attention | D0's client probe, W1 | The selected task has durable, correctly routed history, Markdown, a composer, structured requests, and honest client capability limits. Inspector and compact-card attention open the same conversation. |
 | E1. Define run and input records | D0, W1 | An approved workflow revision owns its attempts and explicit input provenance. Replay and duplicate-start tests pass. Prior standalone results require explicit validated reuse. |
 | E2. Materialize dependency results | E1 and an accepted Git ownership and integration contract | Reports and artifacts reach successors. Isolated code inputs produce a named revision. Fan-in conflicts and uncertain ownership block without corrupting work. Review fixes use the correct code owner. |
 | E3. Execute the workflow | C1, E2, and its verified writer-isolation and join-revision gate | Run Workflow finds roots, launches eligible work, waits at questions and approvals, starts successors once, and stops safely. Review advancement and scheduling share one launch authority. Failure affects only dependent branches. |
@@ -270,6 +272,6 @@ A fresh Claude Opus 5.5 session at xhigh reviewed an inline design packet. Its r
 
 ## Open issues and next action
 
-The execution plan is approved. Detailed run approval, input integration, worktree recovery, concurrency, renderer choice, and client approval capabilities remain design work within its gates. Approval of the plan does not select among those open alternatives or establish runtime verification.
+The execution plan is approved. Detailed run approval, concurrency, renderer choice, and client approval capabilities remain design work within its gates. Approval of the plan does not select among those open alternatives or establish runtime verification.
 
-Wait for the user's later request to resume. No implementation, D0 prototype, or client probe starts now. When authorized, begin with D0. Present inspector, expanded-card, and conversation comparisons before committing to interaction dimensions. Settle run and code ownership before automatic scheduling.
+D0's Git and UI workstreams are done, as the [design validation record](2026-10-06-d0-design-validation.md) records. The user decides whether to approve the client probe's real-client runs. C1 remains gated on that probe. U1 can start from layout A and the shared column definition. W1 can start and includes the blueprint icon and color field in its format and migration review. E2 builds on the revised Git contract after E1. E3 still needs its writer-isolation and join gate verified on the demo-shaped diamond in the implementation. Delete the local `d0/ui-prototypes` branch and its worktree once U1 no longer needs them.
