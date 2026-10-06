@@ -198,18 +198,34 @@
     <Border Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Width="200" Height="150">
       <Border>
         <nodify:Minimap x:Name="Minimap"
-                        ItemsSource="{Binding Nodes}"
+                        ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
                         ViewportLocation="{Binding ViewportLocation}"
                         ViewportSize="{Binding #Editor.ViewportSize}"
                         ViewportStyle="{StaticResource MinimapViewportTheme}"
-                        ItemTemplate="{StaticResource MinimapItemTemplate}"
                         AutomationProperties.AutomationId="Minimap"
                         AutomationProperties.Name="Minimap">
+          <!-- A card is a small card: its kind's fill, and its state's ring where the state is not idle. A proposal's
+               ghost card is a faint fill in a dashed ring of its kind, as on the canvas. -->
+          <nodify:Minimap.DataTemplates>
+            <DataTemplate DataType="canvas:TaskNodeViewModel">
+              <Panel>
+                <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
+                <Border Classes="minimapRing stateStroke"
+                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+              </Panel>
+            </DataTemplate>
+            <DataTemplate DataType="canvas:GhostCardViewModel">
+              <Panel>
+                <Border Classes="minimapItem ghost" theme:StyleClass.Kind="{Binding Kind}" />
+                <Rectangle Classes="minimapRing kindStroke" theme:StyleClass.Kind="{Binding Kind}" />
+              </Panel>
+            </DataTemplate>
+          </nodify:Minimap.DataTemplates>
           <nodify:Minimap.ItemContainerTheme>
+            <!-- The items are cards and ghost cards, two types that each have a Location, so the binding finds it by name. -->
             <ControlTheme TargetType="nodify:MinimapItem"
-                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}"
-                          x:DataType="canvas:TaskNodeViewModel">
-              <Setter Property="Location" Value="{Binding Location, Mode=OneWay}" />
+                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
+              <Setter Property="Location" Value="{ReflectionBinding Location, Mode=OneWay}" />
               <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
               <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
             </ControlTheme>

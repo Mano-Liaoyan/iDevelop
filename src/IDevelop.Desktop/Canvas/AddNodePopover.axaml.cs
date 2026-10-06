@@ -15,8 +15,12 @@ public partial class AddNodePopover : Popup
     public static readonly IValueConverter Glyph = new FuncValueConverter<string?, Geometry?>(key =>
         key is not null && Application.Current!.TryGetResource(key, null, out var value) ? value as Geometry : null);
 
+    // The popover keeps this far from the top and bottom of its bounds, so its largest height leaves a gap at each end.
+    private const double Gap = 8;
+
     private Point _anchor;
-    private Rect _bounds;
+    private Rect _room;
+    private double _tallest;
 
     public AddNodePopover()
     {
@@ -34,22 +38,26 @@ public partial class AddNodePopover : Popup
         IsOpen = false;
         DataContext = add;
         PlacementTarget = target;
-        (_anchor, _bounds) = (anchor, bounds);
+        _anchor = anchor;
+        _room = bounds.Deflate(new Thickness(0, Gap));
+        _tallest = 0;
+        Root.MaxHeight = Math.Max(0, _room.Height);
         IsOpen = true;
     }
 
-    // Avalonia hands a custom placement its rectangles in the window's coordinates. The popover flips left or up when its
-    // full size would cross the bounds there, then slides inside them. The flip takes the largest height, so the popover
-    // stays put while the list shrinks under a search.
+    // Avalonia hands a custom placement its rectangles in the window's coordinates. The popover opens below and to the
+    // right of its anchor, flips left or up where its size would cross the room, then slides inside it. It places by its
+    // tallest size since it opened, so it stays put while a search shortens the list.
     private void Place(CustomPopupPlacement placement)
     {
-        var room = Root.Margin;
-        var size = placement.PopupSize.Deflate(room);
-        var x = _anchor.X + size.Width > _bounds.Right ? _anchor.X - size.Width : _anchor.X;
-        var y = _anchor.Y + Root.MaxHeight > _bounds.Bottom ? _anchor.Y - size.Height : _anchor.Y;
+        var shadow = Root.Margin;
+        var size = placement.PopupSize.Deflate(shadow);
+        _tallest = Math.Max(_tallest, size.Height);
+        var x = _anchor.X + size.Width > _room.Right ? _anchor.X - size.Width : _anchor.X;
+        var y = _anchor.Y + _tallest > _room.Bottom ? _anchor.Y - _tallest : _anchor.Y;
         placement.AnchorRectangle = new Rect(
-            Math.Clamp(x, _bounds.Left, Math.Max(_bounds.Left, _bounds.Right - size.Width)) - room.Left,
-            Math.Clamp(y, _bounds.Top, Math.Max(_bounds.Top, _bounds.Bottom - size.Height)) - room.Top,
+            Math.Clamp(x, _room.Left, Math.Max(_room.Left, _room.Right - size.Width)) - shadow.Left,
+            Math.Clamp(y, _room.Top, Math.Max(_room.Top, _room.Bottom - _tallest)) - shadow.Top,
             1,
             1);
         placement.Anchor = PopupAnchor.TopLeft;
@@ -84,7 +92,7 @@ public partial class AddNodePopover : Popup
         }
 
         e.Handled = true;
-        if (add.Highlighted is { } row && Rows.ContainerFromItem(row) is { } container)
+        if (add.Highlighted is { } row && (Rows.ContainerFromItem(row) ?? ActionRows.ContainerFromItem(row)) is { } container)
         {
             container.BringIntoView();
         }
