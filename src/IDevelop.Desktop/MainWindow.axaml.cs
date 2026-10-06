@@ -53,36 +53,33 @@ public partial class MainWindow : Window
             return;
         }
 
+        e.Cancel = true;
         if (_waitingForUser)
         {
-            e.Cancel = true;
             return;
         }
 
-        // With nothing to ask, leaving starts at once, and the window closes now unless a run is still stopping.
-        if (ViewModel.ActiveRuns.IsEmpty && !ViewModel.Projects.Any(project => project.UnsavedDocuments.Any()))
-        {
-            var leaving = ViewModel.Leave();
-            if (leaving.IsCompleted)
-            {
-                return;
-            }
-        }
-
-        e.Cancel = true;
         _waitingForUser = true;
-        var leave = await ConfirmLeaving([.. ViewModel.Projects], "leave");
-        if (leave)
+        var ask = !ViewModel.ActiveRuns.IsEmpty || ViewModel.Projects.Any(project => project.UnsavedDocuments.Any());
+        if (ask && !await ConfirmLeaving([.. ViewModel.Projects], "leave"))
         {
-            await ViewModel.Leave();
+            _waitingForUser = false;
+            return;
         }
 
-        _waitingForUser = false;
-        if (leave)
+        // A stopping runner refuses every start, so nothing in the window takes a click or a key while the runs stop.
+        ((Control)Content!).IsEnabled = false;
+        var leaving = ViewModel.Leave();
+        // With nothing to ask and nothing to stop, the window closes now.
+        if (!ask && leaving.IsCompleted)
         {
-            _closeConfirmed = true;
-            Close();
+            e.Cancel = false;
+            return;
         }
+
+        await leaving;
+        _closeConfirmed = true;
+        Close();
     }
 
     // Window key bindings run before the focused control sees a key, so they would take Ctrl+Z from a text box. A key

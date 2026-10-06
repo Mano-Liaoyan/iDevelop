@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -285,6 +286,8 @@ public sealed class WorkspaceTests : IDisposable
         shell.RightClick(shell.Center(shell.WorkflowRow("alpha", "Checks")));
         shell.Click(shell.MenuItem("WorkflowRename"));
         shell.Type("Discarded");
+        var box = shell.Shown<TextBox>("WorkflowNameBox");
+        Assert.Equal((true, "Discarded"), (box.IsKeyboardFocusWithin, box.Text));
         shell.Press(Key.Escape);
         Assert.Equal([("alpha", ["Build", "Release", "Checks"])], shell.Tree());
 
@@ -437,5 +440,250 @@ public sealed class WorkspaceTests : IDisposable
             shell.Status);
         Assert.Equal(["1", "3"], new[] { "seed", "legacy" }.Select(project => shell.WorkflowText(project, "Workflow", "TaskCount")));
         Assert.Equal("legacy* - iDevelop", shell.Window.Title);
+    }
+
+    private static void Rename(Shell shell, string project, string workflow, string name)
+    {
+        shell.WorkflowRow(project, workflow).Focus();
+        shell.Press(Key.F2);
+        shell.Type(name);
+        shell.Press(Key.Enter);
+    }
+
+    [AvaloniaFact]
+    public void Two_renames_of_a_workflow_undo_one_at_a_time()
+    {
+        var shell = Shell.Open(Project("alpha"));
+        Rename(shell, "alpha", "Build", "Checks");
+        Rename(shell, "alpha", "Checks", "Gates");
+
+        shell.Click(shell.Find<Button>("Undo"));
+
+        Assert.Equal([("alpha", ["Checks", "Release"])], shell.Tree());
+        Assert.Equal(("alpha", "Checks"), shell.Breadcrumb());
+    }
+
+    [AvaloniaFact]
+    public void Close_project_shows_the_neighbour_at_once_while_its_running_task_stops()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
+            .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
+            .Hang());
+        var (shell, alpha, _) = OpenBoth(_fakes.DiscoverAsync().Result);
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        var window = shell.Window.ViewModel;
+        var closing = window.Projects[0];
+        // What the window lists and shows at the moment the runner reports the task stopped.
+        (bool Listed, string? Shown)? whenStopped = null;
+        closing.Runs.Changed += (_, _) =>
+        {
+            if (closing.Runs.Active.IsEmpty)
+            {
+                whenStopped ??= (window.Projects.Contains(closing), window.Canvas?.Project.Name);
+            }
+        };
+
+        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.Choose("StopAndLeave");
+
+        Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
+        Assert.Equal(("beta - iDevelop: Design, Implement", ("beta", "Build")), (Shown(shell), shell.Breadcrumb()));
+        shell.WaitUntil(() => whenStopped is not null, "alpha's task stops");
+        Assert.Equal((false, "beta"), whenStopped);
+        shell.Window.ViewModel.Open(alpha);
+        shell.Render();
+        Assert.Equal("Interrupted", shell.CardText("Design", "CardStatus"));
+    }
+
+    [AvaloniaFact]
+    public void Closing_the_window_takes_no_input_while_its_running_task_stops()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, On("exec", "--json")
+            .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
+            .Hang());
+        var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Button>("RunTask")];
+
+        shell.Window.Close();
+        shell.Render();
+        shell.Choose("StopAndLeave");
+
+        Assert.Equal([false, false, false], inputs.Select(input => input.IsEffectivelyEnabled));
+        shell.WaitUntil(() => !shell.Window.IsVisible, "the window closes once the task stops");
+    }
+
+    [AvaloniaFact]
+    public void Closing_a_project_or_the_window_closes_the_generate_sheets_of_its_workflows()
+    {
+        var (shell, _, _) = OpenBoth();
+        shell.Click(shell.WorkflowRow("alpha", "Release"));
+        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        var (alpha, beta) = (shell.Window.ViewModel.Projects[0], shell.Window.ViewModel.Projects[1]);
+        Assert.NotNull(alpha.Workflows[1].Sheet);
+
+        _ = shell.Window.ViewModel.Close(alpha);
+        shell.Render();
+
+        Assert.Equal([("beta", ["Build", "Release"])], shell.Tree());
+        Assert.Null(alpha.Workflows[1].Sheet);
+        shell.Click(shell.Find<Button>("GenerateWorkflow"));
+        Assert.NotNull(beta.Workflows[0].Sheet);
+
+        shell.Window.Close();
+        shell.Render();
+
+        Assert.False(shell.Window.IsVisible);
+        Assert.Null(beta.Workflows[0].Sheet);
+    }
+
+    [AvaloniaFact]
+    public void Closing_a_project_shows_the_neighbour_with_a_blueprint_saved_in_its_library_meanwhile()
+    {
+        var (shell, _, beta) = OpenBoth();
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        var implement = BuiltInBlueprints.Implement;
+        BlueprintLibrary.Project(beta).Save(
+            new Blueprint(BlueprintLibrary.NewKey("Bug fix"), "Bug fix", implement.Work, implement.Fields, implement.Defaults) { DerivedFrom = implement.Key });
+        var neighbour = shell.Window.ViewModel.Projects[1].Workflows[0];
+        Assert.Empty(ProjectBlueprints(neighbour));
+
+        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+
+        Assert.Equal(("beta", "Build"), shell.Breadcrumb());
+        Assert.Equal(["Bug fix"], ProjectBlueprints(neighbour));
+    }
+
+    [AvaloniaFact]
+    public void Each_workflow_keeps_its_selection_when_the_window_switches_twice_before_it_lays_out()
+    {
+        var (shell, _, _) = OpenBoth();
+        shell.Click(shell.WorkflowRow("alpha", "Release"));
+        shell.Click(shell.Header(shell.Node("Ship")));
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        shell.Click(shell.Header(shell.Node("Design")));
+        var workflows = shell.Window.ViewModel.Projects[0].Workflows;
+
+        shell.Window.ViewModel.Select(workflows[1]);
+        shell.Window.ViewModel.Select(workflows[0]);
+        shell.Render();
+
+        Assert.Equal(("Build", "Design"), (shell.Breadcrumb().Item2, shell.Find<TextBox>("TaskTitle").Text));
+        shell.Click(shell.WorkflowRow("alpha", "Release"));
+        Assert.Equal(("Release", "Ship"), (shell.Breadcrumb().Item2, shell.Find<TextBox>("TaskTitle").Text));
+    }
+
+    [AvaloniaFact]
+    public void Sidebar_buttons_name_their_project_or_workflow_and_the_shown_workflow_reads_as_shown()
+    {
+        var (shell, _, _) = OpenBoth();
+        static AutomationPeer Peer(Control control) => ControlAutomationPeer.CreatePeerForElement(control);
+        var expand = shell.WorkflowExpand("beta", "Release");
+
+        Assert.Equal(
+            ["New workflow in alpha", "Close alpha", "Show tasks of Release"],
+            new[] { ProjectButton(shell, "alpha", "NewWorkflow"), ProjectButton(shell, "alpha", "CloseProject"), expand }.Select(control => Peer(control).GetName()));
+        shell.Click(expand);
+        Assert.Equal("Hide tasks of Release", Peer(expand).GetName());
+        Assert.Equal(
+            ["", "", "Shown", ""],
+            new[] { ("alpha", "Build"), ("alpha", "Release"), ("beta", "Build"), ("beta", "Release") }
+                .Select(row => Peer(shell.WorkflowRow(row.Item1, row.Item2)).GetItemStatus() ?? ""));
+    }
+
+    private static string[] RememberedProjects() =>
+        [.. JsonNode.Parse(File.ReadAllText(((App)Application.Current!).SessionFile!))!["projects"]!.AsArray().Select(folder => (string)folder!)];
+
+    [AvaloniaFact]
+    public void A_remembered_folder_that_is_missing_stays_remembered_and_opens_at_the_start_after_it_is_back()
+    {
+        var (shell, alpha, beta) = OpenBoth();
+        shell.Window.Close();
+        shell.Render();
+        Directory.Delete(beta, recursive: true);
+
+        var missing = Shell.Show();
+        missing.Window.ViewModel.Restore(null);
+        missing.Render();
+
+        Assert.Equal([("alpha", ["Build", "Release"])], missing.Tree());
+        Assert.Equal($"The folder {beta} does not exist.", missing.Status);
+        Assert.Equal([alpha, beta], RememberedProjects());
+        missing.Window.Close();
+        missing.Render();
+        Assert.Equal([alpha, beta], RememberedProjects());
+
+        Assert.Equal(beta, Project("beta"));
+        var back = Shell.Show();
+        back.Window.ViewModel.Restore(null);
+        back.Render();
+
+        Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], back.Tree());
+        Assert.Null(back.Window.ViewModel.Status);
+    }
+
+    [AvaloniaFact]
+    public void A_window_without_a_session_file_reopens_nothing_and_remembers_nothing()
+    {
+        var (shell, _, _) = OpenBoth();
+        shell.Window.Close();
+        shell.Render();
+        var sessionFile = ((App)Application.Current!).SessionFile!;
+        var remembered = File.ReadAllText(sessionFile);
+        var gamma = Project("gamma");
+
+        var window = new MainWindowViewModel(new ClientDirectory(CommandResolver.Create([], [])), _ => Task.CompletedTask);
+        window.Restore(gamma);
+        window.NewWorkflow(window.Projects.Single());
+        _ = window.Close(window.Projects.Single());
+
+        Assert.Equal((0, remembered), (window.Projects.Count, File.ReadAllText(sessionFile)));
+        Assert.Null(new App().SessionFile);
+    }
+
+    [AvaloniaFact]
+    public void The_next_start_leaves_out_an_unsaved_new_workflow_and_shows_its_projects_first_workflow()
+    {
+        var shell = Shell.Open(Project("alpha"));
+        shell.Click(ProjectButton(shell, "alpha", "NewWorkflow"));
+        Assert.Equal(("alpha", "Workflow 1"), shell.Breadcrumb());
+        shell.Window.Close();
+        shell.Render();
+        shell.Choose("DiscardChanges");
+        Assert.False(shell.Window.IsVisible);
+
+        var reopened = Shell.Show();
+        reopened.Window.ViewModel.Restore(null);
+        reopened.Render();
+
+        Assert.Equal([("alpha", ["Build", "Release"])], reopened.Tree());
+        Assert.Equal(("alpha", "Build"), reopened.Breadcrumb());
+    }
+
+    [AvaloniaFact]
+    public void Cancel_at_close_projects_unsaved_question_leaves_its_task_running_and_the_project_open()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex, Waits());
+        var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.Click(shell.WorkflowRow("alpha", "Release"));
+        shell.AddNode();
+
+        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        Assert.Equal(["\"Design\" is running. Stop it and close alpha?", "Stop and leave", "Keep running"], shell.DialogTexts());
+        shell.Choose("StopAndLeave");
+        Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
+        shell.Choose("CancelChanges");
+
+        Assert.Equal([("alpha", ["Build", "Release"]), ("beta", ["Build", "Release"])], shell.Tree());
+        Assert.Equal("alpha* - iDevelop: New task, Ship", Shown(shell));
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        Assert.Equal(("Running", "Design"), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
     }
 }

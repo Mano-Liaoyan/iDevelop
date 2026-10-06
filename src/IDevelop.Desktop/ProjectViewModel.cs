@@ -70,6 +70,20 @@ public sealed class ProjectViewModel : ObservableObject
         return canvas;
     }
 
+    /// <summary>
+    /// Closes each workflow's Generate sheet, which listens to the window's client directory until it closes, and stops
+    /// the project's running tasks.
+    /// </summary>
+    internal ValueTask CloseAsync()
+    {
+        foreach (var canvas in Workflows)
+        {
+            canvas.CloseSheet();
+        }
+
+        return Runs.DisposeAsync();
+    }
+
     /// <summary>A review whose next step waited for a client goes on once the clients change.</summary>
     internal void FollowAll()
     {

@@ -46,6 +46,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     private bool _isSelected;
     private bool _isRunning;
     private bool _isRenamingWorkflow;
+    private (TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections)? _heldSelection;
 
     /// <param name="project">The open project whose runner and task owners this canvas shares.</param>
     /// <param name="personalBlueprints">The personal library's folder, or null for none.</param>
@@ -154,8 +155,17 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     public bool IsExpanded
     {
         get => _isExpanded;
-        set => SetProperty(ref _isExpanded, value);
+        set
+        {
+            if (SetProperty(ref _isExpanded, value))
+            {
+                OnPropertyChanged(nameof(ExpandLabel));
+            }
+        }
     }
+
+    /// <summary>What the row's disclosure toggle does now, for a screen reader and the tooltip.</summary>
+    public string ExpandLabel => $"{(IsExpanded ? "Hide" : "Show")} tasks of {Name}";
 
     /// <summary>Whether the window shows this canvas.</summary>
     public bool IsSelected
@@ -216,20 +226,28 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         }
     }
 
-    /// <summary>Clears the selection and returns it, for <see cref="RestoreSelection"/>.</summary>
-    internal (TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections) TakeSelection()
+    /// <summary>
+    /// Clears the selection and holds it until a view lays out and calls <see cref="RestoreSelection"/>. A view that never
+    /// lays out, because the window showed another workflow first, leaves it held for the next view.
+    /// </summary>
+    internal void HoldSelection()
     {
-        (TaskNodeViewModel[], ConnectionViewModel[]) selection = ([.. SelectedNodes], [.. SelectedConnections]);
+        _heldSelection ??= ([.. SelectedNodes], [.. SelectedConnections]);
         SelectedNodes.Clear();
         SelectedConnections.Clear();
         SelectedNode = null;
         SelectedConnection = null;
-        return selection;
     }
 
-    /// <summary>Selects again what was selected, leaving out what the workflow no longer holds.</summary>
-    internal void RestoreSelection((TaskNodeViewModel[] Nodes, ConnectionViewModel[] Connections) selection)
+    /// <summary>Selects again what <see cref="HoldSelection"/> held, leaving out what the workflow no longer holds.</summary>
+    internal void RestoreSelection()
     {
+        if (_heldSelection is not { } selection)
+        {
+            return;
+        }
+
+        _heldSelection = null;
         SelectedNodes.Clear();
         SelectedConnections.Clear();
         foreach (var node in selection.Nodes.Where(Nodes.Contains))
@@ -483,6 +501,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Name, current.Name))
         {
             OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(ExpandLabel));
         }
 
         OnPropertyChanged(nameof(HasUnsavedChanges));
