@@ -26,10 +26,12 @@ public sealed class WorkflowDocumentTests : IDisposable
     {
         var golden = File.ReadAllBytes(SampleFile);
 
-        var parsed = WorkflowFile.Parse(golden, SampleFile);
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
+        document.Save();
 
-        Assert.Null(parsed.Converted);
-        Assert.Equal(golden, WorkflowFile.Serialize(parsed.Workflow));
+        Assert.Null(document.Converted);
+        Assert.Null(document.Current.Name);
+        Assert.Equal(golden, File.ReadAllBytes(document.FilePath));
     }
 
     [Fact]
@@ -39,17 +41,18 @@ public sealed class WorkflowDocumentTests : IDisposable
         var file = Path.Combine(Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName, SampleFileName);
         File.Copy(Fixture.Path("storage-change-format2.json"), file);
 
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
 
         Assert.Equal(
             "iDevelop converted this workflow from format 2. Its 3 tasks became Implement nodes, and its review connection became a dependency. Save to keep it in format 3.",
             document.Converted);
         Assert.True(document.HasUnsavedChanges);
+        Assert.Null(document.Current.Name);
         Assert.All(document.Current.Tasks.Values, task => Assert.Same(BuiltInBlueprints.Implement, task.Blueprint));
         Assert.Equal(ConnectionKind.Dependency, document.Current.Connections[new ConnectionKey(Build, Review)]);
 
         document.Save();
-        var reopened = WorkflowDocument.Open(folder);
+        var reopened = WorkflowDocument.OpenProject(folder).Single();
 
         Assert.Null(reopened.Converted);
         Assert.False(reopened.HasUnsavedChanges);
@@ -71,7 +74,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Opening_the_sample_restores_its_text_kinds_and_positions()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
 
         var workflow = document.Current;
         Assert.Equal("Design the workflow file format", workflow.Tasks[Design].Title);
@@ -102,7 +105,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var folder = _temp.Create("repository");
         File.WriteAllText(Path.Combine(folder, "README.md"), "# Existing repository\n");
 
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
 
         Assert.Empty(document.Current.Tasks);
         Assert.False(document.HasUnsavedChanges);
@@ -114,7 +117,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void The_first_save_creates_the_data_folder_and_the_task_reopens()
     {
         var folder = _temp.Create("repository");
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         document.Apply(TestNodes.Place(TestNodes.Implement(Design, "Plan release"), new CanvasPoint(40, 60)));
         Assert.True(document.HasUnsavedChanges);
 
@@ -125,7 +128,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         Assert.Equal(
             new[] { $"{document.Current.Id}.json" },
             Directory.EnumerateFiles(Path.Combine(folder, ".idp", "workflows")).Select(Path.GetFileName));
-        var reopened = WorkflowDocument.Open(folder).Current;
+        var reopened = WorkflowDocument.OpenProject(folder).Single().Current;
         Assert.Equal(document.Current.Id, reopened.Id);
         Assert.Equal("Plan release", reopened.Tasks[Design].Title);
         Assert.Equal(new CanvasPoint(40, 60), reopened.Positions[Design]);
@@ -137,7 +140,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var folder = _temp.CopyOf(Sample);
         var gitignore = Path.Combine(folder, ".idp", ".gitignore");
         File.WriteAllText(gitignore, "# mine\r\n*.tmp\r\nnotes.md");
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         document.Apply(new EditTitle(Design, "Changed"));
 
         document.Save();
@@ -151,7 +154,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void A_failed_save_keeps_the_previous_file_and_the_unsaved_state()
     {
         var folder = _temp.CopyOf(Sample);
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         document.Apply(new EditTitle(Design, "Changed"));
 
         Exception? error;
@@ -168,7 +171,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         document.Save();
 
         Assert.False(document.HasUnsavedChanges);
-        Assert.Equal("Changed", WorkflowDocument.Open(folder).Current.Tasks[Design].Title);
+        Assert.Equal("Changed", WorkflowDocument.OpenProject(folder).Single().Current.Tasks[Design].Title);
     }
 
     [Fact]
@@ -178,7 +181,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var leftover = Path.Combine(folder, ".idp", "workflows", $"{SampleFileName}.5f0c9b7d1a01.tmp");
         File.WriteAllText(leftover, "{\"form");
 
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
 
         Assert.Equal("Design the workflow file format", document.Current.Tasks[Design].Title);
         Assert.Equal("{\"form", File.ReadAllText(leftover));
@@ -191,7 +194,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var file = Path.Combine(folder, ".idp", "workflows", SampleFileName);
         File.WriteAllBytes(file, [0xEF, 0xBB, 0xBF, .. File.ReadAllBytes(SampleFile)]);
 
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
 
         Assert.Equal("Design the workflow file format", document.Current.Tasks[Design].Title);
         Assert.False(document.HasUnsavedChanges);
@@ -200,41 +203,11 @@ public sealed class WorkflowDocumentTests : IDisposable
     }
 
     [Fact]
-    public void Saving_beside_another_workflow_file_is_refused_and_keeps_the_unsaved_state()
-    {
-        var folder = _temp.Create("repository");
-        var document = WorkflowDocument.Open(folder);
-        document.Apply(TestNodes.Place(TestNodes.Implement(Design, "Plan release"), new CanvasPoint(40, 60)));
-        var workflows = Directory.CreateDirectory(Path.Combine(folder, ".idp", "workflows")).FullName;
-        var other = Path.Combine(workflows, SampleFileName);
-        File.Copy(SampleFile, other);
-
-        var error = Assert.Throws<ProjectException>(document.Save);
-
-        Assert.Equal($"Not saved. {other} is another workflow file, and this version of iDevelop keeps one workflow per project.", error.Message);
-        Assert.True(document.HasUnsavedChanges);
-        Assert.Equal(new[] { SampleFileName }, Directory.EnumerateFiles(workflows).Select(Path.GetFileName));
-        Assert.Equal(File.ReadAllBytes(SampleFile), File.ReadAllBytes(other));
-    }
-
-    [Fact]
-    public void A_project_with_two_workflow_files_is_refused()
-    {
-        var folder = _temp.CopyOf(Sample);
-        var workflows = Path.Combine(folder, ".idp", "workflows");
-        File.Copy(Path.Combine(workflows, SampleFileName), Path.Combine(workflows, "019a9d2e-4c10-7a3b-8e21-5f0c9b7d1a02.json"));
-
-        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.Open(folder));
-
-        Assert.Equal($"{workflows} holds 2 workflow files. This version of iDevelop opens one workflow per project.", error.Message);
-    }
-
-    [Fact]
     public void A_missing_folder_is_refused()
     {
         var folder = Path.Combine(_temp.Create("parent"), "missing");
 
-        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.Open(folder));
+        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.OpenProject(folder).Single());
 
         Assert.Equal($"The folder {folder} does not exist.", error.Message);
     }
@@ -373,7 +346,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void Review_and_approval_nodes_save_their_built_ins_and_reopen_the_same()
     {
         var folder = _temp.Create("review");
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         var review = new TaskId(Guid.Parse("019a9d2e-5f00-7000-8000-000000000066"));
         var approval = new TaskId(Guid.Parse("019a9d2e-6000-7000-8000-000000000077"));
         WorkflowEdit[] edits =
@@ -391,7 +364,7 @@ public sealed class WorkflowDocumentTests : IDisposable
 
         document.Save();
         var text = File.ReadAllText(Directory.GetFiles(Path.Combine(folder, ".idp", "workflows")).Single());
-        var reopened = WorkflowDocument.Open(folder).Current;
+        var reopened = WorkflowDocument.OpenProject(folder).Single().Current;
 
         Assert.Contains("\"kind\": \"review\",\n        \"reviewer\": [", text);
         Assert.Contains("\"work\": {\n        \"kind\": \"person\"\n      }", text);
@@ -413,7 +386,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Undoing_a_delete_restores_the_node_and_its_connections()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         var changes = 0;
         document.Changed += (_, _) => changes++;
         document.Apply(new Delete([Review], []));
@@ -435,7 +408,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Redo_deletes_the_node_again_until_a_new_edit_drops_the_redo_step()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         document.Apply(new Delete([Review], []));
         document.Undo();
 
@@ -458,7 +431,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Ten_characters_typed_into_a_field_undo_as_one_step()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
 
         Type(document, Review, "instructions", "Read diffs");
         Assert.Equal("Read diffs", document.Current.Tasks[Review].Field("instructions"));
@@ -472,7 +445,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Typing_again_after_an_undo_starts_a_new_step()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         Type(document, Review, "instructions", "Read");
         document.Undo();
         Type(document, Review, "instructions", "Skim");
@@ -487,7 +460,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void A_move_between_two_runs_of_typing_splits_them_into_three_steps()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         Type(document, Review, "instructions", "Read");
         document.Apply(new MoveTasks([new TaskPosition(Review, new CanvasPoint(800, 300))]));
         Type(document, Review, "instructions", " diffs");
@@ -508,7 +481,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     [Fact]
     public void Typing_into_a_title_then_a_field_then_the_same_field_of_another_task_undoes_as_three_steps()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         Type(document, Review, null, " again");
         Type(document, Review, "instructions", "Read");
         Type(document, Build, "instructions", "!");
@@ -530,7 +503,7 @@ public sealed class WorkflowDocumentTests : IDisposable
     public void Undoing_back_to_the_saved_workflow_reads_as_saved()
     {
         var folder = _temp.CopyOf(Sample);
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         Type(document, Review, "instructions", "Read");
         document.Save();
         Type(document, Review, "instructions", " diffs");
@@ -544,13 +517,13 @@ public sealed class WorkflowDocumentTests : IDisposable
 
         Assert.Equal("", document.Current.Tasks[Review].Field("instructions"));
         Assert.True(document.HasUnsavedChanges);
-        Assert.Equal("Read", WorkflowDocument.Open(folder).Current.Tasks[Review].Field("instructions"));
+        Assert.Equal("Read", WorkflowDocument.OpenProject(folder).Single().Current.Tasks[Review].Field("instructions"));
     }
 
     [Fact]
     public void Undo_and_redo_without_a_step_and_edits_that_change_nothing_leave_the_document_alone()
     {
-        var document = WorkflowDocument.Open(_temp.CopyOf(Sample));
+        var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
         var opened = document.Current;
         var changes = 0;
         document.Changed += (_, _) => changes++;
@@ -589,7 +562,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, json.Replace('\'', '"'));
 
-        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.Open(folder));
+        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.OpenProject(folder).Single());
 
         return error.Message.Replace(file, "<file>");
     }

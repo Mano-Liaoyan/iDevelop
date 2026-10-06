@@ -81,7 +81,7 @@ public sealed class MainWindowViewModel : ObservableObject
         WorkflowDocument document;
         try
         {
-            document = WorkflowDocument.Open(folder);
+            document = WorkflowDocument.OpenProject(folder)[0];
         }
         catch (Exception e) when (e is ProjectException or IOException or UnauthorizedAccessException)
         {

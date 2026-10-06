@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -27,6 +28,113 @@ public sealed class BlueprintLibraryTests : IDisposable
         DerivedFrom = BuiltInBlueprints.Implement.Key,
     };
 
+    [Theory]
+    [InlineData(BlueprintIcon.Code, "code", BlueprintColor.Indigo, "indigo")]
+    [InlineData(BlueprintIcon.TaskList, "taskList", BlueprintColor.Cyan, "cyan")]
+    [InlineData(BlueprintIcon.Ruler, "ruler", BlueprintColor.Purple, "purple")]
+    [InlineData(BlueprintIcon.Glasses, "glasses", BlueprintColor.Mint, "mint")]
+    [InlineData(BlueprintIcon.PersonAvailable, "personAvailable", BlueprintColor.Brown, "brown")]
+    [InlineData(BlueprintIcon.DocumentSearch, "documentSearch", BlueprintColor.Gray, "gray")]
+    public void Icon_and_color_round_trip_through_the_library_and_the_embedded_workflow_copy(
+        BlueprintIcon icon, string iconName, BlueprintColor color, string colorName)
+    {
+        var project = _temp.Create("project");
+        var library = BlueprintLibrary.Project(project);
+        var blueprint = BugFix(new BlueprintKey("bug-fix", 1)) with { Icon = icon, Color = color };
+        library.Save(blueprint);
+        var libraryFile = JsonNode.Parse(File.ReadAllText(Path.Combine(library.Folder, "bug-fix.json")))!;
+        Assert.Equal(iconName, libraryFile["icon"]!.GetValue<string>());
+        Assert.Equal(colorName, libraryFile["color"]!.GetValue<string>());
+        var loaded = Assert.Single(library.Read().Blueprints);
+        Assert.Equal(icon, loaded.Icon);
+        Assert.Equal(color, loaded.Color);
+
+        var document = WorkflowDocument.Create(project, "Build");
+        document.Apply(new PlaceNode(TestTasks.Build, loaded, new CanvasPoint(0, 0)) { Title = "Implement" });
+        document.Save();
+        var workflowFile = JsonNode.Parse(File.ReadAllText(document.FilePath))!;
+        Assert.Equal(iconName, workflowFile["blueprints"]![0]!["icon"]!.GetValue<string>());
+        Assert.Equal(colorName, workflowFile["blueprints"]![0]!["color"]!.GetValue<string>());
+        var embedded = WorkflowDocument.OpenProject(project).Single().Current.Tasks[TestTasks.Build].Blueprint;
+        Assert.Equal(icon, embedded.Icon);
+        Assert.Equal(color, embedded.Color);
+        Assert.Equal("Fixes one bug.", embedded.Description);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Optional_appearance_properties_are_written_only_when_set(bool icon, bool color)
+    {
+        var project = _temp.Create("project");
+        var blueprint = BugFix(new BlueprintKey("bug-fix", 1)) with
+        {
+            Icon = icon ? BlueprintIcon.DocumentSearch : null,
+            Color = color ? BlueprintColor.Mint : null,
+        };
+        var library = JsonNode.Parse(BlueprintLibrary.Serialize(blueprint))!.AsObject();
+        Assert.Equal(icon, library.ContainsKey("icon"));
+        Assert.Equal(color, library.ContainsKey("color"));
+        Assert.Equal("Bug fix", library["name"]!.GetValue<string>());
+
+        var document = WorkflowDocument.Create(project, "Build");
+        document.Apply(new PlaceNode(TestTasks.Build, blueprint, new CanvasPoint(0, 0)));
+        document.Save();
+        var embedded = JsonNode.Parse(File.ReadAllText(document.FilePath))!["blueprints"]![0]!.AsObject();
+        Assert.Equal(icon, embedded.ContainsKey("icon"));
+        Assert.Equal(color, embedded.ContainsKey("color"));
+        Assert.Equal("Bug fix", embedded["name"]!.GetValue<string>());
+        var reopened = WorkflowDocument.OpenProject(project).Single().Current.Tasks[TestTasks.Build].Blueprint;
+        Assert.Equal(icon ? BlueprintIcon.DocumentSearch : null, reopened.Icon);
+        Assert.Equal(color ? BlueprintColor.Mint : null, reopened.Color);
+    }
+
+    [Theory]
+    [InlineData("icon", "unknownGlyph")]
+    [InlineData("icon", "Code")]
+    [InlineData("color", "unknownHue")]
+    [InlineData("color", "Indigo")]
+    public void Unknown_appearance_names_refuse_library_and_workflow_files_with_the_file_and_value(string property, string value)
+    {
+        var project = _temp.Create("project");
+        var library = BlueprintLibrary.Project(project);
+        var blueprint = BugFix(new BlueprintKey("bug-fix", 1));
+        library.Save(blueprint);
+        var libraryPath = Path.Combine(library.Folder, "bug-fix.json");
+        var json = JsonNode.Parse(File.ReadAllText(libraryPath))!;
+        json[property] = value;
+        File.WriteAllText(libraryPath, json.ToJsonString());
+        var libraryRead = library.Read();
+        Assert.Equal($"{libraryPath}: blueprint bug-fix@1 has unknown {property} \"{value}\".", Assert.Single(libraryRead.Problems));
+        Assert.Empty(libraryRead.Blueprints);
+
+        var document = WorkflowDocument.Create(project, "Build");
+        document.Apply(new PlaceNode(TestTasks.Build, blueprint, new CanvasPoint(0, 0)));
+        document.Save();
+        json = JsonNode.Parse(File.ReadAllText(document.FilePath))!;
+        json["blueprints"]![0]![property] = value;
+        File.WriteAllText(document.FilePath, json.ToJsonString());
+        var error = Assert.Throws<ProjectException>(() => WorkflowDocument.OpenProject(project));
+        Assert.Equal($"{document.FilePath}: blueprint bug-fix@1 has unknown {property} \"{value}\".", error.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_different_icon_or_color_under_an_embedded_blueprint_key_is_a_conflict(bool icon)
+    {
+        var document = WorkflowDocument.Create(_temp.Create("project"), "Build");
+        var blueprint = BugFix(new BlueprintKey("bug-fix", 1));
+        document.Apply(new PlaceNode(TestTasks.Build, blueprint, new CanvasPoint(0, 0)));
+        var changed = icon ? blueprint with { Icon = BlueprintIcon.Code } : blueprint with { Color = BlueprintColor.Cyan };
+
+        var rejected = Assert.IsType<EditResult.Rejected>(document.Apply(new PlaceNode(TestTasks.Review, changed, new CanvasPoint(100, 0))));
+
+        Assert.Equal(new EditRejection.BlueprintConflict(new BlueprintKey("bug-fix", 1)), rejected.Reason);
+        Assert.Equal([TestTasks.Build], document.Current.Tasks.Keys);
+    }
+
     [Fact]
     public void A_derived_blueprint_edited_to_version_2_leaves_the_node_placed_from_version_1_on_version_1()
     {
@@ -34,14 +142,14 @@ public sealed class BlueprintLibraryTests : IDisposable
         var library = BlueprintLibrary.Project(project);
         var key = BlueprintLibrary.NewKey("Bug fix");
         library.Save(BugFix(key));
-        var document = WorkflowDocument.Open(project);
+        var document = WorkflowDocument.OpenProject(project).Single();
         var (first, second) = (TaskId.New(), TaskId.New());
 
         Assert.IsType<EditResult.Applied>(document.Apply(new PlaceNode(first, Assert.Single(library.Read().Blueprints), new CanvasPoint(0, 0))));
         library.Save(BugFix(key with { Version = 2 }, template: "Fix {{bug}} and say how you found it.\n{{instructions}}\n"));
         Assert.IsType<EditResult.Applied>(document.Apply(new PlaceNode(second, Assert.Single(library.Read().Blueprints), new CanvasPoint(0, 200))));
         document.Save();
-        var reopened = WorkflowDocument.Open(project).Current;
+        var reopened = WorkflowDocument.OpenProject(project).Single().Current;
 
         Assert.Equal(key, reopened.Tasks[first].Blueprint.Key);
         Assert.Equal("Fix {{bug}}.\n{{instructions}}\n", ((WorkSpec.Agent)reopened.Tasks[first].Blueprint.Work).Template.Text);

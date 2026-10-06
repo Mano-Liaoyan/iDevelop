@@ -97,7 +97,7 @@ public sealed class PlanningTests : IDisposable
         shell.Click(shell.InView<Button>("DismissProposal"));
 
         Assert.Empty(Ghosts(shell));
-        Assert.Equal(3, WorkflowDocument.Open(shell.Window.ViewModel.Canvas!.Document.ProjectFolder).Current.Tasks.Count);
+        Assert.Equal(3, WorkflowDocument.OpenProject(shell.Window.ViewModel.Canvas!.Document.ProjectFolder).Single().Current.Tasks.Count);
     }
 
     [AvaloniaFact]
