@@ -145,12 +145,16 @@ public sealed class ConnectionTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         Assert.Equal(Color.Parse("#564ADE"), shell.ColorAt(shell.Editor, new Point(535, 122)));
 
-        // Held 180 px higher, Build's card spans y = 70 to 134, so the connection lies under its blank bottom row.
-        Color? held = null;
+        // Held 180 px higher, Build's card spans y = 70 to 134, so the connection lies under its blank bottom row. The
+        // connection keeps its straight route along the row, so the card covers it rather than the connection going around.
+        var connection = shell.Window.ViewModel.Canvas!.Connections.Single();
+        (Color Under, IReadOnlyList<Point> Route)? held = null;
         var header = shell.Header(shell.Node("Build"));
-        shell.Drag(header, header + new Vector(0, -186), beforeRelease: () => held = shell.ColorAt(shell.Editor, new Point(535, 122)));
+        shell.Drag(header, header + new Vector(0, -186), beforeRelease: () =>
+            held = (shell.ColorAt(shell.Editor, new Point(535, 122)), connection.Route));
 
-        Assert.Equal(Color.Parse("#FFFFFF"), held);
+        Assert.Equal(Color.Parse("#FFFFFF"), held?.Under);
+        Assert.Equal<Point>([new Point(381, 122), new Point(689, 122)], held?.Route);
     }
 
     [AvaloniaFact]
