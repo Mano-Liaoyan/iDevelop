@@ -148,6 +148,40 @@ public sealed class BlueprintTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(project, ".idp")));
     }
 
+    [AvaloniaFact]
+    public void The_palette_and_the_editor_draw_their_glyph_buttons_at_24_by_24_outside_the_inspector()
+    {
+        var shell = Shell.Open(_temp.Create("plan"));
+        var blueprints = shell.Window.ViewModel.Canvas!.Blueprints;
+        blueprints.Derive(BuiltInBlueprints.Implement);
+        var host = new Window
+        {
+            Width = 480,
+            Height = 1600,
+            Content = new StackPanel
+            {
+                Children = { new PaletteView { DataContext = blueprints }, new BlueprintEditorView { DataContext = blueprints.Editor } },
+            },
+        };
+        host.Show();
+        try
+        {
+            shell.Render();
+
+            var glyphs = host.GetVisualDescendants().OfType<Button>()
+                .Where(button => AutomationProperties.GetAutomationId(button) is "PlaceBlueprint" or "DeriveBlueprint" or "RemoveField")
+                .ToLookup(button => AutomationProperties.GetAutomationId(button)!);
+            Assert.Equal(
+                (true, true, 2),
+                (glyphs["PlaceBlueprint"].Any(), glyphs["DeriveBlueprint"].Any(), glyphs["RemoveField"].Count()));
+            Assert.Equal([new Size(24, 24)], glyphs.SelectMany(group => group).Select(button => button.Bounds.Size).Distinct().ToArray());
+        }
+        finally
+        {
+            host.Close();
+        }
+    }
+
     private static Control[] Containers(Visual root) =>
         [.. root.GetSelfAndVisualDescendants().OfType<ItemsControl>().SelectMany(items => items.GetRealizedContainers())];
 

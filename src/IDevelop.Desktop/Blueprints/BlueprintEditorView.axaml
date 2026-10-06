@@ -4,6 +4,9 @@
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
              x:Class="IDevelop.Desktop.Blueprints.BlueprintEditorView"
              x:DataType="blueprints:BlueprintEditorViewModel">
+  <UserControl.Styles>
+    <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
+  </UserControl.Styles>
   <StackPanel AutomationProperties.AutomationId="BlueprintEditor">
     <TextBlock Classes="headerName" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
     <TextBlock Classes="kindLine" Text="{Binding Caption}" TextWrapping="Wrap" Margin="0,2,0,10"
