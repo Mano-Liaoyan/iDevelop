@@ -125,12 +125,12 @@
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFilter}" />
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
-                <MenuItem Header="Expand All" Click="OnExpandAll">
+                <MenuItem Header="Expand All" Click="OnExpandAll" AutomationProperties.AutomationId="ExpandAllSections">
                   <MenuItem.Icon>
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" />
                   </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="Collapse All" Click="OnCollapseAll">
+                <MenuItem Header="Collapse All" Click="OnCollapseAll" AutomationProperties.AutomationId="CollapseAllSections">
                   <MenuItem.Icon>
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" />
                   </MenuItem.Icon>

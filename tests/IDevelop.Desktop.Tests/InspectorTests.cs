@@ -131,12 +131,12 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         string[] keys = ["Task", "Agent", "Run", "Conversation", "Blueprint"];
 
-        Choose(shell, "Collapse All");
+        Choose(shell, "CollapseAllSections");
 
         Assert.All(keys, key => Assert.True(shell.Section(key).IsFolded, key));
         Assert.Empty(shell.ShownRows());
 
-        Choose(shell, "Expand All");
+        Choose(shell, "ExpandAllSections");
 
         Assert.All(keys, key => Assert.False(shell.Section(key).IsFolded, key));
         Assert.Contains("Client", shell.ShownRows());
@@ -502,11 +502,11 @@ public sealed class InspectorTests : IDisposable
     private static bool Shows(Shell shell, string automationId) => shell.Has<Control>(automationId) && shell.Find<Control>(automationId).IsEffectivelyVisible;
 
     /// <summary>Opens the sections menu and chooses the entry. A headless popup takes no clicks, so the entry raises its own.</summary>
-    private static void Choose(Shell shell, string entry)
+    private static void Choose(Shell shell, string automationId)
     {
         var tools = shell.Find<Button>("InspectorTools");
         shell.Click(tools);
-        var item = shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(menu => (string?)menu.Header == entry);
+        var item = shell.Window.GetVisualDescendants().OfType<MenuItem>().Single(menu => AutomationProperties.GetAutomationId(menu) == automationId);
         item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         tools.Flyout!.Hide();
         shell.Render();
