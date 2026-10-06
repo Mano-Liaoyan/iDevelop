@@ -7,6 +7,9 @@
              xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Blueprints.PaletteView"
              x:DataType="blueprints:BlueprintsViewModel">
+  <UserControl.Styles>
+    <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
+  </UserControl.Styles>
   <StackPanel AutomationProperties.AutomationId="Palette">
     <ItemsControl ItemsSource="{Binding Groups}">
       <ItemsControl.ItemTemplate>
