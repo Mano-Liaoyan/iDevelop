@@ -26,8 +26,16 @@ public sealed partial class TaskNodeViewModel
     private RelayCommand _acceptAndFinish = null!;
     private ProposalViewModel? _watchedProposal;
     private AttemptViewModel? _lastRun;
+    private bool _showsToolCalls;
 
     public string AgentSectionTitle => IsReview ? "Reviewer" : "Agent";
+
+    /// <summary>Whether the inspector lists this task's tool calls in its activity. Each task keeps its own choice across its runs.</summary>
+    public bool ShowsToolCalls
+    {
+        get => _showsToolCalls;
+        set => SetProperty(ref _showsToolCalls, value);
+    }
 
     public string ComposerSectionTitle => IsReview ? "Guide the Review" : "Talk to the Agent";
 

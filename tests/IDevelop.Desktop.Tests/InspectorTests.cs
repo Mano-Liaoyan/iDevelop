@@ -244,6 +244,28 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal(2, Shell.Texts(shell.Find<ItemsControl>("LastRunActivity")).Length);
     }
 
+    [AvaloniaFact]
+    public void Each_task_keeps_its_own_tool_call_disclosure_from_the_canvas_and_the_sidebar()
+    {
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "One", 105, 90, Codex, "Hi."), TaskAt(Build, "Two", 505, 90, Codex, "Hi.")), _fakes.DiscoverAsync().Result);
+        foreach (var title in new[] { "Two", "One" })
+        {
+            shell.Click(shell.Header(shell.Node(title)));
+            shell.Click(shell.InView<Button>("RunTask"));
+            shell.WaitUntil(() => shell.CardText(title, "CardStatus") == "Succeeded", $"{title} succeeds");
+        }
+
+        (string?, bool?) Shown() => (shell.Window.ViewModel.Canvas!.SelectedNode?.Title, shell.InView<ToggleButton>("ToolCallsToggle").IsChecked);
+        shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));
+
+        shell.Click(shell.Header(shell.Node("Two")));
+        var two = Shown();
+        shell.Click(shell.SidebarRow("One"));
+
+        Assert.Equal((("Two", false), ("One", true)), (two, Shown()));
+    }
+
     [Theory]
     [InlineData(0, "Just now")]
     [InlineData(59, "Just now")]

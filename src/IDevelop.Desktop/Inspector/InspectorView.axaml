@@ -588,11 +588,11 @@
                     </StackPanel>
                   </inspector:InspectorSection>
 
-                  <!-- What the agent said shows. Its tool calls, such as raw commands, wait behind a disclosure that outlives
-                       each new record of the run and closes when the selection changes. -->
+                  <!-- What the agent said shows. Its tool calls, such as raw commands, wait behind a disclosure that each task
+                       keeps open or closed across its runs. -->
                   <inspector:InspectorSection Key="Activity" Title="Activity" IsShown="{Binding LastRun.HasActivity, FallbackValue=False}">
                     <StackPanel>
-                      <ContentControl Classes="activity" Content="{Binding LastRun}" Classes.showsTools="{Binding #ToolCallsToggle.IsChecked}">
+                      <ContentControl Classes="activity" Content="{Binding LastRun}" Classes.showsTools="{Binding ShowsToolCalls}">
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="execution:AttemptViewModel">
                             <inspector:InspectorRow Layout="Full">
@@ -610,7 +610,7 @@
                         </ContentControl.ContentTemplate>
                       </ContentControl>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding LastRun.ToolCalls, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-                        <ToggleButton x:Name="ToolCallsToggle" Classes="disclosure"
+                        <ToggleButton Classes="disclosure" IsChecked="{Binding ShowsToolCalls}"
                                       AutomationProperties.AutomationId="ToolCallsToggle"
                                       AutomationProperties.Name="{Binding LastRun.ToolCalls}">
                           <StackPanel Orientation="Horizontal" Spacing="4">
