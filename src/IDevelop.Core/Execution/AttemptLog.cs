@@ -27,7 +27,6 @@ internal sealed class AttemptLog : IDisposable
         RespectRequiredConstructorParameters = true,
         Converters =
         {
-            new RunJournal.TaskConverter(),
             new IdConverter<TaskId>(id => id.Value, value => new TaskId(value)),
             new IdConverter<AttemptId>(id => id.Value, value => new AttemptId(value)),
             new IdConverter<WorkflowId>(id => id.Value, value => new WorkflowId(value)),

@@ -386,12 +386,11 @@ internal sealed class RunStore
         });
 
     public RunDecision ReuseReport(WorkflowId workflow, RunId run, OperationId operation, TaskId task, AttemptSource.Standalone source,
-        CommitId codeBase, OperationId confirmation) =>
+        OperationId confirmation) =>
         Transact(workflow, run, operation, Fingerprint("reuseReport", new
         {
             task,
             source,
-            codeBase,
             confirmation
         }), (record, _) =>
         {
@@ -409,8 +408,7 @@ internal sealed class RunStore
                 reused.Source == source);
             if (previous is not null)
             {
-                return record.Inputs[previous.Inputs].CodeBase == codeBase
-                    ? new Mutation.Existing(new RunEvent.ResultAccepted(previous, record.Inputs[previous.Inputs])) : Refuse(RunProblem.StartConflict);
+                return new Mutation.Existing(new RunEvent.ResultAccepted(previous, record.Inputs[previous.Inputs]));
             }
             if (!record.Revision.Snapshot.Tasks.TryGetValue(task, out var definition) ||
                 record.Revision.Snapshot.Connections.Keys.Any(edge => edge.To == task))
@@ -423,13 +421,13 @@ internal sealed class RunStore
                 return Refuse(RunProblem.StartConflict);
             }
 
-            var reuse = ReportReuse.Validate(_project, definition, source, codeBase, confirmation);
+            var reuse = ReportReuse.Validate(_project, definition, source, record.Base.Commit, confirmation);
             if (reuse.Rejection is { } rejection)
             {
                 return new Mutation.Rejected(rejection);
             }
 
-            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [], codeBase, "");
+            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [], record.Base.Commit, "");
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), task, record.Revision.Id, inputs.Id,
                 new ResultOrigin.Reused(source, reuse.Evidence!), reuse.Report!, null), inputs));
         });

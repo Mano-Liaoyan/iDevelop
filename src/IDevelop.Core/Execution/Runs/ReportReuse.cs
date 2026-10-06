@@ -125,7 +125,19 @@ internal static class ReportReuse
         }
 
         var request = (AttemptEvent.Requested)read.Events[0];
-        if (request.StandaloneCapture is not { Inputs: "" } capture || request.RunBinding is not null || !request.ReadOnly ||
+        StandaloneCapture? capture;
+        try
+        {
+            capture = request.StandaloneCapture?.Deserialize<StandaloneCapture>(RunJournal.Options);
+        }
+        catch (Exception error) when (error is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or
+            ProjectException or BlueprintException or FormatException)
+        {
+            return Refuse();
+        }
+
+        if (request.Attempt != source.Attempt || request.Task != source.Task || capture is not { Inputs: "" } ||
+            request.RunBinding is not null || !request.ReadOnly ||
             request.Planning is not null ||
             Revision.CanonicalTask(capture.Definition) != Revision.CanonicalTask(task) || request.Settings != task.Execution ||
             request.Conversation != task.Conversation || request.Prompt != Prompt(task, "") || request.TaskTitle != task.Title ||
