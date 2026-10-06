@@ -626,27 +626,36 @@ internal sealed class RunStore
             }
 
             var all = ImmutableArray.CreateBuilder<RunRecord>();
-            foreach (var workflowFolder in Directory.EnumerateDirectories(_runs))
+            var workflowFolder = Path.Combine(_runs, workflow.ToString());
+            foreach (var runFolder in Directory.Exists(workflowFolder) ? Directory.EnumerateDirectories(workflowFolder) : [])
             {
-                foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder))
+                var path = Path.Combine(runFolder, "events.jsonl");
+                if (!File.Exists(path) || new FileInfo(path).Length == 0)
                 {
-                    foreach (var path in Directory.EnumerateFiles(runFolder, "events.jsonl", SearchOption.TopDirectoryOnly))
-                    {
-                        if (!Guid.TryParse(Path.GetFileName(runFolder), out var foundRun) ||
-                            !Guid.TryParse(Path.GetFileName(workflowFolder), out var foundWorkflow))
-                        {
-                            return new RunDecision.Rejected(new(RunProblem.InvalidData));
-                        }
-
-                        var read = ReadJournal(new(foundWorkflow), new(foundRun));
-                        if (read is RunRead.Rejected rejected)
-                        {
-                            return new RunDecision.Rejected(rejected.Reason);
-                        }
-
-                        all.Add(((RunRead.Loaded)read).Record);
-                    }
+                    continue;
                 }
+
+                if (!Guid.TryParse(Path.GetFileName(runFolder), out var foundRun))
+                {
+                    return new RunDecision.Rejected(new(RunProblem.InvalidData));
+                }
+
+                var read = ReadJournal(workflow, new(foundRun));
+                if (read is RunRead.Rejected rejected)
+                {
+                    if (foundRun != run.Value && rejected.Reason.Problem == RunProblem.IncompleteTail)
+                    {
+                        if (rejected.Prefix is { } prefix)
+                        {
+                            all.Add(prefix);
+                        }
+                        continue;
+                    }
+
+                    return new RunDecision.Rejected(rejected.Reason);
+                }
+
+                all.Add(((RunRead.Loaded)read).Record);
             }
 
             var record = all.FirstOrDefault(record => record.Workflow == workflow && record.Id == run);
@@ -713,13 +722,18 @@ internal sealed class RunStore
 
     private RunRead ReadJournal(WorkflowId workflow, RunId run)
     {
-        if (!File.Exists(Journal(workflow, run)))
+        if (!File.Exists(Journal(workflow, run)) || new FileInfo(Journal(workflow, run)).Length == 0)
         {
             return new RunRead.Rejected(new(RunProblem.NotApproved));
         }
 
-        var journal = RunJournal.Decode(File.ReadAllText(Journal(workflow, run), new UTF8Encoding(false, true)));
+        var journal = RunJournal.Decode(File.ReadAllBytes(Journal(workflow, run)));
         var read = RunReducer.Replay(workflow, run, journal.Entries);
+        if (journal.Entries.Length != 0 && read is RunRead.Rejected)
+        {
+            return read;
+        }
+
         return journal.Rejection is { } problem ? new RunRead.Rejected(problem, (read as RunRead.Loaded)?.Record) : read;
     }
 

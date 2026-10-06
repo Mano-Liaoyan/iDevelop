@@ -79,6 +79,13 @@ internal sealed class RunFixtures : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
+    public string Journal(WorkflowId workflow, RunId run)
+    {
+        var folder = Path.Combine(Project, ".idp", "runs", workflow.ToString(), run.ToString());
+        Directory.CreateDirectory(folder);
+        return Path.Combine(folder, "events.jsonl");
+    }
+
     public RunRecord Read(RunId? run = null) => Assert.IsType<RunRead.Loaded>(Store.Read(W, run ?? Run)).Record;
 
     public void Approve(CommitId? codeBase = null, RunId? run = null) => Assert.IsType<RunDecision.Created>(

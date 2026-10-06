@@ -20,16 +20,26 @@ internal static class RunJournal
 
     public static string Encode(RunEntry entry) => JsonSerializer.Serialize(entry, Options) + "\n";
 
-    public static JournalRead Decode(string jsonl)
+    public static JournalRead Decode(string jsonl) => Decode(Encoding.UTF8.GetBytes(jsonl));
+
+    public static JournalRead Decode(ReadOnlySpan<byte> jsonl)
     {
         var entries = ImmutableArray.CreateBuilder<RunEntry>();
-        var lines = jsonl.Split('\n');
-        for (var index = 0; index < lines.Length - 1; index++)
+        var utf8 = new UTF8Encoding(false, true);
+        var offset = 0;
+        while (offset < jsonl.Length)
         {
-            var sequence = index + 1L;
+            var sequence = entries.Count + 1L;
+            var length = jsonl[offset..].IndexOf((byte)'\n');
+            if (length < 0)
+            {
+                return new(entries.ToImmutable(), new(RunProblem.IncompleteTail, sequence));
+            }
+
             try
             {
-                using var document = JsonDocument.Parse(lines[index], new JsonDocumentOptions { AllowDuplicateProperties = false });
+                var line = utf8.GetString(jsonl.Slice(offset, length));
+                using var document = JsonDocument.Parse(line, new JsonDocumentOptions { AllowDuplicateProperties = false });
                 var root = document.RootElement;
                 if (root.GetProperty("schema").GetInt32() != 1)
                 {
@@ -43,7 +53,7 @@ internal static class RunJournal
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedEvent, sequence));
                 }
-                var entry = JsonSerializer.Deserialize<RunEntry>(lines[index], Options)!;
+                var entry = JsonSerializer.Deserialize<RunEntry>(line, Options)!;
                 if (RunValidation.Entry(entry) is { } problem)
                 {
                     return new(entries.ToImmutable(), new(problem, sequence));
@@ -51,12 +61,14 @@ internal static class RunJournal
                 entries.Add(entry);
             }
             catch (Exception error) when (error is JsonException or NotSupportedException or InvalidOperationException or
-                KeyNotFoundException or FormatException or ArgumentException or ProjectException or BlueprintException or OverflowException)
+                KeyNotFoundException or FormatException or ArgumentException or ProjectException or BlueprintException or OverflowException or
+                DecoderFallbackException)
             {
                 return new(entries.ToImmutable(), new(RunProblem.InvalidData, sequence));
             }
+            offset += length + 1;
         }
-        return new(entries.ToImmutable(), lines[^1].Length == 0 ? null : new(RunProblem.IncompleteTail, entries.Count + 1L));
+        return new(entries.ToImmutable(), null);
     }
 
     internal static string Canonical<T>(T value)
