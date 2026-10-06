@@ -1,6 +1,6 @@
 # iDevelop product direction
 
-Updated: 2026-10-05. The user selected C# and Avalonia. The desktop app runs, looks like PlanWeave, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI. The user made typed nodes and user-defined node types the next phase and accepted their design, and its five slices are built. The node system redesign gave the editor Apple's colors, an Add popover, a Godot-style inspector, and Generate Workflow. Workflow execution, which comes next, and team synchronization remain proposals. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
+Updated: 2026-10-06. The desktop app uses C# and Avalonia, follows PlanWeave's look, and runs individual tasks with Claude Code, Codex, Pi, or Antigravity CLI. The node model and editor redesign are built. The user's latest feedback makes workflow execution, multiple open projects and workflows, a clearer inspector, expandable cards, and full agent conversation the next milestone. The user approved the [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md) on 2026-10-06 and explicitly deferred implementation. Its delivery sequence and verification gates are approved, while the listed open design choices remain to be validated. Only planning documents changed. Team synchronization remains a first-release requirement. No performance claim has been validated by running iDevelop. The [delivery order](#delivery-order) sequences the work.
 
 ## Confirmed product requirements
 
@@ -26,6 +26,11 @@ The user wants these capabilities:
 - Restyle the interface to look like PlanWeave's desktop app, with a light theme and a dark theme the user can switch between, as recorded in [The interface follows the PlanWeave look](#the-interface-follows-the-planweave-look).
 - Make the node editor work like n8n, Unreal Engine Blueprints, and Godot, with a UI in Apple's design style, as recorded in [The node editor follows Apple's design](#the-node-editor-follows-apples-design).
 - Give nodes types that users define and save as blueprints, as recorded in [Nodes have types that users define](#nodes-have-types-that-users-define).
+- Provide Run Workflow without requiring a selected starting node. Start successors automatically after all required predecessors finish, and deliver predecessor content explicitly.
+- Keep multiple projects open, with multiple workflows per project. Workflow rows initially hide their node references.
+- Preserve the current compact canvas. New and generated nodes start collapsed. Each node and the canvas provide expansion controls. Expanded nodes expose frequent execution settings, agent interaction, attention requests, and result links.
+- Provide a chat-quality agent view with Markdown and conversation history. Keep the inspector as the complete settings editor and improve its Godot-inspired alignment, grouping, and field icons.
+- Create GitHub issues or pull requests only through an explicit inspector action and user confirmation. Show the resulting references on the node.
 
 The shared server synchronizes workflow information. It does not host coding agents, model calls, terminals, or repositories. Provider authentication and execution stay on the local machine.
 
@@ -222,6 +227,16 @@ The [node system redesign record](handoffs/2026-10-05-node-system-redesign.md) h
 
 Two points wait for the user. A blueprint cannot carry its own icon or color until its file format gains a field. The box "New tasks use the planner's agent" lets a generated workflow's new tasks take the planner's agent, which extends the rule that a new node takes its blueprint's default agent.
 
+### The next milestone responds to the workspace feedback
+
+The user reviewed the app on 2026-10-06 and asked for planning only. The earlier editor redesign is built, but its inspector and conversation presentation do not satisfy the new feedback. The compact card design remains the preferred collapsed appearance.
+
+The [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md) maps all seven feedback points to delivery slices and acceptance evidence. It proposes a visible Run Workflow action, a run coordinator over durable events, explicit predecessor inputs, multiple open project documents, a full conversation view, expandable cards, and confirmed GitHub publication. The user approved the plan on 2026-10-06 as the delivery direction, with its design and verification gates intact. Implementation is explicitly deferred until a later request. The listed open architecture choices remain unsettled, and no mechanism is implemented by this approval.
+
+The proposed UI keeps PlanWeave's canvas and neutral surfaces, Apple's existing color tokens, and Fluent icons. Godot supplies the inspector's property hierarchy and editing patterns. The conversation takes the interaction quality of an agent chat application without replacing iDevelop's canvas with a chat-only interface. Controls on a card, in the inspector, and in Conversation must use the same task and attempt state.
+
+Verification extends the existing `skills/verify-idevelop` feature map. This round specifies coverage only. Runnable recipes need actual controls and deterministic fixtures from the later implementation slices. No imaginary automation selectors or passing runtime claims belong in the plan.
+
 ## Dependency licensing preference
 
 Prefer standard permissive licenses such as MIT, Apache-2.0, and BSD. The intended product should remain usable inside a company and distributable commercially without required framework seats, royalties, or revenue-based fees. Keep proprietary distribution possible without choosing iDevelop's own license yet.
@@ -250,7 +265,7 @@ The implementation should cover these acceptance cases:
 - Continue a task with a different agent using only the exported handoff and repository artifacts.
 - Build and smoke-test on Windows, macOS, and Linux separately. One shared codebase does not remove platform packaging and testing work.
 
-The [delivery order](#delivery-order) does not yet assign these cases to phases. The provider catalog can include additional documented integrations with their real availability clearly marked.
+The [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.md#verification-skill-plan) assigns local workspace, scheduling, conversation, inspector, card, and publication checks to the approved delivery slices. Team conflict and disconnected-ownership cases remain in the synchronization phase. The provider catalog can include additional documented integrations with their real availability clearly marked.
 
 ## Delivery order
 
@@ -261,8 +276,8 @@ On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition 
 | 1. Editable local canvas | Done | Open a project, create and connect tasks, edit them, save, and reopen without a server. |
 | 2. PlanWeave look | Done | The shell and canvas follow PlanWeave in a light theme and a dark theme. |
 | 3. Single-task execution | Done | Every task runs on its own with each of Claude Code, Codex, Pi, and Antigravity CLI, using the agent, model, and reasoning setting configured on its node. |
-| 4. Node model | In progress | Proposal. Every built-in node type works on its own in the window. A node converses on each of the four clients. A planner's proposal fills drawn nodes and adds new ones after the user approves it. A review node and its subject iterate in their own continuing sessions until both agree. A user derives a node type, saves it to a library, and places it. |
-| 5. Workflow execution | Planned | A workflow runs as a dependency graph, with linked execution across its tasks. |
+| 4. Node model | Five slices built. Platform verification gaps remain in its record. | The agent, planner, and review behaviors are built. The Approval type exists but needs workflow execution to reach its human gate. The node model record distinguishes implemented behavior from unverified cases. |
+| 5. Local workflow workspace | Plan approved on 2026-10-06. Implementation deferred. | Run Workflow executes dependency-linked tasks with explicit inputs. Multiple projects and workflows stay open. Conversation, inspector, attention, and expandable cards meet the feedback. Confirmed GitHub publication attaches results. The approved slices below define the checks. |
 | 6. Team synchronization | Planned | Proposal. Two desktop clients edit one workflow through the optional service, with defined behavior for conflicts, reconnects, and approval of a specific version. |
 
 ### Single-task execution is done
@@ -282,21 +297,19 @@ The phase settled its open design questions. The [working decisions](context.md#
 
 iDevelop starts the official clients, so each run uses the sign-in that client already has: a subscription for Claude Code, Codex, and Antigravity CLI, and whichever provider the user signed in to in Pi. Whether a provider's plan permits unattended use stays that provider's policy. The [provider access reference](provider-access.md) records each provider's access routes.
 
-### The node model comes next
+### The node model's five slices are built
 
-The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, slice 4, planning, and slice 5, review and approval, are built. The [node system redesign](handoffs/2026-10-05-node-system-redesign.md) then rebuilt the editor around them and added Generate Workflow, the button the node model proposed for talking to one agent. Workflow execution is next.
+The [node model record](handoffs/2026-10-04-node-model.md) holds the design that the user accepted, the five delivery slices, and the unverified client behavior that slice 1 probes. It also records the conversation probe that ran all four clients on Linux and the design arena that chose the shape. Slice 1, talking to a node, slice 2, typed nodes with workflow format 3 and conversation modes, slice 3, blueprint libraries, slice 4, planning, and slice 5, review and approval, are built. The [node system redesign](handoffs/2026-10-05-node-system-redesign.md) then rebuilt the editor around them and added Generate Workflow, the button the node model proposed for talking to one agent. The revised local workspace milestone comes next.
 
-### Workflow execution follows
+### Build the local workflow workspace next
 
-The current proposal comes from [The target workflow](#the-target-workflow) and [Connections have explicit meanings](#connections-have-explicit-meanings). Running a workflow schedules its tasks along dependency connections. A task becomes ready when its required predecessors meet their completion condition. Independent ready tasks run concurrently, each code writer in its own Git worktree and branch. Downstream tasks receive the commits or artifacts they need explicitly. A failure blocks its dependents and names the cause, and retries have a limit. A run executes an approved, immutable version of the workflow. The node model settles what a review connection blocks, because a review node replaces it.
+Workflow execution is a confirmed goal. `WorkflowSchedule` calculates readiness from each task's latest attempt but has no application caller and starts nothing. Completion notifications alone do not deliver predecessor content or isolate concurrent code changes.
 
-The readiness schedule is built, and the rest of workflow execution waits for the user. `WorkflowSchedule` returns the ready tasks and names the tasks that hold back each blocked one, from each task's latest attempt, and starts nothing. A review holds back the tasks after it until it ends approved, and an approval holds back the tasks after it until the person approves. A review's subject releases the tasks connected directly to it once its own latest attempt succeeds, as any task does, so work that must wait for the review depends on the review node. These decisions are open:
+The approved sequence is D0 design validation, U1 inspector repair and W1 multi-project ownership, then C1 conversation and E1 run records. E2 establishes explicit input and code delivery. E3 adds Run Workflow and automatic scheduling. N1 adds expanded node controls. G1 adds confirmed GitHub publication and can proceed once its inspector, conversation, and run-record dependencies exist. The [slice table](handoffs/2026-10-06-workspace-execution-plan.md#approved-delivery-slices) records the exact dependencies and completion conditions. The user explicitly deferred implementation, including D0 prototypes and probes, until a later request.
 
-- The merge rules, which decide how a dependency's change reaches the tasks after it.
-- The lifecycle of each run's Git worktrees and branches.
-- What approves and stores a run, and which attempts belong to it. Until then the schedule reads each task's latest attempt.
-- The retry limit, and whether a failed or cancelled task can start again within a run.
-- How many tasks run at once.
+The preferred execution direction is one run coordinator over durable events and pure readiness rules. A node starts once every required dependency has an accepted result and its inputs are available. Context remains non-blocking. Failure blocks affected dependents, not unrelated work. A review releases its successors after agreement, and an Approval node waits for the person. Work that must wait for a review depends on the review node rather than its subject.
+
+The [design gate](handoffs/2026-10-06-workspace-execution-plan.md#proposed-architecture-and-decisions-still-open) must settle code integration, worktree lifecycle, run approval and membership, retries, concurrency, and crash recovery. The earlier accepted rule allowing planner proposals to add or fill unstarted nodes during a run remains. The proposed solution records an approved run amendment instead of changing running attempts. Failed-attempt retries remain distinct from the user-confirmed review loop, which has no round limit.
 
 ### Team synchronization comes after execution
 
@@ -304,4 +317,4 @@ The current proposal is that synchronization shares a workflow that already carr
 
 ### Later work
 
-The user has not placed these relative to the phases above, and their own order is open. On 2026-10-04 the user kept the iDevelop-managed agent here rather than in phase 3. Generating a draft workflow from a natural-language request left this list when Generate Workflow was built on 2026-10-05. Gate tasks on GitHub issues and pull requests. Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Manage multiple projects and navigate workflow groups.
+Export a portable Markdown session record. Run an iDevelop-managed agent against model APIs. Add deeper workflow groups and GitHub check, review, and merge gates beyond confirmed artifact publication. Their order remains open. Multiple open projects and workflows, and inspector-confirmed issue and PR creation, moved into the approved local workspace plan on 2026-10-06, with implementation deferred. Generating a draft workflow left this list when Generate Workflow was built on 2026-10-05.
