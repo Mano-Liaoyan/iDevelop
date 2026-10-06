@@ -79,6 +79,31 @@ public sealed class BlueprintTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Editing_or_deriving_a_blueprint_in_the_editor_keeps_its_icon_and_color()
+    {
+        var project = _temp.Create("plan");
+        var implement = BuiltInBlueprints.Implement;
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("bug-fix", 1), "Bug fix", implement.Work, implement.Fields, implement.Defaults)
+        {
+            DerivedFrom = implement.Key,
+            Icon = BlueprintIcon.Glasses,
+            Color = BlueprintColor.Mint,
+        });
+        var shell = Shell.Open(project);
+
+        Press(shell, "Bug fix", "EditBlueprint");
+        shell.Find<TextBox>("BlueprintTemplate").Text = "Fix it: {{instructions}}";
+        shell.Click(shell.InView<Button>("SaveBlueprint"));
+        Press(shell, "Bug fix", "DeriveBlueprint");
+        shell.Click(shell.InView<Button>("SaveBlueprint"));
+
+        Assert.Equal(
+            [("Bug fix", 2, BlueprintIcon.Glasses, BlueprintColor.Mint), ("Bug fix copy", 1, BlueprintIcon.Glasses, BlueprintColor.Mint)],
+            BlueprintLibrary.Project(project).Read().Blueprints
+                .Select(blueprint => (blueprint.Name, blueprint.Key.Version, blueprint.Icon, blueprint.Color)).Order());
+    }
+
+    [AvaloniaFact]
     public void Save_as_blueprint_makes_the_tasks_values_and_agent_the_defaults_of_a_personal_blueprint()
     {
         var execution = new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-astra" };
