@@ -66,6 +66,20 @@ internal static class GitTree
             : $"{diff[..DiffLimit]}\n… The diff goes on. Run git diff {from} {to} in the project to read all of it.";
     }
 
+    /// <summary>The recursive entries of a tree or commit outside <c>.idp</c>, sorted, so two snapshots compare by content.</summary>
+    internal static string? ContentOutsideData(string folder, string treeOrCommit)
+    {
+        if (!Revision.IsCommit(treeOrCommit) || Git(folder, null, "ls-tree", "-r", "-z", "--full-tree", treeOrCommit) is not { } entries)
+        {
+            return null;
+        }
+
+        return string.Join('\0', entries.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(entry => entry.IndexOf('\t') is var tab && tab >= 0 &&
+                entry[(tab + 1)..] != ".idp" && !entry[(tab + 1)..].StartsWith(".idp/", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal));
+    }
+
     private static string? Git(string folder, string? indexFile, params string[] arguments)
     {
         var start = new ProcessStartInfo("git", arguments)

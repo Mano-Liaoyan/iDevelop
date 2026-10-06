@@ -18,7 +18,7 @@ internal sealed class AttemptLog : IDisposable
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
-    private static readonly JsonSerializerOptions Options = new()
+    internal static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         // Keeps prompts and paths readable. The log is never embedded in HTML.
@@ -27,8 +27,12 @@ internal sealed class AttemptLog : IDisposable
         RespectRequiredConstructorParameters = true,
         Converters =
         {
+            new RunJournal.TaskConverter(),
             new IdConverter<TaskId>(id => id.Value, value => new TaskId(value)),
             new IdConverter<AttemptId>(id => id.Value, value => new AttemptId(value)),
+            new IdConverter<WorkflowId>(id => id.Value, value => new WorkflowId(value)),
+            new IdConverter<RunId>(id => id.Value, value => new RunId(value)),
+            new IdConverter<InputId>(id => id.Value, value => new InputId(value)),
             new SettingsConverter(),
             new BlueprintKeyConverter(),
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false),
