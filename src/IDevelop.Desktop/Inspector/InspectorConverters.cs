@@ -18,7 +18,6 @@ public static class InspectorConverters
     /// <summary>A field of several lines takes its own line under its label, and a field of one line is an editor.</summary>
     public static readonly IValueConverter StackedWhen = new FuncValueConverter<bool, RowLayout>(stacked => stacked ? RowLayout.Stacked : RowLayout.Editor);
 
-    /// <summary>The geometry of an icon key, such as IconEdit, that a view model names.</summary>
     public static readonly IValueConverter Icon = new FuncValueConverter<string?, Geometry?>(key =>
         key is not null && Application.Current!.TryGetResource(key, null, out var geometry) ? geometry as Geometry : null);
 

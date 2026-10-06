@@ -79,6 +79,18 @@ public sealed class InspectorLayoutTests : IDisposable
         AssertUnder(shell, under, "BlueprintName", "BlueprintClient", "BlueprintConversation");
     }
 
+    [AvaloniaFact]
+    public void An_empty_library_says_so_in_full_in_the_narrowest_inspector()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
+        shell.SizeInspector(280);
+
+        var notes = shell.Find<Control>("Palette").GetVisualDescendants().OfType<TextBlock>()
+            .Where(text => text.IsEffectivelyVisible && text.Text == "None yet. Derive a blueprint to add one.").ToArray();
+
+        Assert.Equal([0, 0], notes.Select(note => note.TextLayout.TextLines.Count(line => line.HasCollapsed)));
+    }
+
     /// <summary>Each editor sits 4 px under its label and starts where the label starts, or sits beside it.</summary>
     private static void AssertUnder(Shell shell, bool under, params string[] ids)
     {

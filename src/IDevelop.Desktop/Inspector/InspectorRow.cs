@@ -15,7 +15,6 @@ public enum RowLayout
     /// <summary>As <see cref="Columns"/>, with the editor under its label once the row is narrower than <see cref="InspectorGrid.NarrowWidth"/>.</summary>
     Editor,
 
-
     /// <summary>The label on its own line, the editor under it from the glyph column to the value edge, for text of several lines.</summary>
     Stacked,
 

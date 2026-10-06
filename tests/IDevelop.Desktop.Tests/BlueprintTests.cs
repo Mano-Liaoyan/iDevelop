@@ -223,7 +223,6 @@ public sealed class BlueprintTests : IDisposable
         shell.Render();
     }
 
-    /// <summary>The headers of the entries that the blueprint's More menu shows.</summary>
     private static string[] MenuEntries(Shell shell, string name)
     {
         var more = OpenMore(shell, name);

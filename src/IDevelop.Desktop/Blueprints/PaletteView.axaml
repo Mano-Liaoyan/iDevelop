@@ -19,7 +19,7 @@
               <TextBlock Classes="groupHeading" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
             </inspector:InspectorRow>
             <inspector:InspectorRow Layout="Full" IsShown="{Binding IsEmpty}">
-              <TextBlock Classes="note" Text="None yet. Derive a blueprint to add one." ToolTip.Tip="None yet. Derive a blueprint to add one." />
+              <TextBlock Classes="note" Text="None yet. Derive a blueprint to add one." TextWrapping="Wrap" MaxLines="0" />
             </inspector:InspectorRow>
             <ItemsControl ItemsSource="{Binding Entries}">
               <ItemsControl.ItemTemplate>

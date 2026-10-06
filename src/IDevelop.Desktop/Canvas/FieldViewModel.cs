@@ -39,7 +39,6 @@ public sealed class FieldViewModel : ObservableObject
     /// <summary>The label's tooltip, which says when the field is required.</summary>
     public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
 
-    /// <summary>The key of the field's icon resource, such as IconEdit for Instructions.</summary>
     public string IconKey => Icons.GetValueOrDefault(Spec.Key, "IconField");
 
     public bool IsMultiline => Spec.Shape == FieldShape.Text;
