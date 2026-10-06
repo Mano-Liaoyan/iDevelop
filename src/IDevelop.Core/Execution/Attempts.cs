@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using IDevelop.Nodes;
@@ -105,7 +106,7 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     {
         /// <summary>The task as a fresh standalone attempt ran it, which a run can check before reusing the report. Null in older logs.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public StandaloneCapture? StandaloneCapture { get; init; }
+        public JsonElement? StandaloneCapture { get; init; }
 
         /// <summary>The run that owns the attempt. Null for a standalone attempt.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
