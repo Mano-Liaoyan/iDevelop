@@ -1,15 +1,12 @@
 using System.Collections.Immutable;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Shapes;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Platform;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
@@ -58,23 +55,6 @@ public sealed class CardTests : IDisposable
 
     private static PlaceNode Place(TaskId id, Blueprint blueprint, string title, double x, double y, ExecutionSettings? execution = null) =>
         new(id, blueprint, new CanvasPoint(x, y)) { Title = title, Settings = new NodeSettings(execution, blueprint.Defaults.Conversation) };
-
-    /// <summary>The window's rendered pixels inside the rectangle, row by row.</summary>
-    private static Color[][] PixelRows(Shell shell, Rect rect)
-    {
-        using var frame = shell.Window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
-        using var pixels = frame.Lock();
-        Assert.Contains(pixels.Format, new[] { PixelFormat.Rgba8888, PixelFormat.Bgra8888 });
-        var (left, top) = ((int)Math.Round(rect.X), (int)Math.Round(rect.Y));
-        return [.. Enumerable.Range(top, (int)Math.Round(rect.Height)).Select(y => Enumerable.Range(left, (int)Math.Round(rect.Width)).Select(x =>
-        {
-            var pixel = pixels.Address + y * pixels.RowBytes + x * 4;
-            byte Channel(int index) => Marshal.ReadByte(pixel, index);
-            return pixels.Format == PixelFormat.Rgba8888
-                ? Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2))
-                : Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
-        }).ToArray())];
-    }
 
     /// <summary>A project with one node of each kind, the last from the project's library.</summary>
     private string EachKind()
@@ -136,7 +116,7 @@ public sealed class CardTests : IDisposable
         var titleDrawnAt = shell.Bounds(shell.InCard<TextBlock>("Design", "CardTitle")).TopLeft;
         var subtitle = shell.Bounds(shell.InCard<TextBlock>("Design", "CardAgent"));
         shell.Click(shell.Header(shell.Node("Design")));
-        var subtitleRows = PixelRows(shell, subtitle);
+        var subtitleRows = shell.PixelRows(subtitle);
         int[] inked = [.. Enumerable.Range(0, subtitleRows.Length).Where(row => subtitleRows[row].Distinct().Count() > 1)];
 
         shell.Press(Key.F2);
@@ -144,7 +124,7 @@ public sealed class CardTests : IDisposable
         var box = shell.InCard<TextBox>("Design", "CardTitleBox");
         var text = box.GetVisualDescendants().OfType<TextPresenter>().Single();
         var shown = shell.Bounds(text.FindAncestorOfType<ScrollContentPresenter>()!).Intersect(shell.Bounds(box).Deflate(box.BorderThickness));
-        var subtitleRowsWhileRenaming = PixelRows(shell, subtitle);
+        var subtitleRowsWhileRenaming = shell.PixelRows(subtitle);
         Assert.True(box.IsFocused);
         Assert.True(Point.Distance(titleDrawnAt, shell.Bounds(text).TopLeft) <= 0.5, $"The text moved from {titleDrawnAt} to {shell.Bounds(text).TopLeft}.");
         Assert.True(shown.Contains(shell.Bounds(text)), $"The box shows {shown} of its line at {shell.Bounds(text)}.");
