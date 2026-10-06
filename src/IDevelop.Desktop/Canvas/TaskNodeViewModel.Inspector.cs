@@ -31,12 +31,12 @@ public sealed partial class TaskNodeViewModel
 
     public string ComposerSectionTitle => IsReview ? "Guide the Review" : "Talk to the Agent";
 
-    /// <summary>The permission note as one short line, under the pickers. The client's info glyph holds the whole note.</summary>
+    /// <summary>The permission note as one short line, which names the client's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string? PermissionSummary => _task.Execution is { } settings
         ? IsReview ? RunText.ReviewerSummary(settings.Client) : RunText.PermissionSummary(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
-    /// <summary>The conversation note as one short line. The conversation's info glyph holds the whole note.</summary>
+    /// <summary>The conversation note as one short line, which names the conversation's info glyph. The glyph's tooltip holds the whole note.</summary>
     public string ConversationSummary => RunText.ConversationSummary(_task.Conversation);
 
     /// <summary>What the blueprint is for, which the header's help glyph shows.</summary>

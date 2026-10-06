@@ -23,8 +23,8 @@ public enum RowLayout
 
 /// <summary>
 /// One property in an inspector section: its label, its editor, a revert arrow while the value differs from the
-/// blueprint's default, and an info glyph whose tooltip holds the note that a paragraph under the editor used to say. While the filter has text,
-/// a row shows when its label or its section's title matches. A row without a label shows only with its section's title.
+/// blueprint's default, and an info glyph whose tooltip holds the property's note. While the filter has text, a row shows
+/// when its label or its section's title matches. A row without a label shows only with its section's title.
 /// </summary>
 public sealed class InspectorRow : InspectorPart
 {
