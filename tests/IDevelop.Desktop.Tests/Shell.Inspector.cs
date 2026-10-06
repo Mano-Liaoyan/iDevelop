@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Inspector;
@@ -26,6 +27,13 @@ internal sealed partial class Shell
         [.. Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row.IsEffectivelyVisible && row.Layout != RowLayout.Full).Select(row => row.Label ?? "")];
 
     private Button SectionHeader(string key) => Section(key).GetVisualDescendants().OfType<Button>().First(button => button.Name == "PART_Header");
+
+    /// <summary>The note that a row's info glyph holds: its short name for UI Automation and its tooltip's whole text.</summary>
+    public (string? Name, object? Tip) Note(string automationId)
+    {
+        var glyph = Find<Control>(automationId);
+        return (AutomationProperties.GetName(glyph), ToolTip.GetTip(glyph));
+    }
 
     public void FilterInspector(string text)
     {

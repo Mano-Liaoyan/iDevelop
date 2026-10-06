@@ -7,7 +7,12 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>A task that a proposal adds or fills, which the person can untick before accepting.</summary>
-public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id, string label, string preview, bool isChosen, NodeKind kind) : ObservableObject
+/// <param name="title">The task's title once accepted.</param>
+/// <param name="label">What accepting does, such as Add Implement "Wire export", which names the row and leads its tooltip.</param>
+/// <param name="slot">For a fill, the title of the task it fills, else null.</param>
+/// <param name="hasText">A fill of a task the person has written in, which starts unticked.</param>
+public sealed class ProposalItemViewModel(
+    ProposalViewModel proposal, TaskId id, string title, string label, string preview, bool isChosen, NodeKind kind, string? slot = null, bool hasText = false) : ObservableObject
 {
     private bool _isChosen = isChosen;
     private bool _hasStarted;
@@ -16,12 +21,23 @@ public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id,
 
     public NodeKind Kind { get; } = kind;
 
+    public string Title { get; } = title;
+
     /// <summary>False for a fill of a task that has started, which no proposal changes.</summary>
     public bool CanChoose => !_hasStarted;
 
     public string Label => _hasStarted ? $"{label}. It has started, so it stays as it is" : label;
 
+    /// <summary>A fill's line under its title, such as "Fills Backend · Has your text". Null for a task the proposal adds.</summary>
+    public string? Note => slot is null ? null
+        : _hasStarted ? $"Fills {slot} · Started"
+        : hasText ? $"Fills {slot} · Has your text"
+        : $"Fills {slot}";
+
     public string Preview { get; } = preview;
+
+    /// <summary>The label, then the first value the proposal gives the task.</summary>
+    public string Tip => string.IsNullOrEmpty(Preview) ? Label : $"{Label}\n{Preview}";
 
     public bool IsChosen
     {
@@ -44,6 +60,8 @@ public sealed class ProposalItemViewModel(ProposalViewModel proposal, TaskId id,
         }
 
         OnPropertyChanged(nameof(Label));
+        OnPropertyChanged(nameof(Note));
+        OnPropertyChanged(nameof(Tip));
         if (hasStarted && _isChosen)
         {
             _isChosen = false;
@@ -75,9 +93,10 @@ public sealed class ProposalViewModel : ObservableObject
                 Proposal = ready.Proposal;
                 // A slot the person has written in since starts unticked, so Accept never overwrites it unasked. A node an
                 // earlier Accept placed is not offered again.
-                Items = [.. Proposal.Fills.Select(fill => Item(fill.Slot, FillLabel(fill), Preview(SlotBlueprint(fill.Slot), fill.Fields), IsEmptySlot(fill.Slot), SlotBlueprint(fill.Slot))),
+                Items = [.. Proposal.Fills.Select(FillItem),
                     .. Proposal.Nodes.Where(node => !workflow.Tasks.ContainsKey(node.Id))
-                        .Select(node => Item(node.Id, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, node.Blueprint))];
+                        .Select(node => new ProposalItemViewModel(
+                            this, node.Id, node.Title, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, _canvas.KindOf(node.Blueprint)))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -120,6 +139,14 @@ public sealed class ProposalViewModel : ObservableObject
     public IReadOnlyList<string> Connections => Proposal is null ? [] :
         [.. AcceptEdit(_canvas.Workflow, Chosen()).Edits.OfType<WorkflowEdit.Connect>().Select(connect =>
             $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
+
+    /// <summary>"1 connection" or "3 connections", which the inspector shows in place of <see cref="Connections"/> until asked, or null for none.</summary>
+    public string? ConnectionCount => Connections.Count switch
+    {
+        0 => null,
+        1 => "1 connection",
+        var count => $"{count} connections",
+    };
 
     /// <summary>Why the proposal cannot be read, or why accepting the chosen tasks would be rejected.</summary>
     public string? Problem
@@ -202,6 +229,7 @@ public sealed class ProposalViewModel : ObservableObject
             ? $"Accept would be refused. {RejectionText.Describe(rejected.Reason, Title)}"
             : null);
         OnPropertyChanged(nameof(Connections));
+        OnPropertyChanged(nameof(ConnectionCount));
         _accept.NotifyCanExecuteChanged();
     }
 
@@ -230,13 +258,16 @@ public sealed class ProposalViewModel : ObservableObject
     private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
         workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null);
 
-    /// <param name="blueprint">The blueprint of the task, or null for a fill whose task is gone, which reads as Implement.</param>
-    private ProposalItemViewModel Item(TaskId id, string label, string preview, bool isChosen, Blueprint? blueprint) =>
-        new(this, id, label, preview, isChosen, _canvas.KindOf(blueprint ?? BuiltInBlueprints.Implement));
-
-    private bool IsEmptySlot(TaskId slot) => _canvas.Workflow.Tasks.TryGetValue(slot, out var task) && PlanningContext.IsEmpty(task);
-
-    private Blueprint? SlotBlueprint(TaskId slot) => _canvas.Workflow.Tasks.GetValueOrDefault(slot)?.Blueprint;
+    /// <summary>A fill whose task is gone reads as Implement.</summary>
+    private ProposalItemViewModel FillItem(ProposedFill fill)
+    {
+        var task = _canvas.Workflow.Tasks.GetValueOrDefault(fill.Slot);
+        var slot = task is not null && !string.IsNullOrWhiteSpace(task.Title) ? task.Title.Trim() : null;
+        var empty = task is not null && PlanningContext.IsEmpty(task);
+        return new ProposalItemViewModel(
+            this, fill.Slot, fill.Title ?? slot ?? "Untitled task", FillLabel(fill), Preview(task?.Blueprint, fill.Fields), empty,
+            _canvas.KindOf(task?.Blueprint ?? BuiltInBlueprints.Implement), slot ?? "an untitled task", hasText: task is not null && !empty);
+    }
 
     private string FillLabel(ProposedFill fill)
     {
