@@ -37,7 +37,7 @@ public sealed class TypedNodeTests : IDisposable
 
         Assert.False(shell.ShowsUnsavedChanges);
         Assert.StartsWith("{\n  \"format\": \"idevelop.workflow/3\",", File.ReadAllText(file));
-        Assert.Null(WorkflowDocument.Open(folder).Converted);
+        Assert.Null(WorkflowDocument.OpenProject(folder).Single().Converted);
     }
 
     [AvaloniaFact]
@@ -56,6 +56,6 @@ public sealed class TypedNodeTests : IDisposable
             ("Waits for you after every turn.", "The task waits for you after every turn, until you mark it done."),
             shell.Note("ConversationNote"));
         shell.Press(Key.S, RawInputModifiers.Control);
-        Assert.Equal(ConversationMode.Chat, WorkflowDocument.Open(folder).Current.Tasks[TestTasks.Design].Conversation);
+        Assert.Equal(ConversationMode.Chat, WorkflowDocument.OpenProject(folder).Single().Current.Tasks[TestTasks.Design].Conversation);
     }
 }

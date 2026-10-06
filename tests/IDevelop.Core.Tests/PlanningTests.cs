@@ -434,7 +434,7 @@ public sealed class PlanningTests : IDisposable
         var document = Seeded(ArchitectWithTwoSlots(ConversationMode.Chat)
             .Must(new PlaceNode(plan, BuiltInBlueprints.Plan, new CanvasPoint(0, 400)) { Title = "Plan" }));
 
-        var reopened = WorkflowDocument.Open(_project).Current;
+        var reopened = WorkflowDocument.OpenProject(_project).Single().Current;
 
         Assert.Equal(document.Current.Tasks.Values, reopened.Tasks.Values);
         Assert.Equal(["idevelop.architect@1", "idevelop.implement@1", "idevelop.plan@1"], reopened.Blueprints.Keys.Select(key => key.ToString()));
@@ -509,7 +509,7 @@ public sealed class PlanningTests : IDisposable
 
     private WorkflowDocument Seeded(Workflow workflow)
     {
-        var document = WorkflowDocument.Open(_project);
+        var document = WorkflowDocument.OpenProject(_project).Single();
         foreach (var task in workflow.Tasks.Values)
         {
             document.Apply(new PlaceNode(task.Id, task.Blueprint, workflow.Positions[task.Id])

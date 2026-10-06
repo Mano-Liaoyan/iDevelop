@@ -136,6 +136,8 @@ public abstract record WorkflowEdit
         public NodeSettings? Settings { get; init; }
     }
 
+    public sealed record Rename(string? Name) : WorkflowEdit;
+
     public sealed record EditTitle(TaskId Task, string Title) : WorkflowEdit;
 
     public sealed record SetField(TaskId Task, string Key, string Text) : WorkflowEdit;
@@ -206,9 +208,11 @@ public sealed class Workflow
         WorkflowId id,
         ImmutableSortedDictionary<TaskId, TaskDefinition> tasks,
         ImmutableSortedDictionary<ConnectionKey, ConnectionKind> connections,
-        ImmutableSortedDictionary<TaskId, CanvasPoint> positions)
+        ImmutableSortedDictionary<TaskId, CanvasPoint> positions,
+        string? name = null)
     {
         Id = id;
+        Name = name;
         Tasks = tasks;
         Connections = connections;
         Positions = positions;
@@ -219,6 +223,8 @@ public sealed class Workflow
     }
 
     public WorkflowId Id { get; }
+
+    public string? Name { get; }
 
     public ImmutableSortedDictionary<TaskId, TaskDefinition> Tasks { get; }
 
@@ -236,6 +242,7 @@ public sealed class Workflow
 
     public EditResult Apply(WorkflowEdit edit) => edit switch
     {
+        WorkflowEdit.Rename e => Rename(e.Name),
         WorkflowEdit.PlaceNode e => PlaceNode(e),
         WorkflowEdit.EditTitle e => Edit(e.Task, task => task with { Title = e.Title }),
         WorkflowEdit.SetField e => Edit(e.Task, task => task.WithField(e.Key, e.Text), new EditRejection.UnknownField(e.Task, e.Key)),
@@ -248,6 +255,12 @@ public sealed class Workflow
         WorkflowEdit.Batch e => Batch(e),
         _ => throw new UnreachableException($"Unhandled edit {edit.GetType().Name}"),
     };
+
+    private EditResult Rename(string? name)
+    {
+        name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        return name == Name ? Applied(this) : Applied(new Workflow(Id, Tasks, Connections, Positions, name));
+    }
 
     private EditResult PlaceNode(WorkflowEdit.PlaceNode e)
     {
@@ -283,7 +296,7 @@ public sealed class Workflow
             task = filled;
         }
 
-        return Applied(new Workflow(Id, Tasks.Add(e.Id, task), Connections, Positions.Add(e.Id, e.Position)));
+        return Applied(new Workflow(Id, Tasks.Add(e.Id, task), Connections, Positions.Add(e.Id, e.Position), Name));
     }
 
     /// <param name="edit">Returns the edited task, or null when the edit does not fit it.</param>
@@ -301,7 +314,7 @@ public sealed class Workflow
 
         return edited.Equals(task)
             ? Applied(this)
-            : Applied(new Workflow(Id, Tasks.SetItem(id, edited), Connections, Positions));
+            : Applied(new Workflow(Id, Tasks.SetItem(id, edited), Connections, Positions, Name));
     }
 
     private EditResult MoveTasks(WorkflowEdit.MoveTasks e)
@@ -317,7 +330,7 @@ public sealed class Workflow
 
         return ReferenceEquals(positions, Positions)
             ? Applied(this)
-            : Applied(new Workflow(Id, Tasks, Connections, positions));
+            : Applied(new Workflow(Id, Tasks, Connections, positions, Name));
     }
 
     private EditResult Connect(WorkflowEdit.Connect e)
@@ -348,7 +361,7 @@ public sealed class Workflow
             return Reject(second);
         }
 
-        return Applied(new Workflow(Id, Tasks, Connections.Add(e.Key, e.Kind), Positions));
+        return Applied(new Workflow(Id, Tasks, Connections.Add(e.Key, e.Kind), Positions, Name));
     }
 
     private EditResult SetConnectionKind(WorkflowEdit.SetConnectionKind e)
@@ -373,7 +386,7 @@ public sealed class Workflow
             return Reject(second);
         }
 
-        return Applied(new Workflow(Id, Tasks, Connections.SetItem(e.Key, e.Kind), Positions));
+        return Applied(new Workflow(Id, Tasks, Connections.SetItem(e.Key, e.Kind), Positions, Name));
     }
 
     private EditResult Delete(WorkflowEdit.Delete e)
@@ -392,7 +405,8 @@ public sealed class Workflow
             Id,
             Tasks.RemoveRange(tasks),
             Connections.RemoveRange(connections),
-            Positions.RemoveRange(tasks)));
+            Positions.RemoveRange(tasks),
+            Name));
     }
 
     private EditResult Batch(WorkflowEdit.Batch e)

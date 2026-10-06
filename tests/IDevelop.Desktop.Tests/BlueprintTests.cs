@@ -73,7 +73,7 @@ public sealed class BlueprintTests : IDisposable
         Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
         reopened.Click(reopened.Header(reopened.Node("Second")));
         Assert.Equal("Version 2", reopened.Find<TextBlock>("TaskTypeVersion").Text);
-        var workflow = WorkflowDocument.Open(project).Current;
+        var workflow = WorkflowDocument.OpenProject(project).Single().Current;
         Assert.Equal([key, key with { Version = 2 }], workflow.Blueprints.Keys);
     }
 
@@ -131,7 +131,7 @@ public sealed class BlueprintTests : IDisposable
         Press(shell, "Implement copy", "PlaceBlueprint");
         Assert.Equal("Bug", shell.Find<TextBox>("TaskBug").GetValue(AutomationProperties.NameProperty));
         shell.Press(Key.S, RawInputModifiers.Control);
-        Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.Open(project).Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
+        Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.OpenProject(project).Single().Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
     }
 
     [AvaloniaFact]

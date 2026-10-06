@@ -36,6 +36,10 @@ public readonly partial record struct BlueprintKey(string Id, int Version) : ICo
 /// </summary>
 public enum WorkKind { Agent, Review, Person }
 
+public enum BlueprintIcon { Code, TaskList, Ruler, Glasses, PersonAvailable, DocumentSearch }
+
+public enum BlueprintColor { Indigo, Cyan, Purple, Mint, Brown, Gray }
+
 /// <summary>What an agent work may do in the project folder.</summary>
 public enum AgentAccess { ReadOnly, Edit }
 
@@ -166,6 +170,10 @@ public sealed partial record Blueprint
     /// <summary>The blueprint this one was derived from, if any.</summary>
     public BlueprintKey? DerivedFrom { get; init; }
 
+    public BlueprintIcon? Icon { get; init; }
+
+    public BlueprintColor? Color { get; init; }
+
     public WorkSpec Work { get; }
 
     /// <summary>In the order the inspector shows them.</summary>
@@ -180,7 +188,7 @@ public sealed partial record Blueprint
     // ImmutableArray compares by reference, so equality compares the fields themselves.
     public bool Equals(Blueprint? other) =>
         other is not null && Key == other.Key && Name == other.Name && Description == other.Description && DerivedFrom == other.DerivedFrom &&
-        Work == other.Work && Fields.SequenceEqual(other.Fields) && Defaults == other.Defaults;
+        Icon == other.Icon && Color == other.Color && Work == other.Work && Fields.SequenceEqual(other.Fields) && Defaults == other.Defaults;
 
     public override int GetHashCode() => HashCode.Combine(Key, Name, Work);
 

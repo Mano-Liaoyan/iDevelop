@@ -73,7 +73,7 @@ public sealed class AgentPickerTests : IDisposable
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(
             new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" },
-            WorkflowDocument.Open(folder).Current.Tasks[Design].Execution);
+            WorkflowDocument.OpenProject(folder).Single().Current.Tasks[Design].Execution);
 
         var reopened = Shell.Open(folder, _clients);
         reopened.Click(reopened.Header(reopened.Node("Design")));
@@ -118,7 +118,7 @@ public sealed class AgentPickerTests : IDisposable
         shell.Press(Key.S, RawInputModifiers.Control);
         Assert.Equal(
             new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "medium" },
-            WorkflowDocument.Open(folder).Current.Tasks[Design].Execution);
+            WorkflowDocument.OpenProject(folder).Single().Current.Tasks[Design].Execution);
     }
 
     [AvaloniaFact]

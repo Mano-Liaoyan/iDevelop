@@ -24,7 +24,12 @@ public sealed class UnsavedChangesTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private string Blocker => Path.Combine(_seed, ".idp", "workflows", "other.json");
+    private static void BlockSave(Shell shell)
+    {
+        var file = shell.Window.ViewModel.Canvas!.Document.FilePath;
+        File.Move(file, $"{file}.backup");
+        Directory.CreateDirectory(file);
+    }
 
     private Shell OpenWithCountingPicker()
     {
@@ -45,7 +50,7 @@ public sealed class UnsavedChangesTests : IDisposable
         return shell;
     }
 
-    private string[] SavedTitles() => [.. WorkflowDocument.Open(_seed).Current.Tasks.Values.Select(task => task.Title).Order()];
+    private string[] SavedTitles() => [.. WorkflowDocument.OpenProject(_seed).Single().Current.Tasks.Values.Select(task => task.Title).Order()];
 
     [AvaloniaFact]
     public void Open_folder_asks_first_and_cancel_keeps_the_document()
@@ -122,14 +127,15 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Open_folder_then_a_failed_save_keeps_the_document()
     {
         var shell = OpenWithUnsavedChanges();
-        File.WriteAllText(Blocker, "{}");
+        BlockSave(shell);
         shell.Click(shell.Find<Button>("OpenFolder"));
 
         shell.Choose("SaveChanges");
 
         Assert.Null(shell.Dialog);
         Assert.Equal(0, _picks);
-        Assert.Equal($"Not saved. {Blocker} is another workflow file, and this version of iDevelop keeps one workflow per project.", shell.Status);
+        Assert.StartsWith("Couldn't save: ", shell.Status);
+        Assert.True(shell.ShowsUnsavedChanges);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
 
@@ -221,7 +227,7 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Closing_then_a_failed_save_keeps_the_window_open()
     {
         var shell = OpenWithUnsavedChanges();
-        File.WriteAllText(Blocker, "{}");
+        BlockSave(shell);
         shell.Window.Close();
         shell.Render();
 
@@ -229,7 +235,8 @@ public sealed class UnsavedChangesTests : IDisposable
 
         Assert.Null(shell.Dialog);
         Assert.True(shell.Window.IsVisible);
-        Assert.Equal($"Not saved. {Blocker} is another workflow file, and this version of iDevelop keeps one workflow per project.", shell.Status);
+        Assert.StartsWith("Couldn't save: ", shell.Status);
+        Assert.True(shell.ShowsUnsavedChanges);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
 

@@ -40,6 +40,7 @@ internal static class WorkflowFile
         {
             Format = FormatV3,
             Id = workflow.Id.Value,
+            Name = workflow.Name,
             Blueprints = [.. workflow.Blueprints.Values.Select(BlueprintJson.ToDto)],
             Tasks = [.. workflow.Tasks.Values.Select(task => new TaskDto
             {
@@ -109,7 +110,7 @@ internal static class WorkflowFile
             }
         }
 
-        var workflow = Workflow.Empty(new WorkflowId(file.Id));
+        var workflow = Replay(Workflow.Empty(new WorkflowId(file.Id)), new WorkflowEdit.Rename(file.Name), path, "name");
         foreach (var (index, task) in file.Tasks.Index())
         {
             if (task is null)
@@ -278,6 +279,7 @@ internal static class WorkflowFile
     {
         public required string Format { get; init; }
         public required Guid Id { get; init; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
         public required List<BlueprintDto?> Blueprints { get; init; }
         public required List<TaskDto?> Tasks { get; init; }
         public required List<ConnectionDto?> Connections { get; init; }

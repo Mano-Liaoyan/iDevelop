@@ -243,7 +243,7 @@ public sealed class CanvasTests : IDisposable
         shell.Press(Key.S, RawInputModifiers.Control);
 
         Assert.Equal("Draft\nReview", shell.Find<TextBox>("TaskInstructions").Text);
-        Assert.Equal("Draft\nReview", WorkflowDocument.Open(folder).Current.Tasks[Design].Field("instructions"));
+        Assert.Equal("Draft\nReview", WorkflowDocument.OpenProject(folder).Single().Current.Tasks[Design].Field("instructions"));
     }
 
     [AvaloniaFact]

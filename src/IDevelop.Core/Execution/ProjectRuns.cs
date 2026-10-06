@@ -25,7 +25,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;
-    private Workflow? _workflow;
+    private ImmutableDictionary<WorkflowId, Workflow> _workflows = ImmutableDictionary<WorkflowId, Workflow>.Empty;
 
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
     private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
@@ -101,22 +101,22 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            return Verdict(task, null, task.Blueprint.Work is WorkSpec.Review ? Subject(task.Id, _workflow, Latest, readChanges: false) : null) is StartVerdict.Blocked blocked
+            return Verdict(task, null, task.Blueprint.Work is WorkSpec.Review ? Subject(task.Id, WorkflowOf(task.Id), Latest, readChanges: false) : null) is StartVerdict.Blocked blocked
                 ? blocked.Problem
                 : null;
         }
     }
 
     /// <summary>
-    /// The workflow whose reviews this project's runs drive. A review's loop goes on from each change of an attempt and
-    /// from each call of this, which also retries a step that could not start, such as a fix round whose client was still
+    /// Follows this workflow without replacing other workflows. A review's loop goes on from each change of an attempt
+    /// and from each call of this, which also retries a step that could not start, such as a fix round whose client was still
     /// being checked. A review that rests between its turns when the project opens goes on once this is first called.
     /// </summary>
     public void Follow(Workflow workflow)
     {
         lock (_gate)
         {
-            _workflow = workflow;
+            _workflows = _workflows.SetItem(workflow.Id, workflow);
         }
 
         // A step can run Git and start a client, so the window's thread does not wait for it.
@@ -142,7 +142,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             (Workflow? Workflow, ImmutableDictionary<TaskId, AttemptRecord> Latest) now;
             lock (_gate)
             {
-                now = (_workflow, Latest);
+                now = (WorkflowOf(task.Id), Latest);
             }
 
             subject = Subject(task.Id, now.Workflow, now.Latest, readChanges: true);
@@ -827,13 +827,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject),
         };
 
+    private Workflow? WorkflowOf(TaskId task) => _workflows.Values.FirstOrDefault(workflow => workflow.Tasks.ContainsKey(task));
+
     /// <summary>
     /// The review attempt that goes on with this task as its subject, or null. Its fix rounds are the task's only new
-    /// attempts until it ends, so no other attempt takes the place of a round. A review deleted from the workflow takes no
+    /// attempts until it ends, so no other attempt takes the place of a round. A review held by no followed workflow takes no
     /// next step, so it no longer holds its subject. Called under the gate.
     /// </summary>
     private AttemptRecord? ReviewOf(TaskId task) => Latest.Values.FirstOrDefault(record =>
-        record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview && _workflow?.Tasks.ContainsKey(record.Task) != false);
+        record.Subject == task && record.Status is AttemptStatus.Running or AttemptStatus.InReview && WorkflowOf(record.Task) is not null);
 
     /// <summary>
     /// Why a review cannot start on its subject as it stands, or null. Another review of the subject would take the fix
