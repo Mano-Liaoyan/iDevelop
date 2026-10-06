@@ -45,24 +45,7 @@ public sealed class GenerateTests : IDisposable
 
     public GenerateTests() => _fakes = new FakeClients(_temp.Create("bin"));
 
-    // A test may end while its planner's turn still writes the attempt log, which Windows will not delete while it is
-    // open, so the folder goes once the run lets go of it.
-    public void Dispose()
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (true)
-        {
-            try
-            {
-                _temp.Dispose();
-                return;
-            }
-            catch (IOException) when (DateTime.UtcNow < deadline)
-            {
-                Thread.Sleep(100);
-            }
-        }
-    }
+    public void Dispose() => _temp.Dispose();
 
     [AvaloniaFact]
     public void An_empty_workflow_offers_to_start_from_a_description_until_it_has_a_task()
@@ -159,6 +142,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(planner.Id, canvas.SelectedNode?.Id);
         Assert.True(canvas.HasStarted(planner.Id));
         Assert.True(canvas.Generated(planner.Id));
+        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
