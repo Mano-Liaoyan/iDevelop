@@ -32,11 +32,24 @@ public sealed class WorkspaceTests : IDisposable
         _gate = Path.Combine(_temp.Create("evidence"), "go");
     }
 
-    // A fake client that a failed test left waiting at the gate ends here.
+    // A fake client that a test left waiting at the gate ends here. Its run then finishes the attempt log, which Windows
+    // will not delete while it is open, so the folder goes once the run lets go of it.
     public void Dispose()
     {
         File.WriteAllText(_gate, "");
-        _temp.Dispose();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            try
+            {
+                _temp.Dispose();
+                return;
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(100);
+            }
+        }
     }
 
     /// <summary>
@@ -238,9 +251,10 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("alpha", ["Build", "Release"])], shell.Tree());
         Assert.Equal("Running", shell.CardText("Design", "CardStatus"));
 
+        var runs = shell.Window.ViewModel.Projects.Single().Runs;
         shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
         shell.Choose("StopAndLeave");
-        shell.WaitUntil(() => shell.Tree().Length == 0, "alpha closes");
+        shell.WaitUntil(() => shell.Tree().Length == 0 && runs.Active.IsEmpty, "alpha closes and its run stops");
 
         Assert.Equal("iDevelop", shell.Window.Title);
         shell.Window.ViewModel.Open(alpha);
