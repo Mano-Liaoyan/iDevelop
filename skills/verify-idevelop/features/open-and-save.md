@@ -1,6 +1,6 @@
 # Open a project and save edits
 
-A user opens a project folder, edits a task in the inspector, and saves the workflow into the folder's `.idp/workflows/<workflow-id>.json`. The window title marks unsaved edits with `*`, and closing the window or opening another folder with unsaved edits asks whether to save them first.
+A user opens a project folder, edits a task in the inspector, and saves the workflow into the folder's `.idp/workflows/<workflow-id>.json`. The window title marks unsaved edits with `*`, and closing the window or the project with unsaved edits asks whether to save them first.
 
 ## Sub-features
 
@@ -12,7 +12,7 @@ A user opens a project folder, edits a task in the inspector, and saves the work
 - `prompt-discard` closes without writing when the user chooses `Don't save`.
 - `prompt-save` writes the edits and closes when the user chooses `Save`.
 - `reopen` shows the saved edits after a restart.
-- `folder-asks` asks about unsaved edits before the folder button opens the system folder picker.
+- `close-project-asks` asks about unsaved edits before the project row's close button closes the project.
 
 ## How to get to it (user POV)
 
@@ -20,7 +20,7 @@ A user opens a project folder, edits a task in the inspector, and saves the work
 - Choose the folder button beside `PROJECT` in the sidebar.
 - Choose a task in the sidebar or on the canvas, then type in the inspector's `Title`, `Instructions`, or `Acceptance criteria` box.
 - Choose the save button at the end of the breadcrumb, or press Ctrl+S, or Cmd+S on macOS.
-- Close the window with unsaved edits.
+- Close the window, or choose the close button on the project's row, with unsaved edits.
 
 ## Driving it with real-window.psm1
 
@@ -38,7 +38,7 @@ Preconditions:
 - **Prompt, Don't save.** Close again and discard. Run `Close-Window $s.Window`, `Invoke-Element (Find-InProcessWindows $s.Process 'DiscardChanges')`, `Assert-Step $s ($s.Process.WaitForExit(15000)) "Don't save closes the window"`, and `Assert-Step $s ((Get-Content -Raw -Encoding UTF8 $wf | ConvertFrom-Json).tasks[1].title -eq 'Implement atomic save 原子保存') 'the file keeps the saved title'`.
 - **Reopen.** Restart in the same session. Begin the call with `Import-Module ./scripts/real-window.psm1` and `$s = Start-IDevelop -Reopen`, because `Connect-IDevelop` fails while the window is closed. Then run `Assert-Step $s ($null -ne (Find-NameOutside $s.Window 'Implement atomic save 原子保存' 'SidebarTasks')) 'the reopened card shows the saved title'` and `Assert-Step $s ((Get-SidebarTasks $s.Window).Current.Name -notcontains 'Unsaved edit') 'the discarded edit is gone'`.
 - **Prompt, Save.** Choose the second task again, edit, close, and save. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`, `Set-Text (Find-ById $s.Window 'TaskTitle') 'Saved from the prompt'`, `Close-Window $s.Window`, and `Invoke-Element (Find-InProcessWindows $s.Process 'SaveChanges')`. Then run `Assert-Step $s ($s.Process.WaitForExit(15000)) 'Save closes the window'` and `Assert-Step $s ((Get-Content -Raw -Encoding UTF8 $wf | ConvertFrom-Json).tasks[1].title -eq 'Saved from the prompt') 'the prompt saved the edit'`.
-- **Folder button asks first.** Begin the call with `Import-Module ./scripts/real-window.psm1` and `$s = Start-IDevelop -Reopen`. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`, `Set-Text (Find-ById $s.Window 'TaskTitle') 'Unsaved edit'`, and `Invoke-Element (Find-ById $s.Window 'OpenFolder')`. Then run `Assert-Step $s ((Find-InProcessWindows $s.Process 'Question').Current.Name -eq 'Save changes to project?') 'the folder button asks whether to save changes first'`, `Invoke-Element (Find-InProcessWindows $s.Process 'CancelChanges')`, and `Assert-Step $s ($s.Window.Current.Name -eq 'project* - iDevelop') 'the edit stays unsaved after Cancel'`.
+- **Close project asks first.** Begin the call with `Import-Module ./scripts/real-window.psm1` and `$s = Start-IDevelop -Reopen`. Run `Select-Element (Get-SidebarTasks $s.Window)[1]`, `Set-Text (Find-ById $s.Window 'TaskTitle') 'Unsaved edit'`, and `Invoke-Element (Find-ById $s.Window 'CloseProject')`. Then run `Assert-Step $s ((Find-InProcessWindows $s.Process 'Question').Current.Name -eq 'Save changes to project?') 'closing the project asks whether to save changes first'`, `Invoke-Element (Find-InProcessWindows $s.Process 'CancelChanges')`, and `Assert-Step $s ($s.Window.Current.Name -eq 'project* - iDevelop') 'the edit stays unsaved after Cancel'`.
 - **First save.** Close the window with `Close-Window $s.Window`, `Invoke-Element (Find-InProcessWindows $s.Process 'DiscardChanges')`, and `$s.Process.WaitForExit(15000)`. Then run `$s = Start-IDevelop -Reopen -Empty`, `Assert-Step $s ($s.Window.Current.Name -eq 'empty-project - iDevelop') 'the title names the empty folder'`, `Assert-Step $s ((Find-ById $s.Window 'TaskCount').Current.Name -eq '0') 'the sidebar counts no task'`, and `Assert-Step $s (-not (Test-Path "$($s.Project)\.idp")) 'the empty folder has no .idp folder'`. Run `Invoke-Element (Find-ById $s.Window 'AddTask')`, `Invoke-Element (Find-ById $s.Window 'AddNodeItem')` to choose the popover's first row, Implement, and `Invoke-Element (Find-ById $s.Window 'Save')`. Then run `$files = @(Wait-Until { Get-ChildItem "$($s.Project)\.idp\workflows" -Filter *.json -ErrorAction SilentlyContinue })`, `Assert-Step $s ($files.Count -eq 1) 'the first save writes one workflow file'`, `$saved = Get-Content -Raw -Encoding UTF8 $files[0].FullName | ConvertFrom-Json`, and `Assert-Step $s (@($saved.tasks).Count -eq 1 -and $saved.tasks[0].title -eq 'New task') 'its only task is titled New task'`.
 
 ## Gotchas
@@ -46,6 +46,6 @@ Preconditions:
 - The sidebar repeats every task title. Find a card with `Find-NameOutside`, or the sidebar's copy passes for the card.
 - After `Don't save` or `Save` in the prompt the process exits. `Connect-IDevelop` then fails until `Start-IDevelop -Reopen` reopens the window.
 - A second `Close-Window` while the prompt is open opens no second prompt. Answer the open one.
-- The folder button opens the operating system's folder picker when nothing is unsaved. This harness does not drive that dialog. Open a folder by naming it at start, and see `UnsavedChangesTests` for the picker paths.
+- The folder button opens the operating system's folder picker and adds the chosen folder as another project, without asking about unsaved edits. This harness does not drive that dialog. Open a folder by naming it at start, and see `UnsavedChangesTests` and `WorkspaceTests` for the picker paths.
 - Ctrl+S and Cmd+S are keys, which UI Automation patterns cannot press. `CanvasTests` and `AgentPickerTests` save with them headlessly.
 - Saving rewrites the whole workflow file. Compare parsed values, not bytes, after an edit.
