@@ -3,6 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Controls.Presenters;
+using Avalonia.VisualTree;
+using Avalonia.Media;
 using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -117,6 +120,24 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal(("alpha", "Build"), shell.Breadcrumb());
         Assert.True(shell.Node("Implement").IsSelected);
         Assert.Equal("Implement", shell.Find<TextBox>("TaskTitle").Text);
+    }
+
+    [AvaloniaFact]
+    public void A_workflow_that_is_not_shown_keeps_its_task_selection_without_the_selected_look()
+    {
+        var (shell, _, _) = OpenBoth();
+        shell.Click(shell.WorkflowExpand("alpha", "Build"));
+        shell.Click(shell.TaskRow("alpha", "Build", "Implement"));
+        Color? RowFill() => (shell.TaskRow("alpha", "Build", "Implement").GetVisualDescendants().OfType<ContentPresenter>().First().Background as ISolidColorBrush)?.Color;
+        var selected = RowFill();
+
+        shell.Click(shell.WorkflowRow("beta", "Build"));
+
+        Assert.True(shell.TaskRow("alpha", "Build", "Implement").IsSelected);
+        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), selected);
+        Assert.Equal(shell.Resource("SurfaceMuted60Brush"), RowFill());
+        shell.Click(shell.WorkflowRow("alpha", "Build"));
+        Assert.Equal(shell.Resource("StateSelectedSurfaceBrush"), RowFill());
     }
 
     [AvaloniaFact]

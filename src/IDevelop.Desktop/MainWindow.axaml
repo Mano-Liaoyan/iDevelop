@@ -170,7 +170,7 @@
                           </Grid>
                           <Border IsVisible="{Binding IsExpanded}"
                                   Margin="12,0,0,0" Padding="12,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border60Brush}">
-                            <ListBox Classes="tasks"
+                            <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
                                      ItemsSource="{Binding Outline}"
                                      SelectedItem="{Binding SelectedNode}"
                                      SelectionChanged="OnSidebarSelectionChanged"
