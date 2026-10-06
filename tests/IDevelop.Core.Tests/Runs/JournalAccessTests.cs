@@ -71,6 +71,47 @@ public sealed class JournalAccessTests
     }
 
     [Fact]
+    public void Sixteen_threads_reserve_one_initial_attempt()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        var decisions = Race(f, (store, op) => store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
+        Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Created), decisions.Count(d => d is RunDecision.Existing),
+            decisions.Count(d => d is not (RunDecision.Created or RunDecision.Existing))));
+        Assert.Equal([A1], f.Read().Attempts.Keys);
+        Assert.Equal(2, f.Read().Sequence);
+    }
+
+    [Fact]
+    public void Sixteen_threads_claim_one_launch_grant()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        var reservation = f.Reserve();
+        var decisions = Race(f, (store, op) => store.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
+        Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Granted), decisions.Count(d => d is RunDecision.Existing),
+            decisions.Count(d => d is not (RunDecision.Granted or RunDecision.Existing))));
+        Assert.Equal([new LaunchKey(A1, 1)], f.Read().Claims.Keys);
+        Assert.Equal(3, f.Read().Sequence);
+    }
+
+    [Fact]
+    public void Foreign_journal_lock_rejects_then_allows_the_same_reservation()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        var op = f.Op();
+        using (var held = new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"),
+            FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.Equal(RunProblem.JournalBusy,
+                Problem(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, "")));
+        }
+        var created = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
+        Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(created.Event).Attempt.Id);
+    }
+
+    [Fact]
     public void Another_runs_torn_first_line_counts_as_absent()
     {
         using var f = new RunFixtures();
@@ -88,5 +129,17 @@ public sealed class JournalAccessTests
         File.WriteAllText(f.Journal(W, OtherRun), File.ReadAllText(f.Journal(W, Run)) + "{\"schema\":1");
         Assert.Equal(RunProblem.IdentityMismatch,
             Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, "")));
+    }
+
+    private static RunDecision[] Race(RunFixtures f, Func<RunStore, OperationId, RunDecision> command)
+    {
+        using var barrier = new Barrier(16);
+        var workers = Enumerable.Range(0, 16).Select(_ => (Store: f.NewStore(), Operation: f.Op())).ToArray();
+        var tasks = workers.Select(worker => System.Threading.Tasks.Task.Factory.StartNew(() =>
+        {
+            barrier.SignalAndWait();
+            return command(worker.Store, worker.Operation);
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
+        return System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();
     }
 }
