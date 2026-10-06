@@ -260,19 +260,26 @@
                       </inspector:InspectorRow>
                       <ContentControl Content="{Binding LastRun}">
                         <ContentControl.ContentTemplate>
+                          <!-- The status and why a run ended show even while a proposal hides the rest of the run. -->
                           <DataTemplate DataType="execution:AttemptViewModel">
-                            <inspector:InspectorRow Label="Status">
-                              <Border Classes="pill" HorizontalAlignment="Left"
-                                      Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
-                                      Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                                      Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                      Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <PathIcon Theme="{StaticResource Glyph}" />
-                                  <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
-                                </StackPanel>
-                              </Border>
-                            </inspector:InspectorRow>
+                            <StackPanel>
+                              <inspector:InspectorRow Label="Status">
+                                <Border Classes="pill" HorizontalAlignment="Left"
+                                        Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
+                                        Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
+                                        Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
+                                        Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+                                  <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <PathIcon Theme="{StaticResource Glyph}" />
+                                    <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="LastRunStatus" />
+                                  </StackPanel>
+                                </Border>
+                              </inspector:InspectorRow>
+                              <inspector:InspectorRow Layout="Full" IsShown="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                           AutomationProperties.AutomationId="LastRunDetail" />
+                              </inspector:InspectorRow>
+                            </StackPanel>
                           </DataTemplate>
                         </ContentControl.ContentTemplate>
                       </ContentControl>
@@ -310,10 +317,6 @@
                                     <TextBlock Text="{Binding Took}" />
                                   </Border>
                                 </WrapPanel>
-                              </inspector:InspectorRow>
-                              <inspector:InspectorRow Layout="Full" IsShown="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                           AutomationProperties.AutomationId="LastRunDetail" />
                               </inspector:InspectorRow>
                             </StackPanel>
                           </DataTemplate>

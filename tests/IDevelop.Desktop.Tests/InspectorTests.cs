@@ -401,6 +401,26 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_planner_whose_next_turn_fails_under_an_open_proposal_still_says_why()
+    {
+        var shell = WaitingArchitect(Resuming(ClientId.Codex, Session)
+            .Print(SessionLine(ClientId.Codex, Session))
+            .Print("""{"type":"turn.failed","error":{"message":"You've hit your usage limit. Try again later."}}""")
+            .Exit(1));
+        shell.Click(shell.InView<TextBox>("Composer"));
+        shell.Type("Keep the export small.");
+
+        shell.Click(shell.InView<Button>("SendMessage"));
+        shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Failed", "the next turn fails");
+
+        Assert.True(shell.Has<StackPanel>("Proposal"));
+        Assert.Equal(["AcceptProposal"], PrimaryButtons(shell));
+        Assert.Equal(
+            (true, "You've hit your usage limit. Try again later."),
+            (Shows(shell, "LastRunDetail"), shell.Find<TextBlock>("LastRunDetail").Text));
+    }
+
+    [AvaloniaFact]
     public void A_long_title_ends_in_an_ellipsis_until_its_box_has_focus()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Add CSV export to the reports page with tests for quoting", 105, 90)));
