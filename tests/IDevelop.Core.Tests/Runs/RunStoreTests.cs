@@ -104,7 +104,7 @@ public sealed class RunStoreTests
         f.Reserve();
         var second = f.NewStore();
         Assert.Equal([A1], Assert.IsType<RunRead.Loaded>(second.Read(W, Run)).Record.Attempts.Keys);
-        Assert.Equal(new AttemptRecovery(A1, RecoveryState.RequestMissing, []), Assert.Single(second.InspectRecovery(W, Run)));
+        Assert.Equal(new AttemptRecovery(A1, RecoveryState.RequestMissing, []), Assert.Single(Assert.IsType<RecoveryRead.Loaded>(second.InspectRecovery(W, Run)).Attempts));
         Assert.Equal(2, f.Read().Sequence);
     }
 
@@ -127,7 +127,7 @@ public sealed class RunStoreTests
                     Conversation = ConversationMode.Autonomous
                 });
         }
-        var recovery = Assert.Single(f.NewStore().InspectRecovery(W, Run));
+        var recovery = Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.NewStore().InspectRecovery(W, Run)).Attempts);
         Assert.Equal((A1, RecoveryState.Uncertain), (recovery.Attempt, recovery.State));
         Assert.Equal([new LaunchKey(A1, 1)], recovery.Claims.ToArray());
     }
@@ -149,7 +149,7 @@ public sealed class RunStoreTests
             log.Append(new AttemptEvent.Launched(At, Environment.ProcessId, At.AddYears(-10)));
         }
         Assert.Equal(RunProblem.RecoveryEvidenceInsufficient, Problem(f.Store.Recover(W, Run, f.Op(), A1)));
-        Assert.Equal(RecoveryState.Uncertain, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class RunStoreTests
         Assert.Equal(new AttemptId(Id(104)), next.Attempt.Id);
         Assert.Equal(A1, Assert.IsType<AttemptCause.Retry>(next.Attempt.Cause).Previous);
         Assert.Equal(new AttemptId(Id(104)), Assert.IsType<RunEvent.Reserved>(repeated.Event).Attempt.Id);
-        Assert.Equal(RecoveryState.Closed, f.Store.InspectRecovery(W, Run).First(item => item.Attempt == A1).State);
+        Assert.Equal(RecoveryState.Closed, Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts.First(item => item.Attempt == A1).State);
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public sealed class RunStoreTests
         f.Claim(reservation);
         var checkpoint = f.WriteLog(reservation, subject: reviewing ? U : null);
         Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.CloseAttempt(W, Run, f.Op(), A1, TerminalAttemptOutcome.Succeeded, checkpoint)));
-        Assert.Equal(RecoveryState.Uncertain, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
     [Fact]
@@ -379,7 +379,7 @@ public sealed class RunStoreTests
             checkpoint = Checkpoint(Path.GetDirectoryName(path)!);
         }
         Assert.Equal(RunProblem.EvidenceMismatch, Problem(f.Store.CloseAttempt(W, Run, f.Op(), A1, TerminalAttemptOutcome.Succeeded, checkpoint)));
-        Assert.Equal(RecoveryState.Uncertain, Assert.Single(f.Store.InspectRecovery(W, Run)).State);
+        Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
     [Fact]

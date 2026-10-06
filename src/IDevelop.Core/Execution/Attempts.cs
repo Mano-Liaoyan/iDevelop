@@ -207,7 +207,6 @@ public sealed record AttemptRecord
         ReadOnly = requested.ReadOnly;
         Subject = requested.Subject;
         Fix = requested.Fix;
-        RunBinding = requested.RunBinding;
         Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null) { StartTree = requested.Tree }];
     }
 
@@ -242,8 +241,6 @@ public sealed record AttemptRecord
 
     /// <summary>Set on an attempt of a review's subject that fixes a round of the review's findings.</summary>
     public ReviewLink? Fix { get; }
-
-    internal RunBinding? RunBinding { get; }
 
     /// <summary>A review's guidance from the person, oldest first.</summary>
     public ImmutableList<GuidanceNote> Guidance { get; internal init; } = [];
