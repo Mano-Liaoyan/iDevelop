@@ -38,16 +38,18 @@
     <Setter Property="Height" Value="18" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- The left margin cancels the box's padding and border, so the text stays where the title drew it. -->
+  <!-- The box is its font's line plus a 1 px border at the top and bottom, so no font loses its descenders. The -5 left
+       and -1 top margins cancel the border and the 4 px padding, so the text sits where the title drew it. With the -6
+       bottom margin the box takes 5 px less than its line, so the row keeps the 18 px of its Panel's MinHeight for any line
+       up to 23 px, and a taller box reaches into the empty top of the subtitle's row. -->
   <Style Selector="TextBox.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Height" Value="22" />
     <Setter Property="MinHeight" Value="0" />
-    <Setter Property="Margin" Value="-5,-2,0,-2" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="-5,-1,0,-6" />
     <Setter Property="Padding" Value="4,0" />
     <Setter Property="CornerRadius" Value="5" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="TextBlock.cardAgent, TextBlock.cardStatus">

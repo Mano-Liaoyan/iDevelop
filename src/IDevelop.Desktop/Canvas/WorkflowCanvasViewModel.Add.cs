@@ -28,7 +28,7 @@ public abstract record AddTarget
     public sealed record Between(ConnectionKey Connection, CanvasPoint Point) : AddTarget;
 }
 
-/// <summary>What only the canvas view can do: read the pointer and move the viewport.</summary>
+/// <summary>What only the canvas view can do: read the pointer, move the viewport, and reach the inspector beside it.</summary>
 internal interface ICanvasView
 {
     /// <summary>Where the pointer last was over the canvas, in canvas coordinates.</summary>
@@ -37,12 +37,13 @@ internal interface ICanvasView
     void FitToView();
 
     void ZoomToActual();
+
+    /// <summary>Focuses the inspector's client picker for the selected node and opens its list.</summary>
+    void FocusAgent();
 }
 
 public sealed partial class WorkflowCanvasViewModel
 {
-    private static readonly Vector DuplicateOffset = new(30, 30);
-
     private AddNodeViewModel? _addNode;
 
     /// <summary>The open Add popover, or null.</summary>
@@ -108,7 +109,10 @@ public sealed partial class WorkflowCanvasViewModel
         SelectedConnections.Clear();
     }
 
-    /// <summary>Copies the selected nodes 30 px down and right, with the connections among them, and selects the copies.</summary>
+    /// <summary>
+    /// Copies the selected nodes, with the connections among them, below the originals where no card is, and selects the
+    /// copies.
+    /// </summary>
     internal void Duplicate()
     {
         var copies = SelectedNodes.ToDictionary(node => node.Id, _ => TaskId.New());
@@ -117,7 +121,8 @@ public sealed partial class WorkflowCanvasViewModel
             return;
         }
 
-        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Offset(Workflow.Positions[node.Id], DuplicateOffset))).ToList();
+        var shift = FreeShift([.. copies.Keys.Select(id => Workflow.Positions[id])]);
+        var places = SelectedNodes.Select(node => node.CopyAs(copies[node.Id], Offset(Workflow.Positions[node.Id], shift))).ToList();
         var connections = Workflow.Connections
             .Where(connection => copies.ContainsKey(connection.Key.From) && copies.ContainsKey(connection.Key.To))
             .Select(connection => (WorkflowEdit)new WorkflowEdit.Connect(new(copies[connection.Key.From], copies[connection.Key.To]), connection.Value));

@@ -69,17 +69,24 @@ internal sealed partial class Shell
     public Color ColorAt(Visual visual, Point local)
     {
         var point = At(visual, local);
+        return PixelRows(new Rect(Math.Floor(point.X), Math.Floor(point.Y), 1, 1))[0][0];
+    }
+
+    /// <summary>The window's rendered pixels inside the rectangle, in window coordinates, row by row.</summary>
+    public Color[][] PixelRows(Rect rect)
+    {
         using var frame = Window.CaptureRenderedFrame() ?? throw new InvalidOperationException("Nothing was rendered.");
         using var pixels = frame.Lock();
-        var pixel = pixels.Address + (int)point.Y * pixels.RowBytes + (int)point.X * 4;
-        byte Channel(int index) => Marshal.ReadByte(pixel, index);
-        if (pixels.Format == PixelFormat.Rgba8888)
+        Assert.Contains(pixels.Format, new[] { PixelFormat.Rgba8888, PixelFormat.Bgra8888 });
+        var (left, top) = ((int)Math.Round(rect.X), (int)Math.Round(rect.Y));
+        return [.. Enumerable.Range(top, (int)Math.Round(rect.Height)).Select(y => Enumerable.Range(left, (int)Math.Round(rect.Width)).Select(x =>
         {
-            return Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2));
-        }
-
-        Assert.Equal(PixelFormat.Bgra8888, pixels.Format);
-        return Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
+            var pixel = pixels.Address + y * pixels.RowBytes + x * 4;
+            byte Channel(int index) => Marshal.ReadByte(pixel, index);
+            return pixels.Format == PixelFormat.Rgba8888
+                ? Color.FromArgb(Channel(3), Channel(0), Channel(1), Channel(2))
+                : Color.FromArgb(Channel(3), Channel(2), Channel(1), Channel(0));
+        }).ToArray())];
     }
 
     public ItemContainer Node(string title) =>
