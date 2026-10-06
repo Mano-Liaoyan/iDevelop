@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using IDevelop.Execution;
 using IDevelop.Projects;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
@@ -9,6 +10,38 @@ namespace IDevelop.Core.Tests.Runs;
 [Collection(IDevelop.TestSupport.ProcessCollection.Name)]
 public sealed class ReportReuseTests
 {
+    [Fact]
+    public async Task A_report_from_ProjectRuns_standalone_capture_can_be_reused_with_its_recorded_source()
+    {
+        using var f = new RunFixtures(FixtureWorkflow(Task(model: "gpt-6-sol")));
+        using var temp = new TempFolder();
+        var commit = Repository(f.Project);
+        var fakes = new FakeClients(temp.Create("bin"));
+        FakeAgents.Install(fakes, ClientId.Codex,
+            FakeAgents.Fresh(ClientId.Codex).Replay(Fixture.Path("codex-success.jsonl")));
+        await using var runs = ProjectRuns.Open(f.Project, await fakes.DiscoverAsync());
+        var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.Changed += (_, _) =>
+        {
+            if (runs.Active.IsEmpty && runs.Latest.GetValueOrDefault(T) is { Status: not AttemptStatus.Running } attempt)
+            {
+                settled.TrySetResult(attempt);
+            }
+        };
+
+        var started = Assert.IsType<StartResult.Started>(runs.Start(f.Workflow.Tasks[T]));
+        var attempt = await settled.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.Equal((started.Attempt.Id, AttemptStatus.Succeeded, "DONE"), (attempt.Id, attempt.Status, attempt.Result));
+        f.Approve(commit);
+
+        Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(W, Run, f.Op(), T,
+            new AttemptSource.Standalone(T, started.Attempt.Id), commit, f.Op()));
+
+        var result = f.Read().CurrentResults[T];
+        Assert.Equal("DONE", result.Report);
+        Assert.Equal(new AttemptSource.Standalone(T, started.Attempt.Id), Assert.IsType<ResultOrigin.Reused>(result.Origin).Source);
+    }
+
     [Fact]
     public void Explicit_matching_standalone_reuse_copies_one_report_and_source()
     {
