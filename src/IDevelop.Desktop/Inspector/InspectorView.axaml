@@ -589,14 +589,14 @@
                   </inspector:InspectorSection>
 
                   <!-- What the agent said shows. Its tool calls, such as raw commands, wait behind a disclosure that outlives
-                       each new record of the run. -->
+                       each new record of the run and closes when the selection changes. -->
                   <inspector:InspectorSection Key="Activity" Title="Activity" IsShown="{Binding LastRun.HasActivity, FallbackValue=False}">
                     <StackPanel>
                       <ContentControl Classes="activity" Content="{Binding LastRun}" Classes.showsTools="{Binding #ToolCallsToggle.IsChecked}">
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="execution:AttemptViewModel">
                             <inspector:InspectorRow Layout="Full">
-                              <ItemsControl ItemsSource="{Binding Activity}"
+                              <ItemsControl Classes="activity"
                                             AutomationProperties.AutomationId="LastRunActivity"
                                             AutomationProperties.Name="Recent activity">
                                 <ItemsControl.ItemTemplate>

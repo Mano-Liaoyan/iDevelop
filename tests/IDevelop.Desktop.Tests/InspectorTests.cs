@@ -227,6 +227,7 @@ public sealed class InspectorTests : IDisposable
         var activity = shell.InView<ItemsControl>("LastRunActivity");
         var tools = shell.InView<ToggleButton>("ToolCallsToggle");
         Assert.Equal(["DONE"], Shell.Texts(activity));
+        Assert.Single(activity.GetVisualDescendants().OfType<TextBlock>());
         Assert.Equal("1 tool call", Shell.TextOf(tools));
 
         shell.Click(tools);

@@ -2,6 +2,7 @@
      Godot's inspector gives the structure; the type sizes, radii, and colors come from the app's tokens. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:execution="using:IDevelop.Desktop.Execution"
         xmlns:inspector="using:IDevelop.Desktop.Inspector">
 
   <Style Selector="Border.inspectorHeader">
@@ -327,8 +328,12 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="Margin" Value="14,0,0,0" />
   </Style>
-  <Style Selector="ContentControl.activity:not(.showsTools) TextBlock.tool">
-    <Setter Property="IsVisible" Value="False" />
+  <!-- The list holds the tool calls only while the person asks for them, so a long run builds only the lines it shows. -->
+  <Style Selector="ItemsControl.activity" x:DataType="execution:AttemptViewModel">
+    <Setter Property="ItemsSource" Value="{Binding Said}" />
+  </Style>
+  <Style Selector="ContentControl.activity.showsTools ItemsControl.activity" x:DataType="execution:AttemptViewModel">
+    <Setter Property="ItemsSource" Value="{Binding Activity}" />
   </Style>
 
   <Style Selector="TextBlock.itemTitle">

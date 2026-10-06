@@ -41,8 +41,11 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     public string? TerminalNote => RunText.TerminalNote(record);
 
-    /// <summary>The latest activity. The inspector hides its tool calls until the person asks for them.</summary>
+    /// <summary>The latest activity. The inspector shows <see cref="Said"/> until the person asks for the tool calls.</summary>
     public IReadOnlyList<ActivityLine> Activity { get; } = Recent(record.Activity, ActivityShown);
+
+    /// <summary>The lines of <see cref="Activity"/> that the agent or iDevelop said, without its tool calls.</summary>
+    public IReadOnlyList<ActivityLine> Said => [.. Activity.Where(line => !line.IsTool)];
 
     public bool HasActivity => !record.Activity.IsEmpty;
 
