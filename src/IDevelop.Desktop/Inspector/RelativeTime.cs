@@ -44,5 +44,5 @@ public sealed class RelativeTime : TextBlock
         }
     }
 
-    private void Show() => Text = At is { } at ? RunText.Ago(at, DateTimeOffset.Now) : null;
+    private void Show() => Text = At is { } at ? RunText.Ago(at, DateTimeOffset.Now, TimeZoneInfo.Local) : null;
 }

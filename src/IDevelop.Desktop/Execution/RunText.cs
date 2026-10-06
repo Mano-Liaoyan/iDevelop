@@ -303,14 +303,14 @@ public static class RunText
         [.. new[] { Clients.Name(attempt.Requested.Client), attempt.ReportedModel ?? attempt.Requested.Model, attempt.ReportedReasoning ?? attempt.Requested.Reasoning }.OfType<string>()];
 
     /// <summary>
-    /// When something happened, as people say it: "Just now", "5 min ago", "Today 9:41 AM", "Yesterday 9:41 AM", or the
-    /// local date and time.
+    /// When something happened, as people say it in <paramref name="zone"/>: "Just now", "5 min ago", "Today 9:41 AM",
+    /// "Yesterday 9:41 AM", or the date and time.
     /// </summary>
-    public static string Ago(DateTimeOffset at, DateTimeOffset now)
+    public static string Ago(DateTimeOffset at, DateTimeOffset now, TimeZoneInfo zone)
     {
         var age = now - at;
-        var local = at.ToLocalTime();
-        var today = now.ToLocalTime().Date;
+        var local = TimeZoneInfo.ConvertTime(at, zone);
+        var today = TimeZoneInfo.ConvertTime(now, zone).Date;
         return age switch
         {
             { TotalMinutes: < 1 } => "Just now",

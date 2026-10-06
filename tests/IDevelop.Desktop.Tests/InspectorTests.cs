@@ -259,9 +259,8 @@ public sealed class InspectorTests : IDisposable
         System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         try
         {
-            var noon = new DateTime(2026, 10, 5, 14, 0, 0, DateTimeKind.Unspecified);
-            var now = new DateTimeOffset(noon, TimeZoneInfo.Local.GetUtcOffset(noon));
-            Assert.Equal(text, IDevelop.Desktop.Execution.RunText.Ago(now.AddSeconds(-secondsAgo).ToLocalTime(), now));
+            var now = new DateTimeOffset(2026, 10, 5, 14, 0, 0, TimeSpan.Zero);
+            Assert.Equal(text, IDevelop.Desktop.Execution.RunText.Ago(now.AddSeconds(-secondsAgo), now, TimeZoneInfo.Utc));
         }
         finally
         {
