@@ -88,7 +88,7 @@ public sealed class WorkflowDocument
             documents.Add(new WorkflowDocument(projectFolder, file, workflow, parsed.Converted));
         }
 
-        return [.. documents.OrderBy(document => document.Current.Name ?? "Workflow", StringComparer.OrdinalIgnoreCase)
+        return [.. documents.OrderBy(document => document.Current.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(document => document.Current.Id.Value)];
     }
 
