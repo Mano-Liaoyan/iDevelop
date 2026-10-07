@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -337,6 +338,30 @@ public sealed class GitRepositoryTests
         using var taken = linked.TakeMutationLock();
         Assert.NotNull(taken);
         Assert.True(File.Exists(Path.Combine(repository.CommonDirectory, "idevelop", "mutation.lock")));
+    }
+
+    [UnixFact]
+    public void Metadata_times_out_while_a_worktree_scan_uses_its_longer_limit()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new GitFixture();
+        f.Diamond();
+        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+        var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
+        var environment = new Dictionary<string, string>(f.Environment)
+        {
+            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+        };
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment, limits)).Repository;
+        var shim = Path.Combine(bin, "git");
+        File.WriteAllText(shim, "#!/bin/sh\nsleep 3\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var failed = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/heads/main"));
+        Assert.Equal("GitFailed", failed.Problem.ToString());
+        Assert.Equal("Git timed out.", failed.Detail);
+        f.Write("new.txt", "new\n");
+        Assert.Equal("?? new.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
     }
 
     [UnixFact]
