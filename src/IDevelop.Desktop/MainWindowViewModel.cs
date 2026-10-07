@@ -370,7 +370,7 @@ public sealed class MainWindowViewModel : ObservableObject
             return null;
         }
 
-        var runs = ProjectRuns.Open(identity, _clients, new HostQuestions.Disabled());
+        var runs = ProjectRuns.Open(identity, _clients, new HostQuestions.DeferImmediately());
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
         project.ConversationRequested += OpenConversation;
         Projects.Add(project);
