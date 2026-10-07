@@ -159,6 +159,22 @@ public class ConversationFoldTests
     }
 
     [Fact]
+    public void Delivery_uncertainty_overrides_earlier_resolution_and_keeps_the_recorded_reply()
+    {
+        var record = Fold([BuildRequested(First), LaunchedAt1s, OpenFixture(),
+            new AttemptEvent.RequestAnswered(T0.AddSeconds(3), "s:fixture", new QuestionsReply([new QuestionAnswer("fixture", ["local"], null)])),
+            new AttemptEvent.RequestClosed(T0.AddSeconds(4), "s:fixture", RequestCloseReason.Resolved),
+            new AttemptEvent.RequestClosed(T0.AddSeconds(5), "s:fixture", RequestCloseReason.DeliveryUnknown), Exit(6, 1)]);
+
+        var state = Assert.IsType<QuestionState.Closed>(Assert.IsType<RequestRecord.Question>(record.Requests[FixtureKey]).State);
+        Assert.Equal(RequestCloseReason.DeliveryUnknown, state.Reason);
+        var answer = Assert.Single(Assert.IsType<QuestionsReply>(state.RecordedReply).Answers);
+        Assert.Equal("fixture", answer.QuestionId);
+        Assert.Equal(["local"], answer.OptionIds.ToArray());
+        Assert.Equal(AttemptStatus.Failed, record.Status);
+    }
+
+    [Fact]
     public void Deferral_closes_only_unanswered_questions_and_keeps_an_already_recorded_reply()
     {
         var record = Fold([BuildRequested(First), LaunchedAt1s, Said(2, new AgentEvent.SessionStarted("session-1")), OpenFixture(),

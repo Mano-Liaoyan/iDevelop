@@ -461,6 +461,8 @@ internal static partial class AttemptReducer
     {
         RequestRecord.Question { State: QuestionState.Open } question => question with { State = new QuestionState.Closed(reason, null) },
         RequestRecord.Question { State: QuestionState.AnswerRecorded answer } question => question with { State = new QuestionState.Closed(reason, answer.Reply) },
+        RequestRecord.Question { State: QuestionState.Closed closed } question when reason == RequestCloseReason.DeliveryUnknown =>
+            question with { State = closed with { Reason = RequestCloseReason.DeliveryUnknown } },
         RequestRecord.Question => request,
         RequestRecord.Permission { State: PermissionState.Declining } permission => permission with
         {

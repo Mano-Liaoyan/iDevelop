@@ -394,12 +394,21 @@ public sealed partial class ProjectRuns
                     }
                 }
 
+                switch (accepted)
+                {
+                    case AttemptEvent.CancelRequested:
+                        StopTurn(RequestCloseReason.Cancelled);
+                        break;
+                    case AttemptEvent.InterruptRequested:
+                        StopTurn(RequestCloseReason.Interrupted);
+                        break;
+                    case AttemptEvent.MessageQueued { StopsTurn: true }:
+                        StopTurn(RequestCloseReason.Stopped);
+                        break;
+                }
+
                 _owner.Publish(Record);
                 person.Done.TrySetResult(accepted is AttemptEvent.GuidanceAdded ? new SendResult.Guided() : new SendResult.Queued());
-                if (accepted is AttemptEvent.CancelRequested or AttemptEvent.InterruptRequested or AttemptEvent.MessageQueued { StopsTurn: true })
-                {
-                    StopTurn();
-                }
             }
             catch
             {
@@ -495,9 +504,10 @@ public sealed partial class ProjectRuns
 
         private void OpenQuestion(AgentEvent.QuestionAsked question, DateTimeOffset at)
         {
-            if (_plan.Request.PolicyFor(_plan.Settings.Client).Questions == QuestionHandling.Decline || Record.Stopping)
+            if (_turn.Stopping || _plan.Request.PolicyFor(_plan.Settings.Client).Questions == QuestionHandling.Decline)
             {
-                Append(new AttemptEvent.QuestionRecorded(at, question.RequestId, question.Questions, new QuestionState.Closed(RequestCloseReason.PolicyDenied, null)));
+                Append(new AttemptEvent.QuestionRecorded(at, question.RequestId, question.Questions,
+                    new QuestionState.Closed(_turn.StopReason ?? RequestCloseReason.PolicyDenied, null)));
                 Output(_turn.Protocol.Decline(question.RequestId));
                 return;
             }
@@ -533,7 +543,7 @@ public sealed partial class ProjectRuns
         private void ExpireQuestions()
         {
             var requests = OpenQuestions();
-            if (requests.Length == 0 || Record.Stopping || _owner.TimeProvider.GetUtcNow() < ((QuestionState.Open)requests[0].State).Deadline.AnswerBy)
+            if (requests.Length == 0 || _turn.Stopping || _owner.TimeProvider.GetUtcNow() < ((QuestionState.Open)requests[0].State).Deadline.AnswerBy)
             {
                 return;
             }
@@ -550,7 +560,7 @@ public sealed partial class ProjectRuns
                 _closed = true;
             }
 
-            StopTurn(stopBy);
+            StopTurn(RequestCloseReason.Deferred, stopBy);
         }
 
         private void AcceptAnswer(Input.Answer answer)
@@ -578,13 +588,20 @@ public sealed partial class ProjectRuns
                 return;
             }
 
-            if (question.State is QuestionState.AnswerRecorded recorded && EqualReply(recorded.Reply, answer.Reply))
+            var recorded = question.State switch
+            {
+                QuestionState.AnswerRecorded state => state.Reply,
+                QuestionState.Closed state => state.RecordedReply,
+                QuestionState.Open => null,
+                _ => throw new InvalidOperationException("Unknown question state."),
+            };
+            if (recorded is not null && EqualReply(recorded, answer.Reply))
             {
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.AlreadyRecorded, "This answer was already recorded."));
                 return;
             }
 
-            if (question.State is not QuestionState.Open || Record.Stopping || !_turn.ClientRuns)
+            if (question.State is not QuestionState.Open || _turn.Stopping || !_turn.ClientRuns)
             {
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The question is closed."));
                 return;
@@ -625,14 +642,27 @@ public sealed partial class ProjectRuns
                 && answer.OptionIds.All(id => question.Options.Any(option => option.Id == id))
                 && (question.AllowsOther || string.IsNullOrEmpty(answer.Text)));
 
-        private void StopTurn(DateTimeOffset? stopBy = null)
+        private bool BeginStopping(RequestCloseReason reason)
         {
-            if (!_turn.ClientRuns || _turn.Stopping)
+            var stopping = _turn.Stopping;
+            _turn.StopReason = Record.InterruptReason is not null ? RequestCloseReason.Interrupted
+                : Record.CancelRequested ? RequestCloseReason.Cancelled : _turn.StopReason ?? reason;
+            _turn.QuestionTimer?.Dispose();
+            foreach (var question in OpenQuestions())
+            {
+                Append(new AttemptEvent.RequestClosed(_owner.TimeProvider.GetUtcNow(), question.Key.Id, _turn.StopReason.Value));
+            }
+
+            return !stopping;
+        }
+
+        private void StopTurn(RequestCloseReason reason, DateTimeOffset? stopBy = null)
+        {
+            if (!BeginStopping(reason) || !_turn.ClientRuns)
             {
                 return;
             }
 
-            _turn.Stopping = true;
             Deadline(stopBy);
             if (_turn.Protocol.Interrupt() is { } interrupt)
             {
@@ -647,6 +677,7 @@ public sealed partial class ProjectRuns
 
         private void Fail(string detail)
         {
+            BeginStopping(RequestCloseReason.TurnEnded);
             _turn.Failure ??= detail;
             Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(detail)));
             _turn.Process.StopTree();
@@ -865,7 +896,9 @@ public sealed partial class ProjectRuns
 
             public bool Open { get; set; } = true;
 
-            public bool Stopping { get; set; }
+            public RequestCloseReason? StopReason { get; set; }
+
+            public bool Stopping => StopReason is not null;
 
             public string? Failure { get; set; }
 

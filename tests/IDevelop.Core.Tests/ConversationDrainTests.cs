@@ -89,6 +89,239 @@ public sealed class ConversationDrainTests : IDisposable
     }
 
     [Fact]
+    public async Task Stop_and_send_closes_the_question_before_a_later_answer_and_runs_the_queued_prompt()
+    {
+        InstallQuestion(FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"").Write(FileAt("interrupted"), "yes")
+            .WaitForFile(FileAt("go")).Print(Aborted));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        try
+        {
+            _clock.Advance(TimeSpan.FromSeconds(54));
+            Assert.Equal(new SendResult.Queued(), await session.SendAsync(key.Turn, "Do it differently", true, default));
+            await Until(() => File.Exists(FileAt("interrupted")));
+            Assert.Equal(AnswerOutcome.Stale, (await session.AnswerAsync(key, Local, default)).Outcome);
+            Assert.Equal(0, AnswerFrames());
+            Assert.Equal(new QuestionState.Closed(RequestCloseReason.Stopped, null),
+                Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(key, default)).State);
+            Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, Session)
+                .CapturePrompt(FileAt("prompt.txt")).Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+            File.WriteAllText(FileAt("go"), "go");
+            var record = await Settled(runs);
+            Assert.Equal((AttemptStatus.Succeeded, 2, "Do it differently"), (record.Status, record.Turns.Count, record.Turns[1].Message));
+            Assert.Equal("Do it differently", File.ReadAllText(FileAt("prompt.txt")));
+            Assert.Equal(0, AnswerFrames());
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            _clock.Advance(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Fact]
+    public async Task Stop_and_send_prevents_expiry_from_deferring_the_queued_prompt()
+    {
+        InstallQuestion(FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"").Write(FileAt("interrupted"), "yes")
+            .WaitForFile(FileAt("go")).Print(Aborted));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        try
+        {
+            _clock.Advance(TimeSpan.FromSeconds(54));
+            Assert.Equal(new SendResult.Queued(), await session.SendAsync(key.Turn, "Do it differently", true, default));
+            await Until(() => File.Exists(FileAt("interrupted")));
+            _clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Equal(AnswerOutcome.Stale, (await session.AnswerAsync(key, Local, default)).Outcome);
+            Assert.Empty(Events(runs.Latest[Node.Id]).OfType<AttemptEvent.RequestDeferred>());
+            Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, Session)
+                .CapturePrompt(FileAt("prompt.txt")).Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+            File.WriteAllText(FileAt("go"), "go");
+            var record = await Settled(runs);
+            Assert.Equal((AttemptStatus.Succeeded, 2, "Do it differently"), (record.Status, record.Turns.Count, record.Turns[1].Message));
+            Assert.Empty(Events(record).OfType<AttemptEvent.RequestDeferred>());
+            Assert.Equal("Do it differently", File.ReadAllText(FileAt("prompt.txt")));
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            _clock.Advance(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Stopping_mid_question_closes_it_with_the_stop_reason_before_provider_cancellation(bool stopAndSend)
+    {
+        InstallQuestion(FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"")
+            .Print("""{"type":"control_cancel_request","request_id":"q1"}""").Print(Aborted));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        if (stopAndSend)
+        {
+            Assert.Equal(new SendResult.Queued(), await session.SendAsync(key.Turn, "Do it differently", true, default));
+        }
+        else
+        {
+            Assert.Equal(CommandOutcome.Applied, (await session.CancelAsync(key.Turn, default)).Outcome);
+        }
+
+        await Until(() => runs.Latest.GetValueOrDefault(Node.Id) is { } r && r.Requests.TryGetValue(key, out var q)
+            && q is RequestRecord.Question { State: QuestionState.Closed });
+        await Until(() => Events(runs.Latest[Node.Id]).OfType<AttemptEvent.RequestClosed>()
+            .Any(closed => closed.RequestId == key.Id && closed.Reason == RequestCloseReason.Resolved));
+        var state = Assert.IsType<RequestRecord.Question>(runs.Latest[Node.Id].Requests[key]).State;
+        Assert.Equal(new QuestionState.Closed(stopAndSend ? RequestCloseReason.Stopped : RequestCloseReason.Cancelled, null), state);
+        var events = Events(runs.Latest[Node.Id]);
+        var intent = Array.FindIndex(events, e => e is AttemptEvent.MessageQueued or AttemptEvent.CancelRequested);
+        Assert.Equal(new AttemptEvent.RequestClosed(_clock.GetUtcNow(), "s:q1",
+            stopAndSend ? RequestCloseReason.Stopped : RequestCloseReason.Cancelled), events[intent + 1]);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(key.Turn.Attempt, new HistoryQuery.AroundRequest(key), 50, default));
+        Assert.Equal(new ConversationContent.Request(key),
+            Assert.Single(page.Entries, entry => entry.Content is ConversationContent.Request request && request.Key == key).Content);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_question_arriving_while_stopping_is_closed_with_the_stop_reason_and_declined(bool stopAndSend)
+    {
+        InstallQuestion(FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"")
+            .Print(Question.Replace("q1", "q2", StringComparison.Ordinal)).ReadLine(FileAt("decline.json"))
+            .Write(FileAt("declined"), "yes").WaitForFile(FileAt("go")).Print(Aborted));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        try
+        {
+            if (stopAndSend)
+            {
+                Assert.Equal(new SendResult.Queued(), await session.SendAsync(key.Turn, "Do it differently", true, default));
+            }
+            else
+            {
+                Assert.Equal(CommandOutcome.Applied, (await session.CancelAsync(key.Turn, default)).Outcome);
+            }
+
+            var late = key with { Id = "s:q2" };
+            await Until(() => runs.Latest[Node.Id].Requests.ContainsKey(late));
+            Assert.Equal(new QuestionState.Closed(stopAndSend ? RequestCloseReason.Stopped : RequestCloseReason.Cancelled, null),
+                Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(late, default)).State);
+            Assert.Equal(AnswerOutcome.Stale, (await session.AnswerAsync(late, Local, default)).Outcome);
+            await Until(() => File.Exists(FileAt("declined")));
+            using var wire = JsonDocument.Parse(File.ReadAllText(FileAt("decline.json")));
+            Assert.Equal("deny", wire.RootElement.GetProperty("response").GetProperty("response").GetProperty("behavior").GetString());
+            File.WriteAllText(FileAt("go"), "go");
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            _clock.Advance(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Fact]
+    public async Task Leaving_closes_an_unanswered_question_as_interrupted()
+    {
+        InstallQuestion(InterruptAndEnd());
+        var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        await runs.DisposeAsync();
+        var record = runs.Latest[Node.Id];
+        Assert.Equal(AttemptStatus.Interrupted, record.Status);
+        Assert.Equal(new QuestionState.Closed(RequestCloseReason.Interrupted, null), Assert.IsType<RequestRecord.Question>(record.Requests[key]).State);
+        Assert.Equal(RequestCloseReason.Interrupted, Assert.Single(Events(record).OfType<AttemptEvent.RequestClosed>()).Reason);
+        Assert.Equal(0, AnswerFrames());
+    }
+
+    [Fact]
+    public async Task Protocol_failure_closes_an_open_question_before_turn_exit()
+    {
+        InstallQuestion(FakeRule.On().WaitForFile(FileAt("fail"))
+            .Print(Question.Replace("Fixture?", "Changed?", StringComparison.Ordinal)).Hang());
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        File.WriteAllText(FileAt("fail"), "go");
+        var record = await Settled(runs);
+        Assert.Equal(AttemptStatus.Failed, record.Status);
+        Assert.Equal(new QuestionState.Closed(RequestCloseReason.TurnEnded, null), Assert.IsType<RequestRecord.Question>(record.Requests[key]).State);
+        Assert.Equal(RequestCloseReason.TurnEnded, Assert.Single(Events(record).OfType<AttemptEvent.RequestClosed>()).Reason);
+        Assert.Equal(0, AnswerFrames());
+    }
+
+    [Fact]
+    public async Task An_identical_answer_after_provider_resolution_is_already_recorded_without_another_frame()
+    {
+        InstallQuestion(FakeRule.On().ReadLine(FileAt("answer.json"))
+            .Print("""{"type":"control_cancel_request","request_id":"q1"}""").WaitForFile(FileAt("go"))
+            .Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        try
+        {
+            Assert.Equal(AnswerOutcome.Recorded, (await session.AnswerAsync(key, Local, default)).Outcome);
+            await Until(() => runs.Latest[Node.Id].Requests[key] is RequestRecord.Question { State: QuestionState.Closed });
+            var closed = Assert.IsType<QuestionState.Closed>(Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(key, default)).State);
+            Assert.Equal(RequestCloseReason.Resolved, closed.Reason);
+            Assert.Equal("Local", AnswerText(Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(key, default))));
+            Assert.Equal(AnswerOutcome.AlreadyRecorded, (await session.AnswerAsync(key,
+                new QuestionsReply([new QuestionAnswer("q:0", ["o:0"], null)]), default)).Outcome);
+            File.WriteAllText(FileAt("go"), "go");
+            var record = await Settled(runs);
+            Assert.Equal(1, AnswerFrames());
+            Assert.Single(Events(record).OfType<AttemptEvent.RequestAnswered>());
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            _clock.Advance(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Fact]
+    public async Task An_identical_answer_from_an_earlier_turn_is_stale_without_another_frame()
+    {
+        InstallQuestion(FakeRule.On().ReadLine(FileAt("answer.json")).WaitForFile(FileAt("go"))
+            .Print(ReplyLines(ClientId.ClaudeCode, "First done")));
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        try
+        {
+            Assert.Equal(AnswerOutcome.Recorded, (await session.AnswerAsync(key, Local, default)).Outcome);
+            Assert.Equal(new SendResult.Queued(), await session.SendAsync(key.Turn, "Continue", false, default));
+            Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, Session)
+                .RecordFrames(FileAt("second-frames.jsonl")).CapturePrompt(FileAt("prompt.txt"))
+                .Print(SessionLine(ClientId.ClaudeCode, Session))
+                .Write(FileAt("second"), "yes").WaitForFile(FileAt("finish"))
+                .Print(ReplyLines(ClientId.ClaudeCode, "Done")).WaitForStdinEnd());
+            File.WriteAllText(FileAt("go"), "go");
+            await Until(() => File.Exists(FileAt("second")));
+            Assert.Equal(new TurnKey(key.Turn.Attempt, 2), session.Snapshot.Current);
+            Assert.Equal(AnswerOutcome.Stale, (await session.AnswerAsync(key, Local, default)).Outcome);
+            File.WriteAllText(FileAt("finish"), "go");
+            var record = await Settled(runs);
+            Assert.Equal((AttemptStatus.Succeeded, 2), (record.Status, record.Turns.Count));
+            Assert.Equal(1, AnswerFrames());
+            Assert.DoesNotContain(File.ReadLines(FileAt("second-frames.jsonl")),
+                line => line.Contains("\"behavior\":\"allow\"", StringComparison.Ordinal));
+            Assert.Single(Events(record).OfType<AttemptEvent.RequestAnswered>());
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            File.WriteAllText(FileAt("finish"), "go");
+        }
+    }
+
+    [Fact]
     public async Task Expiry_wins_then_answer()
     {
         InstallQuestion(InterruptAndEnd());
