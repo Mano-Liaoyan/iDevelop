@@ -51,6 +51,7 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
                 if (launch.ResumeSession is { } session)
                 {
                     args["threadId"] = session;
+                    args["excludeTurns"] = true;
                 }
 
                 return new([], [Frame(new { method = "initialized" }), Rpc("thread-1", launch.ResumeSession is null ? "thread/start" : "thread/resume", args)], false);

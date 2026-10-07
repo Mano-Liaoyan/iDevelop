@@ -95,7 +95,9 @@ public sealed class TurnProtocolTests
     {
         var protocol = Clients.Get(ClientId.Codex).Protocol(new LaunchRequest("gpt-6-sol", "high", "banana") { ResumeSession = "thread-a", ReadOnly = true });
         Assert.Equal(["""{"id":"init-1","method":"initialize","params":{"clientInfo":{"name":"idevelop","version":"1.0.0"},"capabilities":{"experimentalApi":false}}}"""], protocol.Start().Writes.ToArray());
-        Assert.Equal(["""{"method":"initialized"}""", """{"id":"thread-1","method":"thread/resume","params":{"model":"gpt-6-sol","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"read-only","threadId":"thread-a"}}"""], protocol.Read("""{"id":"init-1","result":{}}""").Writes.ToArray());
+        Assert.Equal(["""{"method":"initialized"}""", """{"id":"thread-1","method":"thread/resume","params":{"model":"gpt-6-sol","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"read-only","threadId":"thread-a","excludeTurns":true}}"""], protocol.Read("""{"id":"init-1","result":{}}""").Writes.ToArray());
+        Assert.Equal(["""{"method":"initialized"}""", """{"id":"thread-1","method":"thread/start","params":{"model":"m","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"workspace-write"}}"""],
+            Protocol(ClientId.Codex).Read("""{"id":"init-1","result":{}}""").Writes.ToArray());
         var started = protocol.Read("""{"id":"thread-1","result":{"thread":{"id":"thread-a"}}}""");
         Assert.Equal([new SessionStarted("thread-a")], started.Events.ToArray());
         Assert.Equal(["""{"id":"turn-1","method":"turn/start","params":{"threadId":"thread-a","input":[{"type":"text","text":"banana","text_elements":[]}],"effort":"high"}}"""], started.Writes.ToArray());
