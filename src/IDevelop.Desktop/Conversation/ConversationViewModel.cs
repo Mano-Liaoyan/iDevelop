@@ -14,9 +14,19 @@ namespace IDevelop.Desktop.Conversation;
 /// <summary>A conversation to open: the task in its workflow, and the request to show, if any.</summary>
 public sealed record ConversationTarget(WorkflowCanvasViewModel Canvas, TaskId Task, RequestKey? Request = null);
 
-/// <summary>An entry in the attempt picker.</summary>
-public sealed record AttemptChoice(AttemptId Id, string Label)
+/// <summary>An entry in the attempt picker. Its label follows the attempt's status in place.</summary>
+public sealed class AttemptChoice(AttemptId id, string label) : ObservableObject
 {
+    private string _label = label;
+
+    public AttemptId Id { get; } = id;
+
+    public string Label
+    {
+        get => _label;
+        internal set => SetProperty(ref _label, value);
+    }
+
     public override string ToString() => Label;
 }
 
@@ -47,7 +57,6 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     private readonly TaskNodeViewModel? _node;
     private ConversationSnapshot _snapshot;
     private ImmutableArray<AttemptSummary> _attempts = [];
-    private ImmutableArray<AttemptChoice> _choices = [];
     private AttemptId? _head;
     private long _logRevision = -1;
     private int _generation;
@@ -78,7 +87,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             _earlier = true;
             Invalidate();
         }, () => HasEarlier);
-        ReturnToCurrentCommand = new RelayCommand(() => SelectedAttempt = _choices.LastOrDefault());
+        ReturnToCurrentCommand = new RelayCommand(() => SelectedAttempt = Attempts.LastOrDefault());
         state.PropertyChanged += OnStateChanged;
         if (_node is not null)
         {
@@ -98,7 +107,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     /// <summary>The project and workflow the task belongs to, as the breadcrumb names them.</summary>
     public string Breadcrumb => $"{Target.Canvas.Project.Name} › {Target.Canvas.Name}";
 
-    public string AgentName => _snapshot.Latest?.Requested.Client is { } client ? Clients.Name(client) : "The agent";
+    public string AgentName => Client is { } client ? Clients.Name(client) : "The agent";
+
+    // Before its first attempt, a task's conversation names the agent the task is set to run.
+    private ClientId? Client => _snapshot.Latest?.Requested.Client ?? _node?.SelectedClient.Id;
 
     public string StatusLabel => RunText.StatusLabel(_snapshot.Latest, elsewhere: false);
 
@@ -107,12 +119,12 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ConversationItemViewModel> Items { get; } = [];
 
-    public ImmutableArray<AttemptChoice> Attempts => _choices;
+    public ObservableCollection<AttemptChoice> Attempts { get; } = [];
 
     /// <summary>The attempt whose history shows. Choosing the latest follows new attempts again.</summary>
     public AttemptChoice? SelectedAttempt
     {
-        get => _choices.FirstOrDefault(choice => choice.Id == (_head ?? State.SelectedAttempt ?? _snapshot.Latest?.Id));
+        get => Attempts.FirstOrDefault(choice => choice.Id == (_head ?? State.SelectedAttempt ?? _snapshot.Latest?.Id));
         set
         {
             if (value is null)
@@ -151,7 +163,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             _ => "Sending continues the session in a new attempt.",
         };
 
-    public string Watermark => _snapshot.Latest?.Subject is not null ? "Guide the review" : $"Message {AgentName}";
+    public string Watermark => _snapshot.Latest?.Subject is not null ? "Guide the review"
+        : Client is { } client ? $"Message {Clients.Name(client)}"
+        : "Message the agent";
 
     /// <summary>Why the last command did not go through, or null.</summary>
     public string? Notice
@@ -253,6 +267,11 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         if (e.PropertyName == nameof(TaskNodeViewModel.Title))
         {
             OnPropertyChanged(nameof(Title));
+        }
+        else if (e.PropertyName == nameof(TaskNodeViewModel.SelectedClient))
+        {
+            OnPropertyChanged(nameof(AgentName));
+            OnPropertyChanged(nameof(Watermark));
         }
     }
 
@@ -560,13 +579,28 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     private void ShowSnapshot(ConversationSnapshot snapshot)
     {
         _snapshot = snapshot;
-        var number = 0;
-        ImmutableArray<AttemptChoice> choices = [.. _attempts.Select(attempt => new AttemptChoice(attempt.Id, Label(attempt, ++number)))];
-        // A new list would close the attempt picker while output streams, so an unchanged list stays the same instance.
-        if (!choices.SequenceEqual(_choices))
+        // The picker shows its selection only while the selected entry stays in its list, so an attempt keeps its entry
+        // and a new status changes only the entry's label.
+        for (var i = 0; i < _attempts.Length; i++)
         {
-            _choices = choices;
-            OnPropertyChanged(nameof(Attempts));
+            var label = Label(_attempts[i], i + 1);
+            if (i == Attempts.Count)
+            {
+                Attempts.Add(new AttemptChoice(_attempts[i].Id, label));
+            }
+            else if (Attempts[i].Id == _attempts[i].Id)
+            {
+                Attempts[i].Label = label;
+            }
+            else
+            {
+                Attempts[i] = new AttemptChoice(_attempts[i].Id, label);
+            }
+        }
+
+        while (Attempts.Count > _attempts.Length)
+        {
+            Attempts.RemoveAt(Attempts.Count - 1);
         }
 
         OnPropertyChanged(nameof(Title));

@@ -27,7 +27,13 @@
                   ItemsSource="{Binding Attempts}" SelectedItem="{Binding SelectedAttempt}"
                   ToolTip.Tip="Every attempt of this task, oldest first"
                   AutomationProperties.AutomationId="AttemptPicker"
-                  AutomationProperties.Name="Attempt" />
+                  AutomationProperties.Name="Attempt">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="conversation:AttemptChoice">
+              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
         <Button Grid.Column="4" Classes="icon"
                 Command="{Binding $parent[local:MainWindow].ViewModel.ToggleConversationLayoutCommand, FallbackValue={x:Null}}"
                 ToolTip.Tip="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}"
