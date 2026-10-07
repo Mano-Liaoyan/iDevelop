@@ -80,14 +80,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>Attempt folders that could not be read or settled. Each one is a sentence for the user.</summary>
     public ImmutableArray<string> Warnings { get; private set; }
 
-    /// <summary>The attempts this window runs, while they run, in the order this window started them.</summary>
+    /// <summary>The attempts this window runs, until their lock is released, as <see cref="Latest"/> shows them, in the order
+    /// this window started them.</summary>
     public ImmutableArray<AttemptRecord> Active
     {
         get
         {
             lock (_gate)
             {
-                return [.. _active.Values.OrderBy(run => run.Order).Select(run => run.Record).Where(record => record.Status == AttemptStatus.Running)];
+                return [.. _active.Values.OrderBy(run => run.Order).Select(run => Latest[run.Record.Task])];
             }
         }
     }
@@ -1136,17 +1137,18 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private void Publish(AttemptRecord record, long logRevision)
     {
+        if (record.Status != AttemptStatus.Running)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             Latest = Latest.SetItem(record.Task, record);
             _logRevisions[(record.Task, record.Id)] = logRevision;
         }
 
-        if (record.Status == AttemptStatus.Running
-            || record is { Status: AttemptStatus.WaitingForInput, Turns: [.., { Outcome: TurnOutcome.Deferred }] })
-        {
-            NotifyChanged(record.Task);
-        }
+        NotifyChanged(record.Task);
     }
 
     private void Finish(ActiveRun run)
