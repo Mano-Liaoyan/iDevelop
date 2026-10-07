@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using System.Text.Json;
+using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
@@ -25,8 +25,8 @@ internal sealed record ClientDefinition
 
     public required Func<LaunchRequest, LaunchArguments> Launch { get; init; }
 
-    /// <summary>One stdout line to normalized events. It may throw <see cref="JsonException"/> on a line that is not JSON.</summary>
-    public required Func<string, ImmutableArray<AgentEvent>> Interpret { get; init; }
+    /// <summary>Creates the protocol state owned by one turn's drain.</summary>
+    public required Func<LaunchRequest, TurnProtocol> Protocol { get; init; }
 
     /// <summary>The command a person types to open a session in the client's own terminal interface.</summary>
     public required Func<string, string> Terminal { get; init; }
@@ -72,6 +72,11 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
 
     /// <summary>The turn runs in the client's read-only mode. Pi has none, so its turn can still edit files.</summary>
     public bool ReadOnly { get; init; }
+
+    public EffectivePolicy? Policy { get; init; }
+
+    public EffectivePolicy PolicyFor(ClientId client) => Policy ?? ClientPolicy.For(
+        client, ReadOnly, ConversationMode.Autonomous, reviewer: false, new HostQuestions.Disabled());
 }
 
 internal sealed record LaunchArguments(ImmutableArray<string> Arguments, string Stdin);

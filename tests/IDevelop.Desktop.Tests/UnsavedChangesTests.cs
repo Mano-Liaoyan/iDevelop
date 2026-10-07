@@ -24,7 +24,12 @@ public sealed class UnsavedChangesTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private string Blocker => Path.Combine(_seed, ".idp", "workflows", "other.json");
+    private static void BlockSave(Shell shell)
+    {
+        var file = shell.Window.ViewModel.Canvas!.Document.FilePath;
+        File.Move(file, $"{file}.backup");
+        Directory.CreateDirectory(file);
+    }
 
     private Shell OpenWithCountingPicker()
     {
@@ -45,91 +50,94 @@ public sealed class UnsavedChangesTests : IDisposable
         return shell;
     }
 
-    private string[] SavedTitles() => [.. WorkflowDocument.Open(_seed).Current.Tasks.Values.Select(task => task.Title).Order()];
+    private string[] SavedTitles() => [.. WorkflowDocument.OpenProject(_seed).Single().Current.Tasks.Values.Select(task => task.Title).Order()];
 
     [AvaloniaFact]
-    public void Open_folder_asks_first_and_cancel_keeps_the_document()
+    public void Close_project_asks_first_and_cancel_keeps_it_open()
     {
         var shell = OpenWithUnsavedChanges();
 
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.Click(shell.Find<Button>("CloseProject"));
 
         Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
         shell.Choose("CancelChanges");
         Assert.Null(shell.Dialog);
-        Assert.Equal(0, _picks);
+        Assert.Equal([("seed", ["Workflow"])], shell.Tree());
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         Assert.Equal(2, shell.Nodes().Count());
     }
 
     [AvaloniaFact]
-    public void Open_folder_then_dont_save_opens_the_picked_folder_and_saves_nothing()
+    public void Close_project_then_dont_save_closes_it_and_saves_nothing()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.Click(shell.Find<Button>("CloseProject"));
 
         shell.Choose("DiscardChanges");
 
-        Assert.Equal(1, _picks);
-        Assert.Equal("other - iDevelop", shell.Window.Title);
+        Assert.Empty(shell.Tree());
+        Assert.Equal("iDevelop", shell.Window.Title);
         Assert.Empty(shell.Nodes());
         Assert.Equal(["Design"], SavedTitles());
     }
 
     [AvaloniaFact]
-    public void Open_folder_then_save_saves_and_opens_the_picked_folder()
+    public void Close_project_then_save_saves_and_closes_it()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.Click(shell.Find<Button>("CloseProject"));
 
         shell.Choose("SaveChanges");
 
-        Assert.Equal(1, _picks);
-        Assert.Equal("other - iDevelop", shell.Window.Title);
+        Assert.Empty(shell.Tree());
+        Assert.Equal("iDevelop", shell.Window.Title);
         Assert.Equal(["Design", "New task"], SavedTitles());
     }
 
     [AvaloniaFact]
-    public void Open_folder_then_dont_save_then_cancelling_the_picker_keeps_the_document()
+    public void Open_folder_with_unsaved_changes_asks_nothing_and_keeps_them()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Window.PickFolder = () => Task.FromResult<string?>(null);
+
         shell.Click(shell.Find<Button>("OpenFolder"));
 
-        shell.Choose("DiscardChanges");
-
         Assert.Null(shell.Dialog);
+        Assert.Equal(1, _picks);
+        Assert.Equal("other - iDevelop", shell.Window.Title);
+        Assert.Equal([("seed", ["Workflow"]), ("other", ["Workflow"])], shell.Tree());
+        shell.Click(shell.WorkflowRow("seed", "Workflow"));
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
         Assert.Equal(2, shell.Nodes().Count());
         Assert.Equal(["Design"], SavedTitles());
     }
 
     [AvaloniaFact]
-    public void Closing_the_prompt_with_its_title_bar_keeps_the_document()
+    public void Closing_the_prompt_with_its_title_bar_keeps_the_project_open()
     {
         var shell = OpenWithUnsavedChanges();
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        shell.Click(shell.Find<Button>("CloseProject"));
 
         shell.Dialog!.Close();
         shell.Render();
 
         Assert.Null(shell.Dialog);
-        Assert.Equal(0, _picks);
+        Assert.Equal([("seed", ["Workflow"])], shell.Tree());
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
 
     [AvaloniaFact]
-    public void Open_folder_then_a_failed_save_keeps_the_document()
+    public void Close_project_then_a_failed_save_keeps_it_open()
     {
         var shell = OpenWithUnsavedChanges();
-        File.WriteAllText(Blocker, "{}");
-        shell.Click(shell.Find<Button>("OpenFolder"));
+        BlockSave(shell);
+        shell.Click(shell.Find<Button>("CloseProject"));
 
         shell.Choose("SaveChanges");
 
         Assert.Null(shell.Dialog);
-        Assert.Equal(0, _picks);
-        Assert.Equal($"Not saved. {Blocker} is another workflow file, and this version of iDevelop keeps one workflow per project.", shell.Status);
+        Assert.Equal([("seed", ["Workflow"])], shell.Tree());
+        Assert.StartsWith("Couldn't save: ", shell.Status);
+        Assert.True(shell.ShowsUnsavedChanges);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
 
@@ -221,7 +229,7 @@ public sealed class UnsavedChangesTests : IDisposable
     public void Closing_then_a_failed_save_keeps_the_window_open()
     {
         var shell = OpenWithUnsavedChanges();
-        File.WriteAllText(Blocker, "{}");
+        BlockSave(shell);
         shell.Window.Close();
         shell.Render();
 
@@ -229,7 +237,8 @@ public sealed class UnsavedChangesTests : IDisposable
 
         Assert.Null(shell.Dialog);
         Assert.True(shell.Window.IsVisible);
-        Assert.Equal($"Not saved. {Blocker} is another workflow file, and this version of iDevelop keeps one workflow per project.", shell.Status);
+        Assert.StartsWith("Couldn't save: ", shell.Status);
+        Assert.True(shell.ShowsUnsavedChanges);
         Assert.Equal("seed* - iDevelop", shell.Window.Title);
     }
 
@@ -251,17 +260,13 @@ public sealed class UnsavedChangesTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Closing_during_open_folder_is_cancelled_until_the_folder_opens()
+    public void Closing_while_the_folder_picker_is_open_is_cancelled_until_the_folder_opens()
     {
         var shell = OpenWithUnsavedChanges();
         var picker = new TaskCompletionSource<string?>();
         shell.Window.PickFolder = () => picker.Task;
         shell.Click(shell.Find<Button>("OpenFolder"));
 
-        shell.Window.Close();
-        shell.Render();
-        Assert.Single(shell.Window.OwnedWindows);
-        shell.Choose("DiscardChanges");
         shell.Window.Close();
         shell.Render();
 
@@ -272,7 +277,10 @@ public sealed class UnsavedChangesTests : IDisposable
         Assert.Equal("other - iDevelop", shell.Window.Title);
         shell.Window.Close();
         shell.Render();
+        Assert.Equal(["Save changes to seed?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
+        shell.Choose("DiscardChanges");
         Assert.False(shell.Window.IsVisible);
+        Assert.Equal(["Design"], SavedTitles());
     }
 
     [AvaloniaFact]

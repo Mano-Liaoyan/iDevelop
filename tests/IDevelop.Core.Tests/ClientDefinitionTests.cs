@@ -55,10 +55,10 @@ public class ClientDefinitionTests
     [Fact]
     public void Claude_Code_turns_each_permission_denial_into_a_notice()
     {
-        var events = Clients.Get(ClientId.ClaudeCode).Interpret(
+        var events = Clients.Get(ClientId.ClaudeCode).Protocol(new LaunchRequest("m", null, "p")).Read(
             """{"type":"result","subtype":"success","is_error":false,"result":"I could not run it.","permission_denials":[{"tool_name":"Bash"}]}""");
 
-        Assert.Equal([new Notice("Claude Code denied Bash."), new Succeeded("I could not run it.")], events.ToArray());
+        Assert.Equal([new Notice("Claude Code denied Bash."), new Succeeded("I could not run it.")], events.Events.ToArray());
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class ClientDefinitionTests
             [
                 new SessionStarted("01a104d5-d442-71a1-9b08-8938c119e5ae"),
                 new ToolStarted("command", @"pwsh.exe -Command ""Set-Content -LiteralPath .\\hello.txt -Value 'hi' -NoNewline"""),
-                new Message("DONE"),
+                new Message("DONE") { Id = "item_1" },
                 new Succeeded(null),
             ],
             Events(ClientId.Codex, "codex-success.jsonl"));
@@ -96,8 +96,9 @@ public class ClientDefinitionTests
                 new SessionStarted("01a104d6-5d29-70a3-b067-4dea17388eb1"),
                 new Reported("deepseek/deepseek-v4-pro", "high"),
                 new ToolStarted("write", "hello.txt"),
+                new MessageDelta("local:0", "D"),
                 new Reported("deepseek/deepseek-v4-pro", "high"),
-                new Message("DONE"),
+                new Message("DONE") { Id = "local:0" },
                 new Succeeded("DONE"),
             ],
             Events(ClientId.Pi, "pi-success.jsonl"));
@@ -123,6 +124,8 @@ public class ClientDefinitionTests
                 new SessionStarted("88fcc1a4-0a4f-495c-a2db-b6fc830d0b4a"),
                 new Reported("gemini-3.8-flash", null),
                 new ToolStarted("write_to_file", @"C:\project\hello.txt"),
+                new MessageDelta("step:3", "DONE"),
+                new Message("DONE") { Id = "step:3" },
                 new Succeeded("DONE"),
             ],
             Events(ClientId.Antigravity, "agy-success.jsonl"));
@@ -147,16 +150,16 @@ public class ClientDefinitionTests
         var agy = Launch(ClientId.Antigravity, "gemini-3.8-flash", "low", prompt);
 
         Assert.Equal(
-            ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits"],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--permission-prompts", "none"],
             claude.Arguments.ToArray());
         Assert.Equal(
-            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
             codex.Arguments.ToArray());
         Assert.Equal(["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high"], pi.Arguments.ToArray());
         Assert.Equal(
             ["--input-format", "stream-json", "--output-format", "stream-json", "--model", "gemini-3.8-flash", "--effort", "low", "--mode", "accept-edits", "--print="],
             agy.Arguments.ToArray());
-        Assert.Equal([prompt, prompt, prompt], new[] { claude.Stdin, codex.Stdin, pi.Stdin });
+        Assert.Equal(["", "", prompt], new[] { claude.Stdin, codex.Stdin, pi.Stdin });
         Assert.Equal("""{"event":"user","message":{"role":"user","content":"# Greet\n\nWrite \"hi\" to 审查.txt"}}""" + "\n", agy.Stdin);
     }
 
@@ -173,13 +176,10 @@ public class ClientDefinitionTests
         var agy = Resume(ClientId.Antigravity, "gemini-3.8-flash", "low");
 
         Assert.Equal(
-            ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--resume", session],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-opus-5-5", "--effort", "xhigh", "--permission-mode", "acceptEdits", "--resume", session, "--permission-prompts", "none"],
             claude.Arguments.ToArray());
         Assert.Equal(
-            [
-                "exec", "resume", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never",
-                "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", session, "-",
-            ],
+            ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
             codex.Arguments.ToArray());
         Assert.Equal(["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high", "--session-id", session], pi.Arguments.ToArray());
         Assert.Equal(
@@ -188,7 +188,7 @@ public class ClientDefinitionTests
                 "--conversation", session,
             ],
             agy.Arguments.ToArray());
-        Assert.Equal(["banana", "banana", "banana"], new[] { claude.Stdin, codex.Stdin, pi.Stdin });
+        Assert.Equal(["", "", "banana"], new[] { claude.Stdin, codex.Stdin, pi.Stdin });
         Assert.Equal("""{"event":"user","message":{"role":"user","content":"banana"}}""" + "\n", agy.Stdin);
     }
 
@@ -317,8 +317,11 @@ public class ClientDefinitionTests
             probes[1].Problem(new ProbeOutput(1, "", "no such provider", false)));
     }
 
-    private static AgentEvent[] Events(ClientId client, string fixture) =>
-        [.. Fixture.Lines(fixture).SelectMany(line => Clients.Get(client).Interpret(line))];
+    private static AgentEvent[] Events(ClientId client, string fixture)
+    {
+        var protocol = Clients.Get(client).Protocol(new LaunchRequest("m", null, "p"));
+        return [.. Fixture.Lines(fixture).SelectMany(line => protocol.Read(client == ClientId.Codex ? FakeAgents.AppLine(line) : line).Events)];
+    }
 
     private static LaunchArguments Launch(ClientId client, string model, string? reasoning, string prompt) =>
         Clients.Get(client).Launch(new LaunchRequest(model, reasoning, prompt));

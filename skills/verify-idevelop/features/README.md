@@ -41,9 +41,11 @@ Keep implementation details out of the map. Name only user paths, stable handles
 ## Features
 
 - [Open a project and save edits](./open-and-save.md) covers opening a folder, editing a task, saving, and the unsaved-changes prompt.
+- [Keep several projects and workflows open](./workspace.md) covers the project tree, New workflow, switching workflows with unsaved edits and undo, a run that stays with its own workflow, Close project's questions, and reopening the previous projects.
 - [The canvas](./canvas.md) covers the cards, adding tasks through the Add popover, the card and connection menus, the canvas keys, undo and redo, the zoom and fit buttons, the minimap, and the sample's connections.
 - [The Agents section and the agent pickers](./agents.md) covers client readiness and choosing a task's client, model, and reasoning level.
 - [Run and cancel a task](./run-and-cancel.md) covers running, cancelling, and finishing a task through the fake Codex, and a refused start.
 - [Talk to a task's agent](./conversation.md) covers Open in terminal, Continue, the conversation after Continue, Send during a turn, and Stop and send through the fake Codex. It drives `Composer`, `SendMessage`, `StopAndSend`, `OpenInTerminal`, `Conversation`, `TurnReply<n>`, `WaitingMessages`, and `TerminalNote`.
+- [The conversation view](./conversation-view.md) covers opening a task's conversation from the inspector and from card attention, sending, earlier attempts, drafts across task and layout switches, the dock, and closing. It drives `OpenConversation`, `CardAttention`, `ConversationComposer`, `ConversationSend`, `AttemptPicker`, `ReturnToCurrent`, `ConversationLayout`, and `CloseConversation`.
 - [Generate a workflow from a description](./generate.md) covers the empty-state card, the Generate sheet, and the Chat-mode Plan task it places and runs through the fake Codex.
 - [The theme switch](./theme.md) covers the System, Light, and Dark segments and their persistence across a restart.

@@ -142,6 +142,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(planner.Id, canvas.SelectedNode?.Id);
         Assert.True(canvas.HasStarted(planner.Id));
         Assert.True(canvas.Generated(planner.Id));
+        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
@@ -162,6 +163,7 @@ public sealed class GenerateTests : IDisposable
 
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
         Assert.Equal([Prompt], canvas.Workflow.Tasks.Values.Select(task => task.Field("goal")));
+        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
@@ -223,6 +225,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
+        shell.ShowTasks();
         Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         var workflow = canvas.Workflow;
@@ -401,7 +404,7 @@ public sealed class GenerateTests : IDisposable
         var sheet = shell.Find<GenerateSheet>("GenerateSheet");
         var columns = ((Grid)shell.Window.Content!).ColumnDefinitions;
         var widths = columns.Select(column => column.ActualWidth).ToArray();
-        var splitters = shell.Window.GetVisualDescendants().OfType<GridSplitter>().ToArray();
+        var splitters = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Where(splitter => splitter.IsEffectivelyVisible).ToArray();
         Assert.Equal(2, splitters.Length);
 
         foreach (var splitter in splitters)

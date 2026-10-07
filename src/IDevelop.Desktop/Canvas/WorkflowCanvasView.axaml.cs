@@ -38,6 +38,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         NodifyEditor.HandleRightClickAfterPanningThreshold = 4;
     }
 
+    /// <param name="canvas">
+    /// The workflow this view will show. A new editor bound to a selection leaves it in disarray, so the view binds to an
+    /// empty one and then selects again what the workflow had selected.
+    /// </param>
+    public WorkflowCanvasView(WorkflowCanvasViewModel? canvas) : this()
+    {
+        canvas?.HoldSelection();
+    }
+
     public WorkflowCanvasView()
     {
         InitializeComponent();
@@ -110,21 +119,45 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
             canvas.View = this;
             canvas.PropertyChanged += OnViewModelChanged;
             StartBelowChrome(canvas);
+            Editor.LayoutUpdated += RestoreSelection;
         }
 
         ShowAdd();
     }
 
-    // A workflow opens at the canvas origin. Where its top cards would sit under the floating breadcrumb, it opens
-    // higher, so they start at the view's top inset as they do after Fit.
-    private void StartBelowChrome(WorkflowCanvasViewModel canvas)
+    // The selection comes back once the editor has laid out its cards, as a selection made on the canvas would.
+    private void RestoreSelection(object? sender, EventArgs e)
     {
-        if (canvas.ViewportLocation != default || canvas.Nodes.Count == 0)
+        Editor.LayoutUpdated -= RestoreSelection;
+        _viewModel?.RestoreSelection();
+    }
+
+    // The window builds a new view for each workflow it shows, so a view that leaves the window lets its canvas go.
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        if (_viewModel is { } canvas && ReferenceEquals(canvas.View, this))
+        {
+            canvas.View = null;
+        }
+    }
+
+    // A workflow first shows at the canvas origin. Where its top cards would sit under the floating breadcrumb, it shows
+    // higher, so they start at the view's top inset as they do after Fit. Later it shows where it was left.
+    private static void StartBelowChrome(WorkflowCanvasViewModel canvas)
+    {
+        if (canvas.IsPositioned)
         {
             return;
         }
 
-        var top = canvas.Nodes.Min(node => node.Location.Y) - ViewInset.Top / Editor.ViewportZoom;
+        canvas.IsPositioned = true;
+        if (canvas.Nodes.Count == 0)
+        {
+            return;
+        }
+
+        var top = canvas.Nodes.Min(node => node.Location.Y) - ViewInset.Top / canvas.ViewportZoom;
         if (top < 0)
         {
             canvas.ViewportLocation = new Point(0, top);

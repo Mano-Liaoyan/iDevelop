@@ -1,0 +1,1 @@
+{"method":"item/commandExecution/requestApproval","id":0,"params":{"threadId":"01a112ae-fdc7-7382-8517-9cd1911e1909","turnId":"01a112ae-fdee-7012-8525-ea00277f862f","itemId":"exec-d3b45bac-ab7f-4038-8bad-873e88ed77f4","kind":"command","command":"/usr/bin/zsh -lc 'printf hi > probe.txt'","cwd":"/project","startedAtMs":1791314824776}}

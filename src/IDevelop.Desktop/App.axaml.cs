@@ -18,6 +18,9 @@ public partial class App : Application
     /// <summary>The personal blueprint library, beside the preferences file. Null without one.</summary>
     public string? PersonalBlueprints => PreferencesFile is { } file ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(file))!, "blueprints") : null;
 
+    /// <summary>The file that remembers the open projects between runs, beside the preferences file. Null without one.</summary>
+    public string? SessionFile => PreferencesFile is { } file ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(file))!, "session.json") : null;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -35,10 +38,7 @@ public partial class App : Application
             var clients = new ClientDirectory(CommandResolver.FromEnvironment());
             _ = clients.RefreshAsync();
             var window = new MainWindow(clients);
-            if (desktop.Args is [var folder, ..])
-            {
-                _ = window.ViewModel.Open(folder);
-            }
+            window.ViewModel.Restore(desktop.Args is [var folder, ..] ? folder : null);
 
             desktop.MainWindow = window;
         }

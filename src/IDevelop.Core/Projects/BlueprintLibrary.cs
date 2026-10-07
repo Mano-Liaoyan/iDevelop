@@ -136,6 +136,8 @@ public sealed partial class BlueprintLibrary
             Name = dto.Name,
             Description = dto.Description,
             DerivedFrom = dto.DerivedFrom,
+            Icon = dto.Icon,
+            Color = dto.Color,
             Work = dto.Work,
             Fields = dto.Fields,
             Defaults = dto.Defaults,

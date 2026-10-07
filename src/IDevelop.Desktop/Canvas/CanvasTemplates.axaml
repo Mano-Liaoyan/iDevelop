@@ -70,9 +70,24 @@
                        AutomationProperties.AutomationId="CardStatus" />
           </Panel>
         </StackPanel>
-        <PathIcon Grid.Column="2" Classes="stateIcon" Theme="{StaticResource Glyph}" VerticalAlignment="Center"
-                  theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
-                  AutomationProperties.AutomationId="CardStateGlyph" />
+        <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs. -->
+        <Panel Grid.Column="2" VerticalAlignment="Center">
+          <!-- The state styles hide the glyph of some states, so the attention switch sits on a panel around it. -->
+          <Panel IsVisible="{Binding !HasAttention}">
+            <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
+                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
+                      AutomationProperties.AutomationId="CardStateGlyph" />
+          </Panel>
+          <Button Classes="attention" IsVisible="{Binding HasAttention}"
+                  Command="{Binding OpenConversationCommand}"
+                  ToolTip.Tip="{Binding AttentionLabel}"
+                  AutomationProperties.AutomationId="CardAttention"
+                  AutomationProperties.Name="{Binding AttentionLabel}"
+                  AutomationProperties.HelpText="Opens the conversation">
+            <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
+                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+          </Button>
+        </Panel>
       </Grid>
       <!-- A review that goes on with this node marks its tile with the Review tile. -->
       <Border Classes="roleBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="38.5,36.5,0,0"

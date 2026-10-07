@@ -1,10 +1,11 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using IDevelop.Workflows;
 using static IDevelop.Execution.JsonFields;
 
 namespace IDevelop.Execution;
 
-/// <summary>Codex through <c>codex exec --json</c>.</summary>
+/// <summary>Codex through <c>codex app-server</c>.</summary>
 internal static class Codex
 {
     public static readonly ClientDefinition Definition = new()
@@ -15,30 +16,13 @@ internal static class Codex
         Catalog = new CatalogSource.Probed(new Probe(["debug", "models"]), ParseCatalog),
         Readiness = _ => [new ReadinessProbe(null, new Probe(["login", "status"]), SignInProblem)],
         Launch = Launch,
-        Interpret = Interpret,
+        Protocol = request => new CodexProtocol(request),
         Terminal = session => $"codex resume {session}",
         HasReadOnlyMode = true,
     };
 
-    // The level is unquoted, so the argument passes the batch-shim rule for an npm codex.cmd.
-    // Codex reads the value as TOML and falls back to the plain string.
-    // A user's approval_policy can let an automatic reviewer approve a command outside the sandbox, so approvals are off.
-    // exec resume takes no --sandbox, so a resumed turn sets the same sandbox through its config key.
-    private static LaunchArguments Launch(LaunchRequest request)
-    {
-        string[] common =
-        [
-            "--json", "-m", request.Model,
-            .. request.Reasoning is { } effort ? ["-c", $"model_reasoning_effort={effort}"] : Array.Empty<string>(),
-            "-c", "approval_policy=never",
-        ];
-        var sandbox = request.ReadOnly ? "read-only" : "workspace-write";
-        return new(
-            request.ResumeSession is { } session
-                ? ["exec", "resume", .. common, "--skip-git-repo-check", "-c", $"sandbox_mode={sandbox}", session, "-"]
-                : ["exec", .. common, "--sandbox", sandbox, "--skip-git-repo-check", "-"],
-            request.Prompt);
-    }
+    private static LaunchArguments Launch(LaunchRequest request) => new(
+        ["app-server", "-c", $"approval_policy={((NativePolicy.Codex)request.PolicyFor(ClientId.Codex).Native).ApprovalPolicy}", "-c", "features.default_mode_request_user_input=false"], "");
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {
@@ -78,27 +62,8 @@ internal static class Codex
     private static ReadinessProblem? SignInProblem(ProbeOutput output) =>
         output.ExitCode == 0 ? null : new ReadinessProblem("Codex is not signed in. Run codex login in a terminal.", SignedOut: true);
 
-    private static ImmutableArray<AgentEvent> Interpret(string line)
-    {
-        using var json = JsonDocument.Parse(line);
-        var root = json.RootElement;
-        var item = root.Property("item");
-        return (root.String("type"), item?.String("type")) switch
-        {
-            ("thread.started", _) when root.String("thread_id") is { } thread => [new AgentEvent.SessionStarted(thread)],
-            ("item.started", "command_execution") when item?.String("command") is { } command => [new AgentEvent.ToolStarted("command", command)],
-            ("item.completed", "agent_message") when NonBlank(item?.String("text")) is { } text => [new AgentEvent.Message(text)],
-            ("item.completed", "error") when item?.String("message") is { } message => [new AgentEvent.Notice(message)],
-            // A top-level error can be one Codex recovers from, so only the turn decides the outcome.
-            ("error", _) when root.String("message") is { } message => [new AgentEvent.Notice(InnerMessage(message))],
-            ("turn.completed", _) => [new AgentEvent.Succeeded(null)],
-            ("turn.failed", _) => [new AgentEvent.Failed(root.Property("error")?.String("message") is { } message ? InnerMessage(message) : "Codex reported a failed turn.")],
-            _ => [],
-        };
-    }
-
     /// <summary>Codex passes an API error through as JSON text. Its inner message is the readable part.</summary>
-    private static string InnerMessage(string message)
+    internal static string InnerMessage(string message)
     {
         if (!message.StartsWith('{'))
         {

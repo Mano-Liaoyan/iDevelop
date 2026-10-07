@@ -251,6 +251,7 @@
           "Avalonia.Desktop": "[11.3.22, )",
           "Avalonia.Themes.Fluent": "[11.3.22, )",
           "IDevelop.Core": "[1.0.0, )",
+          "Markdig": "[1.4.0, )",
           "NodifyAvalonia": "[6.6.0, )"
         }
       },
@@ -289,6 +290,12 @@
         "dependencies": {
           "Avalonia": "11.3.22"
         }
+      },
+      "Markdig": {
+        "type": "CentralTransitive",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "lLhaiI/mNDTNzgLqnmknhf4LjgTqOAyjx5+GNz0X3AxYMxUhmFppF2WVMdER+SDqwhE5wUF1pzs/cuLwFxs7xA=="
       },
       "NodifyAvalonia": {
         "type": "CentralTransitive",

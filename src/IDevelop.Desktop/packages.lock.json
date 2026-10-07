@@ -35,6 +35,12 @@
           "Avalonia": "11.3.22"
         }
       },
+      "Markdig": {
+        "type": "Direct",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "lLhaiI/mNDTNzgLqnmknhf4LjgTqOAyjx5+GNz0X3AxYMxUhmFppF2WVMdER+SDqwhE5wUF1pzs/cuLwFxs7xA=="
+      },
       "NodifyAvalonia": {
         "type": "Direct",
         "requested": "[6.6.0, )",

@@ -73,8 +73,33 @@ public sealed class BlueprintTests : IDisposable
         Assert.Equal(["Bug fix", "Version 1"], [reopened.Find<TextBlock>("TaskType").Text ?? "", reopened.Find<TextBlock>("TaskTypeVersion").Text ?? ""]);
         reopened.Click(reopened.Header(reopened.Node("Second")));
         Assert.Equal("Version 2", reopened.Find<TextBlock>("TaskTypeVersion").Text);
-        var workflow = WorkflowDocument.Open(project).Current;
+        var workflow = WorkflowDocument.OpenProject(project).Single().Current;
         Assert.Equal([key, key with { Version = 2 }], workflow.Blueprints.Keys);
+    }
+
+    [AvaloniaFact]
+    public void Editing_or_deriving_a_blueprint_in_the_editor_keeps_its_icon_and_color()
+    {
+        var project = _temp.Create("plan");
+        var implement = BuiltInBlueprints.Implement;
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("bug-fix", 1), "Bug fix", implement.Work, implement.Fields, implement.Defaults)
+        {
+            DerivedFrom = implement.Key,
+            Icon = BlueprintIcon.Glasses,
+            Color = BlueprintColor.Mint,
+        });
+        var shell = Shell.Open(project);
+
+        Press(shell, "Bug fix", "EditBlueprint");
+        shell.Find<TextBox>("BlueprintTemplate").Text = "Fix it: {{instructions}}";
+        shell.Click(shell.InView<Button>("SaveBlueprint"));
+        Press(shell, "Bug fix", "DeriveBlueprint");
+        shell.Click(shell.InView<Button>("SaveBlueprint"));
+
+        Assert.Equal(
+            [("Bug fix", 2, BlueprintIcon.Glasses, BlueprintColor.Mint), ("Bug fix copy", 1, BlueprintIcon.Glasses, BlueprintColor.Mint)],
+            BlueprintLibrary.Project(project).Read().Blueprints
+                .Select(blueprint => (blueprint.Name, blueprint.Key.Version, blueprint.Icon, blueprint.Color)).Order());
     }
 
     [AvaloniaFact]
@@ -131,7 +156,7 @@ public sealed class BlueprintTests : IDisposable
         Press(shell, "Implement copy", "PlaceBlueprint");
         Assert.Equal("Bug", shell.Find<TextBox>("TaskBug").GetValue(AutomationProperties.NameProperty));
         shell.Press(Key.S, RawInputModifiers.Control);
-        Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.Open(project).Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
+        Assert.Equal(["acceptanceCriteria", "bug", "instructions"], WorkflowDocument.OpenProject(project).Single().Current.Blueprints.Values.Single().Fields.Select(field => field.Key).Order());
     }
 
     [AvaloniaFact]

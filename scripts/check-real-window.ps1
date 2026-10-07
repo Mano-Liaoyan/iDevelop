@@ -14,6 +14,7 @@ function Check([bool] $ok, [string] $what) {
 }
 
 function With-App([string] $project, [scriptblock] $Body) {
+    Clear-Session
     $process = Start-Process -FilePath $Exe -ArgumentList "`"$project`"" -PassThru
     try {
         $window = Find-MainWindow $process
@@ -99,7 +100,7 @@ try {
 
         # The sample's first task asks for Claude Code with Claude Opus 5.5 at high. The model's name comes from the
         # catalog, or its id when this machine has no Claude Code.
-        $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+        $sidebarRows = Get-SidebarTasks $window
         Select-Element $sidebarRows[0]
         $client = Find-ById $window 'TaskClient'
         Check ((Get-Value $client) -like 'Claude Code*') "the client picker shows Claude Code (found '$(Get-Value $client)')"
@@ -142,7 +143,7 @@ try {
             Check ((Wait-Until { (Find-ById $window 'AgentCodex').Current.Name -like 'Ready*' } 60) -eq $true) 'the fake Codex is ready'
             # Claude Code is missing here, so the first task's picker lists only high, and the second task's GPT-6-Sol lists
             # high third. Moving between them makes Avalonia carry high over to the new list as a selection change.
-            $sidebarRows = (Find-ById $window 'SidebarTasks').FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+            $sidebarRows = Get-SidebarTasks $window
             Select-Element $sidebarRows[0]
             $reasoning = Find-ById $window 'TaskReasoning'
             Check ((Wait-Until { (Get-Value $reasoning) -eq 'high' }) -eq $true) "the reasoning picker shows the first task's high (found '$(Get-Value $reasoning)')"

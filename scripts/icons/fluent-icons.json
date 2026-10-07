@@ -51,6 +51,13 @@
     { "key": "IconFlowchart", "asset": "Flowchart", "file": "ic_fluent_flowchart_16_regular.svg" },
     { "key": "IconCheckmark", "asset": "Checkmark", "file": "ic_fluent_checkmark_16_regular.svg" },
     { "key": "IconWireDependency", "asset": "Line Horizontal 1", "file": "ic_fluent_line_horizontal_1_16_regular.svg" },
-    { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" }
+    { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" },
+    { "key": "IconChat", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
+    { "key": "IconSend", "asset": "Send", "file": "ic_fluent_send_16_regular.svg" },
+    { "key": "IconCopy", "asset": "Copy", "file": "ic_fluent_copy_16_regular.svg" },
+    { "key": "IconPanelBottom", "asset": "Layout Row Two", "file": "ic_fluent_layout_row_two_16_regular.svg" },
+    { "key": "IconMaximize", "asset": "Arrow Maximize", "file": "ic_fluent_arrow_maximize_16_regular.svg" },
+    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
+    { "key": "IconShieldDismiss", "asset": "Shield Dismiss", "file": "ic_fluent_shield_dismiss_16_regular.svg" }
   ]
 }

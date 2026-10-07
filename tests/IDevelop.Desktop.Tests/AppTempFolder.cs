@@ -21,7 +21,7 @@ internal static class AppTempFolder
     public static string Seed(this TempFolder temp, params WorkflowEdit[] edits)
     {
         var folder = temp.Create("seed");
-        var document = WorkflowDocument.Open(folder);
+        var document = WorkflowDocument.OpenProject(folder).Single();
         foreach (var edit in edits)
         {
             Assert.IsType<EditResult.Applied>(document.Apply(edit));

@@ -49,7 +49,6 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private Point _location;
     private AttemptRecord? _attempt;
     private (AttemptId? Continues, ImmutableArray<AttemptRecord> Attempts) _earlier = (null, []);
-    private string _draft = "";
     private AttemptRecord? _proposed;
     private ProposalRead _proposalRead = new ProposalRead.None();
     private ProposalViewModel? _proposal;
@@ -70,10 +69,10 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Output = new PortViewModel(this, PortSide.Output);
         _run = new RelayCommand(Run, () => !RunsHere);
         _cancel = new RelayCommand(
-            () => _canvas.Notice(_canvas.Runs.Cancel(Id) is { } problem ? RunText.Describe(problem) : null),
+            async () => _canvas.Notice(await _canvas.Runs.CancelAsync(Id) is { } problem ? RunText.Describe(problem) : null),
             () => IsWaiting || _attempt is { Status: AttemptStatus.InReview } ||
                 _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
-        _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
+        _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(Draft) && _canvas.Runs.CheckSend(_task) is null);
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
         _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
         _markDone = new RelayCommand(MarkDone, () => IsWaiting);
@@ -84,6 +83,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeCard();
         InitializeActions();
         InitializeInspector();
+        InitializeConversation();
     }
 
     public TaskId Id => _task.Id;
@@ -259,18 +259,14 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         }
     }
 
-    /// <summary>The message the person is writing to the task's agent. Each task keeps its own.</summary>
+    /// <summary>
+    /// The message the person is writing to the task's agent. Each task keeps its own, which the conversation view's
+    /// composer shares.
+    /// </summary>
     public string Draft
     {
-        get => _draft;
-        set
-        {
-            if (SetProperty(ref _draft, value))
-            {
-                _send.NotifyCanExecuteChanged();
-                _stopAndSend.NotifyCanExecuteChanged();
-            }
-        }
+        get => ConversationState.Draft;
+        set => ConversationState.Draft = value;
     }
 
     /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
@@ -495,15 +491,16 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private void Run() =>
         _canvas.Notice(_canvas.Runs.Start(_task, _canvas.Planning(Id)) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
-    private void Send(bool stopTurn)
+    private async void Send(bool stopTurn)
     {
-        if (_canvas.Runs.Send(_task, _draft, stopTurn) is SendResult.Refused refused)
+        var submitted = Draft;
+        if (await _canvas.Runs.SendAsync(_task, submitted, stopTurn) is SendResult.Refused refused)
         {
             _canvas.Notice(RunText.Describe(refused.Problem));
             return;
         }
 
-        Draft = "";
+        if (Draft == submitted) Draft = "";
         _canvas.Notice(null);
     }
 
@@ -556,6 +553,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeActions();
 
     partial void InitializeInspector();
+
+    partial void InitializeConversation();
 
     private void SetExecution(ExecutionSettings? settings)
     {

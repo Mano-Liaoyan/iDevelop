@@ -295,5 +295,5 @@ public class AttemptReducerTests
 
     private static AttemptRecord Replay(params AttemptEvent[] events) => AttemptReducer.Replay([BuildRequested(First), .. events])!;
 
-    private static string Waiting(AttemptRecord record) => string.Join("|", record.Queued);
+    private static string Waiting(AttemptRecord record) => string.Join("|", record.Queued.Select(message => message.Text));
 }

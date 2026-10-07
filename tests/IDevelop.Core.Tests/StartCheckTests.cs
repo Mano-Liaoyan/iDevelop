@@ -25,10 +25,10 @@ public class StartCheckTests
 
         Assert.Same(CodexCommand, plan.Command);
         Assert.Equal(
-            ["exec", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"],
+            ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
             plan.Launch.Arguments.ToArray());
         const string prompt = "# Say hi\n\nCreate hello.txt containing hi.\n\n## Acceptance criteria\n\nhello.txt holds hi.\n";
-        Assert.Equal(prompt, plan.Launch.Stdin);
+        Assert.Equal("", plan.Launch.Stdin);
         Assert.Equal(prompt, plan.Request.Prompt);
     }
 
@@ -39,9 +39,9 @@ public class StartCheckTests
             StartCheck.Evaluate(SayHi(SolHigh, instructions: ""), Folder, CodexReady, new Resumption("thread-1", "banana"))).Plan;
 
         Assert.Equal(
-            ["exec", "resume", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never", "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", "thread-1", "-"],
+            ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
             plan.Launch.Arguments.ToArray());
-        Assert.Equal("banana", plan.Launch.Stdin);
+        Assert.Equal("banana", plan.Request.Prompt);
     }
 
     [Fact]
@@ -174,7 +174,8 @@ public class StartCheckTests
         var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(new TaskDefinition(TestTasks.Design, reader) { Title = "it" }, Folder, CodexReady)).Plan;
 
         Assert.Equal("Read it.", plan.Request.Prompt);
-        Assert.Equal("exec --json -m gpt-6-sol -c model_reasoning_effort=high -c approval_policy=never --sandbox read-only --skip-git-repo-check -", string.Join(" ", plan.Launch.Arguments));
+        Assert.Equal("app-server -c approval_policy=never -c features.default_mode_request_user_input=false", string.Join(" ", plan.Launch.Arguments));
+        Assert.Equal("read-only", Assert.IsType<NativePolicy.Codex>(plan.Request.Policy!.Native).Sandbox);
     }
 
     [Fact]

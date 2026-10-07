@@ -70,7 +70,7 @@ public sealed class PlanningTests : IDisposable
         AttemptRecord record;
         await using (var runs = ProjectRuns.Open(_project, clients))
         {
-            record = await Settles(runs, () => runs.Start(workflow.Tasks[Architect], PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false)));
+            record = await Settles(runs, () => Task.FromResult<object>(runs.Start(workflow.Tasks[Architect], PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false))));
         }
 
         var prompt = File.ReadAllText(Evidence("prompt.txt"));
@@ -79,7 +79,7 @@ public sealed class PlanningTests : IDisposable
         Assert.Contains("- slot-2: \"Frontend\", type Implement.", prompt);
         Assert.Contains("- type-1: Implement. Carries out its instructions", prompt);
         Assert.Contains("- type-3: Architect.", prompt);
-        Assert.Contains("--sandbox read-only", string.Join(" ", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("arguments.json")))!));
+        Assert.Equal("read-only", JsonDocument.Parse(File.ReadAllText(Evidence("arguments.json.thread.json"))).RootElement.GetProperty("params").GetProperty("sandbox").GetString());
         Assert.Equal(AttemptStatus.Succeeded, record.Status);
 
         var proposal = Ready(record);
@@ -187,10 +187,10 @@ public sealed class PlanningTests : IDisposable
         var workflow = ArchitectWithTwoSlots(ConversationMode.Chat);
         var planner = workflow.Tasks[Architect];
 
-        var afterFirst = await Settles(runs, () => runs.Start(planner, PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false)));
+        var afterFirst = await Settles(runs, () => Task.FromResult<object>(runs.Start(planner, PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false))));
         var firstProposal = Ready(afterFirst);
         var acceptedFirst = workflow.Must(firstProposal.Accept(workflow, firstProposal.Items.ToHashSet(), _ => false));
-        var afterSecond = await Settles(runs, () => runs.Send(planner, "Split it in two.", stopTurn: false));
+        var afterSecond = await Settles(runs, async () => await runs.SendAsync(planner, "Split it in two.", stopTurn: false));
         var secondProposal = Ready(afterSecond);
         var acceptedSecond = acceptedFirst.Must(secondProposal.Accept(acceptedFirst, secondProposal.Items.ToHashSet(), _ => false));
 
@@ -434,7 +434,7 @@ public sealed class PlanningTests : IDisposable
         var document = Seeded(ArchitectWithTwoSlots(ConversationMode.Chat)
             .Must(new PlaceNode(plan, BuiltInBlueprints.Plan, new CanvasPoint(0, 400)) { Title = "Plan" }));
 
-        var reopened = WorkflowDocument.Open(_project).Current;
+        var reopened = WorkflowDocument.OpenProject(_project).Single().Current;
 
         Assert.Equal(document.Current.Tasks.Values, reopened.Tasks.Values);
         Assert.Equal(["idevelop.architect@1", "idevelop.implement@1", "idevelop.plan@1"], reopened.Blueprints.Keys.Select(key => key.ToString()));
@@ -509,7 +509,7 @@ public sealed class PlanningTests : IDisposable
 
     private WorkflowDocument Seeded(Workflow workflow)
     {
-        var document = WorkflowDocument.Open(_project);
+        var document = WorkflowDocument.OpenProject(_project).Single();
         foreach (var task in workflow.Tasks.Values)
         {
             document.Apply(new PlaceNode(task.Id, task.Blueprint, workflow.Positions[task.Id])
@@ -530,7 +530,7 @@ public sealed class PlanningTests : IDisposable
     }
 
     /// <summary>Does <paramref name="act"/>, then waits until the planner's attempt neither runs nor is about to.</summary>
-    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<object> act)
+    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<Task<object>> act)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnChanged(object? sender, EventArgs e)
@@ -544,7 +544,7 @@ public sealed class PlanningTests : IDisposable
         runs.Changed += OnChanged;
         try
         {
-            var result = act();
+            var result = await act();
             Assert.False(result is StartResult.Refused or SendResult.Refused, $"refused: {result}");
             return await settled.Task.WaitAsync(Patience);
         }
