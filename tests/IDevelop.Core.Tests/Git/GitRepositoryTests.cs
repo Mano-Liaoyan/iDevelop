@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Execution;
@@ -161,7 +160,7 @@ public sealed class GitRepositoryTests
         var capture = Read(repository.Capture(f.Folder, "extra"));
         Assert.Equal(before, File.ReadAllBytes(index));
         Assert.Equal(capture.IndexBefore, capture.IndexAfter);
-        Assert.Equal(new Digest(Convert.ToHexStringLower(SHA256.HashData(before))), capture.IndexBefore);
+        Assert.Equal(new Digest("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2"), capture.IndexBefore);
         Assert.Equal("100644 blob 5ea2ed416fbd4a4cbe227b75fe255dd7fa6bd4d6\ta.txt\n" +
             "100644 blob d8649da39ddf7910d29982e2f19cd9c0ff5ffe96\troot.txt\n" +
             "100644 blob 3e757656cf36eca53338e520d134963a44f793f8\tuntracked.txt\n", f.Git("ls-tree", "-r", capture.Tree.Hex));
@@ -202,7 +201,7 @@ public sealed class GitRepositoryTests
         var index = Read(repository.IndexPath(f.Folder));
         var bytes = File.ReadAllBytes(index);
         var unexpected = Assert.IsType<IndexAlignment.Unexpected>(repository.AlignIndex(f.Folder, capture.IndexBefore, capture.Tree));
-        Assert.Equal(new Digest(Convert.ToHexStringLower(SHA256.HashData(bytes))), unexpected.Observed);
+        Assert.Equal(new Digest("8a5586a2ade20c9ee8a6f9757de411a07a75c088ae0d58c2a3bd765cc286b207"), unexpected.Observed);
         Assert.Equal(bytes, File.ReadAllBytes(index));
         Assert.Equal("staged afterward\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal("M  a.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
@@ -318,7 +317,7 @@ public sealed class GitRepositoryTests
         Assert.Null(capture.IndexAfter);
         Assert.Equal("root\n", f.Git("show", capture.Tree.Hex + ":root.txt"));
         Assert.False(File.Exists(Read(repository.IndexPath(f.Folder))));
-        File.WriteAllBytes(Read(repository.IndexPath(f.Folder)), []);
+        f.Git("read-tree", "--empty");
         Assert.Equal(new Digest("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), Read(repository.IndexDigest(f.Folder)));
     }
 
@@ -440,5 +439,29 @@ public sealed class GitRepositoryTests
         Assert.Equal(0, repository.ResetCheckout(f.Folder, a).ExitCode);
         Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal("mine\n", File.ReadAllText(f.PathOf("folder/keep")));
+    }
+
+    [Fact]
+    public void Index_digest_ignores_stat_refresh_and_capture_preserves_real_index_bytes()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var repository = f.Open();
+        var index = Read(repository.IndexPath(f.Folder));
+        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", Read(repository.IndexDigest(f.Folder))?.Sha256);
+        var before = File.ReadAllBytes(index);
+        File.SetLastWriteTimeUtc(f.PathOf("plan.txt"), DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal("", f.Git("--no-optional-locks", "status", "--porcelain"));
+        f.Git("update-index", "--refresh");
+        Assert.False(before.SequenceEqual(File.ReadAllBytes(index)));
+        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", Read(repository.IndexDigest(f.Folder))?.Sha256);
+        var refreshed = File.ReadAllBytes(index);
+        f.Write("new.txt", "new\n");
+        var captured = Read(repository.Capture(f.Folder));
+        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", captured.IndexBefore?.Sha256);
+        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", captured.IndexAfter?.Sha256);
+        Assert.Equal(refreshed, File.ReadAllBytes(index));
+        Assert.Equal("new\n", f.Git("show", captured.Tree.Hex + ":new.txt"));
+        Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));
     }
 }
