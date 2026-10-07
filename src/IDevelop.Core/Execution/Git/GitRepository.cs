@@ -65,7 +65,7 @@ internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan 
     public static GitLimits Default { get; } = new(TimeSpan.FromSeconds(60), TimeSpan.FromHours(1), TimeSpan.FromHours(4));
 }
 
-internal sealed class GitRepository
+internal sealed partial class GitRepository
 {
     private readonly GitLimits _limits;
     private readonly IReadOnlyDictionary<string, string> _environment;
