@@ -587,11 +587,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
     {
         var deadline = Task.Delay(timeout, TimeProvider);
-        var stopped = run.StopAsync(new AttemptEvent.InterruptRequested(TimeProvider.GetUtcNow(), LeaveReason));
+        var leave = new AttemptEvent.InterruptRequested(TimeProvider.GetUtcNow(), LeaveReason);
+        var stopped = run.StopAsync(leave);
         var leaving = Task.WhenAll(stopped, run.Completion);
         if (await Task.WhenAny(leaving, deadline).ConfigureAwait(false) != leaving)
         {
-            run.Abandon();
+            run.Abandon(leave);
         }
 
         await run.Completion.ConfigureAwait(false);
