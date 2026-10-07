@@ -27,7 +27,7 @@ internal static class Pi
         Readiness = models => [.. models.Select(model => model.Provider!).Distinct().Select(provider =>
             new ReadinessProbe(provider, new Probe(["auth", "check", "--provider", provider, "--json"]), output => SignInProblem(provider, output)))],
         Launch = Launch,
-        Interpret = Interpret,
+        Protocol = request => new OneShotProtocol(Launch(request), Interpret),
         Terminal = session => $"pi --session {session}",
         HasReadOnlyMode = false,
     };

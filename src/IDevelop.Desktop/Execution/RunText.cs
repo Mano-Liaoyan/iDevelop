@@ -236,6 +236,9 @@ public static class RunText
     /// <summary>One or two sentences for each reason a message cannot go to a task's agent.</summary>
     public static string Describe(SendProblem problem) => problem switch
     {
+        SendProblem.ClosedOwner => "The project is closed.",
+        SendProblem.MissingTask => "The task no longer exists.",
+        SendProblem.StaleTarget => "The conversation has moved to another turn.",
         SendProblem.EmptyMessage => "Write a message first.",
         SendProblem.NeverRan => "Run this task first. Then you can write to its agent.",
         SendProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to continue. Run the task again.",
@@ -251,6 +254,9 @@ public static class RunText
     /// <summary>One or two sentences for each reason a task's session cannot go to a terminal.</summary>
     public static string Describe(TerminalProblem problem) => problem switch
     {
+        TerminalProblem.ClosedOwner => "The project is closed.",
+        TerminalProblem.MissingTask => "The task no longer exists.",
+        TerminalProblem.StaleTarget => "The conversation has moved to another turn.",
         TerminalProblem.NeverRan => "Run this task first.",
         TerminalProblem.NotWaiting p => $"\"{p.Title}\" can go to a terminal only while it waits for you.",
         TerminalProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to open.",
@@ -268,6 +274,7 @@ public static class RunText
     /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
     public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
     {
+        TurnOutcome.Deferred => "This turn deferred its questions.",
         TurnOutcome.Stopped => "You stopped this turn.",
         TurnOutcome.Failed => Sentences("This turn failed.", turn.Detail),
         TurnOutcome.Interrupted => Sentences("This turn was interrupted.", turn.Detail),

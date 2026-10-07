@@ -68,6 +68,44 @@ public sealed class ReviewTests : IDisposable
         .Must(TestNodes.Place(ReviewNode, new CanvasPoint(300, 0)))
         .Must(new WorkflowEdit.Connect(new ConnectionKey(Subject, Review), ConnectionKind.Dependency));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_subject_session_is_invalidated_when_the_first_reviewer_turn_fails_or_is_cancelled(bool cancel)
+    {
+        WriteTurn(_reviewer, 1, FakeRule.On().Print(SessionLine(ClientId.ClaudeCode, ReviewerSession))
+            .WaitForFile(_gate).Print("""{"type":"result","subtype":"error_during_execution","is_error":true}"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(Workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
+        using var session = runs.OpenConversation(Subject);
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        await Until(() => runs.Latest[Review].SessionId == ReviewerSession, "the reviewer starts");
+        Assert.False(session.Snapshot.Actions.Send.Enabled);
+        var released = new TaskCompletionSource<ActionAvailability>(TaskCreationOptions.RunContinuationsAsynchronously);
+        session.Changed += _ =>
+        {
+            var availability = session.Snapshot.Actions.Send;
+            if (availability.Enabled)
+            {
+                released.TrySetResult(availability);
+            }
+        };
+        if (cancel)
+        {
+            Assert.Null(await runs.CancelAsync(Review));
+        }
+        else
+        {
+            File.WriteAllText(_gate, "go");
+        }
+
+        await Until(() => runs.Latest[Review].Status == (cancel ? AttemptStatus.Cancelled : AttemptStatus.Failed) && runs.Active.IsEmpty, "the review settles");
+        Assert.Equal(new ActionAvailability(true, "Send a message."), session.Snapshot.Actions.Send);
+        Assert.Equal(new ActionAvailability(true, "Send a message."), await released.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
     [Fact]
     public async Task A_review_that_approves_in_the_first_round_reads_the_ticket_the_report_and_the_change_and_ends()
     {
@@ -105,14 +143,14 @@ public sealed class ReviewTests : IDisposable
         var (review, runs) = await RunLoop(async runs =>
         {
             await Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 starts");
-            Assert.IsType<SendResult.Guided>(runs.Send(ReviewNode, "Keep add on two lines.", stopTurn: false));
+            Assert.IsType<SendResult.Guided>(await runs.SendAsync(ReviewNode, "Keep add on two lines.", stopTurn: false));
             File.WriteAllText(_gate, "");
         });
         await using (runs)
         {
             Assert.Equal((AttemptStatus.Succeeded, 3), (review.Status, review.Turns.Count));
             Assert.All(new[] { 2, 3 }, turn => Assert.True(Has(Arguments(_reviewer, turn), "--resume", ReviewerSession), $"reviewer turn {turn} resumes"));
-            Assert.All(new[] { 2, 3 }, turn => Assert.True(Has(Arguments(_implementer, turn), ImplementerSession, "-") && Has(Arguments(_implementer, turn), "exec", "resume"), $"fix round {turn - 1} resumes"));
+            Assert.All(new[] { 2, 3 }, turn => Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, turn)));
 
             var fixes = runs.EarlierAttempts(runs.Latest[Subject]).Add(runs.Latest[Subject]);
             Assert.Equal([null, 1, 2], fixes.Select(attempt => attempt.Fix?.Round));
@@ -227,7 +265,7 @@ public sealed class ReviewTests : IDisposable
             await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
             Assert.Equal(AttemptStatus.InReview, runs.Latest[Review].Status);
             Assert.Equal(new StartProblem.InReview("Review add"), runs.Check(ReviewNode));
-            Assert.Null(runs.Cancel(Review));
+            Assert.Null(await runs.CancelAsync(Review));
         });
         await using (runs)
         {
@@ -258,14 +296,14 @@ public sealed class ReviewTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
         Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
-        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), runs.Send(SubjectNode, "Go on.", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), await runs.SendAsync(SubjectNode, "Go on.", stopTurn: false));
         runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
         Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
 
         runs.Follow(Workflow);
 
         await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the review approves");
-        Assert.True(Has(Arguments(_implementer, 3), ImplementerSession, "-"), "the fix round resumes the implementer's session");
+        Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, 3));
         Assert.Equal((1, AttemptStatus.Succeeded), (runs.Latest[Subject].Fix!.Round, runs.Latest[Subject].Status));
         Assert.Equal(2, runs.Latest[Review].Turns.Count);
     }
@@ -298,7 +336,7 @@ public sealed class ReviewTests : IDisposable
         await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
 
         runs.Follow(workflow.Must(new WorkflowEdit.Delete([Review], [])));
-        Assert.Null(runs.Cancel(Subject));
+        Assert.Null(await runs.CancelAsync(Subject));
         await Until(() => runs.Latest[Subject].Status == AttemptStatus.Cancelled && runs.Active.IsEmpty, "the fix round is cancelled");
 
         Assert.Null(runs.Check(SubjectNode));
@@ -446,6 +484,28 @@ public sealed class ReviewTests : IDisposable
         Assert.Null(GitTree.Snapshot(_temp.Create("plain")));
     }
 
+    [Fact]
+    public async Task Review_receives_Check_null_handling()
+    {
+        WriteTurn(_reviewer, 1, FakeRule.On().Print(SessionLine(ClientId.ClaudeCode, ReviewerSession)).WaitForFile(_gate)
+            .Print(ReplyLines(ClientId.ClaudeCode, Verdict("""{"status":"verdict","verdict":"approve","findings":[]}"""))));
+        var (review, runs) = await RunLoop(async runs =>
+        {
+            await Until(() => runs.Latest[Review].SessionId == ReviewerSession, "the reviewer reports its session");
+            using var session = runs.OpenConversation(Review);
+            Assert.Equal(new SendResult.Guided(), await session.SendAsync(session.Snapshot.Current!.Value, "Check null handling", false, default));
+            var recorded = runs.Latest[Review];
+            Assert.Equal(["Check null handling"], recorded.Guidance.Select(note => note.Text));
+            Assert.Single(recorded.Turns);
+            File.WriteAllText(_gate, "go");
+        });
+        await using (runs)
+        {
+            Assert.Equal((AttemptStatus.Succeeded, 1), (review.Status, review.Turns.Count));
+            Assert.Equal(["Check null handling"], review.Guidance.Select(note => note.Text));
+        }
+    }
+
     /// <summary>Runs the subject, then the review, and waits until the review settles.</summary>
     private async Task<(AttemptRecord Review, ProjectRuns Runs)> RunLoop(Func<ProjectRuns, Task>? during = null)
     {
@@ -493,6 +553,12 @@ public sealed class ReviewTests : IDisposable
     private static string Answers(string answers) => $"I answered each finding.\n\n```idevelop\n{{\"status\": \"answers\", \"answers\": {answers}}}\n```";
 
     private static string Prompt(string folder, int turn) => File.ReadAllText(Path.Combine(folder, $"{turn}.stdin"));
+
+    private static (string?, string?) Thread(string folder, int turn)
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, $"{turn}.args.thread.json")));
+        return (json.RootElement.GetProperty("method").GetString(), json.RootElement.GetProperty("params").GetProperty("threadId").GetString());
+    }
 
     private static string[] Arguments(string folder, int turn) => JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(folder, $"{turn}.args")))!;
 

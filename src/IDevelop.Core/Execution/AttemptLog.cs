@@ -44,11 +44,14 @@ internal sealed class AttemptLog : IDisposable
     private AttemptLog(string folder, FileMode mode)
     {
         Folder = folder;
+        LineCount = mode == FileMode.Append ? File.ReadLines(Path.Combine(folder, EventsFile)).LongCount() : 0;
         // Other windows fold a live log, so readers share it.
         _events = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
     }
 
     public string Folder { get; }
+
+    public long LineCount { get; private set; }
 
     /// <summary>The folder of a task's attempts, which also holds its run lock.</summary>
     public static string TaskFolder(string attemptsFolder, TaskId task) => Path.Combine(attemptsFolder, task.ToString());
@@ -84,6 +87,7 @@ internal sealed class AttemptLog : IDisposable
         {
             _events.Write(line);
             _events.Flush();
+            LineCount++;
         }
     }
 
@@ -120,22 +124,26 @@ internal sealed class AttemptLog : IDisposable
     /// The newest readable attempt of each task, folded. Opening a project needs only these, and only these can be a
     /// run that a crashed instance left behind. A folder that cannot be read is skipped and named in the warnings.
     /// </summary>
-    public static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings) ReadLatest(string attemptsFolder)
+    public static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) ReadLatest(string attemptsFolder)
     {
         var latest = ImmutableDictionary.CreateBuilder<TaskId, AttemptRecord>();
+        var revisions = ImmutableDictionary.CreateBuilder<(TaskId Task, AttemptId Attempt), long>();
         var warnings = ImmutableArray.CreateBuilder<string>();
         try
         {
             if (!Directory.Exists(attemptsFolder))
             {
-                return (latest.ToImmutable(), []);
+                return (latest.ToImmutable(), [], revisions.ToImmutable());
             }
 
             foreach (var taskFolder in Directory.EnumerateDirectories(attemptsFolder).Where(IsIdFolder))
             {
-                if (Newest(taskFolder, warnings) is { } record)
+                var (record, lines) = Newest(taskFolder, warnings);
+                if (record is not null)
                 {
                     latest[record.Task] = record;
+                    revisions[(record.Task, record.Id)] = lines;
                 }
             }
         }
@@ -144,14 +152,14 @@ internal sealed class AttemptLog : IDisposable
             warnings.Add($"iDevelop could not read {attemptsFolder}. {e.Message}");
         }
 
-        return (latest.ToImmutable(), warnings.ToImmutable());
+        return (latest.ToImmutable(), warnings.ToImmutable(), revisions.ToImmutable());
     }
 
     /// <summary>
     /// The newest readable attempt of one task, or null. Reconciliation reads a task again this way once it holds the
     /// task's lock. The read that found the task running has already reported its warnings.
     /// </summary>
-    public static AttemptRecord? ReadLatest(string attemptsFolder, TaskId task)
+    public static (AttemptRecord? Record, long LineCount) ReadLatest(string attemptsFolder, TaskId task)
     {
         try
         {
@@ -159,7 +167,7 @@ internal sealed class AttemptLog : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return (null, 0);
         }
     }
 
@@ -169,6 +177,52 @@ internal sealed class AttemptLog : IDisposable
         try
         {
             return AttemptReducer.Replay(Read(FolderOf(attemptsFolder, task, attempt)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Preserves physical positions even when a torn or unknown line is skipped.</summary>
+    public static ImmutableArray<PositionedAttemptEvent> ReadPositioned(string folder) => ReadPositioned(folder, out _, out _);
+
+    public static ImmutableArray<PositionedAttemptEvent> ReadPositioned(string folder, out long lineCount, out long length)
+    {
+        using var stream = new FileStream(Path.Combine(folder, EventsFile), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Utf8);
+        var events = ImmutableArray.CreateBuilder<PositionedAttemptEvent>();
+        long position = 0;
+        while (reader.ReadLine() is { } line)
+        {
+            try
+            {
+                if (JsonSerializer.Deserialize<AttemptEvent>(line, Options) is { } e)
+                {
+                    events.Add(new PositionedAttemptEvent(position, e));
+                }
+            }
+            catch (Exception e) when (e is JsonException or NotSupportedException)
+            {
+            }
+
+            position++;
+        }
+
+        lineCount = position;
+        length = stream.Position;
+        return events.ToImmutable();
+    }
+
+    public static AttemptHistory? ReadHistory(string attemptsFolder, TaskId task, AttemptId attempt,
+        IReadOnlyDictionary<string, LiveMessageBuffer>? live = null)
+    {
+        try
+        {
+            var events = ReadPositioned(FolderOf(attemptsFolder, task, attempt));
+            return events.FirstOrDefault(line => line.Event is AttemptEvent.Requested)?.Event is AttemptEvent.Requested requested
+                && requested.Task == task && requested.Attempt == attempt
+                ? ConversationHistory.Project(events, live) : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -187,27 +241,29 @@ internal sealed class AttemptLog : IDisposable
         }
     }
 
-    private static AttemptRecord? Newest(string taskFolder, ImmutableArray<string>.Builder warnings)
+    private static (AttemptRecord? Record, long LineCount) Newest(string taskFolder, ImmutableArray<string>.Builder warnings)
     {
         var newestFirst = Directory.EnumerateDirectories(taskFolder).Where(IsIdFolder).OrderByDescending(folder => Guid.Parse(Path.GetFileName(folder)));
         foreach (var attemptFolder in newestFirst)
         {
-            if (TryFold(attemptFolder, warnings) is { } record)
+            var result = TryFold(attemptFolder, warnings);
+            if (result.Record is not null)
             {
-                return record;
+                return result;
             }
         }
 
-        return null;
+        return (null, 0);
     }
 
-    private static AttemptRecord? TryFold(string folder, ImmutableArray<string>.Builder warnings)
+    private static (AttemptRecord? Record, long LineCount) TryFold(string folder, ImmutableArray<string>.Builder warnings)
     {
         try
         {
-            if (AttemptReducer.Replay(Read(folder)) is { } record)
+            var events = ReadPositioned(folder, out var lines, out _);
+            if (AttemptReducer.Replay(events.Select(line => line.Event)) is { } record)
             {
-                return record;
+                return (record, lines);
             }
 
             warnings.Add($"{folder} holds no attempt record, so iDevelop skipped it.");
@@ -217,7 +273,7 @@ internal sealed class AttemptLog : IDisposable
             warnings.Add($"iDevelop could not read {folder}, so it skipped that attempt. {e.Message}");
         }
 
-        return null;
+        return (null, 0);
     }
 
     private static bool IsIdFolder(string folder) => Guid.TryParse(Path.GetFileName(folder), out _);

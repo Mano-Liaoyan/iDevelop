@@ -1,0 +1,5 @@
+{"type":"message_start","message":{"role":"assistant","content":[],"provider":"openai-codex","model":"gpt-5.6-luna","stopReason":"pending"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_start","contentIndex":0}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"R"}}
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"ivers"}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Rivers flow across landscapes.  \nThey provide water for people and wildlife.  \nMany rivers eventually meet the sea."}],"provider":"openai-codex","model":"gpt-5.6-luna","stopReason":"stop","thinkingLevel":"low"}}

@@ -37,7 +37,7 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     public string? WaitingCaption => RunText.WaitingCaption(record);
 
-    public IReadOnlyList<string> Waiting => record.Queued;
+    public IReadOnlyList<string> Waiting => [.. record.Queued.Select(message => message.Text)];
 
     public string? TerminalNote => RunText.TerminalNote(record);
 

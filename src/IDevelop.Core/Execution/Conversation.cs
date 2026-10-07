@@ -28,6 +28,10 @@ public abstract record SendProblem
 {
     private SendProblem() { }
 
+    public sealed record StaleTarget : SendProblem;
+    public sealed record MissingTask : SendProblem;
+    public sealed record ClosedOwner : SendProblem;
+
     public sealed record EmptyMessage : SendProblem;
 
     /// <summary>The task has no attempt whose session could continue.</summary>
@@ -69,6 +73,10 @@ public abstract record TerminalResult
 public abstract record TerminalProblem
 {
     private TerminalProblem() { }
+
+    public sealed record StaleTarget : TerminalProblem;
+    public sealed record MissingTask : TerminalProblem;
+    public sealed record ClosedOwner : TerminalProblem;
 
     public sealed record NeverRan : TerminalProblem;
 

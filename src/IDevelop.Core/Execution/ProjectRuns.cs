@@ -19,6 +19,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly Lock _gate = new();
     private readonly string _projectFolder;
     private readonly ClientDirectory _clients;
+    private readonly HostQuestions _questions;
+    private long _revision;
+
+    private event Action<TaskId?, long>? ConversationChanged;
+
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
     private readonly Dictionary<TaskId, ActiveRun> _active = [];
@@ -30,32 +35,58 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
     private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
 
-    private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings)
+    private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> logRevisions, HostQuestions questions)
     {
         _projectFolder = projectFolder;
         _clients = clients;
+        _questions = questions;
+        clients.Changed += OnClientsChanged;
         _attempts = DataFolder.Attempts(projectFolder);
-        Latest = latest;
-        Warnings = warnings;
+        RefreshPublished((latest, warnings, logRevisions));
     }
+
+    /// <summary>The host clock and timers used by the runner. Tests inject a manually advanced clock.</summary>
+    internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
+
+    /// <summary>The budget for a protocol stop or deferral teardown. Tests shorten it.</summary>
+    internal TimeSpan ShutdownTime { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a client that reported success may take to exit, for its own shutdown work such as session hooks, before
+    /// iDevelop stops it and fails the turn. Only a client that never exits should reach it. Tests shorten it.
+    /// </summary>
+    internal TimeSpan SuccessExitTime { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>Awaited after a run's turn is disposed and before its lock is released. Tests hold it to observe teardown.</summary>
+    internal Func<Task>? BeforeRelease { get; set; }
+
+    internal (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers)? Live(TaskId task)
+    {
+        lock (_gate)
+        {
+            return _active.TryGetValue(task, out var run) ? run.Live : null;
+        }
+    }
+
     /// <summary>The newest attempt of each task that has one.</summary>
-    public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; }
+    public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; } = ImmutableDictionary<TaskId, AttemptRecord>.Empty;
 
     /// <summary>Attempt folders that could not be read or settled. Each one is a sentence for the user.</summary>
     public ImmutableArray<string> Warnings { get; private set; }
 
-    /// <summary>The attempts this window runs, while they run, in the order this window started them.</summary>
+    /// <summary>The attempts this window runs, until their lock is released, as <see cref="Latest"/> shows them, in the order
+    /// this window started them.</summary>
     public ImmutableArray<AttemptRecord> Active
     {
         get
         {
             lock (_gate)
             {
-                return [.. _active.Values.OrderBy(run => run.Order).Select(run => run.Record).Where(record => record.Status == AttemptStatus.Running)];
+                return [.. _active.Values.OrderBy(run => run.Order).Select(run => Latest[run.TaskId])];
             }
         }
     }
@@ -88,11 +119,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// instance runs now: it stops the client if it is provably the same process, and records it as interrupted. A folder
     /// without attempts stays untouched.
     /// </summary>
-    public static ProjectRuns Open(string projectFolder, ClientDirectory clients)
+    public static ProjectRuns Open(string projectFolder, ClientDirectory clients, HostQuestions? questions = null)
     {
         var folder = Path.GetFullPath(projectFolder);
-        var (latest, warnings) = ReadAndReconcile(DataFolder.Attempts(folder));
-        return new ProjectRuns(folder, clients, latest, warnings);
+        var (latest, warnings, revisions) = ReadAndReconcile(DataFolder.Attempts(folder));
+        return new ProjectRuns(folder, clients, latest, warnings, revisions, questions ?? new HostQuestions.Disabled());
     }
 
     /// <summary>The reason this task cannot start now, or null. A run of it in another window shows up only at
@@ -125,6 +156,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         // A step can run Git and start a client, so the window's thread does not wait for it.
+        NotifyChanged(null);
         ThreadPool.QueueUserWorkItem(_ => Advance());
     }
 
@@ -197,7 +229,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Announce(run);
+        Announce(task.Id, run);
         return result;
     }
 
@@ -208,8 +240,19 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// attempt resumes the latest attempt's session with it, which leaves that attempt as it was. Every reason not to send
     /// comes back as <see cref="SendResult.Refused"/>.
     /// </summary>
-    public SendResult Send(TaskDefinition task, string text, bool stopTurn)
+    public async Task<SendResult> SendAsync(TaskDefinition task, string text, bool stopTurn, CancellationToken ct = default, TurnKey? expected = null)
     {
+        ct.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
+            task = Resolve(task.Id) ?? task;
+        }
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return new SendResult.Refused(new SendProblem.EmptyMessage());
@@ -220,7 +263,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             case null:
                 return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.NoConversation()));
             case MessageUse.Guidance guidance:
-                return Guide(task, guidance.Text);
+                return await GuideAsync(task, guidance.Text, ct, expected);
             case MessageUse.Turn turn:
                 text = turn.Prompt;
                 break;
@@ -229,13 +272,18 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         ActiveRun? active;
         lock (_gate)
         {
-            ObjectDisposedException.ThrowIf(_leaving is not null, this);
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
+            task = Resolve(task.Id) ?? task;
             _active.TryGetValue(task.Id, out active);
         }
 
         if (active is not null)
         {
-            return active.Send(text, stopTurn, task.Conversation);
+            return await active.SendAsync(task, text, stopTurn, ct, expected);
         }
 
         SendResult result;
@@ -243,10 +291,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         var tree = GitTree.Snapshot(_projectFolder);
         lock (_gate)
         {
-            ObjectDisposedException.ThrowIf(_leaving is not null, this);
+            ct.ThrowIfCancellationRequested();
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
+            task = Resolve(task.Id) ?? task;
             if (_active.TryGetValue(task.Id, out var started))
             {
-                return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(task.Id, started.Record.TaskTitle)));
+                return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(task.Id, started.Title)));
             }
 
             switch (TakeLock(task.Id))
@@ -256,6 +310,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 case LockTake.HeldElsewhere elsewhere:
                     result = new SendResult.Refused(new SendProblem.CannotStart(elsewhere.Problem));
                     break;
+                case LockTake.Taken taken when SendTarget(task, expected) is { } lockedTarget:
+                    taken.Lock.Dispose();
+                    return new SendResult.Refused(lockedTarget);
                 case LockTake.Taken taken:
                     (result, run) = Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
                         ? Answer(task, text, waiting, taken.Lock, tree)
@@ -266,18 +323,24 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Announce(run);
+        Announce(task.Id, run);
         return result;
     }
 
     /// <summary>
-    /// Why <see cref="Send"/> would refuse a message to this task now, or null, for the inspector before any click. Send
+    /// Why <see cref="SendAsync"/> would refuse a message to this task now, or null, for the inspector before any click. Send
     /// checks again under the task's lock, where a run of it in another window also shows up.
     /// </summary>
     public SendProblem? CheckSend(TaskDefinition task)
     {
         lock (_gate)
         {
+            if (SendTarget(task, null) is { } target)
+            {
+                return target;
+            }
+
+            task = Resolve(task.Id) ?? task;
             switch (task.Blueprint.Work)
             {
                 case WorkSpec.Person:
@@ -310,7 +373,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             var settings = last is { Status: AttemptStatus.WaitingForInput } ? last.Requested : task.Execution;
-            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, "")) is StartVerdict.Blocked blocked
+            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, ""), questions: _questions) is StartVerdict.Blocked blocked
                 ? new SendProblem.CannotStart(blocked.Problem)
                 : null;
         }
@@ -340,15 +403,24 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Records on the task's latest attempt that the person took its session to the client's own terminal interface, and
     /// returns the command that opens it there. Refused unless the task waits for the person with a session.
     /// </summary>
-    public TerminalResult OpenInTerminal(TaskId task)
+    public TerminalResult OpenInTerminal(TaskId task, TurnKey? expected = null)
     {
         TerminalResult result;
         lock (_gate)
         {
-            ObjectDisposedException.ThrowIf(_leaving is not null, this);
+            if (_leaving is not null)
+            {
+                return new TerminalResult.Refused(new TerminalProblem.ClosedOwner());
+            }
+
+            if (expected is { } target && Current(task) != target)
+            {
+                return new TerminalResult.Refused(new TerminalProblem.StaleTarget());
+            }
+
             if (_active.TryGetValue(task, out var run))
             {
-                return new TerminalResult.Refused(new TerminalProblem.TurnRunning(run.Record.TaskTitle));
+                return new TerminalResult.Refused(new TerminalProblem.TurnRunning(run.Title));
             }
 
             switch (TakeLock(task))
@@ -361,7 +433,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 case LockTake.Taken taken:
                     using (taken.Lock)
                     {
-                        result = HandOff(task);
+                        result = expected is { } turn && Current(task) != turn
+                            ? new TerminalResult.Refused(new TerminalProblem.StaleTarget()) : HandOff(task);
                     }
 
                     break;
@@ -370,61 +443,81 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Changed?.Invoke(this, EventArgs.Empty);
+        NotifyChanged(task);
         return result;
     }
 
     /// <summary>Stops the task's client and every process it started, unless the client already exited, and records the
     /// attempt as cancelled. A task that waits for the person is recorded as cancelled at once. Does nothing otherwise,
     /// unless this window runs that task's attempt. Returns why a waiting task could not be cancelled, or null.</summary>
-    public StartProblem? Cancel(TaskId task)
+    public async Task<StartProblem?> CancelAsync(TaskId task, CancellationToken ct = default) => (await CancelCoreAsync(task, null, ct)).Problem;
+
+    private async Task<(StartProblem? Problem, bool Applied, bool Stale)> CancelCoreAsync(TaskId task, TurnKey? expected, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         ActiveRun? run;
-        lock (_gate)
-        {
-            _active.TryGetValue(task, out run);
-        }
-
-        if (run is not null)
-        {
-            run.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
-            return null;
-        }
-
         AttemptRecord? before;
         lock (_gate)
         {
+            if (_leaving is not null)
+            {
+                return (null, false, false);
+            }
+
+            if (expected is { } target && Current(task) != target)
+            {
+                return (null, false, true);
+            }
+
+            _active.TryGetValue(task, out run);
             before = Latest.GetValueOrDefault(task);
         }
 
-        var problem = Settle(task, record => record.Status is AttemptStatus.WaitingForInput or AttemptStatus.InReview, new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
-        // Cancelling a review between its turns also cancels the fix round its subject runs or waits in.
-        if (problem is null && before is { Status: AttemptStatus.InReview, Subject: { } subject } && Latest.GetValueOrDefault(subject) is { Fix: { } link } fix
-            && link.Attempt == before.Id && fix.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput)
+        StartProblem? problem;
+        bool applied;
+        if (run is not null)
         {
-            return Cancel(subject);
+            var accepted = await run.StopAsync(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow()), expected, ct);
+            if (accepted is SendResult.Refused refusal)
+            {
+                return (refusal.Problem is SendProblem.CannotStart failed ? failed.Problem : null, false, refusal.Problem is SendProblem.StaleTarget);
+            }
+
+            (problem, applied) = (null, true);
+        }
+        else
+        {
+            problem = Append(task, record => (expected is null || Current(task) == expected)
+                && record.Status is AttemptStatus.WaitingForInput or AttemptStatus.InReview, new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow()), out applied);
+            ThreadPool.QueueUserWorkItem(_ => Advance());
         }
 
-        return problem;
+        if (applied && before is { Subject: { } subject } && Latest.GetValueOrDefault(subject) is { Fix: { } link } fix
+            && link.Attempt == before.Id && fix.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput)
+        {
+            problem = await CancelAsync(subject);
+        }
+
+        return (problem, applied, expected is not null && !applied && problem is null);
     }
 
     /// <summary>Records a task that waits for the person as succeeded, with its last reply as its result. Null when it is
     /// done, else why not.</summary>
-    public StartProblem? MarkDone(TaskId task) =>
-        Settle(task, record => record.Status == AttemptStatus.WaitingForInput, new AttemptEvent.MarkedDone(DateTimeOffset.UtcNow));
+    public StartProblem? MarkDone(TaskId task) => MarkDoneCore(task, null).Problem;
+
+    private (StartProblem? Problem, bool Applied) MarkDoneCore(TaskId task, TurnKey? expected)
+    {
+        var problem = Append(task, record => (expected is null || Current(task) == expected) && record.Status == AttemptStatus.WaitingForInput,
+            new AttemptEvent.MarkedDone(TimeProvider.GetUtcNow()), out var applied);
+        ThreadPool.QueueUserWorkItem(_ => Advance());
+        return (problem, applied);
+    }
 
     /// <summary>
     /// Appends <paramref name="e"/> to the task's latest attempt under its lock, when <paramref name="fits"/> it before and
     /// after the lock is taken. Does nothing otherwise, while this window runs the task, or once the project is leaving.
     /// Then a review may go on, off the caller's thread, because its step can run Git and start a client.
     /// </summary>
-    private StartProblem? Settle(TaskId task, Func<AttemptRecord, bool> fits, AttemptEvent e)
-    {
-        var problem = Append(task, fits, e, out _);
-        ThreadPool.QueueUserWorkItem(_ => Advance());
-        return problem;
-    }
-
     private StartProblem? Append(TaskId task, Func<AttemptRecord, bool> fits, AttemptEvent e, out bool appended)
     {
         appended = false;
@@ -452,7 +545,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                             {
                                 using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, waiting.Id));
                                 log.Append(e);
-                                Latest = Latest.SetItem(task, AttemptReducer.Apply(waiting, e));
+                                SetPublished(task, new PublishedAttempt(AttemptReducer.Apply(waiting, e), log.LineCount));
                                 appended = true;
                             }
                             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -468,7 +561,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Changed?.Invoke(this, EventArgs.Empty);
+        NotifyChanged(task);
         return problem;
     }
 
@@ -481,29 +574,41 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            _leaving ??= Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+            if (_leaving is null)
+            {
+                _clients.Changed -= OnClientsChanged;
+                _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+                NotifyConversations(null);
+            }
+
             return new ValueTask(_leaving);
         }
     }
 
-    private static async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
+    private async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
     {
-        run.Stop(new AttemptEvent.InterruptRequested(DateTimeOffset.UtcNow, LeaveReason));
-        if (await Task.WhenAny(run.Completion, Task.Delay(timeout)) != run.Completion)
+        var deadline = Task.Delay(timeout, TimeProvider);
+        var leave = new AttemptEvent.InterruptRequested(TimeProvider.GetUtcNow(), LeaveReason);
+        var stopped = run.StopAsync(leave);
+        var leaving = Task.WhenAll(stopped, run.Completion);
+        if (await Task.WhenAny(leaving, deadline).ConfigureAwait(false) != leaving)
         {
-            run.Abandon();
-            await run.Completion;
+            run.Abandon(leave);
         }
+
+        await run.Completion.ConfigureAwait(false);
     }
 
     /// <summary>The newest attempt of each task, after <see cref="Reconcile"/>, and the warnings of both.</summary>
-    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings) ReadAndReconcile(
+    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) ReadAndReconcile(
         string attempts, TaskId? held = null)
     {
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var (latest, warnings, revisions) = AttemptLog.ReadLatest(attempts);
+        var counts = revisions.ToBuilder();
         var notes = warnings.ToBuilder();
-        latest = Reconcile(attempts, latest, notes, held);
-        return (latest, notes.ToImmutable());
+        latest = Reconcile(attempts, latest, notes, counts, held);
+        return (latest, notes.ToImmutable(), counts.ToImmutable());
     }
 
     /// <summary>
@@ -511,13 +616,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// window holds its task's lock and is skipped. <paramref name="held"/> names a task whose lock the caller holds.
     /// </summary>
     private static ImmutableDictionary<TaskId, AttemptRecord> Reconcile(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long>.Builder revisions, TaskId? held)
     {
         foreach (var running in latest.Values.Where(record => record.Status == AttemptStatus.Running).ToList())
         {
             if (running.Task == held)
             {
-                latest = SettleCrashed(attempts, latest, running, warnings);
+                latest = SettleCrashed(attempts, latest, running, warnings, revisions);
                 continue;
             }
 
@@ -537,10 +643,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 if (taskLock is not null)
                 {
                     // The run may have ended between the read and the lock, so settle what its log says now.
-                    var record = AttemptLog.ReadLatest(attempts, running.Task);
+                    var (record, lines) = AttemptLog.ReadLatest(attempts, running.Task);
+                    if (record is not null)
+                    {
+                        revisions[(record.Task, record.Id)] = lines;
+                    }
+
                     if (record is { Status: AttemptStatus.Running })
                     {
-                        latest = SettleCrashed(attempts, latest, record, warnings);
+                        latest = SettleCrashed(attempts, latest, record, warnings, revisions);
                     }
                     else if (record is not null)
                     {
@@ -554,15 +665,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     private static ImmutableDictionary<TaskId, AttemptRecord> SettleCrashed(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long>.Builder revisions)
     {
         ProcessMatch? match = record.Process is { } process ? ProcessCheck.StopIfSame(process) : null;
-        var reconciled = new AttemptEvent.Reconciled(DateTimeOffset.UtcNow, match);
+        var reconciled = new AttemptEvent.Reconciled(System.TimeProvider.System.GetUtcNow(), match);
         try
         {
             using (var log = AttemptLog.Open(AttemptLog.FolderOf(attempts, record.Task, record.Id)))
             {
                 log.Append(reconciled);
+                revisions[(record.Task, record.Id)] = log.LineCount;
             }
 
             return latest.SetItem(record.Task, AttemptReducer.Apply(record, reconciled));
@@ -592,21 +705,57 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         if (held is null)
         {
-            // Another instance holds the lock, so the read settles nothing.
-            (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
+            RefreshPublished(AttemptLog.ReadLatest(_attempts));
+
+            NotifyConversations(null);
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
         }
 
-        (Latest, Warnings) = ReadAndReconcile(_attempts, held: task);
+        RefreshPublished(ReadAndReconcile(_attempts, held: task));
+
+        NotifyConversations(null);
         return new LockTake.Taken(held);
     }
 
+    private void RefreshPublished((ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) disk)
+    {
+        foreach (var task in _published.Keys.Where(task => !disk.Latest.ContainsKey(task) && !_active.ContainsKey(task)).ToArray())
+        {
+            SetPublished(task, null);
+        }
+
+        foreach (var (task, record) in disk.Latest)
+        {
+            if (!_active.ContainsKey(task))
+            {
+                SetPublished(task, new PublishedAttempt(record, disk.LogRevisions.GetValueOrDefault((task, record.Id))));
+            }
+        }
+
+        Warnings = disk.Warnings;
+    }
+
+    private void SetPublished(TaskId task, PublishedAttempt? attempt)
+    {
+        if (attempt is null)
+        {
+            _published.Remove(task);
+            Latest = Latest.Remove(task);
+        }
+        else
+        {
+            _published[task] = attempt;
+            Latest = Latest.SetItem(task, attempt.Record);
+        }
+    }
+
     /// <summary>Raises <see cref="Changed"/> on the caller's thread, then starts reading the new run.</summary>
-    private void Announce(ActiveRun? run)
+    private void Announce(TaskId task, ActiveRun? run)
     {
         try
         {
-            Changed?.Invoke(this, EventArgs.Empty);
+            NotifyChanged(task);
         }
         finally
         {
@@ -633,7 +782,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: _questions);
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -663,7 +812,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        var prompt = waiting.Status == AttemptStatus.WaitingForInput
+            ? string.Join("\n\n", waiting.Queued.Select(item => item.Text).Append(message)) : message;
+        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, prompt), questions: _questions);
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -685,14 +836,25 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         try
         {
-            var turn = new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
+            record = waiting;
+            if (waiting.Status == AttemptStatus.WaitingForInput)
+            {
+                var queued = new AttemptEvent.MessageQueued(TimeProvider.GetUtcNow(), message, false) { Id = Guid.CreateVersion7().ToString() };
+                log.Append(queued);
+                record = AttemptReducer.Apply(record, queued);
+            }
+
+            var turn = new AttemptEvent.TurnRequested(TimeProvider.GetUtcNow(), plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Conversation = task.Conversation,
                 Tree = tree,
                 Report = report,
+                Consumed = waiting.Status == AttemptStatus.WaitingForInput ? [.. record.Queued.Select(item => item.Id)] : default,
+                Replies = waiting.Status == AttemptStatus.WaitingForInput
+                    ? [.. waiting.DeferredRequestIds.Select(id => new TurnRequestId(waiting.Turns.Count, id))] : default,
             };
             log.Append(turn);
-            record = AttemptReducer.Apply(waiting, turn);
+            record = AttemptReducer.Apply(record, turn);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -715,7 +877,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active[task.Id] = run;
         }
 
-        Latest = Latest.SetItem(task.Id, launched);
+        SetPublished(task.Id, new PublishedAttempt(launched, log.LineCount));
         return (new SendResult.Answered(launched), run);
     }
 
@@ -753,18 +915,18 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         var command = TerminalCommand.For(_projectFolder, Clients.Get(last.Requested.Client).Terminal(session), TerminalCommand.Current);
-        var handoff = new AttemptEvent.HandedToTerminal(DateTimeOffset.UtcNow, _projectFolder, command);
+        var handoff = new AttemptEvent.HandedToTerminal(TimeProvider.GetUtcNow(), _projectFolder, command);
         try
         {
             using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, last.Id));
             log.Append(handoff);
+            SetPublished(task, new PublishedAttempt(AttemptReducer.Apply(last, handoff), log.LineCount));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new TerminalResult.Refused(new TerminalProblem.Blocked(CannotRecord(e)));
         }
 
-        Latest = Latest.SetItem(task, AttemptReducer.Apply(last, handoff));
         return new TerminalResult.HandedOff(handoff.Folder, handoff.Command);
     }
 
@@ -782,7 +944,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             DataFolder.EnsureGitIgnore(_projectFolder);
             requested = new AttemptEvent.Requested(
-                DateTimeOffset.UtcNow, AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
+                TimeProvider.GetUtcNow(), AttemptId.New(), task.Id, task.Title, plan.Settings, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Continues = continues,
                 Conversation = task.Conversation,
@@ -814,7 +976,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active[task.Id] = run;
         }
 
-        Latest = Latest.SetItem(task.Id, record);
+        SetPublished(task.Id, new PublishedAttempt(record, log.LineCount));
         return (new StartResult.Started(record), run);
     }
 
@@ -823,14 +985,62 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private StartVerdict Verdict(TaskDefinition task, PlanningContext? planning = null, SubjectView? subject = null) =>
         (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
         {
-            (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
+            (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.TaskId, run.Title)),
             (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
             (_, { Status: AttemptStatus.InReview } reviewing) =>
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
             _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
             _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(task.Id, subject) is { } problem => new StartVerdict.Blocked(problem),
-            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject),
+            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject, questions: _questions),
         };
+
+    private TaskDefinition? Resolve(TaskId task) => WorkflowOf(task)?.Tasks.GetValueOrDefault(task);
+
+    private SendProblem? SendTarget(TaskDefinition task, TurnKey? expected)
+    {
+        if (_leaving is not null)
+        {
+            return new SendProblem.ClosedOwner();
+        }
+
+        if ((expected is not null || !_workflows.IsEmpty) && Resolve(task.Id) is null)
+        {
+            return new SendProblem.MissingTask();
+        }
+
+        if (expected is { } turn && Current(task.Id) != turn)
+        {
+            return new SendProblem.StaleTarget();
+        }
+
+        var current = Resolve(task.Id) ?? task;
+        return Latest.GetValueOrDefault(task.Id) is { } last && current.Execution is { } settings && settings.Client != last.Requested.Client
+            ? new SendProblem.ClientChanged(last.Requested.Client, settings.Client) : null;
+    }
+
+    private TurnKey? Current(TaskId task) => Latest.GetValueOrDefault(task) is { } record ? new TurnKey(record.Id, record.Turns.Count) : null;
+
+    private void OnClientsChanged(object? sender, EventArgs e) => NotifyChanged(null);
+
+    /// <summary>A review owns its subject's sendability, so both conversations depend on the review's changes.</summary>
+    private void NotifyChanged(TaskId? task)
+    {
+        TaskId? subject;
+        lock (_gate)
+        {
+            subject = task is { } id ? Latest.GetValueOrDefault(id)?.Subject : null;
+        }
+
+        NotifyConversations(task);
+        if (subject is { } affected && affected != task)
+        {
+            NotifyConversations(affected);
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void NotifyConversations(TaskId? task) => ConversationChanged?.Invoke(task, Interlocked.Increment(ref _revision));
 
     private Workflow? WorkflowOf(TaskId task) => _workflows.Values.FirstOrDefault(workflow => workflow.Tasks.ContainsKey(task));
 
@@ -903,7 +1113,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
         catch (LaunchException e)
         {
-            var failed = new AttemptEvent.LaunchFailed(DateTimeOffset.UtcNow, e.Message);
+            var failed = new AttemptEvent.LaunchFailed(TimeProvider.GetUtcNow(), e.Message);
             try
             {
                 log.Append(failed);
@@ -918,7 +1128,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         // On Windows a crash stops the client through its job. On Linux and macOS, a crash before this line is on disk
         // leaves a client that reconciliation cannot identify.
-        var launched = new AttemptEvent.Launched(DateTimeOffset.UtcNow, process.Identity.Id, process.Identity.StartedAt);
+        var launched = new AttemptEvent.Launched(TimeProvider.GetUtcNow(), process.Identity.Id, process.Identity.StartedAt);
         try
         {
             log.Append(launched);
@@ -927,7 +1137,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             process.StopTree();
             process.Dispose();
-            return (AttemptReducer.Abandon(record, CannotWriteLog(e), DateTimeOffset.UtcNow), null);
+            return (AttemptReducer.Abandon(record, CannotWriteLog(e), TimeProvider.GetUtcNow()), null);
         }
 
         return (AttemptReducer.Apply(record, launched), process);
@@ -943,32 +1153,34 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             ? new StartProblem.AlreadyRunning(running.Task, running.TaskTitle)
             : new StartProblem.RunInAnotherWindow();
 
-    private void Publish(AttemptRecord record)
+    private void Publish(AttemptRecord record, long logRevision)
     {
-        lock (_gate)
+        if (record.Status != AttemptStatus.Running)
         {
-            Latest = Latest.SetItem(record.Task, record);
+            return;
         }
 
-        if (record.Status == AttemptStatus.Running)
+        lock (_gate)
         {
-            Changed?.Invoke(this, EventArgs.Empty);
+            SetPublished(record.Task, new PublishedAttempt(record, logRevision));
         }
+
+        NotifyChanged(record.Task);
     }
 
-    private void Finish(ActiveRun run)
+    private void Finish(ActiveRun run, AttemptRecord record)
     {
         lock (_gate)
         {
-            if (_active.TryGetValue(run.Record.Task, out var current) && current == run)
+            if (_active.TryGetValue(record.Task, out var current) && current == run)
             {
-                _active.Remove(run.Record.Task);
+                _active.Remove(record.Task);
             }
 
-            Latest = Latest.SetItem(run.Record.Task, run.Record);
+            SetPublished(record.Task, new PublishedAttempt(record, run.Live.LogRevision));
         }
 
-        Changed?.Invoke(this, EventArgs.Empty);
+        NotifyChanged(record.Task);
         Advance();
     }
 

@@ -1,6 +1,6 @@
 # Agent client behavior
 
-Single-task execution relies on the client behavior below. The client rows in `src/IDevelop.Core/Execution/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
+Single-task execution relies on the client behavior below. The [C1 protocols](#conversation-protocols-from-c1) section describes how each turn talks to its client since the conversation backend, and which parts no real client run has confirmed yet. The client rows in `src/IDevelop.Core/Execution/Clients/` encode it, and the tests replay the recorded fixtures in `tests/Shared/Fixtures`.
 
 These observations come from running each client on Windows on 2026-10-04, first from a shell and then through iDevelop. Each run used the sign-in that client already had. Each client wrote a requested file in a fresh Git repository and returned its final text. The recorded event streams, trimmed and without local paths, are the fixtures. Some Antigravity CLI observations come from running it on 2026-10-03 while setting up this project.
 
@@ -57,7 +57,18 @@ A person's message resumes the client's own session in a new process. `scripts/p
 - The terminal commands come from each client's `--help`. On Linux on 2026-10-05, run from another folder with the same session flags in print mode, `claude -p --resume <id>` and `agy --conversation <id>` found the session but would work in that folder, and `pi -p --session <id>` printed nothing. From the project folder, Pi resumed the session.
 - Open in terminal therefore copies the command after a change into the project folder. On Linux and macOS it copies `cd '<folder>' && <command>`. On Windows, whose default terminal is PowerShell, it copies `Set-Location -LiteralPath '<folder>'; <command>`. The folder is quoted for that shell.
 
+## Conversation protocols from C1
+
+C1a moved Claude Code and Codex to protocols that carry questions, permission requests, and interrupts. One client process still runs each turn. The protocols come from D0's Linux probes on 2026-10-06 with Claude Code 2.1.291, Codex 0.160.0, Pi 1.0.4, and Antigravity CLI 1.3.0, and no real client has run these exact launches yet.
+
+- Claude Code runs `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --model <id> [--effort <level>] --permission-mode plan|acceptEdits [--resume <id>]`, followed by `--permission-prompt-tool stdio` when the turn may surface questions, or `--permission-prompts none` otherwise. iDevelop writes an `initialize` control request and sends the user message only after its success response. It keeps stdin open for answers, denials, and the `interrupt` control request, and closes it at the `result` event.
+- Codex runs `codex app-server -c approval_policy=never -c features.default_mode_request_user_input=false`. iDevelop sends `initialize` with `experimentalApi` off, `initialized`, then `thread/start` or `thread/resume` with the model, approval policy `never`, reviewer `user`, and the access sandbox, then `turn/start` with the prompt and effort. The thread id is the session. Questions arrive as message text. A command or file-change approval request is declined, and any other server request gets a method-not-supported error. iDevelop closes stdin at `turn/completed`.
+- Pi and Antigravity CLI keep the launches above and still read the whole prompt from stdin, which then closes.
+- After a client reports success and its stdin closes, it has 5 seconds to exit before iDevelop stops it and fails the turn.
+
 ## Unverified items
+
+- Every launch in the C1 protocols section, on each platform: Claude Code questions under `acceptEdits` and `plan`, a denied `ExitPlanMode`, `--permission-prompts none`, an interrupt with trailing output, and resuming after a deferred question; Codex app-server with the question feature off, `thread/resume` of a session that `codex exec` created, and read-only turns; npm shims on Windows holding stdin open.
 
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
 - Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.

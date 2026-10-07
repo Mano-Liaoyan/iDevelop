@@ -70,11 +70,11 @@ public sealed partial class ProjectRuns
     private bool Conclude(AttemptRecord review, string? failure)
     {
         Append(review.Task, current => current.Status == AttemptStatus.InReview && current.Id == review.Id && current.Turns.Count == review.Turns.Count,
-            new AttemptEvent.Concluded(DateTimeOffset.UtcNow, failure), out var appended);
+            new AttemptEvent.Concluded(TimeProvider.GetUtcNow(), failure), out var appended);
         if (appended)
         {
             Unstall(review.Task);
-            Changed?.Invoke(this, EventArgs.Empty);
+            NotifyChanged(review.Task);
         }
 
         return appended;
@@ -112,7 +112,7 @@ public sealed partial class ProjectRuns
             }
         }
 
-        Announce(run);
+        Announce(node.Id, run);
         return run is null;
     }
 
@@ -145,7 +145,7 @@ public sealed partial class ProjectRuns
                         return true;
                     }
 
-                    var verdict = StartCheck.Evaluate(node, _projectFolder, _clients.Current, new Resumption(from?.Session, fix.Prompt));
+                    var verdict = StartCheck.Evaluate(node, _projectFolder, _clients.Current, new Resumption(from?.Session, fix.Prompt), questions: _questions);
                     if (verdict is StartVerdict.Blocked blocked)
                     {
                         taken.Lock.Dispose();
@@ -167,7 +167,7 @@ public sealed partial class ProjectRuns
             }
         }
 
-        Announce(run);
+        Announce(node.Id, run);
         return run is null;
     }
 
@@ -177,7 +177,7 @@ public sealed partial class ProjectRuns
         if (_stalls.GetValueOrDefault(review) != problem)
         {
             _stalls = _stalls.SetItem(review, problem);
-            ThreadPool.QueueUserWorkItem(_ => Changed?.Invoke(this, EventArgs.Empty));
+            ThreadPool.QueueUserWorkItem(_ => NotifyChanged(review));
         }
 
         return false;
@@ -197,23 +197,49 @@ public sealed partial class ProjectRuns
     /// The person's guidance to a review, while its reviewer's turn runs or while it rests between turns. A turn that starts
     /// or ends between the two checks sends it to the other place.
     /// </summary>
-    private SendResult Guide(TaskDefinition task, string text)
+    private async Task<SendResult> GuideAsync(TaskDefinition task, string text, CancellationToken ct, TurnKey? expected)
     {
         for (var tries = 0; ; tries++)
         {
             ActiveRun? active;
             lock (_gate)
             {
-                ObjectDisposedException.ThrowIf(_leaving is not null, this);
+                if (SendTarget(task, expected) is { } target)
+                {
+                    return new SendResult.Refused(target);
+                }
+
+                task = Resolve(task.Id) ?? task;
                 _active.TryGetValue(task.Id, out active);
             }
 
-            if (active?.Guide(text) is SendResult.Guided guided)
+            if (active is not null)
             {
-                return guided;
+                var result = await active.GuideAsync(task, text, ct, expected);
+                if (result is not SendResult.Refused { Problem: SendProblem.Ending })
+                {
+                    return result;
+                }
             }
 
-            var problem = Append(task.Id, current => current.Status == AttemptStatus.InReview, new AttemptEvent.GuidanceAdded(DateTimeOffset.UtcNow, text), out var appended);
+            StartProblem? problem;
+            bool appended;
+            lock (_gate)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (SendTarget(task, expected) is { } target)
+                {
+                    return new SendResult.Refused(target);
+                }
+
+                problem = Append(task.Id, current => (expected is null || Current(task.Id) == expected)
+                    && current.Status == AttemptStatus.InReview, new AttemptEvent.GuidanceAdded(TimeProvider.GetUtcNow(), text), out appended);
+                if (expected is not null && Current(task.Id) != expected)
+                {
+                    return new SendResult.Refused(new SendProblem.StaleTarget());
+                }
+            }
+
             if (problem is not null)
             {
                 return new SendResult.Refused(new SendProblem.CannotStart(problem));
@@ -221,7 +247,7 @@ public sealed partial class ProjectRuns
 
             if (appended)
             {
-                Changed?.Invoke(this, EventArgs.Empty);
+                NotifyChanged(task.Id);
                 return new SendResult.Guided();
             }
 
@@ -230,7 +256,7 @@ public sealed partial class ProjectRuns
                 return new SendResult.Refused(new SendProblem.NotReviewing(task.Title));
             }
 
-            Thread.Sleep(50);
+            await Task.Delay(50, ct);
         }
     }
 }

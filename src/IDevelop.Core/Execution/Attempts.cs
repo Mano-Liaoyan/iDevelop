@@ -26,7 +26,7 @@ public readonly record struct AttemptId(Guid Value)
 public enum AttemptStatus { Running, Succeeded, Failed, Cancelled, Interrupted, WaitingForInput, InReview }
 
 /// <summary>How one client process ended. Stopped means the person stopped it, with Stop and send or Cancel.</summary>
-public enum TurnOutcome { Running, Succeeded, Failed, Stopped, Interrupted }
+public enum TurnOutcome { Running, Succeeded, Failed, Stopped, Interrupted, Deferred }
 
 /// <summary>One line of what an attempt did. <paramref name="IsTool"/> marks a tool call, such as a command, rather than what the agent or iDevelop said.</summary>
 public sealed record ActivityLine(DateTimeOffset At, string Text, bool IsTool = false);
@@ -46,6 +46,8 @@ public sealed record TurnRecord(int Number, string? Message, TurnOutcome Outcome
 
     /// <summary>A review's turn after a fix round: what the subject reported in that round.</summary>
     public FixReport? Report { get; init; }
+
+    public ImmutableArray<TurnRequestId> Replies { get; init; } = [];
 }
 
 /// <summary>
@@ -86,6 +88,11 @@ public sealed record TerminalHandoff(DateTimeOffset At, string Folder, string Co
 [JsonDerivedType(typeof(MarkedDone), "markedDone")]
 [JsonDerivedType(typeof(GuidanceAdded), "guidanceAdded")]
 [JsonDerivedType(typeof(Concluded), "concluded")]
+[JsonDerivedType(typeof(QuestionRecorded), "questionRecorded")]
+[JsonDerivedType(typeof(RequestAnswered), "requestAnswered")]
+[JsonDerivedType(typeof(RequestClosed), "requestClosed")]
+[JsonDerivedType(typeof(RequestDeferred), "requestDeferred")]
+[JsonDerivedType(typeof(ShutdownForced), "shutdownForced")]
 internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTimeOffset At)
 {
     /// <summary>
@@ -129,7 +136,25 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
 
     public sealed record LaunchFailed(DateTimeOffset At, string Reason) : AttemptEvent(At);
 
-    public sealed record Agent(DateTimeOffset At, AgentEvent Event) : AttemptEvent(At);
+    public sealed record Agent(DateTimeOffset At, AgentEvent Event) : AttemptEvent(At)
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? Order { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? PresentationSequence { get; init; }
+    }
+
+    public sealed record QuestionRecorded(
+        DateTimeOffset At, string RequestId, ImmutableArray<AskedQuestion> Questions, QuestionState State) : AttemptEvent(At);
+
+    public sealed record RequestAnswered(DateTimeOffset At, string RequestId, QuestionsReply Reply) : AttemptEvent(At);
+
+    public sealed record RequestClosed(DateTimeOffset At, string RequestId, RequestCloseReason Reason) : AttemptEvent(At);
+
+    public sealed record RequestDeferred(DateTimeOffset At, ImmutableArray<string> RequestIds, string Question) : AttemptEvent(At);
+
+    public sealed record ShutdownForced(DateTimeOffset At) : AttemptEvent(At);
 
     public sealed record CancelRequested(DateTimeOffset At) : AttemptEvent(At);
 
@@ -146,12 +171,22 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     /// <summary>Written by whoever next takes the run lock and finds the attempt still running. Null when it never launched.</summary>
     public sealed record Reconciled(DateTimeOffset At, ProcessMatch? Process) : AttemptEvent(At);
 
-    /// <summary>A message the person sent while the attempt ran. It waits for the turn to end, and <paramref name="StopsTurn"/> ends it.</summary>
-    public sealed record MessageQueued(DateTimeOffset At, string Text, bool StopsTurn) : AttemptEvent(At);
+    /// <summary>A message sent during a turn or while the attempt waits. <paramref name="StopsTurn"/> ends a running turn.</summary>
+    public sealed record MessageQueued(DateTimeOffset At, string Text, bool StopsTurn) : AttemptEvent(At)
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Id { get; init; }
+    }
 
     /// <summary>A turn after the first, which resumes the session with the waiting messages. Launched or LaunchFailed follows it.</summary>
     public sealed record TurnRequested(DateTimeOffset At, string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At)
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public ImmutableArray<string> Consumed { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public ImmutableArray<TurnRequestId> Replies { get; init; }
+
         /// <summary>The node's conversation mode from this turn on, when the person changed it while the node waited.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ConversationMode? Conversation { get; init; }
@@ -272,7 +307,9 @@ public sealed record AttemptRecord
     public ImmutableList<TurnRecord> Turns { get; internal init; }
 
     /// <summary>The person's messages that wait for the running turn to end. A settled attempt keeps the ones it never sent.</summary>
-    public ImmutableList<string> Queued { get; internal init; } = [];
+    public ImmutableList<QueuedMessage> Queued { get; internal init; } = [];
+
+    public ImmutableDictionary<RequestKey, RequestRecord> Requests { get; internal init; } = ImmutableDictionary<RequestKey, RequestRecord>.Empty;
 
     /// <summary>The latest hand-off of the session to the client's terminal interface.</summary>
     public TerminalHandoff? Terminal { get; internal init; }
@@ -292,6 +329,14 @@ public sealed record AttemptRecord
     internal AgentEvent? Verdict { get; init; }
 
     internal string? LastMessage { get; init; }
+
+    internal int AppliedEvents { get; init; } = 1;
+
+    internal string? DeferredQuestion { get; init; }
+
+    internal ImmutableArray<string> DeferredRequestIds { get; init; } = [];
+
+    internal bool ShutdownForced { get; init; }
 }
 
 /// <summary>The only writer of <see cref="AttemptRecord"/>. Pure.</summary>
@@ -325,7 +370,15 @@ internal static partial class AttemptReducer
         SessionId = requested.Continues is { Session: var session } && PlainSessionId().IsMatch(session) ? session : null,
     };
 
-    public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e) => (e, record) switch
+    public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e)
+    {
+        var next = ApplyEvent(record, e);
+        return record.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview
+            ? next with { AppliedEvents = record.AppliedEvents + 1 }
+            : next;
+    }
+
+    private static AttemptRecord ApplyEvent(AttemptRecord record, AttemptEvent e) => (e, record) switch
     {
         (AttemptEvent.HandedToTerminal handoff, _) => record with { Terminal = new TerminalHandoff(handoff.At, handoff.Folder, handoff.Command) },
         (AttemptEvent.TurnRequested turn, { Status: AttemptStatus.WaitingForInput or AttemptStatus.InReview }) =>
@@ -336,6 +389,11 @@ internal static partial class AttemptReducer
             Settle(record, concluded.Failure is null ? AttemptStatus.Succeeded : AttemptStatus.Failed, concluded.Failure, concluded.At),
         (AttemptEvent.GuidanceAdded guidance, { Status: AttemptStatus.Running or AttemptStatus.InReview }) =>
             record with { Guidance = record.Guidance.Add(new GuidanceNote(guidance.At, guidance.Text, record.Turns.Count)) },
+        (AttemptEvent.MessageQueued message, { Status: AttemptStatus.Running or AttemptStatus.WaitingForInput }) => record with
+        {
+            Queued = record.Queued.Add(new QueuedMessage(message.Id ?? $"legacy:{record.Id}:{record.AppliedEvents}", message.Text)),
+            StopTurnRequested = record.StopTurnRequested || (message.StopsTurn && !record.BetweenTurns),
+        },
         (_, { Status: not AttemptStatus.Running }) => record,
         (AttemptEvent.Requested, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
@@ -345,11 +403,11 @@ internal static partial class AttemptReducer
         (AttemptEvent.CancelRequested, _) => record with { CancelRequested = true, Stopping = true },
         (AttemptEvent.InterruptRequested interrupt, { BetweenTurns: true }) => Settle(record, AttemptStatus.Interrupted, interrupt.Reason, interrupt.At),
         (AttemptEvent.InterruptRequested interrupt, _) => record with { InterruptReason = record.InterruptReason ?? interrupt.Reason, Stopping = true },
-        (AttemptEvent.MessageQueued message, _) => record with
-        {
-            Queued = record.Queued.Add(message.Text),
-            StopTurnRequested = record.StopTurnRequested || (message.StopsTurn && !record.BetweenTurns),
-        },
+        (AttemptEvent.QuestionRecorded question, _) => RecordQuestion(record, question),
+        (AttemptEvent.RequestAnswered answer, _) => AnswerRequest(record, answer),
+        (AttemptEvent.RequestClosed closed, _) => CloseRequest(record, closed.RequestId, closed.Reason),
+        (AttemptEvent.RequestDeferred deferred, _) => DeferRequests(record, deferred),
+        (AttemptEvent.ShutdownForced, _) => record with { ShutdownForced = true },
         (AttemptEvent.TurnRequested turn, _) => NextTurn(record, turn),
         (AttemptEvent.Exited exited, _) => AtExit(record, exited),
         (AttemptEvent.Reconciled reconciled, _) =>
@@ -360,13 +418,88 @@ internal static partial class AttemptReducer
 
     private static AttemptRecord NextTurn(AttemptRecord record, AttemptEvent.TurnRequested turn) => record with
     {
-        Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null) { StartTree = turn.Tree, Report = turn.Report }),
-        Queued = [],
+        Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)
+        {
+            StartTree = turn.Tree,
+            Report = turn.Report,
+            Replies = turn.Replies.IsDefault ? [] : turn.Replies,
+        }),
+        Queued = turn.Consumed.IsDefault ? [] : record.Queued.RemoveAll(message => turn.Consumed.Contains(message.Id)),
+        DeferredQuestion = null,
+        DeferredRequestIds = [],
+        ShutdownForced = false,
+        Stopping = false,
         StopTurnRequested = false,
         Verdict = null,
         LastMessage = null,
         Conversation = turn.Conversation ?? record.Conversation,
     };
+
+    private static RequestKey Key(AttemptRecord record, string id) => new(new TurnKey(record.Id, record.Turns.Count), id);
+
+    private static AttemptRecord RecordQuestion(AttemptRecord record, AttemptEvent.QuestionRecorded question)
+    {
+        var key = Key(record, question.RequestId);
+        return AddRequest(record, new RequestRecord.Question(key, question.Questions, question.State) { At = question.At });
+    }
+
+    private static AttemptRecord AddRequest(AttemptRecord record, RequestRecord request) => record.Requests.ContainsKey(request.Key)
+        ? record
+        : record with { Requests = record.Requests.Add(request.Key, request) };
+
+    private static AttemptRecord AnswerRequest(AttemptRecord record, AttemptEvent.RequestAnswered answer)
+    {
+        var key = Key(record, answer.RequestId);
+        return record.Requests.GetValueOrDefault(key) is RequestRecord.Question { State: QuestionState.Open } question
+            ? record with { Requests = record.Requests.SetItem(key, question with { State = new QuestionState.AnswerRecorded(answer.Reply) }) }
+            : record;
+    }
+
+    private static AttemptRecord CloseRequest(AttemptRecord record, string id, RequestCloseReason reason)
+    {
+        var key = Key(record, id);
+        return record.Requests.TryGetValue(key, out var request)
+            ? record with { Requests = record.Requests.SetItem(key, Close(request, reason)) }
+            : record;
+    }
+
+    private static RequestRecord Close(RequestRecord request, RequestCloseReason reason) => request switch
+    {
+        RequestRecord.Question { State: QuestionState.Open } question => question with { State = new QuestionState.Closed(reason, null) },
+        RequestRecord.Question { State: QuestionState.AnswerRecorded answer } question => question with { State = new QuestionState.Closed(reason, answer.Reply) },
+        RequestRecord.Question { State: QuestionState.Closed closed } question when reason == RequestCloseReason.DeliveryUnknown =>
+            question with { State = closed with { Reason = RequestCloseReason.DeliveryUnknown } },
+        RequestRecord.Question => request,
+        RequestRecord.Permission { State: PermissionState.Declining } permission => permission with
+        {
+            State = reason == RequestCloseReason.DeliveryUnknown ? PermissionState.DeliveryUnknown : PermissionState.Denied,
+        },
+        RequestRecord.Permission => request,
+        _ => throw new UnreachableException($"Unhandled request {request.GetType().Name}"),
+    };
+
+    private static AttemptRecord DeferRequests(AttemptRecord record, AttemptEvent.RequestDeferred deferred)
+    {
+        foreach (var id in deferred.RequestIds)
+        {
+            if (record.Requests.GetValueOrDefault(Key(record, id)) is RequestRecord.Question { State: QuestionState.Open })
+            {
+                record = CloseRequest(record, id, RequestCloseReason.Deferred);
+            }
+        }
+
+        return record with { DeferredQuestion = deferred.Question, DeferredRequestIds = deferred.RequestIds, Stopping = true };
+    }
+
+    private static ImmutableDictionary<RequestKey, RequestRecord> CloseTurnRequests(AttemptRecord record, RequestCloseReason reason) =>
+        record.Requests.SetItems(record.Requests.Where(pair => pair.Key.Turn == new TurnKey(record.Id, record.Turns.Count))
+            .Select(pair => new KeyValuePair<RequestKey, RequestRecord>(pair.Key, pair.Value switch
+            {
+                RequestRecord.Permission { State: PermissionState.Declining } => Close(pair.Value, RequestCloseReason.DeliveryUnknown),
+                RequestRecord.Permission => pair.Value,
+                RequestRecord.Question => Close(pair.Value, reason),
+                _ => throw new UnreachableException($"Unhandled request {pair.Value.GetType().Name}"),
+            })));
 
     /// <summary>Ends an attempt whose log can no longer be written. Only the record in memory changes.</summary>
     public static AttemptRecord Abandon(AttemptRecord record, string reason, DateTimeOffset at) =>
@@ -384,6 +517,9 @@ internal static partial class AttemptReducer
         AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, TextLines.FirstLine(message.Text) ?? ""),
         AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}", isTool: true),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
+        AgentEvent.PermissionRequested permission => AddRequest(record,
+            new RequestRecord.Permission(Key(record, permission.RequestId), permission.Action, PermissionState.Declining) { At = at }),
+        AgentEvent.MessageDelta or AgentEvent.QuestionAsked or AgentEvent.RequestClosed => record,
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
         _ => throw new UnreachableException($"Unhandled agent event {e.GetType().Name}"),
     };
@@ -397,10 +533,30 @@ internal static partial class AttemptReducer
     {
         record = record with { Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with { EndTree = exited.Tree }) };
         var (turn, status, detail) = ExitPolicy(record, exited);
-        if (status == AttemptStatus.Succeeded && record.ReadOnly && record.Turns[^1] is { StartTree: { } before, EndTree: { } after } && before != after)
+        var deferring = record is { DeferredQuestion: not null, CancelRequested: false, InterruptReason: null };
+        if ((status == AttemptStatus.Succeeded || deferring) && record.ReadOnly && record.Turns[^1] is { StartTree: { } before, EndTree: { } after } && before != after)
         {
             return EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,
                 "The turn changed files in the project, although this node's agent may only read.", exited.At);
+        }
+
+        if (deferring && record.DeferredQuestion is { } question)
+        {
+            return record.SessionId is null
+                ? EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed,
+                    "The client reported no session; this question cannot be resumed.", exited.At)
+                : EndTurn(record, TurnOutcome.Deferred, null) with
+                {
+                    Status = AttemptStatus.WaitingForInput,
+                    Pending = new Pending.Question(question),
+                    Result = FinalText(record),
+                    Stopping = false,
+                };
+        }
+
+        if (record.ShutdownForced && !record.CancelRequested && record.InterruptReason is null)
+        {
+            return EndAttempt(record, turn, status, detail, exited.At);
         }
 
         if (record is { Queued.IsEmpty: false, CancelRequested: false, InterruptReason: null, SessionId: not null })
@@ -429,8 +585,8 @@ internal static partial class AttemptReducer
     }
 
     /// <summary>
-    /// The one exit policy, the same for every client, applied in order: a leave request, then a cancel request, then a
-    /// stopped turn, then the client's failure, then its success with exit code 0. Anything else failed.
+    /// The one exit policy, the same for every client, applied in order: a leave request, then a cancel request, then
+    /// forced shutdown, then a stopped turn, then the client's failure, then its success with exit code 0. Anything else failed.
     /// Success needs both signals: Pi exits 0 after a failed turn, and Claude Code exits 1 after a bad model.
     /// A stopped turn settles the attempt only when its client reported no session to send the message to.
     /// </summary>
@@ -441,6 +597,7 @@ internal static partial class AttemptReducer
         {
             { InterruptReason: { } reason } => (TurnOutcome.Interrupted, AttemptStatus.Interrupted, reason),
             { CancelRequested: true } => (TurnOutcome.Stopped, AttemptStatus.Cancelled, null),
+            { ShutdownForced: true } => (TurnOutcome.Failed, AttemptStatus.Failed, "The client reported success but did not shut down."),
             { StopTurnRequested: true } => (TurnOutcome.Stopped, AttemptStatus.Cancelled, $"{client} reported no session, so iDevelop could not send your message."),
             { Verdict: AgentEvent.Failed failed } => (TurnOutcome.Failed, AttemptStatus.Failed, failed.Reason),
             { Verdict: AgentEvent.Succeeded } when exited.ExitCode == 0 => (TurnOutcome.Succeeded, AttemptStatus.Succeeded, null),
@@ -490,6 +647,14 @@ internal static partial class AttemptReducer
                 Detail = outcome is TurnOutcome.Failed or TurnOutcome.Interrupted ? detail : null,
             }),
             Process = null,
+            Requests = CloseTurnRequests(record, outcome switch
+            {
+                TurnOutcome.Stopped => record.CancelRequested ? RequestCloseReason.Cancelled : RequestCloseReason.Stopped,
+                TurnOutcome.Interrupted => RequestCloseReason.Interrupted,
+                TurnOutcome.Deferred => RequestCloseReason.TurnEnded,
+                TurnOutcome.Succeeded or TurnOutcome.Failed => RequestCloseReason.TurnEnded,
+                TurnOutcome.Running => throw new UnreachableException("A running turn cannot end as running."),
+            }),
         };
 
     /// <summary>Ends the running turn, if one runs, and settles the attempt, both for the same reason.</summary>
