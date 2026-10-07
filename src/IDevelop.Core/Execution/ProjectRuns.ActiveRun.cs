@@ -525,8 +525,8 @@ public sealed partial class ProjectRuns
         {
             if (_turn.Stopping || _plan.Request.PolicyFor(_plan.Settings.Client).Questions == QuestionHandling.Decline)
             {
-                Append(new AttemptEvent.QuestionRecorded(at, question.RequestId, question.Questions,
-                    new QuestionState.Closed(_turn.StopReason ?? RequestCloseReason.PolicyDenied, null)));
+                var reason = _turn.StopReason is null or RequestCloseReason.Deferred ? RequestCloseReason.PolicyDenied : _turn.StopReason.Value;
+                Append(new AttemptEvent.QuestionRecorded(at, question.RequestId, question.Questions, new QuestionState.Closed(reason, null)));
                 Output(_turn.Protocol.Decline(question.RequestId));
                 return;
             }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -105,14 +106,22 @@ internal static class ConversationPager
                 first = selected.Length > 0 ? At(selected[0]) : anchor;
                 last = selected.Length > 0 ? At(selected[^1]) : anchor;
                 break;
-            case HistoryQuery.AroundRequest around:
-                var request = Array.FindIndex(rows, row => row.Entry.Content is ConversationContent.Request r && r.Key == around.Request);
-                if (request < 0)
+            case HistoryQuery.AroundRequest:
+            case HistoryQuery.AroundEntry:
+                var entryIndex = query switch
                 {
-                    return new HistoryResult.Unavailable("The request has no persisted entry in the selected attempt chain. Select its attempt to read it.");
+                    HistoryQuery.AroundRequest around => Array.FindIndex(rows, row => row.Entry.Content is ConversationContent.Request r && r.Key == around.Request),
+                    HistoryQuery.AroundEntry around => Array.FindIndex(rows, row => row.Entry.Id == around.Entry),
+                    _ => throw new UnreachableException(),
+                };
+                if (entryIndex < 0)
+                {
+                    return new HistoryResult.Unavailable(query is HistoryQuery.AroundEntry
+                        ? "The entry is not in the selected attempt chain. Select its attempt to read it."
+                        : "The request has no persisted entry in the selected attempt chain. Select its attempt to read it.");
                 }
 
-                var start = Math.Max(0, Math.Min(request - count / 2, rows.Length - count));
+                var start = Math.Max(0, Math.Min(entryIndex - count / 2, rows.Length - count));
                 selected = rows.Skip(start).Take(count).ToArray();
                 first = At(selected[0]);
                 last = At(selected[^1]);

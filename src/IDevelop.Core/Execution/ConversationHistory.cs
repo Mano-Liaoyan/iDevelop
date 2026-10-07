@@ -164,8 +164,11 @@ internal static class ConversationHistory
 
                     break;
                 case AttemptEvent.Agent { Event: AgentEvent.Failed failed }:
-                    Marker("failure", failed.Reason);
-                    failures[turn.Number] = failed.Reason;
+                    if (before is not ({ Stopping: true } or { StopTurnRequested: true }))
+                    {
+                        Marker("failure", failed.Reason);
+                        failures[turn.Number] = failed.Reason;
+                    }
                     break;
                 case AttemptEvent.GuidanceAdded guidance:
                     Message(MessageAuthor.Person, guidance.Text, MessageState.Submitted, "guidance");

@@ -586,12 +586,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
     {
-        await run.StopAsync(new AttemptEvent.InterruptRequested(TimeProvider.GetUtcNow(), LeaveReason));
-        if (await Task.WhenAny(run.Completion, Task.Delay(timeout)) != run.Completion)
+        var deadline = Task.Delay(timeout, TimeProvider);
+        var stopped = run.StopAsync(new AttemptEvent.InterruptRequested(TimeProvider.GetUtcNow(), LeaveReason));
+        var leaving = Task.WhenAll(stopped, run.Completion);
+        if (await Task.WhenAny(leaving, deadline).ConfigureAwait(false) != leaving)
         {
             run.Abandon();
-            await run.Completion;
         }
+
+        await run.Completion.ConfigureAwait(false);
     }
 
     /// <summary>The newest attempt of each task, after <see cref="Reconcile"/>, and the warnings of both.</summary>
@@ -822,11 +825,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Report = report,
                 Consumed = waiting.Status == AttemptStatus.WaitingForInput ? [.. record.Queued.Select(item => item.Id)] : default,
                 Replies = waiting.Status == AttemptStatus.WaitingForInput
-                    ? [.. waiting.Requests.Values.OfType<RequestRecord.Question>()
-                        .Where(request => request.Key.Turn.Number == waiting.Turns.Count
-                            && request.State is QuestionState.Closed { Reason: RequestCloseReason.Deferred })
-                        .OrderBy(request => request.Key.Turn.Number).ThenBy(request => request.Key.Id, StringComparer.Ordinal)
-                        .Select(request => new TurnRequestId(request.Key.Turn.Number, request.Key.Id))] : default,
+                    ? [.. waiting.DeferredRequestIds.Select(id => new TurnRequestId(waiting.Turns.Count, id))] : default,
             };
             log.Append(turn);
             record = AttemptReducer.Apply(record, turn);
@@ -1000,10 +999,21 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private void OnClientsChanged(object? sender, EventArgs e) => NotifyChanged(null);
 
-    /// <summary>Raises <see cref="Changed"/> and invalidates the sessions of <paramref name="task"/>, or of every task when it is null.</summary>
+    /// <summary>A review owns its subject's sendability, so both conversations depend on the review's changes.</summary>
     private void NotifyChanged(TaskId? task)
     {
+        TaskId? subject;
+        lock (_gate)
+        {
+            subject = task is { } id ? (_active.GetValueOrDefault(id)?.Record ?? Latest.GetValueOrDefault(id))?.Subject : null;
+        }
+
         NotifyConversations(task);
+        if (subject is { } affected && affected != task)
+        {
+            NotifyConversations(affected);
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

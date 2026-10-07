@@ -68,6 +68,44 @@ public sealed class ReviewTests : IDisposable
         .Must(TestNodes.Place(ReviewNode, new CanvasPoint(300, 0)))
         .Must(new WorkflowEdit.Connect(new ConnectionKey(Subject, Review), ConnectionKind.Dependency));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_subject_session_is_invalidated_when_the_first_reviewer_turn_fails_or_is_cancelled(bool cancel)
+    {
+        WriteTurn(_reviewer, 1, FakeRule.On().Print(SessionLine(ClientId.ClaudeCode, ReviewerSession))
+            .WaitForFile(_gate).Print("""{"type":"result","subtype":"error_during_execution","is_error":true}"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(Workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
+        using var session = runs.OpenConversation(Subject);
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        await Until(() => runs.Latest[Review].SessionId == ReviewerSession, "the reviewer starts");
+        Assert.False(session.Snapshot.Actions.Send.Enabled);
+        var released = new TaskCompletionSource<ActionAvailability>(TaskCreationOptions.RunContinuationsAsynchronously);
+        session.Changed += _ =>
+        {
+            var availability = session.Snapshot.Actions.Send;
+            if (availability.Enabled)
+            {
+                released.TrySetResult(availability);
+            }
+        };
+        if (cancel)
+        {
+            Assert.Null(await runs.CancelAsync(Review));
+        }
+        else
+        {
+            File.WriteAllText(_gate, "go");
+        }
+
+        await Until(() => runs.Latest[Review].Status == (cancel ? AttemptStatus.Cancelled : AttemptStatus.Failed) && runs.Active.IsEmpty, "the review settles");
+        Assert.Equal(new ActionAvailability(true, "Send a message."), session.Snapshot.Actions.Send);
+        Assert.Equal(new ActionAvailability(true, "Send a message."), await released.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
     [Fact]
     public async Task A_review_that_approves_in_the_first_round_reads_the_ticket_the_report_and_the_change_and_ends()
     {

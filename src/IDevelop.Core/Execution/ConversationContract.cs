@@ -108,6 +108,8 @@ public abstract record HistoryQuery
 
     public sealed record AroundRequest(RequestKey Request) : HistoryQuery;
 
+    public sealed record AroundEntry(EntryId Entry) : HistoryQuery;
+
     public sealed record RefreshWindow(HistoryWindow Window) : HistoryQuery;
 }
 
