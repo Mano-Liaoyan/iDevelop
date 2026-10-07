@@ -82,7 +82,7 @@ internal static class GitTree
 
     private static string? Git(string folder, string? indexFile, params string[] arguments)
     {
-        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", .. arguments])
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.commitGraph=false", .. arguments])
         {
             WorkingDirectory = folder,
             RedirectStandardOutput = true,

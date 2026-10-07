@@ -35,6 +35,39 @@ public sealed class GitRepositoryTests
     }
 
     [Fact]
+    public void Git_tree_diff_ignores_a_forged_commit_graph_root_tree()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        const string below = "81ddb7c330112c7f16700ed002803a04b0bce693";
+        f.Git("commit-graph", "write", "--reachable", "--no-changed-paths");
+        CommitGraphForgery.Forge(Path.Combine(f.Open().CommonDirectory, "objects", "info", "commit-graph"), a.Hex,
+            tree: f.Git("rev-parse", below + "^{tree}").Trim());
+        Assert.Equal("", f.Git("diff", below, a.Hex));
+        Assert.Equal("diff --git a/a.txt b/a.txt\nnew file mode 100644\nindex 0000000..f70f10e\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1 @@\n+A\n",
+            GitTree.Diff(f.Folder, below, a.Hex));
+    }
+
+    [Fact]
+    public void Ancestry_ignores_a_forged_commit_graph_parent()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        var below = new CommitId("81ddb7c330112c7f16700ed002803a04b0bce693");
+        f.Git("checkout", "-q", "--detach", below.Hex);
+        f.Write("b.txt", "B\n");
+        var tip = f.Commit("b.txt");
+        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", tip.Hex);
+        f.Git("branch", "forged", tip.Hex);
+        f.Git("commit-graph", "write", "--reachable", "--no-changed-paths");
+        var repository = f.Open();
+        CommitGraphForgery.Forge(Path.Combine(repository.CommonDirectory, "objects", "info", "commit-graph"), tip.Hex, parent: a.Hex);
+        Assert.Equal(0, f.Run(f.Folder, "merge-base", "--is-ancestor", a.Hex, tip.Hex).ExitCode);
+        Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
+        Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
+    }
+
+    [Fact]
     public void Symbolic_refs_are_refused_by_reads_and_snapshots()
     {
         using var f = new GitFixture();
