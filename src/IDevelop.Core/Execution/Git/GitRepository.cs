@@ -196,6 +196,8 @@ internal sealed class GitRepository
         };
     }
 
+    public GitResult AttachHead(string checkout, string branch) => Git(checkout, GitOperation.Metadata, ["symbolic-ref", "HEAD", branch]);
+
     public GitRead<ImmutableArray<StageEntry>> UnmergedEntries(string checkout)
     {
         var result = Git(checkout, GitOperation.Worktree, ["ls-files", "-u", "-z"]);

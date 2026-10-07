@@ -82,6 +82,7 @@ internal static partial class RunValidation
             Revision.IsCommit(m.Change.Target.Hex),
         GitMutation.AlignIndex m => m.Task.Value != Guid.Empty && Hash(m.Expected) && Revision.IsCommit(m.Target.Hex),
         GitMutation.ResetCheckout m => m.Task.Value != Guid.Empty && Revision.IsCommit(m.Target.Hex),
+        GitMutation.AttachHead m => m.Task.Value != Guid.Empty && Reference(m.Branch),
         GitMutation.RemovePaths m => m.Task.Value != Guid.Empty && !m.Paths.IsDefault && m.Paths.All(Evidence),
         _ => false,
     };

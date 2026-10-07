@@ -65,6 +65,7 @@ internal abstract record MaterializationPlan
 [JsonDerivedType(typeof(AlignIndex), "alignIndex")]
 [JsonDerivedType(typeof(ResetCheckout), "resetCheckout")]
 [JsonDerivedType(typeof(RemovePaths), "removePaths")]
+[JsonDerivedType(typeof(AttachHead), "attachHead")]
 internal abstract record GitMutation
 {
     private GitMutation() { }
@@ -76,6 +77,8 @@ internal abstract record GitMutation
     internal sealed record AlignIndex(TaskId Task, Digest? Expected, TreeId Target) : GitMutation;
 
     internal sealed record ResetCheckout(TaskId Task, CommitId Target) : GitMutation;
+
+    internal sealed record AttachHead(TaskId Task, string Branch) : GitMutation;
 
     internal sealed record RemovePaths(TaskId Task, ImmutableArray<EvidenceFile> Paths) : GitMutation;
 }

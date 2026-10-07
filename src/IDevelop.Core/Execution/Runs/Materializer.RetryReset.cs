@@ -32,7 +32,7 @@ internal sealed partial class Materializer
             record = Read(workflow, run);
             if (record.Phase != RunPhase.Approved) return new RetryReset.Rejected(new(RunProblem.RunStopped));
             VerifyRepository(record, repository);
-            VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+            VerifyOwnedCheckout(repository, prepared.Location, record);
             if (Value(repository.ReadRef(retained.Ref)) != retained.Commit ||
                 Value(repository.CreateCommit(salvage.Recipe)) != retained.Commit)
                 throw Fault(MaterializationProblem.UncertainOwnership, "The retained salvage ref or commit differs from its recipe.");
@@ -51,7 +51,8 @@ internal sealed partial class Materializer
                     ? produced.Code.Commit
                     : record.Preparations.Values.Where(p => p.Location.Owner.Task == task).OrderBy(p => record.Receipts.Values.Single(entry =>
                         entry.Event is RunEvent.Prepared e && e.Execution.Launch == p.Launch).Sequence).First().Location.AttemptBase;
-                plan = new(task, salvage.Attempt, salvagePlan, Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value, target, salvage.Untracked);
+                plan = new(task, salvage.Attempt, salvagePlan, Value(repository.ReadRef(prepared.Location.Owner.Branch)) ??
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent."), target, salvage.Untracked);
                 step = "retry-plan";
                 Journal("retry-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
             }
@@ -67,22 +68,33 @@ internal sealed partial class Materializer
                 var remaining = salvage.Untracked.Where(file => !targetPaths.Contains(file.RelativePath)).ToImmutableArray();
                 var capture = Value(Mutate("retry-resume-capture", () => repository.Capture(checkout, [.. remaining.Select(file => file.RelativePath)])));
                 var adopted = record.GitIntents.ContainsKey(intended) && tip == plan.To && capture.Tree == targetTree &&
-                    RunReducer.Same(Untracked(repository, checkout), remaining) && capture.IndexBefore == capture.IndexAfter;
+                    RunReducer.Same(Untracked(repository, checkout), remaining) && capture.IndexBefore == capture.IndexAfter &&
+                    Value(repository.ReadIndexTree(checkout)) == targetTree && Value(repository.SymbolicHead(checkout)) == prepared.Location.Owner.Branch;
                 if (!adopted)
                 {
-                    if (record.GitIntents.ContainsKey(intended) && tip == plan.To && tip != plan.From)
-                        throw Fault(MaterializationProblem.DirtyWorktree, "The checkout changed after the unacknowledged retry reset.");
-                    if (tip != plan.From) throw Fault(MaterializationProblem.UncertainOwnership, "The retry branch moved outside the recorded reset.");
+                    if (tip != plan.From && !(record.GitIntents.ContainsKey(intended) && tip == plan.To))
+                        throw Fault(MaterializationProblem.UncertainOwnership, "The retry branch moved outside the recorded reset.");
                     VerifyRetryInventory(repository, checkout, salvage, salvage.Recipe.Tree);
-                    if (Value(repository.IgnoredFiles(checkout)).Any(ignored => targetPaths.Any(path => path == ignored ||
-                        path.StartsWith(ignored + "/", StringComparison.Ordinal) || ignored.StartsWith(path + "/", StringComparison.Ordinal))))
-                        throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the retry target and must be preserved.");
+                    VerifyIgnoredObstructions(repository, checkout, targetPaths);
                 }
                 step = "retry-reset";
                 Journal("retry-reset-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, reset)));
                 if (!adopted)
                 {
-                    // Retained salvage and the complete unchanged inventory make this confirmed hard reset safe.
+                    var attach = new GitMutation.AttachHead(task, prepared.Location.Owner.Branch);
+                    if (Value(repository.Worktrees()).Any(worktree => worktree.Branch == attach.Branch && !SamePath(worktree.Path, checkout)))
+                        throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.");
+                    RequirePublication(_refs.Publish(workflow, run, operation, planId, "retry-branch", repository,
+                        new(prepared.Location.Owner.Branch, plan.From, plan.To)));
+                    if (!PublicationObserved(Read(workflow, run), planId, attach))
+                    {
+                        var attachIntent = OperationIds.Derive(operation, "retry-attach-intent");
+                        Journal("retry-attach-intent", () => _store.Record(workflow, run, attachIntent, new RunEvent.GitIntended(planId, attach)));
+                        var attached = Mutate("retry-attach", () => repository.AttachHead(checkout, attach.Branch));
+                        if (attached.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, attached.Stderr);
+                        Journal("retry-attach-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-attach-observed"),
+                            new RunEvent.GitObserved(attachIntent, new(false, attach.Branch))));
+                    }
                     var result = Mutate("retry-reset", () => repository.ResetCheckout(checkout, plan.To));
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
                 }
@@ -117,8 +129,15 @@ internal sealed partial class Materializer
     private void VerifyRetryInventory(GitRepository repository, string checkout, MaterializationPlan.Salvage salvage, TreeId tree)
     {
         var capture = Value(Mutate("retry-capture", () => repository.Capture(checkout)));
-        if (capture.Tree != tree || capture.IndexBefore != capture.IndexAfter || !RunReducer.Same(Untracked(repository, checkout), salvage.Untracked))
+        if (capture.Tree != tree || capture.IndexBefore != salvage.IndexBefore || capture.IndexBefore != capture.IndexAfter || !RunReducer.Same(Untracked(repository, checkout), salvage.Untracked))
             throw Fault(MaterializationProblem.DirtyWorktree, "The tracked or nonignored untracked inventory differs from retained salvage.");
+    }
+
+    private static void VerifyIgnoredObstructions(GitRepository repository, string checkout, ImmutableArray<string> targetPaths)
+    {
+        if (Value(repository.IgnoredFiles(checkout)).Any(ignored => targetPaths.Any(path => path == ignored ||
+            path.StartsWith(ignored + "/", StringComparison.Ordinal) || ignored.StartsWith(path + "/", StringComparison.Ordinal))))
+            throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the reset target and must be preserved.");
     }
 
     private RetryReset RetryBlock(WorkflowId workflow, RunId run, OperationId operation, string step, MaterializationBlock block) =>
