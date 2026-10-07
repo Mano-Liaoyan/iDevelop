@@ -52,6 +52,8 @@ internal sealed partial class Materializer
             }
             VerifyRepository(record, repository);
             var checkout = Checkout(repository, prepared.Location.Owner);
+            var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
+            if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked));
             MaterializationPlan.Publication plan;
             if (existing.Value is MaterializationPlan.Publication persisted)
             {

@@ -12,6 +12,27 @@ public sealed class PublicationTests
 {
     private static readonly OperationId Operation = new(Id(2000));
 
+    [Theory]
+    [InlineData(".idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json", "Tracked execution data: .idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json")]
+    [InlineData(".idp/inputs/forced.txt", "Tracked execution data: .idp/inputs/forced.txt")]
+    [InlineData(".worktrees/forced.txt", "Tracked execution data: .worktrees/forced.txt")]
+    public async Task Force_staged_execution_data_blocks_publication_before_capture(string path, string detail)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write(path, "{\"schema\":1,\"artifacts\":[]}", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "-f", "--", path).ExitCode);
+        f.Close(ready);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal(detail, blocked.Block.Detail);
+        var repository = f.Git.Open();
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Null(GitFixture.Read(repository.ReadRef(RunLayout.ResultRef(f.Read().RunKey!, f.Read().TaskKeys[T], ready.Execution.Launch.Attempt))));
+        Assert.Empty(f.Read().Results);
+        Assert.Equal(blocked, f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+    }
+
     [Fact]
     public async Task Own_branch_commit_edits_and_additions_publish_exact_code_and_align_the_real_index()
     {
