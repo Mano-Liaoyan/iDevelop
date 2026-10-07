@@ -18,11 +18,20 @@ namespace IDevelop.Desktop.Conversation;
 /// <summary>
 /// One message's Markdown as Avalonia controls. HTML stays literal text, an image shows its description and address and
 /// is never fetched, and a link goes only to the <see cref="ConversationLinkRouter"/>. A new text rebuilds only the blocks
-/// whose source changed, and a block with selected text keeps its old content until the selection clears.
+/// whose source changed, and a block with selected text keeps its old content until the selection clears. A message too
+/// long, too deeply nested, or with too many table cells or links to lay out quickly shows as its source.
 /// </summary>
 public sealed class MarkdownView : StackPanel
 {
     public static readonly StyledProperty<string?> MarkdownProperty = AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
+
+    // Measured headlessly at each limit, 1,000 table cells or 500 links lay out in about 165 ms, and 20,000 characters of
+    // nested brackets in about 530 ms.
+    private const int MaxLength = 20_000;
+    private const int MaxCells = 1_000;
+    private const int MaxLinks = 500;
+
+    private const string SourceKey = "\0source";
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
 
@@ -55,19 +64,9 @@ public sealed class MarkdownView : StackPanel
     private void Render()
     {
         var text = Markdown ?? "";
-        List<Block> blocks;
-        try
+        if (Parse(text) is not { } blocks)
         {
-            blocks = [.. Markdig.Markdown.Parse(text, Pipeline).Where(block => block is not LinkReferenceDefinitionGroup)];
-        }
-        catch (ArgumentException)
-        {
-            // Markdig refuses input nested too deeply, so such a message shows as its source.
-            Children.Clear();
-            _sources.Clear();
-            Children.Add(Plain(text));
-            _sources.Add("\0source");
-            BlocksBuilt++;
+            ShowSource(text);
             return;
         }
 
@@ -104,6 +103,55 @@ public sealed class MarkdownView : StackPanel
             _sources.RemoveAt(_sources.Count - 1);
             Children.RemoveAt(Children.Count - 1);
         }
+    }
+
+    private static List<Block>? Parse(string text)
+    {
+        if (text.Length > MaxLength)
+        {
+            return null;
+        }
+
+        MarkdownDocument document;
+        try
+        {
+            document = Markdig.Markdown.Parse(text, Pipeline);
+        }
+        catch (ArgumentException)
+        {
+            // Markdig refuses input nested too deeply.
+            return null;
+        }
+
+        return document.Descendants<Markdig.Syntax.Inlines.Inline>().Where(inline => inline is LinkInline { IsImage: false } or AutolinkInline).Skip(MaxLinks).Any()
+            || document.Descendants<TableCell>().Skip(MaxCells).Any()
+            ? null
+            : [.. document.Where(block => block is not LinkReferenceDefinitionGroup)];
+    }
+
+    // A message streams as its source once it passes a limit, so its one block takes the new text in place and keeps a
+    // selection until it clears.
+    private void ShowSource(string text)
+    {
+        if (_sources is [SourceKey] && Children[0] is SelectableTextBlock shown)
+        {
+            if (Selected(shown) is { } selected)
+            {
+                WaitForSelectionToClear(selected);
+            }
+            else
+            {
+                shown.Text = text;
+            }
+
+            return;
+        }
+
+        Children.Clear();
+        _sources.Clear();
+        Children.Add(Plain(text));
+        _sources.Add(SourceKey);
+        BlocksBuilt++;
     }
 
     private static string Source(string text, Block block)
@@ -247,7 +295,8 @@ public sealed class MarkdownView : StackPanel
         return new Border { Classes = { "mdCode" }, Child = layout };
     }
 
-    private static SelectableTextBlock Plain(string source) => new() { Classes = { "md", "mdMono" }, Text = source };
+    // A long run with no break opportunity takes time that grows with its square to wrap, so it runs past the edge instead.
+    private static SelectableTextBlock Plain(string source) => new() { Classes = { "md", "mdMono" }, Text = source, TextWrapping = TextWrapping.WrapWithOverflow };
 
     private SelectableTextBlock Text(ContainerInline? inline, string? style)
     {
