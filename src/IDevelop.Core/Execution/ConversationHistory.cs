@@ -15,6 +15,8 @@ internal sealed record ProjectedConversationEntry(ConversationEntry Entry, long 
 
 internal sealed record AttemptHistory(AttemptId Id, ImmutableArray<ProjectedConversationEntry> Rows)
 {
+    public required AttemptRecord Record { get; init; }
+
     public ImmutableArray<ConversationEntry> Entries => [.. Rows.Select(row => row.Entry)];
 }
 
@@ -236,7 +238,7 @@ internal static class ConversationHistory
         }
 
         return new AttemptHistory(record.Id, [.. rows.Values.OrderBy(row => row.Entry.Order).ThenBy(row => row.Position)
-            .ThenBy(row => row.Slot).ThenBy(row => row.Entry.Id.Value, StringComparer.Ordinal)]);
+            .ThenBy(row => row.Slot).ThenBy(row => row.Entry.Id.Value, StringComparer.Ordinal)]) { Record = record };
     }
 
     private static EntryId Id(AttemptId attempt, int turn, string kind, string? identity, long position) =>

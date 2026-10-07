@@ -29,6 +29,8 @@ public sealed partial class ProjectRuns
         private readonly Lock _gate = new();
         private ImmutableDictionary<string, LiveMessageBuffer> _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
         private long _revision;
+        private long _publishedRevision;
+        private AttemptRecord _publishedRecord;
         private int _presentationSequence;
         private LaunchPlan _plan;
         private Turn _turn;
@@ -48,6 +50,8 @@ public sealed partial class ProjectRuns
             _held = held;
             Record = record;
             _revision = log.LineCount;
+            _publishedRevision = _revision;
+            _publishedRecord = record;
         }
 
         public long Order { get; }
@@ -223,7 +227,7 @@ public sealed partial class ProjectRuns
                                     Append(new AttemptEvent.RequestClosed(_owner.TimeProvider.GetUtcNow(), reply.Key.Id, RequestCloseReason.DeliveryUnknown));
                                 }
 
-                                _owner.Publish(Record);
+                                Publish();
                                 reply.Done.TrySetResult(new AnswerResult(write.Success ? AnswerOutcome.Recorded : AnswerOutcome.DeliveryUnknown,
                                     write.Success ? "The answer was recorded." : "The answer was recorded, but delivery could not be confirmed."));
                             }
@@ -273,7 +277,7 @@ public sealed partial class ProjectRuns
 
                             Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = GitTree.Snapshot(_owner._projectFolder) });
                             exited = true;
-                            _owner.Publish(Record);
+                            Publish();
                             if (Record.Status != AttemptStatus.Running || !await NextTurnAsync())
                             {
                                 return;
@@ -287,7 +291,7 @@ public sealed partial class ProjectRuns
                             throw new InvalidOperationException("Unknown run input.");
                     }
 
-                    _owner.Publish(Record);
+                    Publish();
                 }
             }
             catch (OperationCanceledException) { }
@@ -408,7 +412,7 @@ public sealed partial class ProjectRuns
                         break;
                 }
 
-                _owner.Publish(Record);
+                Publish();
                 person.Done.TrySetResult(accepted is AttemptEvent.GuidanceAdded ? new SendResult.Guided() : new SendResult.Queued());
             }
             catch
@@ -429,8 +433,12 @@ public sealed partial class ProjectRuns
                         lock (_gate)
                         {
                             var buffer = _buffers.GetValueOrDefault(delta.MessageId) ?? new LiveMessageBuffer("", _log.LineCount, at) { PresentationSequence = ++_presentationSequence };
-                            _buffers = _buffers.SetItem(delta.MessageId, buffer with { Text = buffer.Text + delta.Text });
-                            _revision++;
+                            var next = buffer with { Text = buffer.Text + delta.Text };
+                            if (_buffers.GetValueOrDefault(delta.MessageId) != next)
+                            {
+                                _buffers = _buffers.SetItem(delta.MessageId, next);
+                                _revision++;
+                            }
                         }
 
                         break;
@@ -448,10 +456,20 @@ public sealed partial class ProjectRuns
 
                         lock (_gate)
                         {
-                            _buffers = message.Partial
-                                ? _buffers.SetItem(id, (prior ?? new LiveMessageBuffer("", _log.LineCount, at) { PresentationSequence = ++_presentationSequence }) with { Text = message.Text })
-                                : _buffers.Remove(id);
-                            _revision++;
+                            if (message.Partial)
+                            {
+                                var next = (prior ?? new LiveMessageBuffer("", _log.LineCount, at) { PresentationSequence = ++_presentationSequence }) with { Text = message.Text };
+                                if (prior != next)
+                                {
+                                    _buffers = _buffers.SetItem(id, next);
+                                    _revision++;
+                                }
+                            }
+                            else if (prior is not null)
+                            {
+                                _buffers = _buffers.Remove(id);
+                                _revision++;
+                            }
                         }
 
                         break;
@@ -858,6 +876,19 @@ public sealed partial class ProjectRuns
             _turn.Lifetime.Dispose();
             _turn.PromptCancellation.Dispose();
             _turn.Process.Dispose();
+        }
+
+        private void Publish()
+        {
+            var live = Live;
+            if (ReferenceEquals(Record, _publishedRecord) && live.Revision == _publishedRevision)
+            {
+                return;
+            }
+
+            _publishedRecord = Record;
+            _publishedRevision = live.Revision;
+            _owner.Publish(Record, live.LogRevision);
         }
 
         private void Append(AttemptEvent e)

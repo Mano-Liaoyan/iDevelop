@@ -60,6 +60,8 @@ public enum PermissionState { Declining, Denied, DeliveryUnknown }
 
 public abstract record RequestRecord(RequestKey Key)
 {
+    public DateTimeOffset At { get; init; }
+
     public sealed record Question(
         RequestKey Key, ImmutableArray<AskedQuestion> Questions, QuestionState State)
         : RequestRecord(Key);

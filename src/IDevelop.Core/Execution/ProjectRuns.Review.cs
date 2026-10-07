@@ -74,7 +74,7 @@ public sealed partial class ProjectRuns
         if (appended)
         {
             Unstall(review.Task);
-            NotifyChanged();
+            NotifyChanged(review.Task);
         }
 
         return appended;
@@ -112,7 +112,7 @@ public sealed partial class ProjectRuns
             }
         }
 
-        Announce(run);
+        Announce(node.Id, run);
         return run is null;
     }
 
@@ -167,7 +167,7 @@ public sealed partial class ProjectRuns
             }
         }
 
-        Announce(run);
+        Announce(node.Id, run);
         return run is null;
     }
 
@@ -177,7 +177,7 @@ public sealed partial class ProjectRuns
         if (_stalls.GetValueOrDefault(review) != problem)
         {
             _stalls = _stalls.SetItem(review, problem);
-            ThreadPool.QueueUserWorkItem(_ => NotifyChanged());
+            ThreadPool.QueueUserWorkItem(_ => NotifyChanged(review));
         }
 
         return false;
@@ -247,7 +247,7 @@ public sealed partial class ProjectRuns
 
             if (appended)
             {
-                NotifyChanged();
+                NotifyChanged(task.Id);
                 return new SendResult.Guided();
             }
 
