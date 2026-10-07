@@ -91,7 +91,7 @@ public sealed class ConversationLinkRouter
             await _copy(web.Uri.AbsoluteUri);
         };
         flyout.Closed += (_, _) => answer.TrySetResult(false);
-        flyout.Content = Prompt("Open this address in your browser?", web.Uri.AbsoluteUri, open, copy);
+        flyout.Content = Prompt("Open this address in your browser?", Shown(web.Uri), open, copy);
         flyout.ShowAt(link);
         return answer.Task;
     }
@@ -109,6 +109,10 @@ public sealed class ConversationLinkRouter
         flyout.Content = Prompt("iDevelop opens only web addresses. You can copy this one.", text.Destination, copy);
         flyout.ShowAt(link);
     }
+
+    // A host in another script shows as the browser will send it, so a look-alike letter cannot pass for another site.
+    internal static string Shown(Uri uri) =>
+        uri.IdnHost == uri.Host ? uri.AbsoluteUri : $"{uri.AbsoluteUri}\nHost as sent: {uri.IdnHost}";
 
     private static Control Prompt(string question, string destination, params Button[] buttons)
     {

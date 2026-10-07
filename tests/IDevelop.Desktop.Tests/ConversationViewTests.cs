@@ -265,8 +265,45 @@ public sealed class ConversationViewTests : IDisposable
         Render();
 
         Assert.Equal("m0", Ids(model)[0]);
+        var read = transcript.ContainerFromIndex(Ids(model).ToList().IndexOf("m20"))!;
+        Assert.Equal(-12.0, Math.Round(read.TranslatePoint(default, (Avalonia.Visual)scroller.Content!)!.Value.Y - scroller.Offset.Y, 1));
         Assert.Equal(("m20", 12.0), (view.Anchor!.Value.Entry.Value, Math.Round(view.Anchor.Value.Offset, 1)));
         Assert.Equal("edge cases", text.SelectedText);
+    }
+
+    [AvaloniaFact]
+    public void Card_attention_seeks_an_old_request_and_asks_the_view_to_reveal_it()
+    {
+        var key = new RequestKey(new TurnKey(A, 1), "s:q7");
+        _session.Requests[key] = new RequestRecord.Question(key, [new AskedQuestion("q1", "", "Fixture?", [], false, true)],
+            new QuestionState.Closed(RequestCloseReason.TurnEnded, null));
+        _pager.Rows.AddRange(Enumerable.Range(0, 200).Select(i => i == 10 ? Entry("q7", new ConversationContent.Request(key)) : Said($"m{i}", MessageAuthor.Agent, $"Message {i}")));
+        var model = Open();
+        var revealed = new List<string>();
+        model.RevealRequested += entry => revealed.Add(entry.Value);
+        Assert.DoesNotContain("q7", Ids(model));
+
+        var seek = model.SeekAsync(key);
+        Settle(model);
+
+        Assert.True(seek.IsCompleted);
+        Assert.Equal(["q7"], revealed);
+        Assert.Equal("m0", Ids(model)[0]);
+        Assert.Contains("q7", Ids(model));
+        Assert.Equal("The turn ended before an answer.", Assert.IsType<RequestItemViewModel>(model.Items.Single(item => item.Id.Value == "q7")).Status);
+    }
+
+    [AvaloniaFact]
+    public void Reopening_pages_back_to_the_entry_the_person_last_read()
+    {
+        _pager.Rows.AddRange(Enumerable.Range(0, 200).Select(i => Said($"m{i}", MessageAuthor.Agent, $"Message {i}")));
+        var state = new ConversationState { Anchor = (new EntryId("m120"), 30) };
+
+        var model = Open(state);
+
+        Assert.Equal("m100", Ids(model)[0]);
+        Assert.Equal("m199", Ids(model)[^1]);
+        Assert.True(model.HasEarlier);
     }
 
     private sealed class DisposableWindow(Window window) : IDisposable

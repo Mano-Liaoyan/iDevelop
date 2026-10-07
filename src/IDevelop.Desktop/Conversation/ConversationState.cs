@@ -49,7 +49,7 @@ public sealed class ConversationState : ObservableObject
         Answers[request] = (Answers.GetValueOrDefault(request) ?? ImmutableDictionary<string, QuestionDraft>.Empty).SetItem(question, draft);
 
     /// <summary>
-    /// Moves the unsent answer of a deferred question into the composer, once. Each answered question becomes its text,
+    /// Moves the unsent answer of a question that closed without one into the composer, once, such as a deferred question. Each answered question becomes its text,
     /// then its chosen labels in option order, then what the person wrote. Blank lines separate questions and earlier
     /// composer text. Nothing is sent.
     /// </summary>
