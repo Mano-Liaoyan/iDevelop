@@ -341,7 +341,7 @@ public sealed class InspectorTests : IDisposable
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Review, new CanvasPoint(825, 90)) { Title = "Check" },
             new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 330)) { Title = "Plan it" }));
 
-        Assert.Equal(["seed", "4 tasks"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+        Assert.Equal(["Workflow", "4 tasks"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
         Assert.Equal(["Overview", "Implement", "2", "Plan", "1", "Review", "1"], Shell.Texts(shell.Section("Overview")));
         Assert.True(shell.Section("Library").IsEffectivelyVisible);
     }
