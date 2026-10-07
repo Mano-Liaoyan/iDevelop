@@ -29,7 +29,7 @@ New runs write schema 2. Schema-1 journals decode `codeBase` as a `Legacy` selec
 This invariant governs every ref and HEAD change that E2a makes:
 
 - iDevelop moves the refs it owns only through `RefPublisher`, a journaled compare-and-swap. `RefPublisher` checks the live ref against the journal before it records an intent.
-- `RefOwnership.Accepts` folds the journal in order into one expected state per run ref. An observation makes the state exact. A pending compare-and-swap allows its old or its new value. An editable writer's preparation opens a lease that allows descendant commits until the next observation of that branch. Retained salvage makes the recorded branch tip exact only when the state before it already explains that tip. No older entry can excuse a value. Any other state blocks as `UncertainOwnership`.
+- `RefOwnership.Accepts` folds the journal in order into one expected state per run ref. An observation makes the state exact. A pending compare-and-swap allows its old or its new value. An editable writer's preparation opens a lease that allows descendant commits until the next observation of that branch. Retained salvage makes the recorded branch tip exact when that tip equals the expected value or a pending target, or when the branch holds a lease. Under a lease, salvage adopts any tip, including a rewind below the attempt base. Publication then blocks, because the branch tip must contain the attempt base. No older entry can excuse a value. Any other state blocks as `UncertainOwnership`.
 - `reset --hard`, HEAD attach, and path removal run only after a live check that HEAD is the task branch and the branch is at its expected value.
 - No branch moves away from a commit unless a retained ref keeps that commit reachable.
 
@@ -61,6 +61,20 @@ Keys are the first eight hexadecimal characters of SHA-256 over the full lowerca
 
 `Publish` requires a logged successful closure, the task lock, and process-tree quiescence from `IExecutionBoundary`. It checks registration, symbolic HEAD, and every run ref against `RefOwnership`. The branch tip must contain the attempt base. It captures tracked edits and nonignored additions through a temporary index, excluding execution data and nested worktrees. It freezes the `.idp/outbox` manifest and the report, and journals a commit recipe whose parent is the verified tip. Then it moves the task branch by compare-and-swap, aligns the real index to the result tree without touching working files, and creates the result ref from absent. It rechecks refs, files, index, HEAD, and quiescence before it records `ResultAccepted`.
 
+### Git reads real commit parents
+
+Every Git process that iDevelop starts sets `GIT_NO_REPLACE_OBJECTS=1` and points `GIT_GRAFT_FILE` at the null device. Without them, a writer can run `git replace --graft` or write `info/grafts` so that Git reports the attempt base as an ancestor of a commit that does not contain it. Publication would then accept a result outside its attempt base. Git prints a deprecation hint on stderr whenever it reads a graft file, even an empty one, so each process also passes `-c advice.graftFileDeprecated=false`.
+
+### Flagged index entries block only when they hide a change
+
+An index entry flagged assume-unchanged or skip-worktree can hide an edit from capture. Retry's `reset --hard` would then destroy that edit. An earlier round blocked every flagged entry. A sparse checkout flags each path outside its cone as skip-worktree, so every sparse preparation blocked as `DirtyWorktree`.
+
+`VisibleIndex` now blocks a flagged entry only when it can hide a change. A skip-worktree path that is absent from the worktree passes. An absent assume-unchanged path blocks, because it hides a deletion. A present flagged path passes only when it is a regular file, its executable bit matches the staged mode, and `git hash-object --stdin-paths` returns the staged blob. Any other flagged path blocks as `DirtyWorktree` and names the path.
+
+### Sparse checkouts keep their cone through publication
+
+Git gives a new task worktree the main checkout's sparse-checkout patterns. Paths outside the cone stay absent, and capture keeps their staged blobs in the result tree. After the branch moves, publication aligns the index with `read-tree --reset`. A plain `read-tree` rebuilt the index without skip-worktree bits. The absent paths then looked deleted, and publication blocked after the branch had moved until a person ran `git sparse-checkout reapply`. The one-way merge in `read-tree --reset` keeps those bits.
+
 ### Salvage and retry keep every commit reachable
 
 `Salvage` commits the captured tree with the observed HEAD as its parent. When HEAD does not contain the branch tip, the tip becomes a second parent. The first salvage ref is immutable, and a later capture gets a `resalvage` ref. Salvage records the branch tip and the real index digest. Ignored files and dirty submodules stay in place.
@@ -85,6 +99,7 @@ Every step journals its intent before the Git call and its observation after it,
 
 - `src/IDevelop.Core/Execution/Git/GitRepository.cs` is the Git adapter.
 - `src/IDevelop.Core/Execution/Runs/` adds the code records, `RunLayout`, `RefOwnership`, `RefPublisher`, and the `Materializer` partial classes for preparation, inputs, outbox, publication, salvage, retry, refresh, and inspection. `RunStore`, `RunReducer`, `RunJournal`, and `RunRecords` gain schema 2.
+- `src/IDevelop.Core/Execution/GitTree.cs` gives its Git processes the adapter's replace and graft settings.
 - `src/IDevelop.Core/Execution/Runs/RegularFile.cs` reads file types through `statx` or `lstat`, with `lstat$INODE64` on Intel macOS.
 - `tests/IDevelop.Core.Tests/Git/`, `Materialization/`, and `Runs/` test each behavior against real scratch Git.
 - `.github/workflows/dotnet.yml` adds `macos-26-intel` to the CI matrix.
@@ -94,17 +109,20 @@ Every step journals its intent before the Git call and its observation after it,
 | Command or check | Observed result |
 | --- | --- |
 | `dotnet build -c Release` | 0 warnings and 0 errors. |
-| `dotnet test -c Release` on Linux | Core passes 731 tests with 10 platform skips. Desktop passes 321. E1's baseline was Core 439. |
-| The census, `run-census.sh` in the coordinator's scratch folder | At `0f4a189`, 24 of 39 runs passed. At `eba029c`, 39 of 39 passed. The next round added 9 runs, and `d7dc51c` passed 48 of 48. This round adds 2 runs for a branch reset below its attempt base. Both fail at `d7dc51c`, and all 50 runs pass at the new head. |
+| `dotnet test -c Release` on Linux | Core passes 738 tests with 10 platform skips. Desktop passes 321. E1's baseline was Core 439. |
+| The census, `run-census.sh` in the coordinator's scratch folder | At `0f4a189`, 24 of 39 runs passed. At `eba029c`, 39 of 39 passed. The next round added 9 runs, and `d7dc51c` passed 48 of 48. The round after that adds 2 runs for a branch reset below its attempt base. Both fail at `d7dc51c`, and all 50 pass at `d181e4a`. The latest round adds 4 runs for a sparse checkout with an unstaged edit and for replaced or grafted parents. All 4 fail at `d181e4a`, and all 54 runs pass at the new head. |
 | The Opus re-verifier's scenarios, `Reverify2Tests.cs` in the coordinator's scratch folder | 28 of 31 pass. The three failures are by design. `V2_H` is open issue 1. Two `V2_F` modes assert `Salvage.Retained` where salvage now blocks a flagged edit and leaves it in the checkout. |
-| New tests against the previous head's source | Against `d7dc51c`, 6 of the 12 new test runs fail. The other 6 are controls that already passed, such as a writer that publishes on top of its base and a flagged file with a changed mode. |
+| New tests against the previous head's source | Against `d7dc51c`, 6 of the 12 new test runs fail. The other 6 are controls that already passed, such as a writer that publishes on top of its base and a flagged file with a changed mode. Against `d181e4a`, 6 of the latest round's 7 new test runs fail. The seventh covers the persisted plan's attempt-base check, which already existed, and it fails when that one check is deleted. |
 | `node scripts/check-licenses.mjs`, `node scripts/planweave-tokens.mjs --check`, `node scripts/fluent-icons.mjs --check` | Each exits 0. |
 | `node scripts/check-handoffs.mjs` | It reports nine records, each linked from `docs/context.md` or `docs/product-direction.md`, and exits 0. |
-| CI on `d7dc51c` | Every check passes on Linux, Windows, arm64 macOS, and Intel macOS. The pull request lists the runs for later heads. |
+| CI on `d7dc51c` | Every check passes on Linux, Windows, arm64 macOS, and Intel macOS. The user has since disabled GitHub Actions, so later heads pass only the local checks in this table. |
 
 ## Open issues
 
-1. A writer's lease outlives its closure. After a writer closes unpublished, three measured cases leave the writer's commit reachable only through the reflog, though no iDevelop move drops it. In the first, a foreign commit on the writer's branch becomes the parent of a published result. In the second, a rewrite to another descendant of the start publishes without the writer's commit. In the third, salvage's lease clause adopts a rewind below the start, a blocked sibling then publishes, and retry resets. E3 closes attempts. It must journal the quiescent branch tip at closure as an observation and end the lease there. All three cases are E3 acceptance tests. Nothing in production calls `Materializer` or `CloseAttempt` yet.
+1. A writer's lease outlives its closure. E3 closes attempts. It must journal the quiescent branch tip at closure as an observation and end the lease there. Three measured cases show the gap. In each, a writer closes unpublished, and its commit stays reachable only through the reflog, though no iDevelop move drops it. Each case is an E3 acceptance test with the expected outcome below. Nothing in production calls `Materializer` or `CloseAttempt` yet.
+   - A foreign commit lands on the closed writer's branch. Today it becomes the parent of a published result. After E3, the writer's `Publish` and a sibling's `Publish` each block as `UncertainOwnership`, record no result, and leave the foreign commit on the branch.
+   - The branch is rewritten to another descendant of the attempt base. Today `Publish` accepts a result without the writer's commit. After E3, `Publish` blocks as `UncertainOwnership` and records no result.
+   - The branch is reset below the attempt base, and salvage runs after closure. Today salvage's lease clause adopts the rewind, a blocked sibling then publishes, and `ResetForRetry` moves the branch. After E3, salvage returns `Retained` without adopting the rewound tip. The sibling's `Publish` stays blocked as `UncertainOwnership`, and `ResetForRetry` blocks as `UncertainOwnership` and moves no ref.
 2. Live checks protect only against iDevelop's own actors. Worktree adoption, HEAD attach, `reset --hard`, path removal, and submodule update have no compare-and-swap. They run under the task lock and the repository mutation lock, right after a live check. A process outside iDevelop that writes to the repository between the check and the Git call can still change what the call acts on. E3 must keep that window under exclusive ownership through process-tree quiescence, and must not claim protection from external writers.
 3. E2b's remaining scope is the real `IJoinComposer`. It chains `merge-tree --write-tree -z --messages` over the sources ordered by full task ID, creates one join whose parents are the distinct input commits, and publishes the join branch through `RefPublisher`. A conflict records `FanInConflict` with its evidence and publishes no join. Adoption requires a tree equal to a fresh clean merge. E2b runs the design note's diamond suite, reruns the unchanged E2a suite, and changes no E2a file.
 4. Production `Publish` blocks as `LiveWriter` until E3 supplies process-tree evidence through `IExecutionBoundary`.
