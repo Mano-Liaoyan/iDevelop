@@ -1,0 +1,4 @@
+{"type":"requested","at":"2026-10-07T00:00:00+00:00","attempt":"00000000-0000-0000-0000-000000000105","task":"00000000-0000-0000-0000-000000000003","taskTitle":"Plan","settings":{"client":"codex","model":"m1","reasoning":"high"},"prompt":"Inspect","command":"codex","arguments":[],"runBinding":{"workflow":"00000000-0000-0000-0000-000000000001","run":"00000000-0000-0000-0000-000000000010","revision":{"sha256":"e3a8958a6288857375ea9237c5b69bc3473ce053053c73a61396511e17388d94"},"initialInputs":"00000000-0000-0000-0000-000000000104"},"conversation":"autonomous","readOnly":true}
+{"type":"agent","at":"2026-10-07T00:00:00+00:00","event":{"type":"sessionStarted","sessionId":"session-1"}}
+{"type":"agent","at":"2026-10-07T00:00:00+00:00","event":{"type":"succeeded","result":"Done."}}
+{"type":"exited","at":"2026-10-07T00:00:00+00:00","exitCode":0,"stderrTail":""}
