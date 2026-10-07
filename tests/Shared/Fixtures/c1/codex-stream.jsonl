@@ -1,0 +1,9 @@
+{"method":"turn/started","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turn":{"id":"01a112af-2743-7b92-b998-c6c627dff0f1","status":"inProgress","error":null}}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":"You"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":" chose"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":" **"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":"banana"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":"**"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","itemId":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","delta":"."}}
+{"method":"item/completed","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turnId":"01a112af-2743-7b92-b998-c6c627dff0f1","item":{"type":"agentMessage","id":"msg_00f079ffd4a00a6b016ac54b93c15487d28b63e565c27d9469","text":"You chose **banana**."}}}
+{"method":"turn/completed","params":{"threadId":"01a112af-2710-7731-9c72-afe5b033ccfa","turn":{"id":"01a112af-2743-7b92-b998-c6c627dff0f1","status":"completed","error":null}}}

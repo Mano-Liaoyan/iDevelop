@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using IDevelop.Workflows;
 using static IDevelop.Execution.JsonFields;
 
 namespace IDevelop.Execution;
@@ -18,7 +19,7 @@ internal static class Antigravity
         // agy has no sign-in check, so a model list that loads counts as ready.
         Readiness = _ => [],
         Launch = Launch,
-        Interpret = Interpret,
+        Protocol = request => new OneShotProtocol(Launch(request), Interpret),
         Terminal = session => $"agy --conversation {session}",
         HasReadOnlyMode = true,
     };
@@ -27,7 +28,7 @@ internal static class Antigravity
     [
         "--input-format", "stream-json", "--output-format", "stream-json", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
-        "--mode", request.ReadOnly ? "plan" : "accept-edits", "--print=",
+        "--mode", ((NativePolicy.Antigravity)request.PolicyFor(ClientId.Antigravity).Native).Mode, "--print=",
         .. request.ResumeSession is { } session ? ["--conversation", session] : Array.Empty<string>(),
     ],
     UserLine(request.Prompt));
@@ -95,7 +96,6 @@ internal static class Antigravity
             "init" => Init(root),
             "step_update" when step?.String("step_type") == "tool" && step?.String("state") == "ACTIVE" && step?.String("tool_name") is { } tool =>
                 [new AgentEvent.ToolStarted(tool, step?.Property("tool_info")?.Property("parameters")?.String("TargetFile"))],
-            // Response deltas are skipped: the result event carries the whole text.
             "result" when root.Property("result") is { } result => [Verdict(result)],
             _ => [],
         };

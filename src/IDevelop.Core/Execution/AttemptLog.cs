@@ -44,11 +44,14 @@ internal sealed class AttemptLog : IDisposable
     private AttemptLog(string folder, FileMode mode)
     {
         Folder = folder;
+        LineCount = mode == FileMode.Append ? File.ReadLines(Path.Combine(folder, EventsFile)).LongCount() : 0;
         // Other windows fold a live log, so readers share it.
         _events = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
     }
 
     public string Folder { get; }
+
+    public long LineCount { get; private set; }
 
     /// <summary>The folder of a task's attempts, which also holds its run lock.</summary>
     public static string TaskFolder(string attemptsFolder, TaskId task) => Path.Combine(attemptsFolder, task.ToString());
@@ -84,6 +87,7 @@ internal sealed class AttemptLog : IDisposable
         {
             _events.Write(line);
             _events.Flush();
+            LineCount++;
         }
     }
 

@@ -36,16 +36,30 @@ internal sealed class FakeClients
         return clients;
     }
 
+    private static FakeRule Adapt(FakeRule rule)
+    {
+        var exec = rule.When.IndexOf("exec");
+        return exec < 0 ? rule : rule with
+        {
+            When = [.. rule.When.Take(exec), "app-server"],
+            ThreadMethod = rule.When.Contains("resume") ? "thread/resume" : rule.ThreadMethod,
+            ThreadId = rule.When.Contains("resume") && rule.Has.Length > 0 ? rule.Has[0] : rule.ThreadId,
+            Has = [],
+        };
+    }
+
     /// <summary>Writes the shim for <paramref name="command"/>, or replaces it.</summary>
     public string Install(string command, params FakeRule[] rules)
     {
         var rulesFile = Path.Combine(Folder, $"{command}.rules.json");
         var json = new JsonObject
         {
-            ["rules"] = new JsonArray([.. rules.Select(rule => new JsonObject
+            ["rules"] = new JsonArray([.. rules.Select(Adapt).Select(rule => new JsonObject
             {
                 ["when"] = new JsonArray([.. rule.When.Select(part => JsonValue.Create(part))]),
                 ["has"] = new JsonArray([.. rule.Has.Select(part => JsonValue.Create(part))]),
+                ["thread"] = rule.ThreadMethod,
+                ["threadId"] = rule.ThreadId,
                 ["steps"] = new JsonArray([.. rule.Steps.Select(step => step.DeepClone())]),
             })]),
         };
@@ -74,6 +88,10 @@ internal sealed class FakeClients
 internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<JsonNode> Steps)
 {
     public ImmutableArray<string> Has { get; init; } = [];
+    public string? ThreadMethod { get; init; }
+    public string? ThreadId { get; init; }
+
+    public FakeRule Thread(string method, string? id = null) => this with { ThreadMethod = method, ThreadId = id };
 
     public static FakeRule On(params string[] argumentPrefix) => new([.. argumentPrefix], []);
 
@@ -84,6 +102,11 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     public FakeRule RecordWorkingDirectory(string file) => Step("recordWorkingDirectory", file);
 
     public FakeRule CaptureStdin(string file) => Step("captureStdin", file);
+    public FakeRule CapturePrompt(string file) => Step("capturePrompt", file);
+    public FakeRule ReadLine(string file) => Step("readLine", file);
+    public FakeRule WaitForLine(string pattern) => Step("waitForLine", pattern);
+    public FakeRule EchoId(string line) => Step("echoId", line);
+    public FakeRule CloseStdin() => Step("closeStdin", true);
 
     public FakeRule WaitForStdinEnd() => Step("waitForStdinEnd", true);
 

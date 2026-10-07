@@ -30,12 +30,9 @@ public sealed class ConversationTests : IDisposable
     private static readonly Dictionary<ClientId, string[]> ResumeArguments = new()
     {
         [ClientId.ClaudeCode] =
-            ["-p", "--output-format", "stream-json", "--verbose", "--model", "claude-haiku-4-5", "--effort", "high", "--permission-mode", "acceptEdits", "--resume", Session],
+            ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", "claude-haiku-4-5", "--effort", "high", "--permission-mode", "acceptEdits", "--resume", Session, "--permission-prompts", "none"],
         [ClientId.Codex] =
-        [
-            "exec", "resume", "--json", "-m", "gpt-6-sol", "-c", "model_reasoning_effort=high", "-c", "approval_policy=never",
-            "--skip-git-repo-check", "-c", "sandbox_mode=workspace-write", Session, "-",
-        ],
+        ["app-server", "-c", "approval_policy=never", "-c", "features.default_mode_request_user_input=false"],
         [ClientId.Pi] = ["-p", "--mode", "json", "--model", "deepseek/deepseek-v4-pro", "--thinking", "high", "--session-id", Session],
         [ClientId.Antigravity] =
         [

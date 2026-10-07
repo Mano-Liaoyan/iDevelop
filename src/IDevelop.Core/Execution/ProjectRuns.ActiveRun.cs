@@ -29,110 +29,83 @@ public sealed partial class ProjectRuns
         private readonly ProjectRuns _owner;
         private readonly AttemptLog _log;
         private readonly RunLock _held;
-        private readonly Channel<AttemptEvent> _events = Channel.CreateUnbounded<AttemptEvent>(new UnboundedChannelOptions { SingleReader = true });
+        private readonly Channel<Input> _events = Channel.CreateUnbounded<Input>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Lock _gate = new();
+        private ImmutableDictionary<string, LiveMessageBuffer> _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
+        private long _revision;
         private LaunchPlan _plan;
         private Turn _turn;
         private bool _messageWaiting;
         private ConversationMode? _conversation;
         private bool _closed;
 
-        /// <param name="order">Counts this window's launches, so <see cref="Active"/> keeps the order the runs started in.</param>
         public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
         {
             _owner = owner;
             Order = order;
             _plan = plan;
-            _turn = new Turn(process);
+            _turn = new Turn(process, plan.Client.Protocol(plan.Request));
             _log = log;
             _held = held;
             Record = record;
+            _revision = log.LineCount;
         }
 
         public long Order { get; }
-
         public AttemptRecord Record { get; private set; }
-
-        /// <summary>Completes once the lock is released.</summary>
         public Task Completion => _finished.Task;
+        public (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers) Live
+        {
+            get { lock (_gate) return (_revision, _log.LineCount, _buffers); }
+        }
 
         public void Start() => _ = Task.Run(RunAsync);
 
-        /// <summary>Cancel or leave: no message is accepted after it, and the turn's process tree stops while its client runs.</summary>
-        public void Stop(AttemptEvent request)
+        public Task StopAsync(AttemptEvent request)
         {
             lock (_gate)
             {
+                if (_closed && ! _turn.Open) return Task.CompletedTask;
                 _closed = true;
-                _events.Writer.TryWrite(request);
-                if (_turn.ClientRuns)
-                {
-                    _turn.Process.StopTree();
-                }
+                var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                return _events.Writer.TryWrite(new Input.Person(request, done, null)) ? done.Task : Task.CompletedTask;
             }
         }
 
-        /// <param name="conversation">The task's mode now, which the next turn takes.</param>
         public SendResult Send(string text, bool stopTurn, ConversationMode conversation)
         {
+            Task<SendResult> accepted;
             lock (_gate)
             {
-                if (Problem() is { } problem)
-                {
-                    return new SendResult.Refused(problem);
-                }
-
-                _conversation = conversation;
-                // Once the client exited, the turn keeps its own outcome.
-                var stops = stopTurn && _turn.ClientRuns;
-                _events.Writer.TryWrite(new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stops));
+                if (Problem() is { } problem) return new SendResult.Refused(problem);
+                var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var message = new AttemptEvent.MessageQueued(DateTimeOffset.UtcNow, text, stopTurn) { Id = Guid.CreateVersion7().ToString() };
+                if (!_events.Writer.TryWrite(new Input.Person(message, done, conversation))) return new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle));
                 _messageWaiting = true;
-                if (stops)
-                {
-                    _turn.Process.StopTree();
-                }
-
-                return new SendResult.Queued();
+                accepted = done.Task;
             }
+            return accepted.GetAwaiter().GetResult();
         }
 
-        /// <summary>A review's guidance, which the reducer adds to the attempt's ledger without starting a turn.</summary>
         public SendResult Guide(string text)
         {
+            Task<SendResult> accepted;
             lock (_gate)
             {
-                if (_closed)
-                {
+                if (_closed) return new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle));
+                var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (!_events.Writer.TryWrite(new Input.Person(new AttemptEvent.GuidanceAdded(DateTimeOffset.UtcNow, text), done, null)))
                     return new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle));
-                }
-
-                _events.Writer.TryWrite(new AttemptEvent.GuidanceAdded(DateTimeOffset.UtcNow, text));
-                return new SendResult.Guided();
+                accepted = done.Task;
             }
+            return accepted.GetAwaiter().GetResult();
         }
 
-        public SendProblem? GuideProblem()
-        {
-            lock (_gate)
-            {
-                return _closed ? new SendProblem.Ending(Record.TaskTitle) : null;
-            }
-        }
-
-        public SendProblem? SendProblem()
-        {
-            lock (_gate)
-            {
-                return Problem();
-            }
-        }
-
-        /// <summary>Stops the drain at its next event, without waiting for the client's exit. The attempt stays on record as running.</summary>
+        public SendProblem? GuideProblem() { lock (_gate) return _closed ? new SendProblem.Ending(Record.TaskTitle) : null; }
+        public SendProblem? SendProblem() { lock (_gate) return Problem(); }
         public void Abandon() => _abandon.Cancel();
-
-        /// <summary>Called under the gate.</summary>
         private SendProblem? Problem() => (_closed, Record.SessionId) switch
         {
             (true, _) => new SendProblem.Ending(Record.TaskTitle),
@@ -142,74 +115,67 @@ public sealed partial class ProjectRuns
 
         private async Task RunAsync()
         {
-            try
-            {
-                Read(_turn, _plan);
-                await DrainAsync();
-            }
-            finally
-            {
-                _finished.TrySetResult();
-            }
-        }
-
-        private void Read(Turn turn, LaunchPlan plan)
-        {
-            var stderrTail = new Tail();
-            _ = turn.Process.WriteStdinAsync(plan.Launch.Stdin, close: true);
-            turn.Process.ReadStdout(line => Interpret(turn, plan, line));
-            turn.Process.ReadStderr(line =>
-            {
-                lock (_gate)
-                {
-                    if (turn.Open)
-                    {
-                        _log.AppendStderr(line);
-                        stderrTail.Add(line);
-                    }
-                }
-            });
-            _ = WatchExitAsync(turn, stderrTail);
-        }
-
-        private async Task DrainAsync()
-        {
             var exited = false;
             try
             {
+                Read(_turn);
+                Output(_turn.Protocol.Start());
                 await foreach (var next in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
-                    // Leaving gave up while this drain was busy. Events already queued stay off the log too.
                     _abandon.Token.ThrowIfCancellationRequested();
-                    // The drain, not the exit's watcher, snapshots the project, so no Git process outlives the run in
-                    // the project folder after a drain that ended early released it.
-                    var e = next is AttemptEvent.Exited exit ? exit with { Tree = GitTree.Snapshot(_owner._projectFolder) } : next;
-                    Append(e);
-                    exited |= e is AttemptEvent.Exited;
-                    _owner.Publish(Record);
-                    if (Record.Status != AttemptStatus.Running)
+                    switch (next)
                     {
-                        break;
-                    }
-
-                    if (e is AttemptEvent.Exited)
-                    {
-                        if (!NextTurn())
-                        {
+                        case Input.Line line when line.Turn == _turn:
+                            _log.AppendOutput(line.Text);
+                            if (!string.IsNullOrWhiteSpace(line.Text))
+                            {
+                                try { Output(_turn.Protocol.Read(line.Text)); }
+                                catch (JsonException) { Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(_plan.Settings.Client)} printed."))); }
+                                catch (ProtocolException error) { Fail(error.Message); }
+                            }
                             break;
-                        }
-
-                        exited = false;
-                        _owner.Publish(Record);
+                        case Input.Person person:
+                            Accept(person);
+                            break;
+                        case Input.WriteDone write when write.Turn == _turn:
+                            _turn.PendingWrites--;
+                            if (write.RequestId is { } request)
+                            {
+                                Append(new AttemptEvent.RequestClosed(DateTimeOffset.UtcNow, request, write.Success ? RequestCloseReason.PolicyDenied : RequestCloseReason.DeliveryUnknown));
+                            }
+                            if (!write.Success && _turn.ClientRuns) Fail("iDevelop could not write to the client's input pipe.");
+                            if (_turn.PendingWrites == 0 && _turn.Exit is { } heldExit) _events.Writer.TryWrite(heldExit);
+                            break;
+                        case Input.Deadline deadline when deadline.Turn == _turn && !_turn.Process.HasExited:
+                            if (!_turn.Stopping && Record.Verdict is AgentEvent.Succeeded) Append(new AttemptEvent.ShutdownForced(DateTimeOffset.UtcNow));
+                            _turn.Process.StopTree();
+                            CloseInput();
+                            break;
+                        case Input.Exit exit when exit.Turn == _turn:
+                            if (_turn.PendingWrites > 0) { _turn.Exit = exit; break; }
+                            _turn.Exit = null;
+                            foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order))
+                                Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Message(buffer.Text) { Id = id, Partial = true }) { Order = buffer.Order });
+                            lock (_gate) _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
+                            if (_turn.Failure is { } failure) Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Failed(failure)));
+                            Append(new AttemptEvent.Exited(DateTimeOffset.UtcNow, exit.Code, exit.Stderr) { Tree = GitTree.Snapshot(_owner._projectFolder) });
+                            exited = true;
+                            _owner.Publish(Record);
+                            if (Record.Status != AttemptStatus.Running || !NextTurn()) return;
+                            exited = false;
+                            break;
+                        case Input.Line or Input.WriteDone or Input.Deadline or Input.Exit:
+                            break;
+                        default:
+                            throw new InvalidOperationException("Unknown run input.");
                     }
+                    _owner.Publish(Record);
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) { }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Record = AttemptReducer.Abandon(Record, CannotWriteLog(e), DateTimeOffset.UtcNow);
+                Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), DateTimeOffset.UtcNow);
             }
             finally
             {
@@ -218,153 +184,265 @@ public sealed partial class ProjectRuns
                     _closed = true;
                     _turn.Open = false;
                     _events.Writer.TryComplete();
+                    while (_events.Reader.TryRead(out var pending))
+                        if (pending is Input.Person person) person.Done.TrySetResult(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
                 }
-
-                // Whatever ended the drain early, including a Changed handler that threw, no client runs on unobserved.
-                // After its exit, whatever the client started for the user, such as a dev server, keeps running.
-                if (exited)
-                {
-                    _turn.Process.LeaveDescendantsRunning();
-                }
-                else
-                {
-                    _turn.Process.StopTree();
-                }
-
-                _turn.Process.Dispose();
+                if (exited) _turn.Process.LeaveDescendantsRunning();
+                else _turn.Process.StopTree();
+                await DisposeTurnAsync();
                 _log.Dispose();
                 _held.Dispose();
-                _owner.Finish(this);
+                try { _owner.Finish(this); }
+                finally { _finished.TrySetResult(); }
             }
         }
 
-        /// <summary>
-        /// After a turn ended with a message waiting, starts the next turn with every waiting message. Every event still
-        /// queued came from the person, because the ended turn writes nothing more, so they are folded first. False when
-        /// the attempt ended instead: a cancel or leave came first, or the client did not start. Unless the next turn
-        /// started, the run closes to messages before the gate opens, because no turn is left to take them.
-        /// </summary>
+        private void Accept(Input.Person person)
+        {
+            try
+            {
+                var accepted = person.Event is AttemptEvent.MessageQueued message
+                    ? message with { StopsTurn = message.StopsTurn && _turn.ClientRuns }
+                    : person.Event;
+                Append(accepted);
+                if (person.Conversation is { } conversation) _conversation = conversation;
+                person.Done.TrySetResult(accepted is AttemptEvent.GuidanceAdded ? new SendResult.Guided() : new SendResult.Queued());
+                if (accepted is AttemptEvent.CancelRequested or AttemptEvent.InterruptRequested or AttemptEvent.MessageQueued { StopsTurn: true }) StopTurn();
+            }
+            catch
+            {
+                person.Done.TrySetResult(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.CannotRecord("iDevelop could not write this attempt's log."))));
+                throw;
+            }
+        }
+
+        private void Output(ProtocolOutput output)
+        {
+            foreach (var e in output.Events)
+            {
+                var at = DateTimeOffset.UtcNow;
+                switch (e)
+                {
+                    case AgentEvent.MessageDelta delta:
+                        lock (_gate)
+                        {
+                            var buffer = _buffers.GetValueOrDefault(delta.MessageId) ?? new LiveMessageBuffer("", _log.LineCount, at);
+                            _buffers = _buffers.SetItem(delta.MessageId, buffer with { Text = buffer.Text + delta.Text });
+                            _revision++;
+                        }
+                        break;
+                    case AgentEvent.Message { Id: { } id } message:
+                        LiveMessageBuffer? prior;
+                        lock (_gate) prior = _buffers.GetValueOrDefault(id);
+                        if (!message.Partial) Append(new AttemptEvent.Agent(at, message) { Order = prior?.Order });
+                        lock (_gate)
+                        {
+                            _buffers = message.Partial
+                                ? _buffers.SetItem(id, (prior ?? new LiveMessageBuffer("", _log.LineCount, at)) with { Text = message.Text })
+                                : _buffers.Remove(id);
+                            _revision++;
+                        }
+                        break;
+                    case AgentEvent.QuestionAsked question:
+                        Append(new AttemptEvent.QuestionRecorded(at, question.RequestId, question.Questions, new QuestionState.Closed(RequestCloseReason.PolicyDenied, null)));
+                        Output(_turn.Protocol.Decline(question.RequestId));
+                        break;
+                    case AgentEvent.PermissionRequested permission:
+                        Append(new AttemptEvent.Agent(at, permission));
+                        var decline = _turn.Protocol.Decline(permission.RequestId);
+                        foreach (var frame in decline.Writes) Write(frame, close: false, permission.RequestId);
+                        break;
+                    case AgentEvent.RequestClosed closed:
+                        // The decline's write completion owns a permission's delivery outcome.
+                        var key = new RequestKey(new TurnKey(Record.Id, Record.Turns.Count), closed.RequestId);
+                        if (Record.Requests.GetValueOrDefault(key) is RequestRecord.Permission) break;
+                        Append(new AttemptEvent.RequestClosed(at, closed.RequestId, RequestCloseReason.Resolved));
+                        break;
+                    default:
+                        Append(new AttemptEvent.Agent(at, e));
+                        break;
+                }
+            }
+            foreach (var frame in output.Writes) Write(frame, close: false, null);
+            if (output.CloseInput)
+            {
+                if (_turn.Stopping && _turn.ClientRuns) _turn.Process.StopTree();
+                CloseInput();
+                if (_turn.Protocol is not OneShotProtocol) Deadline();
+            }
+        }
+
+        private void StopTurn()
+        {
+            if (!_turn.ClientRuns || _turn.Stopping) return;
+            _turn.Stopping = true;
+            Deadline();
+            if (_turn.Protocol.Interrupt() is { } interrupt) Output(interrupt);
+            else { _turn.Process.StopTree(); CloseInput(); }
+        }
+
+        private void Fail(string detail)
+        {
+            _turn.Failure ??= detail;
+            Append(new AttemptEvent.Agent(DateTimeOffset.UtcNow, new AgentEvent.Failed(detail)));
+            _turn.Process.StopTree();
+            CloseInput();
+        }
+
+        private void Deadline()
+        {
+            if (_turn.StopBy is not null) return;
+            _turn.StopBy = DateTimeOffset.UtcNow + _owner.ShutdownTime;
+            var turn = _turn;
+            var lifetime = turn.Lifetime.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(_owner.ShutdownTime, lifetime);
+                    _events.Writer.TryWrite(new Input.Deadline(turn));
+                }
+                catch (OperationCanceledException) { }
+            });
+        }
+
+        private void CloseInput()
+        {
+            if (_turn.InputClosed) return;
+            _turn.InputClosed = true;
+            Write("", close: true, null);
+        }
+
+        private void Write(string frame, bool close, string? requestId)
+        {
+            _turn.PendingWrites++;
+            _turn.Writes.Writer.TryWrite(new WriteWork(frame, close, requestId));
+        }
+
+        private void Read(Turn turn)
+        {
+            var stderr = new Tail();
+            turn.Process.ReadStdout(line =>
+            {
+                lock (_gate) { if (turn.Open) _events.Writer.TryWrite(new Input.Line(turn, line)); }
+            });
+            turn.Process.ReadStderr(line =>
+            {
+                lock (_gate) { if (turn.Open) { _log.AppendStderr(line); stderr.Add(line); } }
+            });
+            turn.Writer = Task.Run(async () =>
+            {
+                await foreach (var work in turn.Writes.Reader.ReadAllAsync())
+                {
+                    var text = work.Frame.Length > 0 && turn.Protocol is not OneShotProtocol ? work.Frame + "\n" : work.Frame;
+                    var success = await turn.Process.WriteInputAsync(text, work.Close, _owner.ShutdownTime, turn.Lifetime.Token);
+                    _events.Writer.TryWrite(new Input.WriteDone(turn, work.RequestId, success));
+                }
+            });
+            _ = WatchExitAsync(turn, stderr);
+        }
+
+        private async Task WatchExitAsync(Turn turn, Tail stderr)
+        {
+            try
+            {
+                var code = await turn.Process.WaitForExitAsync();
+                var remaining = turn.StopBy is { } stopBy ? TimeSpan.FromTicks(Math.Max(0, (stopBy - DateTimeOffset.UtcNow).Ticks)) : (TimeSpan?)null;
+                await turn.Process.WaitForOutputAsync(remaining);
+                lock (_gate)
+                {
+                    turn.Open = false;
+                    _closed |= !_messageWaiting;
+                    _events.Writer.TryWrite(new Input.Exit(turn, code, stderr.Text));
+                }
+            }
+            catch (Exception error) when (error is ObjectDisposedException or InvalidOperationException) { }
+        }
+
         private bool NextTurn()
         {
             _turn.Process.LeaveDescendantsRunning();
-            _turn.Process.Dispose();
+            DisposeTurnAsync().GetAwaiter().GetResult();
             var tree = GitTree.Snapshot(_owner._projectFolder);
             lock (_gate)
             {
                 var started = false;
                 try
                 {
-                    while (Record.Status == AttemptStatus.Running && _events.Reader.TryRead(out var e))
-                    {
-                        Append(e);
-                    }
-
+                    while (_events.Reader.TryRead(out var input))
+                        if (input is Input.Person person) Accept(person);
                     started = Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session, tree);
                     return started;
                 }
-                finally
-                {
-                    _closed |= !started;
-                }
+                finally { _closed |= !started; }
             }
         }
 
-        /// <summary>Called under the gate. False when the client did not start, which ended the attempt.</summary>
         private bool Launch(string session, string? tree)
         {
             var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued.Select(message => message.Text)));
+            if (_conversation is { } mode) plan = plan with { Request = plan.Request with { Policy = ClientPolicy.For(plan.Settings.Client, plan.Request.ReadOnly, mode, Record.Subject is not null, new HostQuestions.Disabled()) } };
             Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
-                Conversation = _conversation,
-                Tree = tree,
+                Conversation = _conversation, Tree = tree, Consumed = [.. Record.Queued.Select(message => message.Id)],
             });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
             Record = record;
             _messageWaiting = false;
-            if (process is null)
-            {
-                return false;
-            }
-
+            if (process is null) return false;
             _plan = plan;
-            _turn = new Turn(process);
-            Read(_turn, plan);
+            _turn = new Turn(process, plan.Client.Protocol(plan.Request));
+            Read(_turn);
+            Output(_turn.Protocol.Start());
             return true;
+        }
+
+        private async Task DisposeTurnAsync()
+        {
+            if (_turn.Disposed) return;
+            _turn.Disposed = true;
+            _turn.Lifetime.Cancel();
+            _turn.Writes.Writer.TryComplete();
+            await _turn.Writer;
+            _turn.Lifetime.Dispose();
+            _turn.Process.Dispose();
         }
 
         private void Append(AttemptEvent e)
         {
             _log.Append(e);
-            Record = AttemptReducer.Apply(Record, e);
-        }
-
-        private void Interpret(Turn turn, LaunchPlan plan, string line)
-        {
-            var events = string.IsNullOrWhiteSpace(line) ? [] : Parse(plan, line);
             lock (_gate)
             {
-                if (!turn.Open)
-                {
-                    return;
-                }
-
-                _log.AppendOutput(line);
-                foreach (var e in events)
-                {
-                    _events.Writer.TryWrite(new AttemptEvent.Agent(DateTimeOffset.UtcNow, e));
-                }
+                Record = AttemptReducer.Apply(Record, e);
+                _revision++;
             }
         }
 
-        private static ImmutableArray<AgentEvent> Parse(LaunchPlan plan, string line)
+        private abstract record Input
         {
-            try
-            {
-                return plan.Client.Interpret(line);
-            }
-            catch (JsonException)
-            {
-                return [new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(plan.Settings.Client)} printed.")];
-            }
+            private Input() { }
+            public sealed record Line(Turn Turn, string Text) : Input;
+            public sealed record Person(AttemptEvent Event, TaskCompletionSource<SendResult> Done, ConversationMode? Conversation) : Input;
+            public sealed record Exit(Turn Turn, int Code, string Stderr) : Input;
+            public sealed record WriteDone(Turn Turn, string? RequestId, bool Success) : Input;
+            public sealed record Deadline(Turn Turn) : Input;
         }
-
-        private async Task WatchExitAsync(Turn turn, Tail stderrTail)
-        {
-            var exitQueued = false;
-            try
-            {
-                var code = await turn.Process.WaitForExitAsync();
-                // The turn ends without output that comes later.
-                await turn.Process.WaitForOutputAsync();
-                lock (_gate)
-                {
-                    turn.Open = false;
-                    _closed |= !_messageWaiting;
-                    exitQueued = _events.Writer.TryWrite(new AttemptEvent.Exited(DateTimeOffset.UtcNow, code, stderrTail.Text));
-                }
-            }
-            finally
-            {
-                // Without an exit the drain would wait forever, so it ends, and its end stops the client.
-                if (!exitQueued)
-                {
-                    _events.Writer.TryComplete();
-                }
-            }
-        }
-
-        /// <summary>One client process. <see cref="Open"/> turns false under the run's gate when the process exits.</summary>
-        private sealed class Turn(ChildProcess process)
+        private sealed record WriteWork(string Frame, bool Close, string? RequestId);
+        private sealed class Turn(ChildProcess process, TurnProtocol protocol)
         {
             public ChildProcess Process { get; } = process;
-
+            public TurnProtocol Protocol { get; } = protocol;
+            public CancellationTokenSource Lifetime { get; } = new();
+            public Channel<WriteWork> Writes { get; } = Channel.CreateUnbounded<WriteWork>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            public Task Writer { get; set; } = Task.CompletedTask;
             public bool Open { get; set; } = true;
-
-            /// <summary>
-            /// Whether a stop should end the turn's process tree. <see cref="Open"/> stays true for up to 5 seconds after
-            /// the client exits, while a process it left running, such as a dev server, holds its output. That process
-            /// is the person's, as after a command in a terminal, so nothing stops it.
-            /// </summary>
+            public bool Stopping { get; set; }
+            public string? Failure { get; set; }
+            public bool InputClosed { get; set; }
+            public bool Disposed { get; set; }
+            public int PendingWrites { get; set; }
+            public Input.Exit? Exit { get; set; }
+            public DateTimeOffset? StopBy { get; set; }
             public bool ClientRuns => Open && !Process.HasExited;
         }
     }

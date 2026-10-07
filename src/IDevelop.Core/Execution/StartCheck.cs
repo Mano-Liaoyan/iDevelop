@@ -120,7 +120,7 @@ internal static class StartCheck
     /// <param name="subject">A review's subject, which its first prompt reads.</param>
     public static StartVerdict Evaluate(
         TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null,
-        PlanningContext? planning = null, SubjectView? subject = null)
+        PlanningContext? planning = null, SubjectView? subject = null, HostQuestions? questions = null)
     {
         if (task.Blueprint.Work is WorkSpec.Person)
         {
@@ -209,7 +209,7 @@ internal static class StartCheck
             }
         }
 
-        var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly };
+        var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly, Policy = ClientPolicy.For(client, readOnly, task.Conversation, task.Blueprint.Work is WorkSpec.Review, questions ?? new HostQuestions.Disabled()) };
         var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request);
         if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)
         {

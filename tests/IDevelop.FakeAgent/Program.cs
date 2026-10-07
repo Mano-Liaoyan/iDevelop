@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
@@ -14,6 +15,12 @@ using System.Text.Json;
 //   recordArguments <file>        write the client arguments as a JSON array
 //   recordWorkingDirectory <file> write the current folder
 //   captureStdin <file>           copy stdin to the file until it closes
+//                                interactive clients capture their decoded first prompt
+//   capturePrompt <file>          record the decoded prompt, including stream-json one-shot input
+//   readLine <file>               read and record one stdin frame
+//   waitForLine <pattern>         wait for a stdin frame containing the pattern
+//   echoId <line>                 print the line with $id replaced by the last matched frame's id
+//   closeStdin                   close this process's pipe readers, so host writes fail
 //   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
@@ -51,15 +58,51 @@ var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 using var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true, NewLine = "\n" };
 using var stderr = new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true, NewLine = "\n" };
 using var rules = JsonDocument.Parse(File.ReadAllBytes(rulesFile));
+using var stdin = new StreamReader(Console.OpenStandardInput(), utf8);
+var appServer = clientArguments.Contains("app-server");
+var claudeStream = clientArguments.Contains("--include-partial-messages");
+string? prompt = null;
+JsonElement? matchedLine = null;
+JsonElement? threadRequest = null;
+JsonElement? turnRequest = null;
+if (appServer)
+{
+    var initialize = ReadInput();
+    stdout.WriteLine(JsonSerializer.Serialize(new { id = initialize.GetProperty("id"), result = new { } }));
+    ReadInput();
+    threadRequest = ReadInput();
+}
+else if (claudeStream)
+{
+    var initialize = ReadInput();
+    stdout.WriteLine(JsonSerializer.Serialize(new { type = "control_response", response = new { subtype = "success", request_id = initialize.GetProperty("request_id") } }));
+    prompt = ReadInput().GetProperty("message").GetProperty("content").GetString();
+}
 var rule = rules.RootElement.GetProperty("rules").EnumerateArray()
-    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments))
-    .Select(candidate => (JsonElement?)candidate)
-    .FirstOrDefault();
+    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments) && ThreadMatches(candidate))
+    .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
 if (rule is not { } matched)
 {
     stderr.WriteLine($"fake agent: no rule for {string.Join(' ', clientArguments)}");
     return 99;
 }
+if (threadRequest is { } thread)
+{
+    stdout.WriteLine(JsonSerializer.Serialize(new { id = thread.GetProperty("id"), result = new { thread = new { id = "" } } }));
+    var turn = ReadInput();
+    turnRequest = turn;
+    prompt = turn.GetProperty("params").GetProperty("input")[0].GetProperty("text").GetString();
+    stdout.WriteLine(JsonSerializer.Serialize(new { id = turn.GetProperty("id"), result = new { turn = new { id = "turn-1" } } }));
+}
+
+bool ThreadMatches(JsonElement candidate)
+{
+    if (threadRequest is not { } request || !candidate.TryGetProperty("thread", out var method) || method.ValueKind == JsonValueKind.Null) return true;
+    if (method.GetString() != request.GetProperty("method").GetString()) return false;
+    return !candidate.TryGetProperty("threadId", out var id) || id.ValueKind == JsonValueKind.Null
+        || id.GetString() == request.GetProperty("params").GetProperty("threadId").GetString();
+}
+JsonElement ReadInput() => JsonDocument.Parse(stdin.ReadLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
 List<FileStream> held = [];
 return Run(matched.GetProperty("steps")) ?? 0;
@@ -73,27 +116,51 @@ int? Run(JsonElement steps)
         {
             case "recordArguments":
                 File.WriteAllText(value.GetString()!, JsonSerializer.Serialize(clientArguments));
+                if (threadRequest is { } threadFrame) File.WriteAllText(value.GetString()! + ".thread.json", threadFrame.GetRawText());
+                if (turnRequest is { } turnFrame) File.WriteAllText(value.GetString()! + ".turn.json", turnFrame.GetRawText());
                 break;
             case "recordWorkingDirectory":
                 File.WriteAllText(value.GetString()!, Environment.CurrentDirectory);
                 break;
             case "captureStdin":
-                using (var input = Console.OpenStandardInput())
-                using (var file = File.Create(value.GetString()!))
-                {
-                    input.CopyTo(file);
-                }
-
+                File.WriteAllText(value.GetString()!, prompt ?? stdin.ReadToEnd());
+                break;
+            case "capturePrompt":
+                var captured = prompt ?? stdin.ReadToEnd();
+                if (prompt is null && clientArguments.Contains("stream-json"))
+                    captured = JsonDocument.Parse(captured).RootElement.GetProperty("message").GetProperty("content").GetString()!;
+                File.WriteAllText(value.GetString()!, captured);
                 break;
             case "waitForStdinEnd":
-                using (var input = Console.OpenStandardInput())
+                stdin.ReadToEnd();
+                break;
+            case "readLine":
+                var inputLine = stdin.ReadLine() ?? throw new IOException("stdin ended before the next line.");
+                File.WriteAllText(value.GetString()!, inputLine);
+                matchedLine = JsonDocument.Parse(inputLine).RootElement.Clone();
+                break;
+            case "waitForLine":
+                var pattern = value.GetString()!;
+                matchedLine = null;
+                while (stdin.ReadLine() is { } read)
                 {
-                    input.CopyTo(Stream.Null);
+                    if (!read.Contains(pattern, StringComparison.Ordinal)) continue;
+                    matchedLine = JsonDocument.Parse(read).RootElement.Clone();
+                    break;
                 }
-
+                if (matchedLine is null) return 96;
+                break;
+            case "echoId":
+                var last = matchedLine ?? throw new IOException("No input frame matched.");
+                var lastId = last.TryGetProperty("id", out var rpcId) ? rpcId : last.GetProperty("request_id");
+                stdout.WriteLine(value.GetString()!.Replace("$id", lastId.GetRawText(), StringComparison.Ordinal));
+                break;
+            case "closeStdin":
+                stdin.Dispose();
+                NativePipes.CloseInput();
                 break;
             case "print":
-                stdout.WriteLine(value.GetString());
+                Print(value.GetString()!);
                 break;
             case "stderr":
                 stderr.WriteLine(value.GetString());
@@ -101,7 +168,7 @@ int? Run(JsonElement steps)
             case "replay":
                 foreach (var line in File.ReadLines(value.GetString()!))
                 {
-                    stdout.WriteLine(line);
+                    Print(line);
                 }
 
                 break;
@@ -144,11 +211,7 @@ int? Run(JsonElement steps)
                 var counter = Path.Combine(folder, "count");
                 var turn = (File.Exists(counter) ? int.Parse(File.ReadAllText(counter)) : 0) + 1;
                 File.WriteAllText(counter, turn.ToString());
-                using (var input = Console.OpenStandardInput())
-                using (var file = File.Create(Path.Combine(folder, $"{turn}.stdin")))
-                {
-                    input.CopyTo(file);
-                }
+                File.WriteAllText(Path.Combine(folder, $"{turn}.stdin"), prompt ?? stdin.ReadToEnd());
 
                 using (var script = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(folder, $"{turn}.json"))))
                 {
@@ -168,6 +231,27 @@ int? Run(JsonElement steps)
     }
 
     return null;
+}
+
+void Print(string line)
+{
+    if (!appServer) { stdout.WriteLine(line); return; }
+    using var parsed = JsonDocument.Parse(line);
+    var root = parsed.RootElement;
+    if (!root.TryGetProperty("type", out var type)) { stdout.WriteLine(line); return; }
+    var item = root.TryGetProperty("item", out var found) ? found : (JsonElement?)null;
+    object? translated = type.GetString() switch
+    {
+        "thread.started" => new { method = "thread/started", @params = new { thread = new { id = root.GetProperty("thread_id").GetString() } } },
+        "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item?.GetProperty("command").GetString() } } },
+        "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item?.GetProperty("id").GetString(), text = item?.GetProperty("text").GetString() } } },
+        "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item?.GetProperty("message").GetString() } } },
+        "error" => new { method = "error", @params = new { error = new { message = root.GetProperty("message").GetString() } } },
+        "turn.completed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "completed" } } },
+        "turn.failed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "failed", error = root.GetProperty("error") } } },
+        _ => null,
+    };
+    if (translated is not null) stdout.WriteLine(JsonSerializer.Serialize(translated));
 }
 
 static bool Matches(JsonElement when, string[] arguments)
@@ -193,3 +277,53 @@ static Process StartSleeper() =>
 // Run through "dotnet IDevelop.FakeAgent.dll", a copy needs the assembly path. Run through its apphost, it needs nothing.
 static string[] HostArguments() =>
     Path.GetFileNameWithoutExtension(Environment.ProcessPath) == "dotnet" ? [typeof(Program).Assembly.Location] : [];
+
+internal static class NativePipes
+{
+    public static void CloseInput()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            CloseHandle(GetStdHandle(-10));
+            return;
+        }
+
+        // Console keeps a duplicate of the inherited descriptor. Every descriptor with stdin's device and inode is a
+        // reader of the same pipe, and only once all are closed does the host's write fail. The first 16 bytes of
+        // struct stat hold that identity on Linux and Darwin.
+        var descriptors = OperatingSystem.IsLinux() ? "/proc/self/fd" : "/dev/fd";
+        var status = Marshal.AllocHGlobal(512);
+        try
+        {
+            if (Stat(0, status) != 0)
+            {
+                throw new IOException("The fake could not inspect stdin.");
+            }
+
+            var identity = (Marshal.ReadInt64(status), Marshal.ReadInt64(status, 8));
+            var readers = Directory.EnumerateFiles(descriptors).Select(path => int.Parse(Path.GetFileName(path)))
+                .Where(descriptor => Stat(descriptor, status) == 0 && (Marshal.ReadInt64(status), Marshal.ReadInt64(status, 8)) == identity)
+                .ToArray();
+            foreach (var descriptor in readers)
+            {
+                Close(descriptor);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(status);
+        }
+    }
+
+    [DllImport("libc", EntryPoint = "close")]
+    private static extern int Close(int descriptor);
+
+    [DllImport("libc", EntryPoint = "fstat")]
+    private static extern int Stat(int descriptor, nint status);
+
+    [DllImport("kernel32.dll")]
+    private static extern nint GetStdHandle(int handle);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(nint handle);
+}

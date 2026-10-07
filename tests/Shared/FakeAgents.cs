@@ -31,13 +31,13 @@ internal static class FakeAgents
     };
 
     /// <summary>A turn that starts a new session. Install it after <see cref="Resuming"/>, whose arguments it also matches.</summary>
-    public static FakeRule Fresh(ClientId client) => client == ClientId.Codex ? On("exec", "--json") : On();
+    public static FakeRule Fresh(ClientId client) => client == ClientId.Codex ? On("app-server").Thread("thread/start") : On();
 
     /// <summary>A turn that resumes <paramref name="session"/>, in the client's own argument shape.</summary>
     public static FakeRule Resuming(ClientId client, string session) => client switch
     {
         ClientId.ClaudeCode => On().With("--resume", session),
-        ClientId.Codex => On("exec", "resume").With(session, "-"),
+        ClientId.Codex => On("app-server").Thread("thread/resume", session),
         ClientId.Pi => On().With("--session-id", session),
         ClientId.Antigravity => On().With("--conversation", session),
     };
@@ -46,7 +46,7 @@ internal static class FakeAgents
     public static string SessionLine(ClientId client, string session) => client switch
     {
         ClientId.ClaudeCode => $$"""{"type":"system","subtype":"init","session_id":"{{session}}","model":"claude-haiku-4-5"}""",
-        ClientId.Codex => $$"""{"type":"thread.started","thread_id":"{{session}}"}""",
+        ClientId.Codex => JsonSerializer.Serialize(new { method = "thread/started", @params = new { thread = new { id = session } } }),
         ClientId.Pi => $$"""{"type":"session","id":"{{session}}"}""",
         ClientId.Antigravity => $$"""{"event":"init","conversation_id":"{{session}}"}""",
     };
@@ -60,11 +60,31 @@ internal static class FakeAgents
             ClientId.ClaudeCode => [$$$"""{"type":"result","subtype":"success","is_error":false,"result":{{{json}}}}"""],
             ClientId.Codex =>
             [
-                $$$"""{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":{{{json}}}}}""",
-                """{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}""",
+                JsonSerializer.Serialize(new { method = "item/completed", @params = new { item = new { id = "item_1", type = "agentMessage", text } } }),
+                """{"method":"turn/completed","params":{"turn":{"id":"turn-1","status":"completed"}}}""",
             ],
             ClientId.Pi => [$$$"""{"type":"agent_end","messages":[{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":{{{json}}}}]}]}"""],
             ClientId.Antigravity => [$$$"""{"event":"result","result":{"status":"SUCCESS","response":{{{json}}}}}"""],
         };
     }
+    public static string AppLine(string line)
+    {
+        using var json = JsonDocument.Parse(line);
+        var root = json.RootElement;
+        var type = root.GetProperty("type").GetString();
+        var item = root.TryGetProperty("item", out var found) ? found : (JsonElement?)null;
+        object? translated = type switch
+        {
+            "thread.started" => new { method = "thread/started", @params = new { thread = new { id = root.GetProperty("thread_id").GetString() } } },
+            "item.started" when item?.GetProperty("type").GetString() == "command_execution" => new { method = "item/started", @params = new { item = new { type = "commandExecution", command = item?.GetProperty("command").GetString() } } },
+            "item.completed" when item?.GetProperty("type").GetString() == "agent_message" => new { method = "item/completed", @params = new { item = new { type = "agentMessage", id = item?.GetProperty("id").GetString(), text = item?.GetProperty("text").GetString() } } },
+            "item.completed" when item?.GetProperty("type").GetString() == "error" => new { method = "error", @params = new { error = new { message = item?.GetProperty("message").GetString() } } },
+            "error" => new { method = "error", @params = new { error = new { message = root.GetProperty("message").GetString() } } },
+            "turn.completed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "completed" } } },
+            "turn.failed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "failed", error = root.GetProperty("error") } } },
+            _ => new { method = "ignored" },
+        };
+        return JsonSerializer.Serialize(translated);
+    }
+
 }

@@ -115,6 +115,23 @@ internal sealed class ChildProcess : IDisposable
         }
     }
 
+    public async Task<bool> WriteInputAsync(string text, bool close, TimeSpan timeout, CancellationToken ct)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(timeout);
+        try
+        {
+            await _process.StandardInput.WriteAsync(text.AsMemory(), bounded.Token);
+            await _process.StandardInput.FlushAsync(bounded.Token);
+            if (close) _process.StandardInput.Close();
+            return true;
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Reads stdout in the background, one call per line. Lines can be large, so there is no length cap.</summary>
     public void ReadStdout(Action<string> onLine) => _stdout = ReadLinesAsync(_process.StandardOutput, onLine);
 
@@ -130,7 +147,7 @@ internal sealed class ChildProcess : IDisposable
     /// Completes at the end of stdout and stderr, or 5 seconds after the call, whichever comes first. After the process
     /// exits or is stopped, a process it started may still hold the pipes open.
     /// </summary>
-    public Task WaitForOutputAsync() => Task.WhenAny(Task.WhenAll(_stdout, _stderr), Task.Delay(OutputGrace));
+    public Task WaitForOutputAsync(TimeSpan? timeout = null) => Task.WhenAny(Task.WhenAll(_stdout, _stderr), Task.Delay(timeout ?? OutputGrace));
 
     /// <summary>
     /// Stops the process and every process it started. A process that already exited is not an error. After
