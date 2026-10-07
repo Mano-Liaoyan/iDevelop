@@ -718,6 +718,9 @@ public sealed class ConversationDrainTests : IDisposable
         {
             _clock.Advance(TimeSpan.FromSeconds(55));
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(AttemptStatus.Running, session.Snapshot.Latest!.Status);
+            Assert.Equal(AttemptStatus.Running, (await session.ListAttemptsAsync(default)).Single().Status);
+            Assert.Equal("Build Running", string.Join(", ", runs.Active.Select(record => $"{record.TaskTitle} {record.Status}")));
             using var held = RunLock.TryTake(DataFolder.Attempts(_project), Node.Id);
             var during = (session.Snapshot.Actions.Send, runs.CheckSend(Node), LockHeld: held is null, runs.Latest[Node.Id].Status);
             Assert.Equal((new ActionAvailability(false, "The turn is ending. Wait for teardown to finish."), new SendProblem.Ending("Build"), true, AttemptStatus.Running), during);
