@@ -648,7 +648,7 @@ internal sealed class RunStore
                 var read = ReadJournal(workflow, new(foundRun));
                 if (read is RunRead.Rejected rejected)
                 {
-                    if (foundRun != run.Value && rejected.Reason.Problem == RunProblem.IncompleteTail)
+                    if (rejected.Reason.Problem == RunProblem.IncompleteTail && (foundRun != run.Value || rejected.Prefix is null))
                     {
                         if (rejected.Prefix is { } prefix)
                         {
@@ -691,7 +691,8 @@ internal sealed class RunStore
             var updated = ((RunRead.Loaded)reduced).Record;
             DataFolder.EnsureGitIgnore(_project);
             Directory.CreateDirectory(Folder(workflow, run));
-            using (var stream = new FileStream(Journal(workflow, run), FileMode.Append, FileAccess.Write, FileShare.Read))
+            using (var stream = new FileStream(Journal(workflow, run), record is null ? FileMode.Create : FileMode.Append,
+                FileAccess.Write, FileShare.Read))
             {
                 stream.Write(Encoding.UTF8.GetBytes(RunJournal.Encode(entry)));
                 stream.Flush(flushToDisk: true);
