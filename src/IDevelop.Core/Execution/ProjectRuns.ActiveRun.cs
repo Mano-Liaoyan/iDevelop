@@ -272,7 +272,7 @@ public sealed partial class ProjectRuns
         /// <summary>Called under the gate. False when the client did not start, which ended the attempt.</summary>
         private bool Launch(string session, string? tree)
         {
-            var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued));
+            var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued.Select(message => message.Text)));
             Append(new AttemptEvent.TurnRequested(DateTimeOffset.UtcNow, plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Conversation = _conversation,

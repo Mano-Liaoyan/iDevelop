@@ -268,6 +268,7 @@ public static class RunText
     /// <summary>What happened to a turn before the latest one, and why, when it did not succeed.</summary>
     public static string? EarlierTurnNote(TurnRecord turn) => turn.Outcome switch
     {
+        TurnOutcome.Deferred => "This turn deferred its questions.",
         TurnOutcome.Stopped => "You stopped this turn.",
         TurnOutcome.Failed => Sentences("This turn failed.", turn.Detail),
         TurnOutcome.Interrupted => Sentences("This turn was interrupted.", turn.Detail),
