@@ -63,6 +63,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>Awaited after a run's turn is disposed and before its lock is released. Tests hold it to observe teardown.</summary>
+    internal Func<Task> BeforeRelease { get; set; } = () => Task.CompletedTask;
+
     internal (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers)? Live(TaskId task)
     {
         lock (_gate)

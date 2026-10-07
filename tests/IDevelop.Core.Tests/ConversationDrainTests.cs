@@ -700,31 +700,28 @@ public sealed class ConversationDrainTests : IDisposable
     }
 
     [Fact]
-    public async Task Deferred_exit_keeps_Send_disabled_in_the_waiting_notification_until_the_lock_is_released()
+    public async Task Deferred_exit_keeps_Send_disabled_until_the_lock_is_released()
     {
         InstallQuestion(InterruptAndEnd());
         await using var runs = await Open();
         using var session = runs.OpenConversation(Node.Id);
         await OpenRequest(session);
-        var observed = new TaskCompletionSource<(ActionAvailability Send, SendProblem? Problem, bool LockHeld)>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void ObserveTeardown(object? sender, EventArgs args)
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.BeforeRelease = () =>
         {
-            if (runs.Latest.GetValueOrDefault(Node.Id)?.Status == AttemptStatus.WaitingForInput
-                && runs.Live(Node.Id) is not null)
-            {
-                using var held = RunLock.TryTake(DataFolder.Attempts(_project), Node.Id);
-                observed.TrySetResult((session.Snapshot.Actions.Send, runs.CheckSend(Node), held is null));
-            }
-        }
+            entered.TrySetResult();
+            return release.Task;
+        };
 
-        runs.Changed += ObserveTeardown;
         try
         {
             _clock.Advance(TimeSpan.FromSeconds(55));
-            var during = await observed.Task.WaitAsync(TimeSpan.FromSeconds(15));
-            Assert.Equal(new ActionAvailability(false, "The turn is ending. Wait for teardown to finish."), during.Send);
-            Assert.Equal(new SendProblem.Ending("Build"), during.Problem);
-            Assert.True(during.LockHeld);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            using var held = RunLock.TryTake(DataFolder.Attempts(_project), Node.Id);
+            var during = (session.Snapshot.Actions.Send, runs.CheckSend(Node), LockHeld: held is null, runs.Latest[Node.Id].Status);
+            Assert.Equal((new ActionAvailability(false, "The turn is ending. Wait for teardown to finish."), new SendProblem.Ending("Build"), true, AttemptStatus.Running), during);
+            release.TrySetResult();
             var record = await Settled(runs);
             Assert.Equal((AttemptStatus.WaitingForInput, TurnOutcome.Deferred), (record.Status, record.Turns.Single().Outcome));
             Assert.Equal(new ActionAvailability(true, "Send a message."), session.Snapshot.Actions.Send);
@@ -734,7 +731,7 @@ public sealed class ConversationDrainTests : IDisposable
         }
         finally
         {
-            runs.Changed -= ObserveTeardown;
+            release.TrySetResult();
         }
     }
 

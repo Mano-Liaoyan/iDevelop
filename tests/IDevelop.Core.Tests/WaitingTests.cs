@@ -124,6 +124,43 @@ public sealed class WaitingTests : IDisposable
     }
 
     [Fact]
+    public async Task A_turn_that_ends_waiting_shows_Running_until_teardown_releases_the_lock_and_Mark_done_then_applies()
+    {
+        Install(_fakes, ClientId.Codex,
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = SayHi(ClientId.Codex, ConversationMode.Chat);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.BeforeRelease = () =>
+        {
+            entered.TrySetResult();
+            return release.Task;
+        };
+
+        var waiting = await Settles(runs, async () =>
+        {
+            try
+            {
+                var started = Assert.IsType<StartResult.Started>(runs.Start(task));
+                await entered.Task.WaitAsync(Patience);
+                var during = (runs.Latest[SayHiId].Status, string.Join(", ", runs.Active.Select(record => $"{record.TaskTitle} {record.Status}")), runs.MarkDone(SayHiId),
+                    await runs.SendAsync(task, "Change it.", stopTurn: false));
+                Assert.Equal((AttemptStatus.Running, "Say hi Running", (StartProblem?)null,
+                    new SendResult.Refused(new SendProblem.Ending("Say hi"))), during);
+                return started;
+            }
+            finally
+            {
+                release.TrySetResult();
+            }
+        });
+        Assert.Equal(AttemptStatus.WaitingForInput, waiting.Status);
+        Assert.Null(runs.MarkDone(SayHiId));
+        Assert.Equal(AttemptStatus.Succeeded, runs.Latest[SayHiId].Status);
+    }
+
+    [Fact]
     public async Task Cancelling_a_waiting_node_records_it_cancelled_and_lets_it_run_again()
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Asking)));
