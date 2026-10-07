@@ -5,12 +5,16 @@ using IDevelop.Execution;
 
 namespace IDevelop.TestSupport;
 
+internal enum FakeClientInstallMode { Shim, Direct }
+
 /// <summary>
-/// Installs fake-client shims in a folder of their own: "claude.cmd" on Windows, which runs through cmd.exe like an npm
-/// shim, and an executable "claude" script elsewhere. Each shim runs IDevelop.FakeAgent with its rules and passes the
-/// client arguments through. <see cref="Resolver"/> searches only that folder, so a real client is never found.
+/// Installs fake clients in a folder of their own. A shim, the default, is "claude.cmd" on Windows, which runs through
+/// cmd.exe like an npm shim, and an executable "claude" script elsewhere; it runs IDevelop.FakeAgent with its rules. Direct
+/// installs the fake's own apphost as "claude.exe" or "claude", like a native client, so no shim holds the client's pipes;
+/// the fake then reads its rules from beside itself. <see cref="Resolver"/> searches only that folder, so a real client
+/// is never found.
 /// </summary>
-internal sealed class FakeClients
+internal sealed class FakeClients : IDisposable
 {
     private static readonly string Agent = Path.Combine(AppContext.BaseDirectory, "IDevelop.FakeAgent.dll");
 
@@ -18,9 +22,30 @@ internal sealed class FakeClients
     private static readonly string Dotnet = Path.GetFullPath(Path.Combine(
         RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"));
 
-    public FakeClients(string folder)
+    private readonly FakeClientInstallMode _mode;
+    private readonly Dictionary<string, string?> _environment = [];
+
+    public FakeClients(string folder, FakeClientInstallMode mode = FakeClientInstallMode.Shim)
     {
         Folder = Directory.CreateDirectory(folder).FullName;
+        _mode = mode;
+        if (mode == FakeClientInstallMode.Direct)
+        {
+            var root = Path.GetDirectoryName(Dotnet)!;
+            foreach (var name in new[] { "DOTNET_ROOT", "DOTNET_ROOT_" + RuntimeInformation.ProcessArchitecture.ToString().ToUpperInvariant() })
+            {
+                _environment[name] = Environment.GetEnvironmentVariable(name);
+                Environment.SetEnvironmentVariable(name, root);
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        foreach (var (name, value) in _environment)
+        {
+            Environment.SetEnvironmentVariable(name, value);
+        }
     }
 
     public string Folder { get; }
@@ -48,10 +73,10 @@ internal sealed class FakeClients
         };
     }
 
-    /// <summary>Writes the shim for <paramref name="command"/>, or replaces it.</summary>
     public string Install(string command, params FakeRule[] rules)
     {
-        var rulesFile = Path.Combine(Folder, $"{command}.rules.json");
+        var executable = command + (OperatingSystem.IsWindows() && _mode == FakeClientInstallMode.Direct ? ".exe" : "");
+        var rulesFile = Path.Combine(Folder, $"{executable}.rules.json");
         var json = new JsonObject
         {
             ["rules"] = new JsonArray([.. rules.Select(Adapt).Select(rule => new JsonObject
@@ -60,10 +85,29 @@ internal sealed class FakeClients
                 ["has"] = new JsonArray([.. rule.Has.Select(part => JsonValue.Create(part))]),
                 ["thread"] = rule.ThreadMethod,
                 ["threadId"] = rule.ThreadId,
+                ["beforeTurnResponse"] = new JsonArray([.. rule.BeforeTurnResponseSteps.Select(step => step.DeepClone())]),
                 ["steps"] = new JsonArray([.. rule.Steps.Select(step => step.DeepClone())]),
             })]),
         };
         File.WriteAllText(rulesFile, json.ToJsonString());
+
+        if (_mode == FakeClientInstallMode.Direct)
+        {
+            foreach (var suffix in new[] { ".dll", ".deps.json", ".runtimeconfig.json" })
+            {
+                var name = "IDevelop.FakeAgent" + suffix;
+                File.Copy(Path.Combine(AppContext.BaseDirectory, name), Path.Combine(Folder, name), overwrite: true);
+            }
+
+            var apphost = Path.Combine(Folder, executable);
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "IDevelop.FakeAgent" + (OperatingSystem.IsWindows() ? ".exe" : "")), apphost, overwrite: true);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(apphost, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            return apphost;
+        }
 
         if (OperatingSystem.IsWindows())
         {
@@ -92,6 +136,10 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     public string? ThreadMethod { get; init; }
 
     public string? ThreadId { get; init; }
+
+    public ImmutableArray<JsonNode> BeforeTurnResponseSteps { get; init; } = [];
+
+    public FakeRule BeforeTurnResponse(FakeRule steps) => this with { BeforeTurnResponseSteps = steps.Steps };
 
     public FakeRule Thread(string method, string? id = null) => this with { ThreadMethod = method, ThreadId = id };
 

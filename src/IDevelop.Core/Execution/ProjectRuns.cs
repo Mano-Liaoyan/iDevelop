@@ -1128,7 +1128,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _logRevisions[(record.Task, record.Id)] = logRevision;
         }
 
-        if (record.Status == AttemptStatus.Running)
+        if (record.Status == AttemptStatus.Running
+            || record is { Status: AttemptStatus.WaitingForInput, Turns: [.., { Outcome: TurnOutcome.Deferred }] })
         {
             NotifyChanged(record.Task);
         }
