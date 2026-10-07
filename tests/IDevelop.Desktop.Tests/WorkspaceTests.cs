@@ -721,4 +721,54 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal([("seed", ["Workflow", "Workflow 2"])], shell.Tree());
         Assert.Equal(("seed", "Workflow 2"), shell.Breadcrumb());
     }
+
+    /// <summary>One project whose expanded workflows list more rows than the sidebar shows at once.</summary>
+    private Shell Crowded()
+    {
+        var alpha = Project("alpha");
+        foreach (var name in new[] { "Docs", "Tests", "Deploy" })
+        {
+            Save(alpha, name, TaskAt(TaskId.New(), "One", 105, 90), TaskAt(TaskId.New(), "Two", 405, 90), TaskAt(TaskId.New(), "Three", 705, 90));
+        }
+
+        var shell = Shell.Open(alpha);
+        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
+        {
+            canvas.IsExpanded = true;
+        }
+
+        shell.Render();
+        var scroll = SidebarScroll(shell);
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height, "the tree overflows the sidebar");
+        return shell;
+    }
+
+    private static ScrollViewer SidebarScroll(Shell shell) => shell.Find<ItemsControl>("Projects").FindAncestorOfType<ScrollViewer>()!;
+
+    private static bool InSidebarView(Shell shell, Control control)
+    {
+        var scroll = SidebarScroll(shell);
+        var top = control.TranslatePoint(default, scroll)!.Value.Y;
+        return top >= 0 && top + control.Bounds.Height <= scroll.Viewport.Height;
+    }
+
+    [AvaloniaFact]
+    public void Close_project_in_an_overflowing_tree_takes_a_click_on_its_middle()
+    {
+        var shell = Crowded();
+
+        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+
+        Assert.Empty(shell.Tree());
+    }
+
+    [AvaloniaFact]
+    public void New_workflow_in_an_overflowing_tree_scrolls_its_row_into_view()
+    {
+        var shell = Crowded();
+
+        shell.Click(ProjectButton(shell, "alpha", "NewWorkflow"));
+
+        Assert.Equal(("Workflow 1", true), (shell.Breadcrumb().Item2, InSidebarView(shell, shell.WorkflowRow("alpha", "Workflow 1"))));
+    }
 }

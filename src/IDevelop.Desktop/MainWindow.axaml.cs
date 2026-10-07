@@ -186,9 +186,10 @@ public partial class MainWindow : Window
 
     private void OnNewWorkflow(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is ProjectViewModel project)
+        if ((sender as Control)?.DataContext is ProjectViewModel project && ViewModel.NewWorkflow(project) is { } canvas)
         {
-            ViewModel.NewWorkflow(project);
+            UpdateLayout();
+            this.GetVisualDescendants().OfType<Button>().FirstOrDefault(row => row.Classes.Contains("workflow") && row.DataContext == canvas)?.BringIntoView();
         }
     }
 

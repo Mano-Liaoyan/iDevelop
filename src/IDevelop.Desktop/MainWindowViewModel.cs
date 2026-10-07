@@ -127,8 +127,8 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    /// <summary>Adds an unsaved, empty workflow to the project, named "Workflow N", and shows it.</summary>
-    public void NewWorkflow(ProjectViewModel project)
+    /// <summary>Adds an unsaved, empty workflow to the project, named "Workflow N", shows it, and returns it.</summary>
+    public WorkflowCanvasViewModel? NewWorkflow(ProjectViewModel project)
     {
         WorkflowDocument document;
         try
@@ -138,10 +138,12 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (ProjectException e)
         {
             Status = e.Message;
-            return;
+            return null;
         }
 
-        Select(project.Add(document));
+        var canvas = project.Add(document);
+        Select(canvas);
+        return canvas;
     }
 
     /// <summary>
