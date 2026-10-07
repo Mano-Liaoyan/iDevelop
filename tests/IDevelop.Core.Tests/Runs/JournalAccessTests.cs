@@ -154,7 +154,10 @@ public sealed class JournalAccessTests
         var tasks = workers.Select(worker => System.Threading.Tasks.Task.Factory.StartNew(() =>
         {
             barrier.SignalAndWait();
-            return command(worker.Store, worker.Operation);
+            var decision = command(worker.Store, worker.Operation);
+            while (decision is RunDecision.Rejected { Reason.Problem: RunProblem.JournalBusy })
+                decision = command(worker.Store, worker.Operation);
+            return decision;
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
         return System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();
     }
