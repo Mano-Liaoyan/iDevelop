@@ -116,6 +116,7 @@ public sealed class ConversationDrainTests : IDisposable
         runs.ShutdownTime = TimeSpan.FromSeconds(60);
         using var session = runs.OpenConversation(Node.Id);
         var key = await OpenRequest(session);
+        using var client = Process.GetProcessById(runs.Latest[Node.Id].Process!.Value.Id);
         using var release = new ManualResetEventSlim();
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void HoldDrain(object? sender, EventArgs args)
@@ -137,8 +138,13 @@ public sealed class ConversationDrainTests : IDisposable
             release.Set();
             await disposal.WaitAsync(TimeSpan.FromSeconds(3));
             Assert.Equal(new SendResult.Queued(), await send);
+            await client.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(new[] { "The project was closed while this task ran." },
+                Events(runs.Latest[Node.Id]).OfType<AttemptEvent.InterruptRequested>().Select(interrupt => interrupt.Reason));
             await using var reopened = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
             Assert.Equal(AttemptStatus.Interrupted, reopened.Latest[Node.Id].Status);
+            Assert.Equal("The project was closed while this task ran. Its client did not stop in time, and iDevelop settled it when the project was opened again.",
+                reopened.Latest[Node.Id].Detail);
         }
         finally
         {
@@ -180,6 +186,21 @@ public sealed class ConversationDrainTests : IDisposable
             File.WriteAllText(FileAt("go"), "go");
             _clock.Advance(TimeSpan.FromSeconds(60));
         }
+    }
+
+    [Fact]
+    public async Task A_host_detected_Claude_protocol_failure_has_one_failure_marker()
+    {
+        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode)
+            .Print(SessionLine(ClientId.ClaudeCode, Session))
+            .Print("""{"type":"control_request","request":{"subtype":"can_use_tool"}}""").Hang());
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        var record = await Settled(runs);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(record.Id, new HistoryQuery.Latest(), 50, default));
+        Assert.Equal(AttemptStatus.Failed, record.Status);
+        Assert.Equal(new[] { ("failure", "Claude Code supplied no request id.") }, page.Entries.Select(entry => entry.Content)
+            .OfType<ConversationContent.Marker>().Where(marker => marker.Kind == "failure").Select(marker => (marker.Kind, marker.Text)));
     }
 
     [Fact]
