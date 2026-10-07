@@ -20,7 +20,7 @@ using System.Text.Json;
 //   readLine <file>               read and record one stdin frame
 //   waitForLine <pattern>         wait for a stdin frame containing the pattern
 //   echoId <line>                 print the line with $id replaced by the last matched frame's id
-//   closeStdin                   Linux and macOS only: close this process's pipe readers, so host writes fail
+//   closeStdin                   close this process's pipe readers, so host writes fail
 //   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
@@ -48,10 +48,17 @@ if (args is ["--spawn-sleeper", var sleeperFile])
     return 0;
 }
 
-if (args is not ["--rules", var rulesFile, "--", .. var clientArguments])
+string rulesFile;
+string[] clientArguments;
+if (args is ["--rules", var explicitRules, "--", .. var explicitArguments])
 {
-    Console.Error.WriteLine("usage: IDevelop.FakeAgent --rules <rules.json> -- <arguments>");
-    return 2;
+    rulesFile = explicitRules;
+    clientArguments = explicitArguments;
+}
+else
+{
+    rulesFile = Environment.ProcessPath + ".rules.json";
+    clientArguments = args;
 }
 
 var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
@@ -66,6 +73,7 @@ string? framesFile = null;
 JsonElement? matchedLine = null;
 JsonElement? threadRequest = null;
 JsonElement? turnRequest = null;
+List<FileStream> held = [];
 if (appServer)
 {
     var initialize = ReadInput();
@@ -95,6 +103,11 @@ if (threadRequest is { } thread)
     var turn = ReadInput();
     turnRequest = turn;
     prompt = turn.GetProperty("params").GetProperty("input")[0].GetProperty("text").GetString();
+    if (matched.TryGetProperty("beforeTurnResponse", out var beforeTurn) && Run(beforeTurn) is { } code)
+    {
+        return code;
+    }
+
     stdout.WriteLine(JsonSerializer.Serialize(new { id = turn.GetProperty("id"), result = new { turn = new { id = "turn-1" } } }));
 }
 
@@ -127,7 +140,6 @@ string? ReadWireLine()
 
 JsonElement ReadInput() => JsonDocument.Parse(ReadWireLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
-List<FileStream> held = [];
 return Run(matched.GetProperty("steps")) ?? 0;
 
 int? Run(JsonElement steps)
@@ -345,7 +357,18 @@ internal static class NativePipes
 {
     public static void CloseInput()
     {
-        // On Windows the cmd.exe shim holds the pipe too, so only Linux and macOS tests use this step.
+        if (OperatingSystem.IsWindows())
+        {
+            var input = GetStdHandle(-10);
+            if (input == 0 || input == -1 || !CloseHandle(input))
+            {
+                throw new IOException("The fake could not close stdin.");
+            }
+
+            SetStdHandle(-10, 0);
+            return;
+        }
+
         // Console keeps a duplicate of the inherited descriptor. Every descriptor with stdin's device and inode is a
         // reader of the same pipe, and only once all are closed does the host's write fail. The first 16 bytes of
         // struct stat hold that identity on Linux and Darwin.
@@ -378,4 +401,15 @@ internal static class NativePipes
 
     [DllImport("libc", EntryPoint = "fstat")]
     private static extern int Stat(int descriptor, nint status);
+
+    [DllImport("kernel32.dll")]
+    private static extern nint GetStdHandle(int standardHandle);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetStdHandle(int standardHandle, nint handle);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(nint handle);
 }

@@ -204,6 +204,56 @@ public sealed class ProtocolDrainTests : IDisposable
     }
 
     [Fact]
+    public async Task An_unsupported_Claude_control_request_gets_an_error_and_notice_and_the_turn_succeeds()
+    {
+        var frames = Path.Combine(_evidence, "frames.jsonl");
+        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).RecordFrames(frames)
+            .Print(SessionLine(ClientId.ClaudeCode, Session))
+            .Print("""{"type":"control_request","request_id":"hook-1","request":{"subtype":"hook_callback","callback_id":"hook-42","input":{"hook_event_name":"PreToolUse","tool_name":"Read"}}}""")
+            .Print(ReplyLines(ClientId.ClaudeCode, "Done")).WaitForStdinEnd());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = Task(ClientId.ClaudeCode);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        var record = await Settled(runs, task.Id);
+        Assert.Equal(["""{"type":"control_response","response":{"subtype":"error","request_id":"hook-1","error":"Method not supported."}}"""], File.ReadAllLines(frames));
+        Assert.Equal([new AgentEvent.Notice("Claude Code requested an unsupported control method.")],
+            Events(record).OfType<AttemptEvent.Agent>().Select(e => e.Event).OfType<AgentEvent.Notice>());
+        Assert.Equal((AttemptStatus.Succeeded, "Done", TurnOutcome.Succeeded), (record.Status, record.Result, record.Turns.Single().Outcome));
+    }
+
+    [Fact]
+    public async Task Codex_cancel_before_the_turn_start_response_writes_one_interrupt_when_the_id_arrives()
+    {
+        var ready = Path.Combine(_evidence, "ready");
+        var go = Path.Combine(_evidence, "go");
+        var frames = Path.Combine(_evidence, "frames.jsonl");
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex)
+            .BeforeTurnResponse(FakeRule.On().RecordFrames(frames).Print(SessionLine(ClientId.Codex, Session))
+                .Write(ready, "yes").WaitForFile(go))
+            .WaitForLine("\"method\":\"turn/interrupt\"").EchoId("""{"id":$id,"result":{}}""")
+            .Print("""{"method":"turn/started","params":{"turn":{"id":"turn-1"}}}""")
+            .Print("""{"id":"turn-1","result":{"turn":{"id":"turn-1"}}}""")
+            .Print("""{"method":"turn/completed","params":{"turn":{"id":"turn-1","status":"interrupted"}}}""").WaitForStdinEnd());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = Task(ClientId.Codex);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        try
+        {
+            await Until(() => File.Exists(ready) && runs.Latest[task.Id].SessionId == Session);
+            Assert.Null(await runs.CancelAsync(task.Id));
+            Assert.Single(Events(runs.Latest[task.Id]).OfType<AttemptEvent.CancelRequested>());
+            File.WriteAllText(go, "go");
+            var record = await Settled(runs, task.Id);
+            Assert.Equal(["""{"id":"stop-1","method":"turn/interrupt","params":{"threadId":"session-1","turnId":"turn-1"}}"""], File.ReadAllLines(frames));
+            Assert.Equal((AttemptStatus.Cancelled, TurnOutcome.Stopped), (record.Status, record.Turns.Single().Outcome));
+        }
+        finally
+        {
+            File.WriteAllText(go, "go");
+        }
+    }
+
+    [Fact]
     public async Task Codex_interrupt_drains_the_completed_tail_as_one_partial_message()
     {
         var wire = Path.Combine(_evidence, "interrupt.json");
@@ -297,12 +347,14 @@ public sealed class ProtocolDrainTests : IDisposable
         Assert.Single(Events(record).OfType<AttemptEvent.ShutdownForced>());
     }
 
-    [UnixFact]
+    [Fact]
     public async Task A_broken_permission_pipe_closes_DeliveryUnknown_and_fails_the_turn()
     {
-        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).CloseStdin().Print(ExitPlan)
+        using var fakes = new FakeClients(_fakes.Folder, FakeClientInstallMode.Direct);
+        var command = Install(fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).CloseStdin().Print(ExitPlan)
             .Print("""{"type":"control_cancel_request","request_id":"plan-1"}""").Hang());
-        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        Assert.Equal(OperatingSystem.IsWindows() ? "claude.exe" : "claude", Path.GetFileName(command));
+        await using var runs = ProjectRuns.Open(_project, await fakes.DiscoverAsync());
         var task = Task(ClientId.ClaudeCode);
         runs.Start(task);
         var record = await Settled(runs, task.Id);

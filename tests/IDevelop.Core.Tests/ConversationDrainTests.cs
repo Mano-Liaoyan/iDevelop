@@ -353,12 +353,14 @@ public sealed class ConversationDrainTests : IDisposable
         Assert.Equal(1, AnswerFrames());
     }
 
-    [UnixFact]
+    [Fact]
     public async Task Answer_pipe_fails_after_logging()
     {
-        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).RecordFrames(FileAt("frames.jsonl"))
+        using var fakes = new FakeClients(_fakes.Folder, FakeClientInstallMode.Direct);
+        var command = Install(fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).RecordFrames(FileAt("frames.jsonl"))
             .Print(SessionLine(ClientId.ClaudeCode, Session)).CloseStdin().Print(Question).Hang());
-        var clients = await _fakes.DiscoverAsync();
+        Assert.Equal(OperatingSystem.IsWindows() ? "claude.exe" : "claude", Path.GetFileName(command));
+        var clients = await fakes.DiscoverAsync();
         await using (var runs = ProjectRuns.Open(_project, clients, Bounded))
         {
             runs.TimeProvider = _clock;
@@ -532,6 +534,45 @@ public sealed class ConversationDrainTests : IDisposable
         Assert.Empty(Events(session.Snapshot.Latest).OfType<AttemptEvent.TurnRequested>());
         await session.CancelAsync(key.Turn, default);
         await Settled(runs);
+    }
+
+    [Fact]
+    public async Task Deferred_exit_keeps_Send_disabled_in_the_waiting_notification_until_the_lock_is_released()
+    {
+        InstallQuestion(InterruptAndEnd());
+        await using var runs = await Open();
+        using var session = runs.OpenConversation(Node.Id);
+        await OpenRequest(session);
+        var observed = new TaskCompletionSource<(ActionAvailability Send, SendProblem? Problem, bool LockHeld)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void ObserveTeardown(object? sender, EventArgs args)
+        {
+            if (runs.Latest.GetValueOrDefault(Node.Id)?.Status == AttemptStatus.WaitingForInput
+                && runs.Live(Node.Id) is not null)
+            {
+                using var held = RunLock.TryTake(DataFolder.Attempts(_project), Node.Id);
+                observed.TrySetResult((session.Snapshot.Actions.Send, runs.CheckSend(Node), held is null));
+            }
+        }
+
+        runs.Changed += ObserveTeardown;
+        try
+        {
+            _clock.Advance(TimeSpan.FromSeconds(55));
+            var during = await observed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(new ActionAvailability(false, "The turn is ending. Wait for teardown to finish."), during.Send);
+            Assert.Equal(new SendProblem.Ending("Build"), during.Problem);
+            Assert.True(during.LockHeld);
+            var record = await Settled(runs);
+            Assert.Equal((AttemptStatus.WaitingForInput, TurnOutcome.Deferred), (record.Status, record.Turns.Single().Outcome));
+            Assert.Equal(new ActionAvailability(true, "Send a message."), session.Snapshot.Actions.Send);
+            Assert.Null(runs.CheckSend(Node));
+            using var released = RunLock.TryTake(DataFolder.Attempts(_project), Node.Id);
+            Assert.NotNull(released);
+        }
+        finally
+        {
+            runs.Changed -= ObserveTeardown;
+        }
     }
 
     [Fact]
