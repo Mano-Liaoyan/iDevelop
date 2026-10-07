@@ -794,10 +794,13 @@ public sealed class WorkspaceTests : IDisposable
         var unopened = missing.Find<ItemsControl>("UnopenedProjects");
         var forget = missing.Find<Button>("ForgetProject");
 
+        var reason = missing.Find<TextBlock>("UnopenedReason");
+
         Assert.Equal(["beta", "Folder not found"], Shell.Texts(unopened));
+        Assert.Equal(Color.Parse("#A16A00"), ((ISolidColorBrush)reason.Foreground!).Color);
         Assert.Equal(
             ($"The folder {beta} does not exist.", "Forget beta"),
-            (AutomationProperties.GetHelpText(missing.Find<TextBlock>("UnopenedReason")), ControlAutomationPeer.CreatePeerForElement(forget).GetName()));
+            (AutomationProperties.GetHelpText(reason), ControlAutomationPeer.CreatePeerForElement(forget).GetName()));
 
         missing.Click(forget);
 

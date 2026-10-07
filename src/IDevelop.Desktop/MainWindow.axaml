@@ -221,8 +221,8 @@
                     <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextMutedBrush}"
                                AutomationProperties.AutomationId="UnopenedName" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource StateWarningStrongBrush}"
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                               FontSize="12" Foreground="{DynamicResource StateWarningStrongBrush}"
                                AutomationProperties.AutomationId="UnopenedReason"
                                AutomationProperties.HelpText="{Binding Reason}" />
                     <Button Grid.Column="2" Classes="icon" VerticalAlignment="Center"
