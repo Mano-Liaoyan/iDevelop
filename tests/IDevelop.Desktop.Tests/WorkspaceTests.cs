@@ -771,6 +771,22 @@ public sealed class WorkspaceTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Project_row_buttons_line_up_with_open_folder_once_the_tree_stops_overflowing()
+    {
+        var shell = Crowded();
+        foreach (var canvas in shell.Window.ViewModel.Projects.Single().Workflows)
+        {
+            canvas.IsExpanded = false;
+        }
+
+        shell.Render();
+        var close = ProjectButton(shell, "alpha", "CloseProject");
+        var open = shell.Find<Button>("OpenFolder");
+
+        Assert.Equal(0, close.TranslatePoint(new Point(close.Bounds.Width, 0), open)!.Value.X - open.Bounds.Width);
+    }
+
+    [AvaloniaFact]
     public void New_workflow_in_an_overflowing_tree_scrolls_its_row_into_view()
     {
         var shell = Crowded();
@@ -802,9 +818,12 @@ public sealed class WorkspaceTests : IDisposable
             ($"The folder {beta} does not exist.", "Forget beta"),
             (AutomationProperties.GetHelpText(reason), ControlAutomationPeer.CreatePeerForElement(forget).GetName()));
 
+        Assert.Equal($"The folder {beta} does not exist.", missing.Status);
+
         missing.Click(forget);
 
         Assert.Empty(Shell.Texts(unopened));
+        Assert.Equal("", missing.Status);
         Assert.Equal([alpha], RememberedProjects());
         missing.Window.Close();
         missing.Render();

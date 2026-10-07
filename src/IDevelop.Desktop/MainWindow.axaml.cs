@@ -240,6 +240,9 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnTreeScrollChanged(object? sender, ScrollChangedEventArgs e) =>
+        TreeRows.Margin = new Thickness(0, 0, Tree.ScrollBarMaximum.Y > 0 ? 16 : 8, 0);
+
     // A question, the folder picker, or a project that is still closing holds a second open or close until it ends.
     private async void OnOpenFolder(object? sender, RoutedEventArgs e)
     {

@@ -68,10 +68,11 @@
           </Border>
         </StackPanel>
         <!-- Each project lists its workflows, and each workflow lists its tasks while its row is expanded. The shown
-             workflow is the selected row, as in PlanWeave's project tree. The scroll bar draws over the content, so the
-             rows end where the bar starts, and the bar sits in the sidebar's right margin. -->
-        <ScrollViewer Grid.Row="1" Margin="0,0,-8,0" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="0,0,16,0" Spacing="12">
+             workflow is the selected row, as in PlanWeave's project tree. The scroll bar draws over the content and sits
+             in the sidebar's right margin, so while the tree overflows the rows end where the bar starts. -->
+        <ScrollViewer x:Name="Tree" Grid.Row="1" Margin="0,0,-8,0" HorizontalScrollBarVisibility="Disabled"
+                      ScrollChanged="OnTreeScrollChanged">
+          <StackPanel x:Name="TreeRows" Margin="0,0,8,0" Spacing="12">
             <ItemsControl ItemsSource="{Binding Projects}"
                           AutomationProperties.AutomationId="Projects"
                           AutomationProperties.Name="Open projects">

@@ -168,12 +168,20 @@ public sealed class MainWindowViewModel : ObservableObject
         await project.CloseAsync();
     }
 
-    /// <summary>Stops remembering a folder that did not open, so the next start does not try it again.</summary>
+    /// <summary>
+    /// Stops remembering a folder that did not open, so the next start does not try it again, and clears a status line that
+    /// names it.
+    /// </summary>
     public void Forget(UnopenedProject project)
     {
         if (Unopened.Remove(project))
         {
             Persist();
+        }
+
+        if (Status?.Contains(project.Reason, StringComparison.Ordinal) == true)
+        {
+            Status = null;
         }
     }
 
