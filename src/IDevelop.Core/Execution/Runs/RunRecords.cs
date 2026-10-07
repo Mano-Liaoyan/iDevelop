@@ -179,7 +179,7 @@ internal abstract record RunEvent
 
     internal sealed record GitObserved(OperationId Mutation, GitObservation Observation) : RunEvent;
 
-    internal sealed record Prepared(PreparedExecution Execution) : RunEvent;
+    internal sealed record Prepared(PreparedExecution Execution, EvidenceFile SharedRefs) : RunEvent;
 
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
 

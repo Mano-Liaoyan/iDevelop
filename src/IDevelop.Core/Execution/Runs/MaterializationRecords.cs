@@ -32,6 +32,7 @@ internal abstract record LayoutKey
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Preparation), "preparation")]
 [JsonDerivedType(typeof(Publication), "publication")]
+[JsonDerivedType(typeof(Join), "join")]
 [JsonDerivedType(typeof(Salvage), "salvage")]
 [JsonDerivedType(typeof(RetryReset), "retryReset")]
 internal abstract record MaterializationPlan
@@ -40,6 +41,9 @@ internal abstract record MaterializationPlan
 
     internal sealed record Preparation(AttemptId Attempt, InputId Inputs, TaskId Task, RevisionId Revision, AttemptCause Cause,
         ImmutableArray<InputBinding> Bindings, ImmutableArray<CodeSource> Sources, ReviewInput? Review) : MaterializationPlan;
+
+    internal sealed record Join(TaskId Task, InputId Inputs, ImmutableArray<CodeSource> Sources, CommitRecipe Recipe,
+        CommitId Commit, CommitId? Previous, string Ref) : MaterializationPlan;
 
     internal sealed record Publication(AttemptId Attempt, ResultId Result, ResultId? Supersedes, CommitId VerifiedTip,
         Digest? IndexBefore, CommitRecipe Recipe, CommitId Commit, string Report, ImmutableArray<ArtifactRecord> Artifacts) : MaterializationPlan;

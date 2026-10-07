@@ -122,9 +122,12 @@ internal sealed class RunFixtures : IDisposable
                 new(new(task, $".worktrees/{record.RunKey}/{key}", $"refs/heads/idp/{record.RunKey}/task/{key}"),
                     RunReducer.AttemptBase(record, reservation.Attempt, reservation.Inputs)!.Value), prompt, Revision.Hash(prompt),
                 record.Revisions[reservation.Attempt.Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit }
-                    ? $".idp/outbox/{reservation.Attempt.Id.Value:D}" : ""))));
+                    ? $".idp/outbox/{reservation.Attempt.Id.Value:D}" : ""), SharedRefs)));
         }
     }
+
+    public static EvidenceFile SharedRefs => new("evidence/00000000-0000-0000-0000-000000000001/refs.json",
+        Revision.Hash("{}"), 2);
 
     public void Claim(RunEvent.Reserved reservation, RunId? run = null)
     {

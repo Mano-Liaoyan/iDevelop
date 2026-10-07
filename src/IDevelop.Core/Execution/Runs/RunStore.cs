@@ -180,7 +180,7 @@ internal sealed class RunStore
             {
                 return Missing();
             }
-            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Salvage or
+            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
                 MaterializationPlan.RetryReset } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
                 RunEvent.SalvageRetained or RunEvent.BlockResolved))
             {
@@ -189,6 +189,11 @@ internal sealed class RunStore
             if (!RunReducer.Permitted(record, e))
             {
                 return Refuse(RunProblem.RunStopped);
+            }
+            if (e is RunEvent.Prepared { Execution: { Launch.Turn: 1 } prepared } &&
+                record.Inputs.TryGetValue(prepared.Inputs, out var inputs) && RunReducer.InputProblem(record, inputs, true) is { } stale)
+            {
+                return new Mutation.Rejected(stale);
             }
             return new Mutation.Append(e);
         });
