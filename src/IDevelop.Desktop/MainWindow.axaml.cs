@@ -193,6 +193,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnForgetProject(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is UnopenedProject project)
+        {
+            ViewModel.Forget(project);
+        }
+    }
+
     // Both questions come before either answer acts, and the project's runs stop only once it closes.
     private async void OnCloseProject(object? sender, RoutedEventArgs e)
     {

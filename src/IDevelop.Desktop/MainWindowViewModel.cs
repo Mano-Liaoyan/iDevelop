@@ -26,9 +26,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _undo;
     private readonly RelayCommand _redo;
     private readonly RelayCommand _refreshAgents;
-    // Remembered folders the last start could not open, such as a drive that was not mounted. They stay remembered, so a
-    // later start opens them once they are back.
-    private readonly List<string> _unopened = [];
     private WorkflowCanvasViewModel? _canvas;
     private string? _status;
     private bool _refreshingAgents;
@@ -52,6 +49,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>The open projects, in the order they were opened.</summary>
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
+
+    /// <summary>
+    /// Remembered folders that this start could not open. Each stays remembered, so a later start opens it once it is back,
+    /// until the person forgets it.
+    /// </summary>
+    public ObservableCollection<UnopenedProject> Unopened { get; } = [];
 
     /// <summary>The workflow the window shows, or null when no project is open.</summary>
     public WorkflowCanvasViewModel? Canvas
@@ -168,13 +171,22 @@ public sealed class MainWindowViewModel : ObservableObject
         await project.CloseAsync();
     }
 
+    /// <summary>Stops remembering a folder that did not open, so the next start does not try it again.</summary>
+    public void Forget(UnopenedProject project)
+    {
+        if (Unopened.Remove(project))
+        {
+            Persist();
+        }
+    }
+
     /// <summary>Stops every running task, as closing the window does. The open projects stay remembered for the next start.</summary>
     public Task Leave() => Task.WhenAll(Projects.Select(project => project.CloseAsync().AsTask()));
 
     /// <summary>
     /// Opens the projects the last session left open, with the workflow rows it left expanded and the workflow it showed,
-    /// then the folder, if any. A folder that is missing or fails to open is skipped with a status line, and stays
-    /// remembered, so a later start opens it once it is back.
+    /// then the folder, if any. A folder that is missing or fails to open is skipped with a status line and listed in
+    /// <see cref="Unopened"/>.
     /// </summary>
     public void Restore(string? folder)
     {
@@ -187,7 +199,7 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 if (TryAdd(saved, $"Couldn't reopen {saved}", out var notice) is null)
                 {
-                    _unopened.Add(saved);
+                    Unopened.Add(new UnopenedProject(saved, notice!));
                 }
 
                 if (notice is not null)
@@ -277,7 +289,11 @@ public sealed class MainWindowViewModel : ObservableObject
         var runs = ProjectRuns.Open(identity, _clients);
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
         Projects.Add(project);
-        _unopened.RemoveAll(unopened => ProjectFolders.Comparer.Equals(unopened, identity));
+        foreach (var unopened in Unopened.Where(unopened => ProjectFolders.Comparer.Equals(unopened.Folder, identity)).ToList())
+        {
+            Unopened.Remove(unopened);
+        }
+
         notices = string.Join(" ", [.. documents.Select(document => document.Converted).OfType<string>(), .. runs.Warnings]) is { Length: > 0 } notice
             ? notice
             : null;
@@ -342,7 +358,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var session = new WorkspaceSession(
-            [.. Projects.Select(project => project.Folder), .. _unopened],
+            [.. Projects.Select(project => project.Folder), .. Unopened.Select(unopened => unopened.Folder)],
             Canvas is { } canvas ? new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id) : null,
             [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))]);
         try

@@ -25,7 +25,7 @@ public sealed class ProjectViewModel : ObservableObject
         string folder, ProjectRuns runs, IEnumerable<WorkflowDocument> documents, Func<ProjectViewModel, WorkflowDocument, WorkflowCanvasViewModel> newCanvas)
     {
         Folder = folder;
-        Name = Path.GetFileName(folder) is { Length: > 0 } name ? name : folder;
+        Name = ProjectFolders.Name(folder);
         Runs = runs;
         _newCanvas = newCanvas;
         runs.Changed += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(IsRunning)));

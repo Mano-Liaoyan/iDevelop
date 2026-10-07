@@ -20,6 +20,9 @@ internal static class ProjectFolders
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public static string Identity(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+
+    /// <summary>The folder's own name, or the whole path for a drive's root.</summary>
+    public static string Name(string folder) => Path.GetFileName(folder) is { Length: > 0 } name ? name : folder;
 }
 
 /// <summary>
