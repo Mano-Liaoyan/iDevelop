@@ -176,6 +176,92 @@ internal sealed class AttemptLog : IDisposable
         }
     }
 
+    /// <summary>Preserves physical positions even when a torn or unknown line is skipped.</summary>
+    public static ImmutableArray<PositionedAttemptEvent> ReadPositioned(string folder)
+    {
+        using var stream = new FileStream(Path.Combine(folder, EventsFile), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Utf8);
+        var events = ImmutableArray.CreateBuilder<PositionedAttemptEvent>();
+        long position = 0;
+        while (reader.ReadLine() is { } line)
+        {
+            try
+            {
+                if (JsonSerializer.Deserialize<AttemptEvent>(line, Options) is { } e)
+                {
+                    events.Add(new PositionedAttemptEvent(position, e));
+                }
+            }
+            catch (Exception e) when (e is JsonException or NotSupportedException)
+            {
+            }
+
+            position++;
+        }
+
+        return events.ToImmutable();
+    }
+
+    public static AttemptHistory? ReadHistory(string attemptsFolder, TaskId task, AttemptId attempt,
+        IReadOnlyDictionary<string, LiveMessageBuffer>? live = null)
+    {
+        try
+        {
+            var events = ReadPositioned(FolderOf(attemptsFolder, task, attempt));
+            return events.FirstOrDefault(line => line.Event is AttemptEvent.Requested)?.Event is AttemptEvent.Requested requested
+                && requested.Task == task && requested.Attempt == attempt
+                ? ConversationHistory.Project(events, live) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    public static RequestRecord? ReadRequest(string attemptsFolder, TaskId task, RequestKey key) =>
+        ReadAttempt(attemptsFolder, task, key.Turn.Attempt)?.Requests.GetValueOrDefault(key);
+
+    public static (ImmutableArray<AttemptSummary> Attempts, ImmutableArray<string> Warnings) ListAttempts(string attemptsFolder, TaskId task)
+    {
+        var attempts = ImmutableArray.CreateBuilder<AttemptSummary>();
+        var warnings = ImmutableArray.CreateBuilder<string>();
+        var folder = TaskFolder(attemptsFolder, task);
+        try
+        {
+            if (Directory.Exists(folder))
+            {
+                foreach (var path in Directory.EnumerateDirectories(folder).Where(IsIdFolder).OrderBy(path => Guid.Parse(Path.GetFileName(path))))
+                {
+                    if (TryFold(path, warnings) is { } record && record.Task == task)
+                    {
+                        attempts.Add(new AttemptSummary(record.Id, record.Continues, record.RequestedAt, record.Status, record.Requested));
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"iDevelop could not list {folder}. {e.Message}");
+        }
+
+        return (attempts.ToImmutable(), warnings.ToImmutable());
+    }
+
+    public static ImmutableArray<AttemptRecord> ReadChain(string attemptsFolder, TaskId task, AttemptId head)
+    {
+        var chain = new List<AttemptRecord>();
+        var seen = new HashSet<AttemptId>();
+        AttemptId? link = head;
+        while (link is { } id && seen.Add(id) && ReadAttempt(attemptsFolder, task, id) is { } record && record.Task == task)
+        {
+            chain.Add(record);
+            link = record.Continues;
+        }
+
+        chain.Reverse();
+        return [.. chain];
+    }
+
     public void Dispose()
     {
         lock (_gate)
