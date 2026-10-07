@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using IDevelop.Execution;
@@ -112,11 +113,27 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         var target = Directory.CreateDirectory(Path.Combine(f.Git.Folder, "external")).FullName;
         File.WriteAllBytes(Path.Combine(target, "payload.bin"), [67, 0, 127]);
-        Junction.Create(Path.Combine(outbox, "via"), target);
-        File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"via/payload.bin\"}]}");
-        f.Close(ready);
-        CheckRejected(f, ready);
-        Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
+        var junction = Path.Combine(outbox, "via");
+        using (var mklink = Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, ["/c", "mklink", "/J", junction, target])
+        {
+            UseShellExecute = false, RedirectStandardOutput = true,
+        })!)
+        {
+            await mklink.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(0, mklink.ExitCode);
+        }
+        try
+        {
+            File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"via/payload.bin\"}]}");
+            f.Close(ready);
+            CheckRejected(f, ready);
+            Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
+        }
+        finally
+        {
+            // A recursive delete fails on a junction, so the temporary folder's cleanup would.
+            Directory.Delete(junction);
+        }
     }
 
     [UnixFact]
@@ -211,37 +228,6 @@ public sealed class OutboxTests
         Assert.Equal("MissingDependencyResult", Assert.IsType<Preparation.Rejected>(f.Prepare(U).GetAwaiter().GetResult()).Reason.Problem.ToString());
         Assert.Equal(0, f.Read().Preparations.Values.Count(p => f.Read().Attempts[p.Launch.Attempt].Task == U));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-    }
-
-    private static class Junction
-    {
-        public static void Create(string path, string target)
-        {
-            Directory.CreateDirectory(path);
-            using var handle = CreateFile(path, 0x40000000, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
-            Assert.False(handle.IsInvalid, $"CreateFile failed with {Marshal.GetLastPInvokeError()}.");
-            var substitute = System.Text.Encoding.Unicode.GetBytes("\\??\\" + Path.GetFullPath(target));
-            var display = System.Text.Encoding.Unicode.GetBytes(Path.GetFullPath(target));
-            var buffer = new byte[16 + substitute.Length + display.Length + 4];
-            BitConverter.GetBytes(0xa0000003u).CopyTo(buffer, 0);
-            BitConverter.GetBytes((ushort)(buffer.Length - 8)).CopyTo(buffer, 4);
-            BitConverter.GetBytes((ushort)substitute.Length).CopyTo(buffer, 10);
-            BitConverter.GetBytes((ushort)(substitute.Length + 2)).CopyTo(buffer, 12);
-            BitConverter.GetBytes((ushort)display.Length).CopyTo(buffer, 14);
-            substitute.CopyTo(buffer, 16);
-            display.CopyTo(buffer, 18 + substitute.Length);
-            Assert.True(DeviceIoControl(handle, 0x900a4, buffer, buffer.Length, IntPtr.Zero, 0, out _, IntPtr.Zero),
-                $"FSCTL_SET_REPARSE_POINT failed with {Marshal.GetLastPInvokeError()}.");
-        }
-
-        [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security,
-            uint disposition, uint flags, IntPtr template);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool DeviceIoControl(Microsoft.Win32.SafeHandles.SafeFileHandle handle, uint code, byte[] input, int length,
-            IntPtr output, int capacity, out int written, IntPtr overlapped);
     }
 
     [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]
