@@ -427,7 +427,7 @@ internal sealed class GitRepository
         {
             return new IndexAlignment.Unexpected(observed);
         }
-        var read = Git(checkout, GitOperation.Worktree, ["read-tree", "--reset", target.Hex]);
+        var read = Git(checkout, GitOperation.Worktree, ["read-tree", target.Hex]);
         if (read.ExitCode != 0)
         {
             return new IndexAlignment.Failed(read.Stderr);
@@ -579,7 +579,7 @@ internal sealed class GitRepository
     private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory, TimeSpan patience,
         IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
     {
-        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", .. arguments])
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", .. arguments])
         {
             WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -639,42 +639,11 @@ internal sealed class GitRepository
     {
         var result = Git(checkout, GitOperation.Worktree, ["ls-files", "--stage", "-v", "-z"]);
         if (result.ExitCode != 0) return Failure<byte[]>(result);
-        var present = new List<(string Path, string Blob)>();
-        GitResult? filemode = null;
-        GitRead<byte[]>.Failed Hidden(string path) => new(MaterializationProblem.DirtyWorktree,
-            $"The index hides changes to {path} with assume-unchanged or skip-worktree.");
         foreach (var entry in NulFields(result).Where(entry => char.IsLower(entry[0]) || entry[0] == 'S'))
         {
-            var tab = entry.IndexOf('\t');
-            var path = entry[(tab + 1)..];
-            var fullPath = Path.Combine(checkout, path);
-            if (!File.Exists(fullPath) && !Directory.Exists(fullPath) && new FileInfo(fullPath).LinkTarget is null)
-            {
-                if (entry[0] == 'S') continue;
-                return Hidden(path);
-            }
-            var header = entry[..tab].Split(' ');
-            if (header[1] is not ("100644" or "100755")) return Hidden(path);
-            try { RegularFile.Verify(fullPath); }
-            catch (IOException) { return Hidden(path); }
-            if (!OperatingSystem.IsWindows())
-            {
-                filemode ??= Git(checkout, GitOperation.Metadata, ["config", "--bool", "--get", "core.filemode"]);
-                if (filemode.ExitCode is not (0 or 1)) return Failure<byte[]>(filemode);
-                if (filemode.Text.Trim() != "false" && ((File.GetUnixFileMode(fullPath) & UnixFileMode.UserExecute) != 0) != (header[1] == "100755"))
-                    return Hidden(path);
-            }
-            present.Add((path, header[2]));
-        }
-        if (present.Count != 0)
-        {
-            var paths = string.Join('\n', present.Select(entry => "\"" + entry.Path.Replace("\\", "\\\\", StringComparison.Ordinal)
-                .Replace("\"", "\\\"", StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal) + "\"")) + "\n";
-            var hashed = Git(checkout, GitOperation.Worktree, ["hash-object", "--stdin-paths"], stdin: Encoding.UTF8.GetBytes(paths));
-            if (hashed.ExitCode != 0) return Failure<byte[]>(hashed);
-            var blobs = hashed.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 0; i < present.Count; i++)
-                if (i >= blobs.Length || blobs[i].TrimEnd('\r') != present[i].Blob) return Hidden(present[i].Path);
+            var path = entry[(entry.IndexOf('\t') + 1)..];
+            return new GitRead<byte[]>.Failed(MaterializationProblem.DirtyWorktree,
+                $"The index hides changes to {path} with assume-unchanged or skip-worktree.");
         }
         return new GitRead<byte[]>.Read(result.Stdout);
     }

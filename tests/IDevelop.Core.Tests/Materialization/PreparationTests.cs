@@ -10,62 +10,135 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class PreparationTests
 {
-    [Fact]
-    public async Task Sparse_checkout_prepares_and_publishes_without_materializing_or_losing_out_of_cone_files()
+    [Theory]
+    [InlineData("--sparse-index")]
+    [InlineData("--no-sparse-index")]
+    [InlineData("legacy")]
+    public async Task A_sparse_clone_gives_the_writer_a_full_checkout_that_publishes_an_out_of_cone_edit(string layout)
     {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
-        {
-            git.Write("a/inside.txt", "inside\n");
-            git.Write("outside/kept.bin", "outside\0bytes\n");
-            var commit = git.Commit("sparse");
-            git.Git("sparse-checkout", "set", "a");
-            return commit;
-        });
+        using var f = CheckoutFixture(layout);
+        var patterns = File.ReadAllBytes(f.Git.PathOf(".git/info/sparse-checkout"));
         var operation = f.Op();
-        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
-        Assert.Equal(ready, await f.Prepare(T, operation));
-        Assert.False(File.Exists(Path.Combine(ready.Checkout, "outside/kept.bin")));
-        Assert.Equal("S outside/kept.bin\n", f.Git.Run(ready.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
-        f.Git.Write("a/inside.txt", "changed inside\n", ready.Checkout);
-        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a/inside.txt").ExitCode);
-        Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "inside").ExitCode);
-        f.Close(ready);
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
+        Assert.Equal(writer, await f.Prepare(T, operation));
+        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 },
+            File.ReadAllBytes(Path.Combine(writer.Checkout, "outside/kept.bin")));
+        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
+        Assert.Equal("S outside/kept.bin\n", f.Git.Git("ls-files", "-v", "outside/kept.bin"));
+        Assert.False(File.Exists(f.Git.PathOf("outside/kept.bin")));
+        f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
+        f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
+        f.Close(writer);
         var publicationOperation = f.Op();
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, publicationOperation, ready.Execution.Launch.Attempt));
-        var code = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code;
-        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 }, f.Git.Run(ready.Checkout, "show", code.Commit.Hex + ":outside/kept.bin").Stdout);
-        Assert.Equal("changed inside\n", f.Git.Git("show", code.Commit.Hex + ":a/inside.txt"));
-        Assert.False(File.Exists(Path.Combine(ready.Checkout, "outside/kept.bin")));
-        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, publicationOperation, ready.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, publicationOperation, writer.Execution.Launch.Attempt));
+        var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
+        Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
+        Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
+        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, publicationOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal("", f.Git.Run(writer.Checkout, "status", "--porcelain").Text);
+        Assert.Equal(patterns, File.ReadAllBytes(f.Git.PathOf(".git/info/sparse-checkout")));
+        Assert.Equal("S outside/kept.bin\n", f.Git.Git("ls-files", "-v", "outside/kept.bin"));
+        Assert.False(File.Exists(f.Git.PathOf("outside/kept.bin")));
     }
 
     [Theory]
     [InlineData("--sparse-index")]
     [InlineData("--no-sparse-index")]
-    public async Task Sparse_unstaged_publication_preserves_out_of_cone_bytes_flags_and_replays(string layout)
+    [InlineData("legacy")]
+    public async Task An_out_of_cone_edit_in_a_sparse_clone_survives_salvage_and_retry(string layout)
     {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
-        {
-            git.Write("a/inside.txt", "inside\n");
-            git.Write("outside/kept.bin", "outside\0bytes\n");
-            var commit = git.Commit("sparse");
-            git.Git("sparse-checkout", "set", layout, "a");
-            return commit;
-        });
+        using var f = CheckoutFixture(layout);
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
+        f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
+        var salvageOperation = f.Op();
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
+        Assert.Equal("edited\n", f.Git.Git("show", retained.Commit.Hex + ":a/inside.txt"));
+        Assert.Equal(retained, f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        var resetOperation = f.Op();
+        var confirmation = f.Op();
+        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, resetOperation, retained.Receipt.Plan, confirmation));
+        Assert.Equal(writer.Execution.Location.AttemptBase, reset.Target);
+        Assert.Equal(reset, f.Materializer().ResetForRetry(W, f.RunId, resetOperation, retained.Receipt.Plan, confirmation));
+        Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", retained.Commit.Hex, "--format=%(objectname)", retained.Receipt.Ref));
+        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 },
+            File.ReadAllBytes(Path.Combine(writer.Checkout, "outside/kept.bin")));
+        Assert.Equal("inside\n", File.ReadAllText(Path.Combine(writer.Checkout, "a/inside.txt")));
+    }
+
+    [Theory]
+    [InlineData("publish")]
+    [InlineData("salvage")]
+    public async Task Sparse_state_the_writer_creates_blocks_publication_and_salvage_and_keeps_files(string mode)
+    {
+        using var f = CheckoutFixture();
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "sparse-checkout", "set", "a").ExitCode);
+        Assert.Equal("S outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
+        Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
+        f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
+        f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed);
+        var index = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout));
+        var bytes = File.ReadAllBytes(index);
+        var operation = f.Op();
+        MaterializationBlock block;
+        if (mode == "publish")
+        {
+            var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            block = blocked.Block;
+            Assert.Equal(blocked, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        }
+        else
+        {
+            var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            block = blocked.Block;
+            Assert.Equal(blocked, f.Materializer().Salvage(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        }
+        Assert.Equal("DirtyWorktree", block.Problem.ToString());
+        Assert.Equal("The index hides changes to outside/kept.bin with assume-unchanged or skip-worktree.", block.Detail);
+        Assert.Equal(writer.Execution.Location.AttemptBase.Hex, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Empty(f.Read().Results);
+        Assert.Empty(f.Read().Salvages);
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal("edited\n", File.ReadAllText(Path.Combine(writer.Checkout, "a/inside.txt")));
+        Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
+    }
+
+    [Fact]
+    public async Task An_out_of_cone_edit_the_writer_restores_after_making_its_checkout_sparse_is_published()
+    {
+        using var f = CheckoutFixture();
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "sparse-checkout", "set", "a").ExitCode);
+        f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
+        var writerEnvironment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(" M outside/kept.bin\n", f.Git.Run(writer.Checkout, writerEnvironment, "status", "--porcelain").Text);
+        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
         f.Close(writer);
         var operation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
-        Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
-        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 },
-            f.Git.Run(writer.Checkout, "show", commit + ":outside/kept.bin").Stdout);
+        Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
+        Assert.Equal("writer edit\n", File.ReadAllText(Path.Combine(writer.Checkout, "outside/kept.bin")));
         Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
-        Assert.Equal("S outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
-        Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
-        Assert.Equal("", f.Git.Run(writer.Checkout, "status", "--porcelain").Text);
     }
+
+    private static PreparationFixture CheckoutFixture(string? layout = null) => new(FixtureWorkflow(Writer(T)), configureBase: git =>
+    {
+        git.Write("a/inside.txt", "inside\n");
+        git.Write("outside/kept.bin", "outside\0bytes\n");
+        var commit = git.Commit("sparse");
+        if (layout == "legacy")
+        {
+            git.Git("config", "core.sparseCheckout", "true");
+            git.Write(".git/info/sparse-checkout", "/a/\n");
+            git.Git("read-tree", "-mu", "HEAD");
+        }
+        else if (layout is not null) git.Git("sparse-checkout", "set", layout, "a");
+        return commit;
+    });
 
     [Theory]
     [InlineData("none", true)]

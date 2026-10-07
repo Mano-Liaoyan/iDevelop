@@ -65,7 +65,9 @@ internal sealed class GitFixture : IDisposable
         return result.Text;
     }
 
-    public GitResult Run(string checkout, params string[] arguments)
+    public GitResult Run(string checkout, params string[] arguments) => Run(checkout, Environment, arguments);
+
+    public GitResult Run(string checkout, IReadOnlyDictionary<string, string> environment, params string[] arguments)
     {
         using var process = new Process
         {
@@ -75,7 +77,7 @@ internal sealed class GitFixture : IDisposable
                 RedirectStandardOutput = true, RedirectStandardError = true,
             },
         };
-        foreach (var (key, value) in Environment) process.StartInfo.Environment[key] = value;
+        foreach (var (key, value) in environment) process.StartInfo.Environment[key] = value;
         process.Start();
         using var bytes = new MemoryStream();
         var stdout = process.StandardOutput.BaseStream.CopyToAsync(bytes);
