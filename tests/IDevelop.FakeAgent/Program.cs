@@ -10,8 +10,8 @@ using System.Text.Json;
 //   IDevelop.FakeAgent --spawn-sleeper <file>   start a sleeping copy, write its pid, and exit, as spawnThroughCmd runs it
 //
 // The rules file is {"rules": [{"when": ["auth", "status"], "has": ["--resume", "id"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
-// The first rule whose "when" is a prefix of the client arguments, and whose optional "has" appears among them in that
-// order without gaps, runs its steps in order. Steps:
+// The first rule whose "when" is a prefix of the client arguments after any leading "-c key=value" pairs, as Git takes
+// them, and whose optional "has" appears among them in that order without gaps, runs its steps in order. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
 //   recordWorkingDirectory <file> write the current folder
 //   captureStdin <file>           copy stdin to the file until it closes
@@ -332,7 +332,13 @@ void Print(string line)
 static bool Matches(JsonElement when, string[] arguments)
 {
     string[] prefix = [.. when.EnumerateArray().Select(part => part.GetString()!)];
-    return prefix.Length <= arguments.Length && prefix.SequenceEqual(arguments[..prefix.Length]);
+    var command = arguments;
+    while (command is ["-c", var setting, .. var rest] && setting.Contains('='))
+    {
+        command = rest;
+    }
+
+    return prefix.Length <= command.Length && prefix.SequenceEqual(command[..prefix.Length]);
 }
 
 static bool Has(JsonElement rule, string[] arguments)
