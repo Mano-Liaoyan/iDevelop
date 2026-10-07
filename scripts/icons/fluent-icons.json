@@ -63,6 +63,13 @@
     { "key": "IconConstraints", "asset": "Lock Closed", "file": "ic_fluent_lock_closed_16_regular.svg" },
     { "key": "IconChecklist", "asset": "Text Bullet List LTR", "file": "ic_fluent_text_bullet_list_ltr_16_regular.svg" },
     { "key": "IconVersion", "asset": "Tag", "file": "ic_fluent_tag_16_regular.svg" },
-    { "key": "IconDescription", "asset": "Text Description", "file": "ic_fluent_text_description_16_regular.svg" }
+    { "key": "IconDescription", "asset": "Text Description", "file": "ic_fluent_text_description_16_regular.svg" },
+    { "key": "IconChat", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
+    { "key": "IconSend", "asset": "Send", "file": "ic_fluent_send_16_regular.svg" },
+    { "key": "IconCopy", "asset": "Copy", "file": "ic_fluent_copy_16_regular.svg" },
+    { "key": "IconPanelBottom", "asset": "Layout Row Two", "file": "ic_fluent_layout_row_two_16_regular.svg" },
+    { "key": "IconMaximize", "asset": "Arrow Maximize", "file": "ic_fluent_arrow_maximize_16_regular.svg" },
+    { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
+    { "key": "IconShieldDismiss", "asset": "Shield Dismiss", "file": "ic_fluent_shield_dismiss_16_regular.svg" }
   ]
 }

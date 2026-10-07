@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -20,6 +21,9 @@ public sealed class ProjectViewModel : ObservableObject
     // a new task gets a fresh id and opening refuses ids that two files share, so the first holder is the only one. A
     // running task deleted from its workflow keeps its owner, so its run stays in that workflow's run bar.
     private readonly Dictionary<TaskId, WorkflowCanvasViewModel> _owners = [];
+
+    // Unsent drafts, chosen attempts, and reading positions live as long as the project stays open.
+    private readonly Dictionary<ConversationKey, ConversationState> _conversations = [];
 
     internal ProjectViewModel(
         string folder, ProjectRuns runs, IEnumerable<WorkflowDocument> documents, Func<ProjectViewModel, WorkflowDocument, WorkflowCanvasViewModel> newCanvas)
@@ -49,6 +53,23 @@ public sealed class ProjectViewModel : ObservableObject
 
     internal IEnumerable<WorkflowDocument> UnsavedDocuments =>
         Workflows.Select(canvas => canvas.Document).Where(document => document.HasUnsavedChanges);
+
+    /// <summary>The inspector and card attention ask the window to open a conversation through this one route.</summary>
+    internal event Action<ConversationTarget>? ConversationRequested;
+
+    internal void OpenConversation(ConversationTarget target) => ConversationRequested?.Invoke(target);
+
+    /// <summary>The task's conversation state in the workflow, kept while the project stays open.</summary>
+    internal ConversationState ConversationOf(WorkflowCanvasViewModel canvas, TaskId task)
+    {
+        var key = new ConversationKey(new WorkflowRef(Folder, canvas.Workflow.Id), task);
+        if (!_conversations.TryGetValue(key, out var state))
+        {
+            _conversations.Add(key, state = new ConversationState());
+        }
+
+        return state;
+    }
 
     /// <summary>Whether the canvas's workflow holds or held the task this session.</summary>
     internal bool Owns(WorkflowCanvasViewModel canvas, TaskId task) => _owners.GetValueOrDefault(task) == canvas;
