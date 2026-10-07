@@ -12,6 +12,21 @@ public sealed class PublicationTests
 {
     private static readonly OperationId Operation = new(Id(2000));
 
+    [Fact]
+    public async Task A_preplan_live_writer_block_is_resolved_when_the_same_operation_publishes()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await ChangedWriter(f);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(boundary: new UnprovenBoundary())
+            .Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("LiveWriter", blocked.Block.Problem.ToString());
+        Assert.Single(f.Materializer().Inspect(W, f.RunId, T)!.Blocks);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex);
+        Assert.Empty(f.Materializer().Inspect(W, f.RunId, T)!.Blocks);
+        Assert.Equal("Publication verified.", Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
+    }
+
     [Theory]
     [InlineData(".idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json", "Tracked execution data: .idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json")]
     [InlineData(".idp/inputs/forced.txt", "Tracked execution data: .idp/inputs/forced.txt")]
