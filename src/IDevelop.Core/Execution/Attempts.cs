@@ -140,6 +140,9 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public long? Order { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? PresentationSequence { get; init; }
     }
 
     public sealed record QuestionRecorded(

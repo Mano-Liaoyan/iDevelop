@@ -29,6 +29,7 @@ public sealed partial class ProjectRuns
         private readonly Lock _gate = new();
         private ImmutableDictionary<string, LiveMessageBuffer> _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
         private long _revision;
+        private int _presentationSequence;
         private LaunchPlan _plan;
         private Turn _turn;
         private bool _messageWaiting;
@@ -227,7 +228,7 @@ public sealed partial class ProjectRuns
                                     write.Success ? "The answer was recorded." : "The answer was recorded, but delivery could not be confirmed."));
                             }
 
-                            if (!write.Success && _turn.ClientRuns)
+                            if (!write.Success && _turn.ClientRuns && !_turn.Stopping)
                             {
                                 Fail("iDevelop could not write to the client's input pipe.");
                             }
@@ -255,9 +256,9 @@ public sealed partial class ProjectRuns
                             }
 
                             _turn.Exit = null;
-                            foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order))
+                            foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order).ThenBy(pair => pair.Value.PresentationSequence))
                             {
-                                Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Message(buffer.Text) { Id = id, Partial = true }) { Order = buffer.Order });
+                                Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Message(buffer.Text) { Id = id, Partial = true }) { Order = buffer.Order, PresentationSequence = buffer.PresentationSequence });
                             }
 
                             lock (_gate)
@@ -427,7 +428,7 @@ public sealed partial class ProjectRuns
                     case AgentEvent.MessageDelta delta:
                         lock (_gate)
                         {
-                            var buffer = _buffers.GetValueOrDefault(delta.MessageId) ?? new LiveMessageBuffer("", _log.LineCount, at);
+                            var buffer = _buffers.GetValueOrDefault(delta.MessageId) ?? new LiveMessageBuffer("", _log.LineCount, at) { PresentationSequence = ++_presentationSequence };
                             _buffers = _buffers.SetItem(delta.MessageId, buffer with { Text = buffer.Text + delta.Text });
                             _revision++;
                         }
@@ -442,13 +443,13 @@ public sealed partial class ProjectRuns
 
                         if (!message.Partial)
                         {
-                            Append(new AttemptEvent.Agent(at, message) { Order = prior?.Order });
+                            Append(new AttemptEvent.Agent(at, message) { Order = prior?.Order, PresentationSequence = prior?.PresentationSequence });
                         }
 
                         lock (_gate)
                         {
                             _buffers = message.Partial
-                                ? _buffers.SetItem(id, (prior ?? new LiveMessageBuffer("", _log.LineCount, at)) with { Text = message.Text })
+                                ? _buffers.SetItem(id, (prior ?? new LiveMessageBuffer("", _log.LineCount, at) { PresentationSequence = ++_presentationSequence }) with { Text = message.Text })
                                 : _buffers.Remove(id);
                             _revision++;
                         }
@@ -484,7 +485,7 @@ public sealed partial class ProjectRuns
 
             foreach (var frame in output.Writes)
             {
-                Write(frame, close: false, null);
+                Write(frame, close: false, null, oneShotPrompt: output.IsOneShotPrompt);
             }
 
             if (output.CloseInput)
@@ -497,7 +498,7 @@ public sealed partial class ProjectRuns
                 CloseInput();
                 if (_turn.Protocol is not OneShotProtocol)
                 {
-                    Deadline();
+                    Deadline(Record.Verdict is AgentEvent.Succeeded ? _owner.TimeProvider.GetUtcNow() + _owner.SuccessExitTime : null);
                 }
             }
         }
@@ -645,6 +646,7 @@ public sealed partial class ProjectRuns
         private bool BeginStopping(RequestCloseReason reason)
         {
             var stopping = _turn.Stopping;
+            _turn.PromptCancellation.Cancel();
             _turn.StopReason = Record.InterruptReason is not null ? RequestCloseReason.Interrupted
                 : Record.CancelRequested ? RequestCloseReason.Cancelled : _turn.StopReason ?? reason;
             _turn.QuestionTimer?.Dispose();
@@ -686,12 +688,14 @@ public sealed partial class ProjectRuns
 
         private void Deadline(DateTimeOffset? stopBy = null)
         {
-            if (_turn.StopBy is not null)
+            var deadline = stopBy ?? _owner.TimeProvider.GetUtcNow() + _owner.ShutdownTime;
+            if (_turn.StopBy is { } current && current <= deadline)
             {
                 return;
             }
 
-            _turn.StopBy = stopBy ?? _owner.TimeProvider.GetUtcNow() + _owner.ShutdownTime;
+            _turn.StopTimer?.Dispose();
+            _turn.StopBy = deadline;
             var turn = _turn;
             turn.StopTimer = _owner.TimeProvider.CreateTimer(_ => _events.Writer.TryWrite(new Input.Deadline(turn)), null,
                 Remaining(_turn.StopBy.Value), Timeout.InfiniteTimeSpan);
@@ -708,10 +712,10 @@ public sealed partial class ProjectRuns
             Write("", close: true, null);
         }
 
-        private void Write(string frame, bool close, string? requestId, Input.Answer? answer = null)
+        private void Write(string frame, bool close, string? requestId, Input.Answer? answer = null, bool oneShotPrompt = false)
         {
             _turn.PendingWrites++;
-            _turn.Writes.Writer.TryWrite(new WriteWork(frame, close, requestId, answer));
+            _turn.Writes.Writer.TryWrite(new WriteWork(frame, close, requestId, answer, oneShotPrompt));
         }
 
         private void Read(Turn turn)
@@ -743,7 +747,10 @@ public sealed partial class ProjectRuns
                 await foreach (var work in turn.Writes.Reader.ReadAllAsync())
                 {
                     var text = work.Frame.Length > 0 && turn.Protocol is not OneShotProtocol ? work.Frame + "\n" : work.Frame;
-                    var success = await turn.Process.WriteInputAsync(text, work.Close, _owner.ShutdownTime, turn.Lifetime.Token);
+                    using var promptLifetime = work.OneShotPrompt
+                        ? CancellationTokenSource.CreateLinkedTokenSource(turn.Lifetime.Token, turn.PromptCancellation.Token) : null;
+                    var success = await turn.Process.WriteInputAsync(text, work.Close,
+                        work.OneShotPrompt ? Timeout.InfiniteTimeSpan : _owner.ShutdownTime, promptLifetime?.Token ?? turn.Lifetime.Token);
                     _events.Writer.TryWrite(new Input.WriteDone(turn, work.RequestId, success, work.Answer));
                 }
             });
@@ -755,7 +762,8 @@ public sealed partial class ProjectRuns
             try
             {
                 var code = await turn.Process.WaitForExitAsync();
-                var remaining = turn.StopBy is { } stopBy ? TimeSpan.FromTicks(Math.Max(0, (stopBy - _owner.TimeProvider.GetUtcNow()).Ticks)) : (TimeSpan?)null;
+                turn.PromptCancellation.Cancel();
+                var remaining = turn.Stopping && turn.StopBy is { } stopBy ? TimeSpan.FromTicks(Math.Max(0, (stopBy - _owner.TimeProvider.GetUtcNow()).Ticks)) : (TimeSpan?)null;
                 await turn.Process.WaitForOutputAsync(remaining);
                 lock (_gate)
                 {
@@ -848,6 +856,7 @@ public sealed partial class ProjectRuns
             _turn.Writes.Writer.TryComplete();
             await _turn.Writer;
             _turn.Lifetime.Dispose();
+            _turn.PromptCancellation.Dispose();
             _turn.Process.Dispose();
         }
 
@@ -880,7 +889,7 @@ public sealed partial class ProjectRuns
             public sealed record Deadline(Turn Turn) : Input;
         }
 
-        private sealed record WriteWork(string Frame, bool Close, string? RequestId, Input.Answer? Answer);
+        private sealed record WriteWork(string Frame, bool Close, string? RequestId, Input.Answer? Answer, bool OneShotPrompt);
 
         private sealed class Turn(ChildProcess process, TurnProtocol protocol)
         {
@@ -889,6 +898,8 @@ public sealed partial class ProjectRuns
             public TurnProtocol Protocol { get; } = protocol;
 
             public CancellationTokenSource Lifetime { get; } = new();
+
+            public CancellationTokenSource PromptCancellation { get; } = new();
 
             public Channel<WriteWork> Writes { get; } = Channel.CreateUnbounded<WriteWork>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
 

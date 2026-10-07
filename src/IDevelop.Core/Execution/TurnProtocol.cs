@@ -5,6 +5,8 @@ namespace IDevelop.Execution;
 
 internal sealed record ProtocolOutput(ImmutableArray<AgentEvent> Events, ImmutableArray<string> Writes, bool CloseInput)
 {
+    public bool IsOneShotPrompt { get; init; }
+
     public static ProtocolOutput Empty { get; } = new([], [], false);
 }
 
@@ -38,7 +40,7 @@ internal sealed class OneShotProtocol(LaunchArguments launch, Func<string, Immut
     private int _ordinal;
     private string _messageId = "local:0";
 
-    public override ProtocolOutput Start() => new([], [launch.Stdin], true);
+    public override ProtocolOutput Start() => new([], [launch.Stdin], true) { IsOneShotPrompt = true };
 
     public override ProtocolOutput Read(string line)
     {
