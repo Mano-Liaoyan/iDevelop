@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -770,5 +771,37 @@ public sealed class WorkspaceTests : IDisposable
         shell.Click(ProjectButton(shell, "alpha", "NewWorkflow"));
 
         Assert.Equal(("Workflow 1", true), (shell.Breadcrumb().Item2, InSidebarView(shell, shell.WorkflowRow("alpha", "Workflow 1"))));
+    }
+
+    [AvaloniaFact]
+    public void A_remembered_folder_that_is_missing_shows_as_not_found_until_the_person_forgets_it()
+    {
+        var (shell, alpha, beta) = OpenBoth();
+        shell.Window.Close();
+        shell.Render();
+        Directory.Delete(beta, recursive: true);
+
+        var missing = Shell.Show();
+        missing.Window.ViewModel.Restore(null);
+        missing.Render();
+        var unopened = missing.Find<ItemsControl>("UnopenedProjects");
+        var forget = missing.Find<Button>("ForgetProject");
+
+        Assert.Equal(["beta", "Folder not found"], Shell.Texts(unopened));
+        Assert.Equal(
+            ($"The folder {beta} does not exist.", "Forget beta"),
+            (AutomationProperties.GetHelpText(missing.Find<TextBlock>("UnopenedReason")), ControlAutomationPeer.CreatePeerForElement(forget).GetName()));
+
+        missing.Click(forget);
+
+        Assert.Empty(Shell.Texts(unopened));
+        Assert.Equal([alpha], RememberedProjects());
+        missing.Window.Close();
+        missing.Render();
+        Assert.Equal(beta, Project("beta"));
+        var next = Shell.Show();
+        next.Window.ViewModel.Restore(null);
+        next.Render();
+        Assert.Equal([("alpha", ["Build", "Release"])], next.Tree());
     }
 }
