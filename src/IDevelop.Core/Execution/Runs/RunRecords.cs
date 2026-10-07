@@ -230,6 +230,15 @@ internal enum RunProblem
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
 
+internal abstract record TaskRunOwnership
+{
+    private TaskRunOwnership() { }
+
+    internal sealed record Free : TaskRunOwnership;
+    internal sealed record Owned : TaskRunOwnership;
+    internal sealed record Unreadable(string Detail) : TaskRunOwnership;
+}
+
 internal abstract record RunRead
 {
     private RunRead() { }

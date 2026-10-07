@@ -89,6 +89,7 @@ public sealed partial class ProjectRuns
             StartProblem.ModelUnready model => model.Reason,
             StartProblem.AlreadyRunning => "Another run owns this task.",
             StartProblem.RunInAnotherWindow => "Another window owns this task.",
+            StartProblem.RunOwned => "A workflow run owns this task.",
             StartProblem.UnderReview review => $"The task is under review by {review.Review}.",
             StartProblem.NoConversation => "This node has no agent conversation.",
             StartProblem.NoAgent => "Choose an agent before continuing.",

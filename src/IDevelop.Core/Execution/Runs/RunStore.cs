@@ -45,6 +45,40 @@ internal sealed class RunStore
         }
     }
 
+    public TaskRunOwnership TaskOwnership(TaskId task)
+    {
+        var owned = false;
+        try
+        {
+            if (!Directory.Exists(_runs)) return new TaskRunOwnership.Free();
+            foreach (var workflowFolder in Directory.EnumerateDirectories(_runs))
+            foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder))
+            foreach (var journal in Directory.EnumerateFiles(runFolder, "events.jsonl"))
+            {
+                var relative = Path.GetRelativePath(_project, journal);
+                if (!Guid.TryParse(Path.GetFileName(workflowFolder), out var workflow) ||
+                    !Guid.TryParse(Path.GetFileName(runFolder), out var run))
+                    return new TaskRunOwnership.Unreadable($"{relative}: invalid run identity.");
+                var read = ReadJournal(new(workflow), new(run), journal);
+                var record = read switch
+                {
+                    RunRead.Loaded loaded => loaded.Record,
+                    RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: { } prefix } => prefix,
+                    _ => null,
+                };
+                if (record is null)
+                    return new TaskRunOwnership.Unreadable($"{relative}: {((RunRead.Rejected)read).Reason.Problem}.");
+                owned |= record.Phase != RunPhase.Abandoned &&
+                    record.Attempts.Values.Any(attempt => attempt.Task == task && !record.Closures.ContainsKey(attempt.Id));
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new TaskRunOwnership.Unreadable(error.Message);
+        }
+        return owned ? new TaskRunOwnership.Owned() : new TaskRunOwnership.Free();
+    }
+
     internal string Project => _project;
 
     public ControlTake TakeControl(WorkflowId workflow, RunId run) => CoordinatorPermit.Acquire(this, workflow, run);
@@ -192,11 +226,15 @@ internal sealed class RunStore
                 var reserved = Reservation(record, existing.Id);
                 return RunReducer.SameInput(reserved.Inputs, inputs) ? new Mutation.Existing(reserved) : Refuse(RunProblem.InputConflict);
             }
+            if (RunReducer.ReservationTaskProblem(record, preparation.Task, preparation.Revision, recorded: true) is { } taskProblem)
+            {
+                return new Mutation.Rejected(taskProblem);
+            }
             if (RunReducer.InputProblem(record, inputs, true) is { } inputProblem)
             {
                 return new Mutation.Rejected(inputProblem);
             }
-            if (RunReducer.PlanProblem(record, preparation) is { } planProblem)
+            if (RunReducer.PlanProblem(record, preparation, recorded: true) is { } planProblem)
             {
                 return Refuse(planProblem);
             }
@@ -945,14 +983,15 @@ internal sealed class RunStore
         return null;
     }
 
-    private RunRead ReadJournal(WorkflowId workflow, RunId run)
+    private RunRead ReadJournal(WorkflowId workflow, RunId run, string? path = null)
     {
-        if (!File.Exists(Journal(workflow, run)) || new FileInfo(Journal(workflow, run)).Length == 0)
+        path ??= Journal(workflow, run);
+        if (!File.Exists(path) || new FileInfo(path).Length == 0)
         {
             return new RunRead.Rejected(new(RunProblem.NotApproved));
         }
 
-        var journal = RunJournal.Decode(File.ReadAllBytes(Journal(workflow, run)));
+        var journal = RunJournal.Decode(File.ReadAllBytes(path));
         var read = RunReducer.Replay(workflow, run, journal.Entries);
         if (journal.Entries.Length != 0 && read is RunRead.Rejected)
         {

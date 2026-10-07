@@ -229,6 +229,7 @@ public static class RunText
             $"{Clients.Name(p.Client)} runs through cmd.exe, which cannot work in a network folder and would run it in the Windows folder instead. Open the project from a drive letter to run this task.",
         StartProblem.AlreadyRunning p => $"\"{p.Title}\" is already running.",
         StartProblem.RunInAnotherWindow => "Another iDevelop window is starting this task.",
+        StartProblem.RunOwned => "A workflow run owns this task.",
         StartProblem.CannotRecord p => p.Reason,
         _ => throw new UnreachableException(),
     };

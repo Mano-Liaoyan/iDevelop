@@ -712,6 +712,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
         }
 
+        switch (RunStore.Open(_projectFolder).TaskOwnership(task))
+        {
+            case TaskRunOwnership.Owned:
+                held.Dispose();
+                return new LockTake.HeldElsewhere(new StartProblem.RunOwned());
+            case TaskRunOwnership.Unreadable unreadable:
+                held.Dispose();
+                return new LockTake.Failed(new StartProblem.CannotRecord(
+                    $"iDevelop could not read this project's workflow runs. {unreadable.Detail}"));
+        }
+
         RefreshPublished(ReadAndReconcile(_attempts, held: task));
 
         NotifyConversations(null);

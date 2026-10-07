@@ -103,7 +103,9 @@ internal static partial class RunReducer
                     break;
                 case RunEvent.Reserved reserved:
                     var attempt = reserved.Attempt;
-                    if (ReservationTaskProblem(record, attempt.Task, attempt.Revision) is { } taskProblem)
+                    if (ReservationTaskProblem(record, attempt.Task, attempt.Revision,
+                        recorded: record.Schema >= 2 && record.Plans.Values.OfType<MaterializationPlan.Preparation>()
+                            .Any(plan => plan.Attempt == attempt.Id)) is { } taskProblem)
                     {
                         return Reject(taskProblem.Problem, taskProblem.Task);
                     }
@@ -408,9 +410,7 @@ internal static partial class RunReducer
 
             if (record.Attempts.Values.Any(attempt => attempt.Task == task.Id) || record.Results.Any(result => result.Task == task.Id))
             {
-                if (Revision.CanonicalTask(task) != Revision.CanonicalTask(replacement) ||
-                    !record.Revision.Snapshot.Connections.Where(edge =>
-                        edge.Key.To == task.Id).SequenceEqual(candidate.Connections.Where(edge => edge.Key.To == task.Id)))
+                if (!SameTask(record.Revision.Snapshot, candidate, task.Id))
                 {
                     return RunProblem.StartedTaskChanged;
                 }
@@ -418,6 +418,11 @@ internal static partial class RunReducer
         }
         return null;
     }
+
+    private static bool SameTask(Workflow original, Workflow current, TaskId task) =>
+        original.Tasks.TryGetValue(task, out var definition) && current.Tasks.TryGetValue(task, out var replacement) &&
+        Revision.CanonicalTask(definition) == Revision.CanonicalTask(replacement) &&
+        original.Connections.Where(edge => edge.Key.To == task).SequenceEqual(current.Connections.Where(edge => edge.Key.To == task));
 
     internal static RunAttempt? Slot(RunRecord record, TaskId task, AttemptCause cause) => record.Attempts.Values.FirstOrDefault(attempt => MatchesSlot(attempt, task, cause));
 
@@ -439,19 +444,20 @@ internal static partial class RunReducer
         _ => null,
     };
 
-    internal static RunRejection? ReservationTaskProblem(RunRecord record, TaskId task, RevisionId revision)
+    internal static RunRejection? ReservationTaskProblem(RunRecord record, TaskId task, RevisionId revision, bool recorded = false)
     {
         if (record.Phase != RunPhase.Approved)
         {
             return new(RunProblem.RunStopped);
         }
 
-        if (revision != record.Revision.Id)
+        if (revision != record.Revision.Id && (!recorded || !record.Revisions.TryGetValue(revision, out var original) ||
+            !SameTask(original.Snapshot, record.Revision.Snapshot, task)))
         {
             return new(RunProblem.RevisionConflict);
         }
 
-        if (!record.Revision.Snapshot.Tasks.TryGetValue(task, out var definition))
+        if (!record.Revisions[revision].Snapshot.Tasks.TryGetValue(task, out var definition))
         {
             return new(RunProblem.IdentityMismatch);
         }
