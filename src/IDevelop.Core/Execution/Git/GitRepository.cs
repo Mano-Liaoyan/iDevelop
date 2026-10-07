@@ -554,18 +554,20 @@ internal sealed partial class GitRepository
         return PathRemoval.Removed;
     }
 
-    private GitResult Git(string checkout, GitOperation operation, string[] arguments, IReadOnlyDictionary<string, string>? overlay = null, byte[]? stdin = null)
+    private GitResult Git(string checkout, GitOperation operation, string[] arguments, IReadOnlyDictionary<string, string>? overlay = null, byte[]? stdin = null,
+        IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
     {
         var environment = new Dictionary<string, string>(_environment);
         if (overlay is not null)
         {
             foreach (var (key, value) in overlay) environment[key] = value;
         }
-        return Run(arguments, checkout, operation, _limits, environment, stdin);
+        return Run(arguments, checkout, operation, _limits, environment, stdin, pinnedGitEnvironment);
     }
 
     private static GitResult Run(string[] arguments, string workingDirectory, GitOperation operation, GitLimits limits,
-        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
+        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null,
+        IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
     {
         var patience = operation switch
         {
@@ -573,11 +575,12 @@ internal sealed partial class GitRepository
             GitOperation.Worktree => limits.Worktree,
             GitOperation.Network => limits.Network,
         };
-        return RunAsync(arguments, workingDirectory, patience, environment, stdin).GetAwaiter().GetResult();
+        return RunAsync(arguments, workingDirectory, patience, environment, stdin, pinnedGitEnvironment).GetAwaiter().GetResult();
     }
 
     private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory, TimeSpan patience,
-        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
+        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null,
+        IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
     {
         var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
         {
@@ -588,6 +591,12 @@ internal sealed partial class GitRepository
         if (environment is not null)
         {
             foreach (var (key, value) in environment) start.Environment[key] = value;
+        }
+        if (pinnedGitEnvironment is not null)
+        {
+            foreach (var key in start.Environment.Keys.Where(key => key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)).ToArray())
+                start.Environment.Remove(key);
+            foreach (var (key, value) in pinnedGitEnvironment) start.Environment[key] = value;
         }
         if (!OperatingSystem.IsWindows() && environment is not null && environment.TryGetValue("PATH", out var searchPath))
             start.FileName = CommandResolver.Create(searchPath.Split(Path.PathSeparator), []).Resolve("git")?.Path ?? "git";

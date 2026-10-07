@@ -319,4 +319,57 @@ public sealed class JoinPolicyTests
             .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
         Assert.Equal("changed 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nchanged 10\n", File.ReadAllText(Path.Combine(ready.Checkout, "x.txt")));
     }
+
+    [UnixTheory]
+    [InlineData("GIT_COMMON_DIR")]
+    [InlineData("GIT_CONFIG_COUNT")]
+    [InlineData("GIT_CONFIG_PARAMETERS")]
+    [InlineData("GIT_CONFIG_SYSTEM")]
+    [InlineData("GIT_CONFIG_GLOBAL")]
+    public async Task Inherited_git_configuration_cannot_run_a_driver_or_publish_its_ref(string variable)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(Diamond(), configureBase: git =>
+        {
+            git.Write(".gitattributes", "settings.txt merge=keep\n");
+            return Settings(git);
+        });
+        await ConflictingSources(f);
+        var folder = Path.GetDirectoryName(f.Git.Folder)!;
+        var marker = Path.Combine(folder, "driver-ran");
+        var script = Path.Combine(folder, "driver.sh");
+        Assert.DoesNotContain("'", script);
+        File.WriteAllText(script, "#!/bin/sh\ntouch \"" + marker + "\"\ngit update-ref refs/heads/driver-wrote " + f.Read().Base.Commit.Hex + "\nexit 0\n");
+        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var command = "\"" + script + "\"";
+        var environment = new Dictionary<string, string>(f.Git.Environment);
+        switch (variable)
+        {
+            case "GIT_COMMON_DIR":
+                f.Git.Git("config", "merge.keep.driver", command);
+                environment[variable] = f.Git.Open().CommonDirectory;
+                break;
+            case "GIT_CONFIG_COUNT":
+                environment[variable] = "1";
+                environment["GIT_CONFIG_KEY_0"] = "merge.keep.driver";
+                environment["GIT_CONFIG_VALUE_0"] = command;
+                break;
+            case "GIT_CONFIG_PARAMETERS":
+                environment[variable] = "'merge.keep.driver'='" + command + "'";
+                break;
+            default:
+                var config = Path.Combine(folder, "driver.config");
+                Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "--file", config, "merge.keep.driver", command).ExitCode);
+                environment[variable] = config;
+                if (variable == "GIT_CONFIG_SYSTEM") environment["GIT_CONFIG_NOSYSTEM"] = "0";
+                break;
+        }
+        var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment)
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        Assert.Equal(MaterializationProblem.FanInConflict, blocked.Block.Problem);
+        Assert.Equal(new[] { "settings.txt" }, blocked.Block.Conflict!.Paths);
+        Assert.False(File.Exists(marker));
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef("refs/heads/driver-wrote")));
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
+    }
 }

@@ -57,17 +57,16 @@ internal sealed partial class GitRepository
             var environment = new Dictionary<string, string>
             {
                 ["GIT_DIR"] = temporary,
+                ["GIT_COMMON_DIR"] = temporary,
                 ["GIT_OBJECT_DIRECTORY"] = Path.Combine(CommonDirectory, "objects"),
                 ["GIT_SHALLOW_FILE"] = Path.Combine(CommonDirectory, "shallow"),
                 ["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null",
                 ["GIT_CONFIG_NOSYSTEM"] = "1",
                 ["GIT_ATTR_NOSYSTEM"] = "1",
-                ["GIT_CONFIG_COUNT"] = "0",
-                ["GIT_CONFIG_PARAMETERS"] = "",
             };
             var result = Git(ProjectFolder, GitOperation.Worktree,
                 [.. MergeSettings.SelectMany(setting => new[] { "-c", setting.Key + "=" + setting.Value }),
-                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex], environment);
+                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
             if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages, out var messages))
                 return new TreeMerge.Failed(result.Stderr.Length == 0 ? "Git returned malformed merge-tree output." : result.Stderr);
             return result.ExitCode switch
