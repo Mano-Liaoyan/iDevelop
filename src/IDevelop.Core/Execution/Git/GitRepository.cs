@@ -427,7 +427,7 @@ internal sealed class GitRepository
         {
             return new IndexAlignment.Unexpected(observed);
         }
-        var read = Git(checkout, GitOperation.Worktree, ["read-tree", target.Hex]);
+        var read = Git(checkout, GitOperation.Worktree, ["read-tree", "--reset", target.Hex]);
         if (read.ExitCode != 0)
         {
             return new IndexAlignment.Failed(read.Stderr);
