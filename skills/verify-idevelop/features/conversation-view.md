@@ -10,7 +10,7 @@ A user reads and continues a task's whole conversation in the main area, or in a
 - `view-send` sends the composer's text with `ConversationSend`, clears it only after iDevelop recorded it, and shows a refusal in `ConversationNotice`.
 - `view-draft` keeps each task's draft when the person selects another task, switches between `ConversationLayout` layouts, or closes and reopens the view.
 - `view-dock` moves the view between the main area and a dock under the canvas with `ConversationLayout`, and `CloseConversation` or Escape closes it.
-- `view-follow` follows streamed output at the end, keeps the reading position elsewhere, and offers `JumpToLatest`. It needs a wheel, so `ConversationViewTests.Prepending_an_earlier_page_keeps_the_entry_being_read_and_its_selected_text_in_place` covers it headlessly.
+- `view-follow` follows streamed output at the end, keeps the reading position elsewhere, and offers `JumpToLatest`. It needs a wheel or a click in the scroll track, so `ConversationViewTests.Prepending_an_earlier_page_keeps_the_entry_being_read_and_its_selected_text_in_place` and `ConversationViewTests.A_click_in_the_scroll_track_while_output_streams_stops_following_the_end_among_rows_of_different_heights` cover it headlessly.
 - `view-links` opens a web link only after `OpenLink` in its confirmation, which shows the address in `LinkDestination`, and offers only `CopyLink` for any other link. It needs a pointer on message text, so `MarkdownViewTests` covers it headlessly.
 
 ## How to get to it (user POV)
@@ -39,3 +39,4 @@ Preconditions:
 - `CardAttention` exists only while a card needs the person, so `Find-ById $s.Window 'CardAttention' 1` returns `$null` otherwise. UI Automation may not reach a button inside a card; `ConversationWindowTests.A_failed_card_opens_its_conversation_from_its_attention_glyph` covers it headlessly.
 - `HistoricalNote`, `ConversationStopAndSend`, `ConversationCancel`, `ConversationMarkDone`, `ConversationTerminal`, `LoadEarlier`, `JumpToLatest`, and `ConversationNotice` exist only while shown. Pass a short timeout.
 - Message text is Markdown rendered into several text elements, so read a message's whole source with its `CopyMessage` button and the clipboard, not from one element.
+- A message longer than 20,000 characters, or with more than 1,000 table cells or 500 links, shows as its source in one text element, unformatted.

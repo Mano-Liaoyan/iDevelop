@@ -125,6 +125,50 @@ public sealed class MarkdownViewTests
         window.Close();
     }
 
+    [AvaloniaFact]
+    public void A_message_past_the_cell_link_or_length_limit_shows_as_its_source()
+    {
+        static string Table(int rows) => "| a | b | c | d | e | f | g | h | i | j |\n|-|-|-|-|-|-|-|-|-|-|\n"
+            + string.Concat(Enumerable.Range(0, rows).Select(row => "| x | x | x | x | x | x | x | x | x | x |\n"));
+        static string Links(int count) => string.Join(" ", Enumerable.Range(0, count).Select(i => $"[l{i}](https://example.com/{i})"));
+        var (window, view) = Show("");
+        (int Cells, int Links, int Blocks) Shown(string markdown)
+        {
+            view.Markdown = markdown;
+            window.UpdateLayout();
+            return (view.GetVisualDescendants().OfType<Border>().Count(border => border.Classes.Contains("mdCell")),
+                view.GetVisualDescendants().OfType<Button>().Count(button => button.Classes.Contains("mdLink")), Blocks(view).Length);
+        }
+
+        Assert.Equal((1000, 0, 1000), Shown(Table(99)));
+        Assert.Equal((0, 0, 1), Shown(Table(100)));
+        Assert.Equal((0, 500, 1), Shown(Links(500)));
+        Assert.Equal((0, 0, 1), Shown(Links(501)));
+        Assert.Equal((0, 0, 2), Shown("Short.\n\n" + new string('w', 19_992)));
+        var longer = "Short.\n\n" + new string('w', 19_993);
+        Assert.Equal((0, 0, 1), Shown(longer));
+        Assert.Equal((longer, 57.0), (Blocks(view).Single(), view.Children[0].Bounds.Height));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_message_shown_as_its_source_streams_into_the_same_block_and_waits_while_its_text_is_selected()
+    {
+        var source = "| a |\n|-|\n" + string.Concat(Enumerable.Repeat("| x |\n", 1000));
+        var (window, view) = Show(source);
+        var shown = (SelectableTextBlock)view.Children[0];
+        shown.SelectionStart = 0;
+        shown.SelectionEnd = 5;
+
+        view.Markdown = source + "| y |\n";
+        Assert.Equal((source, 1), (Blocks(view).Single(), view.BlocksBuilt));
+        shown.SelectionEnd = 0;
+
+        Assert.Same(shown, view.Children[0]);
+        Assert.Equal((source + "| y |\n", 1), (Blocks(view).Single(), view.BlocksBuilt));
+        window.Close();
+    }
+
     [Fact]
     public void A_confirmation_shows_a_look_alike_host_as_the_browser_sends_it() =>
         Assert.Equal("https://аpple.com/login\nHost as sent: xn--pple-43d.com", ConversationLinkRouter.Shown(new Uri("https://аpple.com/login")));
