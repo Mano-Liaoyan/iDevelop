@@ -9,6 +9,20 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class PublicationOwnershipTests
 {
+    [Fact]
+    public async Task Observed_base_retention_is_rechecked_before_preparing_another_task()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Git("update-ref", "refs/idp/93f23689/base", "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(U));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Approved base ref has an unexpected value.", blocked.Block.Detail);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal(0, f.Read().Preparations.Values.Count(prepared => prepared.Location.Owner.Task == U));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+    }
+
     [Theory]
     [InlineData("detached")]
     [InlineData("rewritten")]

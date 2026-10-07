@@ -67,7 +67,7 @@ internal sealed partial class Materializer
                 Journal("salvage-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
             }
             step = "salvage-ref";
-            PublishMove(workflow, run, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit));
+            RequirePublication(_refs.Publish(workflow, run, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit)));
             if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
                 throw Fault(MaterializationProblem.UncertainOwnership, "The salvage retention ref changed.");
             step = "salvage-retained";

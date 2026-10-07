@@ -97,8 +97,8 @@ internal sealed partial class Materializer
             }
             evidence = [];
             step = "branch";
-            PublishMove(workflow, run, operation, planId, "branch", repository,
-                new(prepared.Location.Owner.Branch, plan.VerifiedTip, plan.Commit));
+            RequirePublication(_refs.Publish(workflow, run, operation, planId, "branch", repository,
+                new(prepared.Location.Owner.Branch, plan.VerifiedTip, plan.Commit)));
             step = "index";
             var indexIntent = OperationIds.Derive(operation, "index-intent");
             record = Read(workflow, run);
@@ -116,8 +116,8 @@ internal sealed partial class Materializer
                     new RunEvent.GitObserved(indexIntent, new(aligned is IndexAlignment.AlreadyAligned, plan.Recipe.Tree.Hex))));
             }
             step = "result-ref";
-            PublishMove(workflow, run, operation, planId, "result", repository,
-                new(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[task], attempt), null, plan.Commit));
+            RequirePublication(_refs.Publish(workflow, run, operation, planId, "result", repository,
+                new(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[task], attempt), null, plan.Commit)));
             step = "verify";
             VerifyPublication(repository, prepared, plan, workflow, run);
             VerifyPublicationRefs(Read(workflow, run), repository, prepared, operation, workflow, run, ref evidence);
@@ -141,19 +141,10 @@ internal sealed partial class Materializer
             throw Fault(MaterializationProblem.LiveWriter, $"Attempt {attempt.Value:D} has no verified process-tree quiescence.");
     }
 
-    private void PublishMove(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, string step,
-        GitRepository repository, RefChange change)
+    private static void RequirePublication(RefPublication outcome)
     {
-        var mutation = new GitMutation.MoveRef(change);
-        if (PublicationObserved(Read(workflow, run), plan, mutation)) return;
-        var intended = OperationIds.Derive(operation, step + "-intent");
-        Journal(step + "-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(plan, mutation)));
-        var moved = Mutate(step, () => repository.MoveRef(change));
-        if (moved is RefMove.Conflict conflict)
-            throw Fault(MaterializationProblem.UncertainOwnership, $"Publication ref {change.Ref} has unexpected value {conflict.Observed?.Hex ?? "absent"}.");
-        if (moved is RefMove.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail);
-        Journal(step + "-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, step + "-observed"),
-            new RunEvent.GitObserved(intended, new(moved is RefMove.AlreadyAtTarget, change.Target.Hex))));
+        if (outcome is RefPublication.Rejected rejected) throw new Refusal(rejected.Reason);
+        if (outcome is RefPublication.Blocked blocked) throw Fault(blocked.Problem, blocked.Detail);
     }
 
     private static bool PublicationObserved(RunRecord record, OperationId plan, GitMutation mutation) =>

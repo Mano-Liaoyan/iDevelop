@@ -313,7 +313,9 @@ public sealed class ReviewMaterializationTests
             if (mode != "receipt")
             {
                 Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)));
-                f.Observe(request.Operation, new(reference, request.ExpectedJoin, commit));
+                if (new RefPublisher(f.Store).Publish(request.Workflow, request.Run, request.Operation, request.Operation,
+                    "join", f.Git.Open(), new(reference, request.ExpectedJoin, commit)) is not RefPublication.Completed)
+                    throw new InvalidOperationException("Join publication failed.");
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);
             }
             var sources = mode == "sources" ? request.Sources.Reverse().ToImmutableArray() : request.Sources;

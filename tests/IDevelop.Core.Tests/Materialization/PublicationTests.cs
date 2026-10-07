@@ -152,6 +152,8 @@ public sealed class PublicationTests
                 .Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
             var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
             Assert.Equal("f7d21fe0-9370-801e-a122-38820dfbc203", published.Result.Id.Value.ToString("D"));
+            Assert.Equal(RunJournal.Canonical(published.Result), RunJournal.Canonical(Assert.IsType<Publication.Accepted>(
+                f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt)).Result));
             Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(published.Result.Code).Code.Commit.Hex);
             Assert.Single(f.Read().Receipts.Values, entry => entry.Event is RunEvent.ResultAccepted);
             Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);

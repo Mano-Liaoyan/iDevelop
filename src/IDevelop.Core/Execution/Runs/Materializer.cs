@@ -9,6 +9,7 @@ internal sealed partial class Materializer
     private readonly string _project;
     private readonly RunStore _store;
     private readonly IJoinComposer _joins;
+    private readonly RefPublisher _refs;
     private readonly IExecutionBoundary _boundary;
     private readonly TimeProvider _clock;
     private readonly IReadOnlyDictionary<string, string> _environment;
@@ -19,6 +20,7 @@ internal sealed partial class Materializer
     {
         _project = Path.GetFullPath(project);
         _store = store;
+        _refs = new(store, probe);
         _joins = joins;
         _boundary = boundary;
         _clock = clock;
