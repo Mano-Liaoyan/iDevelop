@@ -47,7 +47,6 @@ public sealed class MainWindowViewModel : ObservableObject
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
 
-    /// <summary>The open projects, in the order they were opened.</summary>
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
 
     /// <summary>
@@ -81,7 +80,6 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _status, value);
     }
 
-    /// <summary>Saves the shown workflow.</summary>
     public ICommand SaveCommand => _save;
 
     /// <summary>Takes back the shown workflow's latest edit. A run of typing in one box is one edit.</summary>
@@ -118,7 +116,6 @@ public sealed class MainWindowViewModel : ObservableObject
         Persist();
     }
 
-    /// <summary>Shows the workflow.</summary>
     public void Select(WorkflowCanvasViewModel canvas)
     {
         if (canvas == Canvas)
@@ -241,7 +238,6 @@ public sealed class MainWindowViewModel : ObservableObject
         Status = string.Join(" ", [.. notes, .. Status is { } status ? [status] : Array.Empty<string>()]) is { Length: > 0 } all ? all : null;
     }
 
-    /// <summary>Saves the shown workflow.</summary>
     public bool TrySave() => Canvas is not { } canvas || TrySave([canvas.Document]);
 
     /// <summary>Saves each document in turn and stops at the first that fails, whose reason the status shows.</summary>

@@ -151,7 +151,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     public bool HasUnsavedChanges => Document.HasUnsavedChanges;
 
-    /// <summary>Whether the sidebar lists this workflow's tasks under its row.</summary>
     public bool IsExpanded
     {
         get => _isExpanded;
@@ -167,7 +166,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     /// <summary>What the row's disclosure toggle does now, for a screen reader and the tooltip.</summary>
     public string ExpandLabel => $"{(IsExpanded ? "Hide" : "Show")} tasks of {Name}";
 
-    /// <summary>Whether the window shows this canvas.</summary>
     public bool IsSelected
     {
         get => _isSelected;
@@ -181,7 +179,6 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         private set => SetProperty(ref _isRunning, value);
     }
 
-    /// <summary>The sidebar row's name is a box that takes a new name.</summary>
     public bool IsRenamingWorkflow
     {
         get => _isRenamingWorkflow;
