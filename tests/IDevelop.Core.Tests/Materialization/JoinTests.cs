@@ -11,16 +11,16 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class JoinTests
 {
-    private static Workflow Diamond(bool third = false)
+    internal static Workflow Diamond(bool third = false)
     {
         var workflow = Connect(Connect(FixtureWorkflow(third ? [Writer(T), Writer(C), Writer(D), Writer(U)] : [Writer(T), Writer(C), Writer(U)]), T, U), C, U);
         return third ? Connect(workflow, D, U) : workflow;
     }
 
-    private static Materializer Open(PreparationFixture f, Action<string>? probe = null) =>
+    internal static Materializer Open(PreparationFixture f, Action<string>? probe = null) =>
         MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), f.Git.Environment, probe);
 
-    private static async Task<(OwnedCode B, OwnedCode C)> Sources(PreparationFixture f, string bPath = "b.txt", string bText = "B\n",
+    internal static async Task<(OwnedCode B, OwnedCode C)> Sources(PreparationFixture f, string bPath = "b.txt", string bText = "B\n",
         string cPath = "c.txt", string cText = "C\n")
     {
         var b = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), T, new AttemptCause.Initial()));
@@ -34,14 +34,14 @@ public sealed class JoinTests
         return (Assert.IsType<CodeOutput.Produced>(publishedB.Result.Code).Code, Assert.IsType<CodeOutput.Produced>(publishedC.Result.Code).Code);
     }
 
-    private static void OwnCommit(PreparationFixture f, Preparation.Ready ready, string path, string text, string message)
+    internal static void OwnCommit(PreparationFixture f, Preparation.Ready ready, string path, string text, string message)
     {
         f.Git.Write(path, text, ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "--all").ExitCode);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", message).ExitCode);
     }
 
-    private static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
+    internal static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
         Open(f, probe).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial());
 
     [Fact]
@@ -226,40 +226,6 @@ public sealed class JoinTests
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("b350f18e8c7f922d58c54e415a95fb0a4b6fa249", GitFixture.Read(f.Git.Open().ReadRef("refs/heads/idp/93f23689/join/c67f2fc3"))?.Hex);
         Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Join>());
-    }
-
-    [Fact]
-    public async Task Join_probes_separated_only_by_reads_share_durable_state_and_converge_to_one_publication_and_an_equal_preparation()
-    {
-        var points = new List<string>();
-        using (var baseline = new PreparationFixture(Diamond()))
-        {
-            await Sources(baseline);
-            var ready = Assert.IsType<Preparation.Ready>(await Prepare(baseline, baseline.Op(), points.Add));
-            AssertDiamond(baseline, ready);
-        }
-        Assert.Equal(new[] { "git.join-merge-1.before", "git.join-merge-1.after", "git.join-commit.before", "git.join-commit.after",
-            "journal.join-plan.before", "journal.join-plan.after", "journal.join-intent.before", "journal.join-intent.after", "git.join.before", "git.join.after",
-            "journal.join-observed.before", "journal.join-observed.after" }, points.Where(point => point.Contains("join", StringComparison.Ordinal)));
-        foreach (var point in points.Where(point => point.Contains("join", StringComparison.Ordinal))
-            .Where(point => point == "git.join-merge-1.before" || point.EndsWith(".after", StringComparison.Ordinal)))
-        {
-            using var f = new PreparationFixture(Diamond());
-            await Sources(f);
-            var operation = f.Op();
-            await Assert.ThrowsAsync<PublicationTests.Crash>(async () => await Prepare(f, operation, step =>
-            {
-                if (step == point) throw new PublicationTests.Crash();
-            }));
-            var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, operation));
-            AssertDiamond(f, ready);
-            var record = f.Read();
-            var intent = Assert.Single(record.GitIntents, pair => pair.Value.Plan == OperationIds.Derive(operation, "join"));
-            Assert.Equal("a9e5b83f5ce058b92625a5187acce471cf4b3fad", record.GitObservations[intent.Key].Value);
-            Assert.Equal(1, record.Receipts.Values.Count(entry => entry.Event is RunEvent.GitObserved observed && observed.Mutation == intent.Key));
-            Assert.Single(record.Plans.Values.OfType<MaterializationPlan.Join>());
-            Assert.Equal(ready, await Prepare(f, operation));
-        }
     }
 
     [Fact]
