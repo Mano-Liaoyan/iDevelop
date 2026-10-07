@@ -52,10 +52,10 @@ internal abstract record MaterializationPlan
     internal sealed record Publication(AttemptId Attempt, ResultId Result, ResultId? Supersedes, CommitId VerifiedTip,
         Digest? IndexBefore, CommitRecipe Recipe, CommitId Commit, string Report, ImmutableArray<ArtifactRecord> Artifacts) : MaterializationPlan;
 
-    internal sealed record Salvage(TaskId Task, AttemptId Attempt, CommitId ObservedTip, Digest? IndexBefore, CommitRecipe Recipe,
+    internal sealed record Salvage(TaskId Task, AttemptId Attempt, CommitId ObservedTip, CommitId? BranchTip, Digest? IndexBefore, CommitRecipe Recipe,
         CommitId Commit, ImmutableArray<EvidenceFile> Untracked, string Ref) : MaterializationPlan;
 
-    internal sealed record RetryReset(TaskId Task, AttemptId Salvaged, OperationId SalvagePlan, CommitId From, CommitId To,
+    internal sealed record RetryReset(TaskId Task, AttemptId Salvaged, OperationId SalvagePlan, CommitId? From, CommitId To,
         ImmutableArray<EvidenceFile> Remove) : MaterializationPlan;
 }
 

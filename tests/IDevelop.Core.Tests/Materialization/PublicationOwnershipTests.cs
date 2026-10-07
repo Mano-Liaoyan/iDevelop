@@ -3,6 +3,7 @@ using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
+using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 
 namespace IDevelop.Core.Tests.Materialization;
@@ -18,7 +19,7 @@ public sealed class PublicationOwnershipTests
         f.Git.Git("update-ref", "refs/idp/93f23689/base", "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(U));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Approved base ref has an unexpected value.", blocked.Block.Detail);
+        Assert.Equal("Publication ref refs/idp/93f23689/base has unexpected value 7c64b20d5be53b5c1a291863ef191aa28f6f4d51.", blocked.Block.Detail);
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
         Assert.Equal(0, f.Read().Preparations.Values.Count(prepared => prepared.Location.Owner.Task == U));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -254,5 +255,172 @@ public sealed class PublicationOwnershipTests
             .Block.Problem.ToString());
         Assert.Equal("UU a.txt\0", System.Text.Encoding.UTF8.GetString(GitFixture.Read(f.Git.Open().Status(ready.Checkout))));
         Assert.Empty(f.Read().Results);
+    }
+
+    private const string A = "adfe40b30c176fb407933286f51d15ea9b54cdc3";
+    private static string? Ref(PreparationFixture f, string name) => GitFixture.Read(f.Git.Open().ReadRef(name))?.Hex;
+    private static string Head(PreparationFixture f, string checkout) => f.Git.Run(checkout, "rev-parse", "HEAD").Text.Trim();
+    private static bool Reachable(PreparationFixture f, string commit) => f.Git.Git("for-each-ref", "--contains", commit, "--format=%(refname)").Trim().Length != 0;
+    private static void CommitFile(PreparationFixture f, string checkout, string file, string text)
+    {
+        f.Git.Write(file, text, checkout);
+        Assert.Equal(0, f.Git.Run(checkout, "add", file).ExitCode);
+        Assert.Equal(0, f.Git.Run(checkout, "-c", "commit.gpgSign=false", "commit", "-qm", file).ExitCode);
+    }
+    private static AttemptId AttemptOf(ResultRecord result) => Assert.IsType<ResultOrigin.Executed>(result.Origin).Attempt;
+
+    [Fact]
+    public async Task A_published_sibling_rewound_to_its_creation_start_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        CommitFile(f, sibling.Checkout, "u.txt", "U\n");
+        f.Close(sibling);
+        var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), sibling.Execution.Launch.Attempt));
+        var writer = await PublicationTests.ChangedWriter(f);
+        f.Git.Git("update-ref", sibling.Execution.Location.Owner.Branch, A);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, 70d86755135c4bf457f1b7d4d32f5ffc137996d8 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal(A, Ref(f, sibling.Execution.Location.Owner.Branch));
+        Assert.Single(f.Read().Results);
+        Assert.True(Reachable(f, Assert.IsType<CodeOutput.Produced>(published.Result.Code).Code.Commit.Hex));
+    }
+
+    [Fact]
+    public async Task A_closed_readers_branch_moved_forward_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Task(U)));
+        var reader = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        f.Close(reader, "Read.\n");
+        var writer = await PublicationTests.ChangedWriter(f);
+        CommitFile(f, reader.Checkout, "c.txt", "C\n");
+        var moved = Head(f, reader.Checkout);
+        Assert.Equal("ce4934392b45ba0126622eb19131acce29bd8705", moved);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, adfe40b30c176fb407933286f51d15ea9b54cdc3 to ce4934392b45ba0126622eb19131acce29bd8705.", blocked.Block.Detail);
+        Assert.Equal("ce4934392b45ba0126622eb19131acce29bd8705", Ref(f, reader.Execution.Location.Owner.Branch));
+        Assert.Empty(f.Read().Results);
+    }
+
+    [Fact]
+    public async Task A_published_writers_branch_moved_forward_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        CommitFile(f, sibling.Checkout, "u.txt", "U\n");
+        f.Close(sibling);
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), sibling.Execution.Launch.Attempt));
+        var writer = await PublicationTests.ChangedWriter(f);
+        CommitFile(f, sibling.Checkout, "late.txt", "late\n");
+        var moved = Head(f, sibling.Checkout);
+        Assert.Equal("1731d2d20abe6875ad433e4a336ab668a66bdce7", moved);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, 70d86755135c4bf457f1b7d4d32f5ffc137996d8 to 1731d2d20abe6875ad433e4a336ab668a66bdce7.", blocked.Block.Detail);
+        Assert.Equal("1731d2d20abe6875ad433e4a336ab668a66bdce7", Ref(f, sibling.Execution.Location.Owner.Branch));
+        Assert.Single(f.Read().Results);
+    }
+
+    [Fact]
+    public async Task A_sibling_rewound_to_its_earlier_published_result_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var first = await f.Publish(U, f.A);
+        var again = Assert.IsType<Preparation.Ready>(await f.Prepare(U, cause: new AttemptCause.Retry(AttemptOf(first), f.Op())));
+        CommitFile(f, again.Checkout, "u.txt", "U\n");
+        f.Close(again);
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), again.Execution.Launch.Attempt));
+        var writer = await PublicationTests.ChangedWriter(f);
+        var firstCommit = Assert.IsType<CodeOutput.Produced>(first.Code).Code.Commit.Hex;
+        Assert.Equal("366602c243fddab716b8f02fc03fdacaf56e6058", firstCommit);
+        f.Git.Git("update-ref", again.Execution.Location.Owner.Branch, firstCommit);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000106: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, 5f04054075cc6998be6254c2ee7c4d2f8cbba682 to 366602c243fddab716b8f02fc03fdacaf56e6058.", blocked.Block.Detail);
+        Assert.Equal(2, f.Read().Results.Count);
+    }
+
+    [Fact]
+    public async Task A_sibling_that_published_and_was_rewound_to_the_publishers_snapshot_value_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        var writer = await PublicationTests.ChangedWriter(f);
+        CommitFile(f, sibling.Checkout, "u.txt", "U\n");
+        f.Close(sibling);
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), sibling.Execution.Launch.Attempt));
+        f.Git.Git("update-ref", sibling.Execution.Location.Owner.Branch, A);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, adfe40b30c176fb407933286f51d15ea9b54cdc3 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal(A, Ref(f, sibling.Execution.Location.Owner.Branch));
+        Assert.Single(f.Read().Results);
+    }
+
+    [Theory]
+    [InlineData("pending")]
+    [InlineData("pending-then-moved")]
+    public async Task A_sibling_creation_interrupted_after_git_is_judged_by_its_pending_intent(string mode)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Task(U)));
+        var writer = await PublicationTests.ChangedWriter(f);
+        await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == "git.create-worktree.after") throw new Crash(); })
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        var branch = "refs/heads/idp/93f23689/task/c67f2fc3";
+        Assert.Equal(A, Ref(f, branch));
+        if (mode == "pending-then-moved")
+            CommitFile(f, Path.Combine(f.Git.Folder, ".worktrees", "93f23689", "c67f2fc3"), "c.txt", "C\n");
+        var outcome = f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt);
+        if (mode == "pending")
+        {
+            var accepted = Assert.IsType<Publication.Accepted>(outcome);
+            Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex);
+            Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, branch));
+        }
+        else
+        {
+            var blocked = Assert.IsType<Publication.Blocked>(outcome);
+            Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+            Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/c67f2fc3, absent to ce4934392b45ba0126622eb19131acce29bd8705.", blocked.Block.Detail);
+            Assert.Equal("ce4934392b45ba0126622eb19131acce29bd8705", Ref(f, branch));
+        }
+        Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
+    }
+
+    [Fact]
+    public async Task Historical_creation_cannot_authorize_recreating_a_rewound_branch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        await f.Publish(T, f.A);
+        var owner = f.Read().Preparations[new(A1, 1)].Location.Owner;
+        var checkout = Path.Combine(f.Git.Folder, owner.RelativePath);
+        f.Git.Git("worktree", "unlock", checkout);
+        f.Git.Git("worktree", "remove", "--force", checkout);
+        f.Git.Git("update-ref", owner.Branch, "adfe40b30c176fb407933286f51d15ea9b54cdc3");
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(A1, f.Op())));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The branch or occupied checkout is not a matching creation intent.", blocked.Block.Detail);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, owner.Branch));
+        Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", Ref(f, "refs/idp/93f23689/result/90d5b0a2/00000000-0000-0000-0000-000000000102"));
+        Assert.False(Directory.Exists(checkout));
+    }
+
+    [Fact]
+    public async Task A_ref_deleted_before_the_snapshot_is_still_checked_against_the_journal()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        await f.Publish(U, f.A);
+        const string reference = "refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102";
+        f.Git.Git("update-ref", "-d", reference);
+        var writer = await PublicationTests.ChangedWriter(f);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102, absent to absent.", blocked.Block.Detail);
+        Assert.Equal(2, blocked.Block.Evidence.Length);
+        Assert.Equal("366602c243fddab716b8f02fc03fdacaf56e6058", Ref(f, "refs/heads/idp/93f23689/task/c67f2fc3"));
+        Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
+        Assert.Single(f.Read().Results);
     }
 }

@@ -144,7 +144,8 @@ public sealed class SalvageTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DivergedWriter(f, detached);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Assert.Single(GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents).Hex);
+        Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
+            new[] { "81ddb7c330112c7f16700ed002803a04b0bce693" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("approved\n", f.Git.Git("show", retained.Commit.Hex + ":plan.txt"));
         var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, f.Op()));
@@ -252,8 +253,9 @@ public sealed class SalvageTests
             var ready = detached ? await DivergedWriter(f, true) : await FailedWriter(f, ownCommit);
             var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
             if (!detached) Assert.Equal(ownCommit ? "fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b" : Commit, retained.Commit.Hex);
-            Assert.Equal(detached ? "81ddb7c330112c7f16700ed002803a04b0bce693" : ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : Target,
-                Assert.Single(GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents).Hex);
+            Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
+                new[] { ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : Target },
+                GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
             var confirmation = f.Op();
             Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
                 .ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, confirmation));
@@ -539,5 +541,230 @@ public sealed class SalvageTests
         Assert.False(File.Exists(indexLock));
         Assert.True(File.Exists(Path.Combine(DataFolder.Attempts(f.Git.Folder), T.ToString(), "run.lock")));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    private static string? Ref(PreparationFixture f, string name) => GitFixture.Read(f.Git.Open().ReadRef(name))?.Hex;
+    private static string Head(PreparationFixture f, string checkout) => f.Git.Run(checkout, "rev-parse", "HEAD").Text.Trim();
+    private static bool Reachable(PreparationFixture f, string commit) => f.Git.Git("for-each-ref", "--contains", commit, "--format=%(refname)").Trim().Length != 0;
+    private static void CommitFile(PreparationFixture f, string checkout, string file, string text)
+    {
+        f.Git.Write(file, text, checkout);
+        Assert.Equal(0, f.Git.Run(checkout, "add", file).ExitCode);
+        Assert.Equal(0, f.Git.Run(checkout, "-c", "commit.gpgSign=false", "commit", "-qm", file).ExitCode);
+    }
+    private const string PlanCommit = "81ddb7c330112c7f16700ed002803a04b0bce693";
+
+    [Theory]
+    [InlineData("detached")]
+    [InlineData("rewound")]
+    [InlineData("side-branch")]
+    public async Task Salvage_keeps_a_branch_commit_that_head_does_not_contain_reachable_through_retry(string mode)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        CommitFile(f, ready.Checkout, "b.txt", "B\n");
+        var branchCommit = Head(f, ready.Checkout);
+        Assert.Equal(0, (mode switch
+        {
+            "detached" => f.Git.Run(ready.Checkout, "checkout", "-q", "--detach", "HEAD~1"),
+            "rewound" => f.Git.Run(ready.Checkout, "reset", "-q", "--hard", "HEAD~1"),
+            _ => f.Git.Run(ready.Checkout, "checkout", "-q", "-b", "side", "HEAD~1"),
+        }).ExitCode);
+        f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
+        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
+        Assert.Equal("3292b7a2adf71a45a545bbfb04cefc7d663bbe93", branchCommit);
+        Assert.Equal(mode == "rewound" ? "76e7826be3fb35d52157bac1d88e8f6a188758e6" : "33893cedcad25a1a43d30ed215d4813b66e66853", retained.Commit.Hex);
+        var plan = Assert.IsType<MaterializationPlan.Salvage>(f.Read().Plans[retained.Receipt.Plan]);
+        Assert.Equal(mode == "rewound" ? "adfe40b30c176fb407933286f51d15ea9b54cdc3" : "3292b7a2adf71a45a545bbfb04cefc7d663bbe93", plan.BranchTip?.Hex);
+        var parents = GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex);
+        Assert.Equal(mode == "rewound" ? new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3" } :
+            new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3", "3292b7a2adf71a45a545bbfb04cefc7d663bbe93" }, parents);
+        Assert.Equal(mode != "rewound", Reachable(f, branchCommit));
+        Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, f.Op(), retained.Receipt.Plan, f.Op()));
+        Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2\n", f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD").Text);
+        Assert.Equal(mode != "rewound", Reachable(f, branchCommit));
+        if (mode == "side-branch") Assert.Equal(Target, Ref(f, "refs/heads/side"));
+    }
+
+    [Fact]
+    public async Task A_plain_git_status_after_salvage_does_not_block_retry()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        var before = File.ReadAllBytes(index);
+        File.SetLastWriteTimeUtc(Path.Combine(ready.Checkout, "plan.txt"), DateTime.UtcNow.AddMinutes(1));
+        var status = new System.Diagnostics.ProcessStartInfo("git", ["status", "--short"])
+            { WorkingDirectory = ready.Checkout, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var (key, value) in f.Git.Environment.Where(pair => pair.Key != "GIT_OPTIONAL_LOCKS")) status.Environment[key] = value;
+        using (var process = System.Diagnostics.Process.Start(status)!)
+        {
+            process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+        }
+        Assert.False(before.SequenceEqual(File.ReadAllBytes(index)));
+        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, f.Op(), retained.Receipt.Plan, f.Op()));
+        Assert.Equal(Target, reset.Target.Hex);
+    }
+
+    [Fact]
+    public async Task A_foreign_head_after_a_recorded_attach_blocks_retry_and_keeps_the_foreign_branch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-attach-observed.after") throw new Crash(); })
+            .ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        f.Git.Git("branch", "foreign", PlanCommit);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD", "refs/heads/foreign").ExitCode);
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The retry HEAD moved outside the recorded attachment.", blocked.Block.Detail);
+        Assert.Equal(PlanCommit, Ref(f, "refs/heads/foreign"));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Fact]
+    public async Task A_branch_moved_after_salvage_blocks_retry_and_stays_reachable()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var fresh = f.Git.Run(f.Git.Folder, "commit-tree", Target + "^{tree}", "-p", Target, "-m", "out of band").Text.Trim();
+        Assert.Equal("8d14445e6226129e327b4f1f807c957d99479399", fresh);
+        f.Git.Git("update-ref", ready.Execution.Location.Owner.Branch, fresh);
+        var outcome = f.Materializer().ResetForRetry(W, f.RunId, f.Op(), retained.Receipt.Plan, f.Op());
+        Assert.True(Reachable(f, fresh), outcome.ToString());
+        var blocked = Assert.IsType<RetryReset.Blocked>(outcome);
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The retry branch moved outside the recorded reset.", blocked.Block.Detail);
+        Assert.Equal("8d14445e6226129e327b4f1f807c957d99479399", Ref(f, ready.Execution.Location.Owner.Branch));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Fact]
+    public async Task A_foreign_head_after_an_unrecorded_attach_blocks_retry()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "git.retry-attach.after") throw new Crash(); })
+            .ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        f.Git.Git("branch", "foreign", PlanCommit);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD", "refs/heads/foreign").ExitCode);
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The retry HEAD moved outside the recorded attachment.", blocked.Block.Detail);
+        Assert.Equal(PlanCommit, Ref(f, "refs/heads/foreign"));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Fact]
+    public async Task A_salvage_ref_created_out_of_band_at_its_target_blocks_salvage()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var operation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.salvage-plan.after") throw new Crash(); })
+            .Salvage(W, f.RunId, operation, ready.Execution.Launch.Attempt));
+        var plan = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Salvage>());
+        f.Git.Git("update-ref", plan.Ref, plan.Commit.Hex);
+        var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(W, f.RunId, operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Publication ref refs/idp/93f23689/salvage/90d5b0a2/00000000-0000-0000-0000-000000000102 has unexpected value 0dbf5cbc9310ef3abbc28073142652917c69dc2f.", blocked.Block.Detail);
+        Assert.Equal(0, f.Read().Receipts.Values.Count(entry => entry.Event is RunEvent.SalvageRetained));
+    }
+
+    [Fact]
+    public async Task A_branch_rewound_after_salvage_to_a_retained_ancestor_blocks_retry()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f, ownCommit: true);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        f.Git.Git("update-ref", ready.Execution.Location.Owner.Branch, Target);
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, f.Op(), retained.Receipt.Plan, f.Op()));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The retry branch moved outside the recorded reset.", blocked.Block.Detail);
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Fact]
+    public async Task A_foreign_head_after_an_observed_reset_blocks_cleanup()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-reset-observed.after") throw new Crash(); })
+            .ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        f.Git.Git("branch", "foreign", PlanCommit);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD", "refs/heads/foreign").ExitCode);
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, operation, retained.Receipt.Plan, confirmation));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The reset HEAD or task branch differs from its recorded target.", blocked.Block.Detail);
+        Assert.Equal(PlanCommit, Ref(f, "refs/heads/foreign"));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Theory]
+    [InlineData("git.retry-attach.before", "The retry HEAD moved outside the recorded attachment.")]
+    [InlineData("git.retry-reset.before", "The reset HEAD or task branch differs from its recorded target.")]
+    [InlineData("git.retry-remove-new.txt.before", "The reset HEAD or task branch differs from its recorded target.")]
+    public async Task Live_head_is_checked_before_each_retry_mutation(string point, string detail)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        f.Git.Git("branch", "foreign", "81ddb7c330112c7f16700ed002803a04b0bce693");
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer(probe: step =>
+        {
+            if (step == point) Assert.Equal(0, f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD", "refs/heads/foreign").ExitCode);
+        }).ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, f.Op()));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal(detail, blocked.Block.Detail);
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, "refs/heads/foreign"));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+    }
+
+    [Fact]
+    public async Task Same_capture_with_a_new_operation_uses_a_new_retention_ref()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f);
+        var first = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        var second = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", first.Commit.Hex);
+        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", second.Commit.Hex);
+        Assert.Equal("refs/idp/93f23689/resalvage/90d5b0a2/00000000-0000-0000-0000-000000000102/00000000-0000-0000-0000-000000001005", second.Receipt.Ref);
+        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", Ref(f, first.Receipt.Ref));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+        Assert.Equal(2, f.Read().Salvages.Count);
+    }
+
+    [Fact]
+    public async Task Salvage_records_an_absent_branch_and_retry_creates_it_by_cas()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f, ownCommit: true);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "--detach", "HEAD").ExitCode);
+        f.Git.Git("update-ref", "-d", ready.Execution.Location.Owner.Branch);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b", retained.Commit.Hex);
+        Assert.Null(Assert.IsType<MaterializationPlan.Salvage>(f.Read().Plans[retained.Receipt.Plan]).BranchTip);
+        Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
+        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, f.Op()));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", reset.Target.Hex);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, ready.Execution.Location.Owner.Branch));
+        Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2", GitFixture.Read(f.Git.Open().SymbolicHead(ready.Checkout)));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
     }
 }

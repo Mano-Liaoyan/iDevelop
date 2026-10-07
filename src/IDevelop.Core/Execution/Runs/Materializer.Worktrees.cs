@@ -49,7 +49,8 @@ internal sealed partial class Materializer
             var existing = branch is not null;
             var oldIntent = record.GitIntents.Values.Select(intent => intent.Mutation).OfType<GitMutation.CreateWorktree>()
                 .FirstOrDefault(create => create.Owner == owner && create.Start == branch);
-            if (existing && (oldIntent is null || Directory.Exists(checkout) && Directory.EnumerateFileSystemEntries(checkout).Any()))
+            if (!RefOwnership.Accepts(record, repository, owner.Branch, branch) ||
+                existing && (oldIntent is null || Directory.Exists(checkout) && Directory.EnumerateFileSystemEntries(checkout).Any()))
                 throw Fault(MaterializationProblem.UncertainOwnership, "The branch or occupied checkout is not a matching creation intent.");
             if (worktrees.Any(worktree => worktree.Branch == owner.Branch))
                 throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.");
@@ -108,12 +109,9 @@ internal sealed partial class Materializer
         VerifyRegistration(repository, location, record);
         var tip = Value(repository.ReadRef(location.Owner.Branch));
         if (tip is null) throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.");
-        if (keepChanges)
-        {
-            if (repository.IsAncestor(location.AttemptBase, tip.Value) is not GitAncestry.Yes)
-                throw Fault(MaterializationProblem.UncertainOwnership, "The checkout no longer descends from its attempt base.");
-        }
-        else if (tip != location.AttemptBase || Value(repository.Status(Checkout(repository, location.Owner))).Length != 0)
+        if (!RefOwnership.Accepts(record, repository, location.Owner.Branch, tip))
+            throw Fault(MaterializationProblem.UncertainOwnership, "The task branch differs from its journaled state.");
+        if (!keepChanges && (tip != location.AttemptBase || Value(repository.Status(Checkout(repository, location.Owner))).Length != 0))
             throw Fault(MaterializationProblem.DirtyWorktree, "The checkout tip or contents differ from the recorded attempt base.");
         VerifyOwnedCheckout(repository, location, record);
     }

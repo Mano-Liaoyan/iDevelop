@@ -152,7 +152,7 @@ public sealed class MaterializationTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(W, Run, f.Op(), RunOutcome.Stopped));
         var operation = f.Op();
         const string reference = "refs/idp/salvage/task/00000000-0000-0000-0000-000000000102";
-        var salvage = new MaterializationPlan.Salvage(T, A1, Base, null, Recipe(Base), WriterCommit, [], reference);
+        var salvage = new MaterializationPlan.Salvage(T, A1, Base, Base, null, Recipe(Base), WriterCommit, [], reference);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, operation, new RunEvent.Planned(salvage)));
         ObserveMove(f, operation, reference, null, WriterCommit);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, f.Op(), new RunEvent.SalvageRetained(operation, reference, WriterCommit)));
@@ -272,7 +272,7 @@ public sealed class MaterializationTests
         var operation = f.Op();
         const string reference = "refs/idp/salvage/task";
         var file = new EvidenceFile("new.txt", Prompt, 5);
-        var salvage = new MaterializationPlan.Salvage(T, A1, Base, null, Recipe(Base), WriterCommit, [file], reference);
+        var salvage = new MaterializationPlan.Salvage(T, A1, Base, Base, null, Recipe(Base), WriterCommit, [file], reference);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, operation, new RunEvent.Planned(salvage)));
         var reset = new MaterializationPlan.RetryReset(T, A1, operation, Base, Base, [file]);
         Assert.Equal(RunProblem.InvalidData, Problem(f.Store.Record(W, Run, f.Op(), new RunEvent.Planned(reset))));

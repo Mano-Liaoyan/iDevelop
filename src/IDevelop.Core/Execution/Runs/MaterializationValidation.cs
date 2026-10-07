@@ -68,10 +68,10 @@ internal static partial class RunValidation
         MaterializationPlan.Publication p => p.Attempt.Value != Guid.Empty && p.Result.Value != Guid.Empty && p.Supersedes?.Value != Guid.Empty &&
             Revision.IsCommit(p.VerifiedTip.Hex) && Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) &&
             p.Report is not null && !p.Artifacts.IsDefault && p.Artifacts.All(Artifact),
-        MaterializationPlan.Salvage p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && Revision.IsCommit(p.ObservedTip.Hex) &&
+        MaterializationPlan.Salvage p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && Revision.IsCommit(p.ObservedTip.Hex) && (p.BranchTip is null || Revision.IsCommit(p.BranchTip.Value.Hex)) &&
             Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) && !p.Untracked.IsDefault && p.Untracked.All(Evidence) && Reference(p.Ref),
         MaterializationPlan.RetryReset p => p.Task.Value != Guid.Empty && p.Salvaged.Value != Guid.Empty && p.SalvagePlan.Value != Guid.Empty &&
-            Revision.IsCommit(p.From.Hex) && Revision.IsCommit(p.To.Hex) && !p.Remove.IsDefault && p.Remove.All(Evidence),
+            (p.From is null || Revision.IsCommit(p.From.Value.Hex)) && Revision.IsCommit(p.To.Hex) && !p.Remove.IsDefault && p.Remove.All(Evidence),
         _ => false,
     };
 

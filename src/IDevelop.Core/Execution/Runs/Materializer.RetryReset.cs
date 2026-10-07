@@ -51,11 +51,13 @@ internal sealed partial class Materializer
                     ? produced.Code.Commit
                     : record.Preparations.Values.Where(p => p.Location.Owner.Task == task).OrderBy(p => record.Receipts.Values.Single(entry =>
                         entry.Event is RunEvent.Prepared e && e.Execution.Launch == p.Launch).Sequence).First().Location.AttemptBase;
-                plan = new(task, salvage.Attempt, salvagePlan, Value(repository.ReadRef(prepared.Location.Owner.Branch)) ??
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent."), target, salvage.Untracked);
+                plan = new(task, salvage.Attempt, salvagePlan, salvage.BranchTip, target, salvage.Untracked);
                 step = "retry-plan";
                 Journal("retry-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
             }
+            if (!RefOwnership.Accepts(Read(workflow, run), repository, prepared.Location.Owner.Branch,
+                Value(repository.ReadRef(prepared.Location.Owner.Branch))))
+                throw Fault(MaterializationProblem.UncertainOwnership, "The retry branch moved outside the recorded reset.");
             var reset = new GitMutation.ResetCheckout(task, plan.To);
             if (!PublicationObserved(Read(workflow, run), planId, reset))
             {
@@ -84,23 +86,39 @@ internal sealed partial class Materializer
                     var attach = new GitMutation.AttachHead(task, prepared.Location.Owner.Branch);
                     if (Value(repository.Worktrees()).Any(worktree => worktree.Branch == attach.Branch && !SamePath(worktree.Path, checkout)))
                         throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.");
+                    var attachObserved = PublicationObserved(Read(workflow, run), planId, attach);
+                    var head = Value(repository.SymbolicHead(checkout));
+                    if (head != attach.Branch && (attachObserved ||
+                        Value(repository.ResolveCheckoutHead(checkout)) != salvage.ObservedTip))
+                        throw Fault(MaterializationProblem.UncertainOwnership, "The retry HEAD moved outside the recorded attachment.");
                     RequirePublication(_refs.Publish(workflow, run, operation, planId, "retry-branch", repository,
                         new(prepared.Location.Owner.Branch, plan.From, plan.To)));
-                    if (!PublicationObserved(Read(workflow, run), planId, attach))
+                    if (!attachObserved)
                     {
                         var attachIntent = OperationIds.Derive(operation, "retry-attach-intent");
                         Journal("retry-attach-intent", () => _store.Record(workflow, run, attachIntent, new RunEvent.GitIntended(planId, attach)));
-                        var attached = Mutate("retry-attach", () => repository.AttachHead(checkout, attach.Branch));
+                        var attached = Mutate("retry-attach", () =>
+                        {
+                            if (Value(repository.SymbolicHead(checkout)) != attach.Branch &&
+                                Value(repository.ResolveCheckoutHead(checkout)) != salvage.ObservedTip)
+                                throw Fault(MaterializationProblem.UncertainOwnership, "The retry HEAD moved outside the recorded attachment.");
+                            return repository.AttachHead(checkout, attach.Branch);
+                        });
                         if (attached.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, attached.Stderr);
                         Journal("retry-attach-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-attach-observed"),
                             new RunEvent.GitObserved(attachIntent, new(false, attach.Branch))));
                     }
-                    var result = Mutate("retry-reset", () => repository.ResetCheckout(checkout, plan.To));
+                    var result = Mutate("retry-reset", () =>
+                    {
+                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
+                        return repository.ResetCheckout(checkout, plan.To);
+                    });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
                 }
                 Journal("retry-reset-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-reset-observed"),
                     new RunEvent.GitObserved(intended, new(adopted, plan.To.Hex))));
             }
+            VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
             var remove = new GitMutation.RemovePaths(task, plan.Remove);
             if (!PublicationObserved(Read(workflow, run), planId, remove))
             {
@@ -111,7 +129,11 @@ internal sealed partial class Materializer
                 {
                     // A path restored as tracked target content belongs to the retry base, not to cleanup.
                     if (Value(repository.TrackedFiles(checkout, file.RelativePath)).Contains(file.RelativePath)) continue;
-                    var removed = Mutate("retry-remove-" + file.RelativePath, () => repository.RemovePath(checkout, file.RelativePath, file.Content, GitPathType.RegularFile));
+                    var removed = Mutate("retry-remove-" + file.RelativePath, () =>
+                    {
+                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
+                        return repository.RemovePath(checkout, file.RelativePath, file.Content, GitPathType.RegularFile);
+                    });
                     if (removed == PathRemoval.Unexpected) throw Fault(MaterializationProblem.DirtyWorktree, "A salvaged path changed before removal: " + file.RelativePath);
                 }
                 Journal("retry-remove-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-remove-observed"),
@@ -124,6 +146,12 @@ internal sealed partial class Materializer
         catch (MaterializationFailure failed) { return RetryBlock(workflow, run, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return RetryBlock(workflow, run, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+    }
+
+    private static void VerifyResetHead(GitRepository repository, string checkout, string branch, CommitId target)
+    {
+        if (Value(repository.SymbolicHead(checkout)) != branch || Value(repository.ReadRef(branch)) != target)
+            throw Fault(MaterializationProblem.UncertainOwnership, "The reset HEAD or task branch differs from its recorded target.");
     }
 
     private void VerifyRetryInventory(GitRepository repository, string checkout, MaterializationPlan.Salvage salvage, TreeId tree)

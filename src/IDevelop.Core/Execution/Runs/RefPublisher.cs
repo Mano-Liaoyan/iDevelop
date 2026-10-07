@@ -18,9 +18,16 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
         var read = store.Read(workflow, run);
         if (read is RunRead.Rejected rejected) return new RefPublication.Rejected(rejected.Reason);
         var record = ((RunRead.Loaded)read).Record;
+        var live = repository.ReadRef(change.Ref);
+        if (live is GitRead<CommitId?>.Failed failedRead)
+            return new RefPublication.Blocked(failedRead.Problem, failedRead.Detail);
+        var value = ((GitRead<CommitId?>.Read)live).Value;
         var mutation = new GitMutation.MoveRef(change);
         var prior = record.GitIntents.FirstOrDefault(pair => pair.Value.Plan == plan && RunReducer.Same(pair.Value.Mutation, mutation) &&
             record.GitObservations.ContainsKey(pair.Key));
+        if (!RefOwnership.Accepts(record, repository, change.Ref, value, prior.Value is null ? change : null))
+            return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
+                $"Publication ref {change.Ref} has unexpected value {value?.Hex ?? "absent"}.");
         if (prior.Value is not null) return new RefPublication.Completed(record.GitObservations[prior.Key]);
         var intended = OperationIds.Derive(operation, step + "-intent");
         var intent = Journal(step + "-intent", intended, new RunEvent.GitIntended(plan, mutation));
