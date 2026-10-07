@@ -82,8 +82,12 @@ internal sealed partial class Materializer
             step = "layout";
             record = AllocateLayout(workflow, run, operation, task, repository, record);
             step = "plan";
-            var planned = Journal("plan", () => _store.Plan(workflow, run, OperationIds.Derive(operation, "plan"), task,
-                record.Revision.Id, cause));
+            var planOperation = OperationIds.Derive(operation, "plan");
+            var revision = record.Receipts.GetValueOrDefault(planOperation)?.Event is
+                RunEvent.Planned { Plan: MaterializationPlan.Preparation originalPlan }
+                ? originalPlan.Revision
+                : RunReducer.Slot(record, task, cause)?.Revision ?? record.Revision.Id;
+            var planned = Journal("plan", () => _store.Plan(workflow, run, planOperation, task, revision, cause));
             record = DecisionRecord(planned);
             var planEvent = DecisionEvent(planned);
             var plan = (MaterializationPlan.Preparation)((RunEvent.Planned)planEvent).Plan;

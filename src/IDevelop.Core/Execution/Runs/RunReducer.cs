@@ -177,6 +177,19 @@ internal static partial class RunReducer
                         return Reject(turnInput.Problem, turnInput.Task);
                     }
 
+                    if (record.Schema == 3 && claim.Key.Turn == 1)
+                    {
+                        var currentResults = record.CurrentResults;
+                        var stale = record.StaleResults;
+                        foreach (var binding in claim.Inputs.Bindings.OfType<InputBinding.Provided>().Where(binding => binding.Kind == ConnectionKind.Dependency))
+                        {
+                            if (stale.Contains(binding.Result) || !currentResults.TryGetValue(binding.Edge.From, out var dependency) || dependency.Id != binding.Result)
+                            {
+                                return Reject(RunProblem.StaleInput, binding.Edge.From);
+                            }
+                        }
+                    }
+
                     if (record.Schema >= 2 && (!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
                         prepared.Inputs != claim.Inputs.Id || prepared.PromptHash != claim.Prompt))
                     {
