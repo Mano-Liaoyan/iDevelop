@@ -363,7 +363,10 @@ public sealed partial class ProjectRuns
                 }
 
                 await DisposeTurnAsync();
-                await _owner.BeforeRelease();
+                if (_owner.BeforeRelease is { } beforeRelease)
+                {
+                    await beforeRelease();
+                }
                 try
                 {
                     if (_leave is { } leave && Record is { Status: AttemptStatus.Running, InterruptReason: null })

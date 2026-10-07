@@ -43,9 +43,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         _questions = questions;
         clients.Changed += OnClientsChanged;
         _attempts = DataFolder.Attempts(projectFolder);
-        Latest = latest;
-        Warnings = warnings;
-        _logRevisions = new(logRevisions);
+        RefreshPublished((latest, warnings, logRevisions));
     }
 
     /// <summary>The host clock and timers used by the runner. Tests inject a manually advanced clock.</summary>
@@ -64,7 +62,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>Awaited after a run's turn is disposed and before its lock is released. Tests hold it to observe teardown.</summary>
-    internal Func<Task> BeforeRelease { get; set; } = () => Task.CompletedTask;
+    internal Func<Task>? BeforeRelease { get; set; }
 
     internal (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers)? Live(TaskId task)
     {
@@ -75,7 +73,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>The newest attempt of each task that has one.</summary>
-    public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; }
+    public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; } = ImmutableDictionary<TaskId, AttemptRecord>.Empty;
 
     /// <summary>Attempt folders that could not be read or settled. Each one is a sentence for the user.</summary>
     public ImmutableArray<string> Warnings { get; private set; }
@@ -547,8 +545,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                             {
                                 using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, waiting.Id));
                                 log.Append(e);
-                                _logRevisions[(task, waiting.Id)] = log.LineCount;
-                                Latest = Latest.SetItem(task, AttemptReducer.Apply(waiting, e));
+                                SetPublished(task, new PublishedAttempt(AttemptReducer.Apply(waiting, e), log.LineCount));
                                 appended = true;
                             }
                             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -723,22 +720,34 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private void RefreshPublished((ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
         ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) disk)
     {
-        var latest = disk.Latest;
-        foreach (var task in _active.Keys)
+        foreach (var task in _published.Keys.Where(task => !disk.Latest.ContainsKey(task) && !_active.ContainsKey(task)).ToArray())
         {
-            latest = latest.SetItem(task, Latest[task]);
+            SetPublished(task, null);
         }
 
-        foreach (var (key, lines) in disk.LogRevisions)
+        foreach (var (task, record) in disk.Latest)
         {
-            if (!_active.ContainsKey(key.Task))
+            if (!_active.ContainsKey(task))
             {
-                _logRevisions[key] = lines;
+                SetPublished(task, new PublishedAttempt(record, disk.LogRevisions.GetValueOrDefault((task, record.Id))));
             }
         }
 
-        Latest = latest;
         Warnings = disk.Warnings;
+    }
+
+    private void SetPublished(TaskId task, PublishedAttempt? attempt)
+    {
+        if (attempt is null)
+        {
+            _published.Remove(task);
+            Latest = Latest.Remove(task);
+        }
+        else
+        {
+            _published[task] = attempt;
+            Latest = Latest.SetItem(task, attempt.Record);
+        }
     }
 
     /// <summary>Raises <see cref="Changed"/> on the caller's thread, then starts reading the new run.</summary>
@@ -868,8 +877,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active[task.Id] = run;
         }
 
-        Latest = Latest.SetItem(task.Id, launched);
-        _logRevisions[(task.Id, launched.Id)] = log.LineCount;
+        SetPublished(task.Id, new PublishedAttempt(launched, log.LineCount));
         return (new SendResult.Answered(launched), run);
     }
 
@@ -912,14 +920,13 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, last.Id));
             log.Append(handoff);
-            _logRevisions[(task, last.Id)] = log.LineCount;
+            SetPublished(task, new PublishedAttempt(AttemptReducer.Apply(last, handoff), log.LineCount));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return new TerminalResult.Refused(new TerminalProblem.Blocked(CannotRecord(e)));
         }
 
-        Latest = Latest.SetItem(task, AttemptReducer.Apply(last, handoff));
         return new TerminalResult.HandedOff(handoff.Folder, handoff.Command);
     }
 
@@ -969,8 +976,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             _active[task.Id] = run;
         }
 
-        Latest = Latest.SetItem(task.Id, record);
-        _logRevisions[(task.Id, record.Id)] = log.LineCount;
+        SetPublished(task.Id, new PublishedAttempt(record, log.LineCount));
         return (new StartResult.Started(record), run);
     }
 
@@ -1156,8 +1162,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         lock (_gate)
         {
-            Latest = Latest.SetItem(record.Task, record);
-            _logRevisions[(record.Task, record.Id)] = logRevision;
+            SetPublished(record.Task, new PublishedAttempt(record, logRevision));
         }
 
         NotifyChanged(record.Task);
@@ -1172,8 +1177,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 _active.Remove(record.Task);
             }
 
-            Latest = Latest.SetItem(record.Task, record);
-            _logRevisions[(record.Task, record.Id)] = run.Live.LogRevision;
+            SetPublished(record.Task, new PublishedAttempt(record, run.Live.LogRevision));
         }
 
         NotifyChanged(record.Task);

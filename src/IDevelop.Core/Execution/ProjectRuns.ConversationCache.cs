@@ -9,7 +9,9 @@ public sealed partial class ProjectRuns
 
     private readonly Lock _historyGate = new();
     private readonly Dictionary<(TaskId Task, AttemptId Attempt), CachedConversation> _histories = [];
-    private readonly Dictionary<(TaskId Task, AttemptId Attempt), long> _logRevisions;
+    private sealed record PublishedAttempt(AttemptRecord Record, long LogRevision);
+
+    private readonly Dictionary<TaskId, PublishedAttempt> _published = [];
 
     private AttemptHistory? ReadConversationHistory(TaskId task, AttemptId attempt)
     {

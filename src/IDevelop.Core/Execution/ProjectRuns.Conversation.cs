@@ -32,9 +32,9 @@ public sealed partial class ProjectRuns
             {
                 lock (_owner._gate)
                 {
-                    var record = _owner.Latest.GetValueOrDefault(Task);
+                    var published = _owner._published.GetValueOrDefault(Task);
+                    var record = published?.Record;
                     var task = _owner.Resolve(Task);
-                    var live = _owner.Live(Task);
                     var client = task?.Execution?.Client ?? record?.Requested.Client;
                     var capabilities = client is { } id
                         ? ClientPolicy.For(id, record?.ReadOnly ?? task?.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly },
@@ -56,8 +56,7 @@ public sealed partial class ProjectRuns
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
                         Availability(unavailable is null && waiting && record?.SessionId is not null,
                             unavailable ?? "The task must finish teardown and wait with a session.", "Open this session in a terminal."));
-                    return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), live?.LogRevision
-                        ?? (record is null ? 0 : _owner._logRevisions.GetValueOrDefault((Task, record.Id))),
+                    return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), published?.LogRevision ?? 0,
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }
             }
