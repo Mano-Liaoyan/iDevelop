@@ -30,6 +30,8 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         var read = store.Read(request.Workflow, request.Run);
         if (read is RunRead.Rejected rejected) return Block(request, MaterializationProblem.InputUnavailable, rejected.Reason.Problem.ToString());
         var record = ((RunRead.Loaded)read).Record;
+        if (request.Sources.Any(source => record.CurrentResults.GetValueOrDefault(source.Task)?.Id != source.Result))
+            return Block(request, MaterializationProblem.InputUnavailable, "A join source is no longer its task's current result.");
         var reference = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[request.Task]);
         ImmutableArray<CommitId> parents = [.. request.Sources.Select(source => source.Commit).Distinct()];
         var existing = record.Plans.GetValueOrDefault(request.Operation) as MaterializationPlan.Join;

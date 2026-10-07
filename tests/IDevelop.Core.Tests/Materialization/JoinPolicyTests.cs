@@ -201,6 +201,34 @@ public sealed class JoinPolicyTests
         Assert.Equal(Renamed, File.ReadAllText(Path.Combine(ready.Checkout, "y.txt")));
     }
 
+    [Theory]
+    [InlineData("journal.plan.after")]
+    [InlineData("git.join-merge-1.before")]
+    [InlineData("git.join-commit.after")]
+    public async Task Stale_operation_cannot_rewind_a_fresh_join(string point)
+    {
+        using var f = new PreparationFixture(Diamond());
+        await Write(f, T, ("b.txt", "B\n"));
+        await Write(f, C, ("c.txt", "C\n"));
+        var stale = f.Op();
+        await Assert.ThrowsAsync<Crash>(async () => await Prepare(f, stale, step => { if (step == point) throw new Crash(); }));
+        var old = f.Read().CurrentResults[T];
+        var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)old.Origin).Attempt, f.Op())));
+        Commit(f, again.Checkout, ("b.txt", "B again\n"));
+        f.Close(again);
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), again.Execution.Launch.Attempt));
+        var fresh = f.Op();
+        var current = Assert.IsType<Preparation.Ready>(await Prepare(f, fresh));
+        var retry = await Prepare(f, stale);
+        Assert.Equal("991c91ce7fcec2c34784c56385034d187447fb91", GitFixture.Read(f.Git.Open().ReadRef(JoinRef))?.Hex);
+        var replay = Assert.IsType<Preparation.Blocked>(retry);
+        Assert.Equal("InputUnavailable", replay.Block.Problem.ToString());
+        Assert.Equal("A join source is no longer its task's current result.", replay.Block.Detail);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef("refs/heads/main"))?.Hex);
+        Assert.Equal("B again\n", File.ReadAllText(Path.Combine(current.Checkout, "b.txt")));
+        Assert.Equal(current, await Prepare(f, fresh));
+    }
+
     [UnixFact]
     public async Task Changed_git_diagnostics_on_a_conflict_retry_publish_new_evidence()
     {
