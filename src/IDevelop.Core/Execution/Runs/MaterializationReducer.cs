@@ -13,7 +13,7 @@ internal static partial class RunReducer
         if (record.Phase == RunPhase.StopRequested)
         {
             return e is not (RunEvent.Reserved or RunEvent.Prepared or RunEvent.TurnClaimed or
-                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset });
+                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset or MaterializationPlan.Refresh });
         }
         return e switch
         {
@@ -60,7 +60,14 @@ internal static partial class RunReducer
                 {
                     return Reject(planProblem);
                 }
-                return (record with { Plans = record.Plans.Add(entry.Operation, planned.Plan) }, null);
+                var updated = record with { Plans = record.Plans.Add(entry.Operation, planned.Plan) };
+                if (planned.Plan is MaterializationPlan.Refresh refresh)
+                {
+                    var reviewer = record.Attempts[refresh.Launch.Attempt];
+                    updated = updated with { Inputs = updated.Inputs.Add(refresh.Inputs, InputMaterial.Build(record, refresh.Inputs,
+                        reviewer.Task, reviewer.Revision, refresh.Bindings, refresh.Sources, refresh.Review)) };
+                }
+                return (updated, null);
             case RunEvent.GitIntended intended:
                 if (intended.Plan == entry.Operation ||
                     !record.Plans.ContainsKey(intended.Plan) && !(record.Receipts.GetValueOrDefault(intended.Plan)?.Event is
@@ -92,7 +99,14 @@ internal static partial class RunReducer
                 {
                     return Reject(RunProblem.InputConflict);
                 }
-                if (prepared.Launch.Turn == 1 && InputProblem(record, inputs, true) is { } stale)
+                var refreshPlan = record.Plans.FirstOrDefault(pair => pair.Value is MaterializationPlan.Refresh refresh &&
+                    refresh.Launch == prepared.Launch && refresh.Inputs == inputs.Id);
+                if (prepared.Launch.Turn > 1 && prepared.Inputs != record.Preparations.GetValueOrDefault(new(attempt.Id, prepared.Launch.Turn - 1))?.Inputs &&
+                    (refreshPlan.Value is not MaterializationPlan.Refresh || !record.GitIntents.Any(pair => pair.Value.Plan == refreshPlan.Key &&
+                        pair.Value.Mutation is GitMutation.ResetCheckout reset && reset.Task == attempt.Task && reset.Target == inputs.CodeBase &&
+                        record.GitObservations.GetValueOrDefault(pair.Key)?.Value == inputs.CodeBase.Hex)))
+                    return Reject(RunProblem.InputConflict);
+                if ((prepared.Launch.Turn == 1 || refreshPlan.Value is MaterializationPlan.Refresh) && InputProblem(record, inputs, true) is { } stale)
                 {
                     return Reject(stale.Problem);
                 }
@@ -142,7 +156,7 @@ internal static partial class RunReducer
 
     internal static CommitId? AttemptBase(RunRecord record, RunAttempt attempt, InputRecord inputs)
     {
-        if (attempt.Cause is AttemptCause.Initial)
+        if (attempt.Cause is AttemptCause.Initial || record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Review)
         {
             return inputs.CodeBase;
         }
@@ -188,6 +202,22 @@ internal static partial class RunReducer
                 {
                     return RunProblem.StaleInput;
                 }
+                return null;
+            case MaterializationPlan.Refresh refresh:
+                if (!record.Attempts.TryGetValue(refresh.Launch.Attempt, out var reviewer)) return RunProblem.UnknownAttempt;
+                if (record.Revisions[reviewer.Revision].Snapshot.Tasks[reviewer.Task].Blueprint.Work is not WorkSpec.Review ||
+                    refresh.Launch.Turn < 2 || record.Closures.ContainsKey(reviewer.Id) ||
+                    !record.TurnClosures.ContainsKey(new(reviewer.Id, refresh.Launch.Turn - 1)) || record.Preparations.ContainsKey(refresh.Launch))
+                    return RunProblem.InvalidClaim;
+                if (record.Inputs.ContainsKey(refresh.Inputs) || record.Plans.Values.OfType<MaterializationPlan.Refresh>().Any(p => p.Launch == refresh.Launch))
+                    return RunProblem.InputConflict;
+                var refreshedInput = new InputRecord(refresh.Inputs, reviewer.Task, reviewer.Revision, refresh.Bindings,
+                    new CodeSelection.Root(record.Base.Commit), "", [], refresh.Review);
+                if (InputProblem(record, refreshedInput, true) is { } freshProblem) return freshProblem.Problem;
+                if (!Same(refresh.Sources, InputMaterial.Sources(record, refresh.Bindings)) ||
+                    !Same(refresh.Review, InputMaterial.Review(record.Revisions[reviewer.Revision].Snapshot, reviewer.Task, refresh.Bindings)) || refresh.Review is null)
+                    return RunProblem.InputConflict;
+                if (refresh.Sources.Select(source => source.Commit).Distinct().Count() > 1) return RunProblem.InputConflict;
                 return null;
             case MaterializationPlan.Join join:
                 return record.RunKey is { } run && record.TaskKeys.TryGetValue(join.Task, out var key) &&
