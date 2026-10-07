@@ -14,7 +14,8 @@ internal static class RegularFile
         // Managed attributes do not distinguish Unix FIFOs and devices; inspect type before opening to avoid blocking on a pipe.
         var status = new byte[512];
         var linux = OperatingSystem.IsLinux();
-        var success = linux ? Statx(-100, path, 0x100, 1, status) : Lstat(path, status);
+        var success = linux ? Statx(-100, path, 0x100, 1, status) :
+            OperatingSystem.IsMacOS() && RuntimeInformation.ProcessArchitecture == Architecture.X64 ? LstatInode64(path, status) : Lstat(path, status);
         var mode = BitConverter.ToUInt16(status, linux ? 28 : 4);
         if (success != 0 || (mode & 0xf000) != 0x8000)
             throw new IOException($"Artifact path is not a regular file: {path}.");
@@ -25,4 +26,7 @@ internal static class RegularFile
 
     [DllImport("libc", EntryPoint = "lstat", SetLastError = true)]
     private static extern int Lstat([MarshalAs(UnmanagedType.LPUTF8Str)] string path, [Out] byte[] status);
+
+    [DllImport("libc", EntryPoint = "lstat$INODE64", SetLastError = true)]
+    private static extern int LstatInode64([MarshalAs(UnmanagedType.LPUTF8Str)] string path, [Out] byte[] status);
 }
