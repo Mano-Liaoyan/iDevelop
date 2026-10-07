@@ -12,7 +12,7 @@ public sealed class AttentionTests
     [Fact]
     public void The_oldest_open_question_comes_before_the_wait_and_a_failure_and_a_finished_attempt_needs_nothing()
     {
-        var asking = Record(A, Launched(1), Asked(2, "s:b", "Which fixture?", 57), Asked(3, "s:a", "Which branch?", 58));
+        var asking = Record(A, Launched(1), Asked(2, "s:b", "Which fixture?", 57), Asked(3, "s:a", "Which branch?", 57));
         var failed = Record(A, Launched(1), At(2, new AgentEvent.Failed("The model is not available.")), Exited(3, 1));
         var succeeded = Record(A, Launched(1), At(2, new AgentEvent.Succeeded("Done.")), Exited(3));
 

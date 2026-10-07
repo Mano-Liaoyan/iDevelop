@@ -28,8 +28,8 @@ public abstract record Attention(string Label)
 
         var open = latest.Requests.Values.OfType<RequestRecord.Question>()
             .Where(question => question.State is QuestionState.Open)
-            .OrderBy(question => question.Key.Turn.Number)
-            .ThenBy(question => ((QuestionState.Open)question.State).Deadline.AnswerBy)
+            .OrderBy(question => question.At)
+            .ThenBy(question => question.Key.Turn.Number)
             .ThenBy(question => question.Key.Id, StringComparer.Ordinal)
             .FirstOrDefault();
         if (open is not null)
