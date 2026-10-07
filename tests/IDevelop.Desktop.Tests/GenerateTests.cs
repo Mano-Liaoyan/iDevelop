@@ -163,6 +163,7 @@ public sealed class GenerateTests : IDisposable
 
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
         Assert.Equal([Prompt], canvas.Workflow.Tasks.Values.Select(task => task.Field("goal")));
+        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
