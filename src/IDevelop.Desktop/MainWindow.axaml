@@ -71,7 +71,7 @@
              workflow is the selected row, as in PlanWeave's project tree. The scroll bar draws over the content, so the
              rows end where the bar starts, and the bar sits in the sidebar's right margin. -->
         <ScrollViewer Grid.Row="1" Margin="0,0,-8,0" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="0,0,12,0" Spacing="12">
+          <StackPanel Margin="0,0,16,0" Spacing="12">
             <ItemsControl ItemsSource="{Binding Projects}"
                           AutomationProperties.AutomationId="Projects"
                           AutomationProperties.Name="Open projects">
