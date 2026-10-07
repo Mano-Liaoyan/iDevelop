@@ -710,4 +710,15 @@ public sealed class WorkspaceTests : IDisposable
         Assert.Equal((open, title), (shell.Window.IsVisible, shell.Window.Title));
         Assert.Equal([saved, "Release"], WorkflowDocument.OpenProject(alpha).Select(document => document.Current.Name).Order());
     }
+
+    [AvaloniaFact]
+    public void New_workflow_beside_an_unnamed_workflow_is_its_second()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
+
+        shell.Click(ProjectButton(shell, "seed", "NewWorkflow"));
+
+        Assert.Equal([("seed", ["Workflow", "Workflow 2"])], shell.Tree());
+        Assert.Equal(("seed", "Workflow 2"), shell.Breadcrumb());
+    }
 }
