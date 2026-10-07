@@ -388,7 +388,7 @@ internal sealed class GitRepository
         return refresh.ExitCode == 0 ? new IndexAlignment.Aligned() : new IndexAlignment.Failed(refresh.Stderr);
     }
 
-    private GitRead<TreeId> ReadIndexTree(string checkout)
+    public GitRead<TreeId> ReadIndexTree(string checkout)
     {
         var index = IndexPath(checkout);
         if (index is not GitRead<string>.Read path)

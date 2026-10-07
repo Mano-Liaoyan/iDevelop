@@ -24,19 +24,19 @@ public sealed class PreparationTests
         f.Git.Git("update-ref", f.Read().Preparations[new(A1, 1)].Location.Owner.Branch, "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
         var operation = f.Op();
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, operation));
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
+        Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Location.AttemptBase.Hex);
+        Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea\n", f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-        var report = ".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md";
+        var report = ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/report.md";
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout, report)));
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout, report[..^9], "artifacts/payload")));
         Assert.Equal(1, Count(ready.Execution.Prompt, f.Read().Inputs[ready.Execution.Inputs].Text));
-        Assert.Contains(".idp/outbox/00000000-0000-0000-0000-000000000105/manifest.json", ready.Execution.Prompt);
+        Assert.Contains(".idp/outbox/00000000-0000-0000-0000-000000000104/manifest.json", ready.Execution.Prompt);
         Assert.Contains("{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}", ready.Execution.Prompt);
         foreach (var checkout in new[] { ready.Checkout, f.Git.Folder })
         {
             Assert.Equal(0, f.Git.Run(checkout, "check-ignore", "-q", report).ExitCode);
-            Assert.Equal(0, f.Git.Run(checkout, "check-ignore", "-q", ".idp/outbox/00000000-0000-0000-0000-000000000105/payload.bin").ExitCode);
+            Assert.Equal(0, f.Git.Run(checkout, "check-ignore", "-q", ".idp/outbox/00000000-0000-0000-0000-000000000104/payload.bin").ExitCode);
             Assert.Equal(1, f.Git.Run(checkout, "check-ignore", "-q", "a.txt").ExitCode);
             Assert.Equal("A\n", File.ReadAllText(Path.Combine(checkout, "a.txt")));
         }
@@ -60,7 +60,7 @@ public sealed class PreparationTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         var input = f.Read().Inputs[ready.Execution.Inputs];
         Assert.Equal(new ConnectionKey(C, U), Assert.Single(input.Bindings.OfType<InputBinding.MissingContext>()).Edge);
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
+        Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Location.AttemptBase.Hex);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class PreparationTests
         {
             var ready = Assert.IsType<Preparation.Ready>(await baseline.Materializer(probe: steps.Add)
                 .Prepare(W, baseline.RunId, baseline.Op(), task, new AttemptCause.Initial()));
-            Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
+            Assert.Equal(linear ? "d4d26ecdf72779dbc9c5c983025fb51546c8f9ea" : "adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
         }
         Assert.Contains("git.create-worktree.after", steps);
         Assert.Contains("journal.prepared.after", steps);
@@ -130,7 +130,7 @@ public sealed class PreparationTests
             await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: name => { if (name == step) throw new Crash(); })
                 .Prepare(W, f.RunId, operation, task, new AttemptCause.Initial()));
             var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(task, operation));
-            Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
+            Assert.Equal(linear ? "d4d26ecdf72779dbc9c5c983025fb51546c8f9ea" : "adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
             Assert.Single(f.Read().Preparations, pair => f.Read().Attempts[pair.Key.Attempt].Task == task);
             Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Prepare(task, operation)));

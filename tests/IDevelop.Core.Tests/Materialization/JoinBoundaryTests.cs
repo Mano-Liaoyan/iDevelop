@@ -62,11 +62,11 @@ public sealed class JoinBoundaryTests
         if (mode == "valid")
         {
             var ready = Assert.IsType<Preparation.Ready>(outcome);
-            Assert.Equal("21e68c24938d0d5643aa3fe17a38124c16cd1cc0", f.Read().Inputs[ready.Execution.Inputs].CodeBase.Hex);
-            Assert.Equal("21e68c24938d0d5643aa3fe17a38124c16cd1cc0", ready.Execution.Location.AttemptBase.Hex);
+            Assert.Equal("49bd30d4f9a2fb9f90d3dd0cf443001d9fa4a71b", f.Read().Inputs[ready.Execution.Inputs].CodeBase.Hex);
+            Assert.Equal("49bd30d4f9a2fb9f90d3dd0cf443001d9fa4a71b", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
             Assert.Equal("C\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
-            Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "7025720b8121cfd45a182b2ead881a0c0461beb0" },
+            Assert.Equal(new[] { "b350f18e8c7f922d58c54e415a95fb0a4b6fa249", "e954b83b974db2a85981aa86b3a2eabee42d7803" },
                 GitFixture.Read(f.Git.Open().ReadCommit(f.Read().Inputs[ready.Execution.Inputs].CodeBase)).Parents.Select(parent => parent.Hex));
         }
         else
@@ -82,8 +82,8 @@ public sealed class JoinBoundaryTests
         public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation)
         {
             var repository = f.Git.Open();
-            var mergedTree = new TreeId(f.Git.Git("merge-tree", "--write-tree", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67",
-                "7025720b8121cfd45a182b2ead881a0c0461beb0").Trim());
+            var mergedTree = new TreeId(f.Git.Git("merge-tree", "--write-tree", "b350f18e8c7f922d58c54e415a95fb0a4b6fa249",
+                "e954b83b974db2a85981aa86b3a2eabee42d7803").Trim());
             var parents = request.Sources.Select(source => source.Commit).Distinct().ToArray();
             var recipe = new CommitRecipe(mergedTree, [.. parents], "join\n", "E2 <e2@example.test>", "E2 <e2@example.test>", At);
             var actual = mode == "parents" ? recipe with { Parents = [.. parents.Reverse()] } : recipe;
