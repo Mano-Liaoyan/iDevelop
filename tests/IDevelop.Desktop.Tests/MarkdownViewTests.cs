@@ -152,6 +152,28 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_message_past_the_block_budget_shows_as_its_source()
+    {
+        static string Paragraphs(int count) => string.Concat(Enumerable.Repeat("a\n\n", count));
+        static string CodeBlocks(int count) => string.Concat(Enumerable.Repeat("```\nx\n```\n\n", count));
+        var (window, view) = Show("");
+        (int Code, int Blocks) Shown(string markdown)
+        {
+            view.Markdown = markdown;
+            window.UpdateLayout();
+            return (view.GetVisualDescendants().OfType<Border>().Count(border => border.Classes.Contains("mdCode")), Blocks(view).Length);
+        }
+
+        Assert.Equal((0, 1000), Shown(Paragraphs(1000)));
+        Assert.Equal((0, 1), Shown(Paragraphs(1001)));
+        Assert.Equal((100, 100), Shown(CodeBlocks(100)));
+        Assert.Equal((0, 1), Shown(CodeBlocks(101)));
+        Assert.Equal((99, 109), Shown(CodeBlocks(99) + Paragraphs(10)));
+        Assert.Equal((0, 1), Shown(CodeBlocks(99) + Paragraphs(11)));
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void A_message_shown_as_its_source_streams_into_the_same_block_and_waits_while_its_text_is_selected()
     {
         var source = "| a |\n|-|\n" + string.Concat(Enumerable.Repeat("| x |\n", 1000));

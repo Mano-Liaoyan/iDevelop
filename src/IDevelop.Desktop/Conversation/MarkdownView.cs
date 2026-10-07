@@ -19,17 +19,19 @@ namespace IDevelop.Desktop.Conversation;
 /// One message's Markdown as Avalonia controls. HTML stays literal text, an image shows its description and address and
 /// is never fetched, and a link goes only to the <see cref="ConversationLinkRouter"/>. A new text rebuilds only the blocks
 /// whose source changed, and a block with selected text keeps its old content until the selection clears. A message too
-/// long, too deeply nested, or with too many table cells or links to lay out quickly shows as its source.
+/// long, too deeply nested, or with too many blocks, table cells, or links to lay out quickly shows as its source.
 /// </summary>
 public sealed class MarkdownView : StackPanel
 {
     public static readonly StyledProperty<string?> MarkdownProperty = AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
 
     // Measured headlessly at each limit, 1,000 table cells or 500 links lay out in about 165 ms, and 20,000 characters of
-    // nested brackets in about 530 ms.
+    // nested brackets in about 530 ms. A code block costs about ten paragraphs, and 1,000 paragraphs or 100 code blocks
+    // lay out in about 120 ms.
     private const int MaxLength = 20_000;
     private const int MaxCells = 1_000;
     private const int MaxLinks = 500;
+    private const int MaxBlockWeight = 1_000;
 
     private const string SourceKey = "\0source";
 
@@ -125,9 +127,19 @@ public sealed class MarkdownView : StackPanel
 
         return document.Descendants<Markdig.Syntax.Inlines.Inline>().Where(inline => inline is LinkInline { IsImage: false } or AutolinkInline).Skip(MaxLinks).Any()
             || document.Descendants<TableCell>().Skip(MaxCells).Any()
+            || Weight(document) > MaxBlockWeight
             ? null
             : [.. document.Where(block => block is not LinkReferenceDefinitionGroup)];
     }
+
+    // A table's cells have their own limit.
+    private static int Weight(ContainerBlock container) => container.Sum(block => block switch
+    {
+        CodeBlock => 10,
+        Table => 1,
+        ContainerBlock inner => 1 + Weight(inner),
+        _ => 1,
+    });
 
     // A message streams as its source once it passes a limit, so its one block takes the new text in place and keeps a
     // selection until it clears.

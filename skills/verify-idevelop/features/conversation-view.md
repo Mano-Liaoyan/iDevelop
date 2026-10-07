@@ -39,4 +39,4 @@ Preconditions:
 - `CardAttention` exists only while a card needs the person, so `Find-ById $s.Window 'CardAttention' 1` returns `$null` otherwise. UI Automation may not reach a button inside a card; `ConversationWindowTests.A_failed_card_opens_its_conversation_from_its_attention_glyph` covers it headlessly.
 - `HistoricalNote`, `ConversationStopAndSend`, `ConversationCancel`, `ConversationMarkDone`, `ConversationTerminal`, `LoadEarlier`, `JumpToLatest`, and `ConversationNotice` exist only while shown. Pass a short timeout.
 - Message text is Markdown rendered into several text elements, so read a message's whole source with its `CopyMessage` button and the clipboard, not from one element.
-- A message longer than 20,000 characters, or with more than 1,000 table cells or 500 links, shows as its source in one text element, unformatted.
+- A message longer than 20,000 characters, with more than 1,000 table cells or 500 links, or with blocks that weigh more than 1,000, where a code block weighs 10 and any other block 1, shows as its source in one text element, unformatted.
