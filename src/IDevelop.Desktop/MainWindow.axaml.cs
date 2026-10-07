@@ -49,7 +49,7 @@ public partial class MainWindow : Window
 
     // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
     // space back when it closes.
-    private const double DockHeight = 320;
+    private const double DockHeight = 400;
 
     private bool _docked;
 

@@ -3,22 +3,20 @@
         xmlns:conversation="using:IDevelop.Desktop.Conversation">
 
   <!-- Markdown blocks. Text stays neutral; only links take the accent's text color. -->
+  <!-- No fixed line height, because a line that holds a link control would clip its own text. -->
   <Style Selector="SelectableTextBlock.md">
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="21" />
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="SelectionBrush" Value="{DynamicResource StateSelected40Brush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h1">
     <Setter Property="FontSize" Value="20" />
-    <Setter Property="LineHeight" Value="28" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
   <Style Selector="SelectableTextBlock.md.h2">
     <Setter Property="FontSize" Value="17" />
-    <Setter Property="LineHeight" Value="24" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
@@ -39,7 +37,6 @@
   </Style>
   <Style Selector="TextBlock.mdMarker">
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="LineHeight" Value="21" />
     <Setter Property="Margin" Value="2,0,8,0" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>

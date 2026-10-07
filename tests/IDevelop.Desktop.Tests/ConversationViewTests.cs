@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Conversation;
@@ -253,8 +254,11 @@ public sealed class ConversationViewTests : IDisposable
 
         Assert.False(view.IsFollowing);
         var container = transcript.ContainerFromIndex(index)!;
+        // A key in the transcript makes the next scroll the person's, as an arrow key does.
+        scroller.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down });
         scroller.Offset = scroller.Offset.WithY(container.TranslatePoint(default, (Avalonia.Visual)scroller.Content!)!.Value.Y + 12);
         Render();
+
         var text = container.GetVisualDescendants().OfType<SelectableTextBlock>().First(block => Shown(block).StartsWith("Read the edge", StringComparison.Ordinal));
         text.SelectionStart = 9;
         text.SelectionEnd = 19;
