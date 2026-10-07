@@ -98,7 +98,8 @@ internal static partial class RunValidation
     };
 
     private static bool Source(CodeSource source) => source.Task.Value != Guid.Empty && source.Result.Value != Guid.Empty &&
-        source.Owner.Value != Guid.Empty && Revision.IsCommit(source.AttemptBase.Hex) && Revision.IsCommit(source.Commit.Hex);
+        !source.Owners.IsDefaultOrEmpty && source.Owners.All(owner => owner.Value != Guid.Empty) &&
+        source.Owners.SequenceEqual(source.Owners.Distinct().OrderBy(owner => owner.ToString(), StringComparer.Ordinal)) && Revision.IsCommit(source.AttemptBase.Hex) && Revision.IsCommit(source.Commit.Hex);
 
     private static bool Review(ReviewInput? review) => review is null || review.Subject.Value != Guid.Empty && review.SubjectResult.Value != Guid.Empty;
 

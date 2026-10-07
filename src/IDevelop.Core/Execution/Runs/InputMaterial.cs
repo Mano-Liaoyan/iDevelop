@@ -42,7 +42,7 @@ internal static class InputMaterial
             var text = new StringBuilder($"## {workflow.Tasks[provided.Edge.From].Title} ({provided.Kind.ToString().ToLowerInvariant()})\n\nResult: {result.Id.Value:D}\n");
             if (Source(record, provided) is { } source)
             {
-                text.Append($"Code: {source.Commit.Hex}\nOwner: {source.Owner}\n");
+                text.Append($"Code: {source.Commit.Hex}\n{(source.Owners.Length == 1 ? "Owner" : "Owners")}: {string.Join(", ", source.Owners)}\n");
             }
             text.Append("\nReport:\n\n");
             if (inlined + bytes.Length <= 65536)
@@ -84,11 +84,13 @@ internal static class InputMaterial
         var result = record.Results.Single(result => result.Id == binding.Result);
         return result.Code switch
         {
-            CodeOutput.Produced produced => new(binding.Edge.From, result.Id, produced.Code.Owner, produced.Code.AttemptBase, produced.Code.Commit),
+            CodeOutput.Produced produced => new(binding.Edge.From, result.Id, [produced.Code.Owner], produced.Code.AttemptBase, produced.Code.Commit),
             CodeOutput.Forwarded forwarded => record.Inputs[forwarded.Inputs].Code switch
             {
-                CodeSelection.Single single => new(binding.Edge.From, result.Id, single.Source.Owner, single.Source.AttemptBase, single.Source.Commit),
-                CodeSelection.Joined joined => new(binding.Edge.From, result.Id, record.Inputs[forwarded.Inputs].Task, joined.Join.Commit, joined.Join.Commit),
+                CodeSelection.Single single => new(binding.Edge.From, result.Id, single.Source.Owners, single.Source.AttemptBase, single.Source.Commit),
+                CodeSelection.Joined joined => new(binding.Edge.From, result.Id,
+                    [.. joined.Join.Sources.SelectMany(source => source.Owners).Distinct().OrderBy(owner => owner.ToString(), StringComparer.Ordinal)],
+                    joined.Join.Commit, joined.Join.Commit),
                 _ => null,
             },
             _ => null,

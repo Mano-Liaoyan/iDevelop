@@ -36,7 +36,7 @@ public sealed class MaterializationTests
         var reserved = f.Reserve(D);
         var single = Assert.IsType<CodeSelection.Single>(reserved.Inputs.Code);
         Assert.Equal(U, single.Source.Task);
-        Assert.Equal(T, single.Source.Owner);
+        Assert.Equal(new[] { T }, single.Source.Owners);
         Assert.Equal("2222222222222222222222222222222222222222", single.Source.Commit.Hex);
         Assert.Equal([U, C], reserved.Inputs.Bindings.OfType<InputBinding.Provided>().Select(binding => binding.Edge.From));
         Assert.Equal(2, reserved.Inputs.Files.Length);

@@ -99,7 +99,7 @@ public sealed class ReviewMaterializationTests
         var successor = Assert.IsType<Preparation.Ready>(await f.Prepare(D));
         var single = Assert.IsType<CodeSelection.Single>(f.Read().Inputs[successor.Execution.Inputs].Code);
         Assert.Equal(U, single.Source.Task);
-        Assert.Equal(T, single.Source.Owner);
+        Assert.Equal(new[] { T }, single.Source.Owners);
         Assert.Equal(Fixed, single.Source.Commit.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(successor.Checkout, "a.txt")));
         Assert.Equal("A\n", f.Git.Git("show", First + ":a.txt"));
@@ -229,7 +229,9 @@ public sealed class ReviewMaterializationTests
     [Fact]
     public async Task Reviewer_refresh_accepts_verified_join_and_forwards_its_exact_snapshot()
     {
-        using var f = new PreparationFixture(FanInWorkflow());
+        var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(D), Task(C), Reviewer(), Writer(new(Id(6)))),
+            D, C), C, U), T, U), U, new(Id(6)));
+        using var f = new PreparationFixture(workflow);
         var review = await FixedFanIn(f);
         var operation = f.Op();
         var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(W, f.RunId, operation,
@@ -247,6 +249,13 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation,
             ready.Execution.Launch, "Review the fix.")));
         Assert.Equal(new CodeOutput.Forwarded(input.Id), Agree(f, ready).Code);
+        var successor = Assert.IsType<Preparation.Ready>(await f.Prepare(new(Id(6))));
+        var successorInput = f.Read().Inputs[successor.Execution.Inputs];
+        var source = Assert.IsType<CodeSelection.Single>(successorInput.Code).Source;
+        Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", source.Commit.Hex);
+        Assert.Equal(new[] { "00000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000000005" }, source.Owners.Select(owner => owner.ToString()));
+        Assert.Contains("Owners: 00000000-0000-0000-0000-000000000002, 00000000-0000-0000-0000-000000000005\n", successorInput.Text);
+        Assert.DoesNotContain("Owner: 00000000-0000-0000-0000-000000000003", successorInput.Text);
     }
 
     [Theory]
