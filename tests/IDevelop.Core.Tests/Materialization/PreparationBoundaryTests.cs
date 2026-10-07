@@ -25,10 +25,11 @@ public sealed class PreparationBoundaryTests
         var operation = f.Op();
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(U, operation));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("00000000-0000-0000-0000-000000000103", blocked.Block.Detail);
-        Assert.Contains("results/00000000-0000-0000-0000-000000000103/artifacts/payload", blocked.Block.Detail);
+        Assert.Contains("0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b", blocked.Block.Detail);
+        Assert.Contains("results/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/payload", blocked.Block.Detail);
         Assert.Equal(operation, Assert.Single(f.Read().Blocks).Value.Block.Operation);
         Assert.Single(f.Read().Attempts);
+        Assert.Equal(0, f.Read().Preparations.Values.Count(p => f.Read().Attempts[p.Launch.Attempt].Task == U));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(f.Git.Folder, "a.txt")));
     }
 

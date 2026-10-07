@@ -26,7 +26,9 @@ internal sealed class RunStorage(string project, WorkflowId workflow, RunId run)
 
     internal static byte[] Read(string root, string relative, Digest digest, long length)
     {
-        var bytes = File.ReadAllBytes(SafePath(root, relative));
+        var path = SafePath(root, relative);
+        RegularFile.Verify(path);
+        var bytes = File.ReadAllBytes(path);
         Verify(bytes, digest, length);
         return bytes;
     }

@@ -20,11 +20,11 @@ public sealed class PreparationContractTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: prompt));
         Assert.StartsWith(prompt ?? "Inspect", ready.Execution.Prompt);
         Assert.Equal(1, ready.Execution.Prompt.Split("B ready.", StringSplitOptions.None).Length - 1);
-        Assert.Contains("Code: adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Prompt);
+        Assert.Contains("Code: d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Prompt);
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout,
-            ".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/artifacts/report.md")));
+            ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/report.md")));
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout,
-            ".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md")));
+            ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/report.md")));
         var prepared = f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution == ready.Execution);
         var snapshot = File.ReadAllText(Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, prepared.SharedRefs.RelativePath));
         Assert.Contains("refs/idp/93f23689/base", snapshot);
@@ -101,7 +101,7 @@ public sealed class PreparationContractTests
         var input = record.Inputs.Values.Single(input => input.Task == U);
         var attempt = record.Attempts.Values.Single(attempt => attempt.Task == U);
         var owner = record.GitIntents.Values.Select(intent => intent.Mutation).OfType<GitMutation.CreateWorktree>().Single(create => create.Owner.Task == U).Owner;
-        var prepared = new PreparedExecution(new(attempt.Id, 1), input.Id, new(owner, f.A), "Inspect", Revision.Hash("Inspect"), RunLayout.Outbox(attempt.Id));
+        var prepared = new PreparedExecution(new(attempt.Id, 1), input.Id, new(owner, new("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea")), "Inspect", Revision.Hash("Inspect"), RunLayout.Outbox(attempt.Id));
         var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Prepared(prepared, SharedRefs)));
         Assert.Equal("InputConflict", rejected.Reason.Problem.ToString());
         Assert.Equal("C available.\n", context.Report);
