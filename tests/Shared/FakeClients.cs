@@ -88,7 +88,9 @@ internal sealed class FakeClients
 internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<JsonNode> Steps)
 {
     public ImmutableArray<string> Has { get; init; } = [];
+
     public string? ThreadMethod { get; init; }
+
     public string? ThreadId { get; init; }
 
     public FakeRule Thread(string method, string? id = null) => this with { ThreadMethod = method, ThreadId = id };
@@ -102,11 +104,17 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     public FakeRule RecordWorkingDirectory(string file) => Step("recordWorkingDirectory", file);
 
     public FakeRule CaptureStdin(string file) => Step("captureStdin", file);
+
     public FakeRule CapturePrompt(string file) => Step("capturePrompt", file);
+
     public FakeRule RecordFrames(string file) => Step("recordFrames", file);
+
     public FakeRule ReadLine(string file) => Step("readLine", file);
+
     public FakeRule WaitForLine(string pattern) => Step("waitForLine", pattern);
+
     public FakeRule EchoId(string line) => Step("echoId", line);
+
     public FakeRule CloseStdin() => Step("closeStdin", true);
 
     public FakeRule WaitForStdinEnd() => Step("waitForStdinEnd", true);

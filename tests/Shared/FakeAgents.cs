@@ -67,6 +67,7 @@ internal static class FakeAgents
             ClientId.Antigravity => [$$$"""{"event":"result","result":{"status":"SUCCESS","response":{{{json}}}}}"""],
         };
     }
+
     public static string AppLine(string line)
     {
         using var json = JsonDocument.Parse(line);

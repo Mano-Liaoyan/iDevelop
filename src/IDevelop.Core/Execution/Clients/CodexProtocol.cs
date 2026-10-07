@@ -28,38 +28,63 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
         if (method is null && root.String("id") is { } id)
         {
             if (id is "init-1" or "thread-1" or "turn-1" && root.Property("error") is { } error)
+            {
                 throw new ProtocolException(error.String("message") ?? "Codex initialization failed.");
+            }
+
             if (id == "init-1" && !_initialized)
             {
                 _initialized = true;
-                if (_interrupted) return ProtocolOutput.Empty;
+                if (_interrupted)
+                {
+                    return ProtocolOutput.Empty;
+                }
+
                 var native = (NativePolicy.Codex)launch.PolicyFor(ClientId.Codex).Native;
                 var args = new Dictionary<string, object?>
                 {
-                    ["model"] = launch.Model, ["approvalPolicy"] = native.ApprovalPolicy,
-                    ["approvalsReviewer"] = native.ApprovalsReviewer, ["sandbox"] = native.Sandbox,
+                    ["model"] = launch.Model,
+                    ["approvalPolicy"] = native.ApprovalPolicy,
+                    ["approvalsReviewer"] = native.ApprovalsReviewer,
+                    ["sandbox"] = native.Sandbox,
                 };
-                if (launch.ResumeSession is { } session) args["threadId"] = session;
+                if (launch.ResumeSession is { } session)
+                {
+                    args["threadId"] = session;
+                }
+
                 return new([], [Frame(new { method = "initialized" }), Rpc("thread-1", launch.ResumeSession is null ? "thread/start" : "thread/resume", args)], false);
             }
+
             if (id == "thread-1" && !_started)
             {
                 _started = true;
-                if (_interrupted) return ProtocolOutput.Empty;
+                if (_interrupted)
+                {
+                    return ProtocolOutput.Empty;
+                }
+
                 _thread = root.Property("result")?.Property("thread")?.String("id") ?? throw new ProtocolException("Codex reported no thread id.");
                 return new(NonBlank(_thread) is { } session ? [new AgentEvent.SessionStarted(session)] : [], [Rpc("turn-1", "turn/start", new
                 {
                     threadId = _thread, input = new[] { new { type = "text", text = launch.Prompt, text_elements = Array.Empty<object>() } }, effort = launch.Reasoning,
                 })], false);
             }
+
             if (id == "turn-1")
             {
                 _turn = root.Property("result")?.Property("turn")?.String("id");
                 return _interruptPending ? Interrupt() ?? ProtocolOutput.Empty : ProtocolOutput.Empty;
             }
+
             return ProtocolOutput.Empty;
         }
-        if (method is not null && root.Property("id") is { } requestId) return Request(root, method, requestId);
+
+        if (method is not null && root.Property("id") is { } requestId)
+        {
+            return Request(root, method, requestId);
+        }
+
         switch (method)
         {
             case "turn/started":
@@ -99,9 +124,14 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
             var before = prior.Property("params");
             var after = root.Property("params");
             var sameInput = before is { } input ? after is { } next && JsonElement.DeepEquals(input, next) : after is null;
-            if (prior.String("method") != method || !sameInput) throw new ProtocolException($"Codex changed request {id} within the turn.");
+            if (prior.String("method") != method || !sameInput)
+            {
+                throw new ProtocolException($"Codex changed request {id} within the turn.");
+            }
+
             return ProtocolOutput.Empty;
         }
+
         _requests[id] = root.Clone();
         if (method is "item/commandExecution/requestApproval" or "item/fileChange/requestApproval")
         {
@@ -109,6 +139,7 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
             return new([new AgentEvent.PermissionRequested(id, new PermissionAction(method, input?.GetRawText() ?? "{}",
                 input?.String("command") ?? input?.String("grantRoot") ?? input?.String("reason") ?? "This turn"))], [], false);
         }
+
         return new([new AgentEvent.Notice($"Codex requested unsupported method {method}.")],
             [Frame(new { id = rawId, error = new { code = -32601, message = "Method not supported." } })], false);
     }
@@ -124,7 +155,11 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
     {
         _interrupted = true;
         _interruptPending = true;
-        if (_thread is null || _turn is null) return ProtocolOutput.Empty;
+        if (_thread is null || _turn is null)
+        {
+            return ProtocolOutput.Empty;
+        }
+
         _interruptPending = false;
         return new([], [Rpc("stop-1", "turn/interrupt", new { threadId = _thread, turnId = _turn })], false);
     }

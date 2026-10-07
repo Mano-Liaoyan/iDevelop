@@ -9,8 +9,11 @@ namespace IDevelop.Execution;
 internal static class ConversationPager
 {
     private sealed record Position(AttemptId Attempt, long Order, long Line, int Slot, string Entry);
+
     private sealed record CursorToken(string Scope, string Chain, Position Position);
+
     private sealed record WindowToken(string Scope, string Chain, Position First, Position Last, bool Empty);
+
     private static readonly JsonSerializerOptions Options = new()
     {
         RespectNullableAnnotations = true,
@@ -35,15 +38,29 @@ internal static class ConversationPager
         var rows = chain.SelectMany(attempt => attempt.Rows).ToArray();
         var byId = rows.ToDictionary(row => row.Entry.Id.Value, StringComparer.Ordinal);
         Position At(ProjectedConversationEntry row) => new(row.Entry.Turn.Attempt, row.Entry.Order, row.Position, row.Slot, row.Entry.Id.Value);
+
         Position Resolve(Position position) => byId.TryGetValue(position.Entry, out var row) ? At(row) : position;
+
         int Compare(Position left, Position right)
         {
             var comparison = attemptOrder[left.Attempt].CompareTo(attemptOrder[right.Attempt]);
-            if (comparison != 0) return comparison;
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+
             comparison = left.Order.CompareTo(right.Order);
-            if (comparison != 0) return comparison;
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+
             comparison = left.Line.CompareTo(right.Line);
-            if (comparison != 0) return comparison;
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+
             comparison = left.Slot.CompareTo(right.Slot);
             return comparison != 0 ? comparison : StringComparer.Ordinal.Compare(left.Entry, right.Entry);
         }
@@ -53,7 +70,9 @@ internal static class ConversationPager
             && position.Entry.StartsWith($"c1/{position.Attempt}/", StringComparison.Ordinal)
             && (byId.TryGetValue(position.Entry, out var row) && row.Entry.Turn.Attempt == position.Attempt && row.Entry.Order == position.Order
                 || rows.Length == 0 && position.Entry == $"c1/{chain[0].Id}/empty" && position.Order == 0 && position.Line == 0 && position.Slot == 0);
+
         bool Owned(string tokenScope, string tokenChain) => tokenScope == scope && tokenChain == chainId;
+
         var fallback = rows.Length > 0 ? At(rows[0]) : new Position(chain[0].Id, 0, 0, 0, $"c1/{chain[0].Id}/empty");
         ProjectedConversationEntry[] selected;
         Position first;

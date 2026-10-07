@@ -123,7 +123,11 @@ internal sealed class ChildProcess : IDisposable
         {
             await _process.StandardInput.WriteAsync(text.AsMemory(), bounded.Token);
             await _process.StandardInput.FlushAsync(bounded.Token);
-            if (close) _process.StandardInput.Close();
+            if (close)
+            {
+                _process.StandardInput.Close();
+            }
+
             return true;
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
