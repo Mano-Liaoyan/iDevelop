@@ -120,7 +120,7 @@ public sealed class ConversationDrainTests : IDisposable
         Assert.Equal(1, AnswerFrames());
     }
 
-    [Fact]
+    [UnixFact]
     public async Task Answer_pipe_fails_after_logging()
     {
         Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).RecordFrames(FileAt("frames.jsonl"))
