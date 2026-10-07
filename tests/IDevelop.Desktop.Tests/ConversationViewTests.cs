@@ -3,7 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Conversation;
@@ -233,6 +235,30 @@ public sealed class ConversationViewTests : IDisposable
         Settle(model);
         Assert.Equal(["a1", "c1"], Ids(model));
         Assert.True(model.SendCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void A_click_in_the_scroll_track_while_output_streams_stops_following_the_end_among_rows_of_different_heights()
+    {
+        _pager.Rows.AddRange(Enumerable.Range(0, 40).Select(i => Said($"m{i}", MessageAuthor.Agent,
+            string.Join("\n\n", Enumerable.Repeat($"Message {i}", i % 2 == 0 ? 1 : 12)))));
+        _pager.Rows.Add(Said("m40", MessageAuthor.Agent, "Streaming", MessageState.Streaming));
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var scroller = view.GetVisualDescendants().OfType<ScrollViewer>().Single(control => control.Name == "Scroller");
+        var bar = scroller.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.Orientation == Orientation.Vertical);
+        var track = bar.TranslatePoint(new Point(bar.Bounds.Width / 2, 24), window.Window)!.Value;
+        window.Window.MouseMove(track);
+        Render();
+        Assert.True(view.IsFollowing);
+
+        // Rows of different heights come into view, so the scroll that the click makes also changes the extent.
+        window.Window.MouseDown(track, MouseButton.Left);
+        window.Window.MouseUp(track, MouseButton.Left);
+        model.Items[^1].Update(Said("m40", MessageAuthor.Agent, "Streaming\n\nmore output", MessageState.Streaming));
+        Render();
+
+        Assert.Equal((false, true), (view.IsFollowing, view.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "JumpToLatest").IsVisible));
     }
 
     [AvaloniaFact]
