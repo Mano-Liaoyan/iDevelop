@@ -49,8 +49,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>The host clock and timers used by the runner. Tests inject a manually advanced clock.</summary>
     internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
-    /// <summary>The budget for a protocol stop or for exit after its terminal result. Tests shorten it.</summary>
+    /// <summary>The budget for a protocol stop or deferral teardown. Tests shorten it.</summary>
     internal TimeSpan ShutdownTime { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a client that reported success may take to exit, for its own shutdown work such as session hooks, before
+    /// iDevelop stops it and fails the turn. Only a client that never exits should reach it. Tests shorten it.
+    /// </summary>
+    internal TimeSpan SuccessExitTime { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);

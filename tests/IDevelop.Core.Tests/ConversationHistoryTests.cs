@@ -60,6 +60,38 @@ public class ConversationHistoryTests
     }
 
     [Fact]
+    public void Overlapping_buffers_keep_literal_presentation_positions_when_completed_in_reverse()
+    {
+        AttemptEvent[] events = [BuildRequested(First), LaunchedAt1s];
+        var live = new Dictionary<string, LiveMessageBuffer>
+        {
+            ["z"] = new("First", 2, T0) { PresentationSequence = 1 },
+            ["a"] = new("Second", 2, T0) { PresentationSequence = 2 },
+        };
+        var streaming = Project(events, live);
+        var page = Page(streaming, new HistoryQuery.Latest(), 2);
+        var complete = Project([.. events,
+            new AttemptEvent.Agent(T0, new AgentEvent.Message("Second") { Id = "a" }) { Order = 2, PresentationSequence = 2 },
+            new AttemptEvent.Agent(T0, new AgentEvent.Message("First") { Id = "z" }) { Order = 2, PresentationSequence = 1 }]);
+        var refreshed = Page(complete, new HistoryQuery.RefreshWindow(page.Window), 2);
+        string[] ids = ["c1/019aa000-0000-7000-8000-000000000001/1/message/ieg",
+            "c1/019aa000-0000-7000-8000-000000000001/1/message/iYQ"];
+        Assert.Equal(ids, AgentEntries(streaming).Select(entry => entry.Id.Value));
+        Assert.Equal([4L, 4L], AgentEntries(streaming).Select(entry => entry.Order));
+        Assert.Equal([(2L, 1), (2L, 2)], streaming.Rows.Where(row => row.Entry.Content is ConversationContent.Message { Author: MessageAuthor.Agent })
+            .Select(row => (row.Position, row.Slot)));
+        Assert.Equal(ids, AgentEntries(complete).Select(entry => entry.Id.Value));
+        Assert.Equal([4L, 4L], AgentEntries(complete).Select(entry => entry.Order));
+        Assert.Equal([(2L, 1), (2L, 2)], complete.Rows.Where(row => row.Entry.Content is ConversationContent.Message { Author: MessageAuthor.Agent })
+            .Select(row => (row.Position, row.Slot)));
+        Assert.Equal(ids, refreshed.Entries.Select(entry => entry.Id.Value));
+        Assert.Equal(["First", "Second"], refreshed.Entries.Select(entry => Assert.IsType<ConversationContent.Message>(entry.Content).Text));
+        Assert.Equal(page.Window, refreshed.Window);
+        Assert.Equal(page.Before, refreshed.Before);
+        Assert.Equal(page.After, refreshed.After);
+    }
+
+    [Fact]
     public void A_live_message_completes_with_the_same_identity_and_presentation_order_and_refreshes_its_window()
     {
         AttemptEvent[] events = [BuildRequested(First), LaunchedAt1s];

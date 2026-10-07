@@ -51,6 +51,133 @@ public sealed class ProtocolDrainTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Overlapping_items_keep_their_history_window_when_completed_or_flushed_partial(bool complete)
+    {
+        var gate = Path.Combine(_evidence, "go");
+        var fake = Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session))
+            .Print("""{"method":"item/agentMessage/delta","params":{"itemId":"z","delta":"First"}}""")
+            .Print("""{"method":"item/agentMessage/delta","params":{"itemId":"a","delta":"Second"}}""")
+            .WaitForFile(gate);
+        if (complete)
+        {
+            fake = fake.Print("""{"method":"item/completed","params":{"item":{"id":"a","type":"agentMessage","text":"Second"}}}""")
+                .Print("""{"method":"item/completed","params":{"item":{"id":"z","type":"agentMessage","text":"First"}}}""");
+        }
+
+        Install(_fakes, ClientId.Codex, fake.Print("""{"method":"turn/completed","params":{"turn":{"id":"turn-1","status":"completed"}}}"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = Task(ClientId.Codex);
+        using var session = runs.OpenConversation(task.Id);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        await Until(() => runs.Live(task.Id)?.Buffers.Count == 2);
+        var attempt = runs.Latest[task.Id].Id;
+        try
+        {
+            var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(attempt, new HistoryQuery.Latest(), 2, default));
+            Assert.Equal(["1/message/ieg", "1/message/iYQ"], page.Entries.Select(entry => entry.Id.Value[(entry.Id.Value.IndexOf("/1/", StringComparison.Ordinal) + 1)..]));
+            Assert.Equal([6L, 6L], page.Entries.Select(entry => entry.Order));
+            Assert.Equal([MessageState.Streaming, MessageState.Streaming], page.Entries.Select(entry => Assert.IsType<ConversationContent.Message>(entry.Content).State));
+            var liveRefresh = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(attempt, new HistoryQuery.RefreshWindow(page.Window), 2, default));
+            Assert.Equal(["First", "Second"], liveRefresh.Entries.Select(entry => Assert.IsType<ConversationContent.Message>(entry.Content).Text));
+            File.WriteAllText(gate, "go");
+            var record = await Settled(runs, task.Id);
+            Assert.Equal((AttemptStatus.Succeeded, (string?)null), (record.Status, record.Detail));
+            var refreshed = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(attempt, new HistoryQuery.RefreshWindow(page.Window), 2, default));
+            Assert.Equal(["1/message/ieg", "1/message/iYQ"], refreshed.Entries.Select(entry => entry.Id.Value[(entry.Id.Value.IndexOf("/1/", StringComparison.Ordinal) + 1)..]));
+            Assert.Equal([6L, 6L], refreshed.Entries.Select(entry => entry.Order));
+            Assert.Equal(["First", "Second"], refreshed.Entries.Select(entry => Assert.IsType<ConversationContent.Message>(entry.Content).Text));
+            Assert.Equal(complete ? [MessageState.Complete, MessageState.Complete] : new[] { MessageState.Partial, MessageState.Partial },
+                refreshed.Entries.Select(entry => Assert.IsType<ConversationContent.Message>(entry.Content).State));
+            Assert.Equal(page.Window, refreshed.Window);
+            Assert.Equal(page.Before, refreshed.Before);
+            Assert.Equal(page.After, refreshed.After);
+            var messages = Events(record).OfType<AttemptEvent.Agent>().Where(e => e.Event is AgentEvent.Message).ToArray();
+            Assert.Equal(complete ? ["a", "z"] : new[] { "z", "a" }, messages.Select(e => ((AgentEvent.Message)e.Event).Id));
+            Assert.Equal(complete ? [2, 1] : new[] { 1, 2 }, messages.Select(e => e.PresentationSequence!.Value));
+            Assert.All(messages, e => Assert.Equal(3L, e.Order));
+            var persisted = AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), record.Task, record.Id);
+            Assert.Equal(2, File.ReadLines(Path.Combine(persisted, "events.jsonl")).Count(line => line.Contains("\"presentationSequence\"", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            File.WriteAllText(gate, "go");
+        }
+    }
+
+    [Theory]
+    [InlineData(ClientId.Pi, "deepseek/deepseek-v4-pro", "high")]
+    [InlineData(ClientId.Antigravity, "gemini-3.8-flash", "low")]
+    public async Task A_large_one_shot_prompt_to_a_client_that_reads_late_still_succeeds(ClientId client, string model, string reasoning)
+    {
+        var captured = Path.Combine(_evidence, "stdin.txt");
+        Install(_fakes, client, Fresh(client).Sleep(700).CaptureStdin(captured)
+            .Print(SessionLine(client, Session)).Print(ReplyLines(client, "Done")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.ShutdownTime = TimeSpan.FromMilliseconds(200);
+        var goal = new string('x', 300_000);
+        var task = TestNodes.Implement(TestTasks.Design, "Big", goal, execution: new ExecutionSettings(client) { Model = model, Reasoning = reasoning });
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        var record = await Settled(runs, task.Id);
+        Assert.Equal((AttemptStatus.Succeeded, (string?)null), (record.Status, record.Detail));
+        var prompt = client switch
+        {
+            ClientId.Pi => "# Big\n\n" + goal + "\n",
+            ClientId.Antigravity => "{\"event\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"# Big\\n\\n" + goal + "\\n\"}}\n",
+            ClientId.ClaudeCode or ClientId.Codex => throw new InvalidOperationException(),
+        };
+        Assert.Equal(prompt, File.ReadAllText(captured));
+    }
+
+    [Theory]
+    [InlineData(ClientId.Pi, "deepseek/deepseek-v4-pro", "high")]
+    [InlineData(ClientId.Antigravity, "gemini-3.8-flash", "low")]
+    public async Task A_blocked_one_shot_prompt_stays_running_until_cancelled(ClientId client, string model, string reasoning)
+    {
+        var ready = Path.Combine(_evidence, "ready");
+        var gate = Path.Combine(_evidence, "go");
+        Install(_fakes, client, Fresh(client).Print(SessionLine(client, Session)).Write(ready, "yes").WaitForFile(gate).Hang());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.ShutdownTime = TimeSpan.FromMilliseconds(200);
+        var task = TestNodes.Implement(TestTasks.Design, "Big", new string('x', 300_000),
+            execution: new ExecutionSettings(client) { Model = model, Reasoning = reasoning });
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        try
+        {
+            await Until(() => File.Exists(ready));
+            await System.Threading.Tasks.Task.Delay(400);
+            Assert.Equal(AttemptStatus.Running, runs.Latest[task.Id].Status);
+            Assert.Null(await runs.CancelAsync(task.Id));
+            var record = await Settled(runs, task.Id);
+            Assert.Equal((AttemptStatus.Cancelled, (string?)null), (record.Status, record.Detail));
+            Assert.Single(Events(record).OfType<AttemptEvent.CancelRequested>());
+            Assert.Equal([], Events(record).OfType<AttemptEvent.Agent>().Select(e => e.Event).OfType<AgentEvent.Failed>().Select(failed => failed.Reason));
+        }
+        finally
+        {
+            File.WriteAllText(gate, "go");
+        }
+    }
+
+    [Theory]
+    [InlineData(ClientId.ClaudeCode)]
+    [InlineData(ClientId.Codex)]
+    public async Task A_successful_client_exiting_after_the_stop_budget_still_succeeds(ClientId client)
+    {
+        Install(_fakes, client, Fresh(client).Print(SessionLine(client, Session)).Print(ReplyLines(client, "Done"))
+            .WaitForStdinEnd().Sleep(1500).Exit(0));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.ShutdownTime = TimeSpan.FromMilliseconds(200);
+        var task = Task(client);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        var record = await Settled(runs, task.Id);
+        Assert.Equal((AttemptStatus.Succeeded, (string?)null), (record.Status, record.Detail));
+        Assert.Equal(TurnOutcome.Succeeded, record.Turns.Single().Outcome);
+        Assert.Equal(0, Assert.Single(Events(record).OfType<AttemptEvent.Exited>()).ExitCode);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Interrupt_acknowledgement_is_followed_by_the_aborted_full_tail(bool stopAndSend)
@@ -157,11 +284,11 @@ public sealed class ProtocolDrainTests : IDisposable
     }
 
     [Fact]
-    public async Task A_successful_app_server_that_does_not_exit_fails_at_the_shutdown_deadline()
+    public async Task A_successful_app_server_that_does_not_exit_fails_at_the_success_exit_deadline()
     {
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Done")).Hang());
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
-        runs.ShutdownTime = TimeSpan.FromMilliseconds(200);
+        runs.SuccessExitTime = TimeSpan.FromMilliseconds(200);
         var task = Task(ClientId.Codex);
         runs.Start(task);
         var record = await Settled(runs, task.Id);

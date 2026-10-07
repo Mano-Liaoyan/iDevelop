@@ -6,7 +6,10 @@ namespace IDevelop.Execution;
 
 internal sealed record PositionedAttemptEvent(long Position, AttemptEvent Event);
 
-internal sealed record LiveMessageBuffer(string Text, long Order, DateTimeOffset? At = null);
+internal sealed record LiveMessageBuffer(string Text, long Order, DateTimeOffset? At = null)
+{
+    public int? PresentationSequence { get; init; }
+}
 
 internal sealed record ProjectedConversationEntry(ConversationEntry Entry, long Position, int Slot);
 
@@ -43,13 +46,15 @@ internal static class ConversationHistory
 
             var turn = new TurnKey(record.Id, record.Turns.Count);
             var order = e is AttemptEvent.Agent { Order: { } presented } ? 2 * presented : 2 * line.Position + 1;
-            var slot = 0;
+            var presentation = e as AttemptEvent.Agent;
+            var position = presentation is { Order: { } origin, PresentationSequence: not null } ? origin : line.Position;
+            var slot = presentation?.PresentationSequence ?? 0;
             EntryId Add(string kind, ConversationContent content, string? identity = null)
             {
                 var id = Id(record.Id, turn.Number, kind, identity, line.Position);
                 if (!rows.ContainsKey(id))
                 {
-                    rows.Add(id, new ProjectedConversationEntry(new ConversationEntry(id, turn, order, e.At, content), line.Position, slot++));
+                    rows.Add(id, new ProjectedConversationEntry(new ConversationEntry(id, turn, order, e.At, content), position, slot++));
                 }
 
                 return id;
@@ -226,7 +231,7 @@ internal static class ConversationHistory
                 var turn = new TurnKey(record.Id, record.Turns.Count);
                 var id = Id(record.Id, turn.Number, "message", messageId, buffer.Order);
                 rows.TryAdd(id, new ProjectedConversationEntry(new ConversationEntry(id, turn, 2 * buffer.Order,
-                    buffer.At ?? record.RequestedAt, new ConversationContent.Message(MessageAuthor.Agent, buffer.Text, MessageState.Streaming)), buffer.Order, 0));
+                    buffer.At ?? record.RequestedAt, new ConversationContent.Message(MessageAuthor.Agent, buffer.Text, MessageState.Streaming)), buffer.Order, buffer.PresentationSequence ?? 0));
             }
         }
 
