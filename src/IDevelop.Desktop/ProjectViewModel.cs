@@ -95,10 +95,13 @@ public sealed class ProjectViewModel : ObservableObject
         }
     }
 
-    /// <summary>"Workflow N" with the smallest N that no workflow of this project shows as its name.</summary>
+    /// <summary>
+    /// "Workflow N" with the smallest N that no workflow of this project shows as its name. A workflow shown as "Workflow"
+    /// counts as "Workflow 1", so the next one reads as its second.
+    /// </summary>
     internal string NextWorkflowName()
     {
-        var taken = Workflows.Select(canvas => canvas.Name).ToHashSet(StringComparer.Ordinal);
+        var taken = Workflows.Select(canvas => canvas.Name == Workflow.UnnamedName ? $"{Workflow.UnnamedName} 1" : canvas.Name).ToHashSet(StringComparer.Ordinal);
         return Enumerable.Range(1, taken.Count + 1).Select(number => $"Workflow {number}").First(name => !taken.Contains(name));
     }
 
