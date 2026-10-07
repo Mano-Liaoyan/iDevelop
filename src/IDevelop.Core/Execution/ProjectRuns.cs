@@ -22,7 +22,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly HostQuestions _questions;
     private long _revision;
 
-    private event EventHandler? OwnerClosed;
+    private event Action<TaskId?, long>? ConversationChanged;
 
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
@@ -35,7 +35,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
     private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
 
-    private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings, HostQuestions questions)
+    private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> logRevisions, HostQuestions questions)
     {
         _projectFolder = projectFolder;
         _clients = clients;
@@ -44,6 +45,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         _attempts = DataFolder.Attempts(projectFolder);
         Latest = latest;
         Warnings = warnings;
+        _logRevisions = new(logRevisions);
     }
 
     /// <summary>The host clock and timers used by the runner. Tests inject a manually advanced clock.</summary>
@@ -118,8 +120,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     public static ProjectRuns Open(string projectFolder, ClientDirectory clients, HostQuestions? questions = null)
     {
         var folder = Path.GetFullPath(projectFolder);
-        var (latest, warnings) = ReadAndReconcile(DataFolder.Attempts(folder));
-        return new ProjectRuns(folder, clients, latest, warnings, questions ?? new HostQuestions.Disabled());
+        var (latest, warnings, revisions) = ReadAndReconcile(DataFolder.Attempts(folder));
+        return new ProjectRuns(folder, clients, latest, warnings, revisions, questions ?? new HostQuestions.Disabled());
     }
 
     /// <summary>The reason this task cannot start now, or null. A run of it in another window shows up only at
@@ -152,7 +154,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         // A step can run Git and start a client, so the window's thread does not wait for it.
-        NotifyChanged();
+        NotifyChanged(null);
         ThreadPool.QueueUserWorkItem(_ => Advance());
     }
 
@@ -225,7 +227,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Announce(run);
+        Announce(task.Id, run);
         return result;
     }
 
@@ -319,7 +321,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        Announce(run);
+        Announce(task.Id, run);
         return result;
     }
 
@@ -439,7 +441,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        NotifyChanged();
+        NotifyChanged(task);
         return result;
     }
 
@@ -541,6 +543,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                             {
                                 using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, waiting.Id));
                                 log.Append(e);
+                                _logRevisions[(task, waiting.Id)] = log.LineCount;
                                 Latest = Latest.SetItem(task, AttemptReducer.Apply(waiting, e));
                                 appended = true;
                             }
@@ -557,7 +560,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        NotifyChanged();
+        NotifyChanged(task);
         return problem;
     }
 
@@ -574,8 +577,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             {
                 _clients.Changed -= OnClientsChanged;
                 _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
-                Interlocked.Increment(ref _revision);
-                OwnerClosed?.Invoke(this, EventArgs.Empty);
+                NotifyConversations(null);
             }
 
             return new ValueTask(_leaving);
@@ -593,13 +595,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>The newest attempt of each task, after <see cref="Reconcile"/>, and the warnings of both.</summary>
-    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings) ReadAndReconcile(
+    private static (ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) ReadAndReconcile(
         string attempts, TaskId? held = null)
     {
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var (latest, warnings, revisions) = AttemptLog.ReadLatest(attempts);
+        var counts = revisions.ToBuilder();
         var notes = warnings.ToBuilder();
-        latest = Reconcile(attempts, latest, notes, held);
-        return (latest, notes.ToImmutable());
+        latest = Reconcile(attempts, latest, notes, counts, held);
+        return (latest, notes.ToImmutable(), counts.ToImmutable());
     }
 
     /// <summary>
@@ -607,13 +611,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// window holds its task's lock and is skipped. <paramref name="held"/> names a task whose lock the caller holds.
     /// </summary>
     private static ImmutableDictionary<TaskId, AttemptRecord> Reconcile(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings, TaskId? held)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string>.Builder warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long>.Builder revisions, TaskId? held)
     {
         foreach (var running in latest.Values.Where(record => record.Status == AttemptStatus.Running).ToList())
         {
             if (running.Task == held)
             {
-                latest = SettleCrashed(attempts, latest, running, warnings);
+                latest = SettleCrashed(attempts, latest, running, warnings, revisions);
                 continue;
             }
 
@@ -633,10 +638,15 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 if (taskLock is not null)
                 {
                     // The run may have ended between the read and the lock, so settle what its log says now.
-                    var record = AttemptLog.ReadLatest(attempts, running.Task);
+                    var (record, lines) = AttemptLog.ReadLatest(attempts, running.Task);
+                    if (record is not null)
+                    {
+                        revisions[(record.Task, record.Id)] = lines;
+                    }
+
                     if (record is { Status: AttemptStatus.Running })
                     {
-                        latest = SettleCrashed(attempts, latest, record, warnings);
+                        latest = SettleCrashed(attempts, latest, record, warnings, revisions);
                     }
                     else if (record is not null)
                     {
@@ -650,7 +660,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     private static ImmutableDictionary<TaskId, AttemptRecord> SettleCrashed(
-        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings)
+        string attempts, ImmutableDictionary<TaskId, AttemptRecord> latest, AttemptRecord record, ImmutableArray<string>.Builder warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long>.Builder revisions)
     {
         ProcessMatch? match = record.Process is { } process ? ProcessCheck.StopIfSame(process) : null;
         var reconciled = new AttemptEvent.Reconciled(System.TimeProvider.System.GetUtcNow(), match);
@@ -659,6 +670,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             using (var log = AttemptLog.Open(AttemptLog.FolderOf(attempts, record.Task, record.Id)))
             {
                 log.Append(reconciled);
+                revisions[(record.Task, record.Id)] = log.LineCount;
             }
 
             return latest.SetItem(record.Task, AttemptReducer.Apply(record, reconciled));
@@ -689,20 +701,32 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         if (held is null)
         {
             // Another instance holds the lock, so the read settles nothing.
-            (Latest, Warnings) = AttemptLog.ReadLatest(_attempts);
+            (Latest, Warnings, var revisions) = AttemptLog.ReadLatest(_attempts);
+            foreach (var (key, lines) in revisions)
+            {
+                _logRevisions[key] = lines;
+            }
+
+            NotifyConversations(null);
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
         }
 
-        (Latest, Warnings) = ReadAndReconcile(_attempts, held: task);
+        (Latest, Warnings, var counts) = ReadAndReconcile(_attempts, held: task);
+        foreach (var (key, lines) in counts)
+        {
+            _logRevisions[key] = lines;
+        }
+
+        NotifyConversations(null);
         return new LockTake.Taken(held);
     }
 
     /// <summary>Raises <see cref="Changed"/> on the caller's thread, then starts reading the new run.</summary>
-    private void Announce(ActiveRun? run)
+    private void Announce(TaskId task, ActiveRun? run)
     {
         try
         {
-            NotifyChanged();
+            NotifyChanged(task);
         }
         finally
         {
@@ -829,6 +853,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         Latest = Latest.SetItem(task.Id, launched);
+        _logRevisions[(task.Id, launched.Id)] = log.LineCount;
         return (new SendResult.Answered(launched), run);
     }
 
@@ -871,6 +896,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task, last.Id));
             log.Append(handoff);
+            _logRevisions[(task, last.Id)] = log.LineCount;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -928,6 +954,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         Latest = Latest.SetItem(task.Id, record);
+        _logRevisions[(task.Id, record.Id)] = log.LineCount;
         return (new StartResult.Started(record), run);
     }
 
@@ -971,13 +998,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private TurnKey? Current(TaskId task) => (_active.GetValueOrDefault(task)?.Record ?? Latest.GetValueOrDefault(task)) is { } record ? new TurnKey(record.Id, record.Turns.Count) : null;
 
-    private void OnClientsChanged(object? sender, EventArgs e) => NotifyChanged();
+    private void OnClientsChanged(object? sender, EventArgs e) => NotifyChanged(null);
 
-    private void NotifyChanged()
+    /// <summary>Raises <see cref="Changed"/> and invalidates the sessions of <paramref name="task"/>, or of every task when it is null.</summary>
+    private void NotifyChanged(TaskId? task)
     {
-        Interlocked.Increment(ref _revision);
+        NotifyConversations(task);
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    private void NotifyConversations(TaskId? task) => ConversationChanged?.Invoke(task, Interlocked.Increment(ref _revision));
 
     private Workflow? WorkflowOf(TaskId task) => _workflows.Values.FirstOrDefault(workflow => workflow.Tasks.ContainsKey(task));
 
@@ -1090,16 +1120,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             ? new StartProblem.AlreadyRunning(running.Task, running.TaskTitle)
             : new StartProblem.RunInAnotherWindow();
 
-    private void Publish(AttemptRecord record)
+    private void Publish(AttemptRecord record, long logRevision)
     {
         lock (_gate)
         {
             Latest = Latest.SetItem(record.Task, record);
+            _logRevisions[(record.Task, record.Id)] = logRevision;
         }
 
         if (record.Status == AttemptStatus.Running)
         {
-            NotifyChanged();
+            NotifyChanged(record.Task);
         }
     }
 
@@ -1113,9 +1144,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             Latest = Latest.SetItem(run.Record.Task, run.Record);
+            _logRevisions[(run.Record.Task, run.Record.Id)] = run.Live.LogRevision;
         }
 
-        NotifyChanged();
+        NotifyChanged(run.Record.Task);
         Advance();
     }
 

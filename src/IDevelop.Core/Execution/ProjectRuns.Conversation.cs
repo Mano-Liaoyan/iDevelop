@@ -17,8 +17,7 @@ public sealed partial class ProjectRuns
         {
             _owner = owner;
             Task = task;
-            owner.Changed += OnChanged;
-            owner.OwnerClosed += OnChanged;
+            owner.ConversationChanged += OnChanged;
         }
 
         public TaskId Task { get; }
@@ -31,8 +30,6 @@ public sealed partial class ProjectRuns
         {
             get
             {
-                ConversationSnapshot snapshot;
-                bool countLog;
                 lock (_owner._gate)
                 {
                     var record = _owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task);
@@ -59,24 +56,10 @@ public sealed partial class ProjectRuns
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
                         Availability(unavailable is null && waiting && record?.SessionId is not null,
                             unavailable ?? "The task must finish teardown and wait with a session.", "Open this session in a terminal."));
-                    countLog = live is null && record is not null;
-                    snapshot = new ConversationSnapshot(Interlocked.Read(ref _owner._revision), live?.LogRevision ?? 0,
+                    return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), live?.LogRevision
+                        ?? (record is null ? 0 : _owner._logRevisions.GetValueOrDefault((Task, record.Id))),
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }
-
-                if (countLog && snapshot.Latest is { } latest)
-                {
-                    try
-                    {
-                        var logRevision = File.ReadLines(Path.Combine(AttemptLog.FolderOf(_owner._attempts, Task, latest.Id), "events.jsonl")).LongCount();
-                        snapshot = snapshot with { LogRevision = logRevision };
-                    }
-                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                    {
-                    }
-                }
-
-                return snapshot;
             }
         }
 
@@ -118,60 +101,66 @@ public sealed partial class ProjectRuns
             _ => "The task cannot continue with its current configuration and ownership.",
         };
 
-        public Task<ImmutableArray<AttemptSummary>> ListAttemptsAsync(CancellationToken ct)
+        public Task<ImmutableArray<AttemptSummary>> ListAttemptsAsync(CancellationToken ct) => ct.IsCancellationRequested
+            ? AsyncTask.FromCanceled<ImmutableArray<AttemptSummary>>(ct) : AsyncTask.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
-            return AsyncTask.FromResult(Unavailable ? ImmutableArray<AttemptSummary>.Empty : AttemptLog.ListAttempts(_owner._attempts, Task).Attempts);
-        }
+            var attempts = Unavailable ? ImmutableArray<AttemptSummary>.Empty : _owner.ListConversationAttempts(Task, ct);
+            ct.ThrowIfCancellationRequested();
+            return Unavailable ? ImmutableArray<AttemptSummary>.Empty : attempts;
+        }, ct);
 
-        public Task<HistoryResult> ReadPageAsync(AttemptId head, HistoryQuery query, int count, CancellationToken ct)
+        public Task<HistoryResult> ReadPageAsync(AttemptId head, HistoryQuery query, int count, CancellationToken ct) => ct.IsCancellationRequested
+            ? AsyncTask.FromCanceled<HistoryResult>(ct) : AsyncTask.Run<HistoryResult>(() =>
         {
             ct.ThrowIfCancellationRequested();
             if (Unavailable)
             {
-                return AsyncTask.FromResult<HistoryResult>(new HistoryResult.Unavailable("The conversation owner is closed."));
+                return new HistoryResult.Unavailable("The conversation owner is closed.");
             }
 
-            ActiveRun? active;
-            lock (_owner._gate)
-            {
-                active = _owner._active.GetValueOrDefault(Task);
-            }
-
-            var chain = AttemptLog.ReadChain(_owner._attempts, Task, head);
             var histories = new List<AttemptHistory>();
-            foreach (var record in chain)
+            var seen = new HashSet<AttemptId>();
+            AttemptId? link = head;
+            while (link is { } id && seen.Add(id) && _owner.ReadConversationHistory(Task, id) is { } history)
             {
-                var history = active?.Record.Id == record.Id ? active.ReadHistory() : AttemptLog.ReadHistory(_owner._attempts, Task, record.Id);
-                if (history is not null)
-                {
-                    histories.Add(history);
-                }
+                ct.ThrowIfCancellationRequested();
+                histories.Add(history);
+                link = history.Record.Continues;
             }
 
-            return AsyncTask.FromResult(ConversationPager.Read($"{_owner._projectFolder}/{Task}", histories,
-                Snapshot.Revision, query, count));
-        }
+            histories.Reverse();
+            ct.ThrowIfCancellationRequested();
+            if (Unavailable)
+            {
+                return new HistoryResult.Unavailable("The conversation owner is closed.");
+            }
 
-        public Task<RequestRecord?> ReadRequestAsync(RequestKey key, CancellationToken ct)
+            return ConversationPager.Read($"{_owner._projectFolder}/{Task}", histories,
+                Interlocked.Read(ref _owner._revision), query, count);
+        }, ct);
+
+        public Task<RequestRecord?> ReadRequestAsync(RequestKey key, CancellationToken ct) => ct.IsCancellationRequested
+            ? AsyncTask.FromCanceled<RequestRecord?>(ct) : AsyncTask.Run(() =>
         {
             ct.ThrowIfCancellationRequested();
+            if (Unavailable)
+            {
+                return null;
+            }
+
             lock (_owner._gate)
             {
-                if (Unavailable)
+                if (_owner._active.GetValueOrDefault(Task)?.Record is { } record && record.Id == key.Turn.Attempt)
                 {
-                    return AsyncTask.FromResult<RequestRecord?>(null);
-                }
-
-                var record = _owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task);
-                if (record is not null && record.Id == key.Turn.Attempt)
-                {
-                    return AsyncTask.FromResult(record.Requests.GetValueOrDefault(key));
+                    return record.Requests.GetValueOrDefault(key);
                 }
             }
 
-            return AsyncTask.FromResult(AttemptLog.ReadRequest(_owner._attempts, Task, key));
-        }
+            var request = _owner.ReadConversationHistory(Task, key.Turn.Attempt)?.Record.Requests.GetValueOrDefault(key);
+            ct.ThrowIfCancellationRequested();
+            return Unavailable ? null : request;
+        }, ct);
 
         public Task<SendResult> SendAsync(TurnKey expected, string text, bool stopTurn, CancellationToken ct)
         {
@@ -287,13 +276,18 @@ public sealed partial class ProjectRuns
             ? new ConversationCommandResult(CommandOutcome.Unavailable, "The conversation owner is closed.")
             : _owner.Current(Task) != expected ? new ConversationCommandResult(CommandOutcome.Stale, "The conversation has moved to another turn.") : null;
 
-        private void OnChanged(object? sender, EventArgs args)
+        private void OnChanged(TaskId? task, long revision)
         {
+            if (task is not null && task != Task)
+            {
+                return;
+            }
+
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 if (Volatile.Read(ref _disposed) == 0)
                 {
-                    Changed?.Invoke(Snapshot.Revision);
+                    Changed?.Invoke(revision);
                 }
             });
         }
@@ -301,8 +295,7 @@ public sealed partial class ProjectRuns
         public void Dispose()
         {
             Interlocked.Exchange(ref _disposed, 1);
-            _owner.Changed -= OnChanged;
-            _owner.OwnerClosed -= OnChanged;
+            _owner.ConversationChanged -= OnChanged;
         }
     }
 }

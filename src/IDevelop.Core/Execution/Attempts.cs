@@ -437,7 +437,7 @@ internal static partial class AttemptReducer
     private static AttemptRecord RecordQuestion(AttemptRecord record, AttemptEvent.QuestionRecorded question)
     {
         var key = Key(record, question.RequestId);
-        return AddRequest(record, new RequestRecord.Question(key, question.Questions, question.State));
+        return AddRequest(record, new RequestRecord.Question(key, question.Questions, question.State) { At = question.At });
     }
 
     private static AttemptRecord AddRequest(AttemptRecord record, RequestRecord request) => record.Requests.ContainsKey(request.Key)
@@ -515,7 +515,7 @@ internal static partial class AttemptReducer
         AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}", isTool: true),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.PermissionRequested permission => AddRequest(record,
-            new RequestRecord.Permission(Key(record, permission.RequestId), permission.Action, PermissionState.Declining)),
+            new RequestRecord.Permission(Key(record, permission.RequestId), permission.Action, PermissionState.Declining) { At = at }),
         AgentEvent.MessageDelta or AgentEvent.QuestionAsked or AgentEvent.RequestClosed => record,
         AgentEvent.Succeeded or AgentEvent.Failed => record with { Verdict = e },
         _ => throw new UnreachableException($"Unhandled agent event {e.GetType().Name}"),

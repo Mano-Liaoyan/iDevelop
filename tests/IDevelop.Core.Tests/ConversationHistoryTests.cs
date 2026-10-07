@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Execution;
+using IDevelop.Projects;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.AttemptEvents;
 
@@ -174,23 +175,33 @@ public class ConversationHistoryTests
     }
 
     [Fact]
-    public void Attempt_enumeration_includes_independent_and_cancelled_attempts_and_chains_are_cycle_safe()
+    public async Task Attempt_enumeration_includes_independent_and_cancelled_attempts_and_chains_are_cycle_safe()
     {
         using var temp = new TempFolder();
-        var folder = temp.Create("attempts");
+        var project = temp.Create("project");
+        var folder = DataFolder.Attempts(project);
         using (var a = AttemptLog.Create(folder, BuildRequested(First))) { a.Append(Said(1, new AgentEvent.Succeeded("A"))); a.Append(Exit(2, 0)); }
         using (var b = AttemptLog.Create(folder, BuildRequested(B))) { b.Append(new AttemptEvent.CancelRequested(T0)); b.Append(Exit(1, 137)); }
         using (var c = AttemptLog.Create(folder, BuildRequested(C) with { Continues = new Continuation(First, "session-1") })) { c.Append(Said(1, new AgentEvent.Succeeded("C"))); c.Append(Exit(2, 0)); }
 
-        var list = AttemptLog.ListAttempts(folder, TestTasks.Build);
-        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000002", "019aa000-0000-7000-8000-000000000003"], list.Attempts.Select(attempt => attempt.Id.ToString()));
-        Assert.Equal([AttemptStatus.Succeeded, AttemptStatus.Cancelled, AttemptStatus.Succeeded], list.Attempts.Select(attempt => attempt.Status));
-        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000003"], AttemptLog.ReadChain(folder, TestTasks.Build, C).Select(attempt => attempt.Id.ToString()));
+        var clients = new ClientDirectory(CommandResolver.Create([], []));
+        await using var runs = ProjectRuns.Open(project, clients);
+        using var session = runs.OpenConversation(TestTasks.Build);
+        var list = await session.ListAttemptsAsync(default);
+        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000002", "019aa000-0000-7000-8000-000000000003"], list.Select(attempt => attempt.Id.ToString()));
+        Assert.Equal([AttemptStatus.Succeeded, AttemptStatus.Cancelled, AttemptStatus.Succeeded], list.Select(attempt => attempt.Status));
+        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000003"], (Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(C, new HistoryQuery.Latest(), 100, default))).Entries
+            .Select(entry => entry.Turn.Attempt.ToString()).Distinct());
 
         File.Delete(Path.Combine(AttemptLog.FolderOf(folder, TestTasks.Build, First), "events.jsonl"));
         using (var a = AttemptLog.Create(folder, BuildRequested(First) with { Continues = new Continuation(C, "session-1") })) { a.Append(Said(1, new AgentEvent.Succeeded("A"))); a.Append(Exit(2, 0)); }
-        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000003"], AttemptLog.ReadChain(folder, TestTasks.Build, C).Select(attempt => attempt.Id.ToString()));
-        Assert.Empty(AttemptLog.ReadChain(folder, TestTasks.Build, B with { Value = Guid.Empty }));
+        await using var reopened = ProjectRuns.Open(project, clients);
+        using var cycle = reopened.OpenConversation(TestTasks.Build);
+        Assert.Equal(["019aa000-0000-7000-8000-000000000001", "019aa000-0000-7000-8000-000000000003"],
+            (Assert.IsType<HistoryResult.Page>(await cycle.ReadPageAsync(C, new HistoryQuery.Latest(), 100, default))).Entries
+                .Select(entry => entry.Turn.Attempt.ToString()).Distinct());
+        Assert.Equal("The selected attempt has no readable history.",
+            Assert.IsType<HistoryResult.Unavailable>(await cycle.ReadPageAsync(B with { Value = Guid.Empty }, new HistoryQuery.Latest(), 100, default)).Reason);
     }
 
     [Fact]
@@ -234,25 +245,30 @@ public class ConversationHistoryTests
     }
 
     [Fact]
-    public void Seeking_an_old_closed_question_finds_its_persisted_request_row_and_fold()
+    public async Task Seeking_an_old_closed_question_finds_its_persisted_request_row_and_fold()
     {
         using var temp = new TempFolder();
-        var folder = temp.Create("attempts");
+        var project = temp.Create("project");
+        var folder = DataFolder.Attempts(project);
         using var log = AttemptLog.Create(folder, BuildRequested(First));
         log.Append(Question("q7"));
         log.Append(new AttemptEvent.RequestClosed(T0.AddSeconds(2), "q7", RequestCloseReason.Resolved));
         foreach (var e in ManyMessages(500)) log.Append(e);
-        var history = Assert.IsType<AttemptHistory>(AttemptLog.ReadHistory(folder, TestTasks.Build, First));
-        var tail = Page(history, new HistoryQuery.Latest(), 50);
-        var page = Page(history, new HistoryQuery.AroundRequest(new RequestKey(new TurnKey(First, 1), "q7")), 10);
+        log.Append(Said(502, new AgentEvent.Succeeded("m499")));
+        log.Append(Exit(503, 0));
+        log.Dispose();
+        await using var runs = ProjectRuns.Open(project, new ClientDirectory(CommandResolver.Create([], [])));
+        using var session = runs.OpenConversation(TestTasks.Build);
+        var tail = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.Latest(), 50, default));
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.AroundRequest(new RequestKey(new TurnKey(First, 1), "q7")), 10, default));
 
         Assert.Equal("m499", Assert.IsType<ConversationContent.Message>(tail.Entries[^1].Content).Text);
         Assert.Equal("q7", Assert.Single(page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Request>()).Key.Id);
-        var question = Assert.IsType<RequestRecord.Question>(AttemptLog.ReadRequest(folder, TestTasks.Build, new RequestKey(new TurnKey(First, 1), "q7")));
+        var question = Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(new RequestKey(new TurnKey(First, 1), "q7"), default));
         Assert.Equal(new QuestionState.Closed(RequestCloseReason.Resolved, null), question.State);
         Assert.Equal("Fixture?", Assert.Single(question.Questions).Text);
-        var foreign = Assert.IsType<HistoryResult.Unavailable>(ConversationPager.Read(Scope, [history], 1,
-            new HistoryQuery.AroundRequest(new RequestKey(new TurnKey(B, 1), "q7")), 10));
+        var foreign = Assert.IsType<HistoryResult.Unavailable>(await session.ReadPageAsync(First,
+            new HistoryQuery.AroundRequest(new RequestKey(new TurnKey(B, 1), "q7")), 10, default));
         Assert.Equal("The request has no persisted entry in the selected attempt chain. Select its attempt to read it.", foreign.Reason);
     }
 

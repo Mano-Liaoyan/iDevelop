@@ -14,6 +14,43 @@ public class ConversationFoldTests
     private static readonly RequestKey CoverageKey = new(new TurnKey(First, 1), "s:coverage");
 
     [Fact]
+    public void A_questions_event_time_survives_answering_and_closure()
+    {
+        AttemptEvent[] events = [BuildRequested(First), LaunchedAt1s,
+            new AttemptEvent.QuestionRecorded(DateTimeOffset.Parse("2026-10-04T05:00:02+00:00"), "s:fixture", FixtureQuestions(),
+                new QuestionState.Open(new RequestDeadline(T0.AddSeconds(55), T0.AddSeconds(60))))];
+        var reply = new QuestionsReply([new QuestionAnswer("q:0", ["o:0"], null)]);
+        var opened = Fold(events);
+        var answered = Fold([.. events, new AttemptEvent.RequestAnswered(T0.AddSeconds(3), "s:fixture", reply)]);
+        var closed = Fold([.. events, new AttemptEvent.RequestAnswered(T0.AddSeconds(3), "s:fixture", reply),
+            new AttemptEvent.RequestClosed(T0.AddSeconds(4), "s:fixture", RequestCloseReason.Resolved)]);
+
+        foreach (var record in new[] { opened, answered, closed })
+        {
+            Assert.Equal(DateTimeOffset.Parse("2026-10-04T05:00:02+00:00"), record.Requests[FixtureKey].At);
+            Assert.Equal("Fixture?", Assert.IsType<RequestRecord.Question>(record.Requests[FixtureKey]).Questions.Single().Text);
+        }
+
+        Assert.Equal(new QuestionState.Closed(RequestCloseReason.Resolved, reply), Assert.IsType<RequestRecord.Question>(closed.Requests[FixtureKey]).State);
+    }
+
+    [Fact]
+    public void A_permissions_event_time_survives_denial()
+    {
+        AttemptEvent[] events = [BuildRequested(First), LaunchedAt1s,
+            new AttemptEvent.Agent(DateTimeOffset.Parse("2026-10-04T05:00:07+00:00"),
+                new AgentEvent.PermissionRequested("n:0", new PermissionAction("command", "{}", "/project")))];
+        var opened = Fold(events);
+        var closed = Fold([.. events, new AttemptEvent.RequestClosed(T0.AddSeconds(8), "n:0", RequestCloseReason.PolicyDenied)]);
+
+        Assert.Equal(DateTimeOffset.Parse("2026-10-04T05:00:07+00:00"), Assert.Single(opened.Requests).Value.At);
+        var permission = Assert.IsType<RequestRecord.Permission>(Assert.Single(closed.Requests).Value);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-04T05:00:07+00:00"), permission.At);
+        Assert.Equal(PermissionState.Denied, permission.State);
+        Assert.Equal("command", permission.Action.Tool);
+    }
+
+    [Fact]
     public void A_policy_denied_question_is_closed_and_does_not_prevent_success()
     {
         AttemptEvent[] events =

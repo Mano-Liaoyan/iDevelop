@@ -129,7 +129,9 @@ public sealed class AttemptLogTests : IDisposable
         var unreadable = Directory.CreateDirectory(AttemptLog.FolderOf(attempts, Build, Second)).FullName;
         Directory.CreateDirectory(Path.Combine(attempts, "notes"));
 
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var read = AttemptLog.ReadLatest(attempts);
+        var latest = read.Latest;
+        var warnings = read.Warnings;
 
         var record = Assert.Single(latest.Values);
         Assert.Equal((First, AttemptStatus.Succeeded), (record.Id, record.Status));
@@ -145,7 +147,9 @@ public sealed class AttemptLogTests : IDisposable
             Path.Combine(folder, "events.jsonl"),
             """{"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00"}""" + "\n");
 
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var read = AttemptLog.ReadLatest(attempts);
+        var latest = read.Latest;
+        var warnings = read.Warnings;
 
         Assert.Empty(latest);
         Assert.Equal($"{folder} holds no attempt record, so iDevelop skipped it.", Assert.Single(warnings));
@@ -156,7 +160,9 @@ public sealed class AttemptLogTests : IDisposable
     {
         var attempts = Path.Combine(_temp.Create("project"), ".idp", "attempts");
 
-        var (latest, warnings) = AttemptLog.ReadLatest(attempts);
+        var read = AttemptLog.ReadLatest(attempts);
+        var latest = read.Latest;
+        var warnings = read.Warnings;
 
         Assert.Empty(latest);
         Assert.Empty(warnings);
