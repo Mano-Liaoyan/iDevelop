@@ -404,7 +404,7 @@ public sealed class GenerateTests : IDisposable
         var sheet = shell.Find<GenerateSheet>("GenerateSheet");
         var columns = ((Grid)shell.Window.Content!).ColumnDefinitions;
         var widths = columns.Select(column => column.ActualWidth).ToArray();
-        var splitters = shell.Window.GetVisualDescendants().OfType<GridSplitter>().ToArray();
+        var splitters = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Where(splitter => splitter.IsEffectivelyVisible).ToArray();
         Assert.Equal(2, splitters.Length);
 
         foreach (var splitter in splitters)
