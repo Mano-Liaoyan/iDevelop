@@ -60,6 +60,7 @@ public partial class MainWindow : Window
         }
 
         _waitingForUser = true;
+        CommitRenames();
         var ask = !ViewModel.ActiveRuns.IsEmpty || ViewModel.Projects.Any(project => project.UnsavedDocuments.Any());
         if (ask && !await ConfirmLeaving([.. ViewModel.Projects], "leave"))
         {
@@ -200,6 +201,7 @@ public partial class MainWindow : Window
         }
 
         _waitingForUser = true;
+        CommitRenames();
         if (await ConfirmLeaving([project], $"close {project.Name}"))
         {
             await ViewModel.Close(project);
@@ -244,6 +246,15 @@ public partial class MainWindow : Window
         }
 
         _waitingForUser = false;
+    }
+
+    // Closing moves no focus, so a name typed into a rename box becomes an edit here, before the unsaved question.
+    private void CommitRenames()
+    {
+        foreach (var box in this.GetVisualDescendants().OfType<WorkflowNameBox>())
+        {
+            box.Commit();
+        }
     }
 
     /// <summary>

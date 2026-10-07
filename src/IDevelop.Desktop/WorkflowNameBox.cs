@@ -46,9 +46,12 @@ public sealed class WorkflowNameBox : TextBox
         base.OnKeyDown(e);
     }
 
+    /// <summary>Keeps the typed name, as a click elsewhere does. A box whose rename ended keeps nothing.</summary>
+    internal void Commit() => Workflow?.EndRenameWorkflow(Text);
+
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
-        Workflow?.EndRenameWorkflow(Text);
+        Commit();
     }
 }

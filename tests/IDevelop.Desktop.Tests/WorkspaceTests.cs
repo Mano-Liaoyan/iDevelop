@@ -689,4 +689,25 @@ public sealed class WorkspaceTests : IDisposable
         File.WriteAllText(_gate, "");
         shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the run ends before its folder goes");
     }
+
+    [AvaloniaTheory]
+    [InlineData("SaveChanges", false, "alpha - iDevelop", "Checks")]
+    [InlineData("DiscardChanges", false, "alpha* - iDevelop", "Build")]
+    [InlineData("CancelChanges", true, "alpha* - iDevelop", "Build")]
+    public void Closing_the_window_during_a_rename_asks_about_the_typed_name(string answer, bool open, string title, string saved)
+    {
+        var alpha = Project("alpha");
+        var shell = Shell.Open(alpha);
+        shell.WorkflowRow("alpha", "Build").Focus();
+        shell.Press(Key.F2);
+        shell.Type("Checks");
+
+        shell.Window.Close();
+        shell.Render();
+        Assert.Equal(["Save changes to alpha?", "Save", "Don't save", "Cancel"], shell.DialogTexts());
+        shell.Choose(answer);
+
+        Assert.Equal((open, title), (shell.Window.IsVisible, shell.Window.Title));
+        Assert.Equal([saved, "Release"], WorkflowDocument.OpenProject(alpha).Select(document => document.Current.Name).Order());
+    }
 }
