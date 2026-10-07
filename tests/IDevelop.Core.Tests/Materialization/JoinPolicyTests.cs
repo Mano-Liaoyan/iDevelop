@@ -146,18 +146,32 @@ public sealed class JoinPolicyTests
         Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, operation, new RunEvent.Blocked(invalid))).Reason.Problem.ToString());
     }
 
-    [Fact]
-    public async Task Global_conflict_style_does_not_change_conflicted_blob_contents()
+    [Theory]
+    [InlineData("home")]
+    [InlineData("xdg")]
+    public async Task Global_conflict_style_does_not_change_conflicted_blob_contents(string location)
     {
         using var f = new PreparationFixture(Diamond(), configureBase: Settings);
         await ConflictingSources(f);
-        File.WriteAllText(f.Git.Environment["GIT_CONFIG_GLOBAL"], "[merge]\nconflictStyle = diff3\n");
-        var blocked = Assert.IsType<Preparation.Blocked>(await Prepare(f, f.Op()));
+        var folder = Path.GetDirectoryName(f.Git.Folder)!;
+        var home = Directory.CreateDirectory(Path.Combine(folder, "home")).FullName;
+        var xdg = Directory.CreateDirectory(Path.Combine(folder, "xdg")).FullName;
+        var config = location == "home" ? Path.Combine(home, ".gitconfig") : Path.Combine(xdg, "git", "config");
+        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+        var marker = Path.Combine(folder, "driver-ran");
+        File.WriteAllText(config, "[merge]\nconflictStyle = diff3\ndefault = keep\n");
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "--file", config, "merge.keep.driver",
+            "echo driver > \"" + marker.Replace('\\', '/') + "\"; exit 0").ExitCode);
+        var environment = new Dictionary<string, string>(f.Git.Environment) { ["HOME"] = home, ["XDG_CONFIG_HOME"] = xdg };
+        environment.Remove("GIT_CONFIG_GLOBAL");
+        var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment)
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", blocked.Block.Problem.ToString());
-        var tree = Encoding.UTF8.GetString(Evidence(f, blocked.Block.Conflict!.Stdout)).Split('\0')[0];
-        var blob = f.Git.Git("show", tree + ":settings.txt");
-        Assert.Contains("\nb=1\n=======\nc=1\n", blob);
-        Assert.DoesNotContain("|||||||", blob);
+        Assert.Equal(new[] { "settings.txt" }, blocked.Block.Conflict!.Paths);
+        var tree = Encoding.UTF8.GetString(Evidence(f, blocked.Block.Conflict.Stdout)).Split('\0')[0];
+        Assert.Equal("<<<<<<< c9f977277f76f1173ed36a15c0454b88ef2caff2\nb=1\n=======\nc=1\n>>>>>>> c1d5e59b5a21d0fe2661cdededaf476ddaa9b1ba\n",
+            f.Git.Git("show", tree + ":settings.txt"));
+        Assert.False(File.Exists(marker));
     }
 
     [Fact]
