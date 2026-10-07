@@ -185,7 +185,8 @@ internal sealed partial class Materializer
 
     private void ResolvePublicationBlocks(WorkflowId workflow, RunId run, OperationId operation, OperationId plan)
     {
-        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == plan).OrderBy(pair => pair.Key.Value))
+        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved &&
+            (pair.Value.Block.Operation == plan || pair.Value.Block.Operation == operation)).OrderBy(pair => pair.Key.Value))
             Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(workflow, run,
                 OperationIds.Derive(operation, "resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, "Publication verified.")));
     }
