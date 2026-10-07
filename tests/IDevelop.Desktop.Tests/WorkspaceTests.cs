@@ -3,6 +3,8 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Controls.Presenters;
@@ -757,8 +759,13 @@ public sealed class WorkspaceTests : IDisposable
     public void Close_project_in_an_overflowing_tree_takes_a_click_on_its_middle()
     {
         var shell = Crowded();
+        var close = ProjectButton(shell, "alpha", "CloseProject");
+        var scroll = SidebarScroll(shell);
+        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(bar => bar.TemplatedParent == scroll && bar.Orientation == Orientation.Vertical);
+        var gap = bar.TranslatePoint(default, close)!.Value.X - close.Bounds.Width;
+        Assert.True(gap >= 0, $"The expanded scroll bar covers {-gap} px of Close project.");
 
-        shell.Click(ProjectButton(shell, "alpha", "CloseProject"));
+        shell.Click(close);
 
         Assert.Empty(shell.Tree());
     }
