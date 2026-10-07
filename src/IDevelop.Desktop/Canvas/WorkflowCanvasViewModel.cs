@@ -344,7 +344,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     // Each change reads the newest attempts, which is never older than the change itself. A start, even one that another
     // window's run refuses, also reads the other tasks' attempts again, which another window may have ended or a crash
     // may have left running.
-    private void ShowAttempts()
+    internal void ShowAttempts()
     {
         var changed = Nodes.Where(node => node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id))).Select(node => node.Id).ToList();
         RecheckProblems(changed.Concat(changed.SelectMany(DependencyNeighbors)));
