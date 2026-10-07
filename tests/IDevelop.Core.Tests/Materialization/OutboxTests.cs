@@ -113,7 +113,8 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         var target = Directory.CreateDirectory(Path.Combine(f.Git.Folder, "external")).FullName;
         File.WriteAllBytes(Path.Combine(target, "payload.bin"), [67, 0, 127]);
-        var junction = Path.Combine(outbox, "via");
+        // mklink accepts only backslashes, and the outbox path joins a forward-slash relative path.
+        var junction = Path.GetFullPath(Path.Combine(outbox, "via"));
         using (var mklink = Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, ["/c", "mklink", "/J", junction, target])
         {
             UseShellExecute = false, RedirectStandardOutput = true,
