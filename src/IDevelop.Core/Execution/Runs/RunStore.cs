@@ -128,6 +128,21 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) }));
         });
 
+    public RunDecision Refresh(WorkflowId workflow, RunId run, OperationId operation, LaunchKey launch) =>
+        Transact(workflow, run, operation, Fingerprint("refresh", new { launch }), (record, _) =>
+        {
+            if (record is null) return Missing();
+            if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
+            if (!record.Attempts.TryGetValue(launch.Attempt, out var attempt)) return Refuse(RunProblem.UnknownAttempt);
+            var existing = record.Plans.Values.OfType<MaterializationPlan.Refresh>().SingleOrDefault(p => p.Launch == launch);
+            if (existing is not null) return new Mutation.Existing(new RunEvent.Planned(existing));
+            var capture = Inputs(record, attempt.Task, attempt.Revision, default);
+            if (capture.Rejection is { } rejection) return new Mutation.Rejected(rejection);
+            var bindings = capture.Inputs!.Bindings;
+            return new Mutation.Append(new RunEvent.Planned(new MaterializationPlan.Refresh(launch, new(_ids()), bindings,
+                InputMaterial.Sources(record, bindings), InputMaterial.Review(record.Revisions[attempt.Revision].Snapshot, attempt.Task, bindings))));
+        });
+
     public RunDecision Reserve(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, JoinRecord? join = null) =>
         Transact(workflow, run, operation, Fingerprint("reserve", new { plan, join }), (record, _) =>
         {
@@ -181,7 +196,7 @@ internal sealed class RunStore
                 return Missing();
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
-                MaterializationPlan.RetryReset } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
+                MaterializationPlan.RetryReset or MaterializationPlan.Refresh } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
                 RunEvent.SalvageRetained or RunEvent.BlockResolved))
             {
                 return Refuse(RunProblem.InvalidData);

@@ -213,6 +213,12 @@ internal sealed class GitRepository
 
     public GitRead<ImmutableArray<string>> UntrackedFiles(string checkout) => ReadPaths(Git(checkout, ["ls-files", "--others", "--exclude-standard", "-z"]));
 
+    public GitRead<ImmutableArray<string>> IgnoredFiles(string checkout) =>
+        ReadPaths(Git(checkout, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]));
+
+    public GitRead<ImmutableArray<string>> TreeFiles(CommitId commit) =>
+        ReadPaths(Git(ProjectFolder, ["ls-tree", "-r", "--name-only", "-z", commit.Hex]));
+
     public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns)
     {
         var result = Git(ProjectFolder, ["for-each-ref", "--format=%(refname)%00%(objectname)", .. patterns]);
@@ -264,6 +270,9 @@ internal sealed class GitRepository
         }
         return new GitRead<ImmutableArray<GitWorktree>>.Read(worktrees.ToImmutable());
     }
+
+    public GitRead<string> CheckoutCommonDirectory(string checkout) =>
+        ReadText(Git(checkout, ["rev-parse", "--path-format=absolute", "--git-common-dir"]), trim: true);
 
     public GitRead<string> IndexPath(string checkout) => ReadText(Git(checkout, ["rev-parse", "--path-format=absolute", "--git-path", "index"]), trim: true);
 
@@ -450,7 +459,7 @@ internal sealed class GitRepository
     }
 
     /// <summary>Call only after verifying retained salvage, quiescence, ownership, and an unchanged inventory.</summary>
-    public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, ["reset", "--hard", commit.Hex]);
+    public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, ["reset", "--hard", "--no-recurse-submodules", commit.Hex]);
 
     /// <summary>The caller holds ownership and proves quiescence; matching content alone does not exclude concurrent writers.</summary>
     public PathRemoval RemovePath(string checkout, string relativePath, Digest expected, GitPathType expectedType)

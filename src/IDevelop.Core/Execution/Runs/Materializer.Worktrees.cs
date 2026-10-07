@@ -105,9 +105,11 @@ internal sealed partial class Materializer
         var owner = location.Owner;
         var checkout = RunStorage.SafePath(repository.ProjectFolder, owner.RelativePath);
         var registration = Value(repository.Worktrees()).SingleOrDefault(worktree => SamePath(worktree.Path, checkout));
-        if (registration is null || registration.Branch != owner.Branch || Value(repository.SymbolicHead(checkout)) != owner.Branch ||
+        if (registration is null || registration.Branch != owner.Branch ||
+            !SamePath(Value(repository.CheckoutCommonDirectory(checkout)), repository.CommonDirectory) ||
+            Value(repository.SymbolicHead(checkout)) != owner.Branch ||
             !record.GitIntents.Values.Any(intent => intent.Mutation is GitMutation.CreateWorktree create && create.Owner == owner))
-            throw Fault(MaterializationProblem.UncertainOwnership, "Registration, symbolic HEAD and recorded worktree owner do not agree.");
+            throw Fault(MaterializationProblem.UncertainOwnership, "Registration, common directory, symbolic HEAD and recorded worktree owner do not agree.");
     }
 
     private static void VerifyCheckout(GitRepository repository, ExecutionLocation location, bool keepChanges, RunRecord record)

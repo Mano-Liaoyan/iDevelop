@@ -8,20 +8,24 @@ namespace IDevelop.Execution;
 internal static class InputMaterial
 {
     public static InputRecord Build(RunRecord record, MaterializationPlan.Preparation plan, JoinRecord? join)
+        => Build(record, plan.Inputs, plan.Task, plan.Revision, plan.Bindings, plan.Sources, plan.Review, join);
+
+    public static InputRecord Build(RunRecord record, InputId inputs, TaskId task, RevisionId revision,
+        ImmutableArray<InputBinding> bindings, ImmutableArray<CodeSource> sources, ReviewInput? review, JoinRecord? join = null)
     {
-        var commits = plan.Sources.Select(source => source.Commit).Distinct().ToArray();
+        var commits = sources.Select(source => source.Commit).Distinct().ToArray();
         CodeSelection code = commits.Length switch
         {
             0 when join is null => new CodeSelection.Root(record.Base.Commit),
-            1 when join is null => new CodeSelection.Single(plan.Sources.OrderBy(source => source.Task.ToString(), StringComparer.Ordinal).First()),
-            >= 2 when join is not null && RunJournal.Canonical(join.Sources) == RunJournal.Canonical(plan.Sources) => new CodeSelection.Joined(join),
+            1 when join is null => new CodeSelection.Single(sources.OrderBy(source => source.Task.ToString(), StringComparer.Ordinal).First()),
+            >= 2 when join is not null && RunJournal.Canonical(join.Sources) == RunJournal.Canonical(sources) => new CodeSelection.Joined(join),
             _ => throw new ArgumentException("Join does not match the frozen sources.", nameof(join)),
         };
         var files = ImmutableArray.CreateBuilder<DeliveredFile>();
         var sections = new List<string>();
         var inlined = 0;
-        var workflow = record.Revisions[plan.Revision].Snapshot;
-        foreach (var binding in plan.Bindings)
+        var workflow = record.Revisions[revision].Snapshot;
+        foreach (var binding in bindings)
         {
             if (binding is InputBinding.MissingContext missing)
             {
@@ -31,7 +35,7 @@ internal static class InputMaterial
 
             var provided = (InputBinding.Provided)binding;
             var result = record.Results.Single(result => result.Id == provided.Result);
-            var prefix = $".idp/inputs/{plan.Inputs.Value:D}/{result.Id.Value:D}";
+            var prefix = $".idp/inputs/{inputs.Value:D}/{result.Id.Value:D}";
             var reportPath = prefix + "/report.md";
             var bytes = Encoding.UTF8.GetBytes(result.Report);
             files.Add(new(result.Id, reportPath, Revision.Hash(bytes), bytes.LongLength));
@@ -63,7 +67,7 @@ internal static class InputMaterial
             }
             sections.Add(text.ToString());
         }
-        return new(plan.Inputs, plan.Task, plan.Revision, plan.Bindings, code, string.Join("\n\n", sections), files.ToImmutable(), plan.Review);
+        return new(inputs, task, revision, bindings, code, string.Join("\n\n", sections), files.ToImmutable(), review);
     }
 
     internal static ImmutableArray<CodeSource> Sources(RunRecord record, ImmutableArray<InputBinding> bindings) =>

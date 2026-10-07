@@ -60,6 +60,8 @@ internal static partial class RunValidation
         MaterializationPlan.Preparation p => Attempt(new(p.Attempt, p.Task, p.Revision, p.Inputs, p.Cause)) &&
             Bindings(p.Bindings) &&
             !p.Sources.IsDefault && p.Sources.All(Source) && Review(p.Review),
+        MaterializationPlan.Refresh p => Key(p.Launch) && p.Launch.Turn > 1 && p.Inputs.Value != Guid.Empty &&
+            Bindings(p.Bindings) && !p.Sources.IsDefault && p.Sources.All(Source) && Review(p.Review),
         MaterializationPlan.Join p => p.Task.Value != Guid.Empty && p.Inputs.Value != Guid.Empty &&
             !p.Sources.IsDefault && p.Sources.All(Source) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) &&
             (p.Previous is null || Revision.IsCommit(p.Previous.Value.Hex)) && Reference(p.Ref),
