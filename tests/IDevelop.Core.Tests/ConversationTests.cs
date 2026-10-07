@@ -84,7 +84,7 @@ public sealed class ConversationTests : IDisposable
         var sent = runs.Send(SayHi(Settings[client]), "banana", stopTurn: false);
 
         Assert.Equal(new SendResult.Queued(), sent);
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         Assert.Equal(AttemptStatus.Running, runs.Latest[SayHiId].Status);
         File.WriteAllText(_gate, "");
         var record = await settled;
@@ -112,13 +112,13 @@ public sealed class ConversationTests : IDisposable
         runs.Start(codex);
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
         runs.Send(codex, "banana", stopTurn: false);
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.WriteAllText(_gate, "");
         await WaitUntilAsync(() => runs.Latest[SayHiId].Turns is [_, { Outcome: TurnOutcome.Running }]);
 
         Assert.Equal(new SendResult.Queued(), runs.Send(codex, "and an apple", stopTurn: false));
 
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["and an apple"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "and an apple" }]);
         File.WriteAllText(second, "");
         var record = await settled;
         Assert.Equal((AttemptStatus.Succeeded, "Noted."), (record.Status, record.Result));
@@ -147,7 +147,7 @@ public sealed class ConversationTests : IDisposable
         runs.Send(codex, "banana", stopTurn: false);
         runs.Send(codex, "and an apple", stopTurn: false);
 
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana", "and an apple"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }, { Text: "and an apple" }]);
         File.WriteAllText(_gate, "");
         var record = await settled;
         Assert.Equal("banana\n\nand an apple", File.ReadAllText(Evidence("turn-2.txt")));
@@ -263,7 +263,7 @@ public sealed class ConversationTests : IDisposable
         runs.Start(SayHi(Settings[ClientId.Codex]));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
         runs.Send(SayHi(Settings[ClientId.Codex]), "banana", stopTurn: false);
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.WriteAllText(_gate, "");
         await WaitUntilAsync(() => runs.Latest[SayHiId].Turns is [_, { Outcome: TurnOutcome.Running }] && runs.Latest[SayHiId].Process is not null);
         var second = runs.Latest[SayHiId].Process!.Value.Id;
@@ -477,7 +477,7 @@ public sealed class ConversationTests : IDisposable
         var record = runs.Latest[SayHiId];
         Assert.Equal((AttemptStatus.Interrupted, "iDevelop stopped before the next turn started.", "Which fruit?"), (record.Status, record.Detail, record.Result));
         Assert.Equal([new TurnRecord(1, null, TurnOutcome.Succeeded, "Which fruit?")], record.Turns);
-        Assert.Equal(["banana"], record.Queued);
+        Assert.Equal(["banana"], record.Queued.Select(message => message.Text));
         Assert.False(firstTurn.WaitForExit(TimeSpan.FromSeconds(1)), "reconciliation stopped the ended turn's process");
     }
 
@@ -549,7 +549,7 @@ public sealed class ConversationTests : IDisposable
         var started = Assert.IsType<StartResult.Started>(runs.Start(codex));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
         runs.Send(codex, "banana", stopTurn: false);
-        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is ["banana"]);
+        await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.Delete(shim);
         var accepted = new ConcurrentQueue<string>();
         var sender = Task.Run(() =>

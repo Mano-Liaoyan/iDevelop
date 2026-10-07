@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 
 namespace IDevelop.Execution;
@@ -11,6 +12,10 @@ namespace IDevelop.Execution;
 [JsonDerivedType(typeof(Notice), "notice")]
 [JsonDerivedType(typeof(Succeeded), "succeeded")]
 [JsonDerivedType(typeof(Failed), "failed")]
+[JsonDerivedType(typeof(MessageDelta), "messageDelta")]
+[JsonDerivedType(typeof(QuestionAsked), "questionAsked")]
+[JsonDerivedType(typeof(PermissionRequested), "permissionRequested")]
+[JsonDerivedType(typeof(RequestClosed), "requestClosed")]
 internal abstract record AgentEvent
 {
     private AgentEvent() { }
@@ -21,7 +26,22 @@ internal abstract record AgentEvent
     public sealed record Reported(string? Model, string? Reasoning) : AgentEvent;
 
     /// <summary>A complete assistant message. The last one is the result when the verdict carries no text.</summary>
-    public sealed record Message(string Text) : AgentEvent;
+    public sealed record Message(string Text) : AgentEvent
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Id { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Partial { get; init; }
+    }
+
+    public sealed record MessageDelta(string MessageId, string Text) : AgentEvent;
+
+    public sealed record QuestionAsked(string RequestId, ImmutableArray<AskedQuestion> Questions) : AgentEvent;
+
+    public sealed record PermissionRequested(string RequestId, PermissionAction Action) : AgentEvent;
+
+    public sealed record RequestClosed(string RequestId) : AgentEvent;
 
     public sealed record ToolStarted(string Tool, string? Detail) : AgentEvent;
 
