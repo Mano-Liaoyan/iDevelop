@@ -128,8 +128,8 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) }));
         });
 
-    public RunDecision Refresh(WorkflowId workflow, RunId run, OperationId operation, LaunchKey launch) =>
-        Transact(workflow, run, operation, Fingerprint("refresh", new { launch }), (record, _) =>
+    public RunDecision Refresh(WorkflowId workflow, RunId run, OperationId operation, LaunchKey launch, JoinRecord? join = null) =>
+        Transact(workflow, run, operation, Fingerprint("refresh", new { launch, join }), (record, _) =>
         {
             if (record is null) return Missing();
             if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
@@ -139,8 +139,9 @@ internal sealed class RunStore
             var capture = Inputs(record, attempt.Task, attempt.Revision, default);
             if (capture.Rejection is { } rejection) return new Mutation.Rejected(rejection);
             var bindings = capture.Inputs!.Bindings;
-            return new Mutation.Append(new RunEvent.Planned(new MaterializationPlan.Refresh(launch, new(_ids()), bindings,
-                InputMaterial.Sources(record, bindings), InputMaterial.Review(record.Revisions[attempt.Revision].Snapshot, attempt.Task, bindings))));
+            return new Mutation.Append(new RunEvent.Planned(new MaterializationPlan.Refresh(launch,
+                join is not null && record.Plans.GetValueOrDefault(join.Operation) is MaterializationPlan.Join joined ? joined.Inputs : new(_ids()), bindings,
+                InputMaterial.Sources(record, bindings), InputMaterial.Review(record.Revisions[attempt.Revision].Snapshot, attempt.Task, bindings), join)));
         });
 
     public RunDecision Reserve(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, JoinRecord? join = null) =>
@@ -652,7 +653,7 @@ internal sealed class RunStore
             reason
         }), (_, _) => new Mutation.Append(new RunEvent.Abandoned(confirmation, reason)));
 
-    private static (InputRecord? Inputs, RunRejection? Rejection) Inputs(RunRecord record, TaskId task, RevisionId revision,
+    internal static (InputRecord? Inputs, RunRejection? Rejection) Inputs(RunRecord record, TaskId task, RevisionId revision,
         InputId id)
     {
         if (!record.Revisions.TryGetValue(revision, out var snapshot) || !snapshot.Snapshot.Tasks.ContainsKey(task))

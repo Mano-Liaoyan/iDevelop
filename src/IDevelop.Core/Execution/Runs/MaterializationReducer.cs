@@ -65,7 +65,7 @@ internal static partial class RunReducer
                 {
                     var reviewer = record.Attempts[refresh.Launch.Attempt];
                     updated = updated with { Inputs = updated.Inputs.Add(refresh.Inputs, InputMaterial.Build(record, refresh.Inputs,
-                        reviewer.Task, reviewer.Revision, refresh.Bindings, refresh.Sources, refresh.Review)) };
+                        reviewer.Task, reviewer.Revision, refresh.Bindings, refresh.Sources, refresh.Review, refresh.Composed)) };
                 }
                 return (updated, null);
             case RunEvent.GitIntended intended:
@@ -121,7 +121,9 @@ internal static partial class RunReducer
                 if (!KnownTask(record, block.Task) || block.Attempt is { } blockedAttempt &&
                     !record.Attempts.ContainsKey(blockedAttempt) ||
                     block.Inputs is { } blockedInput && !record.Inputs.ContainsKey(blockedInput) &&
-                    !record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(plan => plan.Inputs == blockedInput))
+                    !record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(plan => plan.Inputs == blockedInput) &&
+                    !(block.Attempt is { } refreshing && CanRefresh(record, refreshing) &&
+                        blockedInput.Value == OperationIds.Derive(block.Operation, "refresh-input").Value))
                 {
                     return Reject(RunProblem.InvalidData);
                 }
@@ -144,6 +146,12 @@ internal static partial class RunReducer
                 return Reject(RunProblem.UnsupportedEvent);
         }
     }
+
+    private static bool CanRefresh(RunRecord record, AttemptId attempt) =>
+        record.Attempts.TryGetValue(attempt, out var reviewer) && !record.Closures.ContainsKey(attempt) &&
+        record.Revisions[reviewer.Revision].Snapshot.Tasks[reviewer.Task].Blueprint.Work is WorkSpec.Review &&
+        record.Preparations.Keys.Any(key => key.Attempt == attempt && record.TurnClosures.ContainsKey(key) &&
+            !record.Preparations.ContainsKey(new(attempt, key.Turn + 1)));
 
     private static bool ValidKey(Guid id, string key) => key.Length is >= 8 and <= 64 &&
         Revision.Hash(id.ToString("D")).Sha256.StartsWith(key, StringComparison.Ordinal);
@@ -217,13 +225,28 @@ internal static partial class RunReducer
                 if (!Same(refresh.Sources, InputMaterial.Sources(record, refresh.Bindings)) ||
                     !Same(refresh.Review, InputMaterial.Review(record.Revisions[reviewer.Revision].Snapshot, reviewer.Task, refresh.Bindings)) || refresh.Review is null)
                     return RunProblem.InputConflict;
-                if (refresh.Sources.Select(source => source.Commit).Distinct().Count() > 1) return RunProblem.InputConflict;
+                try
+                {
+                    InputMaterial.Build(record, refresh.Inputs, reviewer.Task, reviewer.Revision, refresh.Bindings,
+                        refresh.Sources, refresh.Review, refresh.Composed);
+                }
+                catch (ArgumentException) { return RunProblem.InputConflict; }
+                if (refresh.Composed is { } refreshedJoin &&
+                    (record.Plans.GetValueOrDefault(refreshedJoin.Operation) is not MaterializationPlan.Join refreshedPlan ||
+                        refreshedPlan.Task != reviewer.Task || refreshedPlan.Inputs != refresh.Inputs ||
+                        !Same(refreshedPlan.Sources, refresh.Sources) || refreshedPlan.Commit != refreshedJoin.Commit ||
+                        refreshedPlan.Recipe.Tree != refreshedJoin.Tree || refreshedPlan.Ref != refreshedJoin.Ref ||
+                        !ObservedMove(record, refreshedJoin.Operation, refreshedPlan.Ref, refreshedPlan.Previous, refreshedPlan.Commit)))
+                    return RunProblem.InputConflict;
                 return null;
             case MaterializationPlan.Join join:
                 return record.RunKey is { } run && record.TaskKeys.TryGetValue(join.Task, out var key) &&
                     join.Ref == RunLayout.JoinBranch(run, key) &&
-                    record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(preparation =>
-                        preparation.Task == join.Task && preparation.Inputs == join.Inputs && Same(preparation.Sources, join.Sources)) &&
+                    (record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(preparation =>
+                        preparation.Task == join.Task && preparation.Inputs == join.Inputs && Same(preparation.Sources, join.Sources)) ||
+                        record.Attempts.Values.Any(attempt => attempt.Task == join.Task && CanRefresh(record, attempt.Id) &&
+                            RunStore.Inputs(record, attempt.Task, attempt.Revision, join.Inputs) is { Rejection: null, Inputs: { } capture } &&
+                            Same(InputMaterial.Sources(record, capture.Bindings), join.Sources))) &&
                     join.Sources.Select(source => source.Commit).Distinct().Count() >= 2 &&
                     join.Recipe.Parents.SequenceEqual(join.Sources.Select(source => source.Commit).Distinct())
                     ? null : RunProblem.InputConflict;

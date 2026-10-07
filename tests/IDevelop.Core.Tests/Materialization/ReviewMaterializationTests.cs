@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -182,6 +183,142 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(repaired.Id, f.Read().Inputs[ready.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(first.Id, f.Read().Inputs[old.Id].Review!.SubjectResult);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+    }
+
+
+    private static async Task<Preparation.Ready> FixedFanIn(PreparationFixture f)
+    {
+        await f.Publish(T, f.A);
+        await f.Publish(D, f.A, "Independent.\n");
+        var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
+        f.Close(forwarded, "Forwarded.\n");
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(), forwarded.Execution.Launch.Attempt,
+            forwarded.Execution.Inputs, "Forwarded.\n"));
+        var review = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).Prepare(W, f.RunId, f.Op(), U,
+            new AttemptCause.Initial(), "Review."));
+        CloseReviewTurn(f, review);
+        var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
+            cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
+        f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
+        f.Close(fix, "Repaired.\n");
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt));
+        return review;
+    }
+
+    private static Workflow FanInWorkflow() => Connect(Connect(Connect(
+        FixtureWorkflow(Writer(T), Writer(D), Task(C), Reviewer()), D, C), C, U), T, U);
+
+    [Fact]
+    public async Task Reviewer_refresh_with_distinct_code_sources_records_join_required_without_a_refresh()
+    {
+        using var f = new PreparationFixture(FanInWorkflow());
+        var review = await FixedFanIn(f);
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+            new(review.Execution.Launch.Attempt, 2), "Review the fix."));
+        Assert.Equal("JoinRequired", blocked.Block.Problem.ToString());
+        Assert.Equal(U, blocked.Block.Task);
+        Assert.Equal("00000000-0000-0000-0000-000000000109", blocked.Block.Attempt?.Value.ToString("D"));
+        Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
+        Assert.Equal(0, f.Read().Preparations.Keys.Count(key => key.Attempt == review.Execution.Launch.Attempt && key.Turn == 2));
+        Assert.Single(f.Read().Blocks);
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(review.Checkout, "a.txt")));
+        Assert.Equal("76e13b8982291f82ffbee6a1302464dedddae3f5", f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
+        Assert.Equal("e5d322528d8df1838e6e71d591820ac3f283a0ae", Assert.IsType<CodeOutput.Produced>(f.Read().CurrentResults[T].Code).Code.Commit.Hex);
+    }
+
+    [Fact]
+    public async Task Reviewer_refresh_accepts_verified_join_and_forwards_its_exact_snapshot()
+    {
+        using var f = new PreparationFixture(FanInWorkflow());
+        var review = await FixedFanIn(f);
+        var operation = f.Op();
+        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(W, f.RunId, operation,
+            new(review.Execution.Launch.Attempt, 2), "Review the fix."));
+        Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
+        Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("approved\n", File.ReadAllText(Path.Combine(ready.Checkout, "plan.txt")));
+        var refresh = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
+        Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", refresh.Composed?.Commit.Hex);
+        Assert.Equal(new[] { "e5d322528d8df1838e6e71d591820ac3f283a0ae", "3e473e4c6ad86aa4bf4f56d444ca398d8acb4572" }, refresh.Sources.Select(source => source.Commit.Hex));
+        var input = f.Read().Inputs[ready.Execution.Inputs];
+        Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", Assert.IsType<CodeSelection.Joined>(input.Code).Join.Commit.Hex);
+        Assert.Equal(T, input.Review!.Subject);
+        Assert.Equal(1, ready.Execution.Prompt.Split("Repaired.", StringSplitOptions.None).Length - 1);
+        Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation,
+            ready.Execution.Launch, "Review the fix.")));
+        Assert.Equal(new CodeOutput.Forwarded(input.Id), Agree(f, ready).Code);
+    }
+
+    [Theory]
+    [InlineData("sources")]
+    [InlineData("tree")]
+    [InlineData("parents")]
+    [InlineData("receipt")]
+    [InlineData("ref")]
+    public async Task Reviewer_refresh_rejects_a_join_with_changed_sources_tree_parents_receipt_or_ref(string mode)
+    {
+        using var f = new PreparationFixture(FanInWorkflow());
+        var review = await FixedFanIn(f);
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer(new RefreshComposer(f, mode)).PrepareTurn(W, f.RunId, f.Op(),
+            new(review.Execution.Launch.Attempt, 2), "Review the fix."));
+        Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
+        Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(review.Checkout, "a.txt")));
+        Assert.Equal("76e13b8982291f82ffbee6a1302464dedddae3f5", f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
+    }
+
+    [Fact]
+    public async Task Every_join_refresh_probe_recovers_the_verified_join_and_one_prepared_turn()
+    {
+        var steps = new List<string>();
+        using (var baseline = new PreparationFixture(FanInWorkflow()))
+        {
+            var reviewer = await FixedFanIn(baseline);
+            Assert.IsType<Preparation.Ready>(await baseline.Materializer(new RefreshComposer(baseline), steps.Add)
+                .PrepareTurn(W, baseline.RunId, baseline.Op(), new(reviewer.Execution.Launch.Attempt, 2), "Review the fix."));
+        }
+        Assert.Contains("git.refresh-reset.after", steps);
+        foreach (var point in steps.Distinct())
+        {
+            using var f = new PreparationFixture(FanInWorkflow());
+            var review = await FixedFanIn(f);
+            var operation = f.Op();
+            var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
+            await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(new RefreshComposer(f), step => { if (step == point) throw new Crash(); })
+                .PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+            Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
+            Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+            Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
+            Assert.Single(f.Read().Preparations, pair => pair.Key == key);
+        }
+    }
+
+    private sealed class RefreshComposer(PreparationFixture f, string mode = "valid") : IJoinComposer
+    {
+        public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation)
+        {
+            if (f.Read().Plans.GetValueOrDefault(request.Operation) is MaterializationPlan.Join persisted)
+                return ValueTask.FromResult<JoinOutcome>(new JoinOutcome.Ready(new(request.Operation, persisted.Sources, persisted.Commit,
+                    persisted.Recipe.Tree, persisted.Ref)));
+            var parents = request.Sources.Select(source => source.Commit).Distinct().ToArray();
+            var merged = f.Git.Git("merge-tree", "--write-tree", parents[0].Hex, parents[1].Hex).Trim();
+            var recipe = new CommitRecipe(new(merged), [.. parents], "join\n", "E2 <e2@example.test>", "E2 <e2@example.test>", At);
+            var actual = mode == "parents" ? recipe with { Parents = [.. parents.Reverse()] } : recipe;
+            if (mode == "tree") actual = recipe with { Tree = GitFixture.Read(f.Git.Open().ReadCommit(f.A)).Tree };
+            var commit = GitFixture.Read(f.Git.Open().CreateCommit(actual));
+            var record = f.Read();
+            var reference = $"refs/heads/idp/{record.RunKey}/join/{record.TaskKeys[request.Task]}";
+            var plan = new MaterializationPlan.Join(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
+            if (mode != "receipt")
+            {
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)));
+                f.Observe(request.Operation, new(reference, request.ExpectedJoin, commit));
+                if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);
+            }
+            var sources = mode == "sources" ? request.Sources.Reverse().ToImmutableArray() : request.Sources;
+            return ValueTask.FromResult<JoinOutcome>(new JoinOutcome.Ready(new(request.Operation, sources, commit, new(merged), reference)));
+        }
     }
 
     [Fact]

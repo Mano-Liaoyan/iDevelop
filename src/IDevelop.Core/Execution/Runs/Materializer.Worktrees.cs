@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -132,10 +133,10 @@ internal sealed partial class Materializer
     private static bool SamePath(string left, string right) => string.Equals(Path.GetFullPath(left), Path.GetFullPath(right),
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static void VerifyJoin(RunRecord record, GitRepository repository, MaterializationPlan.Preparation preparation, JoinRecord join)
+    private static void VerifyJoin(RunRecord record, GitRepository repository, TaskId task, InputId inputs, ImmutableArray<CodeSource> sources, JoinRecord join)
     {
         if (record.Plans.GetValueOrDefault(join.Operation) is not MaterializationPlan.Join plan ||
-            plan.Task != preparation.Task || plan.Inputs != preparation.Inputs || !RunReducer.Same(plan.Sources, preparation.Sources) ||
+            plan.Task != task || plan.Inputs != inputs || !RunReducer.Same(plan.Sources, sources) ||
             !RunReducer.Same(join.Sources, plan.Sources) || join.Commit != plan.Commit || join.Tree != plan.Recipe.Tree || join.Ref != plan.Ref ||
             !record.GitIntents.Any(pair => pair.Value.Plan == join.Operation && pair.Value.Mutation is GitMutation.MoveRef move &&
                 move.Change == new RefChange(plan.Ref, plan.Previous, plan.Commit) &&

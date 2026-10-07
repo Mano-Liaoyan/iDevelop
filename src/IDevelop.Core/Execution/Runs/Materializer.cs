@@ -65,8 +65,8 @@ internal sealed partial class Materializer
                 if (Value(repository.ReadRef(RunLayout.ApprovedBase(record.RunKey!))) != record.Base.Commit)
                     throw Fault(MaterializationProblem.UncertainOwnership, "The approved base retention ref has changed.");
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
-                    VerifyJoin(record, repository, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
-                        .Single(plan => plan.Attempt == original.Id), joined.Join);
+                    VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
+                        .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
                 using var taskLock = TakeTaskLock(task);
                 VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
                 VerifyDelivery(record, completed.Execution, repository);
@@ -92,12 +92,12 @@ internal sealed partial class Materializer
             {
                 step = "join";
                 var joinRef = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[task]);
-                var outcome = await _joins.Compose(new(OperationIds.Derive(operation, "join"), run, task, plan.Inputs,
+                var outcome = await _joins.Compose(new(workflow, OperationIds.Derive(operation, "join"), run, task, plan.Inputs,
                     plan.Sources, Value(repository.ReadRef(joinRef))), cancellation);
                 if (outcome is JoinOutcome.Blocked blocked)
                     return Block(workflow, run, operation, step, blocked.Block with { Operation = operation });
                 join = ((JoinOutcome.Ready)outcome).Join;
-                VerifyJoin(Read(workflow, run), repository, plan, join);
+                VerifyJoin(Read(workflow, run), repository, task, plan.Inputs, plan.Sources, join);
             }
             cancellation.ThrowIfCancellationRequested();
             step = "reserve";

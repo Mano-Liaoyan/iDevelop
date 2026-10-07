@@ -94,7 +94,7 @@ public sealed class JoinBoundaryTests
             var plan = new MaterializationPlan.Join(U, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             if (mode != "receipt")
             {
-                Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, request.Operation, new RunEvent.Planned(plan)));
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)));
                 f.Observe(request.Operation, new(reference, request.ExpectedJoin, commit));
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);
             }

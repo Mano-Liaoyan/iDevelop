@@ -44,7 +44,7 @@ internal abstract record MaterializationPlan
         ImmutableArray<InputBinding> Bindings, ImmutableArray<CodeSource> Sources, ReviewInput? Review) : MaterializationPlan;
 
     internal sealed record Refresh(LaunchKey Launch, InputId Inputs, ImmutableArray<InputBinding> Bindings,
-        ImmutableArray<CodeSource> Sources, ReviewInput? Review) : MaterializationPlan;
+        ImmutableArray<CodeSource> Sources, ReviewInput? Review, JoinRecord? Composed = null) : MaterializationPlan;
 
     internal sealed record Join(TaskId Task, InputId Inputs, ImmutableArray<CodeSource> Sources, CommitRecipe Recipe,
         CommitId Commit, CommitId? Previous, string Ref) : MaterializationPlan;
