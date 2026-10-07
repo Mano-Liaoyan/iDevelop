@@ -25,7 +25,7 @@ internal sealed partial class Materializer
             if (mutation is null) return new Salvage.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             VerifyRepository(record, repository);
-            VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+            VerifyOwnedCheckout(repository, prepared.Location, record);
             var planId = OperationIds.Derive(operation, "salvage-plan");
             if (record.Plans.TryGetValue(planId, out var existing) && (existing is not MaterializationPlan.Salvage old || old.Attempt != attempt))
                 return new Salvage.Rejected(new(RunProblem.OperationConflict));
@@ -47,7 +47,8 @@ internal sealed partial class Materializer
             }
             else
             {
-                var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value;
+                var tip = Value(repository.Worktrees()).Single(worktree => SamePath(worktree.Path, checkout)).Head ??
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.");
                 step = "salvage-capture";
                 var capture = Value(Mutate("salvage-capture", () => repository.Capture(checkout)));
                 if (capture.IndexBefore != capture.IndexAfter) throw Fault(MaterializationProblem.DirtyWorktree, "The index changed during salvage capture.");

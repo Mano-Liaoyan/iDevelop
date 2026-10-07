@@ -131,6 +131,32 @@ public sealed class ReviewMaterializationTests
     }
 
     [Fact]
+    public async Task Ignored_reviewer_file_blocks_refresh_when_the_fix_tracks_its_path()
+    {
+        using var f = new PreparationFixture(Workflow(), configureBase: git =>
+        {
+            git.Write(".gitignore", "cache.txt\n");
+            return git.Commit("ignore cache");
+        });
+        await f.Publish(T, GitFixture.Read(f.Git.Open().ResolveCommit("HEAD"))!.Value);
+        var review = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: "Review."));
+        CloseReviewTurn(f, review);
+        f.Git.Write("cache.txt", "reviewer\n", review.Checkout);
+        var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
+            cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
+        f.Git.Write("cache.txt", "subject\n", fix.Checkout);
+        Assert.Equal(0, f.Git.Run(fix.Checkout, "add", "-f", "cache.txt").ExitCode);
+        f.Close(fix, "Repaired.\n");
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+            new(review.Execution.Launch.Attempt, 2), "Review the fix."));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("Ignored files obstruct the reset target and must be preserved.", blocked.Block.Detail);
+        Assert.Equal("reviewer\n", File.ReadAllText(Path.Combine(review.Checkout, "cache.txt")));
+        Assert.Equal("subject\n", File.ReadAllText(Path.Combine(fix.Checkout, "cache.txt")));
+    }
+
+    [Fact]
     public async Task Accepted_fix_marks_finished_consumers_stale_and_keeps_running_consumers_frozen()
     {
         var workflow = Connect(Connect(Connect(FixtureWorkflow(Writer(T), Reviewer(), Task(C), Writer(D)), T, U), T, C), T, D);

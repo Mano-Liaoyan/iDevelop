@@ -91,14 +91,14 @@ internal sealed partial class Materializer
         }
     }
 
-    private static void VerifyRegistration(GitRepository repository, ExecutionLocation location, RunRecord record)
+    private static void VerifyRegistration(GitRepository repository, ExecutionLocation location, RunRecord record, bool requireBranch = true)
     {
         var owner = location.Owner;
         var checkout = RunStorage.SafePath(repository.ProjectFolder, owner.RelativePath);
         var registration = Value(repository.Worktrees()).SingleOrDefault(worktree => SamePath(worktree.Path, checkout));
-        if (registration is null || registration.Branch != owner.Branch ||
+        if (registration is null || requireBranch && registration.Branch != owner.Branch ||
             !SamePath(Value(repository.CheckoutCommonDirectory(checkout)), repository.CommonDirectory) ||
-            Value(repository.SymbolicHead(checkout)) != owner.Branch ||
+            requireBranch && Value(repository.SymbolicHead(checkout)) != owner.Branch ||
             !record.GitIntents.Values.Any(intent => intent.Mutation is GitMutation.CreateWorktree create && create.Owner == owner))
             throw Fault(MaterializationProblem.UncertainOwnership, "Registration, common directory, symbolic HEAD and recorded worktree owner do not agree.");
     }
@@ -115,6 +115,12 @@ internal sealed partial class Materializer
         }
         else if (tip != location.AttemptBase || Value(repository.Status(Checkout(repository, location.Owner))).Length != 0)
             throw Fault(MaterializationProblem.DirtyWorktree, "The checkout tip or contents differ from the recorded attempt base.");
+        VerifyOwnedCheckout(repository, location, record);
+    }
+
+    private static void VerifyOwnedCheckout(GitRepository repository, ExecutionLocation location, RunRecord record)
+    {
+        VerifyRegistration(repository, location, record, requireBranch: false);
         var registration = Value(repository.Worktrees()).Single(worktree => SamePath(worktree.Path, Checkout(repository, location.Owner)));
         if (!registration.Locked || registration.LockReason != $"idevelop {record.RunKey}/{record.TaskKeys[location.Owner.Task]}")
             throw Fault(MaterializationProblem.UncertainOwnership, "The recorded worktree ownership lock is absent or differs.");

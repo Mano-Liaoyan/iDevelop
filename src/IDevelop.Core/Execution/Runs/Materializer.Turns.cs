@@ -93,7 +93,7 @@ internal sealed partial class Materializer
                 {
                     var intended = OperationIds.Derive(operation, "refresh-reset-intent");
                     Journal("refresh-reset-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, reset)));
-                    // Hard reset is safe here because the reviewer checkout has no tracked or nonignored untracked changes.
+                    VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(input.CodeBase)));
                     var result = Mutate("refresh-reset", () => repository.ResetCheckout(checkout, input.CodeBase));
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
                     Journal("refresh-reset-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "refresh-reset-observed"),
