@@ -49,21 +49,21 @@ public sealed class PublicationOwnershipTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "checkout", "-q", "--detach", "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
         CommitFile(f, writer.Checkout, "b.txt", "B\n");
-        const string tip = "40abc7bebc8957e22d11b4c6b9603180652d95f1";
-        Assert.Equal(tip, Head(f, writer.Checkout));
+        const string forged = "40abc7bebc8957e22d11b4c6b9603180652d95f1";
+        Assert.Equal(forged, Head(f, writer.Checkout));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
-        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", tip).ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", forged).ExitCode);
         var info = Path.Combine(f.Git.Open().CommonDirectory, "objects", "info");
         if (mode == "chain")
         {
             Assert.Equal(0, f.Git.Run(writer.Checkout, "commit-graph", "write", "--reachable", "--no-changed-paths", "--split").ExitCode);
-            CommitGraphForgery.Forge(Assert.Single(Directory.GetFiles(Path.Combine(info, "commit-graphs"), "graph-*.graph")), tip, parent: A);
+            CommitGraphForgery.Forge(Assert.Single(Directory.GetFiles(Path.Combine(info, "commit-graphs"), "graph-*.graph")), forged, parent: A);
         }
         else
         {
             Assert.Equal(0, f.Git.Run(writer.Checkout, "commit-graph", "write", "--reachable", "--no-changed-paths").ExitCode);
             var graph = Path.Combine(info, "commit-graph");
-            CommitGraphForgery.Forge(graph, tip, parent: A);
+            CommitGraphForgery.Forge(graph, forged, parent: A);
             if (mode == "alternate")
             {
                 var alternate = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "alt-objects");
@@ -72,17 +72,20 @@ public sealed class PublicationOwnershipTests
                 File.WriteAllText(Path.Combine(info, "alternates"), alternate + "\n");
             }
         }
+        CommitFile(f, writer.Checkout, "b.txt", "B2\n");
+        const string tip = "1d16e561de9187d92215b37e2ea2d8d456081ac8";
+        Assert.Equal(tip, Head(f, writer.Checkout));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "merge-base", "--is-ancestor", A, tip).ExitCode);
         f.Close(writer);
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 40abc7bebc8957e22d11b4c6b9603180652d95f1.", blocked.Block.Detail);
-        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", Ref(f, writer.Execution.Location.Owner.Branch));
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 1d16e561de9187d92215b37e2ea2d8d456081ac8.", blocked.Block.Detail);
+        Assert.Equal("1d16e561de9187d92215b37e2ea2d8d456081ac8", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Empty(f.Read().Results);
         Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
             f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt)).Block));
-        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", Ref(f, writer.Execution.Location.Owner.Branch));
+        Assert.Equal("1d16e561de9187d92215b37e2ea2d8d456081ac8", Ref(f, writer.Execution.Location.Owner.Branch));
     }
 
     [Fact]
