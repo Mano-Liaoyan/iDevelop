@@ -28,7 +28,7 @@ Each task has one permanent initial slot per run, and each previous attempt has 
 
 An unclosed claim is `Uncertain`. A free lock, a missing or reused PID, and an `AttemptEvent.Reconciled` line are not evidence that the process stopped. `CloseTurn` and attempt closure reject a log that contains `Reconciled`. Otherwise a reconciled turn could release a claim, and after abandonment another run could launch the same task. A person can record `AttemptEnd.Recovered` with a confirmation ID and a reason while the store holds the task lock.
 
-Abandonment closes a run but keeps its unresolved claims. They block the same task in every other run until recovery resolves them.
+Abandonment closes a run but keeps its unresolved claims. They block the same task in every other run of the same workflow until recovery resolves them.
 
 ### Context never blocks a reservation
 
@@ -46,9 +46,9 @@ An executed result needs a logged successful closure and a matching report and i
 
 ### A command reads only its own workflow's journals
 
-Task IDs are unique within a project, and the one-active-run rule applies per workflow. A command therefore reads only `.idp/runs/<workflow-id>/`. The lock stays project-wide.
+A command reads only `.idp/runs/<workflow-id>/`. Only runs of a task's own workflow can claim that task, as long as each task ID belongs to one workflow of the project. On `main`, `WorkflowDocument.Save` refuses to write a second workflow file, so a project has one workflow and the condition holds. The one-active-run rule also applies per workflow. The lock stays project-wide.
 
-A zero-byte journal counts as absent, so a crash before the first line no longer blocks the retried approval. Another run's journal with a torn last line contributes its valid prefix, because the torn entry was never acknowledged. Every other kind of damage blocks mutation, and a torn tail still blocks its own run. The journal decodes line by line, so a line cut inside a multibyte character reads as a torn tail. The store never repairs a journal.
+A journal with no complete entry counts as absent. That covers a zero-byte file and a torn first line, in the command's own run and in other runs. A crash during the first write therefore no longer blocks the retried approval. Under the lock, the store replaces the torn bytes with the new first entry, so the retry returns `Created` and a second retry returns `Existing`. Another run's journal with a torn last line contributes its valid prefix, because the torn entry was never acknowledged. Every other kind of damage blocks mutation, and a torn tail after a complete entry still blocks its own run. The journal decodes line by line, so a line cut inside a multibyte character reads as a torn tail. The store never changes a journal that holds a complete entry.
 
 ### Rejected alternatives
 
@@ -75,7 +75,8 @@ A zero-byte journal counts as absent, so a crash before the first line no longer
 | Command or check | Observed result |
 | --- | --- |
 | `dotnet build -c Release` | 0 warnings and 0 errors. |
-| `dotnet test -c Release` on Linux | Core passed 438 tests with 9 platform skips. Desktop passed 321. The baseline on `main` was Core 346. |
+| `dotnet test -c Release` on Linux | Core passed 439 tests with 9 platform skips. Desktop passed 321. The baseline on `main` was Core 346. |
+| `Own_torn_first_line_allows_approval_and_idempotent_retry` on `c6b247e` and after the fix | Before the fix, the approval returned `Rejected` with `IncompleteTail`. After it, the approval returns `Created`, and the retry returns `Existing`. |
 | The new journal, recovery, and concurrency tests that compile against `106b243` | Nine of twelve failed. The two concurrency tests and the foreign-lock test passed, because the lock was already correct. With the lock opened without `FileShare.None`, the claim race gave 16 `Granted`, and the reservation race gave 13 `Created` and 3 rejections. Sol observed each reuse, context, and reconciliation test fail before its fix. |
 | The recovery inspection and run-base tests on `106b243` | They cannot compile against the old API. Before the fix, Sol showed `InspectRecovery` returning an empty list for a journal with a sequence gap, and `ReuseReport` returning `Created` for a source matching `first` in a run based at `later`. |
 | The concurrency tests, repeated | 20 runs inside the Codex sandbox and 10 runs outside it gave the same result each time. |
@@ -87,10 +88,11 @@ A zero-byte journal counts as absent, so a crash before the first line no longer
 ## Open issues
 
 1. Nothing calls `RunStore` yet. E3 must hold the task lock across claim and launch and route review advancement and standalone launches through the same authority.
-2. A torn tail in a run's own journal blocks that run until a person repairs the file. E1 performs no automatic repair.
+2. A torn tail after a complete entry in a run's own journal blocks that run until a person repairs the file. E1 repairs only a journal with no complete entry.
 3. Filesystem alias identity is open. The store normalizes the project folder with `Path.GetFullPath`, as `ProjectRuns.Open` does.
 4. Old standalone logs without a capture cannot be reused. Broader reuse needs a later evidence contract.
 5. The policy of one active run per workflow is a default. The user has not decided whether a workflow may have simultaneous runs.
+6. Pull request [#37](https://github.com/Mano-Liaoyan/iDevelop/pull/37) (W1) allows several workflows per project. Whichever of #37 and #39 merges second must confirm that task IDs stay unique across a project's workflows, including duplicated and imported workflows, or restore a project-wide claim check in `RunStore`. At `c1b489e` on `feat/w1-workspace`, `WorkflowDocument.Create` makes an empty workflow with a new workflow ID. The branch has no command that duplicates or imports a whole workflow, and duplicating cards gives each copy a new ID from `TaskId.New()`. `WorkflowDocument.OpenProject` rejects a project whose workflow files share a workflow ID or a task ID. `ProjectRuns.Follow` rejects a workflow that shares a task with another followed workflow. `WorkflowDocument.Save` no longer checks other workflow files, so a workflow file copied in by hand is caught only when the project next opens.
 
 ## Next action
 
