@@ -66,6 +66,8 @@ public sealed class ProjectViewModel : ObservableObject
         Runs.Follow(document.Current);
         canvas = _newCanvas(this, document);
         Attribute(canvas);
+        // A review that rested when the project opened may have started its next run before the canvas listened.
+        canvas.ShowAttempts();
         Workflows.Add(canvas);
         return canvas;
     }
