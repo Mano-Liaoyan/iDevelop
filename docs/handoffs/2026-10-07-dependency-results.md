@@ -4,7 +4,7 @@
 
 E2 is the slice "Materialize dependency results" of the [approved execution plan](2026-10-06-workspace-execution-plan.md#approved-delivery-slices). Its completion condition is that reports and artifacts reach successors, isolated code inputs produce a named revision, and fan-in conflicts and uncertain ownership block without corrupting work. Review fixes must use the correct code owner. It builds on the [D0 Git contract](2026-10-06-d0-design-validation.md) and the [E1 run journal](2026-10-07-run-and-input-records.md).
 
-E2 ships as two pull requests. Pull request [#41](https://github.com/Mano-Liaoyan/iDevelop/pull/41) is E2a, based on E1's branch `feat/e1-run-records`. It adds `Materializer` and a Git adapter to `IDevelop.Core`. It adds no UI, no scheduler, and no launch path. E3 is its first caller, and E2b is the next consumer.
+E2 ships as two pull requests. Pull request [#41](https://github.com/Mano-Liaoyan/iDevelop/pull/41) is E2a, based on E1's branch `feat/e1-run-records`. It adds `Materializer` and a Git adapter to `IDevelop.Core`. It adds no UI, no scheduler, and no launch path. E3 is its first caller. E2b is the second pull request, based on `feat/e2a-materialize-inputs`. It adds `MergeJoins`, the real join composer, and the diamond suite.
 
 A fresh Opus backend review of the coordinator's design note made twelve findings. The revised note accepted eleven and partly accepted one. GPT-6.1 Sol wrote the code through Codex. A GPT-6 Astra difficult-task review and an Opus backend review reviewed the code in seven rounds. The coordinator reviewed and amended every diff.
 
@@ -14,7 +14,7 @@ A fresh Opus backend review of the coordinator's design note made twelve finding
 
 E2a owns the whole data contract. That covers the Git adapter, ownership keys, worktrees, result capture and publication, linear inputs, reports, artifacts, review-fix ownership, and salvage. A successor can consume one distinct accepted code revision. Two or more distinct code revisions block as `JoinRequired`.
 
-E2b adds clean joins, durable conflict blocking, and the real-Git diamond suite. It passes a real `IJoinComposer` to `Materializer.Open` and changes no E2a file, schema, or behavior. The composer receives a `JoinRequest` with the workflow, run, task, allocated input ID, frozen sources, and the expected previous join. It must use E2a's Git adapter, repository mutation lock, commit recipes, and `RefPublisher` for every ref move. E2a then checks the returned join's persisted receipt, complete source set, object type, tree, ordered parents, and ref transition before it accepts the input. E2b must also prove that the tree is the clean merge of those sources. `JoinRequest`, the `Join` plan case, join verification, `WriteEvidence`, and `ConflictEvidence` are in E2a, and fake composers test that boundary.
+E2b adds clean joins, durable conflict blocking, and the real-Git diamond suite. It passes a real `IJoinComposer` to `Materializer.Open` and changes no E2a schema or behavior. Its only edit to an E2a file adds the `partial` keyword to `GitRepository`, so that the merge reads live in a new file and still run through the adapter's forced Git settings. The composer receives a `JoinRequest` with the workflow, run, task, allocated input ID, frozen sources, and the expected previous join. It must use E2a's Git adapter, repository mutation lock, commit recipes, and `RefPublisher` for every ref move. E2a then checks the returned join's persisted receipt, complete source set, object type, tree, ordered parents, and ref transition before it accepts the input. E2b must also prove that the tree is the clean merge of those sources. `JoinRequest`, the `Join` plan case, join verification, `WriteEvidence`, and `ConflictEvidence` are in E2a, and fake composers test that boundary.
 
 The Opus design review asked for the split. It keeps the contract in one owner's hands and gives E2b a boundary it can test without editing E2a.
 
@@ -85,6 +85,20 @@ Sparse state that appears in a task worktree anyway blocks. Any index entry flag
 
 Every step journals its intent before the Git call and its observation after it, under operation IDs derived from the caller's operation. A retry with the same operation resumes at the first unobserved step and returns the same receipt. Tests crash at every probe point and assert that.
 
+### E2b joins with merge-tree and blocks a conflict with evidence
+
+`MergeJoins` is the real `IJoinComposer`, and `MergeJoins.Open(projectFolder, store)` is the factory that E3 calls. It runs inside `Materializer.Prepare` and `PrepareTurn`, under the repository mutation lock that they hold. It writes Git objects and journal entries, and it moves only the join branch, through `RefPublisher`.
+
+The sources arrive ordered by full task ID. The join's parents are their distinct commits in that order, so ancestor-related parents stay and only equal commits are dropped. `MergeJoins` chains `merge-tree --write-tree -z --messages` over the parents. Between steps it writes an accumulator commit that carries the merged tree and both parents, so each step merges real ancestry and never a bare tree. Accumulators are objects only. They get no ref, no checkout, and no journal entry. A clean join needs no checkout, so the detached accumulator checkout that the design review measured belongs to the deferred resolution design. No step uses an unborn branch.
+
+Every join and accumulator commit takes the latest committer time of its own parents. Its message carries `IDP-Run` and `IDP-Task` trailers. The join commit is therefore a function of its inputs alone. A first version used the clock, and Sol measured the cost. Git writes the accumulator's ID into conflict markers, so a retried conflict at step 2 produced different evidence, and the retry blocked as `InputUnavailable` instead of repeating its `FanInConflict` block. The same inputs now always give the same join commit, so a retry never moves the join branch off a commit that an earlier attempt used.
+
+A clean merge journals a `Join` plan under the join operation and publishes the join branch from its live expected value. Before it plans, `MergeJoins` checks the live join ref against `RefOwnership`. A foreign value blocks as `UncertainOwnership` and journals nothing. A recorded plan is adopted only when a fresh clean merge gives its tree and parents, and the commit rebuilt from its recipe equals the recorded commit. Correct parents alone never authorize a join.
+
+Git exits 0 for a clean merge and 1 for a conflict. It also exits 1 for an unknown revision, with no output, so exit 1 counts as a conflict only when the output parses. A conflict blocks as `FanInConflict`. The block records every source, the failing step, the conflicted paths, the stage entries, the message records, the Git version, and the merge settings. The raw output is stored as `evidence/<join operation>/join-step-<step>.stdout` and `.stderr` in the run's folder. A conflict plans nothing and moves no ref, so an older join stays where it was. A retry with the same operation returns the same block, and the run records it once.
+
+E2a publishes a result commit on top of each writer's own commit. A join's parents are therefore the writers' result commits, and each writer's own commit is the first parent of its result. The design note's acceptance table named the writer commits B and C as the join's parents. The tests follow the code.
+
 ### Rejected alternatives
 
 | Alternative | Reason for rejection |
@@ -97,6 +111,9 @@ Every step journals its intent before the Git call and its observation after it,
 | Compare the index file's bytes | A plain `git status` rewrites stat data and blocked retry. |
 | Write `HEAD` through its lock file for an atomic attach | It bypasses reftable. `update-ref --stdin` gained `symref-verify` only in Git 2.46. |
 | Reset a reviewer's branch with `reset --hard` on refresh | It dropped any reviewer commit. Refresh retains the old base and moves the branch by compare-and-swap. |
+| Clock time on join and accumulator commits | A retried conflict at step 2 or later produced different evidence and blocked as `InputUnavailable`. |
+| A detached checkout for every join | `merge-tree` writes the merged tree without one. The resolution design needs a checkout, and resolution is deferred. |
+| Reuse an earlier join's recipe for the same inputs | Deriving the time from the parents makes the same inputs give the same commit with less code. |
 | One 60-second limit for every Git call | It would kill a large checkout or a submodule clone. Limits are 60 seconds for metadata, 1 hour for work-tree operations, and 4 hours for submodule updates. |
 
 ## Changed artifacts
@@ -107,6 +124,7 @@ Every step journals its intent before the Git call and its observation after it,
 - `src/IDevelop.Core/Execution/Runs/RegularFile.cs` reads file types through `statx` or `lstat`, with `lstat$INODE64` on Intel macOS.
 - `tests/IDevelop.Core.Tests/Git/`, `Materialization/`, and `Runs/` test each behavior against real scratch Git.
 - `.github/workflows/dotnet.yml` adds `macos-26-intel` to the CI matrix.
+- E2b adds `src/IDevelop.Core/Execution/Runs/MergeJoins.cs` and `src/IDevelop.Core/Execution/Git/GitRepository.Merge.cs`, which reads `merge-tree` results, merge settings, and committer times. It tests them in `tests/IDevelop.Core.Tests/Materialization/JoinTests.cs` and `tests/IDevelop.Core.Tests/Git/MergeTreeTests.cs`.
 
 ## Commands and observed results
 
@@ -120,6 +138,11 @@ Every step journals its intent before the Git call and its observation after it,
 | The Opus adversarial tests, `AdversarialR4Tests.cs`, `AdversarialR5Tests.cs`, and `AdversarialR6Tests.cs` in the coordinator's scratch folder | All 42 runs of the first two pass. Their sparse runs now expect a full task checkout, and the diagnostics that always failed now assert the outcome. In the third, 35 of 37 runs pass. The 2 failures are `W5d`, a diagnostic that always fails. Its log shows the edit in the published and the salvaged commit. |
 | `node scripts/check-licenses.mjs`, `node scripts/planweave-tokens.mjs --check`, `node scripts/fluent-icons.mjs --check` | Each exits 0. |
 | `node scripts/check-handoffs.mjs` | It reports nine records, each linked from `docs/context.md` or `docs/product-direction.md`, and exits 0. |
+| E2b: `dotnet build -c Release` and `dotnet test -c Release` on Linux at `cd544ec` | 0 warnings and 0 errors. Core passes 767 tests with 10 platform skips. Desktop passes 321. |
+| E2b: the census with six join runs added, at `cd544ec` | All 76 runs pass. The join runs cover overlapping sibling publication, a conflicting refresh that keeps the older join, a join ref set out of band at the planned commit, a recorded join with correct parents and missing content, a clean refresh that keeps the older join reachable, and a join ref moved while its intent is pending. |
+| E2b: mutations of `MergeJoins` at `cd544ec` | Without the adoption tree check, the adoption test and the census run for a recorded join with missing content fail. Without the ownership check before planning, the foreign join ref test fails. Sol replaced `Compose` with `UnavailableJoins` and saw every new join test fail. |
+| E2b: the late-conflict test against the clock-stamped composer | It blocks as `InputUnavailable` instead of `FanInConflict`. It passes at `cd544ec`. |
+| E2b: Git processes that the new tests start, counted with `strace` | 5,914 at `f456325`. The crash test starts 2,769 of them. It crashed at all twelve probe points and started 4,532 before it was limited to the seven distinct durable states. |
 | CI on `d7dc51c` | Every check passes on Linux, Windows, arm64 macOS, and Intel macOS. The user has since disabled GitHub Actions, so later heads pass only the local checks in this table. |
 
 ## Open issues
@@ -129,14 +152,14 @@ Every step journals its intent before the Git call and its observation after it,
    - The branch is rewritten to another descendant of the attempt base. Today `Publish` accepts a result without the writer's commit. After E3, `Publish` blocks as `UncertainOwnership` and records no result.
    - The branch is reset below the attempt base, and salvage runs after closure. Today salvage's lease clause adopts the rewind, a blocked sibling then publishes, and `ResetForRetry` moves the branch. After E3, salvage returns `Retained` without adopting the rewound tip. The sibling's `Publish` stays blocked as `UncertainOwnership`, and `ResetForRetry` blocks as `UncertainOwnership` and moves no ref.
 2. Live checks protect only against iDevelop's own actors. Worktree adoption, HEAD attach, `reset --hard`, path removal, and submodule update have no compare-and-swap. They run under the task lock and the repository mutation lock, right after a live check. A process outside iDevelop that writes to the repository between the check and the Git call can still change what the call acts on. E3 must keep that window under exclusive ownership through process-tree quiescence, and must not claim protection from external writers.
-3. E2b's remaining scope is the real `IJoinComposer`. It chains `merge-tree --write-tree -z --messages` over the sources ordered by full task ID, creates one join whose parents are the distinct input commits, and publishes the join branch through `RefPublisher`. A conflict records `FanInConflict` with its evidence and publishes no join. Adoption requires a tree equal to a fresh clean merge. E2b runs the design note's diamond suite, reruns the unchanged E2a suite, and changes no E2a file.
+3. A `Join` plan does not record the merge settings, because E2a's schema has no field for them. Adoption merges again under the live settings and blocks as `InputUnavailable` when the tree differs. A conflict block records the settings. Recording them in the plan needs a schema change.
 4. Production `Publish` blocks as `LiveWriter` until E3 supplies process-tree evidence through `IExecutionBoundary`.
 5. Read-only and review results forward code but not artifacts, so a writer's artifacts reach only its direct dependents. Forwarding artifacts needs a rule for name collisions across several dependencies.
-6. Windows real-machine probes of long paths with long-path support disabled, open handles, and Job Object termination did not run beyond CI. A real Git 2.39 binary did not run. No real coding-agent client ran.
+6. Windows real-machine probes of long paths with long-path support disabled, open handles, and Job Object termination did not run beyond CI. A real Git 2.39 binary did not run. No real coding-agent client ran. E2b ran only on Linux with Git 2.55, after the user disabled GitHub Actions, so its joins have no Windows or macOS run.
 7. Rebase, cleanup, resolution approval, recovered-code acceptance, and the preapproval intent file remain deferred, with their D0 requirements.
 8. Every task worktree checks out every file. In a large monorepo that people keep sparse, each task pays the disk space and checkout time of the whole tree. Support for sparse task worktrees needs its own design, with a capture that cannot skip a file the writer touched.
 9. A repository with `core.ignoreStat=true` gets the assume-unchanged flag on every file that Git checks out, so every task in it blocks as `DirtyWorktree`.
 
 ## Next action
 
-E2b builds the real join composer on E2a's boundary. E3 then wires closure, launch, and process-tree evidence, and must pass the acceptance tests in open issue 1.
+E3 calls `MergeJoins.Open`, wires closure, launch, and process-tree evidence, and must pass the acceptance tests in open issue 1.
