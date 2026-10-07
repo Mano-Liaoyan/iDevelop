@@ -61,6 +61,7 @@ internal sealed partial class Materializer
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+                VerifyPublicationParent(repository, prepared.Location.AttemptBase, plan.VerifiedTip);
                 step = "commit";
                 if (Value(Mutate("commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
                     throw Fault(MaterializationProblem.UncertainOwnership, "The persisted publication recipe produced a different commit.");
@@ -73,6 +74,7 @@ internal sealed partial class Materializer
                 if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
                 var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value;
+                VerifyPublicationParent(repository, prepared.Location.AttemptBase, tip);
                 step = "capture";
                 var capture = Value(Mutate("capture", () => repository.Capture(checkout)));
                 if (capture.IndexBefore != capture.IndexAfter)
@@ -140,6 +142,17 @@ internal sealed partial class Materializer
         { return PublicationBlock(workflow, run, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         { return PublicationBlock(workflow, run, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
+    }
+
+    private static void VerifyPublicationParent(GitRepository repository, CommitId attemptBase, CommitId tip)
+    {
+        switch (repository.IsAncestor(attemptBase, tip))
+        {
+            case GitAncestry.No:
+                throw Fault(MaterializationProblem.UncertainOwnership, $"The writer branch tip {tip.Hex} does not contain the attempt base {attemptBase.Hex}.");
+            case GitAncestry.Failed failed:
+                throw Fault(MaterializationProblem.GitFailed, failed.Detail);
+        }
     }
 
     private void VerifyQuiescence(AttemptId attempt)

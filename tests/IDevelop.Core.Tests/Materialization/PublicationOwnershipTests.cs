@@ -12,6 +12,67 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class PublicationOwnershipTests
 {
     [Fact]
+    public async Task Salvage_adopted_rewind_blocks_publication_without_losing_retained_work_and_retry_converges()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("b.txt", "B\n", writer.Checkout);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "b.txt").ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
+        Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", Head(f, writer.Checkout));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "checkout", "--detach", "-q", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67").ExitCode);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "HEAD").ExitCode);
+        f.Close(writer);
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The writer branch tip 81ddb7c330112c7f16700ed002803a04b0bce693 does not contain the attempt base adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
+        Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "--format=%(objectname)", retained.Receipt.Ref));
+        Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
+        Assert.Null(Ref(f, RunLayout.ResultRef(f.Read().RunKey!, f.Read().TaskKeys[T], writer.Execution.Launch.Attempt)));
+        Assert.Equal(blocked, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        var salvageOperation = f.Op();
+        var recovered = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(recovered, f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        var resetOperation = f.Op();
+        var confirmation = f.Op();
+        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, resetOperation, recovered.Receipt.Plan, confirmation));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", reset.Target.Hex);
+        Assert.Equal(reset, f.Materializer().ResetForRetry(W, f.RunId, resetOperation, recovered.Receipt.Plan, confirmation));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
+        Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Salvaged_descendant_publishes_with_the_literal_writer_parent_including_plan_resume(bool resume)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("b.txt", "B\n", writer.Checkout);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "b.txt").ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
+        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        f.Close(writer);
+        var operation = f.Op();
+        if (resume) Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        {
+            if (step == "journal.plan.after") throw new Crash();
+        }).Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        var code = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code;
+        Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" }, GitFixture.Read(f.Git.Open().ReadCommit(code.Commit)).Parents.Select(parent => parent.Hex));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", code.AttemptBase.Hex);
+        Assert.Equal("B\n", f.Git.Git("show", code.Commit.Hex + ":b.txt"));
+        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+    }
+
+    [Fact]
     public async Task Salvage_cannot_explain_a_published_branch_rewind_for_a_sibling_or_retry()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(C)));
