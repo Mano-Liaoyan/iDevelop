@@ -31,11 +31,11 @@ public sealed class RunStoreTests
         using var f = new RunFixtures();
         f.Approve();
         var op = f.Op();
-        Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
-        var repeat = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
+        Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
+        var repeat = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(repeat.Event).Attempt.Id);
-        Assert.Equal(RunProblem.OperationConflict, Problem(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, "changed")));
-        Assert.Equal(2, f.Read().Sequence);
+        Assert.Equal(RunProblem.OperationConflict, Problem(f.Store.Reserve(W, Run, op, U, new(V1), new AttemptCause.Initial())));
+        Assert.Equal(3, f.Read().Sequence);
     }
 
     [Fact]
@@ -45,12 +45,12 @@ public sealed class RunStoreTests
         f.Approve();
         var second = f.NewStore();
         var created = f.Reserve();
-        var existing = Assert.IsType<RunDecision.Existing>(second.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, ""));
+        var existing = Assert.IsType<RunDecision.Existing>(second.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial()));
         Assert.Equal(A1, created.Attempt.Id);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(existing.Event).Attempt.Id);
         Assert.Equal([A1], f.Read().Attempts.Keys);
-        Assert.Equal(2, f.Read().Sequence);
-        Assert.Equal(RunProblem.StartConflict, Problem(second.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, "other inputs")));
+        Assert.Equal(3, f.Read().Sequence);
+        Assert.Equal(RunProblem.StartConflict, Problem(second.Reserve(W, Run, f.Op(), T, new(V2), new AttemptCause.Initial())));
     }
 
     [Theory]
@@ -74,7 +74,7 @@ public sealed class RunStoreTests
             Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(W, Run, f.Op(), A1, outcome, f.WriteLog(reservation, outcome)));
         }
 
-        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, ""));
+        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial()));
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(repeated.Event).Attempt.Id);
         Assert.Equal([A1], f.Read().Attempts.Keys);
     }
@@ -87,13 +87,14 @@ public sealed class RunStoreTests
         var reservation = f.Reserve();
         var op = f.Op();
         var second = f.NewStore();
+        f.Prepare(reservation);
         var first = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
         var repeated = Assert.IsType<RunDecision.Existing>(second.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs, Prompt));
         var transport = Assert.IsType<RunDecision.Existing>(second.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
         Assert.Equal(new LaunchKey(A1, 1), first.Claim.Key);
         Assert.Equal(new LaunchKey(A1, 1), Assert.IsType<RunEvent.TurnClaimed>(repeated.Event).Key);
         Assert.Equal(new LaunchKey(A1, 1), Assert.IsType<RunEvent.TurnClaimed>(transport.Event).Key);
-        Assert.Equal(3, f.Read().Sequence);
+        Assert.Equal(7, f.Read().Sequence);
     }
 
     [Fact]
@@ -105,7 +106,7 @@ public sealed class RunStoreTests
         var second = f.NewStore();
         Assert.Equal([A1], Assert.IsType<RunRead.Loaded>(second.Read(W, Run)).Record.Attempts.Keys);
         Assert.Equal(new AttemptRecovery(A1, RecoveryState.RequestMissing, []), Assert.Single(Assert.IsType<RecoveryRead.Loaded>(second.InspectRecovery(W, Run)).Attempts));
-        Assert.Equal(2, f.Read().Sequence);
+        Assert.Equal(3, f.Read().Sequence);
     }
 
     [Theory]
@@ -165,7 +166,7 @@ public sealed class RunStoreTests
         Assert.Equal(new AttemptEnd.Recovered(RecoveryOutcome.Stopped, confirmation, "Owner and children stopped."), recovered.Record.Closures[A1]);
         var cause = new AttemptCause.Retry(A1, f.Op());
         var next = f.Reserve(cause: cause);
-        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), T, new(V1), cause, Base, ""));
+        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), T, new(V1), cause));
         Assert.Equal(new AttemptId(Id(104)), next.Attempt.Id);
         Assert.Equal(A1, Assert.IsType<AttemptCause.Retry>(next.Attempt.Cause).Previous);
         Assert.Equal(new AttemptId(Id(104)), Assert.IsType<RunEvent.Reserved>(repeated.Event).Attempt.Id);
@@ -182,6 +183,7 @@ public sealed class RunStoreTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Administrative closure."));
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
+        f.Prepare(next, OtherRun);
         Assert.Equal(RunPhase.Abandoned, f.Read().Phase);
         Assert.Equal(RunPhase.Approved, f.Read(OtherRun).Phase);
         Assert.Equal(RunProblem.UnresolvedOwnership, Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
@@ -200,7 +202,7 @@ public sealed class RunStoreTests
         f.Claim(reservation);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(W, Run, f.Op(), A1, TerminalAttemptOutcome.Succeeded, f.WriteLog(reservation)));
         var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Reserve(W, Run, f.Op(), U, f.Read().Revision.Id,
-            new AttemptCause.Initial(), Base, ""));
+            new AttemptCause.Initial()));
         Assert.Equal(new RunRejection(RunProblem.MissingDependencyResult, Task: T), rejected.Reason);
         Assert.Equal([A1], f.Read().Attempts.Keys);
     }
@@ -249,7 +251,7 @@ public sealed class RunStoreTests
         Assert.IsType<RunDecision.Existing>(f.Store.AcceptReport(W, Run, f.Op(), b.Attempt.Id, b.Inputs.Id, "Checked."));
         Assert.IsType<RunDecision.Existing>(f.Store.AcceptReport(W, Run, f.Op(), c.Attempt.Id, c.Inputs.Id, "Checked."));
         var d = f.Reserve(D);
-        Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), D, f.Read().Revision.Id, new AttemptCause.Initial(), Base, ""));
+        Assert.IsType<RunDecision.Existing>(f.NewStore().Reserve(W, Run, f.Op(), D, f.Read().Revision.Id, new AttemptCause.Initial()));
         Assert.Equal([new ResultId(Id(103)), new ResultId(Id(106))], f.Read().Results.Select(result => result.Id));
         Assert.Equal([new ResultId(Id(103)), new ResultId(Id(106))], d.Inputs.Bindings.OfType<InputBinding.Provided>().Select(binding =>
             binding.Result));
@@ -321,7 +323,7 @@ public sealed class RunStoreTests
             d.Attempt.Id, d.Inputs.Id, "Checked.")).Event).Result;
         Assert.Equal(new ResultId(Id(109)), result.Id);
         Assert.Contains(new ResultId(Id(109)), f.Read().StaleResults);
-        Assert.Equal(RunProblem.StaleInput, Problem(f.Store.Reserve(W, Run, f.Op(), U, f.Read().Revision.Id, new AttemptCause.Initial(), Base, "")));
+        Assert.Equal(RunProblem.StaleInput, Problem(f.Store.Reserve(W, Run, f.Op(), U, f.Read().Revision.Id, new AttemptCause.Initial())));
     }
 
     [Fact]
@@ -397,8 +399,8 @@ public sealed class RunStoreTests
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Abandon(W, Run, f.Op(), default, "Close.")));
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Retry(A1,
-            default), Base, "")));
-        Assert.Equal(4, f.Read().Sequence);
+            default))));
+        Assert.Equal(8, f.Read().Sequence);
     }
 
     [Fact]
@@ -447,11 +449,11 @@ public sealed class RunStoreTests
         f.Complete(f.Reserve(U));
         f.Complete(f.Reserve(cause: new AttemptCause.Retry(A1, f.Op())), "Updated.", r1.Id);
         var context = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, f.Op(), C, f.Read().Revision.Id,
-            new AttemptCause.Initial(), Base, ""));
+            new AttemptCause.Initial()));
         Assert.Equal<InputBinding>([new InputBinding.MissingContext(new(U, C))],
             Assert.IsType<RunEvent.Reserved>(context.Event).Inputs.Bindings);
         Assert.Equal(new RunRejection(RunProblem.StaleInput, Task: U),
             Assert.IsType<RunDecision.Rejected>(f.Store.Reserve(W, Run, f.Op(), D, f.Read().Revision.Id,
-                new AttemptCause.Initial(), Base, "")).Reason);
+                new AttemptCause.Initial())).Reason);
     }
 }

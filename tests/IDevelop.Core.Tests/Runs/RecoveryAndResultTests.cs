@@ -58,7 +58,7 @@ public sealed class RecoveryAndResultTests
         var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1));
         Assert.Equal(TerminalAttemptOutcome.Succeeded, Assert.IsType<AttemptEnd.Logged>(recovered.Record.Closures[A1]).Outcome);
         Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
-        Assert.Equal(4, f.Read().Sequence);
+        Assert.Equal(8, f.Read().Sequence);
     }
 
     [Fact]
@@ -79,6 +79,7 @@ public sealed class RecoveryAndResultTests
 
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
+        f.Prepare(next, OtherRun);
         var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
         Assert.Equal(new LaunchKey(new(Id(104)), 1), granted.Claim.Key);
         Assert.Equal(RunPhase.Approved, granted.Record.Phase);
@@ -97,10 +98,11 @@ public sealed class RecoveryAndResultTests
         var closed = Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, Run, f.Op(), new(A1, 1), evidence));
         Assert.Equal(RunPhase.Abandoned, closed.Record.Phase);
         Assert.Equal([new LaunchKey(A1, 1)], closed.Record.TurnClosures.Keys);
-        Assert.Equal(5, closed.Record.Sequence);
+        Assert.Equal(9, closed.Record.Sequence);
 
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
+        f.Prepare(next, OtherRun);
         var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
         Assert.Equal(new LaunchKey(new(Id(104)), 1), granted.Claim.Key);
         Assert.Equal(RunPhase.Approved, granted.Record.Phase);
@@ -131,7 +133,7 @@ public sealed class RecoveryAndResultTests
         var evidence = f.WriteLog(reservation);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(W, Run, f.Op(), A1, TerminalAttemptOutcome.Succeeded, evidence));
         Assert.Equal(RunProblem.UnsupportedResult, Problem(f.Store.AcceptReport(W, Run, f.Op(), A1, reservation.Inputs.Id, "Checked.")));
-        Assert.Equal(4, f.Read().Sequence);
+        Assert.Equal(8, f.Read().Sequence);
     }
 
     [Fact]
@@ -144,7 +146,7 @@ public sealed class RecoveryAndResultTests
         Assert.Equal(new ResultId(Id(103)), result.Id);
         Assert.Equal("Checked.", result.Report);
         Assert.Equal(new ResultOrigin.Executed(A1), result.Origin);
-        Assert.Equal(5, f.Read().Sequence);
+        Assert.Equal(9, f.Read().Sequence);
     }
 
     [Fact]
@@ -179,7 +181,7 @@ public sealed class RecoveryAndResultTests
         Assert.Equal("Inspect", f.Read().Revision.Snapshot.Tasks[T].Field("brief"));
         var amended = Assert.Single(f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>());
         Assert.Equal(new AmendmentOrigin.Planner(A1, 1), amended.Origin);
-        Assert.Equal(5, f.Read().Sequence);
+        Assert.Equal(9, f.Read().Sequence);
     }
 
     [Fact]
@@ -197,7 +199,7 @@ public sealed class RecoveryAndResultTests
         f.Claim(continuation);
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), continuation.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1),
-            new AttemptCause.Continue(continuation.Attempt.Id, f.Op()), Base, "")));
+            new AttemptCause.Continue(continuation.Attempt.Id, f.Op()))));
     }
 
     [Fact]
@@ -206,7 +208,7 @@ public sealed class RecoveryAndResultTests
         using var f = new RunFixtures(FixtureWorkflow(Task(work: new WorkSpec.Person())));
         f.Approve();
         Assert.Equal(RunProblem.UnsupportedWork, Problem(f.Store.Reserve(W, Run, f.Op(), T, f.Read().Revision.Id,
-            new AttemptCause.Initial(), Base, "")));
+            new AttemptCause.Initial())));
         Assert.Equal(1, f.Read().Sequence);
     }
 
@@ -219,7 +221,7 @@ public sealed class RecoveryAndResultTests
         }));
         f.Approve();
         var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Reserve(W, Run, f.Op(), T, f.Read().Revision.Id,
-            new AttemptCause.Initial(), Base, ""));
+            new AttemptCause.Initial()));
         Assert.Equal(new RunRejection(RunProblem.TaskUnconfigured, Task: T), rejected.Reason);
         var candidate = Revision.Capture(FixtureWorkflow());
         Assert.IsType<RunDecision.Recorded>(f.Store.Amend(W, Run, f.Op(), f.Read().Revision.Id, candidate, new AmendmentOrigin.Person(), f.Op()));
@@ -250,6 +252,7 @@ public sealed class RecoveryAndResultTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Administrative closure."));
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
+        f.Prepare(next, OtherRun);
         Assert.Equal(RunProblem.UnresolvedOwnership,
             Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
     }

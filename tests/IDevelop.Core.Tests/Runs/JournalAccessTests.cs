@@ -31,7 +31,7 @@ public sealed class JournalAccessTests
         Assert.Equal(RunPhase.Approved, f.Read().Phase);
         File.WriteAllBytes(f.Journal(W, OtherRun), []);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(
-            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, "")).Event).Attempt.Id);
+            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
     }
 
     [Fact]
@@ -90,11 +90,11 @@ public sealed class JournalAccessTests
     {
         using var f = new RunFixtures();
         f.Approve();
-        var decisions = Race(f, (store, op) => store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
+        var decisions = Race(f, (store, op) => store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
         Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Created), decisions.Count(d => d is RunDecision.Existing),
             decisions.Count(d => d is not (RunDecision.Created or RunDecision.Existing))));
         Assert.Equal([A1], f.Read().Attempts.Keys);
-        Assert.Equal(2, f.Read().Sequence);
+        Assert.Equal(3, f.Read().Sequence);
     }
 
     [Fact]
@@ -103,11 +103,12 @@ public sealed class JournalAccessTests
         using var f = new RunFixtures();
         f.Approve();
         var reservation = f.Reserve();
+        f.Prepare(reservation);
         var decisions = Race(f, (store, op) => store.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
         Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Granted), decisions.Count(d => d is RunDecision.Existing),
             decisions.Count(d => d is not (RunDecision.Granted or RunDecision.Existing))));
         Assert.Equal([new LaunchKey(A1, 1)], f.Read().Claims.Keys);
-        Assert.Equal(3, f.Read().Sequence);
+        Assert.Equal(7, f.Read().Sequence);
     }
 
     [Fact]
@@ -120,9 +121,9 @@ public sealed class JournalAccessTests
             FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             Assert.Equal(RunProblem.JournalBusy,
-                Problem(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, "")));
+                Problem(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial())));
         }
-        var created = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial(), Base, ""));
+        var created = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(created.Event).Attempt.Id);
     }
 
@@ -133,7 +134,7 @@ public sealed class JournalAccessTests
         f.Approve();
         File.WriteAllBytes(f.Journal(W, OtherRun), [0xe2, 0x82]);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(
-            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, "")).Event).Attempt.Id);
+            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
     }
 
     [Fact]
@@ -143,7 +144,7 @@ public sealed class JournalAccessTests
         f.Approve();
         File.WriteAllText(f.Journal(W, OtherRun), File.ReadAllText(f.Journal(W, Run)) + "{\"schema\":1");
         Assert.Equal(RunProblem.IdentityMismatch,
-            Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial(), Base, "")));
+            Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())));
     }
 
     private static RunDecision[] Race(RunFixtures f, Func<RunStore, OperationId, RunDecision> command)
@@ -153,7 +154,10 @@ public sealed class JournalAccessTests
         var tasks = workers.Select(worker => System.Threading.Tasks.Task.Factory.StartNew(() =>
         {
             barrier.SignalAndWait();
-            return command(worker.Store, worker.Operation);
+            var decision = command(worker.Store, worker.Operation);
+            while (decision is RunDecision.Rejected { Reason.Problem: RunProblem.JournalBusy })
+                decision = command(worker.Store, worker.Operation);
+            return decision;
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
         return System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();
     }

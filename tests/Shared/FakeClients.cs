@@ -126,8 +126,8 @@ internal sealed class FakeClients : IDisposable
 }
 
 /// <summary>
-/// One rule of the fake agent: the steps it runs for client arguments that start with <see cref="When"/> and contain
-/// <see cref="Has"/> without gaps.
+/// One rule of the fake agent: the steps it runs for client arguments that start with <see cref="When"/>, after any
+/// leading "-c key=value" pairs, and contain <see cref="Has"/> without gaps.
 /// </summary>
 internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<JsonNode> Steps)
 {

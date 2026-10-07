@@ -73,6 +73,8 @@ internal sealed class RunFixtures : IDisposable
 
     public string AnotherProject() => _temp.Create("other");
 
+    public ResultId NextResultId() => new(Id(Interlocked.Increment(ref _id)));
+
     public OperationId Op() => new(Id(Interlocked.Increment(ref _operation)));
 
     public static Guid Id(int number) => Guid.Parse($"00000000-0000-0000-0000-{number:000000000000}");
@@ -91,12 +93,47 @@ internal sealed class RunFixtures : IDisposable
     public void Approve(CommitId? codeBase = null, RunId? run = null) => Assert.IsType<RunDecision.Created>(
         Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head)));
 
-    public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null, CommitId? codeBase = null) =>
+    public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null) =>
         Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(W, run ?? Run, Op(), task ?? T,
-            Read(run).Revision.Id, cause ?? new AttemptCause.Initial(), codeBase ?? Base, "")).Event);
+            Read(run).Revision.Id, cause ?? new AttemptCause.Initial())).Event);
 
-    public void Claim(RunEvent.Reserved reservation, RunId? run = null) => Assert.IsType<RunDecision.Granted>(
-        Store.Claim(W, run ?? Run, Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
+    public void Prepare(RunEvent.Reserved reservation, RunId? run = null, int turn = 1, string prompt = "Inspect")
+    {
+        var id = run ?? Run;
+        var record = Read(id);
+        if (record.RunKey is null)
+        {
+            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.LayoutAllocated(
+                new LayoutKey.Run(Revision.Hash(id.Value.ToString("D")).Sha256[..8], Path.GetFullPath(Path.Combine(Project, ".git"))))));
+        }
+        record = Read(id);
+        var task = reservation.Attempt.Task;
+        if (!record.TaskKeys.ContainsKey(task))
+        {
+            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.LayoutAllocated(
+                new LayoutKey.Task(task, Revision.Hash(task.ToString()).Sha256[..8]))));
+        }
+        record = Read(id);
+        var launch = new LaunchKey(reservation.Attempt.Id, turn);
+        if (!record.Preparations.ContainsKey(launch))
+        {
+            var key = record.TaskKeys[task];
+            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.Prepared(new(launch, reservation.Inputs.Id,
+                new(new(task, $".worktrees/{record.RunKey}/{key}", $"refs/heads/idp/{record.RunKey}/task/{key}"),
+                    RunReducer.AttemptBase(record, reservation.Attempt, reservation.Inputs)!.Value), prompt, Revision.Hash(prompt),
+                record.Revisions[reservation.Attempt.Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit }
+                    ? $".idp/outbox/{reservation.Attempt.Id.Value:D}" : ""), SharedRefs)));
+        }
+    }
+
+    public static EvidenceFile SharedRefs => new("evidence/00000000-0000-0000-0000-000000000001/refs.json",
+        Revision.Hash("{}"), 2);
+
+    public void Claim(RunEvent.Reserved reservation, RunId? run = null)
+    {
+        Prepare(reservation, run);
+        Assert.IsType<RunDecision.Granted>(Store.Claim(W, run ?? Run, Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
+    }
 
     public LogCheckpoint WriteLog(RunEvent.Reserved reservation, TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded,
         string report = "Checked.", ConversationMode? conversation = null, TaskId? subject = null, bool terminalHandoff = false, RunId? run = null)
