@@ -62,7 +62,10 @@ internal static partial class RunReducer
                 }
                 return (record with { Plans = record.Plans.Add(entry.Operation, planned.Plan) }, null);
             case RunEvent.GitIntended intended:
-                if (!record.Plans.ContainsKey(intended.Plan) || intended.Plan == entry.Operation)
+                if (intended.Plan == entry.Operation ||
+                    !record.Plans.ContainsKey(intended.Plan) && !(record.Receipts.GetValueOrDefault(intended.Plan)?.Event is
+                        RunEvent.LayoutAllocated { Key: LayoutKey.Run layout } && intended.Mutation is GitMutation.MoveRef baseMove &&
+                        baseMove.Change == new RefChange(RunLayout.ApprovedBase(layout.Key), null, record.Base.Commit)))
                 {
                     return Reject(RunProblem.InvalidData);
                 }
@@ -89,9 +92,13 @@ internal static partial class RunReducer
                 {
                     return Reject(RunProblem.InputConflict);
                 }
+                if (prepared.Launch.Turn == 1 && InputProblem(record, inputs, true) is { } stale)
+                {
+                    return Reject(stale.Problem);
+                }
                 if (!MatchesOwner(record, attempt.Task, prepared.Location.Owner) ||
                     prepared.Location.AttemptBase != AttemptBase(record, attempt, inputs) || prepared.PromptHash != Revision.Hash(prepared.Prompt) ||
-                    prepared.OutboxPath != (Editable(record, attempt) ? $".idp/outbox/{attempt.Id.Value:D}" : ""))
+                    prepared.OutboxPath != (Editable(record, attempt) ? RunLayout.Outbox(attempt.Id) : ""))
                 {
                     return Reject(RunProblem.InputConflict);
                 }
@@ -131,7 +138,7 @@ internal static partial class RunReducer
 
     private static bool MatchesOwner(RunRecord record, TaskId task, WorktreeOwner owner) =>
         record.RunKey is { } run && record.TaskKeys.TryGetValue(task, out var key) && owner.Task == task &&
-        owner.RelativePath == $".worktrees/{run}/{key}" && owner.Branch == $"refs/heads/idp/{run}/task/{key}";
+        owner.RelativePath == RunLayout.TaskCheckout(run, key) && owner.Branch == RunLayout.TaskBranch(run, key);
 
     internal static CommitId? AttemptBase(RunRecord record, RunAttempt attempt, InputRecord inputs)
     {
@@ -182,6 +189,14 @@ internal static partial class RunReducer
                     return RunProblem.StaleInput;
                 }
                 return null;
+            case MaterializationPlan.Join join:
+                return record.RunKey is { } run && record.TaskKeys.TryGetValue(join.Task, out var key) &&
+                    join.Ref == RunLayout.JoinBranch(run, key) &&
+                    record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(preparation =>
+                        preparation.Task == join.Task && preparation.Inputs == join.Inputs && Same(preparation.Sources, join.Sources)) &&
+                    join.Sources.Select(source => source.Commit).Distinct().Count() >= 2 &&
+                    join.Recipe.Parents.SequenceEqual(join.Sources.Select(source => source.Commit).Distinct())
+                    ? null : RunProblem.InputConflict;
             case MaterializationPlan.Publication publication:
                 if (!record.Attempts.TryGetValue(publication.Attempt, out var publisher))
                 {
@@ -243,13 +258,10 @@ internal static partial class RunReducer
         return new(plan.Result, attempt.Task, attempt.Revision, inputs.Id, new ResultOrigin.Executed(attempt.Id), plan.Report, plan.Supersedes)
         {
             Code = new CodeOutput.Produced(new(attempt.Task, attempt.Id, record.Preparations[new(attempt.Id, 1)].Location.AttemptBase,
-                plan.Commit, plan.Recipe.Tree, ResultRef(record, attempt))),
+                plan.Commit, plan.Recipe.Tree, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id))),
             Artifacts = plan.Artifacts,
         };
     }
-
-    private static string ResultRef(RunRecord record, RunAttempt attempt) =>
-        $"refs/idp/{record.RunKey}/result/{record.TaskKeys[attempt.Task]}/{attempt.Id.Value:D}";
 
     private static bool ObservedMove(RunRecord record, OperationId plan, string reference, CommitId? expected, CommitId target) =>
         record.GitIntents.Any(pair => pair.Value.Plan == plan && pair.Value.Mutation is GitMutation.MoveRef move &&
@@ -269,8 +281,8 @@ internal static partial class RunReducer
             }
             var attempt = record.Attempts[executed.Attempt];
             if (!Same(result, PublicationResult(record, publication)) ||
-                !ObservedMove(record, pair.Key, $"refs/heads/idp/{record.RunKey}/task/{record.TaskKeys[attempt.Task]}", publication.VerifiedTip, publication.Commit) ||
-                !ObservedMove(record, pair.Key, ResultRef(record, attempt), null, publication.Commit))
+                !ObservedMove(record, pair.Key, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[attempt.Task]), publication.VerifiedTip, publication.Commit) ||
+                !ObservedMove(record, pair.Key, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id), null, publication.Commit))
             {
                 return RunProblem.InputConflict;
             }

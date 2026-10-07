@@ -340,13 +340,13 @@ public sealed class MaterializationTests
         f.Claim(reservation);
         var first = f.Read().Preparations[new(A1, 1)];
         var second = first with { Launch = new(A1, 2), Prompt = "Follow up", PromptHash = Revision.Hash("Follow up") };
-        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second))));
+        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second, SharedRefs))));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, Run, f.Op(), new(A1, 1), f.WriteLog(reservation)));
         Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second with
         {
             Location = second.Location with { Owner = second.Location.Owner with { Branch = "refs/heads/foreign" } },
-        }))));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second)));
+        }, SharedRefs))));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second, SharedRefs)));
         Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, f.Op(), new(A1, 2), reservation.Inputs, second.PromptHash));
         Assert.Equal("Follow up", f.Read().Preparations[new(A1, 2)].Prompt);
     }

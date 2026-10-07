@@ -42,7 +42,8 @@ internal static partial class RunValidation
         RunEvent.Planned { Plan: var plan } => Plan(plan),
         RunEvent.GitIntended intent => intent.Plan.Value != Guid.Empty && Mutation(intent.Mutation),
         RunEvent.GitObserved observed => observed.Mutation.Value != Guid.Empty,
-        RunEvent.Prepared { Execution: var execution } => Key(execution.Launch) && execution.Inputs.Value != Guid.Empty &&
+        RunEvent.Prepared { Execution: var execution, SharedRefs: var refs } => Evidence(refs) &&
+            StoredEvidence(refs.RelativePath) && Key(execution.Launch) && execution.Inputs.Value != Guid.Empty &&
             Owner(execution.Location.Owner) && Revision.IsCommit(execution.Location.AttemptBase.Hex) &&
             execution.Prompt is not null && Revision.IsHash(execution.PromptHash.Sha256) && execution.OutboxPath is not null,
         RunEvent.Blocked { Block: var block } => block.Operation.Value != Guid.Empty && block.Task.Value != Guid.Empty &&
@@ -59,6 +60,9 @@ internal static partial class RunValidation
         MaterializationPlan.Preparation p => Attempt(new(p.Attempt, p.Task, p.Revision, p.Inputs, p.Cause)) &&
             Bindings(p.Bindings) &&
             !p.Sources.IsDefault && p.Sources.All(Source) && Review(p.Review),
+        MaterializationPlan.Join p => p.Task.Value != Guid.Empty && p.Inputs.Value != Guid.Empty &&
+            !p.Sources.IsDefault && p.Sources.All(Source) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) &&
+            (p.Previous is null || Revision.IsCommit(p.Previous.Value.Hex)) && Reference(p.Ref),
         MaterializationPlan.Publication p => p.Attempt.Value != Guid.Empty && p.Result.Value != Guid.Empty && p.Supersedes?.Value != Guid.Empty &&
             Revision.IsCommit(p.VerifiedTip.Hex) && Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) &&
             p.Report is not null && !p.Artifacts.IsDefault && p.Artifacts.All(Artifact),
@@ -101,6 +105,9 @@ internal static partial class RunValidation
 
     private static bool Artifact(ArtifactRecord file) => Path(file.Name) && !file.Name.Contains('/') && Path(file.StoredPath) &&
         Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0;
+
+    private static bool StoredEvidence(string path) => path.Split('/') is ["evidence", var operation, var name] &&
+        Guid.TryParseExact(operation, "D", out var id) && id != Guid.Empty && Path(name);
 
     private static bool Evidence(EvidenceFile file) => Path(file.RelativePath) && Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0;
 
