@@ -27,6 +27,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         var golden = File.ReadAllBytes(SampleFile);
 
         var document = WorkflowDocument.OpenProject(_temp.CopyOf(Sample)).Single();
+        File.Delete(document.FilePath);
         document.Save();
 
         Assert.Null(document.Converted);
