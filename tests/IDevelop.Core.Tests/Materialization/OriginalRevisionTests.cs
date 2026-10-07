@@ -25,7 +25,7 @@ public sealed class OriginalRevisionTests
         Assert.Equal(A1, reserved.Id);
         Assert.Empty(f.Read().Preparations);
         var amended = Revision.Capture(Edit(workflow, new WorkflowEdit.SetField(U, "goal", "Build X again")));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Amend(W, f.RunId, f.Op(), original, amended,
+        Assert.IsType<RunDecision.Recorded>(f.Store.Amend(f.Permit, f.Op(), original, amended,
             new AmendmentOrigin.Person(), f.Op()));
 
         var resume = newOperation ? f.Op() : operation;
@@ -63,7 +63,7 @@ public sealed class OriginalRevisionTests
         }).Prepare(f.Lease(T), operation, new AttemptCause.Initial()));
         Assert.Empty(f.Read().Attempts);
         var amended = Revision.Capture(Edit(workflow, new WorkflowEdit.SetField(U, "goal", "Build X again")));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Amend(W, f.RunId, f.Op(), original, amended,
+        Assert.IsType<RunDecision.Recorded>(f.Store.Amend(f.Permit, f.Op(), original, amended,
             new AmendmentOrigin.Person(), f.Op()));
 
         var resumed = Assert.IsType<Preparation.Ready>(await f.Prepare(T));

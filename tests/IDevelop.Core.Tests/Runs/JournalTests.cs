@@ -68,7 +68,7 @@ public sealed class JournalTests
         var read = Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run));
         Assert.Equal(new RunRejection((RunProblem)expected, 2), read.Reason);
         Assert.Equal(RunPhase.Approved, read.Prefix!.Phase);
-        Assert.Equal((RunProblem)expected, Problem(f.Store.Stop(W, Run, f.Op())));
+        Assert.Equal((RunProblem)expected, Problem(f.Store.Stop(new LegacyRun(W, Run), f.Op())));
         Assert.Equal(original, File.ReadAllText(path));
     }
 

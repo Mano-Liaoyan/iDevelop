@@ -4,12 +4,15 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public async ValueTask<Preparation> PrepareTurn(TaskLease lease, OperationId operation, LaunchKey key, string prompt,
+    public async ValueTask<Preparation> PrepareTurn(RunLease lease, OperationId operation, LaunchKey key, string prompt,
         CancellationToken cancellation = default)
     {
+        using var authority = lease.Use();
+        if (authority is null) return new Preparation.Rejected(new(RunProblem.TaskBusy));
         if (LeaseProblem(lease) is { } problem) return new Preparation.Rejected(new(problem));
-        var workflow = lease.Permit!.Workflow;
-        var run = lease.Permit.Run;
+        var permit = lease.Permit;
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var task = lease.Task;
         InputId? inputs = null;
         try
@@ -69,10 +72,10 @@ internal sealed partial class Materializer
                     {
                         inputs = capture.Inputs.Id;
                         var reference = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[task]);
-                        var outcome = await _joins.Compose(new(workflow, OperationIds.Derive(operation, "join"), run, task,
+                        var outcome = await _joins.Compose(new(permit, OperationIds.Derive(operation, "join"), task,
                             inputs.Value, sources, Value(repository.ReadRef(reference))), cancellation);
                         if (outcome is JoinOutcome.Blocked blocked)
-                            return Block(workflow, run, operation, "join", blocked.Block with { Operation = operation, Attempt = key.Attempt });
+                            return Block(permit, operation, "join", blocked.Block with { Operation = operation, Attempt = key.Attempt });
                         join = ((JoinOutcome.Ready)outcome).Join;
                         VerifyJoin(Read(workflow, run), repository, task, inputs.Value, sources, join);
                     }
@@ -83,22 +86,22 @@ internal sealed partial class Materializer
                     VerifyJoin(record, repository, task, persisted.Inputs, persisted.Sources, join);
                 }
                 cancellation.ThrowIfCancellationRequested();
-                var refreshed = Journal("refresh-plan", () => _store.Refresh(workflow, run, OperationIds.Derive(operation, "refresh-plan"), key, join));
+                var refreshed = Journal("refresh-plan", () => _store.Refresh(lease, OperationIds.Derive(operation, "refresh-plan"), key, join));
                 record = DecisionRecord(refreshed);
                 var plan = (MaterializationPlan.Refresh)((RunEvent.Planned)DecisionEvent(refreshed)).Plan;
                 var planId = record.Plans.Single(pair => RunReducer.Same(pair.Value, plan)).Key;
                 var input = record.Inputs[plan.Inputs];
                 inputs = input.Id;
                 if (RunReducer.InputProblem(record, input, true) is { } stale) throw new Refusal(stale);
-                RequirePublication(_refs.Publish(workflow, run, operation, planId, "refresh-retain", repository,
+                RequirePublication(_refs.Publish(permit, operation, planId, "refresh-retain", repository,
                     new(RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId), null, old.Location.AttemptBase)));
-                RequirePublication(_refs.Publish(workflow, run, operation, planId, "refresh-branch", repository,
+                RequirePublication(_refs.Publish(permit, operation, planId, "refresh-branch", repository,
                     new(old.Location.Owner.Branch, old.Location.AttemptBase, input.CodeBase)));
                 var reset = new GitMutation.ResetCheckout(task, input.CodeBase);
                 if (!PublicationObserved(record, planId, reset))
                 {
                     var intended = OperationIds.Derive(operation, "refresh-reset-intent");
-                    Journal("refresh-reset-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, reset)));
+                    Journal("refresh-reset-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(planId, reset)));
                     VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(input.CodeBase)));
                     var result = Mutate("refresh-reset", () =>
                     {
@@ -106,7 +109,7 @@ internal sealed partial class Materializer
                         return repository.ResetCheckout(checkout, input.CodeBase);
                     });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
-                    Journal("refresh-reset-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "refresh-reset-observed"),
+                    Journal("refresh-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "refresh-reset-observed"),
                         new RunEvent.GitObserved(intended, new(false, input.CodeBase.Hex))));
                 }
                 var location = old.Location with { AttemptBase = input.CodeBase };
@@ -116,13 +119,13 @@ internal sealed partial class Materializer
                 execution = execution with { Inputs = input.Id, Location = location, Prompt = refreshedPrompt, PromptHash = Revision.Hash(refreshedPrompt) };
             }
             var refs = Snapshot(storage, operation, repository, record);
-            Journal("prepared", () => _store.Record(workflow, run, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
             return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message)); }
+        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
 }

@@ -104,7 +104,7 @@ public sealed class PublicationOwnershipTests
         var commit = GitFixture.Read(repository.CreateCommit(recipe));
         var plan = new MaterializationPlan.Publication(writer.Execution.Launch.Attempt, new ResultId(Guid.Parse("00000000-0000-0000-0000-00000000abcd")),
             null, new CommitId(below), capture.IndexBefore, recipe, commit, "B ready.\n", []);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(plan)));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(plan)));
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());

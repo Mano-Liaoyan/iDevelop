@@ -17,7 +17,7 @@ public sealed class LeaseTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var permit = f.Permit;
         var operation = f.Op();
-        using (var competing = TaskLease.TryTake(f.Git.Folder, T))
+        using (var competing = StandaloneLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(competing);
             Assert.IsType<LeaseTake.Busy>(permit.TakeTask(T));
@@ -115,15 +115,14 @@ public sealed class LeaseTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_standalone_lease_has_no_preparation_authority()
+    public async System.Threading.Tasks.Task A_standalone_lease_blocks_run_owned_preparation_authority()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var operation = f.Op();
-        using (var standalone = TaskLease.TryTake(f.Git.Folder, T))
+        using (var standalone = StandaloneLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(standalone);
-            Assert.Equal(RunProblem.TaskBusy, Assert.IsType<Preparation.Rejected>(
-                await f.Materializer().Prepare(standalone, operation, new AttemptCause.Initial())).Reason.Problem);
+            Assert.IsType<LeaseTake.Busy>(f.Permit.TakeTask(T));
             Assert.Equal(1, f.Read().Sequence);
             Assert.Empty(f.Read().Blocks);
         }
@@ -182,19 +181,19 @@ public sealed class LeaseTests
         var lease = f.Lease(T);
         var operation = f.Op();
         var confirmation = f.Op();
-        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(W, Run, f.Lease(U), operation, A1,
+        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(f.Lease(U), operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         Assert.Equal(7, f.Read().Sequence);
         Assert.Empty(f.Read().Closures);
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, operation, A1,
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(lease, operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped."));
         Assert.Equal(8, recovered.Record.Sequence);
         Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[A1]).Outcome);
         Assert.True(lease.Held);
-        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(W, Run, f.Lease(U), operation, A1,
+        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(f.Lease(U), operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         Assert.Equal(8, f.Read().Sequence);
-        Assert.IsType<RunDecision.Existing>(f.Store.Recover(W, Run, lease, operation, A1,
+        Assert.IsType<RunDecision.Existing>(f.Store.Recover(lease, operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped."));
         Assert.Equal(8, f.Read().Sequence);
     }
@@ -238,20 +237,18 @@ public sealed class LeaseTests
         var attempt = new AttemptId(Id(schema == 1 ? 105 : 104));
         var operation = new OperationId(Id(2003));
         var confirmation = new OperationId(Id(2004));
-        using var wrong = TaskLease.TryTake(f.Project, T)!;
-        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(W, Run, wrong, operation, attempt,
-            RecoveryOutcome.Stopped, confirmation, "Stopped.")));
+        using var wrong = StandaloneLease.TryTake(f.Project, T)!;
+        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(new LegacyRun(W, Run), wrong, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         Assert.Equal(schema == 1 ? 7 : 27, f.Read().Sequence);
-        using var lease = TaskLease.TryTake(f.Project, U)!;
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, operation, attempt,
-            RecoveryOutcome.Stopped, confirmation, "Stopped."));
+        using var lease = StandaloneLease.TryTake(f.Project, U)!;
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(new LegacyRun(W, Run), lease, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
         Assert.Equal(schema, recovered.Record.Schema);
         Assert.Equal(schema == 1 ? 8 : 28, recovered.Record.Sequence);
         Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[attempt]).Outcome);
     }
 
     [Fact]
-    public void A_new_legacy_claim_is_unsupported_but_an_identical_claim_keeps_its_receipt()
+    public void A_legacy_claim_refuses_both_new_commands_and_identical_receipts()
     {
         using var f = new RunFixtures();
         f.Approve();
@@ -269,20 +266,20 @@ public sealed class LeaseTests
         Assert.IsType<RunDecision.Granted>(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt));
         var claimed = File.ReadAllText(f.Journal(W, Run));
         File.WriteAllText(f.Journal(W, Run), claimed.Replace("\"schema\":3", "\"schema\":2", StringComparison.Ordinal));
-        Assert.IsType<RunDecision.Existing>(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt));
-        Assert.IsType<RunDecision.Existing>(f.Store.Claim(lease, f.Op(), key, reserved.Inputs, Prompt));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt)));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Claim(lease, f.Op(), key, reserved.Inputs, Prompt)));
         Assert.Equal((2, 7L), (f.Read().Schema, f.Read().Sequence));
         Assert.Equal(new LaunchKey(A1, 1), Assert.Single(f.Read().Claims).Key);
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_released_permit_rejects_a_still_held_task_lease()
+    public async System.Threading.Tasks.Task A_released_permit_revokes_the_task_leases_authority()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var lease = f.Lease(T);
         var operation = f.Op();
         f.Permit.Dispose();
-        Assert.True(lease.Held);
+        Assert.False(lease.Held);
         Assert.Equal(RunProblem.TaskBusy, Assert.IsType<Preparation.Rejected>(await f.Materializer()
             .Prepare(lease, operation, new AttemptCause.Initial())).Reason.Problem);
         Assert.Equal(1, f.Read().Sequence);
@@ -294,7 +291,7 @@ public sealed class LeaseTests
     }
 
     [Fact]
-    public void Claim_keeps_unknown_attempts_distinct_and_refuses_foreign_or_standalone_authority()
+    public void Claim_keeps_unknown_attempts_distinct_and_refuses_foreign_authority()
     {
         using var f = new RunFixtures();
         using var other = new RunFixtures();
@@ -305,11 +302,6 @@ public sealed class LeaseTests
         var operation = f.Op();
         var key = new LaunchKey(A1, 1);
         Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Claim(other.Lease(T), operation, key, reserved.Inputs, Prompt)));
-        using (var standalone = TaskLease.TryTake(f.Project, T))
-        {
-            Assert.NotNull(standalone);
-            Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Claim(standalone, operation, key, reserved.Inputs, Prompt)));
-        }
         var lease = f.Lease(T);
         Assert.Equal(RunProblem.UnknownAttempt, Problem(f.Store.Claim(lease, operation, new(new(Id(999)), 1), reserved.Inputs, Prompt)));
         Assert.Equal(6, f.Read().Sequence);
@@ -330,26 +322,23 @@ public sealed class LeaseTests
         f.Release(T);
         var operation = f.Op();
         var confirmation = f.Op();
-        using (var standalone = TaskLease.TryTake(f.Project, T))
+        using (var standalone = StandaloneLease.TryTake(f.Project, T))
         {
             Assert.NotNull(standalone);
-            Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(W, Run, standalone, operation, A1,
-                RecoveryOutcome.Stopped, confirmation, "Stopped.")));
+            Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Recover(new LegacyRun(W, Run), standalone,
+                operation, A1, RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         }
-        var folder = Path.GetDirectoryName(f.Journal(W, OtherRun))!;
-        using (var permit = CoordinatorPermit.Open(f.Project, W, OtherRun, folder))
-        using (var wrongRun = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease)
-        {
-            Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(W, Run, wrongRun, operation, A1,
-                RecoveryOutcome.Stopped, confirmation, "Stopped.")));
-        }
+        using var other = new RunFixtures();
+        other.Approve();
+        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(other.Lease(T), operation, A1,
+            RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         var lease = f.Lease(T);
         f.Release(T);
-        Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Recover(W, Run, lease, operation, A1,
+        Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Recover(lease, operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped.")));
         Assert.Equal(7, f.Read().Sequence);
         Assert.Empty(f.Read().Closures);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), operation, A1,
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), operation, A1,
             RecoveryOutcome.Stopped, confirmation, "Stopped."));
         Assert.Equal(8, f.Read().Sequence);
         Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[A1]).Outcome);

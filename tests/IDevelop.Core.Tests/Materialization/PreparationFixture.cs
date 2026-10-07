@@ -14,7 +14,7 @@ internal sealed class PreparationFixture : IDisposable
     private int _id = 100;
     private int _op = 1000;
     private CoordinatorPermit? _permit;
-    private readonly Dictionary<TaskId, TaskLease> _leases = [];
+    private readonly Dictionary<TaskId, RunLease> _leases = [];
     public readonly CommitId A;
     public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null, Func<GitFixture, CommitId>? configureBase = null)
     {
@@ -28,7 +28,7 @@ internal sealed class PreparationFixture : IDisposable
         Execution.Materializer.Open(project ?? Git.Folder, Store, joins, boundary ?? new QuiescentBoundary(), new Clock(), Git.Environment, probe);
     public CoordinatorPermit Permit => _permit ??= Assert.IsType<ControlTake.Owned>(RunStore.Open(Git.Folder).TakeControl(W, RunId)).Permit;
 
-    public TaskLease Lease(TaskId task)
+    public RunLease Lease(TaskId task)
     {
         if (_leases.TryGetValue(task, out var lease)) return lease;
         lease = Assert.IsType<LeaseTake.Taken>(Permit.TakeTask(task)).Lease;
@@ -97,7 +97,7 @@ internal sealed class PreparationFixture : IDisposable
             log.Append(new AttemptEvent.Agent(At, outcome == TerminalAttemptOutcome.Failed ? new AgentEvent.Failed("Failed.") : new AgentEvent.Succeeded(report)));
             log.Append(new AttemptEvent.Exited(At, outcome == TerminalAttemptOutcome.Failed ? 1 : 0, ""));
         }
-        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(W, RunId, Op(), attempt.Id, outcome, Checkpoint(folder)));
+        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(Permit, Op(), attempt.Id, outcome, Checkpoint(folder)));
     }
 
     public void Dispose()

@@ -63,7 +63,7 @@ public sealed class InspectionTests
             Assert.Equal("LiveWriter", Assert.IsType<Salvage.Blocked>(f.Materializer(boundary: new UnprovenBoundary())
                 .Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(id)), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         var resolved = f.Read().Blocks.Single(pair => pair.Value.Block.Operation == new OperationId(Id(3001))).Key;
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.BlockResolved(resolved, "Inspected.")));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(resolved, "Inspected.")));
         Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(2000)), ready.Execution.Launch.Attempt));
         var workspace = Assert.IsType<TaskWorkspace>(f.Materializer().Inspect(W, f.RunId, T));
         Assert.Equal(new[] { "00000000-0000-0000-0000-000000003002", "00000000-0000-0000-0000-000000003000" },

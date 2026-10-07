@@ -5,26 +5,28 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    private RunRecord AllocateLayout(WorkflowId workflow, RunId run, OperationId operation, TaskId task, GitRepository repository, RunRecord record)
+    private RunRecord AllocateLayout(CoordinatorPermit permit, OperationId operation, TaskId task, GitRepository repository, RunRecord record)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var layoutId = OperationIds.Derive(new OperationId(run.Value), "layout");
         if (record.RunKey is null)
         {
             var taken = RunLayout.UsedRunKeys(Value(repository.RefSnapshot("refs/heads/idp/", "refs/idp/")));
-            record = DecisionRecord(Journal("run-layout", () => _store.Record(workflow, run, layoutId,
+            record = DecisionRecord(Journal("run-layout", () => _store.Record(permit, layoutId,
                 new RunEvent.LayoutAllocated(new LayoutKey.Run(RunLayout.Key(run.Value, taken), repository.CommonDirectory)))));
         }
         VerifyRepository(record, repository);
         var actualLayout = record.Receipts.Single(pair => pair.Value.Event is RunEvent.LayoutAllocated { Key: LayoutKey.Run }).Key;
         var change = new RefChange(RunLayout.ApprovedBase(record.RunKey!), null, record.Base.Commit);
-        RequirePublication(_refs.Publish(workflow, run, actualLayout, actualLayout, "base", repository, change));
+        RequirePublication(_refs.Publish(permit, actualLayout, actualLayout, "base", repository, change));
         if (Value(repository.ReadRef(change.Ref)) != change.Target)
             throw Fault(MaterializationProblem.UncertainOwnership, "Approved base ref has an unexpected value.");
         record = Read(workflow, run);
         if (!record.TaskKeys.ContainsKey(task))
         {
             var taken = record.TaskKeys.Values.ToHashSet(StringComparer.Ordinal);
-            record = DecisionRecord(Journal("task-layout", () => _store.Record(workflow, run, OperationIds.Derive(operation, "task-layout"),
+            record = DecisionRecord(Journal("task-layout", () => _store.Record(permit, OperationIds.Derive(operation, "task-layout"),
                 new RunEvent.LayoutAllocated(new LayoutKey.Task(task, RunLayout.Key(task.Value, taken))))));
         }
         return record;
@@ -36,9 +38,11 @@ internal sealed partial class Materializer
             throw Fault(MaterializationProblem.UncertainOwnership, "The run belongs to a different repository common directory.");
     }
 
-    private void EnsureCheckout(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, GitRepository repository,
+    private void EnsureCheckout(CoordinatorPermit permit, OperationId operation, OperationId plan, GitRepository repository,
         ExecutionLocation location, RunRecord record)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var owner = location.Owner;
         var checkout = RunStorage.SafePath(repository.ProjectFolder, owner.RelativePath);
         var worktrees = Value(repository.Worktrees());
@@ -57,7 +61,7 @@ internal sealed partial class Materializer
             var start = existing ? oldIntent!.Start : location.AttemptBase;
             var label = existing ? "adopt-worktree" : "create-worktree";
             var intentId = OperationIds.Derive(operation, label + "-intent");
-            Journal(label + "-intent", () => _store.Record(workflow, run, intentId,
+            Journal(label + "-intent", () => _store.Record(permit, intentId,
                 new RunEvent.GitIntended(plan, new GitMutation.CreateWorktree(owner, start, existing))));
             // Git can create the branch before it refuses an occupied target directory.
             var result = Mutate(label, () => existing
@@ -73,7 +77,7 @@ internal sealed partial class Materializer
             var create = (GitMutation.CreateWorktree)pair.Value.Mutation;
             var tip = Value(repository.ReadRef(owner.Branch));
             if (tip != create.Start) throw Fault(MaterializationProblem.UncertainOwnership, "Unobserved creation has an unexpected branch tip.");
-            Journal("worktree-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, $"worktree-observed-{pair.Key.Value:D}"),
+            Journal("worktree-observed", () => _store.Record(permit, OperationIds.Derive(operation, $"worktree-observed-{pair.Key.Value:D}"),
                 new RunEvent.GitObserved(pair.Key, new(create.ExistingBranch, tip?.Hex))));
         }
         var reason = $"idevelop {record.RunKey}/{record.TaskKeys[owner.Task]}";

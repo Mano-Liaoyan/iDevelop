@@ -275,7 +275,7 @@ public sealed class WaitingTests : IDisposable
             await entered.Task.WaitAsync(Patience);
             if (heldElsewhere)
             {
-                using (var heldB = TaskLease.TryTake(_project, taskB.Id))
+                using (var heldB = StandaloneLease.TryTake(_project, taskB.Id))
                 {
                     Assert.NotNull(heldB);
                     Assert.Equal(new StartResult.Refused(new StartProblem.RunInAnotherWindow()), runs.Start(taskB));

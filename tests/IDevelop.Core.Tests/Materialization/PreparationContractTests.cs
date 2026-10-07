@@ -74,9 +74,9 @@ public sealed class PreparationContractTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var record = f.Read();
         var layout = record.Receipts.Single(pair => pair.Value.Event is RunEvent.LayoutAllocated { Key: LayoutKey.Run }).Key;
-        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.GitIntended(layout,
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.GitIntended(layout,
             new GitMutation.MoveRef(new("refs/idp/foreign/base", null, f.A))))).Reason.Problem.ToString());
-        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Prepared(ready.Execution,
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(ready.Execution,
             new("results/foreign/refs.json", Revision.Hash("{}"), 2)))).Reason.Problem.ToString());
         var prepared = new RunEvent.Prepared(ready.Execution, new("evidence/00000000-0000-0000-0000-000000000001/refs.json", Revision.Hash("{}"), 2));
         var entry = new RunEntry(2, 1, f.Op(), Revision.Hash("fixture"), At, prepared);
@@ -102,7 +102,7 @@ public sealed class PreparationContractTests
         var attempt = record.Attempts.Values.Single(attempt => attempt.Task == U);
         var owner = record.GitIntents.Values.Select(intent => intent.Mutation).OfType<GitMutation.CreateWorktree>().Single(create => create.Owner.Task == U).Owner;
         var prepared = new PreparedExecution(new(attempt.Id, 1), input.Id, new(owner, new("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea")), "Inspect", Revision.Hash("Inspect"), RunLayout.Outbox(attempt.Id));
-        var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Prepared(prepared, SharedRefs)));
+        var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(prepared, SharedRefs)));
         Assert.Equal("InputConflict", rejected.Reason.Problem.ToString());
         Assert.Equal("C available.\n", context.Report);
         Assert.Equal(0, f.Read().Preparations.Values.Count(execution => f.Read().Attempts[execution.Launch.Attempt].Task == U));

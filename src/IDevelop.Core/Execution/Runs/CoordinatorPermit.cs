@@ -1,19 +1,19 @@
 using System.Collections.Immutable;
+using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
 internal sealed class CoordinatorPermit : IDisposable
 {
-    private readonly object _gate = new();
-    private FileStream? _handle;
+    private readonly HeldFile _file;
 
-    private CoordinatorPermit(string project, WorkflowId workflow, RunId run, FileStream handle)
+    private CoordinatorPermit(string project, WorkflowId workflow, RunId run, HeldFile file)
     {
         Project = Path.GetFullPath(project);
         Workflow = workflow;
         Run = run;
-        _handle = handle;
+        _file = file;
     }
 
     public string Project { get; }
@@ -22,28 +22,41 @@ internal sealed class CoordinatorPermit : IDisposable
 
     public RunId Run { get; }
 
-    public bool Held => Volatile.Read(ref _handle) is not null;
+    public bool Held => _file.Held;
 
-    internal static CoordinatorPermit Open(string project, WorkflowId workflow, RunId run, string folder) =>
-        new(project, workflow, run,
-            new FileStream(Path.Combine(folder, "control.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+    internal IDisposable? Use() => _file.Use();
+
+    internal static ControlTake Acquire(RunStore store, WorkflowId workflow, RunId run)
+    {
+        var read = store.Read(workflow, run);
+        if (read is RunRead.Rejected rejected) return new ControlTake.Rejected(rejected.Reason);
+        if (((RunRead.Loaded)read).Record.Schema != 3) return new ControlTake.Rejected(new(RunProblem.UnsupportedSchema));
+        try
+        {
+            var path = Path.Combine(DataFolder.Runs(store.Project), workflow.ToString(), run.ToString(), "control.lock");
+            var file = HeldFile.TryOpen(path);
+            if (file is null) return new ControlTake.Busy();
+            var permit = new CoordinatorPermit(store.Project, workflow, run, file);
+            try
+            {
+                var take = store.Fence(permit);
+                if (take is not ControlTake.Owned) permit.Dispose();
+                return take;
+            }
+            catch { permit.Dispose(); throw; }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        { return new ControlTake.Rejected(new(RunProblem.StorageUnavailable)); }
+    }
 
     public LeaseTake TakeTask(TaskId task)
     {
-        lock (_gate)
-        {
-            ObjectDisposedException.ThrowIf(!Held, this);
-            return TaskLease.TryTake(Project, task, this) is { } lease ? new LeaseTake.Taken(lease) : new LeaseTake.Busy();
-        }
+        using var scope = Use();
+        if (scope is null) return new LeaseTake.Busy();
+        return RunLease.TryTake(this, task) is { } lease ? new LeaseTake.Taken(lease) : new LeaseTake.Busy();
     }
 
-    public void Dispose()
-    {
-        lock (_gate)
-        {
-            Interlocked.Exchange(ref _handle, null)?.Dispose();
-        }
-    }
+    public void Dispose() => _file.Dispose();
 }
 
 internal abstract record ControlTake

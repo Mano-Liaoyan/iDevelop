@@ -113,7 +113,7 @@ public sealed class ControlTests
             Assert.Equal(new[] { new LaunchKey(A1, 1) }, again.Fenced);
             Assert.Equal(before + 1, f.Read().Sequence);
             using var lease = Assert.IsType<LeaseTake.Taken>(again.Permit.TakeTask(T)).Lease;
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(lease, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         }
         var afterRecovery = f.Read().Sequence;
         var recovered = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
@@ -127,13 +127,15 @@ public sealed class ControlTests
     {
         using var f = new RunFixtures();
         f.Approve();
+        var reserved = f.Reserve();
+        f.Prepare(reserved);
+        f.ReleaseControl();
         var owned = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
         using (owned.Permit)
         {
-            var reserved = f.Reserve();
             using var lease = Assert.IsType<LeaseTake.Taken>(owned.Permit.TakeTask(T)).Lease;
             f.Claim(reserved, lease: lease);
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, f.Op(), reserved.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(lease, f.Op(), reserved.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
             Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[reserved.Attempt.Id]).Outcome);
         }
         var before = f.Read().Sequence;
@@ -185,25 +187,24 @@ public sealed class ControlTests
         Assert.Same(permit, transferred.Permit);
         original.Dispose();
         Assert.IsType<LeaseTake.Busy>(permit.TakeTask(T));
-        Assert.Null(TaskLease.TryTake(f.Project, T));
+        Assert.Null(StandaloneLease.TryTake(f.Project, T));
         transferred.Dispose();
         var retaken = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T));
         using (retaken.Lease) Assert.True(retaken.Lease.Held);
         Assert.Throws<InvalidOperationException>(() => transferred.Transfer());
         Assert.Throws<InvalidOperationException>(() => original.Transfer());
-        using (var standalone = TaskLease.TryTake(f.Project, T))
+        using (var standalone = StandaloneLease.TryTake(f.Project, T))
         {
             Assert.NotNull(standalone);
             Assert.True(standalone.Held);
-            Assert.Null(standalone.Permit);
             Assert.IsType<LeaseTake.Busy>(permit.TakeTask(T));
         }
-        using var standaloneAgain = TaskLease.TryTake(f.Project, T);
+        using var standaloneAgain = StandaloneLease.TryTake(f.Project, T);
         Assert.NotNull(standaloneAgain);
         Assert.True(standaloneAgain.Held);
         permit.Dispose();
         Assert.False(permit.Held);
-        Assert.Throws<ObjectDisposedException>(() => permit.TakeTask(U));
+        Assert.IsType<LeaseTake.Busy>(permit.TakeTask(U));
     }
 
     [Fact]
@@ -232,7 +233,7 @@ public sealed class ControlTests
         f.Claim(t);
         var u = f.Reserve(U);
         f.Claim(u);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(u.Attempt.Task), f.Op(), u.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(u.Attempt.Task), f.Op(), u.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         var record = f.Read();
         var key = new LaunchKey(t.Attempt.Id, 1);
         foreach (ImmutableArray<LaunchKey> claims in new ImmutableArray<LaunchKey>[]
@@ -242,7 +243,7 @@ public sealed class ControlTests
             Assert.Equal(new RunRejection(RunProblem.InvalidClaim, record.Sequence + 1),
                 Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record, entry)).Reason);
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Abandoned."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
         f.ReleaseControl();
         var owned = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
         using (owned.Permit) Assert.Equal(new[] { key }, owned.Fenced);

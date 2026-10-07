@@ -208,7 +208,7 @@ public sealed class JoinTests
         var repository = f.Git.Open();
         var recipe = new CommitRecipe(sources.B.Tree, [sources.B.Commit, sources.C.Commit], "incomplete\n", "E2 <e2@example.test>", "E2 <e2@example.test>", At);
         var commit = GitFixture.Read(repository.CreateCommit(recipe));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, OperationIds.Derive(operation, "join"), new RunEvent.Planned(
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, OperationIds.Derive(operation, "join"), new RunEvent.Planned(
             new MaterializationPlan.Join(U, preparation.Inputs, preparation.Sources, recipe, commit, null, "refs/heads/idp/93f23689/join/c67f2fc3"))));
         var blocked = Assert.IsType<Preparation.Blocked>(await Prepare(f, operation));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
@@ -258,7 +258,7 @@ public sealed class JoinTests
         {
             var outcome = await inner.Compose(request, cancellation);
             Assert.IsType<JoinOutcome.Ready>(outcome);
-            Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(W, f.RunId, OperationIds.Derive(publication, "accepted"), OperationIds.Derive(publication, "plan")));
+            Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, OperationIds.Derive(publication, "accepted"), OperationIds.Derive(publication, "plan")));
             return outcome;
         }
     }

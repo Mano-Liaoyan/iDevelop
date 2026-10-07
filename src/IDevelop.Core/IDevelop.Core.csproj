@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <InternalsVisibleTo Include="IDevelop.Core.Tests" />
+    <InternalsVisibleTo Include="IDevelop.RunRacer" />
     <InternalsVisibleTo Include="IDevelop.Desktop.Tests" />
   </ItemGroup>
 </Project>

@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IDevelop.Core\IDevelop.Core.csproj" />
     <ProjectReference Include="..\IDevelop.FakeAgent\IDevelop.FakeAgent.csproj" />
+    <ProjectReference Include="..\IDevelop.RunRacer\IDevelop.RunRacer.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />

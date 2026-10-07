@@ -109,7 +109,7 @@ public sealed class ClaimFreshnessTests
         var first = f.Complete(producer, "A ready.\n");
         var consumer = f.Reserve(U);
         f.Claim(consumer);
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, Run, f.Op(), new(consumer.Attempt.Id, 1),
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), new(consumer.Attempt.Id, 1),
             f.WriteLog(consumer, report: "More?", conversation: ConversationMode.Chat)));
         f.Prepare(consumer, turn: 2, prompt: "Continue.");
         var retry = f.Reserve(T, new AttemptCause.Retry(producer.Attempt.Id, f.Op()));
@@ -125,7 +125,7 @@ public sealed class ClaimFreshnessTests
     private static ResultRecord Accept(PreparationFixture f, Preparation.Ready ready, string report, ResultId? supersedes = null)
     {
         f.Close(ready, report);
-        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId,
+        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit,
             f.Op(), ready.Execution.Launch.Attempt, ready.Execution.Inputs, report, supersedes)).Event).Result;
     }
 }

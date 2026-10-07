@@ -4,6 +4,7 @@
     <Project Path="src/IDevelop.Desktop/IDevelop.Desktop.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/IDevelop.RunRacer/IDevelop.RunRacer.csproj" />
     <Project Path="tests/IDevelop.Core.Tests/IDevelop.Core.Tests.csproj" />
     <Project Path="tests/IDevelop.Desktop.Tests/IDevelop.Desktop.Tests.csproj" />
     <Project Path="tests/IDevelop.FakeAgent/IDevelop.FakeAgent.csproj" />

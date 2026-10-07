@@ -149,9 +149,9 @@ public sealed class JoinBoundaryTests
                 new MaterializationPlan.Join(U, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             if (mode != "receipt")
             {
-                if (f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)) is RunDecision.Rejected rejected)
+                if (f.Store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan)) is RunDecision.Rejected rejected)
                     throw new InvalidOperationException(rejected.Reason.ToString());
-                if (new RefPublisher(f.Store, probe).Publish(request.Workflow, request.Run, request.Operation, request.Operation,
+                if (new RefPublisher(f.Store, probe).Publish(request.Permit, request.Operation, request.Operation,
                     "join", repository, new(reference, plan.Previous, commit)) is not RefPublication.Completed)
                     throw new InvalidOperationException("Join publication failed.");
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);

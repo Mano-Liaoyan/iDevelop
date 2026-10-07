@@ -203,7 +203,7 @@ internal static partial class RunReducer
                     };
                     break;
                 case RunEvent.TurnClosed closed:
-                    if (!record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
+                    if (record.Schema == 3 && record.Fenced.Contains(closed.Key) || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
                         record.Closures.ContainsKey(closed.Key.Attempt))
                     {
                         return Reject(RunProblem.InvalidClaim);

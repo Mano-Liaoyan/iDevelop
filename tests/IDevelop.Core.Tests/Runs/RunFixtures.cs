@@ -47,8 +47,8 @@ internal sealed class RunFixtures : IDisposable
 
     private int _operation = 1000;
 
-    private CoordinatorPermit? _permit;
-    private readonly Dictionary<TaskId, TaskLease> _leases = [];
+    private readonly Dictionary<RunId, CoordinatorPermit> _permits = [];
+    private readonly Dictionary<(RunId, TaskId), RunLease> _leases = [];
 
     public string Project
     {
@@ -72,27 +72,35 @@ internal sealed class RunFixtures : IDisposable
         Workflow = workflow ?? FixtureWorkflow();
     }
 
-    public CoordinatorPermit Permit => _permit ??= Assert.IsType<ControlTake.Owned>(RunStore.Open(Project).TakeControl(W, Run)).Permit;
+    public CoordinatorPermit Permit => PermitFor(Run);
 
-    public TaskLease Lease(TaskId task)
+    public CoordinatorPermit PermitFor(RunId run)
     {
-        if (_leases.TryGetValue(task, out var lease)) return lease;
-        lease = Assert.IsType<LeaseTake.Taken>(Permit.TakeTask(task)).Lease;
-        _leases.Add(task, lease);
+        if (_permits.TryGetValue(run, out var permit)) return permit;
+        permit = Assert.IsType<ControlTake.Owned>(RunStore.Open(Project).TakeControl(W, run)).Permit;
+        _permits.Add(run, permit);
+        return permit;
+    }
+
+    public RunLease Lease(TaskId task, RunId? run = null)
+    {
+        if (_leases.TryGetValue((run ?? Run, task), out var lease)) return lease;
+        lease = Assert.IsType<LeaseTake.Taken>(PermitFor(run ?? Run).TakeTask(task)).Lease;
+        _leases.Add((run ?? Run, task), lease);
         return lease;
     }
 
-    public void Release(TaskId task)
+    public void Release(TaskId task, RunId? run = null)
     {
-        if (_leases.Remove(task, out var lease)) lease.Dispose();
+        if (_leases.Remove((run ?? Run, task), out var lease)) lease.Dispose();
     }
 
     public void ReleaseControl()
     {
         foreach (var lease in _leases.Values) lease.Dispose();
         _leases.Clear();
-        _permit?.Dispose();
-        _permit = null;
+        foreach (var permit in _permits.Values) permit.Dispose();
+        _permits.Clear();
     }
 
     public RunStore NewStore() => RunStore.Open(Project, new FixedClock(), () => Id(Interlocked.Increment(ref _id)));
@@ -124,7 +132,7 @@ internal sealed class RunFixtures : IDisposable
         Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head)));
 
     public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null) =>
-        Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(W, run ?? Run, Op(), task ?? T,
+        Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(Lease(task ?? T, run ?? Run), Op(),
             Read(run).Revision.Id, cause ?? new AttemptCause.Initial())).Event);
 
     public void Prepare(RunEvent.Reserved reservation, RunId? run = null, int turn = 1, string prompt = "Inspect")
@@ -133,14 +141,14 @@ internal sealed class RunFixtures : IDisposable
         var record = Read(id);
         if (record.RunKey is null)
         {
-            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.LayoutAllocated(
+            Assert.IsType<RunDecision.Recorded>(Store.Record(PermitFor(id), Op(), new RunEvent.LayoutAllocated(
                 new LayoutKey.Run(Revision.Hash(id.Value.ToString("D")).Sha256[..8], Path.GetFullPath(Path.Combine(Project, ".git"))))));
         }
         record = Read(id);
         var task = reservation.Attempt.Task;
         if (!record.TaskKeys.ContainsKey(task))
         {
-            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.LayoutAllocated(
+            Assert.IsType<RunDecision.Recorded>(Store.Record(PermitFor(id), Op(), new RunEvent.LayoutAllocated(
                 new LayoutKey.Task(task, Revision.Hash(task.ToString()).Sha256[..8]))));
         }
         record = Read(id);
@@ -148,7 +156,7 @@ internal sealed class RunFixtures : IDisposable
         if (!record.Preparations.ContainsKey(launch))
         {
             var key = record.TaskKeys[task];
-            Assert.IsType<RunDecision.Recorded>(Store.Record(W, id, Op(), new RunEvent.Prepared(new(launch, reservation.Inputs.Id,
+            Assert.IsType<RunDecision.Recorded>(Store.Record(PermitFor(id), Op(), new RunEvent.Prepared(new(launch, reservation.Inputs.Id,
                 new(new(task, $".worktrees/{record.RunKey}/{key}", $"refs/heads/idp/{record.RunKey}/task/{key}"),
                     RunReducer.AttemptBase(record, reservation.Attempt, reservation.Inputs)!.Value), prompt, Revision.Hash(prompt),
                 record.Revisions[reservation.Attempt.Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit }
@@ -159,7 +167,7 @@ internal sealed class RunFixtures : IDisposable
     public static EvidenceFile SharedRefs => new("evidence/00000000-0000-0000-0000-000000000001/refs.json",
         Revision.Hash("{}"), 2);
 
-    public void Claim(RunEvent.Reserved reservation, RunId? run = null, TaskLease? lease = null)
+    public void Claim(RunEvent.Reserved reservation, RunId? run = null, RunLease? lease = null)
     {
         Prepare(reservation, run);
         Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
@@ -206,9 +214,9 @@ internal sealed class RunFixtures : IDisposable
     {
         Claim(reservation, run);
         var checkpoint = WriteLog(reservation, report: report, run: run);
-        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(W, run ?? Run, Op(), reservation.Attempt.Id,
+        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(PermitFor(run ?? Run), Op(), reservation.Attempt.Id,
             TerminalAttemptOutcome.Succeeded, checkpoint));
-        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(Store.AcceptReport(W, run ?? Run, Op(),
+        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(Store.AcceptReport(PermitFor(run ?? Run), Op(),
             reservation.Attempt.Id, reservation.Inputs.Id, report, supersedes)).Event).Result;
     }
 

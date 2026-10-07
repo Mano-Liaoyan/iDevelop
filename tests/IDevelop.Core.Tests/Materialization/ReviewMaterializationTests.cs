@@ -47,7 +47,7 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, f.RunId, f.Op(), execution.Launch, Checkpoint(folder)));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
     }
 
     private static ResultRecord Agree(PreparationFixture f, Preparation.Ready ready)
@@ -64,8 +64,8 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
             log.Append(new AttemptEvent.Concluded(At, null));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(W, f.RunId, f.Op(), attempt.Id, TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
-        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(),
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
+        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             attempt.Id, ready.Execution.Inputs, "Approved.\n")).Event).Result;
     }
 
@@ -164,7 +164,7 @@ public sealed class ReviewMaterializationTests
         var first = await f.Publish(T, f.A);
         var consumer = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(consumer, "Consumed.\n");
-        var consumed = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(),
+        var consumed = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             consumer.Execution.Launch.Attempt, consumer.Execution.Inputs, "Consumed.\n")).Event).Result;
         var running = Assert.IsType<Preparation.Ready>(await f.Prepare(D));
         var runningInput = f.Read().Inputs[running.Execution.Inputs];
@@ -195,9 +195,9 @@ public sealed class ReviewMaterializationTests
         var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
         var old = f.Read().Inputs[review.Execution.Inputs];
         var stale = new MaterializationPlan.Refresh(key, new(Id(300)), old.Bindings, InputMaterial.Sources(f.Read(), old.Bindings), old.Review);
-        Assert.Equal("StaleInput", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(stale))).Reason.Problem.ToString());
+        Assert.Equal("StaleInput", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(stale))).Reason.Problem.ToString());
         var invalid = stale with { Launch = new(review.Execution.Launch.Attempt, 3) };
-        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(invalid))).Reason.Problem.ToString());
+        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(invalid))).Reason.Problem.ToString());
         var wrongFix = await f.Prepare(T, cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 2, 0)), prompt: "Fix.");
         Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(wrongFix).Reason.Problem.ToString());
         var operation = f.Op();
@@ -205,7 +205,7 @@ public sealed class ReviewMaterializationTests
             .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         var refreshed = f.Read().Inputs.Values.Single(input => input.Task == U && input.Id != old.Id);
         var candidate = review.Execution with { Launch = key, Inputs = refreshed.Id, Location = review.Execution.Location with { AttemptBase = refreshed.CodeBase } };
-        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Prepared(candidate, SharedRefs))).Reason.Problem.ToString());
+        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(candidate, SharedRefs))).Reason.Problem.ToString());
         var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         Assert.Equal(repaired.Id, f.Read().Inputs[ready.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(first.Id, f.Read().Inputs[old.Id].Review!.SubjectResult);
@@ -219,7 +219,7 @@ public sealed class ReviewMaterializationTests
         await f.Publish(D, f.A, "Independent.\n");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(forwarded, "Forwarded.\n");
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(), forwarded.Execution.Launch.Attempt,
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt,
             forwarded.Execution.Inputs, "Forwarded.\n"));
         var review = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial(), "Review."));
         CloseReviewTurn(f, review);
@@ -354,8 +354,8 @@ public sealed class ReviewMaterializationTests
             var plan = new MaterializationPlan.Join(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             if (mode != "receipt")
             {
-                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)));
-                if (new RefPublisher(f.Store).Publish(request.Workflow, request.Run, request.Operation, request.Operation,
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan)));
+                if (new RefPublisher(f.Store).Publish(request.Permit, request.Operation, request.Operation,
                     "join", f.Git.Open(), new(reference, request.ExpectedJoin, commit)) is not RefPublication.Completed)
                     throw new InvalidOperationException("Join publication failed.");
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);

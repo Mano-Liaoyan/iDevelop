@@ -27,7 +27,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
 
     private JoinOutcome Compose(JoinRequest request)
     {
-        var read = store.Read(request.Workflow, request.Run);
+        var read = store.Read(request.Permit.Workflow, request.Permit.Run);
         if (read is RunRead.Rejected rejected) return Block(request, MaterializationProblem.InputUnavailable, rejected.Reason.Problem.ToString());
         var record = ((RunRead.Loaded)read).Record;
         if (request.Sources.Any(source => record.CurrentResults.GetValueOrDefault(source.Task)?.Id != source.Result))
@@ -57,7 +57,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                     break;
                 case TreeMerge.Conflicted conflict:
                 {
-                    var storage = new RunStorage(projectFolder, request.Workflow, request.Run);
+                    var storage = new RunStorage(projectFolder, request.Permit.Workflow, request.Permit.Run);
                     var stderrBytes = Encoding.UTF8.GetBytes(conflict.Stderr);
                     var name = $"join-step-{step}-{Revision.Hash([.. conflict.Stdout, .. stderrBytes]).Sha256[..12]}";
                     var stdout = Mutate("join-evidence-stdout", () => storage.WriteEvidence(request.Operation, name + ".stdout", conflict.Stdout));
@@ -94,12 +94,12 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
             var commit = Value(Mutate("join-commit", () => repository.CreateCommit(recipe)));
             plan = new(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             probe?.Invoke("journal.join-plan.before");
-            var decision = store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan));
+            var decision = store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan));
             probe?.Invoke("journal.join-plan.after");
             if (decision is RunDecision.Rejected refused)
                 return Block(request, MaterializationProblem.InputUnavailable, refused.Reason.Problem.ToString());
         }
-        return new RefPublisher(store, probe).Publish(request.Workflow, request.Run, request.Operation, request.Operation, "join",
+        return new RefPublisher(store, probe).Publish(request.Permit, request.Operation, request.Operation, "join",
             repository, new(reference, plan.Previous, plan.Commit)) switch
         {
             RefPublication.Completed => new JoinOutcome.Ready(new(request.Operation, request.Sources, plan.Commit, plan.Recipe.Tree, reference)),
@@ -109,7 +109,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         };
 
         CommitRecipe Recipe(TreeId merged, ImmutableArray<CommitId> ancestry, DateTimeOffset at) => new(merged, ancestry,
-            $"Join dependency results\n\nIDP-Run: {request.Run.Value:D}\nIDP-Task: {request.Task.Value:D}\n",
+            $"Join dependency results\n\nIDP-Run: {request.Permit.Run.Value:D}\nIDP-Task: {request.Task.Value:D}\n",
             "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", at);
     }
 

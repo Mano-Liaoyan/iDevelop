@@ -301,7 +301,7 @@ public sealed class SalvageTests
         async Task<Preparation.Ready> Setup(PreparationFixture fixture)
         {
             var writer = await FailedWriter(fixture);
-            if (terminal) Assert.IsType<RunDecision.Recorded>(fixture.Store.Settle(W, fixture.RunId, fixture.Op(), RunOutcome.Stopped));
+            if (terminal) Assert.IsType<RunDecision.Recorded>(fixture.Store.Settle(fixture.Permit, fixture.Op(), RunOutcome.Stopped));
             return writer;
         }
         var steps = new List<string>();
@@ -421,7 +421,7 @@ public sealed class SalvageTests
         var lease = f.Lease(T);
         f.Release(T);
         var before = f.Read().Sequence;
-        using (var held = TaskLease.TryTake(f.Git.Folder, T))
+        using (var held = StandaloneLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(held);
             Assert.Equal("TaskBusy", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(lease, ResetOperation,
@@ -434,7 +434,7 @@ public sealed class SalvageTests
         Assert.Equal("modified\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
         Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(W, f.RunId, f.Op(), RunOutcome.Stopped));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped));
         Assert.Equal("RunStopped", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation,
             retained.Receipt.Plan, f.Op())).Reason.Problem.ToString());
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -538,9 +538,9 @@ public sealed class SalvageTests
         var result = await f.Publish(T, f.A);
         var owner = f.Read().Preparations[new(A1, 1)].Location.Owner;
         var checkout = Path.Combine(f.Git.Folder, owner.RelativePath);
-        if (phase == "StopRequested") Assert.IsType<RunDecision.Recorded>(f.Store.Stop(W, f.RunId, f.Op()));
-        else if (phase == "Abandoned") Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, f.RunId, f.Op(), f.Op(), "Preserve work."));
-        else if (Enum.TryParse<RunOutcome>(phase, out var outcome)) Assert.IsType<RunDecision.Recorded>(f.Store.Settle(W, f.RunId, f.Op(), outcome));
+        if (phase == "StopRequested") Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
+        else if (phase == "Abandoned") Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Preserve work."));
+        else if (Enum.TryParse<RunOutcome>(phase, out var outcome)) Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), outcome));
         f.Git.Write("a.txt", "modified\n", checkout);
         f.Git.Write("new.txt", "unfinished\n", checkout);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), Operation, A1));
@@ -645,7 +645,7 @@ public sealed class SalvageTests
         var lease = f.Lease(T);
         var before = f.Read().Sequence;
         if (mode == "task-lock") f.Release(T);
-        using (var held = mode == "task-lock" ? TaskLease.TryTake(f.Git.Folder, T) : null)
+        using (var held = mode == "task-lock" ? StandaloneLease.TryTake(f.Git.Folder, T) : null)
         {
             if (mode == "ownership") f.Git.Git("worktree", "unlock", ready.Execution.Location.Owner.RelativePath);
             var result = f.Materializer(boundary: mode == "boundary" ? new UnprovenBoundary() : null)

@@ -408,8 +408,7 @@ public sealed class PreparationTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var original = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, f.RunId,
-            f.Lease(original.Execution.Location.Owner.Task), f.Op(), original.Execution.Launch.Attempt, RecoveryOutcome.NotStarted, f.Op(), "Did not launch."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(original.Execution.Location.Owner.Task), f.Op(), original.Execution.Launch.Attempt, RecoveryOutcome.NotStarted, f.Op(), "Did not launch."));
         f.Git.Write("left.txt", "unfinished\n", original.Checkout);
         var retry = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(original.Execution.Launch.Attempt, f.Op())));
         Assert.Equal("DirtyWorktree", retry.Block.Problem.ToString());

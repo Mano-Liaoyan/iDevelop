@@ -721,7 +721,7 @@ public sealed class ConversationDrainTests : IDisposable
             Assert.Equal(AttemptStatus.Running, session.Snapshot.Latest!.Status);
             Assert.Equal(AttemptStatus.Running, (await session.ListAttemptsAsync(default)).Single().Status);
             Assert.Equal("Build Running", string.Join(", ", runs.Active.Select(record => $"{record.TaskTitle} {record.Status}")));
-            using var held = TaskLease.TryTake(_project, Node.Id);
+            using var held = StandaloneLease.TryTake(_project, Node.Id);
             var during = (session.Snapshot.Actions.Send, runs.CheckSend(Node), LockHeld: held is null, runs.Latest[Node.Id].Status);
             Assert.Equal((new ActionAvailability(false, "The turn is ending. Wait for teardown to finish."), new SendProblem.Ending("Build"), true, AttemptStatus.Running), during);
             release.TrySetResult();
@@ -729,7 +729,7 @@ public sealed class ConversationDrainTests : IDisposable
             Assert.Equal((AttemptStatus.WaitingForInput, TurnOutcome.Deferred), (record.Status, record.Turns.Single().Outcome));
             Assert.Equal(new ActionAvailability(true, "Send a message."), session.Snapshot.Actions.Send);
             Assert.Null(runs.CheckSend(Node));
-            using var released = TaskLease.TryTake(_project, Node.Id);
+            using var released = StandaloneLease.TryTake(_project, Node.Id);
             Assert.NotNull(released);
         }
         finally

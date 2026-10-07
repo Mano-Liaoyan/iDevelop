@@ -5,11 +5,14 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public RetryReset ResetForRetry(TaskLease lease, OperationId operation, OperationId salvagePlan, OperationId confirmation)
+    public RetryReset ResetForRetry(RunLease lease, OperationId operation, OperationId salvagePlan, OperationId confirmation)
     {
+        using var authority = lease.Use();
+        if (authority is null) return new RetryReset.Rejected(new(RunProblem.TaskBusy));
         if (LeaseProblem(lease) is { } problem) return new RetryReset.Rejected(new(problem));
-        var workflow = lease.Permit!.Workflow;
-        var run = lease.Permit.Run;
+        var permit = lease.Permit;
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var task = lease.Task;
         AttemptId? attempt = null;
         InputId? inputs = null;
@@ -55,7 +58,7 @@ internal sealed partial class Materializer
                         entry.Event is RunEvent.Prepared e && e.Execution.Launch == p.Launch).Sequence).First().Location.AttemptBase;
                 plan = new(task, salvage.Attempt, salvagePlan, salvage.BranchTip, target, salvage.Untracked);
                 step = "retry-plan";
-                Journal("retry-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
+                Journal("retry-plan", () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
             if (!RefOwnership.Accepts(Read(workflow, run), repository, prepared.Location.Owner.Branch,
                 Value(repository.ReadRef(prepared.Location.Owner.Branch))))
@@ -82,7 +85,7 @@ internal sealed partial class Materializer
                     VerifyIgnoredObstructions(repository, checkout, targetPaths);
                 }
                 step = "retry-reset";
-                Journal("retry-reset-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, reset)));
+                Journal("retry-reset-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(planId, reset)));
                 if (!adopted)
                 {
                     var attach = new GitMutation.AttachHead(task, prepared.Location.Owner.Branch);
@@ -93,12 +96,12 @@ internal sealed partial class Materializer
                     if (head != attach.Branch && (attachObserved ||
                         Value(repository.ResolveCheckoutHead(checkout)) != salvage.ObservedTip))
                         throw Fault(MaterializationProblem.UncertainOwnership, "The retry HEAD moved outside the recorded attachment.");
-                    RequirePublication(_refs.Publish(workflow, run, operation, planId, "retry-branch", repository,
+                    RequirePublication(_refs.Publish(permit, operation, planId, "retry-branch", repository,
                         new(prepared.Location.Owner.Branch, plan.From, plan.To)));
                     if (!attachObserved)
                     {
                         var attachIntent = OperationIds.Derive(operation, "retry-attach-intent");
-                        Journal("retry-attach-intent", () => _store.Record(workflow, run, attachIntent, new RunEvent.GitIntended(planId, attach)));
+                        Journal("retry-attach-intent", () => _store.Record(permit, attachIntent, new RunEvent.GitIntended(planId, attach)));
                         var attached = Mutate("retry-attach", () =>
                         {
                             if (Value(repository.SymbolicHead(checkout)) != attach.Branch &&
@@ -107,7 +110,7 @@ internal sealed partial class Materializer
                             return repository.AttachHead(checkout, attach.Branch);
                         });
                         if (attached.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, attached.Stderr);
-                        Journal("retry-attach-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-attach-observed"),
+                        Journal("retry-attach-observed", () => _store.Record(permit, OperationIds.Derive(operation, "retry-attach-observed"),
                             new RunEvent.GitObserved(attachIntent, new(false, attach.Branch))));
                     }
                     var result = Mutate("retry-reset", () =>
@@ -117,7 +120,7 @@ internal sealed partial class Materializer
                     });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
                 }
-                Journal("retry-reset-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-reset-observed"),
+                Journal("retry-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "retry-reset-observed"),
                     new RunEvent.GitObserved(intended, new(adopted, plan.To.Hex))));
             }
             VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
@@ -126,7 +129,7 @@ internal sealed partial class Materializer
             {
                 step = "retry-remove";
                 var intended = OperationIds.Derive(operation, "retry-remove-intent");
-                Journal("retry-remove-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, remove)));
+                Journal("retry-remove-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(planId, remove)));
                 foreach (var file in plan.Remove)
                 {
                     // A path restored as tracked target content belongs to the retry base, not to cleanup.
@@ -138,16 +141,16 @@ internal sealed partial class Materializer
                     });
                     if (removed == PathRemoval.Unexpected) throw Fault(MaterializationProblem.DirtyWorktree, "A salvaged path changed before removal: " + file.RelativePath);
                 }
-                Journal("retry-remove-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "retry-remove-observed"),
+                Journal("retry-remove-observed", () => _store.Record(permit, OperationIds.Derive(operation, "retry-remove-observed"),
                     new RunEvent.GitObserved(intended, new(false, null))));
             }
-            ResolveMaintenanceBlocks(workflow, run, operation, "Retry reset verified.");
+            ResolveMaintenanceBlocks(permit, operation, "Retry reset verified.");
             return new RetryReset.Reset(plan.To);
         }
         catch (Refusal refused) { return new RetryReset.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return RetryBlock(workflow, run, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return RetryBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return RetryBlock(workflow, run, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return RetryBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
 
     private static void VerifyResetHead(GitRepository repository, string checkout, string branch, CommitId target)
@@ -170,8 +173,8 @@ internal sealed partial class Materializer
             throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the reset target and must be preserved.");
     }
 
-    private RetryReset RetryBlock(WorkflowId workflow, RunId run, OperationId operation, string step, MaterializationBlock block) =>
-        Block(workflow, run, operation, step, block) switch
+    private RetryReset RetryBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
+        Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new RetryReset.Blocked(blocked.Block),
             Preparation.Rejected rejected => new RetryReset.Rejected(rejected.Reason),

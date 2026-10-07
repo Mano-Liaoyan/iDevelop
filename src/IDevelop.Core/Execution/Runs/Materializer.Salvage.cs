@@ -5,11 +5,14 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public Salvage Salvage(TaskLease lease, OperationId operation, AttemptId attempt)
+    public Salvage Salvage(RunLease lease, OperationId operation, AttemptId attempt)
     {
+        using var authority = lease.Use();
+        if (authority is null) return new Salvage.Rejected(new(RunProblem.TaskBusy));
         if (LeaseProblem(lease) is { } problem) return new Salvage.Rejected(new(problem));
-        var workflow = lease.Permit!.Workflow;
-        var run = lease.Permit.Run;
+        var permit = lease.Permit;
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var task = lease.Task;
         InputId? inputs = null;
         var step = "salvage-preconditions";
@@ -33,7 +36,7 @@ internal sealed partial class Materializer
                 return new Salvage.Rejected(new(RunProblem.OperationConflict));
             if (record.Salvages.TryGetValue(planId, out var receipt))
             {
-                ResolveMaintenanceBlocks(workflow, run, operation, "Salvage retained.");
+                ResolveMaintenanceBlocks(permit, operation, "Salvage retained.");
                 return new Salvage.Retained(receipt, receipt.Commit);
             }
             var checkout = Checkout(repository, prepared.Location.Owner);
@@ -75,22 +78,22 @@ internal sealed partial class Materializer
                     reference = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], attempt, operation);
                 plan = new(task, attempt, tip, branchTip, capture.IndexBefore, recipe, commit, untracked, reference);
                 step = "salvage-plan";
-                Journal("salvage-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
+                Journal("salvage-plan", () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
             step = "salvage-ref";
-            RequirePublication(_refs.Publish(workflow, run, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit)));
+            RequirePublication(_refs.Publish(permit, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit)));
             if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
                 throw Fault(MaterializationProblem.UncertainOwnership, "The salvage retention ref changed.");
             step = "salvage-retained";
-            var retained = (RunEvent.SalvageRetained)DecisionEvent(Journal("salvage-retained", () => _store.Record(workflow, run,
+            var retained = (RunEvent.SalvageRetained)DecisionEvent(Journal("salvage-retained", () => _store.Record(permit,
                 OperationIds.Derive(operation, "salvage-retained"), new RunEvent.SalvageRetained(planId, plan.Ref, plan.Commit))));
-            ResolveMaintenanceBlocks(workflow, run, operation, "Salvage retained.");
+            ResolveMaintenanceBlocks(permit, operation, "Salvage retained.");
             return new Salvage.Retained(retained, retained.Commit);
         }
         catch (Refusal refused) { return new Salvage.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return SalvageBlock(workflow, run, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return SalvageBlock(workflow, run, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
 
     private static ImmutableArray<EvidenceFile> Untracked(GitRepository repository, string checkout) =>
@@ -103,16 +106,18 @@ internal sealed partial class Materializer
             return new EvidenceFile(relative, Revision.Hash(bytes), bytes.LongLength);
         })];
 
-    private void ResolveMaintenanceBlocks(WorkflowId workflow, RunId run, OperationId operation, string reason)
+    private void ResolveMaintenanceBlocks(CoordinatorPermit permit, OperationId operation, string reason)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == operation)
             .OrderBy(pair => pair.Key.Value))
-            Journal("maintenance-resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(workflow, run,
+            Journal("maintenance-resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "maintenance-resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, reason)));
     }
 
-    private Salvage SalvageBlock(WorkflowId workflow, RunId run, OperationId operation, string step, MaterializationBlock block) =>
-        Block(workflow, run, operation, step, block) switch
+    private Salvage SalvageBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
+        Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new Salvage.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Salvage.Rejected(rejected.Reason),

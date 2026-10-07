@@ -75,7 +75,7 @@ public sealed class PreparationBoundaryTests
             Assert.Null(f.Read().RunKey);
         }
         f.Release(T);
-        using (var locked = TaskLease.TryTake(f.Git.Folder, T))
+        using (var locked = StandaloneLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(locked);
             Assert.IsType<LeaseTake.Busy>(f.Permit.TakeTask(T));
@@ -108,7 +108,7 @@ public sealed class PreparationBoundaryTests
         var next = new LaunchKey(first.Launch.Attempt, 2);
         Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), f.Op(),
             next, " Continue.\n")).Reason.Problem.ToString());
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, f.RunId, f.Op(), first.Launch, Checkpoint(folder)));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), first.Launch, Checkpoint(folder)));
         f.Git.Write("left.txt", "ongoing\n", ready.Checkout);
         f.Git.Write("a.txt", "edited\n", ready.Checkout);
         var operation = f.Op();

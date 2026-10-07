@@ -191,7 +191,7 @@ public sealed class PublicationTests
         var lease = f.Lease(T);
         var before = f.Read().Sequence;
         if (mode == "task-lock") f.Release(T);
-        using (var held = mode == "task-lock" ? TaskLease.TryTake(f.Git.Folder, T) : null)
+        using (var held = mode == "task-lock" ? StandaloneLease.TryTake(f.Git.Folder, T) : null)
         {
             var result = f.Materializer(boundary: boundary).Publish(lease, Operation, ready.Execution.Launch.Attempt);
             if (mode == "task-lock")

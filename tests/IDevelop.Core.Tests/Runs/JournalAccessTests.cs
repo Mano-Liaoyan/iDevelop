@@ -31,7 +31,7 @@ public sealed class JournalAccessTests
         Assert.Equal(RunPhase.Approved, f.Read().Phase);
         File.WriteAllBytes(f.Journal(W, OtherRun), []);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(
-            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
+            f.Store.Reserve(f.Lease(T), f.Op(), new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
     }
 
     [Fact]
@@ -90,7 +90,8 @@ public sealed class JournalAccessTests
     {
         using var f = new RunFixtures();
         f.Approve();
-        var decisions = Race(f, (store, op) => store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
+        var lease = f.Lease(T);
+        var decisions = Race(f, (store, op) => store.Reserve(lease, op, new(V1), new AttemptCause.Initial()));
         Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Created), decisions.Count(d => d is RunDecision.Existing),
             decisions.Count(d => d is not (RunDecision.Created or RunDecision.Existing))));
         Assert.Equal([A1], f.Read().Attempts.Keys);
@@ -118,13 +119,14 @@ public sealed class JournalAccessTests
         using var f = new RunFixtures();
         f.Approve();
         var op = f.Op();
+        var lease = f.Lease(T);
         using (var held = new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"),
             FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             Assert.Equal(RunProblem.JournalBusy,
-                Problem(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial())));
+                Problem(f.Store.Reserve(lease, op, new(V1), new AttemptCause.Initial())));
         }
-        var created = Assert.IsType<RunDecision.Created>(f.Store.Reserve(W, Run, op, T, new(V1), new AttemptCause.Initial()));
+        var created = Assert.IsType<RunDecision.Created>(f.Store.Reserve(lease, op, new(V1), new AttemptCause.Initial()));
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(created.Event).Attempt.Id);
     }
 
@@ -135,7 +137,7 @@ public sealed class JournalAccessTests
         f.Approve();
         File.WriteAllBytes(f.Journal(W, OtherRun), [0xe2, 0x82]);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(
-            f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
+            f.Store.Reserve(f.Lease(T), f.Op(), new(V1), new AttemptCause.Initial())).Event).Attempt.Id);
     }
 
     [Fact]
@@ -143,9 +145,10 @@ public sealed class JournalAccessTests
     {
         using var f = new RunFixtures();
         f.Approve();
+        var lease = f.Lease(T);
         File.WriteAllText(f.Journal(W, OtherRun), File.ReadAllText(f.Journal(W, Run)) + "{\"schema\":1");
         Assert.Equal(RunProblem.IdentityMismatch,
-            Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())));
+            Problem(f.Store.Reserve(lease, f.Op(), new(V1), new AttemptCause.Initial())));
     }
 
     private static RunDecision[] Race(RunFixtures f, Func<RunStore, OperationId, RunDecision> command)

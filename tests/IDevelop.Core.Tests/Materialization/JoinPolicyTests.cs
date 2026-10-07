@@ -143,7 +143,7 @@ public sealed class JoinPolicyTests
         Assert.Equal("2a6facb70b2b7d4a23d103ddf1701e457bda8368", evidence.AttributeSource.Hex);
         var operation = f.Op();
         var invalid = blocked.Block with { Operation = operation, Conflict = evidence with { AttributeSource = new("not-a-commit") } };
-        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, operation, new RunEvent.Blocked(invalid))).Reason.Problem.ToString());
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(invalid))).Reason.Problem.ToString());
     }
 
     [Theory]
