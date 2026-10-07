@@ -1,0 +1,582 @@
+using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using IDevelop.Projects;
+
+namespace IDevelop.Execution;
+
+internal sealed record GitResult(int ExitCode, byte[] Stdout, string Stderr)
+{
+    public string Text => Encoding.UTF8.GetString(Stdout);
+}
+
+internal abstract record GitRead<T>
+{
+    private GitRead() { }
+    internal sealed record Read(T Value) : GitRead<T>;
+    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>;
+}
+
+internal abstract record RepositoryOpen
+{
+    private RepositoryOpen() { }
+    internal sealed record Opened(GitRepository Repository) : RepositoryOpen;
+    internal sealed record Refused(MaterializationProblem Problem, string Detail) : RepositoryOpen;
+}
+
+internal sealed record GitCommit(TreeId Tree, ImmutableArray<CommitId> Parents);
+internal sealed record GitWorktree(string Path, CommitId? Head, string? Branch, bool Locked, string? LockReason);
+internal sealed record GitCapture(TreeId Tree, Digest? IndexBefore, Digest? IndexAfter);
+
+internal abstract record GitAncestry
+{
+    private GitAncestry() { }
+    internal sealed record Yes : GitAncestry;
+    internal sealed record No : GitAncestry;
+    internal sealed record Failed(string Detail) : GitAncestry;
+}
+
+internal abstract record RefMove
+{
+    private RefMove() { }
+    internal sealed record Moved : RefMove;
+    internal sealed record AlreadyAtTarget : RefMove;
+    internal sealed record Conflict(CommitId? Observed) : RefMove;
+    internal sealed record Failed(string Detail) : RefMove;
+}
+
+internal abstract record IndexAlignment
+{
+    private IndexAlignment() { }
+    internal sealed record Aligned : IndexAlignment;
+    internal sealed record AlreadyAligned : IndexAlignment;
+    internal sealed record Unexpected(Digest? Observed) : IndexAlignment;
+    internal sealed record Failed(string Detail) : IndexAlignment;
+}
+
+internal enum GitPathType { RegularFile, Directory, Link, Other }
+internal enum PathRemoval { Removed, Absent, Unexpected }
+
+internal sealed class GitRepository
+{
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+    private readonly IReadOnlyDictionary<string, string> _environment;
+
+    private GitRepository(string projectFolder, string commonDirectory, string version, IReadOnlyDictionary<string, string> environment)
+    {
+        ProjectFolder = projectFolder;
+        CommonDirectory = commonDirectory;
+        Version = version;
+        _environment = new Dictionary<string, string>(environment);
+    }
+
+    public string ProjectFolder { get; }
+    public string CommonDirectory { get; }
+    public string Version { get; }
+
+    public static RepositoryOpen Open(string projectFolder) => Open(projectFolder, new Dictionary<string, string>());
+
+    internal static RepositoryOpen Open(string projectFolder, IReadOnlyDictionary<string, string> environment)
+    {
+        var version = Run(["version"], projectFolder, environment);
+        if (version.ExitCode != 0)
+        {
+            return new RepositoryOpen.Refused(MaterializationProblem.GitFailed, version.Stderr);
+        }
+        if (CheckVersion(version.Text) is { } refusal)
+        {
+            return refusal;
+        }
+        var prefix = Run(["rev-parse", "--show-prefix"], projectFolder, environment);
+        if (prefix.ExitCode != 0 || prefix.Text.TrimEnd('\r', '\n').Length != 0)
+        {
+            var root = Run(["rev-parse", "--show-toplevel"], projectFolder, environment);
+            return new RepositoryOpen.Refused(MaterializationProblem.NotRepositoryRoot,
+                root.ExitCode == 0 ? root.Text.TrimEnd('\r', '\n') : prefix.Stderr);
+        }
+        var toplevel = Run(["rev-parse", "--show-toplevel"], projectFolder, environment);
+        var common = Run(["rev-parse", "--path-format=absolute", "--git-common-dir"], projectFolder, environment);
+        if (toplevel.ExitCode != 0 || common.ExitCode != 0)
+        {
+            return new RepositoryOpen.Refused(MaterializationProblem.GitFailed, toplevel.Stderr + common.Stderr);
+        }
+        return new RepositoryOpen.Opened(new(toplevel.Text.TrimEnd('\r', '\n'), common.Text.TrimEnd('\r', '\n'),
+            version.Text.TrimEnd('\r', '\n'), environment));
+    }
+
+    internal static Version? ParseVersion(string text)
+    {
+        var match = Regex.Match(text, @"^git version (\d+)\.(\d+)\.(\d+)(?:\D|$)", RegexOptions.CultureInvariant);
+        return match.Success && System.Version.TryParse($"{match.Groups[1]}.{match.Groups[2]}.{match.Groups[3]}", out var version)
+            ? version : null;
+    }
+
+    internal static RepositoryOpen.Refused? CheckVersion(string text) => ParseVersion(text) is not { } version || version < new Version(2, 39, 0)
+        ? new(MaterializationProblem.GitVersionUnsupported, text.TrimEnd('\r', '\n')) : null;
+
+    /// <summary>The persistent lock file is never deleted, so concurrent owners cannot lock different files at the same path.</summary>
+    public FileStream? TakeMutationLock()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(CommonDirectory, "idevelop")).FullName;
+        var patience = Stopwatch.StartNew();
+        do
+        {
+            try
+            {
+                return new FileStream(Path.Combine(folder, "mutation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(20);
+            }
+        } while (patience.Elapsed < TimeSpan.FromSeconds(1));
+        return null;
+    }
+
+    public GitRead<CommitId?> ResolveCommit(string revision)
+    {
+        var result = Git(ProjectFolder, ["rev-parse", "--verify", "--quiet", revision + "^{commit}"]);
+        return result.ExitCode switch
+        {
+            0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
+            1 => new GitRead<CommitId?>.Read(null),
+            _ => Failure<CommitId?>(result),
+        };
+    }
+
+    public GitRead<CommitId?> ReadRef(string name)
+    {
+        var result = Git(ProjectFolder, ["rev-parse", "--verify", "--quiet", name]);
+        return result.ExitCode switch
+        {
+            0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
+            1 => new GitRead<CommitId?>.Read(null),
+            _ => Failure<CommitId?>(result),
+        };
+    }
+
+    public GitRead<GitCommit> ReadCommit(CommitId commit)
+    {
+        var result = Git(ProjectFolder, ["cat-file", "commit", commit.Hex]);
+        if (result.ExitCode != 0)
+        {
+            return Failure<GitCommit>(result);
+        }
+        var headers = result.Text.Split('\n').TakeWhile(line => line.Length != 0).ToArray();
+        return new GitRead<GitCommit>.Read(new(new(headers.Single(line => line.StartsWith("tree ", StringComparison.Ordinal))[5..]),
+            [.. headers.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => new CommitId(line[7..]))]));
+    }
+
+    public GitRead<string> ObjectType(string objectId) => ReadText(Git(ProjectFolder, ["cat-file", "-t", objectId]), trim: true);
+
+    public GitAncestry IsAncestor(CommitId ancestor, CommitId descendant)
+    {
+        var result = Git(ProjectFolder, ["merge-base", "--is-ancestor", ancestor.Hex, descendant.Hex]);
+        return result.ExitCode switch { 0 => new GitAncestry.Yes(), 1 => new GitAncestry.No(), _ => new GitAncestry.Failed(result.Stderr) };
+    }
+
+    public GitRead<string?> SymbolicHead(string checkout)
+    {
+        var result = Git(checkout, ["symbolic-ref", "--quiet", "HEAD"]);
+        return result.ExitCode switch
+        {
+            0 => new GitRead<string?>.Read(result.Text.TrimEnd('\r', '\n')),
+            1 => new GitRead<string?>.Read(null),
+            _ => Failure<string?>(result),
+        };
+    }
+
+    public GitRead<ImmutableArray<StageEntry>> UnmergedEntries(string checkout)
+    {
+        var result = Git(checkout, ["ls-files", "-u", "-z"]);
+        if (result.ExitCode != 0)
+        {
+            return Failure<ImmutableArray<StageEntry>>(result);
+        }
+        var entries = NulFields(result).Select(entry =>
+        {
+            var tab = entry.IndexOf('\t');
+            var header = entry[..tab].Split(' ');
+            return new StageEntry(header[0], header[1], int.Parse(header[2], CultureInfo.InvariantCulture), entry[(tab + 1)..]);
+        });
+        return new GitRead<ImmutableArray<StageEntry>>.Read([.. entries]);
+    }
+
+    public GitRead<byte[]> Status(string checkout)
+    {
+        var result = Git(checkout, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+        return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
+    }
+
+    public GitRead<ImmutableArray<string>> UntrackedFiles(string checkout) => ReadPaths(Git(checkout, ["ls-files", "--others", "--exclude-standard", "-z"]));
+
+    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns)
+    {
+        var result = Git(ProjectFolder, ["for-each-ref", "--format=%(refname)%00%(objectname)", .. patterns]);
+        if (result.ExitCode != 0)
+        {
+            return Failure<SortedDictionary<string, CommitId>>(result);
+        }
+        var refs = new SortedDictionary<string, CommitId>(StringComparer.Ordinal);
+        foreach (var line in result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.Split('\0');
+            refs.Add(fields[0], new(fields[1]));
+        }
+        return new GitRead<SortedDictionary<string, CommitId>>.Read(refs);
+    }
+
+    public GitResult CheckIgnore(string checkout, string path) => Git(checkout, ["check-ignore", "-q", "--", path]);
+
+    public GitRead<ImmutableArray<string>> TrackedFiles(string checkout, params string[] paths) => ReadPaths(Git(checkout, ["ls-files", "-z", "--", .. paths]));
+
+    public GitRead<ImmutableArray<GitWorktree>> Worktrees()
+    {
+        var result = Git(ProjectFolder, ["worktree", "list", "--porcelain", "-z"]);
+        if (result.ExitCode != 0)
+        {
+            return Failure<ImmutableArray<GitWorktree>>(result);
+        }
+        var worktrees = ImmutableArray.CreateBuilder<GitWorktree>();
+        string? path = null, branch = null, reason = null;
+        CommitId? head = null;
+        var locked = false;
+        foreach (var field in result.Text.Split('\0'))
+        {
+            if (field.Length == 0 && path is not null)
+            {
+                worktrees.Add(new(path, head, branch, locked, reason));
+                path = branch = reason = null;
+                head = null;
+                locked = false;
+            }
+            else if (field.StartsWith("worktree ", StringComparison.Ordinal)) path = field[9..];
+            else if (field.StartsWith("HEAD ", StringComparison.Ordinal)) head = new(field[5..]);
+            else if (field.StartsWith("branch ", StringComparison.Ordinal)) branch = field[7..];
+            else if (field == "locked" || field.StartsWith("locked ", StringComparison.Ordinal))
+            {
+                locked = true;
+                reason = field.Length > 6 ? field[7..] : null;
+            }
+        }
+        return new GitRead<ImmutableArray<GitWorktree>>.Read(worktrees.ToImmutable());
+    }
+
+    public GitRead<string> IndexPath(string checkout) => ReadText(Git(checkout, ["rev-parse", "--path-format=absolute", "--git-path", "index"]), trim: true);
+
+    /// <summary>Null identifies an absent index, distinct from the digest of an existing empty file.</summary>
+    public GitRead<Digest?> IndexDigest(string checkout)
+    {
+        var index = IndexPath(checkout);
+        if (index is not GitRead<string>.Read path)
+        {
+            return ConvertFailure<string, Digest?>(index);
+        }
+        try
+        {
+            return new GitRead<Digest?>.Read(HashIndex(path.Value));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new GitRead<Digest?>.Failed(MaterializationProblem.GitFailed, error.Message);
+        }
+    }
+
+    public GitRead<GitCapture> Capture(string checkout, params string[] excludedPaths)
+    {
+        var index = IndexPath(checkout);
+        if (index is not GitRead<string>.Read path)
+        {
+            return ConvertFailure<string, GitCapture>(index);
+        }
+        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
+        try
+        {
+            var before = HashIndex(path.Value);
+            if (before is not null)
+            {
+                File.Copy(path.Value, temporary);
+                File.SetCreationTimeUtc(temporary, File.GetCreationTimeUtc(path.Value));
+                File.SetLastWriteTimeUtc(temporary, File.GetLastWriteTimeUtc(path.Value));
+                File.SetLastAccessTimeUtc(temporary, File.GetLastAccessTimeUtc(path.Value));
+            }
+            var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };
+            var exclusions = new[] { ".idp", ".worktrees" }.Concat(excludedPaths).Distinct(StringComparer.Ordinal);
+            var added = Git(checkout, ["add", "--all", "--", ".", .. exclusions.Select(exclusion => ":(exclude)" + exclusion)], environment);
+            if (added.ExitCode != 0)
+            {
+                return Failure<GitCapture>(added);
+            }
+            var tree = Git(checkout, ["write-tree"], environment);
+            return tree.ExitCode == 0
+                ? new GitRead<GitCapture>.Read(new(new(tree.Text.Trim()), before, HashIndex(path.Value)))
+                : Failure<GitCapture>(tree);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new GitRead<GitCapture>.Failed(MaterializationProblem.GitFailed, error.Message);
+        }
+        finally
+        {
+            File.Delete(temporary);
+            File.Delete(temporary + ".lock");
+        }
+    }
+
+    public GitRead<CommitId> CreateCommit(CommitRecipe recipe)
+    {
+        var author = Identity(recipe.Author);
+        var committer = Identity(recipe.Committer);
+        if (author is null || committer is null)
+        {
+            return new GitRead<CommitId>.Failed(MaterializationProblem.GitFailed, "Commit identities must have the form Name <email>.");
+        }
+        var date = $"@{recipe.Timestamp.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)} +0000";
+        var environment = new Dictionary<string, string>
+        {
+            ["GIT_AUTHOR_NAME"] = author.Value.Name, ["GIT_AUTHOR_EMAIL"] = author.Value.Email, ["GIT_AUTHOR_DATE"] = date,
+            ["GIT_COMMITTER_NAME"] = committer.Value.Name, ["GIT_COMMITTER_EMAIL"] = committer.Value.Email, ["GIT_COMMITTER_DATE"] = date,
+        };
+        var result = Git(ProjectFolder, ["-c", "commit.gpgSign=false", "commit-tree", recipe.Tree.Hex,
+            .. recipe.Parents.SelectMany(parent => new[] { "-p", parent.Hex }), "-F", "-"], environment, Encoding.UTF8.GetBytes(recipe.Message));
+        return result.ExitCode == 0 ? new GitRead<CommitId>.Read(new(result.Text.Trim())) : Failure<CommitId>(result);
+    }
+
+    public RefMove MoveRef(RefChange change)
+    {
+        var result = Git(ProjectFolder, ["update-ref", change.Ref, change.Target.Hex, change.Expected?.Hex ?? new string('0', 40)]);
+        if (result.ExitCode == 0)
+        {
+            return new RefMove.Moved();
+        }
+        return ReadRef(change.Ref) switch
+        {
+            GitRead<CommitId?>.Read observed when observed.Value == change.Target => new RefMove.AlreadyAtTarget(),
+            GitRead<CommitId?>.Read observed when observed.Value == change.Expected => new RefMove.Failed(result.Stderr),
+            GitRead<CommitId?>.Read observed => new RefMove.Conflict(observed.Value),
+            GitRead<CommitId?>.Failed failure => new RefMove.Failed(failure.Detail),
+            _ => throw new InvalidOperationException(),
+        };
+    }
+
+    public IndexAlignment AlignIndex(string checkout, Digest? expected, TreeId target)
+    {
+        var digest = IndexDigest(checkout);
+        if (digest is GitRead<Digest?>.Failed failure)
+        {
+            return new IndexAlignment.Failed(failure.Detail);
+        }
+        var observed = ((GitRead<Digest?>.Read)digest).Value;
+        var tree = ReadIndexTree(checkout);
+        if (tree is GitRead<TreeId>.Read current && current.Value == target)
+        {
+            return new IndexAlignment.AlreadyAligned();
+        }
+        if (observed != expected)
+        {
+            return new IndexAlignment.Unexpected(observed);
+        }
+        var read = Git(checkout, ["read-tree", target.Hex]);
+        if (read.ExitCode != 0)
+        {
+            return new IndexAlignment.Failed(read.Stderr);
+        }
+        var refresh = Git(checkout, ["update-index", "-q", "--refresh"]);
+        return refresh.ExitCode == 0 ? new IndexAlignment.Aligned() : new IndexAlignment.Failed(refresh.Stderr);
+    }
+
+    private GitRead<TreeId> ReadIndexTree(string checkout)
+    {
+        var index = IndexPath(checkout);
+        if (index is not GitRead<string>.Read path)
+        {
+            return ConvertFailure<string, TreeId>(index);
+        }
+        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
+        try
+        {
+            if (File.Exists(path.Value)) File.Copy(path.Value, temporary);
+            var tree = Git(checkout, ["write-tree"], new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary });
+            return tree.ExitCode == 0 ? new GitRead<TreeId>.Read(new(tree.Text.Trim())) : Failure<TreeId>(tree);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+        }
+        finally
+        {
+            File.Delete(temporary);
+            File.Delete(temporary + ".lock");
+        }
+    }
+
+    public GitResult AddWorktree(string relativePath, string branchShortName, CommitId start) =>
+        Git(ProjectFolder, ["worktree", "add", "-b", branchShortName, relativePath, start.Hex]);
+
+    public GitResult AddWorktreeForExistingBranch(string path, string branch) => Git(ProjectFolder, ["worktree", "add", path, branch]);
+
+    public GitResult LockWorktree(string path, string reason)
+    {
+        var result = Git(ProjectFolder, ["worktree", "lock", "--reason", reason, path]);
+        if (result.ExitCode != 0 && Worktrees() is GitRead<ImmutableArray<GitWorktree>>.Read list)
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(ProjectFolder, path));
+            if (list.Value.Any(worktree => Path.GetFullPath(worktree.Path) == fullPath && worktree.Locked && worktree.LockReason == reason))
+            {
+                return new(0, [], "");
+            }
+        }
+        return result;
+    }
+
+    public GitResult InitializeSubmodules(string checkout) => Git(checkout, ["submodule", "update", "--init", "--recursive"]);
+
+    public void EnsureExcluded()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(CommonDirectory, "info")).FullName;
+        var path = Path.Combine(folder, "exclude");
+        var contents = File.Exists(path) ? File.ReadAllBytes(path) : [];
+        var lines = Encoding.UTF8.GetString(contents).Split('\n').Select(line => line.TrimEnd('\r')).ToHashSet(StringComparer.Ordinal);
+        var missing = new[] { "/.worktrees/", "/.idp/inputs/", "/.idp/outbox/" }.Where(line => !lines.Contains(line)).ToArray();
+        if (missing.Length == 0)
+        {
+            return;
+        }
+        var separator = contents.Length != 0 && contents[^1] != (byte)'\n' ? "\n" : "";
+        AtomicFile.Replace(path, [.. contents, .. Encoding.UTF8.GetBytes(separator + string.Join('\n', missing) + "\n")]);
+    }
+
+    /// <summary>Call only after verifying retained salvage, quiescence, ownership, and an unchanged inventory.</summary>
+    public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, ["reset", "--hard", commit.Hex]);
+
+    /// <summary>The caller holds ownership and proves quiescence; matching content alone does not exclude concurrent writers.</summary>
+    public PathRemoval RemovePath(string checkout, string relativePath, Digest expected, GitPathType expectedType)
+    {
+        if (expectedType != GitPathType.RegularFile || Path.IsPathRooted(relativePath))
+        {
+            return PathRemoval.Unexpected;
+        }
+        var parts = relativePath.Replace('\\', '/').Split('/');
+        if (parts.Any(part => part is "" or "." or ".." || part.Contains(':')))
+        {
+            return PathRemoval.Unexpected;
+        }
+        var path = checkout;
+        foreach (var part in parts)
+        {
+            path = Path.Combine(path, part);
+            if (File.Exists(path) || Directory.Exists(path))
+            {
+                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                {
+                    return PathRemoval.Unexpected;
+                }
+            }
+        }
+        if (Directory.Exists(path))
+        {
+            return PathRemoval.Unexpected;
+        }
+        if (!File.Exists(path))
+        {
+            return PathRemoval.Absent;
+        }
+        if (!IsRegularFile(path) || HashIndex(path) != expected)
+        {
+            return PathRemoval.Unexpected;
+        }
+        File.Delete(path);
+        return PathRemoval.Removed;
+    }
+
+    /// <summary>
+    /// Git adds only regular files and links, and callers remove a path only after a fresh capture proved the same inventory
+    /// under quiescence, so a pipe or device cannot appear here without a writer the caller has already excluded.
+    /// </summary>
+    private static bool IsRegularFile(string path) =>
+        (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) == 0 &&
+        new FileInfo(path).LinkTarget is null;
+
+    private GitResult Git(string checkout, string[] arguments, IReadOnlyDictionary<string, string>? overlay = null, byte[]? stdin = null)
+    {
+        var environment = new Dictionary<string, string>(_environment);
+        if (overlay is not null)
+        {
+            foreach (var (key, value) in overlay) environment[key] = value;
+        }
+        return Run(arguments, checkout, environment, stdin);
+    }
+
+    private static GitResult Run(string[] arguments, string workingDirectory, IReadOnlyDictionary<string, string>? environment = null,
+        byte[]? stdin = null) => RunAsync(arguments, workingDirectory, environment, stdin).GetAwaiter().GetResult();
+
+    private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory,
+        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
+    {
+        var start = new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment) start.Environment[key] = value;
+        }
+        start.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        start.Environment["LC_ALL"] = "C";
+        start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        try
+        {
+            using var process = Process.Start(start)!;
+            using var output = new MemoryStream();
+            using var timeout = new CancellationTokenSource(Patience);
+            var stdout = process.StandardOutput.BaseStream.CopyToAsync(output, timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            try
+            {
+                if (stdin is not null) await process.StandardInput.BaseStream.WriteAsync(stdin, timeout.Token);
+                process.StandardInput.Close();
+                await process.WaitForExitAsync(timeout.Token);
+                await stdout;
+                return new(process.ExitCode, output.ToArray(), await stderr);
+            }
+            catch (Exception error) when (error is OperationCanceledException or IOException)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+                try { await stdout; } catch (OperationCanceledException) { }
+                string detail;
+                try { detail = await stderr; } catch (OperationCanceledException) { detail = ""; }
+                return new(-1, output.ToArray(), detail + (timeout.IsCancellationRequested ? "Git timed out." : error.Message));
+            }
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return new(-1, [], error.Message);
+        }
+    }
+
+    private static Digest? HashIndex(string path) => File.Exists(path) ? new(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))) : null;
+
+    private static (string Name, string Email)? Identity(string text)
+    {
+        var match = Regex.Match(text, @"^([^<>\r\n]+) <([^<>\r\n]+)>$", RegexOptions.CultureInvariant);
+        return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : null;
+    }
+
+    private static string[] NulFields(GitResult result) => result.Text.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    private static GitRead<ImmutableArray<string>> ReadPaths(GitResult result) => result.ExitCode == 0
+        ? new GitRead<ImmutableArray<string>>.Read([.. NulFields(result)]) : Failure<ImmutableArray<string>>(result);
+    private static GitRead<string> ReadText(GitResult result, bool trim = false) => result.ExitCode == 0
+        ? new GitRead<string>.Read(trim ? result.Text.TrimEnd('\r', '\n') : result.Text) : Failure<string>(result);
+    private static GitRead<T>.Failed Failure<T>(GitResult result) => new(MaterializationProblem.GitFailed, result.Stderr);
+    private static GitRead<TOut>.Failed ConvertFailure<TIn, TOut>(GitRead<TIn> result)
+    {
+        var failure = (GitRead<TIn>.Failed)result;
+        return new(failure.Problem, failure.Detail);
+    }
+}
