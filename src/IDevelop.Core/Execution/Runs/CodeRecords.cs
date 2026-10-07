@@ -94,7 +94,7 @@ internal sealed record ConfigEntry(string Key, string Value);
 /// <summary>A fan-in conflict as Git reported it, stored and replayed without interpreting the merge.</summary>
 internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int Step, ImmutableArray<string> Paths,
     ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, EvidenceFile Stdout, EvidenceFile Stderr, string GitVersion,
-    ImmutableArray<ConfigEntry> MergeConfig);
+    ImmutableArray<ConfigEntry> MergeConfig, CommitId AttributeSource);
 
 internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, AttemptId? Attempt, MaterializationProblem Problem,
     InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null);

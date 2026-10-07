@@ -35,3 +35,14 @@ internal sealed class UnixFactAttribute : FactAttribute
         }
     }
 }
+
+internal sealed class UnixTheoryAttribute : TheoryAttribute
+{
+    public UnixTheoryAttribute()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip = "Linux and macOS only.";
+        }
+    }
+}

@@ -129,7 +129,7 @@ internal static partial class RunValidation
     private static bool Reference(string reference) => Path(reference) && reference.StartsWith("refs/", StringComparison.Ordinal) &&
         !reference.Contains("..", StringComparison.Ordinal) && !reference.Any(char.IsWhiteSpace);
 
-    private static bool Conflict(ConflictEvidence conflict) => !conflict.Sources.IsDefault && conflict.Sources.All(Source) && conflict.Step > 0 &&
+    private static bool Conflict(ConflictEvidence conflict) => Revision.IsCommit(conflict.AttributeSource.Hex) && !conflict.Sources.IsDefault && conflict.Sources.All(Source) && conflict.Step > 0 &&
         !conflict.Paths.IsDefault && conflict.Paths.All(Path) && !conflict.Stages.IsDefault && conflict.Stages.All(stage =>
             Path(stage.Path) && stage.Stage is >= 1 and <= 3 && Revision.IsCommit(stage.Object) && !string.IsNullOrWhiteSpace(stage.Mode)) &&
         !conflict.Messages.IsDefault && conflict.Messages.All(message => !message.Paths.IsDefault && message.Paths.All(Path) &&
