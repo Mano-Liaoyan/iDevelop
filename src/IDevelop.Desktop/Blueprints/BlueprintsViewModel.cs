@@ -150,6 +150,8 @@ public sealed class BlueprintEntryViewModel
 
     public string EditName => $"Edit {Name}";
 
+    public string MoreName => $"More for {Name}";
+
     public ICommand PlaceCommand { get; }
 
     public ICommand DeriveCommand { get; }

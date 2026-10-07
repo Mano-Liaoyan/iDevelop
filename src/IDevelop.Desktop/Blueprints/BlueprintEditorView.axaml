@@ -14,7 +14,7 @@
 
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>
-        <inspector:InspectorRow Label="Library" IsShown="{Binding IsNew}">
+        <inspector:InspectorRow Layout="Editor" Label="Library" IsShown="{Binding IsNew}">
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
             <UniformGrid Columns="2">
               <RadioButton Classes="segment" GroupName="BlueprintLibrary" Content="Project"
@@ -28,7 +28,7 @@
             </UniformGrid>
           </Border>
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Name">
+        <inspector:InspectorRow Layout="Editor" Label="Name">
           <TextBox Text="{Binding Name}"
                    AutomationProperties.AutomationId="BlueprintName"
                    AutomationProperties.Name="Name" />
@@ -58,7 +58,7 @@
               <Border Padding="8,6" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
                       BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
                 <StackPanel>
-                  <inspector:InspectorRow Label="Key">
+                  <inspector:InspectorRow Layout="Editor" Label="Key">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
                       <TextBox Text="{Binding Key}"
                                AutomationProperties.AutomationId="FieldKey" AutomationProperties.Name="Key" />
@@ -69,7 +69,7 @@
                       </Button>
                     </Grid>
                   </inspector:InspectorRow>
-                  <inspector:InspectorRow Label="Label">
+                  <inspector:InspectorRow Layout="Editor" Label="Label">
                     <TextBox Text="{Binding Label}"
                              AutomationProperties.AutomationId="FieldLabel" AutomationProperties.Name="Label" />
                   </inspector:InspectorRow>
@@ -122,20 +122,20 @@
 
     <inspector:InspectorSection Key="BlueprintDefaults" Title="Defaults" IsShown="{Binding HasTemplate}">
       <StackPanel>
-        <inspector:InspectorRow Label="Client">
+        <inspector:InspectorRow Layout="Editor" Label="Client">
           <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding Client}"
                     AutomationProperties.AutomationId="BlueprintClient"
                     AutomationProperties.Name="Client" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Model" IsShown="{Binding HasClient}">
+        <inspector:InspectorRow Layout="Editor" Label="Model" IsShown="{Binding HasClient}">
           <TextBox Text="{Binding Model}" Watermark="The client's default"
                    AutomationProperties.AutomationId="BlueprintModel" AutomationProperties.Name="Model" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Reasoning" IsShown="{Binding HasClient}">
+        <inspector:InspectorRow Layout="Editor" Label="Reasoning" IsShown="{Binding HasClient}">
           <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
                    AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Label="Conversation" IsShown="{Binding IsAgent}">
+        <inspector:InspectorRow Layout="Editor" Label="Conversation" IsShown="{Binding IsAgent}">
           <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
                     AutomationProperties.AutomationId="BlueprintConversation"
                     AutomationProperties.Name="Conversation" />

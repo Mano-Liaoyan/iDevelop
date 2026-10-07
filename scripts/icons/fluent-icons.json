@@ -58,6 +58,18 @@
     { "key": "IconPanelBottom", "asset": "Layout Row Two", "file": "ic_fluent_layout_row_two_16_regular.svg" },
     { "key": "IconMaximize", "asset": "Arrow Maximize", "file": "ic_fluent_arrow_maximize_16_regular.svg" },
     { "key": "IconArrowDown", "asset": "Arrow Down", "file": "ic_fluent_arrow_down_16_regular.svg" },
-    { "key": "IconShieldDismiss", "asset": "Shield Dismiss", "file": "ic_fluent_shield_dismiss_16_regular.svg" }
+    { "key": "IconShieldDismiss", "asset": "Shield Dismiss", "file": "ic_fluent_shield_dismiss_16_regular.svg" },
+    { "key": "IconModel", "asset": "Brain", "file": "ic_fluent_brain_16_regular.svg" },
+    { "key": "IconReasoning", "asset": "Gauge", "file": "ic_fluent_gauge_16_regular.svg" },
+    { "key": "IconConversation", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
+    { "key": "IconStatus", "asset": "Status", "file": "ic_fluent_status_16_regular.svg" },
+    { "key": "IconTime", "asset": "History", "file": "ic_fluent_history_16_regular.svg" },
+    { "key": "IconField", "asset": "Text Field", "file": "ic_fluent_text_field_16_regular.svg" },
+    { "key": "IconBrief", "asset": "Document Text", "file": "ic_fluent_document_text_16_regular.svg" },
+    { "key": "IconGoal", "asset": "Target Arrow", "file": "ic_fluent_target_arrow_16_regular.svg" },
+    { "key": "IconConstraints", "asset": "Lock Closed", "file": "ic_fluent_lock_closed_16_regular.svg" },
+    { "key": "IconChecklist", "asset": "Text Bullet List LTR", "file": "ic_fluent_text_bullet_list_ltr_16_regular.svg" },
+    { "key": "IconVersion", "asset": "Tag", "file": "ic_fluent_tag_16_regular.svg" },
+    { "key": "IconDescription", "asset": "Text Description", "file": "ic_fluent_text_description_16_regular.svg" }
   ]
 }
