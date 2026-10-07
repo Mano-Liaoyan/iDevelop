@@ -51,6 +51,18 @@
     { "key": "IconFlowchart", "asset": "Flowchart", "file": "ic_fluent_flowchart_16_regular.svg" },
     { "key": "IconCheckmark", "asset": "Checkmark", "file": "ic_fluent_checkmark_16_regular.svg" },
     { "key": "IconWireDependency", "asset": "Line Horizontal 1", "file": "ic_fluent_line_horizontal_1_16_regular.svg" },
-    { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" }
+    { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" },
+    { "key": "IconModel", "asset": "Brain", "file": "ic_fluent_brain_16_regular.svg" },
+    { "key": "IconReasoning", "asset": "Gauge", "file": "ic_fluent_gauge_16_regular.svg" },
+    { "key": "IconConversation", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
+    { "key": "IconStatus", "asset": "Status", "file": "ic_fluent_status_16_regular.svg" },
+    { "key": "IconTime", "asset": "History", "file": "ic_fluent_history_16_regular.svg" },
+    { "key": "IconField", "asset": "Text Field", "file": "ic_fluent_text_field_16_regular.svg" },
+    { "key": "IconBrief", "asset": "Document Text", "file": "ic_fluent_document_text_16_regular.svg" },
+    { "key": "IconGoal", "asset": "Target Arrow", "file": "ic_fluent_target_arrow_16_regular.svg" },
+    { "key": "IconConstraints", "asset": "Lock Closed", "file": "ic_fluent_lock_closed_16_regular.svg" },
+    { "key": "IconChecklist", "asset": "Text Bullet List LTR", "file": "ic_fluent_text_bullet_list_ltr_16_regular.svg" },
+    { "key": "IconVersion", "asset": "Tag", "file": "ic_fluent_tag_16_regular.svg" },
+    { "key": "IconDescription", "asset": "Text Description", "file": "ic_fluent_text_description_16_regular.svg" }
   ]
 }

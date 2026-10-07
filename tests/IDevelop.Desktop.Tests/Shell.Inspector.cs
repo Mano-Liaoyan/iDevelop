@@ -35,6 +35,14 @@ internal sealed partial class Shell
         return (AutomationProperties.GetName(glyph), ToolTip.GetTip(glyph));
     }
 
+    /// <summary>Sets the inspector's width, as dragging the splitter before it does, within its 280 to 520 px range.</summary>
+    public void SizeInspector(double width)
+    {
+        var inspector = Find<Control>("Inspector");
+        ((Grid)inspector.Parent!).ColumnDefinitions[Grid.GetColumn(inspector)].Width = new GridLength(width);
+        Render();
+    }
+
     public void FilterInspector(string text)
     {
         Click(Find<TextBox>("InspectorFilter"));

@@ -10,6 +10,21 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed class FieldViewModel : ObservableObject
 {
+    /// <summary>
+    /// The icon of each built-in field key, which a derived blueprint keeps with its meaning. Any other key is a field a
+    /// person defined, whose meaning the app cannot know, so it shows the neutral field icon.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> Icons = new Dictionary<string, string>
+    {
+        ["instructions"] = "IconEdit",
+        ["acceptanceCriteria"] = "IconCheckmark",
+        ["goal"] = "IconGoal",
+        ["constraints"] = "IconConstraints",
+        ["brief"] = "IconBrief",
+        ["focus"] = "IconChecklist",
+        ["checklist"] = "IconChecklist",
+    };
+
     private readonly TaskNodeViewModel _node;
 
     internal FieldViewModel(TaskNodeViewModel node, FieldSpec spec)
@@ -23,6 +38,8 @@ public sealed class FieldViewModel : ObservableObject
 
     /// <summary>The label's tooltip, which says when the field is required.</summary>
     public string LabelTip => Spec.Required ? $"{Spec.Label} · Required" : Spec.Label;
+
+    public string IconKey => Icons.GetValueOrDefault(Spec.Key, "IconField");
 
     public bool IsMultiline => Spec.Shape == FieldShape.Text;
 
