@@ -125,7 +125,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         document.Save();
 
         Assert.False(document.HasUnsavedChanges);
-        Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(folder, ".idp", ".gitignore")));
         Assert.Equal(
             new[] { $"{document.Current.Id}.json" },
             Directory.EnumerateFiles(Path.Combine(folder, ".idp", "workflows")).Select(Path.GetFileName));
@@ -148,7 +148,7 @@ public sealed class WorkflowDocumentTests : IDisposable
         document.Apply(new EditTitle(Design, "Changed again"));
         document.Save();
 
-        Assert.Equal("# mine\r\n*.tmp\r\nnotes.md\nattempts/\n", File.ReadAllText(gitignore));
+        Assert.Equal("# mine\r\n*.tmp\r\nnotes.md\nattempts/\nruns/\n", File.ReadAllText(gitignore));
     }
 
     [Fact]

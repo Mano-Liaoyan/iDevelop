@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using IDevelop.Nodes;
@@ -103,6 +104,14 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         DateTimeOffset At, AttemptId Attempt, TaskId Task, string TaskTitle, ExecutionSettings Settings,
         string Prompt, string Command, ImmutableArray<string> Arguments) : AttemptEvent(At)
     {
+        /// <summary>The task as a fresh standalone attempt ran it, which a run can check before reusing the report. Null in older logs.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? StandaloneCapture { get; init; }
+
+        /// <summary>The run that owns the attempt. Null for a standalone attempt.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public RunBinding? RunBinding { get; init; }
+
         /// <summary>Set when the first turn resumes an earlier attempt's session, and then its prompt is the person's message.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public Continuation? Continues { get; init; }

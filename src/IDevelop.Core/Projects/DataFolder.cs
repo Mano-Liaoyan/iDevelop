@@ -7,18 +7,20 @@ internal static class DataFolder
 {
     public const string Name = ".idp";
 
-    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/"];
+    private static readonly string[] IgnoredLines = ["*.tmp", "attempts/", "runs/"];
 
     public static string Workflows(string projectFolder) => Path.Combine(projectFolder, Name, "workflows");
 
     public static string Attempts(string projectFolder) => Path.Combine(projectFolder, Name, "attempts");
 
+    public static string Runs(string projectFolder) => Path.Combine(projectFolder, Name, "runs");
+
     /// <summary>The project's blueprint library, which Git tracks.</summary>
     public static string Blueprints(string projectFolder) => Path.Combine(projectFolder, Name, "blueprints");
 
     /// <summary>
-    /// Makes <c>.idp/.gitignore</c> ignore temporary files and attempts. It keeps the user's lines and appends the
-    /// missing ones, so a project saved before attempts existed gains "attempts/".
+    /// Makes <c>.idp/.gitignore</c> ignore temporary files, attempts, and runs. It keeps the user's lines and appends the
+    /// missing ones when an older project gains execution records.
     /// </summary>
     public static void EnsureGitIgnore(string projectFolder)
     {
