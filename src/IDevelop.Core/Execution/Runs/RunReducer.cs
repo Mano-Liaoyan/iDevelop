@@ -4,7 +4,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>Folds run events into a record and validates their transitions.</summary>
-internal static class RunReducer
+internal static partial class RunReducer
 {
     public static RunRead Replay(WorkflowId workflow, RunId run, IEnumerable<RunEntry> entries)
     {
@@ -25,7 +25,7 @@ internal static class RunReducer
     public static RunRead Apply(WorkflowId workflow, RunId run, RunRecord? record, RunEntry entry)
     {
         RunRead Reject(RunProblem problem, TaskId? task = null) => new RunRead.Rejected(new(problem, entry.Sequence, task), record);
-        if (entry.Schema != 1)
+        if (entry.Schema is not (1 or 2) || record is not null && entry.Schema != record.Schema)
         {
             return Reject(RunProblem.UnsupportedSchema);
         }
@@ -52,7 +52,7 @@ internal static class RunReducer
                 return Reject(RunProblem.IdentityMismatch);
             }
 
-            record = new(run, workflow, approved.Base, approved.Revision);
+            record = new(run, workflow, approved.Base, approved.Revision) { Schema = entry.Schema };
         }
         else
         {
@@ -71,9 +71,7 @@ internal static class RunReducer
                 return Reject(RunProblem.StartConflict);
             }
 
-            // Settlement requires every attempt closed, so only an abandoned run can still have ownership to resolve.
-            if (record.Phase is RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed ||
-                record.Phase == RunPhase.Abandoned && entry.Event is not (RunEvent.AttemptClosed or RunEvent.TurnClosed))
+            if (!Permitted(record, entry.Event))
             {
                 return Reject(RunProblem.RunStopped);
             }
@@ -131,6 +129,11 @@ internal static class RunReducer
                         return Reject(input.Problem, input.Task);
                     }
 
+                    if (record.Schema == 2 && ReservedProblem(record, reserved) is { } materialInput)
+                    {
+                        return Reject(materialInput);
+                    }
+
                     record = record with
                     {
                         Attempts = record.Attempts.Add(attempt.Id, attempt),
@@ -172,6 +175,12 @@ internal static class RunReducer
                     if (InputProblem(record, claim.Inputs, fresh: !record.Inputs.ContainsKey(claim.Inputs.Id)) is { } turnInput)
                     {
                         return Reject(turnInput.Problem, turnInput.Task);
+                    }
+
+                    if (record.Schema == 2 && (!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
+                        prepared.Inputs != claim.Inputs.Id || prepared.PromptHash != claim.Prompt))
+                    {
+                        return Reject(RunProblem.InvalidClaim);
                     }
 
                     record = record with
@@ -221,7 +230,8 @@ internal static class RunReducer
                         return Reject(RunProblem.IdentityMismatch);
                     }
 
-                    if (resultTask.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly })
+                    if (resultTask.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } &&
+                        (record.Schema == 1 || resultTask.Blueprint.Work is WorkSpec.Person))
                     {
                         return Reject(RunProblem.UnsupportedResult);
                     }
@@ -290,6 +300,10 @@ internal static class RunReducer
                         default:
                             return Reject(RunProblem.UnsupportedResult);
                     }
+                    if (record.Schema == 2 && ResultCodeProblem(record, accepted, resultTask) is { } codeProblem)
+                    {
+                        return Reject(codeProblem);
+                    }
                     record = record with
                     {
                         Results = record.Results.Add(result),
@@ -308,6 +322,12 @@ internal static class RunReducer
                     };
                     break;
                 case RunEvent.Settled settled:
+                    if (record.Plans.Any(pair => pair.Value is MaterializationPlan.Publication publication &&
+                        !record.Results.Any(result => result.Id == publication.Result) &&
+                        !record.Blocks.Values.Any(block => block.Block.Operation == pair.Key)))
+                    {
+                        return Reject(RunProblem.UnfinishedPublication);
+                    }
                     if (record.Attempts.Keys.Any(id => !record.Closures.ContainsKey(id)) || record.UnresolvedClaims.Length != 0)
                     {
                         return Reject(RunProblem.UnclosedAttempts);
@@ -334,6 +354,14 @@ internal static class RunReducer
                     {
                         Phase = RunPhase.Abandoned
                     };
+                    break;
+                default:
+                    var material = ApplyMaterialization(record, entry);
+                    if (material.Problem is { } materialProblem)
+                    {
+                        return Reject(materialProblem);
+                    }
+                    record = material.Record;
                     break;
             }
         }
@@ -370,7 +398,9 @@ internal static class RunReducer
         return null;
     }
 
-    internal static RunAttempt? Slot(RunRecord record, TaskId task, AttemptCause cause) => record.Attempts.Values.FirstOrDefault(attempt =>
+    internal static RunAttempt? Slot(RunRecord record, TaskId task, AttemptCause cause) => record.Attempts.Values.FirstOrDefault(attempt => MatchesSlot(attempt, task, cause));
+
+    internal static bool MatchesSlot(RunAttempt attempt, TaskId task, AttemptCause cause) =>
         attempt.Task == task && (cause switch
         {
             AttemptCause.Initial => attempt.Cause is AttemptCause.Initial,
@@ -379,7 +409,7 @@ internal static class RunReducer
             AttemptCause.Retry retry => Previous(attempt.Cause) == retry.Previous,
             AttemptCause.Continue continued => Previous(attempt.Cause) == continued.Previous,
             _ => false,
-        }));
+        });
 
     internal static AttemptId? Previous(AttemptCause cause) => cause switch
     {
@@ -458,8 +488,9 @@ internal static class RunReducer
         return null;
     }
 
-    internal static bool SameInput(InputRecord left, InputRecord right) => left.Id == right.Id && left.Task == right.Task &&
-        left.Revision == right.Revision && left.CodeBase == right.CodeBase && left.Text == right.Text && left.Bindings.SequenceEqual(right.Bindings);
+    internal static bool Same<T>(T left, T right) => RunJournal.Canonical(left) == RunJournal.Canonical(right);
+
+    internal static bool SameInput(InputRecord left, InputRecord right) => Same(left, right);
 
     internal static RunRejection? InputProblem(RunRecord record, InputRecord input, bool fresh)
     {
@@ -521,7 +552,7 @@ internal static class RunReducer
     }
 }
 
-internal static class RunValidation
+internal static partial class RunValidation
 {
     public static RunProblem? Entry(RunEntry entry)
     {
@@ -530,6 +561,10 @@ internal static class RunValidation
             return RunProblem.InvalidData;
         }
 
+        if (SchemaProblem(entry) is { } schema)
+        {
+            return schema;
+        }
         return entry.Event switch
         {
             RunEvent.Approved approved => approved.Run.Value == Guid.Empty || !Base(approved.Base) ? RunProblem.InvalidData :
@@ -547,7 +582,7 @@ internal static class RunValidation
                 RunProblem.ConfirmationRequired : null,
             RunEvent.Settled settled => !Enum.IsDefined(settled.Outcome) ? RunProblem.InvalidData : null,
             RunEvent.StopRequested => null,
-            _ => RunProblem.UnsupportedEvent,
+            _ => Materialization(entry.Event),
         };
     }
 
@@ -571,13 +606,17 @@ internal static class RunValidation
 
     private static bool Input(InputRecord input) => input.Id.Value != Guid.Empty && input.Task.Value != Guid.Empty &&
         Revision.IsHash(input.Revision.Sha256) &&
-        Revision.IsCommit(input.CodeBase.Hex) && input.Text is not null && !input.Bindings.IsDefault && input.Bindings.All(binding => binding switch
-        {
-            InputBinding.Provided provided => provided.Edge.From.Value != Guid.Empty && provided.Edge.To.Value != Guid.Empty &&
-                Enum.IsDefined(provided.Kind) && provided.Result.Value != Guid.Empty,
-            InputBinding.MissingContext missing => missing.Edge.From.Value != Guid.Empty && missing.Edge.To.Value != Guid.Empty,
-            _ => false,
-        });
+        Code(input.Code) && input.Text is not null && !input.Files.IsDefault && input.Files.All(file =>
+            file.Source.Value != Guid.Empty && Path(file.RelativePath) && Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0) &&
+        Review(input.Review) && Bindings(input.Bindings);
+
+    private static bool Bindings(ImmutableArray<InputBinding> bindings) => !bindings.IsDefault && bindings.All(binding => binding switch
+    {
+        InputBinding.Provided provided => provided.Edge.From.Value != Guid.Empty && provided.Edge.To.Value != Guid.Empty &&
+            Enum.IsDefined(provided.Kind) && provided.Result.Value != Guid.Empty,
+        InputBinding.MissingContext missing => missing.Edge.From.Value != Guid.Empty && missing.Edge.To.Value != Guid.Empty,
+        _ => false,
+    });
 
     private static bool Attempt(RunAttempt attempt) => attempt.Id.Value != Guid.Empty && attempt.Task.Value != Guid.Empty &&
         Revision.IsHash(attempt.Revision.Sha256) && attempt.InitialInputs.Value != Guid.Empty && (attempt.Cause switch
@@ -600,7 +639,9 @@ internal static class RunValidation
 
     private static bool Result(ResultRecord result) => result.Id.Value != Guid.Empty && result.Task.Value != Guid.Empty &&
         Revision.IsHash(result.Revision.Sha256) && result.Inputs.Value != Guid.Empty && result.Report is not null &&
-        result.Supersedes?.Value != Guid.Empty && (result.Origin switch
+        result.Supersedes?.Value != Guid.Empty && !result.Artifacts.IsDefault && result.Artifacts.All(Artifact) &&
+        (result.Code is null || result.Code is CodeOutput.Forwarded forwarded && forwarded.Inputs.Value != Guid.Empty ||
+            result.Code is CodeOutput.Produced produced && Owned(produced.Code)) && (result.Origin switch
         {
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&

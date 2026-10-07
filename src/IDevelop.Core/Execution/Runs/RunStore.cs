@@ -66,69 +66,162 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
         });
 
-    public RunDecision Reserve(WorkflowId workflow, RunId run, OperationId operation, TaskId task, RevisionId revision,
-        AttemptCause cause, CommitId codeBase, string text) =>
-        Transact(workflow, run, operation, Fingerprint("reserve", new
-        {
-            task,
-            revision,
-            cause,
-            codeBase,
-            text
-        }), (record, _) =>
+    public RunDecision Plan(WorkflowId workflow, RunId run, OperationId operation, TaskId task, RevisionId revision, AttemptCause cause) =>
+        Transact(workflow, run, operation, Fingerprint("plan", new { task, revision, cause }), (record, _) =>
         {
             if (record is null)
             {
                 return Missing();
             }
-
+            if (record.Schema != 2)
+            {
+                return Refuse(RunProblem.UnsupportedSchema);
+            }
+            if (record.Phase != RunPhase.Approved)
+            {
+                return Refuse(RunProblem.RunStopped);
+            }
             if (cause is AttemptCause.Retry { Confirmation.Value: var retry } && retry == Guid.Empty ||
                 cause is AttemptCause.Continue { Confirmation.Value: var continued } && continued == Guid.Empty)
             {
                 return Refuse(RunProblem.ConfirmationRequired);
             }
-
             if (RunReducer.Slot(record, task, cause) is { } existing)
             {
-                var original = Reservation(record, existing.Id);
-                var inputs = original.Inputs;
-                var sameCause = cause switch
-                {
-                    AttemptCause.Retry => existing.Cause is AttemptCause.Retry,
-                    AttemptCause.Continue => existing.Cause is AttemptCause.Continue,
-                    _ => existing.Cause == cause,
-                };
-                return existing.Revision == revision && inputs.CodeBase == codeBase && inputs.Text == text && sameCause
-                    ? new Mutation.Existing(original)
-                    : new Mutation.Rejected(new(RunReducer.Previous(cause) is null ? RunProblem.StartConflict : RunProblem.ReplacementConflict));
+                var sameCause = existing.Cause.GetType() == cause.GetType();
+                return existing.Revision == revision && sameCause
+                    ? new Mutation.Existing(new RunEvent.Planned(record.Plans.Values.OfType<MaterializationPlan.Preparation>()
+                        .Single(plan => plan.Attempt == existing.Id)))
+                    : Refuse(RunReducer.Previous(cause) is null ? RunProblem.StartConflict : RunProblem.ReplacementConflict);
             }
             if (RunReducer.ReservationTaskProblem(record, task, revision) is { } taskProblem)
             {
                 return new Mutation.Rejected(taskProblem);
             }
-
-            if (!Revision.IsCommit(codeBase.Hex) || text is null)
+            if (RunReducer.ReservationProblem(record, task, cause) is { } reservation)
             {
-                return Refuse(RunProblem.InvalidData);
+                return Refuse(reservation);
             }
-
-            if (RunReducer.ReservationProblem(record, task, cause) is { } problem)
-            {
-                return Refuse(problem);
-            }
-
-            var capture = Inputs(record, task, revision, default, codeBase, text);
+            var capture = Inputs(record, task, revision, default);
             if (capture.Rejection is { } rejection)
             {
                 return new Mutation.Rejected(rejection);
             }
-
-            var capturedInputs = capture.Inputs! with
+            var bindings = capture.Inputs!.Bindings;
+            var sources = InputMaterial.Sources(record, bindings);
+            var review = InputMaterial.Review(record.Revisions[revision].Snapshot, task, bindings);
+            var candidate = new MaterializationPlan.Preparation(default, default, task, revision, cause, bindings, sources, review);
+            if (RunReducer.PlanProblem(record, candidate) is { } problem)
             {
-                Id = new(_ids())
-            };
-            var attempt = new RunAttempt(new(_ids()), task, revision, capturedInputs.Id, cause);
-            return new Mutation.Append(new RunEvent.Reserved(attempt, capturedInputs));
+                return Refuse(problem);
+            }
+            var original = record.Plans.Where(pair => pair.Value is MaterializationPlan.Preparation)
+                .OrderByDescending(pair => record.Receipts[pair.Key].Sequence).Select(pair => (MaterializationPlan.Preparation)pair.Value)
+                .FirstOrDefault(plan => RunReducer.MatchesSlot(new(plan.Attempt, plan.Task, plan.Revision, plan.Inputs, plan.Cause), task, cause) &&
+                    plan.Revision == revision && plan.Cause.GetType() == cause.GetType() && RunReducer.Same(plan.Bindings, bindings) &&
+                    RunReducer.Same(plan.Sources, sources) && RunReducer.Same(plan.Review, review));
+            if (original is not null)
+            {
+                return new Mutation.Existing(new RunEvent.Planned(original));
+            }
+            var inputs = new InputId(_ids());
+            return new Mutation.Append(new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) }));
+        });
+
+    public RunDecision Reserve(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, JoinRecord? join = null) =>
+        Transact(workflow, run, operation, Fingerprint("reserve", new { plan, join }), (record, _) =>
+        {
+            if (record is null)
+            {
+                return Missing();
+            }
+            if (record.Schema != 2)
+            {
+                return Refuse(RunProblem.UnsupportedSchema);
+            }
+            if (record.Phase != RunPhase.Approved)
+            {
+                return Refuse(RunProblem.RunStopped);
+            }
+            if (record.Plans.GetValueOrDefault(plan) is not MaterializationPlan.Preparation preparation)
+            {
+                return Refuse(RunProblem.InvalidData);
+            }
+            InputRecord inputs;
+            try
+            {
+                inputs = InputMaterial.Build(record, preparation, join);
+            }
+            catch (ArgumentException)
+            {
+                return Refuse(RunProblem.InputConflict);
+            }
+            if (record.Attempts.TryGetValue(preparation.Attempt, out var existing))
+            {
+                var reserved = Reservation(record, existing.Id);
+                return RunReducer.SameInput(reserved.Inputs, inputs) ? new Mutation.Existing(reserved) : Refuse(RunProblem.InputConflict);
+            }
+            if (RunReducer.InputProblem(record, inputs, true) is { } inputProblem)
+            {
+                return new Mutation.Rejected(inputProblem);
+            }
+            if (RunReducer.PlanProblem(record, preparation) is { } planProblem)
+            {
+                return Refuse(planProblem);
+            }
+            return new Mutation.Append(new RunEvent.Reserved(new(preparation.Attempt, preparation.Task, preparation.Revision,
+                preparation.Inputs, preparation.Cause), inputs));
+        });
+
+    public RunDecision Record(WorkflowId workflow, RunId run, OperationId operation, RunEvent e) =>
+        Transact(workflow, run, operation, Fingerprint("record", e), (record, _) =>
+        {
+            if (record is null)
+            {
+                return Missing();
+            }
+            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Salvage or
+                MaterializationPlan.RetryReset } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
+                RunEvent.SalvageRetained or RunEvent.BlockResolved))
+            {
+                return Refuse(RunProblem.InvalidData);
+            }
+            if (!RunReducer.Permitted(record, e))
+            {
+                return Refuse(RunProblem.RunStopped);
+            }
+            return new Mutation.Append(e);
+        });
+
+    public RunDecision AcceptPublication(WorkflowId workflow, RunId run, OperationId operation, OperationId publication) =>
+        Transact(workflow, run, operation, Fingerprint("acceptPublication", new { publication }), (record, _) =>
+        {
+            if (record is null)
+            {
+                return Missing();
+            }
+            if (record.Plans.GetValueOrDefault(publication) is not MaterializationPlan.Publication plan)
+            {
+                return Refuse(RunProblem.InvalidData);
+            }
+            if (record.Results.FirstOrDefault(result => result.Id == plan.Result) is { } existing)
+            {
+                return new Mutation.Existing(new RunEvent.ResultAccepted(existing, record.Inputs[existing.Inputs]));
+            }
+            var attempt = record.Attempts[plan.Attempt];
+            var closure = (AttemptEnd.Logged)record.Closures[attempt.Id];
+            var read = OwnedEvidence(record, attempt, closure.Evidence);
+            if (read.Rejection is { } rejection)
+            {
+                return new Mutation.Rejected(rejection);
+            }
+            if (!AttemptEvidence.Matches(read, TerminalAttemptOutcome.Succeeded) || read.Record!.Result != plan.Report ||
+                !record.Claims.ContainsKey(new(attempt.Id, read.Record.Turns.Count)))
+            {
+                return Refuse(RunProblem.OutcomeMismatch);
+            }
+            var result = RunReducer.PublicationResult(record, plan);
+            return new Mutation.Append(new RunEvent.ResultAccepted(result, record.Inputs[result.Inputs]));
         });
 
     public RunDecision Claim(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, InputRecord inputs, Digest prompt) =>
@@ -182,7 +275,7 @@ internal sealed class RunStore
 
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
-                return existing == evidence
+                return RunReducer.Same(existing, evidence)
                             ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing)) : Refuse(RunProblem.EvidenceMismatch);
             }
 
@@ -227,7 +320,7 @@ internal sealed class RunStore
             var end = new AttemptEnd.Logged(outcome, evidence);
             if (record.Closures.TryGetValue(attempt, out var existing))
             {
-                return existing == end
+                return RunReducer.Same<AttemptEnd>(existing, end)
                 ? new Mutation.Existing(new RunEvent.AttemptClosed(attempt, end)) : Refuse(RunProblem.OutcomeMismatch);
             }
 
@@ -362,7 +455,8 @@ internal sealed class RunStore
                 return Refuse(RunProblem.UnknownInput);
             }
 
-            if (record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly })
+            if (record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } &&
+                (record.Schema == 1 || record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Review))
             {
                 return Refuse(RunProblem.UnsupportedResult);
             }
@@ -390,7 +484,10 @@ internal sealed class RunStore
             }
 
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), owner.Task, owner.Revision, inputs,
-                            new ResultOrigin.Executed(attempt), report, supersedes), capture));
+                            new ResultOrigin.Executed(attempt), report, supersedes)
+            {
+                Code = record.Schema == 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
+            }, capture));
         });
 
     public RunDecision ReuseReport(WorkflowId workflow, RunId run, OperationId operation, TaskId task, AttemptSource.Standalone source,
@@ -413,7 +510,7 @@ internal sealed class RunStore
             }
 
             var previous = record.Results.FirstOrDefault(result => result.Task == task && result.Origin is ResultOrigin.Reused reused &&
-                reused.Source == source);
+                RunReducer.Same<AttemptSource>(reused.Source, source));
             if (previous is not null)
             {
                 return new Mutation.Existing(new RunEvent.ResultAccepted(previous, record.Inputs[previous.Inputs]));
@@ -435,7 +532,8 @@ internal sealed class RunStore
                 return new Mutation.Rejected(rejection);
             }
 
-            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [], record.Base.Commit, "");
+            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [],
+                record.Schema == 1 ? new CodeSelection.Legacy(record.Base.Commit) : new CodeSelection.Root(record.Base.Commit), "", [], null);
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), task, record.Revision.Id, inputs.Id,
                 new ResultOrigin.Reused(source, reuse.Evidence!), reuse.Report!, null), inputs));
         });
@@ -535,7 +633,7 @@ internal sealed class RunStore
         }), (_, _) => new Mutation.Append(new RunEvent.Abandoned(confirmation, reason)));
 
     private static (InputRecord? Inputs, RunRejection? Rejection) Inputs(RunRecord record, TaskId task, RevisionId revision,
-        InputId id, CommitId codeBase, string text)
+        InputId id)
     {
         if (!record.Revisions.TryGetValue(revision, out var snapshot) || !snapshot.Snapshot.Tasks.ContainsKey(task))
         {
@@ -569,7 +667,7 @@ internal sealed class RunStore
                 return (null, new(RunProblem.MissingDependencyResult, Task: edge.Key.From));
             }
         }
-        return (new(id, task, revision, bindings.ToImmutable(), codeBase, text), null);
+        return (new(id, task, revision, bindings.ToImmutable(), new CodeSelection.Root(record.Base.Commit), "", [], null), null);
     }
 
     private AttemptEvidence OwnedEvidence(RunRecord record, RunAttempt attempt, LogCheckpoint checkpoint)
@@ -586,7 +684,7 @@ internal sealed class RunStore
         if (request.Attempt != attempt.Id || request.Task != attempt.Task || request.RunBinding != binding ||
             request.Settings != task.Execution || request.Conversation != task.Conversation || request.TaskTitle != task.Title ||
             request.ReadOnly != (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review) ||
-            attempt.Cause is AttemptCause.Initial && task.Blueprint.Work is WorkSpec.Agent { Proposes: false } &&
+            record.Schema == 1 && attempt.Cause is AttemptCause.Initial && task.Blueprint.Work is WorkSpec.Agent { Proposes: false } &&
                 request.Prompt != ReportReuse.Prompt(task, record.Inputs[attempt.InitialInputs].Text))
         {
             return read with
@@ -601,6 +699,11 @@ internal sealed class RunStore
                     AttemptEvent.TurnRequested turn => turn.Prompt,
                     _ => "",
                 }).ToArray();
+        if (record.Schema == 2 && prompts.Where((prompt, index) =>
+            !record.Preparations.TryGetValue(new(attempt.Id, index + 1), out var prepared) || prepared.Prompt != prompt).Any())
+        {
+            return read with { Rejection = new(RunProblem.EvidenceMismatch) };
+        }
         if (read.Record!.Terminal is not null || request.Fix != record.ReviewOf(attempt.Id) || record.Claims.Values.Any(claim =>
             claim.Key.Attempt == attempt.Id && (claim.Key.Turn > prompts.Length || claim.Prompt != Revision.Hash(prompts[claim.Key.Turn - 1]))))
         {
@@ -681,7 +784,7 @@ internal sealed class RunStore
             }
 
             var append = (Mutation.Append)mutation;
-            var entry = new RunEntry(1, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
+            var entry = new RunEntry(record?.Schema ?? 2, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
             var reduced = RunReducer.Apply(workflow, run, record, entry);
             if (reduced is RunRead.Rejected refused)
             {

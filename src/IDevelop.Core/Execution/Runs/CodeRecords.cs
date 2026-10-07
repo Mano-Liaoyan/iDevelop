@@ -19,6 +19,8 @@ internal abstract record CodeSelection
 {
     private CodeSelection() { }
 
+    internal sealed record Legacy(CommitId Base) : CodeSelection;
+
     internal sealed record Root(CommitId Commit) : CodeSelection;
 
     internal sealed record Single(CodeSource Source) : CodeSelection;

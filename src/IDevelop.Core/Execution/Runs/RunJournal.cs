@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using IDevelop.Projects;
 using IDevelop.Workflows;
 
@@ -15,8 +16,11 @@ internal static class RunJournal
 {
     internal static readonly JsonSerializerOptions Options = CreateOptions();
 
-    private static readonly HashSet<string> Events = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
+    private static readonly HashSet<string> LegacyEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
         "resultAccepted", "stopRequested", "settled", "abandoned"];
+
+    private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
+        "prepared", "blocked", "salvageRetained", "blockResolved"];
 
     public static string Encode(RunEntry entry) => JsonSerializer.Serialize(entry, Options) + "\n";
 
@@ -41,7 +45,7 @@ internal static class RunJournal
                 var line = utf8.GetString(jsonl.Slice(offset, length));
                 using var document = JsonDocument.Parse(line, new JsonDocumentOptions { AllowDuplicateProperties = false });
                 var root = document.RootElement;
-                if (root.GetProperty("schema").GetInt32() != 1)
+                if (root.GetProperty("schema").GetInt32() is not (1 or 2))
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedSchema, sequence));
                 }
@@ -49,7 +53,8 @@ internal static class RunJournal
                 {
                     return new(entries.ToImmutable(), new(RunProblem.SequenceGap, sequence));
                 }
-                if (!Events.Contains(root.GetProperty("event").GetProperty("type").GetString() ?? ""))
+                var eventType = root.GetProperty("event").GetProperty("type").GetString() ?? "";
+                if (!LegacyEvents.Contains(eventType) && (root.GetProperty("schema").GetInt32() == 1 || !MaterializationEvents.Contains(eventType)))
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedEvent, sequence));
                 }
@@ -112,6 +117,7 @@ internal static class RunJournal
 
     private static JsonSerializerOptions CreateOptions() => new()
     {
+        TypeInfoResolver = Resolver(),
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         RespectNullableAnnotations = true,
@@ -127,10 +133,60 @@ internal static class RunJournal
             new IdConverter<InputId>(id => id.Value, value => new(value)),
             new IdConverter<ResultId>(id => id.Value, value => new(value)),
             new IdConverter<OperationId>(id => id.Value, value => new(value)),
-            new WorkflowConverter(), new TaskConverter(), new BlueprintConverter(),
+            new InputConverter(), new WorkflowConverter(), new TaskConverter(), new BlueprintConverter(),
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false),
         },
     };
+
+    private static IJsonTypeInfoResolver Resolver()
+    {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(info =>
+        {
+            if (info.Type == typeof(ResultRecord))
+            {
+                info.Properties.Single(property => property.Name == "artifacts").ShouldSerialize =
+                    (_, value) => value is System.Collections.Immutable.ImmutableArray<ArtifactRecord> { IsDefaultOrEmpty: false };
+            }
+        });
+        return resolver;
+    }
+
+    internal sealed class InputConverter : JsonConverter<InputRecord>
+    {
+        private sealed record LegacyInput(InputId Id, TaskId Task, RevisionId Revision, ImmutableArray<InputBinding> Bindings,
+            CommitId CodeBase, string Text);
+
+        private sealed record MaterialInput(InputId Id, TaskId Task, RevisionId Revision, ImmutableArray<InputBinding> Bindings,
+            CodeSelection Code, string Text, ImmutableArray<DeliveredFile> Files, ReviewInput? Review);
+
+        public override InputRecord Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var json = JsonDocument.ParseValue(ref reader);
+            if (json.RootElement.TryGetProperty("codeBase", out _))
+            {
+                var legacy = json.RootElement.Deserialize<LegacyInput>(options)!;
+                return new(legacy.Id, legacy.Task, legacy.Revision, legacy.Bindings, new CodeSelection.Legacy(legacy.CodeBase),
+                    legacy.Text, [], null);
+            }
+            var input = json.RootElement.Deserialize<MaterialInput>(options)!;
+            return new(input.Id, input.Task, input.Revision, input.Bindings, input.Code, input.Text, input.Files, input.Review);
+        }
+
+        public override void Write(Utf8JsonWriter writer, InputRecord value, JsonSerializerOptions options)
+        {
+            if (value.Code is CodeSelection.Legacy legacy)
+            {
+                JsonSerializer.Serialize(writer, new LegacyInput(value.Id, value.Task, value.Revision, value.Bindings, legacy.Base,
+                    value.Text), options);
+            }
+            else
+            {
+                JsonSerializer.Serialize(writer, new MaterialInput(value.Id, value.Task, value.Revision, value.Bindings, value.Code,
+                    value.Text, value.Files, value.Review), options);
+            }
+        }
+    }
 
     internal sealed class IdConverter<T>(Func<T, Guid> value, Func<Guid, T> create) : JsonConverter<T>
     {

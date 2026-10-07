@@ -80,7 +80,18 @@ internal abstract record InputBinding
 }
 
 internal sealed record InputRecord(InputId Id, TaskId Task, RevisionId Revision,
-    ImmutableArray<InputBinding> Bindings, CommitId CodeBase, string Text);
+    ImmutableArray<InputBinding> Bindings, CodeSelection Code, string Text, ImmutableArray<DeliveredFile> Files, ReviewInput? Review)
+{
+    [JsonIgnore]
+    public CommitId CodeBase => Code switch
+    {
+        CodeSelection.Root root => root.Commit,
+        CodeSelection.Single single => single.Source.Commit,
+        CodeSelection.Joined joined => joined.Join.Commit,
+        CodeSelection.Legacy legacy => legacy.Base,
+        _ => throw new InvalidOperationException("Unknown code selection."),
+    };
+}
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Person), "person")]
@@ -125,7 +136,13 @@ internal abstract record ResultOrigin
 }
 
 internal sealed record ResultRecord(ResultId Id, TaskId Task, RevisionId Revision, InputId Inputs,
-    ResultOrigin Origin, string Report, ResultId? Supersedes);
+    ResultOrigin Origin, string Report, ResultId? Supersedes)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CodeOutput? Code { get; init; }
+
+    public ImmutableArray<ArtifactRecord> Artifacts { get; init; } = [];
+}
 
 internal enum RunPhase { Approved, StopRequested, Completed, Stopped, Failed, Abandoned }
 
@@ -142,9 +159,33 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(StopRequested), "stopRequested")]
 [JsonDerivedType(typeof(Settled), "settled")]
 [JsonDerivedType(typeof(Abandoned), "abandoned")]
+[JsonDerivedType(typeof(LayoutAllocated), "layoutAllocated")]
+[JsonDerivedType(typeof(Planned), "planned")]
+[JsonDerivedType(typeof(GitIntended), "gitIntended")]
+[JsonDerivedType(typeof(GitObserved), "gitObserved")]
+[JsonDerivedType(typeof(Prepared), "prepared")]
+[JsonDerivedType(typeof(Blocked), "blocked")]
+[JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
+[JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
+
+    internal sealed record LayoutAllocated(LayoutKey Key) : RunEvent;
+
+    internal sealed record Planned(MaterializationPlan Plan) : RunEvent;
+
+    internal sealed record GitIntended(OperationId Plan, GitMutation Mutation) : RunEvent;
+
+    internal sealed record GitObserved(OperationId Mutation, GitObservation Observation) : RunEvent;
+
+    internal sealed record Prepared(PreparedExecution Execution) : RunEvent;
+
+    internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
+
+    internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
+
+    internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
 
     internal sealed record Approved(RunId Run, ApprovedRevision Revision, RunBase Base) : RunEvent;
 
@@ -181,7 +222,7 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable,
+    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -226,6 +267,26 @@ internal sealed record AttemptRecovery(AttemptId Attempt, RecoveryState State, I
 /// <summary>The immutable run history, with current results and staleness derived from it.</summary>
 internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, ApprovedRevision Revision)
 {
+    public int Schema { get; internal init; } = 2;
+
+    public string? RunKey { get; internal init; }
+
+    public string? Repository { get; internal init; }
+
+    public ImmutableDictionary<TaskId, string> TaskKeys { get; internal init; } = ImmutableDictionary<TaskId, string>.Empty;
+
+    public ImmutableDictionary<OperationId, MaterializationPlan> Plans { get; internal init; } = ImmutableDictionary<OperationId, MaterializationPlan>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.GitIntended> GitIntents { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.GitIntended>.Empty;
+
+    public ImmutableDictionary<OperationId, GitObservation> GitObservations { get; internal init; } = ImmutableDictionary<OperationId, GitObservation>.Empty;
+
+    public ImmutableDictionary<LaunchKey, PreparedExecution> Preparations { get; internal init; } = ImmutableDictionary<LaunchKey, PreparedExecution>.Empty;
+
+    public ImmutableDictionary<OperationId, MaterializationBlockState> Blocks { get; internal init; } = ImmutableDictionary<OperationId, MaterializationBlockState>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.SalvageRetained> Salvages { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.SalvageRetained>.Empty;
+
     public RunPhase Phase { get; internal init; } = RunPhase.Approved;
 
     public long Sequence

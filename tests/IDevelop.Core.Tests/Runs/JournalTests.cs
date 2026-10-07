@@ -38,7 +38,7 @@ public sealed class JournalTests
     {
         var json = damage switch
         {
-            "schema" => Approved.Replace("\"schema\":1", "\"schema\":2"),
+            "schema" => Approved.Replace("\"schema\":1", "\"schema\":3"),
             "id" => Approved.Replace("00000000-0000-0000-0000-000000000010", "00000000-0000-0000-0000-000000000000"),
             "hash" => Approved.Replace("f0be6cefd57fa43e04b8d205ec61a7b32d2277710dd002cc210aed7b0e6473bb",
                 "F0BE6CEFD57FA43E04B8D205EC61A7B32D2277710DD002CC210AED7B0E6473BB"),

@@ -22,8 +22,8 @@ public sealed class ReviewLineageTests
         var first = new AttemptId(Id(201));
         var second = new AttemptId(Id(202));
         var reviewInputs = new InputRecord(new(Id(300)), U, revision.Id, [new InputBinding.Provided(new(T, U), ConnectionKind.Dependency,
-            new(Id(400)))], Base, "");
-        var writerInputs = new InputRecord(new(Id(301)), T, revision.Id, [], Base, "");
+            new(Id(400)))], new CodeSelection.Legacy(Base), "", [], null);
+        var writerInputs = new InputRecord(new(Id(301)), T, revision.Id, [], new CodeSelection.Legacy(Base), "", [], null);
         var initial = new RunAttempt(new(Id(199)), T, revision.Id, writerInputs.Id, new AttemptCause.Initial());
         var checkpoint = new LogCheckpoint(100, Prompt);
         var link = new ReviewLink(U, reviewer, 2, 0);
