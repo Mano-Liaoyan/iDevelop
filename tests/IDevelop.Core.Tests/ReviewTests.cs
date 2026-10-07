@@ -112,7 +112,7 @@ public sealed class ReviewTests : IDisposable
         {
             Assert.Equal((AttemptStatus.Succeeded, 3), (review.Status, review.Turns.Count));
             Assert.All(new[] { 2, 3 }, turn => Assert.True(Has(Arguments(_reviewer, turn), "--resume", ReviewerSession), $"reviewer turn {turn} resumes"));
-            Assert.All(new[] { 2, 3 }, turn => Assert.True(Has(Arguments(_implementer, turn), ImplementerSession, "-") && Has(Arguments(_implementer, turn), "exec", "resume"), $"fix round {turn - 1} resumes"));
+            Assert.All(new[] { 2, 3 }, turn => Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, turn)));
 
             var fixes = runs.EarlierAttempts(runs.Latest[Subject]).Add(runs.Latest[Subject]);
             Assert.Equal([null, 1, 2], fixes.Select(attempt => attempt.Fix?.Round));
@@ -265,7 +265,7 @@ public sealed class ReviewTests : IDisposable
         runs.Follow(Workflow);
 
         await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the review approves");
-        Assert.True(Has(Arguments(_implementer, 3), ImplementerSession, "-"), "the fix round resumes the implementer's session");
+        Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, 3));
         Assert.Equal((1, AttemptStatus.Succeeded), (runs.Latest[Subject].Fix!.Round, runs.Latest[Subject].Status));
         Assert.Equal(2, runs.Latest[Review].Turns.Count);
     }
@@ -493,6 +493,12 @@ public sealed class ReviewTests : IDisposable
     private static string Answers(string answers) => $"I answered each finding.\n\n```idevelop\n{{\"status\": \"answers\", \"answers\": {answers}}}\n```";
 
     private static string Prompt(string folder, int turn) => File.ReadAllText(Path.Combine(folder, $"{turn}.stdin"));
+
+    private static (string?, string?) Thread(string folder, int turn)
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, $"{turn}.args.thread.json")));
+        return (json.RootElement.GetProperty("method").GetString(), json.RootElement.GetProperty("params").GetProperty("threadId").GetString());
+    }
 
     private static string[] Arguments(string folder, int turn) => JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(folder, $"{turn}.args")))!;
 

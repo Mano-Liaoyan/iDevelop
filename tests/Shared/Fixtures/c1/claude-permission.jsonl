@@ -1,0 +1,1 @@
+{"type":"control_request","request_id":"bb00425b-9a51-4a07-a7b5-bb4be1a930f2","request":{"subtype":"can_use_tool","tool_name":"Write","display_name":"Write","input":{"file_path":"/project/probe2.txt","content":"hi"},"description":"probe2.txt","permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}],"tool_use_id":"toolu_013TnpQpCamMk3H5rLUnXX8x"}}

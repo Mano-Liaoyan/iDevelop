@@ -95,7 +95,9 @@ public sealed class ProjectRunsTests : IDisposable
                 ? """{"event":"user","message":{"role":"user","content":"# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n"}}""" + "\n"
                 : "# Say hi\n\nCreate hello.txt containing hi. Then reply with DONE.\n",
             File.ReadAllText(Evidence("stdin.txt")));
-        Assert.Equal(Fixture.Text(expected.Fixture), File.ReadAllText(Path.Combine(folder, "output.jsonl")));
+        var output = File.ReadAllLines(Path.Combine(folder, "output.jsonl"));
+        Assert.Equal(client == ClientId.Codex ? Fixture.Lines(expected.Fixture).Select(FakeAgents.AppLine).Where(line => line != "{\"method\":\"ignored\"}") : Fixture.Lines(expected.Fixture),
+            output.Skip(client == ClientId.Codex ? 3 : client == ClientId.ClaudeCode ? 1 : 0));
         Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
         Assert.Empty(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);

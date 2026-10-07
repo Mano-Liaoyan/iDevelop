@@ -79,7 +79,7 @@ public sealed class PlanningTests : IDisposable
         Assert.Contains("- slot-2: \"Frontend\", type Implement.", prompt);
         Assert.Contains("- type-1: Implement. Carries out its instructions", prompt);
         Assert.Contains("- type-3: Architect.", prompt);
-        Assert.Contains("--sandbox read-only", string.Join(" ", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("arguments.json")))!));
+        Assert.Equal("read-only", JsonDocument.Parse(File.ReadAllText(Evidence("arguments.json.thread.json"))).RootElement.GetProperty("params").GetProperty("sandbox").GetString());
         Assert.Equal(AttemptStatus.Succeeded, record.Status);
 
         var proposal = Ready(record);

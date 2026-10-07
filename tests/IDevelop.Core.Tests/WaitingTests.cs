@@ -67,7 +67,9 @@ public sealed class WaitingTests : IDisposable
         Assert.Equal((waiting.Id, AttemptStatus.Succeeded, "Wrote banana.", (Pending?)null), (answered.Id, answered.Status, answered.Result, answered.Pending));
         Assert.Equal([TurnOutcome.Succeeded, TurnOutcome.Succeeded], answered.Turns.Select(turn => turn.Outcome));
         Assert.Equal("banana", answered.Turns[1].Message);
-        Assert.Contains(Session, JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("turn-2.json")))!);
+        if (client == ClientId.Codex)
+            Assert.Equal(Session, JsonDocument.Parse(File.ReadAllText(Evidence("turn-2.json.thread.json"))).RootElement.GetProperty("params").GetProperty("threadId").GetString());
+        else Assert.Contains(Session, JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("turn-2.json")))!);
     }
 
     [Fact]
@@ -163,9 +165,10 @@ public sealed class WaitingTests : IDisposable
         var changed = task with { Execution = new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" } };
         var record = await Settles(runs, () => runs.Send(changed, "Go ahead.", stopTurn: false));
 
-        var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Evidence("turn-2.json")))!;
-        var model = Array.IndexOf(arguments, "-m");
-        Assert.Equal(["gpt-6-sol", "-c", "model_reasoning_effort=high"], arguments[(model + 1)..(model + 4)]);
+        using var thread = JsonDocument.Parse(File.ReadAllText(Evidence("turn-2.json.thread.json")));
+        using var turn = JsonDocument.Parse(File.ReadAllText(Evidence("turn-2.json.turn.json")));
+        Assert.Equal("gpt-6-sol", thread.RootElement.GetProperty("params").GetProperty("model").GetString());
+        Assert.Equal("high", turn.RootElement.GetProperty("params").GetProperty("effort").GetString());
         Assert.Equal(Settings[ClientId.Codex], record.Requested);
     }
 

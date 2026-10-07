@@ -1,0 +1,6 @@
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg_011CfmXizzDgRoimu3MfUfFj","role":"assistant","model":"claude-haiku-4-5-20251001","content":[]}}}
+{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Rivers are flowing"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" bodies of water that"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":" transport"}}}
+{"type":"assistant","message":{"id":"msg_011CfmXizzDgRoimu3MfUfFj","model":"claude-haiku-4-5-20251001","role":"assistant","content":[{"type":"text","text":"Rivers are flowing bodies of water that transport water from higher elevations to oceans, seas, or lakes, shaping landscapes through erosion and sediment deposition. They sustain ecosystems by providing freshwater habitats for diverse wildlife and plants, while also serving as essential resources for human communities. Throughout history, major rivers like the Nile, Amazon, and Yangtze have supported civilizations by enabling agriculture, transportation, and trade."}],"stop_reason":null}}

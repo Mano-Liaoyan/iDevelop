@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using IDevelop.Workflows;
 using static IDevelop.Execution.JsonFields;
 
 namespace IDevelop.Execution;
@@ -26,19 +27,20 @@ internal static class ClaudeCode
         Catalog = new CatalogSource.Fixed(Models),
         Readiness = _ => [new ReadinessProbe(null, new Probe(["auth", "status"]), SignInProblem)],
         Launch = Launch,
-        Interpret = Interpret,
+        Protocol = request => new ClaudeProtocol(request),
         Terminal = session => $"claude --resume {session}",
         HasReadOnlyMode = true,
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
     [
-        "-p", "--output-format", "stream-json", "--verbose", "--model", request.Model,
+        "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--model", request.Model,
         .. request.Reasoning is { } effort ? ["--effort", effort] : Array.Empty<string>(),
-        "--permission-mode", request.ReadOnly ? "plan" : "acceptEdits",
+        "--permission-mode", ((NativePolicy.Claude)request.PolicyFor(ClientId.ClaudeCode).Native).Mode,
         .. request.ResumeSession is { } session ? ["--resume", session] : Array.Empty<string>(),
+        .. request.PolicyFor(ClientId.ClaudeCode).PermissionPrompts == PermissionPrompts.Host ? ["--permission-prompt-tool", "stdio"] : new[] { "--permission-prompts", "none" },
     ],
-    request.Prompt);
+    "");
 
     private static ReadinessProblem? SignInProblem(ProbeOutput output)
     {
@@ -60,10 +62,8 @@ internal static class ClaudeCode
         return new ReadinessProblem(Probes.Failure("claude auth status", output), SignedOut: false);
     }
 
-    private static ImmutableArray<AgentEvent> Interpret(string line)
+    internal static ImmutableArray<AgentEvent> Events(JsonElement root)
     {
-        using var json = JsonDocument.Parse(line);
-        var root = json.RootElement;
         return root.String("type") switch
         {
             "system" when root.String("subtype") == "init" => Init(root),

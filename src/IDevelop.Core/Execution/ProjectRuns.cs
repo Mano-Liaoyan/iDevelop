@@ -39,8 +39,19 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         Warnings = warnings;
     }
 
+    /// <summary>The budget for a protocol stop or for exit after its terminal result. Tests shorten it.</summary>
+    internal TimeSpan ShutdownTime { get; set; } = TimeSpan.FromSeconds(5);
+
     /// <summary>How long leaving waits for a stopped run to end before it gives up on it. Tests shorten it.</summary>
     internal TimeSpan LeaveTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    internal (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers)? Live(TaskId task)
+    {
+        lock (_gate)
+        {
+            return _active.TryGetValue(task, out var run) ? run.Live : null;
+        }
+    }
 
     /// <summary>The newest attempt of each task that has one.</summary>
     public ImmutableDictionary<TaskId, AttemptRecord> Latest { get; private set; }
@@ -310,7 +321,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             var settings = last is { Status: AttemptStatus.WaitingForInput } ? last.Requested : task.Execution;
-            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, "")) is StartVerdict.Blocked blocked
+            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, ""), questions: new HostQuestions.Disabled()) is StartVerdict.Blocked blocked
                 ? new SendProblem.CannotStart(blocked.Problem)
                 : null;
         }
@@ -387,7 +398,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         if (run is not null)
         {
-            run.Stop(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow));
+            run.StopAsync(new AttemptEvent.CancelRequested(DateTimeOffset.UtcNow)).GetAwaiter().GetResult();
             return null;
         }
 
@@ -488,7 +499,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private static async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
     {
-        run.Stop(new AttemptEvent.InterruptRequested(DateTimeOffset.UtcNow, LeaveReason));
+        await run.StopAsync(new AttemptEvent.InterruptRequested(DateTimeOffset.UtcNow, LeaveReason));
         if (await Task.WhenAny(run.Completion, Task.Delay(timeout)) != run.Completion)
         {
             run.Abandon();
@@ -633,7 +644,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: new HostQuestions.Disabled());
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -663,7 +674,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, message));
+        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: new HostQuestions.Disabled());
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -829,7 +840,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
             _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
             _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(task.Id, subject) is { } problem => new StartVerdict.Blocked(problem),
-            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject),
+            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject, questions: new HostQuestions.Disabled()),
         };
 
     private Workflow? WorkflowOf(TaskId task) => _workflows.Values.FirstOrDefault(workflow => workflow.Tasks.ContainsKey(task));
