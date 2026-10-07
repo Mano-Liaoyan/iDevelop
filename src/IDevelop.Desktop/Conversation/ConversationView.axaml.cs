@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -28,9 +29,17 @@ public partial class ConversationView : UserControl
     {
         InitializeComponent();
         Scroller.ScrollChanged += OnScrollChanged;
-        // A wheel, a drag, or a key scrolls on the person's behalf. Layout alone, such as an item measured for the first
-        // time, never decides whether the view follows the end.
+        // A wheel, a drag, the scroll bar, or a key scrolls on the person's behalf, even when rows coming into view change the
+        // extent in the same scroll. Layout alone, such as an item measured for the first time, never decides whether the
+        // view follows the end.
         Scroller.AddHandler(PointerWheelChangedEvent, (_, _) => _userInput = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Scroller.TemplateApplied += (_, e) =>
+        {
+            foreach (var bar in new[] { "PART_VerticalScrollBar", "PART_HorizontalScrollBar" }.Select(e.NameScope.Find<ScrollBar>).OfType<ScrollBar>())
+            {
+                bar.Scroll += (_, _) => _userInput = true;
+            }
+        };
         Scroller.AddHandler(PointerMovedEvent, (_, e) => _userInput |= e.GetCurrentPoint(Scroller).Properties.IsLeftButtonPressed,
             RoutingStrategies.Tunnel, handledEventsToo: true);
         Scroller.AddHandler(KeyDownEvent, (_, _) => _userInput = true, RoutingStrategies.Tunnel, handledEventsToo: true);
