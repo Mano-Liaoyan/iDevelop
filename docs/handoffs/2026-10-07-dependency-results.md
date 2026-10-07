@@ -4,7 +4,7 @@
 
 E2 is the slice "Materialize dependency results" of the [approved execution plan](2026-10-06-workspace-execution-plan.md#approved-delivery-slices). Its completion condition is that reports and artifacts reach successors, isolated code inputs produce a named revision, and fan-in conflicts and uncertain ownership block without corrupting work. Review fixes must use the correct code owner. It builds on the [D0 Git contract](2026-10-06-d0-design-validation.md) and the [E1 run journal](2026-10-07-run-and-input-records.md).
 
-E2 ships as two pull requests. Pull request [#41](https://github.com/Mano-Liaoyan/iDevelop/pull/41) is E2a, based on E1's branch `feat/e1-run-records`. It adds `Materializer` and a Git adapter to `IDevelop.Core`. It adds no UI, no scheduler, and no launch path. E3 is its first caller. E2b is the second pull request, based on `feat/e2a-materialize-inputs`. It adds `MergeJoins`, the real join composer, and the diamond suite.
+E2 ships as two pull requests. Pull request [#41](https://github.com/Mano-Liaoyan/iDevelop/pull/41) is E2a, based on E1's branch `feat/e1-run-records`. It adds `Materializer` and a Git adapter to `IDevelop.Core`. It adds no UI, no scheduler, and no launch path. E3 is its first caller. Pull request [#44](https://github.com/Mano-Liaoyan/iDevelop/pull/44) is E2b, based on `feat/e2a-materialize-inputs`. It adds `MergeJoins`, the real join composer, and the diamond suite.
 
 A fresh Opus backend review of the coordinator's design note made twelve findings. The revised note accepted eleven and partly accepted one. GPT-6.1 Sol wrote the code through Codex. A GPT-6 Astra difficult-task review and an Opus backend review reviewed the code in seven rounds. The coordinator reviewed and amended every diff.
 
