@@ -39,15 +39,19 @@ public partial class MainWindow : Window
         ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation))
+            if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation) && (ViewModel.DockedConversation is not null) != _docked)
             {
+                _docked = !_docked;
                 SizeDock();
             }
         };
     }
 
-    // The dock keeps the height the person dragged it to while it is open, and gives it back when it closes.
+    // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
+    // space back when it closes.
     private const double DockHeight = 320;
+
+    private bool _docked;
 
     private void SizeDock()
     {

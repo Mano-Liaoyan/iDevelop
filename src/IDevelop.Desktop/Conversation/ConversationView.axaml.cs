@@ -100,7 +100,7 @@ public partial class ConversationView : UserControl
                 {
                     Transcript.ScrollIntoView(index.Value);
                 }
-                else if (_model is { Items.Count: > 0 })
+                else if (_model is { Items.Count: > 0, Idle.IsCompleted: true })
                 {
                     _follow = true;
                     _anchor = null;
@@ -129,7 +129,7 @@ public partial class ConversationView : UserControl
         var atEnd = Scroller.Offset.Y >= Scroller.Extent.Height - Scroller.Viewport.Height - EndSlack;
         JumpToLatest.IsVisible = !atEnd && _model is { Items.Count: > 0 };
         var ours = _scrolledTo is { } target && Math.Abs(Scroller.Offset.Y - target) < 1;
-        var layoutOnly = e.ExtentDelta.Y != 0 && !_userInput;
+        var layoutOnly = (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0) && !_userInput;
         _userInput = false;
         if (_restoring || ours || layoutOnly)
         {

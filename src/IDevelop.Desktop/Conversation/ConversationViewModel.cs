@@ -32,6 +32,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     // Each refresh reads every loaded window again, so the windows that pages from the tail add are folded back into one.
     private const int MaxWindows = 4;
 
+    private const int MaxAnchorPages = 20;
+
     private readonly IConversationSession _session;
     private readonly Func<string, Task> _copy;
     private readonly List<LoadedPage> _windows = [];
@@ -50,6 +52,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     private long _logRevision = -1;
     private int _generation;
     private bool _dirty;
+    private bool _earlier;
+    private bool _opened;
+    private int _posted;
+    private RequestKey? _seek;
     private bool _busy;
     private string? _notice;
     private Task _sync = Task.CompletedTask;
@@ -67,7 +73,11 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _cancel = new RelayCommand(() => _ = RunAsync(turn => _session.CancelAsync(turn, CancellationToken.None)), () => ShowsCancel && !_busy);
         _markDone = new RelayCommand(() => _ = RunAsync(turn => _session.MarkDoneAsync(turn, CancellationToken.None)), () => ShowsMarkDone && !_busy);
         _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && !_busy);
-        _loadEarlier = new RelayCommand(() => _ = LoadEarlierAsync(), () => HasEarlier);
+        _loadEarlier = new RelayCommand(() =>
+        {
+            _earlier = true;
+            Invalidate();
+        }, () => HasEarlier);
         ReturnToCurrentCommand = new RelayCommand(() => SelectedAttempt = _choices.LastOrDefault());
         state.PropertyChanged += OnStateChanged;
         if (_node is not null)
@@ -209,40 +219,25 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Shows the request at its place in the history, in its own attempt when the selected one does not hold it.</summary>
-    internal async Task SeekAsync(RequestKey request)
+    internal Task SeekAsync(RequestKey request)
     {
-        await _sync;
-        var generation = ++_generation;
-        var head = _head ?? _snapshot.Latest?.Id;
-        if (head is null)
-        {
-            return;
-        }
-
-        var page = await _session.ReadPageAsync(head.Value, new HistoryQuery.AroundRequest(request), PageSize, _closed.Token);
-        if (page is HistoryResult.Unavailable && head != request.Turn.Attempt)
-        {
-            head = request.Turn.Attempt;
-            page = await _session.ReadPageAsync(head.Value, new HistoryQuery.AroundRequest(request), PageSize, _closed.Token);
-        }
-
-        if (generation != _generation || page is not HistoryResult.Page found)
-        {
-            return;
-        }
-
-        State.SelectedAttempt = head == _snapshot.Latest?.Id ? null : head;
-        _head = head;
-        _windows.Clear();
-        _windows.Add(new LoadedPage(found));
-        await ShowAsync(generation);
-        if (generation == _generation && found.Entries.FirstOrDefault(entry => entry.Content is ConversationContent.Request r && r.Key == request) is { } entry)
-        {
-            RevealRequested?.Invoke(entry.Id);
-        }
+        _seek = request;
+        Invalidate();
+        return _sync;
     }
 
-    private void OnSessionChanged(long revision) => Dispatcher.UIThread.Post(Invalidate);
+    // Changes can arrive for every line a client writes, so one pending read stands for all that came before it.
+    private void OnSessionChanged(long revision)
+    {
+        if (Interlocked.Exchange(ref _posted, 1) == 0)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                Volatile.Write(ref _posted, 0);
+                Invalidate();
+            }, DispatcherPriority.Background);
+        }
+    }
 
     private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -284,18 +279,66 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
     }
 
+    // The one loop that changes the loaded pages, so a refresh, a seek, and an earlier page never interleave.
     private async Task SyncLoop()
     {
-        while (_dirty && !_closed.IsCancellationRequested)
+        while ((_dirty || _seek is not null || _earlier) && !_closed.IsCancellationRequested)
         {
-            _dirty = false;
             try
             {
-                await SyncAsync(_generation);
+                if (_dirty)
+                {
+                    _dirty = false;
+                    await SyncAsync(_generation);
+                }
+
+                if (_seek is { } request)
+                {
+                    _seek = null;
+                    await SeekOnceAsync(request, _generation);
+                }
+
+                if (_earlier)
+                {
+                    _earlier = false;
+                    await LoadEarlierAsync(_generation);
+                }
             }
             catch (OperationCanceledException) when (_closed.IsCancellationRequested)
             {
             }
+        }
+    }
+
+    private async Task SeekOnceAsync(RequestKey request, int generation)
+    {
+        var head = _head ?? _snapshot.Latest?.Id;
+        if (head is null)
+        {
+            return;
+        }
+
+        var page = await _session.ReadPageAsync(head.Value, new HistoryQuery.AroundRequest(request), PageSize, _closed.Token);
+        if (page is HistoryResult.Unavailable && head != request.Turn.Attempt)
+        {
+            head = request.Turn.Attempt;
+            page = await _session.ReadPageAsync(head.Value, new HistoryQuery.AroundRequest(request), PageSize, _closed.Token);
+        }
+
+        if (generation != _generation || page is not HistoryResult.Page found)
+        {
+            return;
+        }
+
+        State.SelectedAttempt = head == _snapshot.Latest?.Id ? null : head;
+        _head = head;
+        _windows.Clear();
+        _windows.Add(new LoadedPage(found));
+        NotifyHead();
+        await ShowAsync(generation);
+        if (generation == _generation && found.Entries.FirstOrDefault(entry => entry.Content is ConversationContent.Request r && r.Key == request) is { } entry)
+        {
+            RevealRequested?.Invoke(entry.Id);
         }
     }
 
@@ -402,20 +445,34 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             Notice = unavailable.Reason;
         }
 
-        OnPropertyChanged(nameof(SelectedAttempt));
-        OnPropertyChanged(nameof(IsHistorical));
+        // On opening, earlier pages load until the entry the person last read is back, so the view can return to it.
+        if (!_opened && State.Anchor is { } anchor)
+        {
+            for (var pages = 0; pages < MaxAnchorPages && _windows.Count > 0 && _windows[0].HasEarlier
+                && !_windows.Any(window => window.Page.Entries.Any(entry => entry.Id == anchor.Entry)); pages++)
+            {
+                var earlier = await _session.ReadPageAsync(head, new HistoryQuery.Before(_windows[0].Page.Before), PageSize, _closed.Token);
+                if (generation != _generation || earlier is not HistoryResult.Page found)
+                {
+                    break;
+                }
+
+                _windows.Insert(0, new LoadedPage(found));
+            }
+        }
+
+        _opened = true;
+        NotifyHead();
         await ShowAsync(generation);
     }
 
-    private async Task LoadEarlierAsync()
+    private async Task LoadEarlierAsync(int generation)
     {
-        await _sync;
         if (_head is not { } head || !HasEarlier)
         {
             return;
         }
 
-        var generation = _generation;
         var earlier = await _session.ReadPageAsync(head, new HistoryQuery.Before(_windows[0].Page.Before), PageSize, _closed.Token);
         if (generation != _generation || earlier is not HistoryResult.Page page)
         {
@@ -480,9 +537,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             }
 
             request.Show(record, current: !IsHistorical && _snapshot.Current == request.Key.Turn);
-            if (record is RequestRecord.Question { State: QuestionState.Closed { Reason: RequestCloseReason.Deferred } } deferred)
+            if (record is RequestRecord.Question { State: QuestionState.Closed { RecordedReply: null } } closed)
             {
-                State.TransferDeferred(deferred.Key, deferred.Questions);
+                State.TransferDeferred(closed.Key, closed.Questions);
             }
         }
     }
@@ -512,14 +569,20 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(Attempts));
         }
 
-        OnPropertyChanged(nameof(SelectedAttempt));
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(AgentName));
         OnPropertyChanged(nameof(StatusLabel));
         OnPropertyChanged(nameof(Limitations));
+        OnPropertyChanged(nameof(Watermark));
+        NotifyHead();
+    }
+
+    /// <summary>Everything that depends on which attempt shows, after the snapshot or the shown attempt changed.</summary>
+    private void NotifyHead()
+    {
+        OnPropertyChanged(nameof(SelectedAttempt));
         OnPropertyChanged(nameof(IsHistorical));
         OnPropertyChanged(nameof(ComposerHint));
-        OnPropertyChanged(nameof(Watermark));
         OnPropertyChanged(nameof(ShowsStopAndSend));
         OnPropertyChanged(nameof(ShowsCancel));
         OnPropertyChanged(nameof(ShowsMarkDone));

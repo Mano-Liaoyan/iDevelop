@@ -55,7 +55,22 @@ public sealed class MarkdownView : StackPanel
     private void Render()
     {
         var text = Markdown ?? "";
-        var blocks = Markdig.Markdown.Parse(text, Pipeline).Where(block => block is not LinkReferenceDefinitionGroup).ToList();
+        List<Block> blocks;
+        try
+        {
+            blocks = [.. Markdig.Markdown.Parse(text, Pipeline).Where(block => block is not LinkReferenceDefinitionGroup)];
+        }
+        catch (ArgumentException)
+        {
+            // Markdig refuses input nested too deeply, so such a message shows as its source.
+            Children.Clear();
+            _sources.Clear();
+            Children.Add(Plain(text));
+            _sources.Add("\0source");
+            BlocksBuilt++;
+            return;
+        }
+
         for (var i = 0; i < blocks.Count; i++)
         {
             var source = Source(text, blocks[i]);

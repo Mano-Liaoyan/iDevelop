@@ -112,6 +112,24 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void Markdown_nested_too_deeply_for_Markdig_shows_as_its_source()
+    {
+        var deep = new string('>', 200) + " quoted";
+        var (window, view) = Show("First message.");
+
+        view.Markdown = deep;
+
+        Assert.Equal([deep], Blocks(view));
+        view.Markdown = "Next message.";
+        Assert.Equal(["Next message."], Blocks(view));
+        window.Close();
+    }
+
+    [Fact]
+    public void A_confirmation_shows_a_look_alike_host_as_the_browser_sends_it() =>
+        Assert.Equal("https://аpple.com/login\nHost as sent: xn--pple-43d.com", ConversationLinkRouter.Shown(new Uri("https://аpple.com/login")));
+
+    [AvaloniaFact]
     public void Streaming_rebuilds_only_the_changed_last_block_and_waits_while_its_text_is_selected()
     {
         var (window, view) = Show("First paragraph.\n\nSecond");
