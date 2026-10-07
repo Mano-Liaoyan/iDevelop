@@ -229,7 +229,7 @@ public sealed class JoinTests
     }
 
     [Fact]
-    public async Task Every_join_probe_converges_to_one_publication_and_an_equal_preparation()
+    public async Task Join_probes_separated_only_by_reads_share_durable_state_and_converge_to_one_publication_and_an_equal_preparation()
     {
         var points = new List<string>();
         using (var baseline = new PreparationFixture(Diamond()))
@@ -241,7 +241,8 @@ public sealed class JoinTests
         Assert.Equal(new[] { "git.join-merge-1.before", "git.join-merge-1.after", "git.join-commit.before", "git.join-commit.after",
             "journal.join-plan.before", "journal.join-plan.after", "journal.join-intent.before", "journal.join-intent.after", "git.join.before", "git.join.after",
             "journal.join-observed.before", "journal.join-observed.after" }, points.Where(point => point.Contains("join", StringComparison.Ordinal)));
-        foreach (var point in points.Where(point => point.Contains("join", StringComparison.Ordinal)))
+        foreach (var point in points.Where(point => point.Contains("join", StringComparison.Ordinal))
+            .Where(point => point == "git.join-merge-1.before" || point.EndsWith(".after", StringComparison.Ordinal)))
         {
             using var f = new PreparationFixture(Diamond());
             await Sources(f);
