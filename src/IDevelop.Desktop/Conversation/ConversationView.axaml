@@ -25,6 +25,7 @@
         </Border>
         <ComboBox Grid.Column="3" MinWidth="200" MaxWidth="400" VerticalAlignment="Center"
                   ItemsSource="{Binding Attempts}" SelectedItem="{Binding SelectedAttempt}"
+                  IsVisible="{Binding !!Attempts.Count}"
                   ToolTip.Tip="Every attempt of this task, oldest first"
                   AutomationProperties.AutomationId="AttemptPicker"
                   AutomationProperties.Name="Attempt">

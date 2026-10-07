@@ -122,6 +122,30 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_attempt_picker_shows_only_once_a_task_has_an_attempt()
+    {
+        var project = Project(
+            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
+            TaskAt(TestTasks.Build, "Build", 105, 300, CodexHigh, "Build it."));
+        WriteAttempt(project, Requested(B, TestTasks.Design, 0, Prompt), Launched(1),
+            At(2, new AgentEvent.Failed("The model is not available.")), Exited(3, 1));
+        var shell = Shell.Open(project);
+        bool PickerShown(string title)
+        {
+            shell.Click(shell.Header(shell.Node(title)));
+            Invoke(shell.InView<Button>("OpenConversation"));
+            shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted, "the conversation finished reading");
+            shell.Render();
+            var shown = shell.Find<ComboBox>("AttemptPicker").IsEffectivelyVisible;
+            Invoke(shell.Find<Button>("CloseConversation"));
+            shell.Render();
+            return shown;
+        }
+
+        Assert.Equal((true, false), (PickerShown("Design"), PickerShown("Build")));
+    }
+
+    [AvaloniaFact]
     public void Expanding_or_closing_the_dock_gives_its_height_back_to_the_main_area()
     {
         var shell = Shell.Open(Project());
