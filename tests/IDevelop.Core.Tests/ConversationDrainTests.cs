@@ -494,6 +494,52 @@ public sealed class ConversationDrainTests : IDisposable
         await Settled(runs);
     }
 
+    [UnixFact]
+    public async Task Session_send_does_not_hold_up_another_tasks_snapshot_while_Git_waits()
+    {
+        var other = TestNodes.Implement(TaskId.New(), "Other", "Build it", execution: Settings, conversation: ConversationMode.MayAsk);
+        _workflow = _workflow.Must(TestNodes.Place(other, new CanvasPoint(300, 0)));
+        Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode)
+            .Print(SessionLine(ClientId.ClaudeCode, Session)).Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+        await using var runs = await Open();
+        await Settled(runs);
+        Assert.IsType<StartResult.Started>(runs.Start(other));
+        await Until(() => runs.Latest.GetValueOrDefault(other.Id) is { Status: AttemptStatus.Succeeded } && runs.Live(other.Id) is null);
+        using var session = runs.OpenConversation(Node.Id);
+        using var observer = runs.OpenConversation(other.Id);
+        var expected = session.Snapshot.Current!.Value;
+        var entered = FileAt("git-entered");
+        var release = FileAt("git-release");
+        _fakes.Install("git", FakeRule.On("rev-parse", "--git-path", "index")
+            .Write(entered, "entered").WaitForFile(release).Exit(1));
+        var previousPath = Environment.GetEnvironmentVariable("PATH");
+        Task<SendResult>? send = null;
+        try
+        {
+            Environment.SetEnvironmentVariable("PATH", _fakes.Folder + Path.PathSeparator + previousPath);
+            send = Task.Run(() => session.SendAsync(expected, "Continue", false, default));
+            await Until(() => File.Exists(entered));
+            var snapshot = await Task.Run(() => observer.Snapshot).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal((AttemptStatus.Succeeded, "Done", true),
+                (snapshot.Latest!.Status, snapshot.Latest.Result, snapshot.Actions.Send.Enabled));
+            Assert.False(send.IsCompleted);
+            File.WriteAllText(release, "go");
+            Assert.Equal("Continue", Assert.IsType<SendResult.Continued>(await send).Attempt.Turns.Single().Message);
+            await Settled(runs);
+        }
+        finally
+        {
+            File.WriteAllText(release, "go");
+            if (send is not null)
+            {
+                await send;
+                await Settled(runs);
+            }
+
+            Environment.SetEnvironmentVariable("PATH", previousPath);
+        }
+    }
+
     private static int LiveProcesses(int pid)
     {
         try { using var process = Process.GetProcessById(pid); return process.HasExited ? 0 : 1; }

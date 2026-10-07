@@ -79,6 +79,7 @@ else if (claudeStream)
     stdout.WriteLine(JsonSerializer.Serialize(new { type = "control_response", response = new { subtype = "success", request_id = initialize.GetProperty("request_id") } }));
     prompt = ReadInput().GetProperty("message").GetProperty("content").GetString();
 }
+
 var rule = rules.RootElement.GetProperty("rules").EnumerateArray()
     .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments) && ThreadMatches(candidate))
     .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
@@ -87,6 +88,7 @@ if (rule is not { } matched)
     stderr.WriteLine($"fake agent: no rule for {string.Join(' ', clientArguments)}");
     return 99;
 }
+
 if (threadRequest is { } thread)
 {
     stdout.WriteLine(JsonSerializer.Serialize(new { id = thread.GetProperty("id"), result = new { thread = new { id = "" } } }));
@@ -98,17 +100,31 @@ if (threadRequest is { } thread)
 
 bool ThreadMatches(JsonElement candidate)
 {
-    if (threadRequest is not { } request || !candidate.TryGetProperty("thread", out var method) || method.ValueKind == JsonValueKind.Null) return true;
-    if (method.GetString() != request.GetProperty("method").GetString()) return false;
+    if (threadRequest is not { } request || !candidate.TryGetProperty("thread", out var method) || method.ValueKind == JsonValueKind.Null)
+    {
+        return true;
+    }
+
+    if (method.GetString() != request.GetProperty("method").GetString())
+    {
+        return false;
+    }
+
     return !candidate.TryGetProperty("threadId", out var id) || id.ValueKind == JsonValueKind.Null
-        || id.GetString() == request.GetProperty("params").GetProperty("threadId").GetString();
+            || id.GetString() == request.GetProperty("params").GetProperty("threadId").GetString();
 }
+
 string? ReadWireLine()
 {
     var line = stdin.ReadLine();
-    if (line is not null && framesFile is not null) File.AppendAllText(framesFile, line + "\n");
+    if (line is not null && framesFile is not null)
+    {
+        File.AppendAllText(framesFile, line + "\n");
+    }
+
     return line;
 }
+
 JsonElement ReadInput() => JsonDocument.Parse(ReadWireLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
 List<FileStream> held = [];
@@ -123,8 +139,16 @@ int? Run(JsonElement steps)
         {
             case "recordArguments":
                 File.WriteAllText(value.GetString()!, JsonSerializer.Serialize(clientArguments));
-                if (threadRequest is { } threadFrame) File.WriteAllText(value.GetString()! + ".thread.json", threadFrame.GetRawText());
-                if (turnRequest is { } turnFrame) File.WriteAllText(value.GetString()! + ".turn.json", turnFrame.GetRawText());
+                if (threadRequest is { } threadFrame)
+                {
+                    File.WriteAllText(value.GetString()! + ".thread.json", threadFrame.GetRawText());
+                }
+
+                if (turnRequest is { } turnFrame)
+                {
+                    File.WriteAllText(value.GetString()! + ".turn.json", turnFrame.GetRawText());
+                }
+
                 break;
             case "recordWorkingDirectory":
                 File.WriteAllText(value.GetString()!, Environment.CurrentDirectory);
@@ -135,11 +159,17 @@ int? Run(JsonElement steps)
             case "capturePrompt":
                 var captured = prompt ?? stdin.ReadToEnd();
                 if (prompt is null && clientArguments.Contains("stream-json"))
+                {
                     captured = JsonDocument.Parse(captured).RootElement.GetProperty("message").GetProperty("content").GetString()!;
+                }
+
                 File.WriteAllText(value.GetString()!, captured);
                 break;
             case "waitForStdinEnd":
-                while (ReadWireLine() is not null) { }
+                while (ReadWireLine() is not null)
+                {
+                }
+
                 break;
             case "recordFrames":
                 framesFile = value.GetString();
@@ -155,11 +185,20 @@ int? Run(JsonElement steps)
                 matchedLine = null;
                 while (ReadWireLine() is { } read)
                 {
-                    if (!read.Contains(pattern, StringComparison.Ordinal)) continue;
+                    if (!read.Contains(pattern, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     matchedLine = JsonDocument.Parse(read).RootElement.Clone();
                     break;
                 }
-                if (matchedLine is null) return 96;
+
+                if (matchedLine is null)
+                {
+                    return 96;
+                }
+
                 break;
             case "echoId":
                 var last = matchedLine ?? throw new IOException("No input frame matched.");
@@ -246,10 +285,20 @@ int? Run(JsonElement steps)
 
 void Print(string line)
 {
-    if (!appServer) { stdout.WriteLine(line); return; }
+    if (!appServer)
+    {
+        stdout.WriteLine(line);
+        return;
+    }
+
     using var parsed = JsonDocument.Parse(line);
     var root = parsed.RootElement;
-    if (!root.TryGetProperty("type", out var type)) { stdout.WriteLine(line); return; }
+    if (!root.TryGetProperty("type", out var type))
+    {
+        stdout.WriteLine(line);
+        return;
+    }
+
     var item = root.TryGetProperty("item", out var found) ? found : (JsonElement?)null;
     object? translated = type.GetString() switch
     {
@@ -262,7 +311,10 @@ void Print(string line)
         "turn.failed" => new { method = "turn/completed", @params = new { turn = new { id = "turn-1", status = "failed", error = root.GetProperty("error") } } },
         _ => null,
     };
-    if (translated is not null) stdout.WriteLine(JsonSerializer.Serialize(translated));
+    if (translated is not null)
+    {
+        stdout.WriteLine(JsonSerializer.Serialize(translated));
+    }
 }
 
 static bool Matches(JsonElement when, string[] arguments)

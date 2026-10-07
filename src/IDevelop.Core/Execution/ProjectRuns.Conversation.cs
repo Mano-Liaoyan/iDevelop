@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Workflows;
+using AsyncTask = System.Threading.Tasks.Task;
 
 namespace IDevelop.Execution;
 
@@ -21,13 +22,17 @@ public sealed partial class ProjectRuns
         }
 
         public TaskId Task { get; }
+
         public event Action<long>? Changed;
+
         private bool Unavailable => Volatile.Read(ref _disposed) != 0 || _owner._leaving is not null;
 
         public ConversationSnapshot Snapshot
         {
             get
             {
+                ConversationSnapshot snapshot;
+                bool countLog;
                 lock (_owner._gate)
                 {
                     var record = _owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task);
@@ -54,15 +59,24 @@ public sealed partial class ProjectRuns
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
                         Availability(unavailable is null && waiting && record?.SessionId is not null,
                             unavailable ?? "The task must finish teardown and wait with a session.", "Open this session in a terminal."));
-                    long logRevision = live?.LogRevision ?? 0;
-                    if (live is null && record is not null)
-                    {
-                        try { logRevision = File.ReadLines(Path.Combine(AttemptLog.FolderOf(_owner._attempts, Task, record.Id), "events.jsonl")).LongCount(); }
-                        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-                    }
-                    return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), logRevision,
+                    countLog = live is null && record is not null;
+                    snapshot = new ConversationSnapshot(Interlocked.Read(ref _owner._revision), live?.LogRevision ?? 0,
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }
+
+                if (countLog && snapshot.Latest is { } latest)
+                {
+                    try
+                    {
+                        var logRevision = File.ReadLines(Path.Combine(AttemptLog.FolderOf(_owner._attempts, Task, latest.Id), "events.jsonl")).LongCount();
+                        snapshot = snapshot with { LogRevision = logRevision };
+                    }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    {
+                    }
+                }
+
+                return snapshot;
             }
         }
 
@@ -107,25 +121,35 @@ public sealed partial class ProjectRuns
         public Task<ImmutableArray<AttemptSummary>> ListAttemptsAsync(CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            return System.Threading.Tasks.Task.FromResult(Unavailable ? ImmutableArray<AttemptSummary>.Empty : AttemptLog.ListAttempts(_owner._attempts, Task).Attempts);
+            return AsyncTask.FromResult(Unavailable ? ImmutableArray<AttemptSummary>.Empty : AttemptLog.ListAttempts(_owner._attempts, Task).Attempts);
         }
 
         public Task<HistoryResult> ReadPageAsync(AttemptId head, HistoryQuery query, int count, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
-            if (Unavailable) return System.Threading.Tasks.Task.FromResult<HistoryResult>(new HistoryResult.Unavailable("The conversation owner is closed."));
-            var chain = AttemptLog.ReadChain(_owner._attempts, Task, head);
-            var histories = new List<AttemptHistory>();
+            if (Unavailable)
+            {
+                return AsyncTask.FromResult<HistoryResult>(new HistoryResult.Unavailable("The conversation owner is closed."));
+            }
+
+            ActiveRun? active;
             lock (_owner._gate)
             {
-                foreach (var record in chain)
+                active = _owner._active.GetValueOrDefault(Task);
+            }
+
+            var chain = AttemptLog.ReadChain(_owner._attempts, Task, head);
+            var histories = new List<AttemptHistory>();
+            foreach (var record in chain)
+            {
+                var history = active?.Record.Id == record.Id ? active.ReadHistory() : AttemptLog.ReadHistory(_owner._attempts, Task, record.Id);
+                if (history is not null)
                 {
-                    var active = _owner._active.GetValueOrDefault(Task);
-                    var history = active?.Record.Id == record.Id ? active.ReadHistory() : AttemptLog.ReadHistory(_owner._attempts, Task, record.Id);
-                    if (history is not null) histories.Add(history);
+                    histories.Add(history);
                 }
             }
-            return System.Threading.Tasks.Task.FromResult(ConversationPager.Read($"{_owner._projectFolder}/{Task}", histories,
+
+            return AsyncTask.FromResult(ConversationPager.Read($"{_owner._projectFolder}/{Task}", histories,
                 Snapshot.Revision, query, count));
         }
 
@@ -134,34 +158,62 @@ public sealed partial class ProjectRuns
             ct.ThrowIfCancellationRequested();
             lock (_owner._gate)
             {
-                return System.Threading.Tasks.Task.FromResult(Unavailable ? null
-                    : (_owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task)) is { } record && record.Id == key.Turn.Attempt
-                        ? record.Requests.GetValueOrDefault(key) : AttemptLog.ReadRequest(_owner._attempts, Task, key));
+                if (Unavailable)
+                {
+                    return AsyncTask.FromResult<RequestRecord?>(null);
+                }
+
+                var record = _owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task);
+                if (record is not null && record.Id == key.Turn.Attempt)
+                {
+                    return AsyncTask.FromResult(record.Requests.GetValueOrDefault(key));
+                }
             }
+
+            return AsyncTask.FromResult(AttemptLog.ReadRequest(_owner._attempts, Task, key));
         }
 
         public Task<SendResult> SendAsync(TurnKey expected, string text, bool stopTurn, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+            TaskDefinition task;
             lock (_owner._gate)
             {
-                if (Unavailable) return Refused(new SendProblem.ClosedOwner());
-                if (_owner.Resolve(Task) is not { } task) return Refused(new SendProblem.MissingTask());
-                if (_owner.Current(Task) != expected) return Refused(new SendProblem.StaleTarget());
-                return _owner.SendAsync(task, text, stopTurn, ct, expected);
+                if (Unavailable)
+                {
+                    return Refused(new SendProblem.ClosedOwner());
+                }
+
+                if (_owner.Resolve(Task) is not { } current)
+                {
+                    return Refused(new SendProblem.MissingTask());
+                }
+
+                if (_owner.Current(Task) != expected)
+                {
+                    return Refused(new SendProblem.StaleTarget());
+                }
+
+                task = current;
             }
+
+            return _owner.SendAsync(task, text, stopTurn, ct, expected);
         }
 
-        private static Task<SendResult> Refused(SendProblem problem) => System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(problem));
+        private static Task<SendResult> Refused(SendProblem problem) => AsyncTask.FromResult<SendResult>(new SendResult.Refused(problem));
 
         public Task<AnswerResult> AnswerAsync(RequestKey key, QuestionsReply reply, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             lock (_owner._gate)
             {
-                if (Unavailable) return System.Threading.Tasks.Task.FromResult(new AnswerResult(AnswerOutcome.Unavailable, "The conversation owner is closed."));
+                if (Unavailable)
+                {
+                    return AsyncTask.FromResult(new AnswerResult(AnswerOutcome.Unavailable, "The conversation owner is closed."));
+                }
+
                 return _owner._active.TryGetValue(Task, out var run) ? run.AnswerAsync(key, reply, ct)
-                    : System.Threading.Tasks.Task.FromResult(new AnswerResult(AnswerOutcome.Stale, "The question's turn has ended."));
+                    : AsyncTask.FromResult(new AnswerResult(AnswerOutcome.Stale, "The question's turn has ended."));
             }
         }
 
@@ -170,10 +222,17 @@ public sealed partial class ProjectRuns
             ct.ThrowIfCancellationRequested();
             lock (_owner._gate)
             {
-                if (Check(expected) is { } refused) return refused;
+                if (Check(expected) is { } refused)
+                {
+                    return refused;
+                }
+
                 if (!_owner._active.ContainsKey(Task) && _owner.Latest.GetValueOrDefault(Task)?.Status is not (AttemptStatus.WaitingForInput or AttemptStatus.InReview))
+                {
                     return new ConversationCommandResult(CommandOutcome.Refused, "There is no owned attempt to cancel.");
+                }
             }
+
             var result = await _owner.CancelCoreAsync(Task, expected, ct);
             return new ConversationCommandResult(result.Applied ? CommandOutcome.Applied : result.Stale ? CommandOutcome.Stale : CommandOutcome.Refused,
                 result.Applied ? "The cancellation was recorded." : result.Problem is { } problem ? StartReason(problem) : "The attempt is no longer available.");
@@ -184,18 +243,25 @@ public sealed partial class ProjectRuns
             ct.ThrowIfCancellationRequested();
             lock (_owner._gate)
             {
-                var result = Check(expected);
-                if (result is null && _owner.Resolve(Task) is null) result = new ConversationCommandResult(CommandOutcome.Unavailable, "The task no longer exists.");
-                if (result is null && (_owner._active.ContainsKey(Task) || _owner.Latest.GetValueOrDefault(Task)?.Status != AttemptStatus.WaitingForInput))
-                    result = new ConversationCommandResult(CommandOutcome.Refused, "The task must finish teardown and wait for input.");
-                if (result is null)
+                if (Check(expected) is { } refused)
                 {
-                    var done = _owner.MarkDoneCore(Task, expected);
-                    result = new ConversationCommandResult(done.Applied ? CommandOutcome.Applied : done.Problem is null ? CommandOutcome.Stale : CommandOutcome.Refused,
-                        done.Applied ? "The task was marked done." : done.Problem is { } problem ? StartReason(problem) : "The attempt changed.");
+                    return AsyncTask.FromResult(refused);
                 }
-                return System.Threading.Tasks.Task.FromResult(result);
+
+                if (_owner.Resolve(Task) is null)
+                {
+                    return AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "The task no longer exists."));
+                }
+
+                if (_owner._active.ContainsKey(Task) || _owner.Latest.GetValueOrDefault(Task)?.Status != AttemptStatus.WaitingForInput)
+                {
+                    return AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Refused, "The task must finish teardown and wait for input."));
+                }
             }
+
+                    var done = _owner.MarkDoneCore(Task, expected);
+            return AsyncTask.FromResult(new ConversationCommandResult(done.Applied ? CommandOutcome.Applied : done.Problem is null ? CommandOutcome.Stale : CommandOutcome.Refused,
+                            done.Applied ? "The task was marked done." : done.Problem is { } problem ? StartReason(problem) : "The attempt changed."));
         }
 
         public Task<TerminalResult> OpenInTerminalAsync(TurnKey expected, CancellationToken ct)
@@ -203,11 +269,18 @@ public sealed partial class ProjectRuns
             ct.ThrowIfCancellationRequested();
             lock (_owner._gate)
             {
-                TerminalResult result = Unavailable ? new TerminalResult.Refused(new TerminalProblem.ClosedOwner())
-                    : _owner.Current(Task) != expected ? new TerminalResult.Refused(new TerminalProblem.StaleTarget())
-                    : _owner.OpenInTerminal(Task, expected);
-                return System.Threading.Tasks.Task.FromResult(result);
+                if (Unavailable)
+                {
+                    return AsyncTask.FromResult<TerminalResult>(new TerminalResult.Refused(new TerminalProblem.ClosedOwner()));
+                }
+
+                if (_owner.Current(Task) != expected)
+                {
+                    return AsyncTask.FromResult<TerminalResult>(new TerminalResult.Refused(new TerminalProblem.StaleTarget()));
+                }
             }
+
+            return AsyncTask.FromResult(_owner.OpenInTerminal(Task, expected));
         }
 
         private ConversationCommandResult? Check(TurnKey expected) => Unavailable
@@ -218,7 +291,10 @@ public sealed partial class ProjectRuns
         {
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                if (Volatile.Read(ref _disposed) == 0) Changed?.Invoke(Snapshot.Revision);
+                if (Volatile.Read(ref _disposed) == 0)
+                {
+                    Changed?.Invoke(Snapshot.Revision);
+                }
             });
         }
 

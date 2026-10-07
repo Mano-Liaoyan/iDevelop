@@ -204,7 +204,11 @@ public sealed partial class ProjectRuns
             ActiveRun? active;
             lock (_gate)
             {
-                if (SendTarget(task, expected) is { } target) return new SendResult.Refused(target);
+                if (SendTarget(task, expected) is { } target)
+                {
+                    return new SendResult.Refused(target);
+                }
+
                 task = Resolve(task.Id) ?? task;
                 _active.TryGetValue(task.Id, out active);
             }
@@ -212,7 +216,10 @@ public sealed partial class ProjectRuns
             if (active is not null)
             {
                 var result = await active.GuideAsync(task, text, ct, expected);
-                if (result is not SendResult.Refused { Problem: SendProblem.Ending }) return result;
+                if (result is not SendResult.Refused { Problem: SendProblem.Ending })
+                {
+                    return result;
+                }
             }
 
             StartProblem? problem;
@@ -220,11 +227,19 @@ public sealed partial class ProjectRuns
             lock (_gate)
             {
                 ct.ThrowIfCancellationRequested();
-                if (SendTarget(task, expected) is { } target) return new SendResult.Refused(target);
+                if (SendTarget(task, expected) is { } target)
+                {
+                    return new SendResult.Refused(target);
+                }
+
                 problem = Append(task.Id, current => (expected is null || Current(task.Id) == expected)
                     && current.Status == AttemptStatus.InReview, new AttemptEvent.GuidanceAdded(TimeProvider.GetUtcNow(), text), out appended);
-                if (expected is not null && Current(task.Id) != expected) return new SendResult.Refused(new SendProblem.StaleTarget());
+                if (expected is not null && Current(task.Id) != expected)
+                {
+                    return new SendResult.Refused(new SendProblem.StaleTarget());
+                }
             }
+
             if (problem is not null)
             {
                 return new SendResult.Refused(new SendProblem.CannotStart(problem));

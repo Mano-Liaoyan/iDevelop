@@ -3,6 +3,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 internal enum QuestionHandling { Decline, Surface }
+
 internal enum PermissionPrompts { None, Host }
 
 internal abstract record NativePolicy
@@ -10,12 +11,16 @@ internal abstract record NativePolicy
     private NativePolicy() { }
 
     public sealed record Claude(string Mode) : NativePolicy;
+
     public sealed record Codex(string Sandbox) : NativePolicy
     {
         public string ApprovalPolicy => "never";
+
         public string ApprovalsReviewer => "user";
     }
+
     public sealed record Pi : NativePolicy;
+
     public sealed record Antigravity(string Mode) : NativePolicy;
 }
 

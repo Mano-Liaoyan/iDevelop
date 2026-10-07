@@ -23,10 +23,22 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
         switch (root.String("type"))
         {
             case "control_response" when root.Property("response") is { } response && response.String("request_id") == "init-1":
-                if (_initialized) return ProtocolOutput.Empty;
-                if (response.String("subtype") != "success") throw new ProtocolException("Claude Code initialization failed.");
+                if (_initialized)
+                {
+                    return ProtocolOutput.Empty;
+                }
+
+                if (response.String("subtype") != "success")
+                {
+                    throw new ProtocolException("Claude Code initialization failed.");
+                }
+
                 _initialized = true;
-                if (_interrupted) return ProtocolOutput.Empty;
+                if (_interrupted)
+                {
+                    return ProtocolOutput.Empty;
+                }
+
                 return new([], [Frame(new { type = "user", message = new { role = "user", content = launch.Prompt }, parent_tool_use_id = (string?)null })], false);
             case "control_request":
                 return Request(root);
@@ -37,14 +49,21 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                     .Select(part => part.String("tool_use_id")).OfType<string>().Where(_tools.ContainsKey)
                     .Select(tool => new AgentEvent.RequestClosed(_tools[tool])) ?? []], [], false);
             case "stream_event" when root.Property("event") is { } stream:
-                if (stream.String("type") == "message_start") _messageId = stream.Property("message")?.String("id");
+                if (stream.String("type") == "message_start")
+                {
+                    _messageId = stream.Property("message")?.String("id");
+                }
+
                 if (_messageId is { } id && stream.Property("index") is { } index)
                 {
                     _blocks[id] = index.GetInt32();
                     if (stream.String("type") == "content_block_delta" && stream.Property("delta") is { } delta
                         && delta.String("type") == "text_delta" && delta.String("text") is { } text)
+                    {
                         return new([new AgentEvent.MessageDelta($"{id}:{index.GetInt32()}", text)], [], false);
+                    }
                 }
+
                 return ProtocolOutput.Empty;
             case "assistant" when root.Property("message") is { } message:
                 var events = ClaudeCode.Events(root);
@@ -68,15 +87,26 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
         var request = root.Property("request") ?? throw new ProtocolException("Claude Code supplied no request.");
         if (_requests.TryGetValue(id, out var prior))
         {
-            if (!JsonElement.DeepEquals(prior, request)) throw new ProtocolException($"Claude Code changed request {id} within the turn.");
+            if (!JsonElement.DeepEquals(prior, request))
+            {
+                throw new ProtocolException($"Claude Code changed request {id} within the turn.");
+            }
+
             return ProtocolOutput.Empty;
         }
 
         _requests.Add(id, request.Clone());
         if (request.String("subtype") != "can_use_tool")
+        {
             return new([new AgentEvent.Notice("Claude Code requested an unsupported control method.")],
                 [Frame(new { type = "control_response", response = new { subtype = "error", request_id = rawId, error = "Method not supported." } })], false);
-        if (request.String("tool_use_id") is { } tool) _tools[tool] = id;
+        }
+
+        if (request.String("tool_use_id") is { } tool)
+        {
+            _tools[tool] = id;
+        }
+
         var input = request.Property("input");
         if (request.String("tool_name") == "AskUserQuestion")
         {
@@ -86,6 +116,7 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                 question.Bool("multiSelect") == true, AllowsOther: true))];
             return new([new AgentEvent.QuestionAsked(id, questions)], [], false);
         }
+
         return new([new AgentEvent.PermissionRequested(id, new PermissionAction(request.String("tool_name") ?? "unknown",
             input?.GetRawText() ?? "{}", input?.String("file_path") ?? input?.String("command") ?? request.String("description") ?? "This turn"))], [], false);
     }
@@ -104,6 +135,7 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
             var labels = answer.OptionIds.Select(id => options[int.Parse(id.AsSpan(2))].String("label")!);
             answers[question.String("question")!] = string.Join(", ", labels.Concat(answer.Text is { Length: > 0 } text ? [text] : []));
         }
+
         input["answers"] = answers;
         return Response(requestId, new { behavior = "allow", updatedInput = input });
     }

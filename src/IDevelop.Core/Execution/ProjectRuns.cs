@@ -21,7 +21,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly ClientDirectory _clients;
     private readonly HostQuestions _questions;
     private long _revision;
+
     private event EventHandler? OwnerClosed;
+
     private readonly string _attempts;
     private readonly HashSet<AttemptId> _started = [];
     private readonly Dictionary<TaskId, ActiveRun> _active = [];
@@ -233,9 +235,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         ct.ThrowIfCancellationRequested();
         lock (_gate)
         {
-            if (SendTarget(task, expected) is { } target) return new SendResult.Refused(target);
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
             task = Resolve(task.Id) ?? task;
         }
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return new SendResult.Refused(new SendProblem.EmptyMessage());
@@ -255,7 +262,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         ActiveRun? active;
         lock (_gate)
         {
-            if (SendTarget(task, expected) is { } target) return new SendResult.Refused(target);
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
             task = Resolve(task.Id) ?? task;
             _active.TryGetValue(task.Id, out active);
         }
@@ -271,7 +282,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         lock (_gate)
         {
             ct.ThrowIfCancellationRequested();
-            if (SendTarget(task, expected) is { } target) return new SendResult.Refused(target);
+            if (SendTarget(task, expected) is { } target)
+            {
+                return new SendResult.Refused(target);
+            }
+
             task = Resolve(task.Id) ?? task;
             if (_active.TryGetValue(task.Id, out var started))
             {
@@ -310,7 +325,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            if (SendTarget(task, null) is { } target) return target;
+            if (SendTarget(task, null) is { } target)
+            {
+                return target;
+            }
+
             task = Resolve(task.Id) ?? task;
             switch (task.Blueprint.Work)
             {
@@ -379,8 +398,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         TerminalResult result;
         lock (_gate)
         {
-            if (_leaving is not null) return new TerminalResult.Refused(new TerminalProblem.ClosedOwner());
-            if (expected is { } target && Current(task) != target) return new TerminalResult.Refused(new TerminalProblem.StaleTarget());
+            if (_leaving is not null)
+            {
+                return new TerminalResult.Refused(new TerminalProblem.ClosedOwner());
+            }
+
+            if (expected is { } target && Current(task) != target)
+            {
+                return new TerminalResult.Refused(new TerminalProblem.StaleTarget());
+            }
+
             if (_active.TryGetValue(task, out var run))
             {
                 return new TerminalResult.Refused(new TerminalProblem.TurnRunning(run.Record.TaskTitle));
@@ -422,8 +449,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         AttemptRecord? before;
         lock (_gate)
         {
-            if (_leaving is not null) return (null, false, false);
-            if (expected is { } target && Current(task) != target) return (null, false, true);
+            if (_leaving is not null)
+            {
+                return (null, false, false);
+            }
+
+            if (expected is { } target && Current(task) != target)
+            {
+                return (null, false, true);
+            }
+
             _active.TryGetValue(task, out run);
             before = run?.Record ?? Latest.GetValueOrDefault(task);
         }
@@ -434,7 +469,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             var accepted = await run.StopAsync(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow()), expected, ct);
             if (accepted is SendResult.Refused refusal)
+            {
                 return (refusal.Problem is SendProblem.CannotStart failed ? failed.Problem : null, false, refusal.Problem is SendProblem.StaleTarget);
+            }
+
             (problem, applied) = (null, true);
         }
         else
@@ -449,6 +487,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             problem = await CancelAsync(subject);
         }
+
         return (problem, applied, expected is not null && !applied && problem is null);
     }
 
@@ -532,6 +571,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Interlocked.Increment(ref _revision);
                 OwnerClosed?.Invoke(this, EventArgs.Empty);
             }
+
             return new ValueTask(_leaving);
         }
     }
@@ -744,6 +784,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 log.Append(queued);
                 record = AttemptReducer.Apply(record, queued);
             }
+
             var turn = new AttemptEvent.TurnRequested(TimeProvider.GetUtcNow(), plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
                 Conversation = task.Conversation,
@@ -902,9 +943,21 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     private SendProblem? SendTarget(TaskDefinition task, TurnKey? expected)
     {
-        if (_leaving is not null) return new SendProblem.ClosedOwner();
-        if ((expected is not null || !_workflows.IsEmpty) && Resolve(task.Id) is null) return new SendProblem.MissingTask();
-        if (expected is { } turn && Current(task.Id) != turn) return new SendProblem.StaleTarget();
+        if (_leaving is not null)
+        {
+            return new SendProblem.ClosedOwner();
+        }
+
+        if ((expected is not null || !_workflows.IsEmpty) && Resolve(task.Id) is null)
+        {
+            return new SendProblem.MissingTask();
+        }
+
+        if (expected is { } turn && Current(task.Id) != turn)
+        {
+            return new SendProblem.StaleTarget();
+        }
+
         var current = Resolve(task.Id) ?? task;
         return Latest.GetValueOrDefault(task.Id) is { } last && current.Execution is { } settings && settings.Client != last.Requested.Client
             ? new SendProblem.ClientChanged(last.Requested.Client, settings.Client) : null;

@@ -13,9 +13,13 @@ internal sealed class ProtocolException(string message) : Exception(message);
 internal abstract class TurnProtocol
 {
     public abstract ProtocolOutput Start();
+
     public abstract ProtocolOutput Read(string line);
+
     public abstract ProtocolOutput Answer(string requestId, QuestionsReply reply);
+
     public abstract ProtocolOutput Decline(string requestId);
+
     public abstract ProtocolOutput? Interrupt();
 
     protected static string Frame(object value) => JsonSerializer.Serialize(value);
@@ -58,19 +62,27 @@ internal sealed class OneShotProtocol(LaunchArguments launch, Func<string, Immut
             if (step?.String("text_delta") is { } text)
             {
                 _steps[id] = _steps.GetValueOrDefault(id, "") + text;
-                if (step?.String("state") != "DONE") return new([new AgentEvent.MessageDelta(id, text)], [], false);
+                if (step?.String("state") != "DONE")
+                {
+                    return new([new AgentEvent.MessageDelta(id, text)], [], false);
+                }
             }
+
             if (step?.String("state") == "DONE" && _steps.Remove(id, out var complete))
+            {
                 return new([new AgentEvent.Message(complete.TrimEnd()) { Id = id }], [], false);
+            }
+
             return ProtocolOutput.Empty;
         }
 
         var events = interpret(line).Select(e => e is AgentEvent.Message message ? message with { Id = _messageId } : e).ToImmutableArray();
-        // Antigravity's only authoritative complete text is the result. Keep it as the verdict's result for old logs.
         return new(events, [], false);
     }
 
     public override ProtocolOutput Answer(string requestId, QuestionsReply reply) => throw new ProtocolException("This client has no answer channel.");
+
     public override ProtocolOutput Decline(string requestId) => throw new ProtocolException("This client has no permission channel.");
+
     public override ProtocolOutput? Interrupt() => null;
 }

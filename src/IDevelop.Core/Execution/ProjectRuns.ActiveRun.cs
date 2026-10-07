@@ -10,19 +10,13 @@ public sealed partial class ProjectRuns
 {
     /// <summary>
     /// One attempt while it runs. Its turns run one after another, each one client process, under one log, one lock, and
-    /// one channel. The channel puts every event in one order: stdout lines, the person's messages, stop requests, and
-    /// each turn's exit. One drain appends each event to the log, folds it, and publishes the record, in that order. A stop
-    /// request enqueued before the kill therefore always precedes the exit the kill causes. A turn's output ends at its
-    /// exit, so nothing a turn left running writes into the next one.
-    /// A message is accepted only while a turn can still take it. A cancel or leave, the exit of a turn with no message
-    /// waiting, and a next turn that does not start each close the run to messages under the gate that accepts them, so
-    /// every accepted message precedes that point or reaches the next turn. Whatever else ends the drain closes the run
-    /// first.
-    /// The lock is released only after the last event is on disk, or after the drain stops and the log is closed, so
-    /// nothing appends after another instance could take over. The run disposes each turn's process before it starts the
-    /// next turn or releases the lock, so a late stop does nothing. While a turn's client runs, Cancel, Stop and send, and
-    /// leaving stop everything it started, and so does a crash on Windows. What the client leaves running when it exits on
-    /// its own keeps running, as after a command in a terminal, even while it still holds the turn's output.
+    /// one channel. One drain owns parsing, folding, answers, expiry, Send, Stop, and exit. It appends and flushes each
+    /// person's command before acknowledging it, so the intent always precedes the exit it causes.
+    /// Stopping uses the protocol interrupt when available, then the process tree, within ShutdownTime. A turn's output
+    /// ends at its exit, so nothing a turn left running writes into the next one. What the client leaves running when it
+    /// exits on its own keeps running, as after a command in a terminal, even while it still holds the turn's output.
+    /// The run disposes each turn's process before it starts the next turn or releases the lock, so a late stop does
+    /// nothing. The log closes and the lock is released last, so nothing appends after another instance could take over.
     /// </summary>
     private sealed class ActiveRun
     {
@@ -56,11 +50,20 @@ public sealed partial class ProjectRuns
         }
 
         public long Order { get; }
+
         public AttemptRecord Record { get; private set; }
+
         public Task Completion => _finished.Task;
+
         public (long Revision, long LogRevision, ImmutableDictionary<string, LiveMessageBuffer> Buffers) Live
         {
-            get { lock (_gate) return (_revision, _log.LineCount, _buffers); }
+            get
+            {
+                lock (_gate)
+                {
+                    return (_revision, _log.LineCount, _buffers);
+                }
+            }
         }
 
         public void Start() => _ = Task.Run(RunAsync);
@@ -70,7 +73,7 @@ public sealed partial class ProjectRuns
             lock (_gate)
             {
                 var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-                return _events.Writer.TryWrite(new Input.Person(request, done, null, expected, ct)) ? done.Task : System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.StaleTarget()));
+                return _events.Writer.TryWrite(new Input.Person(request, done, null, expected, ct)) ? done.Task : Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.StaleTarget()));
             }
         }
 
@@ -78,11 +81,18 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                if (Problem() is { } problem) return System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(problem));
+                if (Problem() is { } problem)
+                {
+                    return Task.FromResult<SendResult>(new SendResult.Refused(problem));
+                }
+
                 var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 var message = new AttemptEvent.MessageQueued(_owner.TimeProvider.GetUtcNow(), text, stopTurn) { Id = Guid.CreateVersion7().ToString() };
                 if (!_events.Writer.TryWrite(new Input.Person(message, done, task, expected, ct)))
-                    return System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                {
+                    return Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                }
+
                 _messageWaiting = true;
                 return done.Task;
             }
@@ -92,10 +102,17 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                if (_closed) return System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                if (_closed)
+                {
+                    return Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                }
+
                 var done = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (!_events.Writer.TryWrite(new Input.Person(new AttemptEvent.GuidanceAdded(_owner.TimeProvider.GetUtcNow(), text), done, task, expected, ct)))
-                    return System.Threading.Tasks.Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                {
+                    return Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                }
+
                 return done.Task;
             }
         }
@@ -106,19 +123,43 @@ public sealed partial class ProjectRuns
             {
                 var done = new TaskCompletionSource<AnswerResult>(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (!_events.Writer.TryWrite(new Input.Answer(key, reply, done, ct)))
+                {
                     done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The turn has ended."));
+                }
+
                 return done.Task;
             }
         }
 
         public AttemptHistory? ReadHistory()
         {
-            lock (_gate) return AttemptLog.ReadHistory(_owner._attempts, Record.Task, Record.Id, _buffers);
+            ImmutableDictionary<string, LiveMessageBuffer> buffers;
+            lock (_gate)
+            {
+                buffers = _buffers;
+            }
+
+            return AttemptLog.ReadHistory(_owner._attempts, Record.Task, Record.Id, buffers);
         }
 
-        public SendProblem? GuideProblem() { lock (_gate) return _closed ? new SendProblem.Ending(Record.TaskTitle) : null; }
-        public SendProblem? SendProblem() { lock (_gate) return Problem(); }
+        public SendProblem? GuideProblem()
+        {
+            lock (_gate)
+            {
+                return _closed ? new SendProblem.Ending(Record.TaskTitle) : null;
+            }
+        }
+
+        public SendProblem? SendProblem()
+        {
+            lock (_gate)
+            {
+                return Problem();
+            }
+        }
+
         public void Abandon() => _abandon.Cancel();
+
         private SendProblem? Problem() => (_closed, Record.SessionId) switch
         {
             (true, _) => new SendProblem.Ending(Record.TaskTitle),
@@ -142,10 +183,20 @@ public sealed partial class ProjectRuns
                             _log.AppendOutput(line.Text);
                             if (!string.IsNullOrWhiteSpace(line.Text))
                             {
-                                try { Output(_turn.Protocol.Read(line.Text)); }
-                                catch (JsonException) { Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(_plan.Settings.Client)} printed."))); }
-                                catch (ProtocolException error) { Fail(error.Message); }
+                                try
+                                {
+                                    Output(_turn.Protocol.Read(line.Text));
+                                }
+                                catch (JsonException)
+                                {
+                                    Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Notice($"iDevelop could not read a line that {Clients.Name(_plan.Settings.Client)} printed.")));
+                                }
+                                catch (ProtocolException error)
+                                {
+                                    Fail(error.Message);
+                                }
                             }
+
                             break;
                         case Input.Person person:
                             Accept(person);
@@ -162,33 +213,71 @@ public sealed partial class ProjectRuns
                             {
                                 Append(new AttemptEvent.RequestClosed(_owner.TimeProvider.GetUtcNow(), request, write.Success ? RequestCloseReason.PolicyDenied : RequestCloseReason.DeliveryUnknown));
                             }
+
                             if (write.Delivery is { } reply)
                             {
                                 _deliveries.Remove(reply);
-                                if (!write.Success) Append(new AttemptEvent.RequestClosed(_owner.TimeProvider.GetUtcNow(), reply.Key.Id, RequestCloseReason.DeliveryUnknown));
+                                if (!write.Success)
+                                {
+                                    Append(new AttemptEvent.RequestClosed(_owner.TimeProvider.GetUtcNow(), reply.Key.Id, RequestCloseReason.DeliveryUnknown));
+                                }
+
                                 _owner.Publish(Record);
                                 reply.Done.TrySetResult(new AnswerResult(write.Success ? AnswerOutcome.Recorded : AnswerOutcome.DeliveryUnknown,
                                     write.Success ? "The answer was recorded." : "The answer was recorded, but delivery could not be confirmed."));
                             }
-                            if (!write.Success && _turn.ClientRuns) Fail("iDevelop could not write to the client's input pipe.");
-                            if (_turn.PendingWrites == 0 && _turn.Exit is { } heldExit) _events.Writer.TryWrite(heldExit);
+
+                            if (!write.Success && _turn.ClientRuns)
+                            {
+                                Fail("iDevelop could not write to the client's input pipe.");
+                            }
+
+                            if (_turn.PendingWrites == 0 && _turn.Exit is { } heldExit)
+                            {
+                                _events.Writer.TryWrite(heldExit);
+                            }
+
                             break;
                         case Input.Deadline deadline when deadline.Turn == _turn && !_turn.Process.HasExited:
-                            if (!_turn.Stopping && Record.Verdict is AgentEvent.Succeeded) Append(new AttemptEvent.ShutdownForced(_owner.TimeProvider.GetUtcNow()));
+                            if (!_turn.Stopping && Record.Verdict is AgentEvent.Succeeded)
+                            {
+                                Append(new AttemptEvent.ShutdownForced(_owner.TimeProvider.GetUtcNow()));
+                            }
+
                             _turn.Process.StopTree();
                             CloseInput();
                             break;
                         case Input.Exit exit when exit.Turn == _turn:
-                            if (_turn.PendingWrites > 0) { _turn.Exit = exit; break; }
+                            if (_turn.PendingWrites > 0)
+                            {
+                                _turn.Exit = exit;
+                                break;
+                            }
+
                             _turn.Exit = null;
                             foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order))
+                            {
                                 Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Message(buffer.Text) { Id = id, Partial = true }) { Order = buffer.Order });
-                            lock (_gate) _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
-                            if (_turn.Failure is { } failure) Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(failure)));
+                            }
+
+                            lock (_gate)
+                            {
+                                _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
+                            }
+
+                            if (_turn.Failure is { } failure)
+                            {
+                                Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(failure)));
+                            }
+
                             Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = GitTree.Snapshot(_owner._projectFolder) });
                             exited = true;
                             _owner.Publish(Record);
-                            if (Record.Status != AttemptStatus.Running || !await NextTurnAsync()) return;
+                            if (Record.Status != AttemptStatus.Running || !await NextTurnAsync())
+                            {
+                                return;
+                            }
+
                             exited = false;
                             break;
                         case Input.Line or Input.WriteDone or Input.Deadline or Input.QuestionTick or Input.Exit:
@@ -196,6 +285,7 @@ public sealed partial class ProjectRuns
                         default:
                             throw new InvalidOperationException("Unknown run input.");
                     }
+
                     _owner.Publish(Record);
                 }
             }
@@ -212,19 +302,47 @@ public sealed partial class ProjectRuns
                     _turn.Open = false;
                     _events.Writer.TryComplete();
                     while (_events.Reader.TryRead(out var pending))
-                        if (pending is Input.Person person) person.Done.TrySetResult(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
-                        else if (pending is Input.Answer answer) answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The turn has ended."));
-                        else if (pending is Input.WriteDone { Delivery: { } delivery }) delivery.Done.TrySetResult(new AnswerResult(AnswerOutcome.DeliveryUnknown, "Answer delivery could not be confirmed."));
+                    {
+                        if (pending is Input.Person person)
+                        {
+                            person.Done.TrySetResult(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                        }
+                        else if (pending is Input.Answer answer)
+                        {
+                            answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The turn has ended."));
+                        }
+                        else if (pending is Input.WriteDone { Delivery: { } delivery })
+                        {
+                            delivery.Done.TrySetResult(new AnswerResult(AnswerOutcome.DeliveryUnknown, "Answer delivery could not be confirmed."));
+                        }
+                    }
                 }
+
                 foreach (var delivery in _deliveries)
+                {
                     delivery.Done.TrySetResult(new AnswerResult(AnswerOutcome.DeliveryUnknown, "Answer delivery could not be confirmed."));
-                if (exited) _turn.Process.LeaveDescendantsRunning();
-                else _turn.Process.StopTree();
+                }
+
+                if (exited)
+                {
+                    _turn.Process.LeaveDescendantsRunning();
+                }
+                else
+                {
+                    _turn.Process.StopTree();
+                }
+
                 await DisposeTurnAsync();
                 _log.Dispose();
                 _held.Dispose();
-                try { _owner.Finish(this); }
-                finally { _finished.TrySetResult(); }
+                try
+                {
+                    _owner.Finish(this);
+                }
+                finally
+                {
+                    _finished.TrySetResult();
+                }
             }
         }
 
@@ -232,12 +350,18 @@ public sealed partial class ProjectRuns
         {
             try
             {
-                if (person.Ct.IsCancellationRequested) { person.Done.TrySetCanceled(person.Ct); return; }
+                if (person.Ct.IsCancellationRequested)
+                {
+                    person.Done.TrySetCanceled(person.Ct);
+                    return;
+                }
+
                 if (person.Expected is { } expected && expected != new TurnKey(Record.Id, Record.Turns.Count))
                 {
                     person.Done.TrySetResult(new SendResult.Refused(new SendProblem.StaleTarget()));
                     return;
                 }
+
                 if (person.Task is { } task)
                 {
                     lock (_owner._gate)
@@ -247,19 +371,35 @@ public sealed partial class ProjectRuns
                             person.Done.TrySetResult(new SendResult.Refused(target));
                             return;
                         }
+
                         _conversation = (_owner.Resolve(task.Id) ?? task).Conversation;
                     }
-                    if (Record.Stopping) { person.Done.TrySetResult(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle))); return; }
+
+                    if (Record.Stopping)
+                    {
+                        person.Done.TrySetResult(new SendResult.Refused(new SendProblem.Ending(Record.TaskTitle)));
+                        return;
+                    }
                 }
+
                 var accepted = person.Event is AttemptEvent.MessageQueued message
                     ? message with { StopsTurn = message.StopsTurn && _turn.ClientRuns }
                     : person.Event;
                 Append(accepted);
                 if (accepted is AttemptEvent.CancelRequested or AttemptEvent.InterruptRequested)
-                    lock (_gate) _closed = true;
+                {
+                    lock (_gate)
+                    {
+                        _closed = true;
+                    }
+                }
+
                 _owner.Publish(Record);
                 person.Done.TrySetResult(accepted is AttemptEvent.GuidanceAdded ? new SendResult.Guided() : new SendResult.Queued());
-                if (accepted is AttemptEvent.CancelRequested or AttemptEvent.InterruptRequested or AttemptEvent.MessageQueued { StopsTurn: true }) StopTurn();
+                if (accepted is AttemptEvent.CancelRequested or AttemptEvent.InterruptRequested or AttemptEvent.MessageQueued { StopsTurn: true })
+                {
+                    StopTurn();
+                }
             }
             catch
             {
@@ -282,11 +422,20 @@ public sealed partial class ProjectRuns
                             _buffers = _buffers.SetItem(delta.MessageId, buffer with { Text = buffer.Text + delta.Text });
                             _revision++;
                         }
+
                         break;
                     case AgentEvent.Message { Id: { } id } message:
                         LiveMessageBuffer? prior;
-                        lock (_gate) prior = _buffers.GetValueOrDefault(id);
-                        if (!message.Partial) Append(new AttemptEvent.Agent(at, message) { Order = prior?.Order });
+                        lock (_gate)
+                        {
+                            prior = _buffers.GetValueOrDefault(id);
+                        }
+
+                        if (!message.Partial)
+                        {
+                            Append(new AttemptEvent.Agent(at, message) { Order = prior?.Order });
+                        }
+
                         lock (_gate)
                         {
                             _buffers = message.Partial
@@ -294,6 +443,7 @@ public sealed partial class ProjectRuns
                                 : _buffers.Remove(id);
                             _revision++;
                         }
+
                         break;
                     case AgentEvent.QuestionAsked question:
                         OpenQuestion(question, at);
@@ -301,12 +451,20 @@ public sealed partial class ProjectRuns
                     case AgentEvent.PermissionRequested permission:
                         Append(new AttemptEvent.Agent(at, permission));
                         var decline = _turn.Protocol.Decline(permission.RequestId);
-                        foreach (var frame in decline.Writes) Write(frame, close: false, permission.RequestId);
+                        foreach (var frame in decline.Writes)
+                        {
+                            Write(frame, close: false, permission.RequestId);
+                        }
+
                         break;
                     case AgentEvent.RequestClosed closed:
                         // The decline's write completion owns a permission's delivery outcome.
                         var key = new RequestKey(new TurnKey(Record.Id, Record.Turns.Count), closed.RequestId);
-                        if (Record.Requests.GetValueOrDefault(key) is RequestRecord.Permission) break;
+                        if (Record.Requests.GetValueOrDefault(key) is RequestRecord.Permission)
+                        {
+                            break;
+                        }
+
                         Append(new AttemptEvent.RequestClosed(at, closed.RequestId, RequestCloseReason.Resolved));
                         break;
                     default:
@@ -314,12 +472,24 @@ public sealed partial class ProjectRuns
                         break;
                 }
             }
-            foreach (var frame in output.Writes) Write(frame, close: false, null);
+
+            foreach (var frame in output.Writes)
+            {
+                Write(frame, close: false, null);
+            }
+
             if (output.CloseInput)
             {
-                if (_turn.Stopping && _turn.ClientRuns) _turn.Process.StopTree();
+                if (_turn.Stopping && _turn.ClientRuns)
+                {
+                    _turn.Process.StopTree();
+                }
+
                 CloseInput();
-                if (_turn.Protocol is not OneShotProtocol) Deadline();
+                if (_turn.Protocol is not OneShotProtocol)
+                {
+                    Deadline();
+                }
             }
         }
 
@@ -363,23 +533,43 @@ public sealed partial class ProjectRuns
         private void ExpireQuestions()
         {
             var requests = OpenQuestions();
-            if (requests.Length == 0 || Record.Stopping || _owner.TimeProvider.GetUtcNow() < ((QuestionState.Open)requests[0].State).Deadline.AnswerBy) return;
+            if (requests.Length == 0 || Record.Stopping || _owner.TimeProvider.GetUtcNow() < ((QuestionState.Open)requests[0].State).Deadline.AnswerBy)
+            {
+                return;
+            }
+
             Defer([.. requests.Select(request => request.Key.Id)], Fallback(requests.SelectMany(request => request.Questions)),
-                ((QuestionState.Open)requests[0].State).Deadline.StopBy);
+                            ((QuestionState.Open)requests[0].State).Deadline.StopBy);
         }
 
         private void Defer(ImmutableArray<string> ids, string fallback, DateTimeOffset? stopBy)
         {
             Append(new AttemptEvent.RequestDeferred(_owner.TimeProvider.GetUtcNow(), ids, fallback));
-            lock (_gate) _closed = true;
+            lock (_gate)
+            {
+                _closed = true;
+            }
+
             StopTurn(stopBy);
         }
 
         private void AcceptAnswer(Input.Answer answer)
         {
-            if (answer.Ct.IsCancellationRequested) { answer.Done.TrySetCanceled(answer.Ct); return; }
+            if (answer.Ct.IsCancellationRequested)
+            {
+                answer.Done.TrySetCanceled(answer.Ct);
+                return;
+            }
+
             lock (_owner._gate)
-                if (_owner._leaving is not null) { answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Unavailable, "The project is closed.")); return; }
+            {
+                if (_owner._leaving is not null)
+                {
+                    answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Unavailable, "The project is closed."));
+                    return;
+                }
+            }
+
             ExpireQuestions();
             if (answer.Key.Turn != new TurnKey(Record.Id, Record.Turns.Count)
                 || Record.Requests.GetValueOrDefault(answer.Key) is not RequestRecord.Question question)
@@ -387,27 +577,34 @@ public sealed partial class ProjectRuns
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The question is no longer current."));
                 return;
             }
+
             if (question.State is QuestionState.AnswerRecorded recorded && EqualReply(recorded.Reply, answer.Reply))
             {
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.AlreadyRecorded, "This answer was already recorded."));
                 return;
             }
+
             if (question.State is not QuestionState.Open || Record.Stopping || !_turn.ClientRuns)
             {
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Stale, "The question is closed."));
                 return;
             }
+
             if (!ValidReply(question, answer.Reply))
             {
                 answer.Done.TrySetResult(new AnswerResult(AnswerOutcome.Invalid, "The answer must match the question, options, and selection rules."));
                 return;
             }
+
             try
             {
                 Append(new AttemptEvent.RequestAnswered(_owner.TimeProvider.GetUtcNow(), answer.Key.Id, answer.Reply));
                 _deliveries.Add(answer);
                 var output = _turn.Protocol.Answer(answer.Key.Id, answer.Reply);
-                foreach (var frame in output.Writes) Write(frame, false, answer.Key.Id, answer);
+                foreach (var frame in output.Writes)
+                {
+                    Write(frame, false, answer.Key.Id, answer);
+                }
             }
             catch
             {
@@ -430,11 +627,22 @@ public sealed partial class ProjectRuns
 
         private void StopTurn(DateTimeOffset? stopBy = null)
         {
-            if (!_turn.ClientRuns || _turn.Stopping) return;
+            if (!_turn.ClientRuns || _turn.Stopping)
+            {
+                return;
+            }
+
             _turn.Stopping = true;
             Deadline(stopBy);
-            if (_turn.Protocol.Interrupt() is { } interrupt) Output(interrupt);
-            else { _turn.Process.StopTree(); CloseInput(); }
+            if (_turn.Protocol.Interrupt() is { } interrupt)
+            {
+                Output(interrupt);
+            }
+            else
+            {
+                _turn.Process.StopTree();
+                CloseInput();
+            }
         }
 
         private void Fail(string detail)
@@ -447,7 +655,11 @@ public sealed partial class ProjectRuns
 
         private void Deadline(DateTimeOffset? stopBy = null)
         {
-            if (_turn.StopBy is not null) return;
+            if (_turn.StopBy is not null)
+            {
+                return;
+            }
+
             _turn.StopBy = stopBy ?? _owner.TimeProvider.GetUtcNow() + _owner.ShutdownTime;
             var turn = _turn;
             turn.StopTimer = _owner.TimeProvider.CreateTimer(_ => _events.Writer.TryWrite(new Input.Deadline(turn)), null,
@@ -456,7 +668,11 @@ public sealed partial class ProjectRuns
 
         private void CloseInput()
         {
-            if (_turn.InputClosed) return;
+            if (_turn.InputClosed)
+            {
+                return;
+            }
+
             _turn.InputClosed = true;
             Write("", close: true, null);
         }
@@ -472,11 +688,24 @@ public sealed partial class ProjectRuns
             var stderr = new Tail();
             turn.Process.ReadStdout(line =>
             {
-                lock (_gate) { if (turn.Open) _events.Writer.TryWrite(new Input.Line(turn, line)); }
+                lock (_gate)
+                {
+                    if (turn.Open)
+                    {
+                        _events.Writer.TryWrite(new Input.Line(turn, line));
+                    }
+                }
             });
             turn.Process.ReadStderr(line =>
             {
-                lock (_gate) { if (turn.Open) { _log.AppendStderr(line); stderr.Add(line); } }
+                lock (_gate)
+                {
+                    if (turn.Open)
+                    {
+                        _log.AppendStderr(line);
+                        stderr.Add(line);
+                    }
+                }
             });
             turn.Writer = Task.Run(async () =>
             {
@@ -516,26 +745,57 @@ public sealed partial class ProjectRuns
             try
             {
                 while (_events.Reader.TryRead(out var input))
-                    if (input is Input.Person person) Accept(person);
-                    else if (input is Input.Answer answer) AcceptAnswer(answer);
+                {
+                    if (input is Input.Person person)
+                    {
+                        Accept(person);
+                    }
+                    else if (input is Input.Answer answer)
+                    {
+                        AcceptAnswer(answer);
+                    }
+                }
+
                 started = Record is { Status: AttemptStatus.Running, SessionId: { } session } && Launch(session, tree);
                 return started;
             }
-            finally { lock (_gate) _closed |= !started; }
+            finally
+            {
+                lock (_gate)
+                {
+                    _closed |= !started;
+                }
+            }
         }
 
         private bool Launch(string session, string? tree)
         {
             var plan = _plan.Resuming(session, string.Join("\n\n", Record.Queued.Select(message => message.Text)));
-            if (_conversation is { } mode) plan = plan with { Request = plan.Request with { Policy = ClientPolicy.For(plan.Settings.Client, plan.Request.ReadOnly, mode, Record.Subject is not null, _owner._questions) } };
+            if (_conversation is { } mode)
+            {
+                plan = plan with
+                {
+                    Request = plan.Request with
+                    {
+                        Policy = ClientPolicy.For(plan.Settings.Client, plan.Request.ReadOnly, mode, Record.Subject is not null, _owner._questions)
+                    }
+                };
+            }
+
             Append(new AttemptEvent.TurnRequested(_owner.TimeProvider.GetUtcNow(), plan.Request.Prompt, plan.Command.Path, plan.Launch.Arguments)
             {
-                Conversation = _conversation, Tree = tree, Consumed = [.. Record.Queued.Select(message => message.Id)],
+                Conversation = _conversation,
+                Tree = tree,
+                Consumed = [.. Record.Queued.Select(message => message.Id)],
             });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
             Record = record;
             _messageWaiting = false;
-            if (process is null) return false;
+            if (process is null)
+            {
+                return false;
+            }
+
             _plan = plan;
             _turn = new Turn(process, plan.Client.Protocol(plan.Request));
             Read(_turn);
@@ -545,7 +805,11 @@ public sealed partial class ProjectRuns
 
         private async Task DisposeTurnAsync()
         {
-            if (_turn.Disposed) return;
+            if (_turn.Disposed)
+            {
+                return;
+            }
+
             _turn.Disposed = true;
             _turn.QuestionTimer?.Dispose();
             _turn.StopTimer?.Dispose();
@@ -569,32 +833,56 @@ public sealed partial class ProjectRuns
         private abstract record Input
         {
             private Input() { }
+
             public sealed record Line(Turn Turn, string Text) : Input;
+
             public sealed record Person(AttemptEvent Event, TaskCompletionSource<SendResult> Done, TaskDefinition? Task, TurnKey? Expected, CancellationToken Ct) : Input;
+
             public sealed record Exit(Turn Turn, int Code, string Stderr) : Input;
+
             public sealed record Answer(RequestKey Key, QuestionsReply Reply, TaskCompletionSource<AnswerResult> Done, CancellationToken Ct) : Input;
+
             public sealed record QuestionTick(Turn Turn) : Input;
+
             public sealed record WriteDone(Turn Turn, string? RequestId, bool Success, Answer? Delivery) : Input;
+
             public sealed record Deadline(Turn Turn) : Input;
         }
+
         private sealed record WriteWork(string Frame, bool Close, string? RequestId, Input.Answer? Answer);
+
         private sealed class Turn(ChildProcess process, TurnProtocol protocol)
         {
             public ChildProcess Process { get; } = process;
+
             public TurnProtocol Protocol { get; } = protocol;
+
             public CancellationTokenSource Lifetime { get; } = new();
+
             public Channel<WriteWork> Writes { get; } = Channel.CreateUnbounded<WriteWork>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
             public Task Writer { get; set; } = Task.CompletedTask;
+
             public bool Open { get; set; } = true;
+
             public bool Stopping { get; set; }
+
             public string? Failure { get; set; }
+
             public bool InputClosed { get; set; }
+
             public bool Disposed { get; set; }
+
             public int PendingWrites { get; set; }
+
             public Input.Exit? Exit { get; set; }
+
             public DateTimeOffset? StopBy { get; set; }
+
             public ITimer? StopTimer { get; set; }
+
             public ITimer? QuestionTimer { get; set; }
+
             public bool ClientRuns => Open && !Process.HasExited;
         }
     }

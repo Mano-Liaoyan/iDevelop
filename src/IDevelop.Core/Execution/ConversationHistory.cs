@@ -5,8 +5,11 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 internal sealed record PositionedAttemptEvent(long Position, AttemptEvent Event);
+
 internal sealed record LiveMessageBuffer(string Text, long Order, DateTimeOffset? At = null);
+
 internal sealed record ProjectedConversationEntry(ConversationEntry Entry, long Position, int Slot);
+
 internal sealed record AttemptHistory(AttemptId Id, ImmutableArray<ProjectedConversationEntry> Rows)
 {
     public ImmutableArray<ConversationEntry> Entries => [.. Rows.Select(row => row.Entry)];
@@ -61,7 +64,9 @@ internal static class ConversationHistory
                     rows[id] = rows[id] with { Entry = rows[id].Entry with { Content = content } };
                 }
             }
+
             void Marker(string kind, string text) => Add(kind, new ConversationContent.Marker(kind, text));
+
             void Undelivered()
             {
                 foreach (var queued in queue)
