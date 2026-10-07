@@ -36,7 +36,8 @@ internal static class RefOwnership
                     break;
                 case RunEvent.SalvageRetained retained:
                     var salvage = (MaterializationPlan.Salvage)record.Plans[retained.Plan];
-                    if (record.Preparations[new(salvage.Attempt, 1)].Location.Owner.Branch == name)
+                    if (record.Preparations[new(salvage.Attempt, 1)].Location.Owner.Branch == name &&
+                        (salvage.BranchTip == expected || target is not null && salvage.BranchTip == target || lease))
                     {
                         expected = salvage.BranchTip;
                         target = null;

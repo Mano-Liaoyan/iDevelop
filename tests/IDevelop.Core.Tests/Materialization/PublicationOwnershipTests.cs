@@ -12,6 +12,52 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class PublicationOwnershipTests
 {
     [Fact]
+    public async Task Salvage_cannot_explain_a_published_branch_rewind_for_a_sibling_or_retry()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(C)));
+        var first = await PublicationTests.ChangedWriter(f);
+        var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), first.Execution.Launch.Attempt));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
+        CommitFile(f, sibling.Checkout, "c.txt", "C\n");
+        f.Git.Write("a.txt", "A from C\n", sibling.Checkout);
+        f.Close(sibling, "C ready.\n");
+        Assert.Equal(0, f.Git.Run(first.Checkout, "reset", "-q", "--hard", A).ExitCode);
+        var operation = f.Op();
+        var before = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, sibling.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", before.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, 81cae59086bf9597301026b65f1bb57380b74686 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", before.Block.Detail);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), first.Execution.Launch.Attempt));
+        var after = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, sibling.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", after.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, 81cae59086bf9597301026b65f1bb57380b74686 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", after.Block.Detail);
+        Assert.Equal(RunJournal.Canonical(after.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
+            f.Materializer().Publish(W, f.RunId, operation, sibling.Execution.Launch.Attempt)).Block));
+        var retry = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, f.Op(), retained.Receipt.Plan, f.Op()));
+        Assert.Equal("UncertainOwnership", retry.Block.Problem.ToString());
+        Assert.Equal("The retry branch moved outside the recorded reset.", retry.Block.Detail);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, first.Execution.Location.Owner.Branch));
+        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Ref(f, Assert.IsType<CodeOutput.Produced>(published.Result.Code).Code.ResultRef));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(first.Checkout, "a.txt")));
+        Assert.Equal("A captured\n", f.Git.Git("show", "81cae59086bf9597301026b65f1bb57380b74686:a.txt"));
+    }
+
+    [Fact]
+    public async Task A_symbolic_shared_run_ref_blocks_a_sibling_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(C)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
+        var writer = await PublicationTests.ChangedWriter(f);
+        f.Git.Git("branch", "foreign", A);
+        f.Git.Git("symbolic-ref", sibling.Execution.Location.Owner.Branch, "refs/heads/foreign");
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Ref refs/heads/idp/93f23689/task/ca55ceea is symbolic to refs/heads/foreign.", blocked.Block.Detail);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, "refs/heads/foreign"));
+        Assert.Equal("refs/heads/foreign\n", f.Git.Git("symbolic-ref", sibling.Execution.Location.Owner.Branch));
+        Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
+    }
+
+    [Fact]
     public async Task Observed_base_retention_is_rechecked_before_preparing_another_task()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));

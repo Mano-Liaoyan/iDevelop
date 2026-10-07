@@ -10,6 +10,101 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class PreparationTests
 {
+    [Theory]
+    [InlineData("none", true)]
+    [InlineData("git.submodules.before", true)]
+    [InlineData("git.submodules.after", true)]
+    [InlineData("none", false)]
+    public async Task Preparation_preserves_an_initialized_submodule_commit(string point, bool continuation)
+    {
+        using var module = new GitFixture();
+        module.Diamond();
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Git("-c", "protocol.file.allow=always", "submodule", "add", "-q", module.Folder, "m");
+            return git.Commit("module");
+        });
+        var environment = new Dictionary<string, string>(f.Git.Environment)
+        {
+            ["GIT_CONFIG_COUNT"] = "1", ["GIT_CONFIG_KEY_0"] = "protocol.file.allow", ["GIT_CONFIG_VALUE_0"] = "always",
+        };
+        Materializer Materializer(Action<string>? probe = null) => IDevelop.Execution.Materializer.Open(f.Git.Folder, f.Store,
+            null, new QuiescentBoundary(), new Clock(), environment, probe);
+        var ready = Assert.IsType<Preparation.Ready>(await Materializer().Prepare(W, f.RunId, f.Op(), T, new AttemptCause.Initial()));
+        var checkout = Path.Combine(ready.Checkout, "m");
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
+        f.Git.Write("b.txt", "B\n", checkout);
+        Assert.Equal(0, f.Git.Run(checkout, "add", "b.txt").ExitCode);
+        Assert.Equal(0, f.Git.Run(checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
+        f.Close(ready);
+        var operation = f.Op();
+        AttemptCause cause = continuation ? new AttemptCause.Continue(ready.Execution.Launch.Attempt, f.Op()) :
+            new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op());
+        if (point != "none")
+            await Assert.ThrowsAsync<Crash>(async () => await Materializer(step => { if (step == point) throw new Crash(); })
+                .Prepare(W, f.RunId, operation, T, cause));
+        var outcome = await Materializer().Prepare(W, f.RunId, operation, T, cause);
+        if (continuation)
+        {
+            var continued = Assert.IsType<Preparation.Ready>(outcome);
+            Assert.Equal(ready.Execution.Location.Owner, continued.Execution.Location.Owner);
+            Assert.Equal(continued, await Materializer().Prepare(W, f.RunId, operation, T, cause));
+        }
+        else
+        {
+            var blocked = Assert.IsType<Preparation.Blocked>(outcome);
+            Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+            Assert.Equal("The checkout tip or contents differ from the recorded attempt base.", blocked.Block.Detail);
+            Assert.Equal(blocked, await Materializer().Prepare(W, f.RunId, operation, T, cause));
+        }
+        Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
+        Assert.Equal("B\n", File.ReadAllText(Path.Combine(checkout, "b.txt")));
+        Assert.Equal("commit\n", f.Git.Run(checkout, "cat-file", "-t", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67").Text);
+        Assert.Equal("160000 adfe40b30c176fb407933286f51d15ea9b54cdc3 0\tm\n", f.Git.Run(ready.Checkout, "ls-files", "--stage", "m").Text);
+    }
+
+    [Fact]
+    public async Task Adoption_rechecks_the_live_branch_tip_before_observing_creation()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        f.Git.Write(".worktrees/93f23689/90d5b0a2/keep", "mine\n");
+        var operation = f.Op();
+        Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await f.Prepare(T, operation)).Block.Problem.ToString());
+        File.Move(f.Git.PathOf(".worktrees/93f23689/90d5b0a2/keep"), f.Git.PathOf("saved"));
+        var foreign = f.Git.Git("commit-tree", "adfe40b30c176fb407933286f51d15ea9b54cdc3^{tree}",
+            "-p", "adfe40b30c176fb407933286f51d15ea9b54cdc3", "-m", "out of band").Trim();
+        Assert.Equal("8d14445e6226129e327b4f1f807c957d99479399", foreign);
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer(probe: step =>
+        {
+            if (step == "git.adopt-worktree.before") f.Git.Git("update-ref", "refs/heads/idp/93f23689/task/90d5b0a2", foreign);
+        }).Prepare(W, f.RunId, operation, T, new AttemptCause.Initial()));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Unobserved creation has an unexpected branch tip.", blocked.Block.Detail);
+        Assert.Equal(blocked, await f.Prepare(T, operation));
+        Assert.Equal("8d14445e6226129e327b4f1f807c957d99479399", GitFixture.Read(f.Git.Open().ReadRef("refs/heads/idp/93f23689/task/90d5b0a2"))?.Hex);
+        Assert.Equal("mine\n", File.ReadAllText(f.Git.PathOf("saved")));
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged")]
+    [InlineData("--skip-worktree")]
+    public async Task Hidden_index_entries_block_clean_preparation_and_preserve_bytes(string flag)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Close(ready);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
+        f.Git.Write("a.txt", "hidden edit\n", ready.Checkout);
+        var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        var bytes = File.ReadAllBytes(index);
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op())));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Block.Detail);
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal("hidden edit\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+    }
+
     private static Workflow Linear(bool context = false)
     {
         var workflow = Connect(FixtureWorkflow(Writer(T), Writer(U), Writer(C)), T, U);

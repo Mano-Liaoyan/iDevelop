@@ -9,6 +9,80 @@ namespace IDevelop.Core.Tests.Git;
 [Collection(ProcessCollection.Name)]
 public sealed class GitRepositoryTests
 {
+    [Fact]
+    public void Symbolic_refs_are_refused_by_reads_and_snapshots()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("symbolic-ref", "refs/idp/r/base", "refs/heads/main");
+        var repository = f.Open();
+        var read = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/idp/r/base"));
+        Assert.Equal("UncertainOwnership", read.Problem.ToString());
+        Assert.Equal("Ref refs/idp/r/base is symbolic to refs/heads/main.", read.Detail);
+        var snapshot = Assert.IsType<GitRead<SortedDictionary<string, CommitId>>.Failed>(repository.RefSnapshot("refs/idp/"));
+        Assert.Equal("UncertainOwnership", snapshot.Problem.ToString());
+        Assert.Equal("Ref refs/idp/r/base is symbolic to refs/heads/main.", snapshot.Detail);
+        Assert.Equal("refs/heads/main\n", f.Git("symbolic-ref", "refs/idp/r/base"));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git("rev-parse", "refs/heads/main"));
+    }
+
+    [Fact]
+    public void Ref_move_replaces_a_symbolic_ref_without_moving_its_foreign_target()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        f.Git("symbolic-ref", "refs/idp/r/base", "refs/heads/main");
+        var repository = f.Open();
+        Assert.IsType<RefMove.Moved>(repository.MoveRef(new("refs/idp/r/base", a, new("81ddb7c330112c7f16700ed002803a04b0bce693"))));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git("rev-parse", "refs/heads/main"));
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Read(repository.ReadRef("refs/idp/r/base"))?.Hex);
+        Assert.Equal(1, f.Run(f.Folder, "symbolic-ref", "--quiet", "refs/idp/r/base").ExitCode);
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged", "e8b087a53aed4161652f8e8f338181c127b2877911bf0f8b49f433f5c54b7a41")]
+    [InlineData("--skip-worktree", "b92c6ccd0a05dfa8b133e036dbfa9d94d60f448ad45ca8062d92ce43fce4a359")]
+    public void Index_flags_change_the_digest_and_block_capture_and_status(string flag, string digest)
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var repository = f.Open();
+        f.Git("update-index", flag, "a.txt");
+        Assert.Equal(digest, Read(repository.IndexDigest(f.Folder))?.Sha256);
+        f.Write("a.txt", "hidden edit\n");
+        var index = Read(repository.IndexPath(f.Folder));
+        var bytes = File.ReadAllBytes(index);
+        var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
+        Assert.Equal("DirtyWorktree", capture.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", capture.Detail);
+        var status = Assert.IsType<GitRead<byte[]>.Failed>(repository.Status(f.Folder));
+        Assert.Equal("DirtyWorktree", status.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", status.Detail);
+        Assert.Equal("hidden edit\n", File.ReadAllText(f.PathOf("a.txt")));
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Read(repository.ReadRef("refs/heads/main"))?.Hex);
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged")]
+    [InlineData("--skip-worktree")]
+    public void Index_flags_after_capture_block_alignment_without_consuming_index_bytes(string flag)
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var repository = f.Open();
+        f.Write("a.txt", "captured edit\n");
+        var capture = Read(repository.Capture(f.Folder));
+        f.Git("update-index", flag, "a.txt");
+        var index = Read(repository.IndexPath(f.Folder));
+        var bytes = File.ReadAllBytes(index);
+        var aligned = Assert.IsType<IndexAlignment.Failed>(repository.AlignIndex(f.Folder, capture.IndexBefore, capture.Tree));
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", aligned.Detail);
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal("captured edit\n", File.ReadAllText(f.PathOf("a.txt")));
+        Assert.Equal("A\n", f.Git("show", ":a.txt"));
+    }
+
     [Theory]
     [InlineData("git version 2.55.0", 2, 55, 0)]
     [InlineData("git version 2.39.5 (Apple Git-154)", 2, 39, 5)]
@@ -160,7 +234,7 @@ public sealed class GitRepositoryTests
         var capture = Read(repository.Capture(f.Folder, "extra"));
         Assert.Equal(before, File.ReadAllBytes(index));
         Assert.Equal(capture.IndexBefore, capture.IndexAfter);
-        Assert.Equal(new Digest("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2"), capture.IndexBefore);
+        Assert.Equal(new Digest("cf3a398a67ea241355d092c55c321d9463d19d14cc11595a01cd02a70c0f3f74"), capture.IndexBefore);
         Assert.Equal("100644 blob 5ea2ed416fbd4a4cbe227b75fe255dd7fa6bd4d6\ta.txt\n" +
             "100644 blob d8649da39ddf7910d29982e2f19cd9c0ff5ffe96\troot.txt\n" +
             "100644 blob 3e757656cf36eca53338e520d134963a44f793f8\tuntracked.txt\n", f.Git("ls-tree", "-r", capture.Tree.Hex));
@@ -201,7 +275,7 @@ public sealed class GitRepositoryTests
         var index = Read(repository.IndexPath(f.Folder));
         var bytes = File.ReadAllBytes(index);
         var unexpected = Assert.IsType<IndexAlignment.Unexpected>(repository.AlignIndex(f.Folder, capture.IndexBefore, capture.Tree));
-        Assert.Equal(new Digest("8a5586a2ade20c9ee8a6f9757de411a07a75c088ae0d58c2a3bd765cc286b207"), unexpected.Observed);
+        Assert.Equal(new Digest("a7fe487cd90c6e3ebac781ec7c52916395e42706caf40b553aacc6496a528a2d"), unexpected.Observed);
         Assert.Equal(bytes, File.ReadAllBytes(index));
         Assert.Equal("staged afterward\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal("M  a.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
@@ -448,18 +522,18 @@ public sealed class GitRepositoryTests
         f.Diamond();
         var repository = f.Open();
         var index = Read(repository.IndexPath(f.Folder));
-        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", Read(repository.IndexDigest(f.Folder))?.Sha256);
+        Assert.Equal("cf3a398a67ea241355d092c55c321d9463d19d14cc11595a01cd02a70c0f3f74", Read(repository.IndexDigest(f.Folder))?.Sha256);
         var before = File.ReadAllBytes(index);
         File.SetLastWriteTimeUtc(f.PathOf("plan.txt"), DateTime.UtcNow.AddMinutes(1));
         Assert.Equal("", f.Git("--no-optional-locks", "status", "--porcelain"));
         f.Git("update-index", "--refresh");
         Assert.False(before.SequenceEqual(File.ReadAllBytes(index)));
-        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", Read(repository.IndexDigest(f.Folder))?.Sha256);
+        Assert.Equal("cf3a398a67ea241355d092c55c321d9463d19d14cc11595a01cd02a70c0f3f74", Read(repository.IndexDigest(f.Folder))?.Sha256);
         var refreshed = File.ReadAllBytes(index);
         f.Write("new.txt", "new\n");
         var captured = Read(repository.Capture(f.Folder));
-        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", captured.IndexBefore?.Sha256);
-        Assert.Equal("205b8e86d528784bd0a0736cb6a7a8f6a7ac64f4d5509a9640815149bfe5a0c2", captured.IndexAfter?.Sha256);
+        Assert.Equal("cf3a398a67ea241355d092c55c321d9463d19d14cc11595a01cd02a70c0f3f74", captured.IndexBefore?.Sha256);
+        Assert.Equal("cf3a398a67ea241355d092c55c321d9463d19d14cc11595a01cd02a70c0f3f74", captured.IndexAfter?.Sha256);
         Assert.Equal(refreshed, File.ReadAllBytes(index));
         Assert.Equal("new\n", f.Git("show", captured.Tree.Hex + ":new.txt"));
         Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));

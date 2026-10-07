@@ -16,6 +16,62 @@ public sealed class SalvageTests
     private const string Commit = "0dbf5cbc9310ef3abbc28073142652917c69dc2f";
     private const string Target = "adfe40b30c176fb407933286f51d15ea9b54cdc3";
 
+    [Fact]
+    public async Task A_symbolic_task_ref_after_salvage_blocks_retry_without_moving_the_foreign_branch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f, ownCommit: true);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        f.Git.Git("branch", "foreign", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67");
+        f.Git.Git("symbolic-ref", ready.Execution.Location.Owner.Branch, "refs/heads/foreign");
+        var confirmation = f.Op();
+        var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, confirmation));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Ref refs/heads/idp/93f23689/task/90d5b0a2 is symbolic to refs/heads/foreign.", blocked.Block.Detail);
+        Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", Ref(f, "refs/heads/foreign"));
+        Assert.Equal("refs/heads/foreign\n", f.Git.Git("symbolic-ref", ready.Execution.Location.Owner.Branch));
+        Assert.Equal("modified\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal(blocked, f.Materializer().ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, confirmation));
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged", false)]
+    [InlineData("--skip-worktree", false)]
+    [InlineData("--assume-unchanged", true)]
+    [InlineData("--skip-worktree", true)]
+    public async Task Hidden_index_entries_block_salvage_or_retry_and_preserve_writer_bytes(string flag, bool afterSalvage)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f, ownCommit: true);
+        var retained = afterSalvage ? Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt)) : null;
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
+        var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        var bytes = File.ReadAllBytes(index);
+        var confirmation = f.Op();
+        var materializer = f.Materializer();
+        MaterializationBlock block;
+        if (retained is null)
+        {
+            var blocked = Assert.IsType<Salvage.Blocked>(materializer.Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+            block = blocked.Block;
+            Assert.Equal(blocked, materializer.Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        }
+        else
+        {
+            var blocked = Assert.IsType<RetryReset.Blocked>(materializer.ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, confirmation));
+            block = blocked.Block;
+            Assert.Equal(blocked, materializer.ResetForRetry(W, f.RunId, ResetOperation, retained.Receipt.Plan, confirmation));
+            Assert.Equal("fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b", Ref(f, retained.Receipt.Ref));
+        }
+        Assert.Equal("DirtyWorktree", block.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", block.Detail);
+        Assert.Equal("modified\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", Ref(f, ready.Execution.Location.Owner.Branch));
+        Assert.Equal("B\n", f.Git.Git("show", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67:b.txt"));
+    }
+
     internal static async Task<Preparation.Ready> FailedWriter(PreparationFixture f, bool ownCommit = false)
     {
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));

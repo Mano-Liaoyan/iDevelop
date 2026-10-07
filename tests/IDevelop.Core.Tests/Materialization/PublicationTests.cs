@@ -12,6 +12,35 @@ public sealed class PublicationTests
 {
     private static readonly OperationId Operation = new(Id(2000));
 
+    [Theory]
+    [InlineData("--assume-unchanged", true)]
+    [InlineData("--skip-worktree", true)]
+    [InlineData("--assume-unchanged", false)]
+    [InlineData("--skip-worktree", false)]
+    public async Task Hidden_index_entries_block_publication_and_preserve_writer_bytes(string flag, bool ownCommit)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = ownCommit ? await ChangedWriter(f) : Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        if (!ownCommit)
+        {
+            f.Git.Write("a.txt", "A captured\n", ready.Checkout);
+            f.Close(ready);
+        }
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
+        var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        var bytes = File.ReadAllBytes(index);
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Block.Detail);
+        Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        if (ownCommit) Assert.Equal("new\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+        Assert.Equal(bytes, File.ReadAllBytes(index));
+        Assert.Equal(ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : "adfe40b30c176fb407933286f51d15ea9b54cdc3",
+            GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("A\n", f.Git.Git("show", "adfe40b30c176fb407933286f51d15ea9b54cdc3:a.txt"));
+        Assert.Equal(blocked, f.Materializer().Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
+    }
+
     [Fact]
     public async Task A_preplan_live_writer_block_is_resolved_when_the_same_operation_publishes()
     {

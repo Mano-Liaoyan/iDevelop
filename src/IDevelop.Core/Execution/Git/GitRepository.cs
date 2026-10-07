@@ -156,6 +156,11 @@ internal sealed class GitRepository
 
     public GitRead<CommitId?> ReadRef(string name)
     {
+        var symbolic = Git(ProjectFolder, GitOperation.Metadata, ["symbolic-ref", "--quiet", name]);
+        if (symbolic.ExitCode == 0)
+            return new GitRead<CommitId?>.Failed(MaterializationProblem.UncertainOwnership,
+                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.");
+        if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic);
         var result = Git(ProjectFolder, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", name]);
         return result.ExitCode switch
         {
@@ -227,6 +232,8 @@ internal sealed class GitRepository
 
     public GitRead<byte[]> Status(string checkout)
     {
+        var index = VisibleIndex(checkout);
+        if (index is GitRead<byte[]>.Failed) return index;
         var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
     }
@@ -241,7 +248,7 @@ internal sealed class GitRepository
 
     public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns)
     {
-        var result = Git(ProjectFolder, GitOperation.Metadata, ["for-each-ref", "--format=%(refname)%00%(objectname)", .. patterns]);
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", .. patterns]);
         if (result.ExitCode != 0)
         {
             return Failure<SortedDictionary<string, CommitId>>(result);
@@ -250,6 +257,9 @@ internal sealed class GitRepository
         foreach (var line in result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = line.Split('\0');
+            if (fields[2].Length != 0)
+                return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
+                    $"Ref {fields[0]} is symbolic to {fields[2]}.");
             refs.Add(fields[0], new(fields[1]));
         }
         return new GitRead<SortedDictionary<string, CommitId>>.Read(refs);
@@ -307,7 +317,7 @@ internal sealed class GitRepository
         try
         {
             if (!File.Exists(path.Value)) return new GitRead<Digest?>.Read(null);
-            var staged = Git(checkout, GitOperation.Metadata, ["ls-files", "--stage", "-z"]);
+            var staged = Git(checkout, GitOperation.Metadata, ["ls-files", "--stage", "-v", "-z"]);
             return staged.ExitCode == 0 ? new GitRead<Digest?>.Read(Revision.Hash(staged.Stdout)) : Failure<Digest?>(staged);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -318,6 +328,8 @@ internal sealed class GitRepository
 
     public GitRead<GitCapture> Capture(string checkout, params string[] excludedPaths)
     {
+        var visible = VisibleIndex(checkout);
+        if (visible is GitRead<byte[]>.Failed) return ConvertFailure<byte[], GitCapture>(visible);
         var index = IndexPath(checkout);
         if (index is not GitRead<string>.Read path)
         {
@@ -382,7 +394,7 @@ internal sealed class GitRepository
 
     public RefMove MoveRef(RefChange change)
     {
-        var result = Git(ProjectFolder, GitOperation.Metadata, ["update-ref", change.Ref, change.Target.Hex, change.Expected?.Hex ?? new string('0', 40)]);
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["update-ref", "--no-deref", change.Ref, change.Target.Hex, change.Expected?.Hex ?? new string('0', 40)]);
         if (result.ExitCode == 0)
         {
             return new RefMove.Moved();
@@ -399,6 +411,7 @@ internal sealed class GitRepository
 
     public IndexAlignment AlignIndex(string checkout, Digest? expected, TreeId target)
     {
+        if (VisibleIndex(checkout) is GitRead<byte[]>.Failed hidden) return new IndexAlignment.Failed(hidden.Detail);
         var digest = IndexDigest(checkout);
         if (digest is GitRead<Digest?>.Failed failure)
         {
@@ -467,7 +480,13 @@ internal sealed class GitRepository
         return result;
     }
 
-    public GitResult InitializeSubmodules(string checkout) => Git(checkout, GitOperation.Network, ["submodule", "update", "--init", "--recursive"]);
+    public GitResult InitializeSubmodules(string checkout)
+    {
+        var status = Git(checkout, GitOperation.Worktree, ["submodule", "status", "--recursive"]);
+        if (status.ExitCode != 0) return status;
+        if (status.Text.Split('\n').Any(line => line.StartsWith('+') || line.StartsWith('U'))) return new(0, [], "");
+        return Git(checkout, GitOperation.Network, ["submodule", "update", "--init", "--recursive"]);
+    }
 
     public void EnsureExcluded()
     {
@@ -612,6 +631,15 @@ internal sealed class GitRepository
     {
         var match = Regex.Match(text, @"^([^<>\r\n]+) <([^<>\r\n]+)>$", RegexOptions.CultureInvariant);
         return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : null;
+    }
+
+    private GitRead<byte[]> VisibleIndex(string checkout)
+    {
+        var result = Git(checkout, GitOperation.Worktree, ["ls-files", "--stage", "-v", "-z"]);
+        if (result.ExitCode != 0) return Failure<byte[]>(result);
+        var hidden = NulFields(result).FirstOrDefault(entry => char.IsLower(entry[0]) || entry[0] == 'S');
+        return hidden is null ? new GitRead<byte[]>.Read(result.Stdout) : new GitRead<byte[]>.Failed(MaterializationProblem.DirtyWorktree,
+            $"The index hides changes to {hidden[(hidden.IndexOf('\t') + 1)..]} with assume-unchanged or skip-worktree.");
     }
 
     private static string[] NulFields(GitResult result) => result.Text.Split('\0', StringSplitOptions.RemoveEmptyEntries);
