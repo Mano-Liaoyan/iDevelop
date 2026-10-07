@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.Workflows;
@@ -953,6 +954,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,
+                StandaloneCapture = continues is null
+                    ? JsonSerializer.SerializeToElement(new StandaloneCapture(task, ""), RunJournal.Options) : null,
             };
             log = AttemptLog.Create(_attempts, requested);
         }

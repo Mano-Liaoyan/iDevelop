@@ -98,7 +98,7 @@ public sealed class ProjectRunsTests : IDisposable
         var output = File.ReadAllLines(Path.Combine(folder, "output.jsonl"));
         Assert.Equal(client == ClientId.Codex ? Fixture.Lines(expected.Fixture).Select(FakeAgents.AppLine).Where(line => line != "{\"method\":\"ignored\"}") : Fixture.Lines(expected.Fixture),
             output.Skip(client == ClientId.Codex ? 3 : client == ClientId.ClaudeCode ? 1 : 0));
-        Assert.Equal("*.tmp\nattempts/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
+        Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(_project, ".idp", ".gitignore")));
         Assert.Empty(runs.Active);
         await using var reopened = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.Succeeded, "DONE"), (reopened.Latest[SayHiId].Status, reopened.Latest[SayHiId].Result));
