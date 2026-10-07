@@ -67,7 +67,7 @@ public sealed class RunStoreTests
         f.Claim(reservation);
         if (outcome == TerminalAttemptOutcome.Interrupted)
         {
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Confirmed stopped."));
+            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Confirmed stopped."));
         }
         else
         {
@@ -88,9 +88,9 @@ public sealed class RunStoreTests
         var op = f.Op();
         var second = f.NewStore();
         f.Prepare(reservation);
-        var first = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
-        var repeated = Assert.IsType<RunDecision.Existing>(second.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs, Prompt));
-        var transport = Assert.IsType<RunDecision.Existing>(second.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
+        var first = Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(T), op, new(A1, 1), reservation.Inputs, Prompt));
+        var repeated = Assert.IsType<RunDecision.Existing>(second.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs, Prompt));
+        var transport = Assert.IsType<RunDecision.Existing>(second.Claim(f.Lease(T), op, new(A1, 1), reservation.Inputs, Prompt));
         Assert.Equal(new LaunchKey(A1, 1), first.Claim.Key);
         Assert.Equal(new LaunchKey(A1, 1), Assert.IsType<RunEvent.TurnClaimed>(repeated.Event).Key);
         Assert.Equal(new LaunchKey(A1, 1), Assert.IsType<RunEvent.TurnClaimed>(transport.Event).Key);
@@ -149,7 +149,7 @@ public sealed class RunStoreTests
                 "Plan", Task().Execution!, "Inspect", "codex", []));
             log.Append(new AttemptEvent.Launched(At, Environment.ProcessId, At.AddYears(-10)));
         }
-        Assert.Equal(RunProblem.RecoveryEvidenceInsufficient, Problem(f.Store.Recover(W, Run, f.Op(), A1)));
+        Assert.Equal(RunProblem.RecoveryEvidenceInsufficient, Problem(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1)));
         Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
@@ -161,8 +161,7 @@ public sealed class RunStoreTests
         var reservation = f.Reserve();
         f.Claim(reservation);
         var confirmation = f.Op();
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, confirmation,
-            "Owner and children stopped."));
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, confirmation, "Owner and children stopped."));
         Assert.Equal(new AttemptEnd.Recovered(RecoveryOutcome.Stopped, confirmation, "Owner and children stopped."), recovered.Record.Closures[A1]);
         var cause = new AttemptCause.Retry(A1, f.Op());
         var next = f.Reserve(cause: cause);
@@ -184,13 +183,18 @@ public sealed class RunStoreTests
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
         f.Prepare(next, OtherRun);
+        using var otherPermit = Assert.IsType<ControlTake.Owned>(RunStore.Open(f.Project).TakeControl(W, OtherRun)).Permit;
+        f.Release(T);
+        using var otherLease = Assert.IsType<LeaseTake.Taken>(otherPermit.TakeTask(T)).Lease;
         Assert.Equal(RunPhase.Abandoned, f.Read().Phase);
         Assert.Equal(RunPhase.Approved, f.Read(OtherRun).Phase);
-        Assert.Equal(RunProblem.UnresolvedOwnership, Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
+        Assert.Equal(RunProblem.UnresolvedOwnership, Problem(f.Store.Claim(otherLease, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
         Assert.Equal([new LaunchKey(A1, 1)], f.Read().UnresolvedClaims.ToArray());
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Owner stopped."));
-        Assert.Equal(new LaunchKey(new(Id(104)), 1), Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, OtherRun, f.Op(),
-            new(next.Attempt.Id, 1), next.Inputs, Prompt)).Claim.Key);
+        otherLease.Dispose();
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Owner stopped."));
+        f.Release(T);
+        using var retaken = Assert.IsType<LeaseTake.Taken>(otherPermit.TakeTask(T)).Lease;
+        Assert.Equal(new LaunchKey(new(Id(104)), 1), Assert.IsType<RunDecision.Granted>(f.Store.Claim(retaken, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)).Claim.Key);
     }
 
     [Fact]
@@ -333,7 +337,7 @@ public sealed class RunStoreTests
         f.Approve();
         var reservation = f.Reserve();
         Assert.IsType<RunDecision.Recorded>(f.Store.Stop(W, Run, f.Op()));
-        Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs, Prompt)));
+        Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs, Prompt)));
         Assert.Equal(RunPhase.StopRequested, f.Read().Phase);
     }
 
@@ -391,13 +395,12 @@ public sealed class RunStoreTests
         f.Approve();
         var reservation = f.Reserve();
         f.Claim(reservation);
-        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped,
-            default(OperationId), "Stopped.")));
-        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), " ")));
+        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, default(OperationId), "Stopped.")));
+        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), " ")));
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Amend(W, Run, f.Op(), new(V1), Revision.Capture(FixtureWorkflow()),
             new AmendmentOrigin.Person(), default)));
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Abandon(W, Run, f.Op(), default, "Close.")));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Retry(A1,
             default))));
         Assert.Equal(8, f.Read().Sequence);
@@ -409,11 +412,11 @@ public sealed class RunStoreTests
         using var f = new RunFixtures();
         f.Approve();
         var reservation = f.Reserve();
-        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs with
+        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs with
         {
             Text = "different"
         }, Prompt)));
-        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs with
+        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs with
         {
             Id = new(Id(999))
         }, Prompt)));

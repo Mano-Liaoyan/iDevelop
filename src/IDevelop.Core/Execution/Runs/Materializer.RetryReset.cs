@@ -5,9 +5,12 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public RetryReset ResetForRetry(WorkflowId workflow, RunId run, OperationId operation, OperationId salvagePlan, OperationId confirmation)
+    public RetryReset ResetForRetry(TaskLease lease, OperationId operation, OperationId salvagePlan, OperationId confirmation)
     {
-        TaskId task = default;
+        if (LeaseProblem(lease) is { } problem) return new RetryReset.Rejected(new(problem));
+        var workflow = lease.Permit!.Workflow;
+        var run = lease.Permit.Run;
+        var task = lease.Task;
         AttemptId? attempt = null;
         InputId? inputs = null;
         var step = "retry-preconditions";
@@ -19,13 +22,12 @@ internal sealed partial class Materializer
             if (!record.Salvages.TryGetValue(salvagePlan, out var retained) ||
                 record.Plans.GetValueOrDefault(salvagePlan) is not MaterializationPlan.Salvage salvage)
                 return new RetryReset.Rejected(new(RunProblem.InvalidData));
-            task = salvage.Task;
+            if (LeaseProblem(lease, salvage.Task) is { } mismatch) return new RetryReset.Rejected(new(mismatch));
             attempt = salvage.Attempt;
             var prepared = record.Preparations[new(salvage.Attempt, 1)];
             inputs = prepared.Inputs;
             step = "retry-quiescence";
             VerifyQuiescence(salvage.Attempt);
-            using var taskLock = TakeTaskLock(task);
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new RetryReset.Rejected(new(RunProblem.JournalBusy));

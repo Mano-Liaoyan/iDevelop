@@ -47,6 +47,9 @@ internal sealed class RunFixtures : IDisposable
 
     private int _operation = 1000;
 
+    private CoordinatorPermit? _permit;
+    private readonly Dictionary<TaskId, TaskLease> _leases = [];
+
     public string Project
     {
         get;
@@ -69,6 +72,29 @@ internal sealed class RunFixtures : IDisposable
         Workflow = workflow ?? FixtureWorkflow();
     }
 
+    public CoordinatorPermit Permit => _permit ??= Assert.IsType<ControlTake.Owned>(RunStore.Open(Project).TakeControl(W, Run)).Permit;
+
+    public TaskLease Lease(TaskId task)
+    {
+        if (_leases.TryGetValue(task, out var lease)) return lease;
+        lease = Assert.IsType<LeaseTake.Taken>(Permit.TakeTask(task)).Lease;
+        _leases.Add(task, lease);
+        return lease;
+    }
+
+    public void Release(TaskId task)
+    {
+        if (_leases.Remove(task, out var lease)) lease.Dispose();
+    }
+
+    public void ReleaseControl()
+    {
+        foreach (var lease in _leases.Values) lease.Dispose();
+        _leases.Clear();
+        _permit?.Dispose();
+        _permit = null;
+    }
+
     public RunStore NewStore() => RunStore.Open(Project, new FixedClock(), () => Id(Interlocked.Increment(ref _id)));
 
     public string AnotherProject() => _temp.Create("other");
@@ -79,7 +105,11 @@ internal sealed class RunFixtures : IDisposable
 
     public static Guid Id(int number) => Guid.Parse($"00000000-0000-0000-0000-{number:000000000000}");
 
-    public void Dispose() => _temp.Dispose();
+    public void Dispose()
+    {
+        ReleaseControl();
+        _temp.Dispose();
+    }
 
     public string Journal(WorkflowId workflow, RunId run)
     {
@@ -129,10 +159,10 @@ internal sealed class RunFixtures : IDisposable
     public static EvidenceFile SharedRefs => new("evidence/00000000-0000-0000-0000-000000000001/refs.json",
         Revision.Hash("{}"), 2);
 
-    public void Claim(RunEvent.Reserved reservation, RunId? run = null)
+    public void Claim(RunEvent.Reserved reservation, RunId? run = null, TaskLease? lease = null)
     {
         Prepare(reservation, run);
-        Assert.IsType<RunDecision.Granted>(Store.Claim(W, run ?? Run, Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
+        Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
     }
 
     public LogCheckpoint WriteLog(RunEvent.Reserved reservation, TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded,

@@ -1,5 +1,4 @@
 using IDevelop.Nodes;
-using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -35,9 +34,13 @@ internal sealed partial class Materializer
         TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null) =>
         new(projectFolder, store, joins ?? new UnavailableJoins(), boundary, clock, environment ?? new Dictionary<string, string>(), probe);
 
-    public async ValueTask<Preparation> Prepare(WorkflowId workflow, RunId run, OperationId operation, TaskId task, AttemptCause cause,
+    public async ValueTask<Preparation> Prepare(TaskLease lease, OperationId operation, AttemptCause cause,
         string? basePrompt = null, CancellationToken cancellation = default)
     {
+        if (LeaseProblem(lease) is { } problem) return new Preparation.Rejected(new(problem));
+        var workflow = lease.Permit!.Workflow;
+        var run = lease.Permit.Run;
+        var task = lease.Task;
         var step = "open";
         AttemptId? attempt = null;
         InputId? inputs = null;
@@ -45,9 +48,6 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var repository = OpenRepository();
-            step = "task-lock";
-            using var taskLock = TakeTaskLock(task);
-            step = "open";
             using var held = repository.TakeMutationLock();
             if (held is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             var record = Read(workflow, run);
@@ -60,7 +60,8 @@ internal sealed partial class Materializer
             if (preparedReceipt?.Event is RunEvent.Prepared completed)
             {
                 var original = record.Attempts[completed.Execution.Launch.Attempt];
-                if (original.Task != task || !RunReducer.Same(original.Cause, cause) ||
+                if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
+                if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
                         original.Id, basePrompt) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
@@ -193,8 +194,12 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
     }
 
-    private TaskLease TakeTaskLock(TaskId task) => TaskLease.TryTake(_project, task) ??
-        throw Fault(MaterializationProblem.LiveWriter, "The task checkout is owned by a live writer.");
+    private RunProblem? LeaseProblem(TaskLease lease, TaskId? task = null)
+    {
+        if (!lease.Held || lease.Permit is not { Held: true } permit) return RunProblem.TaskBusy;
+        if (!SamePath(permit.Project, _project) || task is { } owner && lease.Task != owner) return RunProblem.IdentityMismatch;
+        return null;
+    }
 
     private static T Value<T>(GitRead<T> read) => read switch
     {

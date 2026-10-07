@@ -117,11 +117,11 @@ public sealed class MaterializationTests
         using var f = new RunFixtures();
         f.Approve();
         var reservation = f.Reserve();
-        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs, Prompt)));
+        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs, Prompt)));
         f.Prepare(reservation);
-        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs,
-            new("0000000000000000000000000000000000000000000000000000000000000000"))));
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, f.Op(), new(A1, 1), reservation.Inputs, Prompt));
+        Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Claim(f.Lease(T), f.Op(),
+            new(A1, 1), reservation.Inputs, new("0000000000000000000000000000000000000000000000000000000000000000"))));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 1), reservation.Inputs, Prompt));
         Assert.Equal("Inspect", f.Read().Preparations[new(A1, 1)].Prompt);
     }
 
@@ -347,7 +347,7 @@ public sealed class MaterializationTests
             Location = second.Location with { Owner = second.Location.Owner with { Branch = "refs/heads/foreign" } },
         }, SharedRefs))));
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, Run, f.Op(), new RunEvent.Prepared(second, SharedRefs)));
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, f.Op(), new(A1, 2), reservation.Inputs, second.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 2), reservation.Inputs, second.PromptHash));
         Assert.Equal("Follow up", f.Read().Preparations[new(A1, 2)].Prompt);
     }
 

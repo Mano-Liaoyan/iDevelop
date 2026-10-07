@@ -23,14 +23,14 @@ public sealed class JoinTests
     internal static async Task<(OwnedCode B, OwnedCode C)> Sources(PreparationFixture f, string bPath = "b.txt", string bText = "B\n",
         string cPath = "c.txt", string cText = "C\n")
     {
-        var b = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), T, new AttemptCause.Initial()));
-        var c = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), C, new AttemptCause.Initial()));
+        var b = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(T), f.Op(), new AttemptCause.Initial()));
+        var c = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(C), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, b, bPath, bText, "b");
         OwnCommit(f, c, cPath, cText, "c");
         f.Close(b);
-        var publishedB = Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), b.Execution.Launch.Attempt));
+        var publishedB = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         f.Close(c);
-        var publishedC = Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), c.Execution.Launch.Attempt));
+        var publishedC = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(c.Execution.Location.Owner.Task), f.Op(), c.Execution.Launch.Attempt));
         return (Assert.IsType<CodeOutput.Produced>(publishedB.Result.Code).Code, Assert.IsType<CodeOutput.Produced>(publishedC.Result.Code).Code);
     }
 
@@ -42,7 +42,7 @@ public sealed class JoinTests
     }
 
     internal static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
-        Open(f, probe).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial());
+        Open(f, probe).Prepare(f.Lease(U), operation, new AttemptCause.Initial());
 
     [Fact]
     public async Task Overlapping_diamond_preserves_isolated_results_and_materializes_the_ordered_join()
@@ -121,10 +121,10 @@ public sealed class JoinTests
     {
         using var f = new PreparationFixture(Diamond(true));
         await Sources(f);
-        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, "b.txt", "different\n", "e");
         f.Close(third);
-        Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), third.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
         var operation = f.Op();
         var first = Assert.IsType<Preparation.Blocked>(await Prepare(f, operation));
         Assert.Equal("FanInConflict", first.Block.Problem.ToString());
@@ -132,7 +132,7 @@ public sealed class JoinTests
         Assert.Equal(new[] { "b.txt" }, first.Block.Conflict.Paths);
         Assert.Equal(3, first.Block.Conflict.Sources.Length);
         var later = MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new LaterClock(), f.Git.Environment);
-        var second = Assert.IsType<Preparation.Blocked>(await later.Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+        var second = Assert.IsType<Preparation.Blocked>(await later.Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", second.Block.Problem.ToString());
         Assert.Equal(RunJournal.Canonical(first.Block), RunJournal.Canonical(second.Block));
         Assert.Equal(1, f.Read().Blocks.Values.Count(block => block.Block.Task == U));
@@ -172,10 +172,10 @@ public sealed class JoinTests
         using var f = new PreparationFixture(Diamond(true), configureBase: conflict ? Settings : null);
         if (conflict) await Sources(f, "settings.txt", "b=1\n", "settings.txt", "c=1\n");
         else await Sources(f);
-        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, "e.txt", "E\n", "e");
         f.Close(third);
-        var thirdResult = Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), third.Execution.Launch.Attempt));
+        var thirdResult = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
         if (conflict) Assert.Equal("560f86f9c272840d2b9c584f26a76e246dabbef4", Assert.IsType<CodeOutput.Produced>(thirdResult.Result.Code).Code.Commit.Hex);
         var outcome = await Prepare(f, f.Op());
         if (conflict)
@@ -234,16 +234,17 @@ public sealed class JoinTests
         using var f = new PreparationFixture(Diamond());
         var sources = await Sources(f);
         var old = f.Read().CurrentResults[T];
-        var second = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), T, new AttemptCause.Continue(old.Origin is ResultOrigin.Executed executed ? executed.Attempt : throw new InvalidOperationException(), f.Op())));
+        var second = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(T), f.Op(),
+            new AttemptCause.Continue(old.Origin is ResultOrigin.Executed executed ? executed.Attempt : throw new InvalidOperationException(), f.Op())));
         f.Git.Write("b.txt", "B again\n", second.Checkout);
         f.Close(second, "B again.\n");
         var publish = f.Op();
         Assert.Throws<PublicationTests.Crash>(() => Open(f, point =>
         {
             if (point == "journal.accepted.before") throw new PublicationTests.Crash();
-        }).Publish(W, f.RunId, publish, second.Execution.Launch.Attempt));
+        }).Publish(f.Lease(second.Execution.Location.Owner.Task), publish, second.Execution.Launch.Attempt));
         var composer = new SupersedingComposer(new MergeJoins(f.Git.Folder, f.Store, f.Git.Environment), f, publish);
-        var outcome = await f.Materializer(composer).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial());
+        var outcome = await f.Materializer(composer).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial());
         Assert.Equal("StaleInput", Assert.IsType<Preparation.Rejected>(outcome).Reason.Problem.ToString());
         Assert.Equal("b350f18e8c7f922d58c54e415a95fb0a4b6fa249", GitFixture.Read(f.Git.Open().ReadRef(sources.B.ResultRef))?.Hex);
         Assert.Equal("B\n", f.Git.Git("show", "b350f18e8c7f922d58c54e415a95fb0a4b6fa249:b.txt"));

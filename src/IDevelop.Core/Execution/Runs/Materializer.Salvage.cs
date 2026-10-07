@@ -5,21 +5,23 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public Salvage Salvage(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt)
+    public Salvage Salvage(TaskLease lease, OperationId operation, AttemptId attempt)
     {
-        TaskId task = default;
+        if (LeaseProblem(lease) is { } problem) return new Salvage.Rejected(new(problem));
+        var workflow = lease.Permit!.Workflow;
+        var run = lease.Permit.Run;
+        var task = lease.Task;
         InputId? inputs = null;
         var step = "salvage-preconditions";
         try
         {
             var record = Read(workflow, run);
             if (!record.Attempts.TryGetValue(attempt, out var writer)) return new Salvage.Rejected(new(RunProblem.UnknownAttempt));
-            task = writer.Task;
+            if (LeaseProblem(lease, writer.Task) is { } mismatch) return new Salvage.Rejected(new(mismatch));
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared)) return new Salvage.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
             step = "salvage-quiescence";
             VerifyQuiescence(attempt);
-            using var taskLock = TakeTaskLock(task);
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Salvage.Rejected(new(RunProblem.JournalBusy));

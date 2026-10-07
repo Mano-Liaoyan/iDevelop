@@ -25,13 +25,14 @@ public sealed class InspectionTests
         Assert.False(Directory.Exists(Path.Combine(f.Git.Folder, ".worktrees")));
         Assert.False(Directory.Exists(Path.Combine(f.Git.Folder, ".git/idevelop")));
         var ready = await PublicationTests.ChangedWriter(f);
-        Assert.IsType<Publication.Accepted>(materializer.Publish(W, f.RunId, new(Id(2000)), ready.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(materializer.Publish(f.Lease(ready.Execution.Location.Owner.Task), new(Id(2000)), ready.Execution.Launch.Attempt));
         var journal = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl");
         var bytes = File.ReadAllBytes(journal);
         var index = f.Git.Run(ready.Checkout, "rev-parse", "--path-format=absolute", "--git-path", "index").Text.Trim();
         var indexBytes = File.ReadAllBytes(index);
         var registrations = f.Git.Git("worktree", "list", "--porcelain");
-        using var taskLock = TaskLease.TryTake(f.Git.Folder, T);
+        var taskLock = f.Lease(T);
+        Assert.True(taskLock.Held);
         using var mutationLock = f.Git.Open().TakeMutationLock();
         var workspace = Assert.IsType<TaskWorkspace>(materializer.Inspect(W, f.RunId, T));
         Assert.Equal(new WorktreeOwner(T, ".worktrees/93f23689/90d5b0a2", "refs/heads/idp/93f23689/task/90d5b0a2"), workspace.Owner);
@@ -60,10 +61,10 @@ public sealed class InspectionTests
         var ready = await SalvageTests.FailedWriter(f);
         foreach (var id in new[] { 3002, 3001, 3000 })
             Assert.Equal("LiveWriter", Assert.IsType<Salvage.Blocked>(f.Materializer(boundary: new UnprovenBoundary())
-                .Salvage(W, f.RunId, new(Id(id)), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+                .Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(id)), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         var resolved = f.Read().Blocks.Single(pair => pair.Value.Block.Operation == new OperationId(Id(3001))).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.BlockResolved(resolved, "Inspected.")));
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, new(Id(2000)), ready.Execution.Launch.Attempt));
+        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(2000)), ready.Execution.Launch.Attempt));
         var workspace = Assert.IsType<TaskWorkspace>(f.Materializer().Inspect(W, f.RunId, T));
         Assert.Equal(new[] { "00000000-0000-0000-0000-000000003002", "00000000-0000-0000-0000-000000003000" },
             workspace.Blocks.Select(block => block.Operation.Value.ToString("D")));

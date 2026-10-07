@@ -19,6 +19,8 @@ public sealed class RecoveryAndResultTests
         f.Approve();
         var reservation = f.Reserve();
         f.Claim(reservation);
+        var lease = f.Lease(T);
+        f.Release(T);
         var release = Path.Combine(f.Project, "release");
         var fakes = new FakeClients(Path.Combine(f.Project, "fakes"));
         Directory.CreateDirectory(AttemptLog.TaskFolder(DataFolder.Attempts(f.Project), T));
@@ -35,7 +37,7 @@ public sealed class RecoveryAndResultTests
         try
         {
             Assert.Equal("locked", await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10)));
-            Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped.")));
+            Assert.Equal(RunProblem.TaskBusy, Problem(f.Store.Recover(W, Run, lease, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped.")));
             Assert.Equal(RecoveryState.Uncertain, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
         }
         finally
@@ -43,7 +45,7 @@ public sealed class RecoveryAndResultTests
             File.WriteAllText(release, "release");
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
     }
 
@@ -55,7 +57,7 @@ public sealed class RecoveryAndResultTests
         var reservation = f.Reserve();
         f.Claim(reservation);
         f.WriteLog(reservation);
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1));
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1));
         Assert.Equal(TerminalAttemptOutcome.Succeeded, Assert.IsType<AttemptEnd.Logged>(recovered.Record.Closures[A1]).Outcome);
         Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
         Assert.Equal(8, f.Read().Sequence);
@@ -72,7 +74,7 @@ public sealed class RecoveryAndResultTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Administrative closure."));
         f.WriteLog(reservation);
 
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1));
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1));
         Assert.Equal(TerminalAttemptOutcome.Succeeded, Assert.IsType<AttemptEnd.Logged>(recovered.Record.Closures[A1]).Outcome);
         Assert.Equal(RunPhase.Abandoned, recovered.Record.Phase);
         Assert.Equal(RecoveryState.Closed, Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, Run)).Attempts).State);
@@ -80,7 +82,10 @@ public sealed class RecoveryAndResultTests
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
         f.Prepare(next, OtherRun);
-        var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
+        using var otherPermit = Assert.IsType<ControlTake.Owned>(RunStore.Open(f.Project).TakeControl(W, OtherRun)).Permit;
+        f.Release(T);
+        using var otherLease = Assert.IsType<LeaseTake.Taken>(otherPermit.TakeTask(T)).Lease;
+        var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(otherLease, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
         Assert.Equal(new LaunchKey(new(Id(104)), 1), granted.Claim.Key);
         Assert.Equal(RunPhase.Approved, granted.Record.Phase);
     }
@@ -103,7 +108,10 @@ public sealed class RecoveryAndResultTests
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
         f.Prepare(next, OtherRun);
-        var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
+        using var otherPermit = Assert.IsType<ControlTake.Owned>(RunStore.Open(f.Project).TakeControl(W, OtherRun)).Permit;
+        f.Release(T);
+        using var otherLease = Assert.IsType<LeaseTake.Taken>(otherPermit.TakeTask(T)).Lease;
+        var granted = Assert.IsType<RunDecision.Granted>(f.Store.Claim(otherLease, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt));
         Assert.Equal(new LaunchKey(new(Id(104)), 1), granted.Claim.Key);
         Assert.Equal(RunPhase.Approved, granted.Record.Phase);
     }
@@ -115,8 +123,7 @@ public sealed class RecoveryAndResultTests
         f.Approve();
         var reservation = f.Reserve();
         f.Claim(reservation);
-        var decision = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.NotStarted, f.Op(),
-            "Launcher cannot continue."));
+        var decision = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(T), f.Op(), A1, RecoveryOutcome.NotStarted, f.Op(), "Launcher cannot continue."));
         Assert.Equal(RecoveryOutcome.NotStarted, Assert.IsType<AttemptEnd.Recovered>(decision.Record.Closures[A1]).Outcome);
         Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.AcceptReport(W, Run, f.Op(), A1, reservation.Inputs.Id, "Checked.")));
         Assert.Equal(RunProblem.IncompleteResults, Problem(f.Store.Settle(W, Run, f.Op(), RunOutcome.Completed)));
@@ -197,7 +204,8 @@ public sealed class RecoveryAndResultTests
         Assert.Equal(new AttemptId(Id(104)), continuation.Attempt.Id);
         Assert.Equal(A1, Assert.IsType<AttemptCause.Continue>(continuation.Attempt.Cause).Previous);
         f.Claim(continuation);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), continuation.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run,
+            f.Lease(continuation.Attempt.Task), f.Op(), continuation.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1),
             new AttemptCause.Continue(continuation.Attempt.Id, f.Op()))));
     }
@@ -253,8 +261,11 @@ public sealed class RecoveryAndResultTests
         f.Approve(run: OtherRun);
         var next = f.Reserve(run: OtherRun);
         f.Prepare(next, OtherRun);
+        using var otherPermit = Assert.IsType<ControlTake.Owned>(RunStore.Open(f.Project).TakeControl(W, OtherRun)).Permit;
+        f.Release(T);
+        using var otherLease = Assert.IsType<LeaseTake.Taken>(otherPermit.TakeTask(T)).Lease;
         Assert.Equal(RunProblem.UnresolvedOwnership,
-            Problem(f.Store.Claim(W, OtherRun, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
+            Problem(f.Store.Claim(otherLease, f.Op(), new(next.Attempt.Id, 1), next.Inputs, Prompt)));
     }
 
     [Fact]

@@ -95,7 +95,7 @@ public sealed class PreparationContractTests
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
         {
             if (step == "journal.prepared.before") throw new Crash();
-        }).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+        }).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         var context = await f.Publish(C, f.A, "C available.\n");
         var record = f.Read();
         var input = record.Inputs.Values.Single(input => input.Task == U);

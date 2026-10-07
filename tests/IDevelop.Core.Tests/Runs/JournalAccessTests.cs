@@ -104,7 +104,8 @@ public sealed class JournalAccessTests
         f.Approve();
         var reservation = f.Reserve();
         f.Prepare(reservation);
-        var decisions = Race(f, (store, op) => store.Claim(W, Run, op, new(A1, 1), reservation.Inputs, Prompt));
+        var lease = f.Lease(T);
+        var decisions = Race(f, (store, op) => store.Claim(lease, op, new(A1, 1), reservation.Inputs, Prompt));
         Assert.Equal((1, 15, 0), (decisions.Count(d => d is RunDecision.Granted), decisions.Count(d => d is RunDecision.Existing),
             decisions.Count(d => d is not (RunDecision.Granted or RunDecision.Existing))));
         Assert.Equal([new LaunchKey(A1, 1)], f.Read().Claims.Keys);

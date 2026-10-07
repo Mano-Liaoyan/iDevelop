@@ -4,10 +4,13 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public async ValueTask<Preparation> PrepareTurn(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, string prompt,
+    public async ValueTask<Preparation> PrepareTurn(TaskLease lease, OperationId operation, LaunchKey key, string prompt,
         CancellationToken cancellation = default)
     {
-        TaskId task = default;
+        if (LeaseProblem(lease) is { } problem) return new Preparation.Rejected(new(problem));
+        var workflow = lease.Permit!.Workflow;
+        var run = lease.Permit.Run;
+        var task = lease.Task;
         InputId? inputs = null;
         try
         {
@@ -16,14 +19,13 @@ internal sealed partial class Materializer
             if (record.Phase != RunPhase.Approved) return new Preparation.Rejected(new(RunProblem.RunStopped));
             if (!record.Attempts.TryGetValue(key.Attempt, out var attempt))
                 return new Preparation.Rejected(new(RunProblem.UnknownAttempt));
-            task = attempt.Task;
+            if (LeaseProblem(lease, attempt.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
             var previous = new LaunchKey(key.Attempt, key.Turn - 1);
             if (key.Turn < 2 || record.Closures.ContainsKey(key.Attempt) || !record.TurnClosures.ContainsKey(previous) ||
                 !record.Preparations.TryGetValue(previous, out var old))
                 return new Preparation.Rejected(new(RunProblem.InvalidClaim));
             inputs = old.Inputs;
             var repository = OpenRepository();
-            using var held = TakeTaskLock(task);
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);

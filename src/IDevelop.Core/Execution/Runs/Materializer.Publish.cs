@@ -6,9 +6,12 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public Publication Publish(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt)
+    public Publication Publish(TaskLease lease, OperationId operation, AttemptId attempt)
     {
-        TaskId task = default;
+        if (LeaseProblem(lease) is { } problem) return new Publication.Rejected(new(problem));
+        var workflow = lease.Permit!.Workflow;
+        var run = lease.Permit.Run;
+        var task = lease.Task;
         InputId? inputs = null;
         var planId = operation;
         var step = "preconditions";
@@ -17,7 +20,7 @@ internal sealed partial class Materializer
         {
             var record = Read(workflow, run);
             if (!record.Attempts.TryGetValue(attempt, out var writer)) return new Publication.Rejected(new(RunProblem.UnknownAttempt));
-            task = writer.Task;
+            if (LeaseProblem(lease, writer.Task) is { } mismatch) return new Publication.Rejected(new(mismatch));
             var definition = record.Revisions[writer.Revision].Snapshot.Tasks[task];
             if (definition.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit })
                 return new Publication.Rejected(new(RunProblem.UnsupportedResult));
@@ -36,8 +39,6 @@ internal sealed partial class Materializer
             if (record.Phase is not (RunPhase.Approved or RunPhase.StopRequested)) return new Publication.Rejected(new(RunProblem.RunStopped));
             step = "quiescence";
             VerifyQuiescence(attempt);
-            step = "task-lock";
-            using var taskLock = TakeTaskLock(task);
             step = "repository";
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();

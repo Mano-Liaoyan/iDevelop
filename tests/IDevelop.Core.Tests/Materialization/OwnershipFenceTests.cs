@@ -13,8 +13,8 @@ public sealed class OwnershipFenceTests
         {
             using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
             var t = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-            Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, Run, f.Op(), t.Execution.Launch,
-                f.Read().Inputs[t.Execution.Inputs], t.Execution.PromptHash));
+            Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(t.Execution.Location.Owner.Task), f.Op(),
+                t.Execution.Launch, f.Read().Inputs[t.Execution.Inputs], t.Execution.PromptHash));
             f.Git.Write("foreign.txt", "foreign\n", t.Checkout);
             Assert.Equal(0, f.Git.Run(t.Checkout, "add", "foreign.txt").ExitCode);
             Assert.Equal(0, f.Git.Run(t.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "foreign").ExitCode);
@@ -23,10 +23,11 @@ public sealed class OwnershipFenceTests
             f.Close(u);
             if (fence)
             {
-                var owned = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
-                using (owned.Permit) Assert.Equal(new[] { new LaunchKey(A1, 1) }, owned.Fenced);
+                f.ReleaseControl();
+                Assert.True(f.Permit.Held);
+                Assert.Equal(new[] { new LaunchKey(A1, 1) }, f.Read().Fenced);
             }
-            var published = f.Materializer().Publish(W, Run, f.Op(), u.Execution.Launch.Attempt);
+            var published = f.Materializer().Publish(f.Lease(u.Execution.Location.Owner.Task), f.Op(), u.Execution.Launch.Attempt);
             if (fence)
             {
                 Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(published).Block.Problem);

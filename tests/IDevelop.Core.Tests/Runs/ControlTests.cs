@@ -76,14 +76,15 @@ public sealed class ControlTests
     {
         using var f = new RunFixtures();
         f.Approve();
+        var reserved = f.Reserve();
+        Assert.Equal(A1, reserved.Attempt.Id);
+        f.Claim(reserved);
+        f.ReleaseControl();
         using var holder = Holder(f, Path.Combine(f.Project, "release"));
         long before;
         try
         {
             Assert.Equal("locked", await holder.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10)));
-            var reserved = f.Reserve();
-            Assert.Equal(A1, reserved.Attempt.Id);
-            f.Claim(reserved);
             before = f.Read().Sequence;
             Assert.IsType<ControlTake.Busy>(f.Store.TakeControl(W, Run));
         }
@@ -111,7 +112,8 @@ public sealed class ControlTests
         {
             Assert.Equal(new[] { new LaunchKey(A1, 1) }, again.Fenced);
             Assert.Equal(before + 1, f.Read().Sequence);
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+            using var lease = Assert.IsType<LeaseTake.Taken>(again.Permit.TakeTask(T)).Lease;
+            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, f.Op(), A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         }
         var afterRecovery = f.Read().Sequence;
         var recovered = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
@@ -129,9 +131,9 @@ public sealed class ControlTests
         using (owned.Permit)
         {
             var reserved = f.Reserve();
-            f.Claim(reserved);
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), reserved.Attempt.Id,
-                RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+            using var lease = Assert.IsType<LeaseTake.Taken>(owned.Permit.TakeTask(T)).Lease;
+            f.Claim(reserved, lease: lease);
+            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, f.Op(), reserved.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
             Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[reserved.Attempt.Id]).Outcome);
         }
         var before = f.Read().Sequence;
@@ -147,9 +149,11 @@ public sealed class ControlTests
         using var f = new RunFixtures(FixtureWorkflow(Task(T), Task(U)));
         f.Approve();
         f.Claim(f.Reserve(T));
+        f.ReleaseControl();
         var first = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
         using (first.Permit) Assert.Equal(new[] { new LaunchKey(A1, 1) }, first.Fenced);
         f.Claim(f.Reserve(U));
+        f.ReleaseControl();
         var next = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
         using (next.Permit)
         {
@@ -228,8 +232,7 @@ public sealed class ControlTests
         f.Claim(t);
         var u = f.Reserve(U);
         f.Claim(u);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Op(), u.Attempt.Id,
-            RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, f.Lease(u.Attempt.Task), f.Op(), u.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
         var record = f.Read();
         var key = new LaunchKey(t.Attempt.Id, 1);
         foreach (ImmutableArray<LaunchKey> claims in new ImmutableArray<LaunchKey>[]
@@ -240,6 +243,7 @@ public sealed class ControlTests
                 Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record, entry)).Reason);
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(W, Run, f.Op(), f.Op(), "Abandoned."));
+        f.ReleaseControl();
         var owned = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(W, Run));
         using (owned.Permit) Assert.Equal(new[] { key }, owned.Fenced);
         var fenced = f.Read();

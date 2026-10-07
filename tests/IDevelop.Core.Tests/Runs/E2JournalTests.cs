@@ -72,8 +72,8 @@ public sealed class E2JournalTests
         using var f = new RunFixtures();
         File.WriteAllBytes(f.Journal(W, Run), File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl")));
         Assert.Equal(new[] { new LaunchKey(new(Id(104)), 1) }, f.Read().UnresolvedClaims);
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, new OperationId(Id(2003)),
-            new(Id(104)), RecoveryOutcome.Stopped, new OperationId(Id(2004)), "Stopped."));
+        using var lease = TaskLease.TryTake(f.Project, U)!;
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, Run, lease, new OperationId(Id(2003)), new(Id(104)), RecoveryOutcome.Stopped, new OperationId(Id(2004)), "Stopped."));
         Assert.Equal((2, 28L), (recovered.Record.Schema, recovered.Record.Sequence));
         Assert.Equal(RecoveryOutcome.Stopped,
             Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[new(Id(104))]).Outcome);
