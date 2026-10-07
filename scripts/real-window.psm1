@@ -24,6 +24,9 @@ $SettingsFile = Join-Path $env:APPDATA 'iDevelop\settings.json'
 # An empty backup records that no preference existed. The owner file names the run that holds the backup.
 $BackupFile = "$SettingsFile.verify-backup"
 $OwnerFile = "$SettingsFile.verify-owner"
+# The session file beside the preference names the projects the window opens again, so it moves aside with the preference.
+$SessionFile = Join-Path $env:APPDATA 'iDevelop\session.json'
+$Kept = @{ File = $SettingsFile; Backup = $BackupFile }, @{ File = $SessionFile; Backup = "$SessionFile.verify-backup" }
 
 function Wait-Until([scriptblock] $Probe, [int] $Seconds = 20) {
     $deadline = (Get-Date).AddSeconds($Seconds)
@@ -47,6 +50,12 @@ function Find-MainWindow([System.Diagnostics.Process] $Process) {
 function Find-ById($Root, [string] $Id, [int] $Seconds = 10) {
     $condition = [PropertyCondition]::new([AutomationElement]::AutomationIdProperty, $Id)
     Wait-Until { $Root.FindFirst([TreeScope]::Descendants, $condition) } $Seconds
+}
+
+# Each open project and workflow repeats its row's ids, so a window with several returns them in sidebar order.
+function Find-AllById($Root, [string] $Id) {
+    $condition = [PropertyCondition]::new([AutomationElement]::AutomationIdProperty, $Id)
+    @($Root.FindAll([TreeScope]::Descendants, $condition))
 }
 
 # The sidebar repeats each task title, so a title found inside the excluded element does not prove the card shows it.
@@ -159,13 +168,15 @@ function Write-SettingsOwner([string] $Run, [System.Diagnostics.Process] $Proces
 }
 
 function Restore-Backup {
-    if ([IO.File]::Exists($BackupFile)) {
-        if ((Get-Item -LiteralPath $BackupFile).Length -eq 0) {
-            [IO.File]::Delete($SettingsFile)
-        } else {
-            [IO.File]::Copy($BackupFile, $SettingsFile, $true)
+    foreach ($file in $Kept) {
+        if ([IO.File]::Exists($file.Backup)) {
+            if ((Get-Item -LiteralPath $file.Backup).Length -eq 0) {
+                [IO.File]::Delete($file.File)
+            } else {
+                [IO.File]::Copy($file.Backup, $file.File, $true)
+            }
+            [IO.File]::Delete($file.Backup)
         }
-        [IO.File]::Delete($BackupFile)
     }
     if ([IO.File]::Exists($OwnerFile)) { [IO.File]::Delete($OwnerFile) }
 }
@@ -199,10 +210,15 @@ function Backup-Settings([string] $Run, [System.Diagnostics.Process] $Owner = (G
         }
         Restore-Backup
         [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $SettingsFile)) | Out-Null
-        if ([IO.File]::Exists($SettingsFile)) { [IO.File]::Move($SettingsFile, $BackupFile) } else { [IO.File]::WriteAllText($BackupFile, '') }
+        foreach ($file in $Kept) {
+            if ([IO.File]::Exists($file.File)) { [IO.File]::Move($file.File, $file.Backup) } else { [IO.File]::WriteAllText($file.Backup, '') }
+        }
         Write-SettingsOwner $Run $Owner
     }
 }
+
+# Each launch starts with no remembered projects, so the window shows only the folder it is given.
+function Clear-Session { if ([IO.File]::Exists($SessionFile)) { [IO.File]::Delete($SessionFile) } }
 
 function Restore-Settings([string] $Run) {
     Use-SettingsLock { if ((Get-SettingsOwner).run -eq $Run) { Restore-Backup } }
@@ -278,7 +294,7 @@ function New-Session($State, $Process, $Window) {
     }
 }
 
-function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $Run, [switch] $Reopen, [switch] $Empty, [switch] $RealClients) {
+function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $Run, [switch] $Reopen, [switch] $Empty, [switch] $KeepProjects, [switch] $RealClients) {
     if (-not [IO.File]::Exists($ReleaseExe)) { throw "No Release build at $ReleaseExe. Run dotnet build -c Release first." }
     if ($Run -or $Reopen) {
         $previous = Get-SessionState $Run
@@ -319,6 +335,8 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
 
     # The preference moves aside only once nothing is left to refuse the start, and comes back if the launch fails.
     Backup-Settings $Run
+    # -KeepProjects reopens the projects the window had open, as a restart does. Otherwise the window starts with none.
+    if (-not $KeepProjects) { Clear-Session }
     $savedPath = $env:PATH
     if (-not $RealClients) { $env:PATH = $bin }
     try {
@@ -351,7 +369,11 @@ function Connect-IDevelop([string] $Run) {
     New-Session $state $process $window
 }
 
+# A workflow's row starts collapsed, so the first workflow's row is expanded before its task rows are listed. A row that
+# is already expanded stays expanded.
 function Get-SidebarTasks($Window) {
+    $toggle = (Find-ById $Window 'WorkflowExpand').GetCurrentPattern([TogglePattern]::Pattern)
+    if ($toggle.Current.ToggleState -eq [ToggleState]::Off) { $toggle.Toggle() }
     (Find-ById $Window 'SidebarTasks').FindAll([TreeScope]::Children, [Condition]::TrueCondition)
 }
 
@@ -494,7 +516,7 @@ function Stop-IDevelop([string] $Run) {
     }
 }
 
-Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-NameOutside, Find-InProcessWindows, Get-PickerEntries,
+Export-ModuleMember -Function Wait-Until, Find-MainWindow, Find-ById, Find-AllById, Find-NameOutside, Find-InProcessWindows, Get-PickerEntries,
     Get-Value, Invoke-Element, Select-Element, Test-Selected, Set-Text, Save-Screenshot, Close-Window,
-    Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Restore-Settings, New-FakeCodex,
+    Get-SettingsPath, Get-SettingsText, Get-SettingsTheme, Backup-Settings, Clear-Session, Restore-Settings, New-FakeCodex,
     Start-IDevelop, Connect-IDevelop, Test-IDevelop, Get-SidebarTasks, Select-PickerEntry, Assert-Step, Save-Evidence, Stop-IDevelop

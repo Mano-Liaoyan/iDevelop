@@ -1,14 +1,14 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Projects;
 
 /// <summary>
-/// The open workflow of a project folder. A project keeps each workflow in
-/// <c>.idp/workflows/&lt;workflow id&gt;.json</c>. This version opens one workflow per project.
+/// One open workflow of a project folder, kept in <c>.idp/workflows/&lt;workflow id&gt;.json</c>.
 /// </summary>
 public sealed class WorkflowDocument
 {
-    /// <summary>Null while the file holds an older format than <see cref="Save"/> writes.</summary>
+    /// <summary>Null until a newly created or converted workflow is saved.</summary>
     private Workflow? _saved;
 
     private readonly Stack<Workflow> _undo = new();
@@ -18,12 +18,12 @@ public sealed class WorkflowDocument
     /// <summary>The edit that made <see cref="Current"/>, or null after an undo, a redo, or a save, so the next edit starts its own step.</summary>
     private WorkflowEdit? _lastEdit;
 
-    private WorkflowDocument(string projectFolder, string filePath, Workflow workflow, string? converted = null)
+    private WorkflowDocument(string projectFolder, string filePath, Workflow workflow, string? converted = null, bool unsaved = false)
     {
         ProjectFolder = projectFolder;
         FilePath = filePath;
         Current = workflow;
-        _saved = converted is null ? workflow : null;
+        _saved = converted is null && !unsaved ? workflow : null;
         Converted = converted;
     }
 
@@ -50,35 +50,67 @@ public sealed class WorkflowDocument
     /// Opens any existing folder. A folder without a workflow file opens as an empty workflow
     /// and stays untouched until the first <see cref="Save"/>.
     /// </summary>
-    /// <exception cref="ProjectException">The folder is missing, holds several workflows, or its workflow file is invalid.</exception>
-    public static WorkflowDocument Open(string folder)
+    /// <exception cref="ProjectException">The folder is missing, a workflow file is invalid, or files share a workflow or task id.</exception>
+    public static ImmutableArray<WorkflowDocument> OpenProject(string folder)
     {
-        var projectFolder = Path.GetFullPath(folder);
-        if (!Directory.Exists(projectFolder))
-        {
-            throw new ProjectException($"The folder {projectFolder} does not exist.");
-        }
-
+        var projectFolder = ExistingFolder(folder);
         var workflowsFolder = DataFolder.Workflows(projectFolder);
         var files = WorkflowFiles(workflowsFolder);
-        switch (files)
+        if (files.Length == 0)
         {
-            case []:
-                var empty = Workflow.Empty(WorkflowId.New());
-                return new WorkflowDocument(projectFolder, Path.Combine(workflowsFolder, $"{empty.Id}.json"), empty);
-            case [var file]:
-                var parsed = WorkflowFile.Parse(File.ReadAllBytes(file), file);
-                return new WorkflowDocument(projectFolder, file, parsed.Workflow, parsed.Converted);
-            default:
-                throw new ProjectException(
-                    $"{workflowsFolder} holds {files.Length} workflow files. This version of iDevelop opens one workflow per project.");
+            var empty = Workflow.Empty(WorkflowId.New());
+            return [new WorkflowDocument(projectFolder, Path.Combine(workflowsFolder, $"{empty.Id}.json"), empty)];
         }
+
+        var documents = ImmutableArray.CreateBuilder<WorkflowDocument>();
+        var workflowFiles = new Dictionary<WorkflowId, string>();
+        var taskFiles = new Dictionary<TaskId, string>();
+        foreach (var file in files)
+        {
+            var parsed = WorkflowFile.Parse(File.ReadAllBytes(file), file);
+            var workflow = parsed.Workflow;
+            if (workflowFiles.TryGetValue(workflow.Id, out var otherWorkflow))
+            {
+                throw new ProjectException($"{otherWorkflow} and {file} share workflow id {workflow.Id}.");
+            }
+
+            workflowFiles.Add(workflow.Id, file);
+            foreach (var task in workflow.Tasks.Keys)
+            {
+                if (taskFiles.TryGetValue(task, out var otherTask))
+                {
+                    throw new ProjectException($"{otherTask} and {file} share task id {task}.");
+                }
+
+                taskFiles.Add(task, file);
+            }
+
+            documents.Add(new WorkflowDocument(projectFolder, file, workflow, parsed.Converted));
+        }
+
+        return [.. documents.OrderBy(document => document.Current.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(document => document.Current.Id.Value)];
+    }
+
+    public static WorkflowDocument Create(string folder, string? name)
+    {
+        var projectFolder = ExistingFolder(folder);
+        var workflow = ((EditResult.Applied)Workflow.Empty(WorkflowId.New()).Apply(new WorkflowEdit.Rename(name))).Workflow;
+        return new WorkflowDocument(projectFolder, Path.Combine(DataFolder.Workflows(projectFolder), $"{workflow.Id}.json"), workflow, unsaved: true);
+    }
+
+    private static string ExistingFolder(string folder)
+    {
+        var projectFolder = Path.GetFullPath(folder);
+        return Directory.Exists(projectFolder)
+            ? projectFolder
+            : throw new ProjectException($"The folder {projectFolder} does not exist.");
     }
 
     /// <summary>
     /// An edit that is rejected or has no effect leaves the document unchanged and raises nothing. Each other edit is one
     /// undo step and clears the redo steps, except that a title or field edit continuing the previous edit of the same text
-    /// joins its step, so a run of typing undoes at once.
+    /// joins its step, so a run of typing undoes at once. A rename commits a whole name, so each rename is a step.
     /// </summary>
     public EditResult Apply(WorkflowEdit edit)
     {
@@ -109,16 +141,10 @@ public sealed class WorkflowDocument
     /// Writes <see cref="Current"/> atomically. On an I/O error the previous file stays intact,
     /// <see cref="HasUnsavedChanges"/> stays true, and the exception propagates.
     /// </summary>
-    /// <exception cref="ProjectException">Another workflow file sits beside this one, so saving would leave a project that no longer opens.</exception>
     public void Save()
     {
         var snapshot = Current;
         var workflowsFolder = Path.GetDirectoryName(FilePath)!;
-        if (WorkflowFiles(workflowsFolder).FirstOrDefault(file => file != FilePath) is { } other)
-        {
-            throw new ProjectException($"Not saved. {other} is another workflow file, and this version of iDevelop keeps one workflow per project.");
-        }
-
         Directory.CreateDirectory(workflowsFolder);
         DataFolder.EnsureGitIgnore(ProjectFolder);
         AtomicFile.Replace(FilePath, WorkflowFile.Serialize(snapshot));

@@ -37,12 +37,16 @@ public sealed class SidebarTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_sidebar_lists_the_open_project_with_its_task_count_and_tasks()
+    public void The_sidebar_lists_the_open_project_with_its_workflow_and_task_count_and_its_tasks_once_expanded()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90), TaskAt(Review, "Review", 405, 300)));
-
-        Assert.Equal("seed", shell.Find<TextBlock>("ProjectName").Text);
+        Assert.Equal([("seed", ["Workflow"])], shell.Tree());
         Assert.Equal("3", shell.Find<TextBlock>("TaskCount").Text);
+        Assert.False(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
+
+        shell.ShowTasks();
+
+        Assert.True(shell.Find<ListBox>("SidebarTasks").IsEffectivelyVisible);
         Assert.Equal(["Design", "Build", "Review"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         shell.AddNode();
@@ -61,6 +65,7 @@ public sealed class SidebarTests : IDisposable
             TaskAt(Review, "Review", 105, 300),
             new WorkflowEdit.Connect(new ConnectionKey(Review, Design), ConnectionKind.Dependency),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Review), ConnectionKind.Context)));
+        shell.ShowTasks();
         var canvas = shell.Window.ViewModel.Canvas!;
         var sidebar = shell.Find<ListBox>("SidebarTasks");
         Assert.Equal(["Build", "Review", "Design"], Shell.Texts(sidebar));
@@ -78,6 +83,7 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_a_task_in_the_sidebar_selects_its_card_and_opens_it_in_the_inspector()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
+        shell.ShowTasks();
 
         shell.Click(shell.SidebarRow("Build"));
 
@@ -94,6 +100,7 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_a_task_off_the_screen_in_the_sidebar_brings_its_card_into_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        shell.ShowTasks();
         Assert.False(new Rect(shell.Editor.Bounds.Size).Intersects(shell.CardRect("Build")));
 
         shell.Click(shell.SidebarRow("Build"));
@@ -108,6 +115,7 @@ public sealed class SidebarTests : IDisposable
     public void Choosing_a_task_off_the_screen_in_the_sidebar_with_the_keyboard_brings_its_card_into_view()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 2400, 1600)));
+        shell.ShowTasks();
         shell.Click(shell.SidebarRow("Design"));
         WaitForPan(shell);
         Assert.Equal(new Point(0, 0), shell.Editor.ViewportLocation);
@@ -122,6 +130,7 @@ public sealed class SidebarTests : IDisposable
     private Shell SelectBuildOnTheCanvasAndPanItAway()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
+        shell.ShowTasks();
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Pan(shell.Editor.TranslatePoint(new Point(700, 400), shell.Window)!.Value, new Vector(-600, -300));
         Assert.Equal("Build", ((TaskNodeViewModel)shell.Find<ListBox>("SidebarTasks").SelectedItem!).Title);
@@ -151,8 +160,12 @@ public sealed class SidebarTests : IDisposable
     {
         var shell = SelectBuildOnTheCanvasAndPanItAway();
         shell.Find<Button>("AddTask").Focus();
-        shell.Press(Key.Tab);
-        shell.Press(Key.Tab);
+        // Open Folder, the project's New Workflow and Close Project, the workflow's chevron and row, then its selected task.
+        for (var stop = 0; stop < 6; stop++)
+        {
+            shell.Press(Key.Tab);
+        }
+
         Assert.Same(shell.SidebarRow("Build"), shell.Window.FocusManager!.GetFocusedElement());
 
         shell.Press(key);
@@ -221,6 +234,7 @@ public sealed class SidebarTests : IDisposable
     public void Tab_moves_through_the_sidebar_from_top_to_bottom()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 405, 90)));
+        shell.ShowTasks();
         shell.Find<Button>("AddTask").Focus();
         string Tab()
         {
@@ -233,6 +247,8 @@ public sealed class SidebarTests : IDisposable
             };
         }
 
-        Assert.Equal(["OpenFolder", "Design", "RefreshAgents", "ThemeSystem", "ThemeLight", "ThemeDark"], [Tab(), Tab(), Tab(), Tab(), Tab(), Tab()]);
+        Assert.Equal(
+            ["OpenFolder", "NewWorkflow", "CloseProject", "WorkflowExpand", "WorkflowRow", "Design", "RefreshAgents", "ThemeSystem", "ThemeLight", "ThemeDark"],
+            Enumerable.Range(0, 10).Select(_ => Tab()));
     }
 }

@@ -66,48 +66,179 @@
                   BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceMuted60Brush}">
             <TextBlock Text="No project open." FontSize="14" Foreground="{DynamicResource TextMutedBrush}" />
           </Border>
-          <!-- The open project is the selected row, as in PlanWeave's project tree. -->
-          <Border IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
-                  Height="32" Padding="8,0" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                  BorderBrush="{DynamicResource StateSelected25Brush}" Background="{DynamicResource StateSelectedSurfaceBrush}"
-                  BoxShadow="{StaticResource SmallShadow}">
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextStrongBrush}" />
-              <TextBlock Grid.Column="1" Text="{Binding ProjectName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                         FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                         ToolTip.Tip="{Binding ProjectName}"
-                         AutomationProperties.AutomationId="ProjectName" />
-              <Border Grid.Column="2" Classes="badge">
-                <TextBlock Text="{Binding Canvas.Nodes.Count}" AutomationProperties.AutomationId="TaskCount" />
-              </Border>
-            </Grid>
-          </Border>
         </StackPanel>
-        <Border Grid.Row="1" IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}" VerticalAlignment="Top"
-                Margin="12,0,0,0" Padding="12,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border60Brush}">
-          <ListBox x:Name="SidebarTasks" Classes="tasks"
-                   ItemsSource="{Binding Canvas.Outline}"
-                   SelectedItem="{Binding Canvas.SelectedNode}"
-                   SelectionChanged="OnSidebarSelectionChanged"
-                   Tapped="OnSidebarTapped"
-                   KeyDown="OnSidebarKeyDown"
-                   AutomationProperties.AutomationId="SidebarTasks">
-            <ListBox.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Spacing="4" />
-              </ItemsPanelTemplate>
-            </ListBox.ItemsPanel>
-            <ListBox.ItemTemplate>
-              <DataTemplate DataType="canvas:TaskNodeViewModel">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                  <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                             ToolTip.Tip="{Binding Title}" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </Border>
+        <!-- Each project lists its workflows, and each workflow lists its tasks while its row is expanded. The shown
+             workflow is the selected row, as in PlanWeave's project tree. The scroll bar draws over the content and sits
+             in the sidebar's right margin, so while the tree overflows the rows end where the bar starts. -->
+        <ScrollViewer x:Name="Tree" Grid.Row="1" Margin="0,0,-8,0" HorizontalScrollBarVisibility="Disabled"
+                      ScrollChanged="OnTreeScrollChanged">
+          <StackPanel x:Name="TreeRows" Margin="0,0,8,0" Spacing="12">
+            <ItemsControl ItemsSource="{Binding Projects}"
+                          AutomationProperties.AutomationId="Projects"
+                          AutomationProperties.Name="Open projects">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="12" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="local:ProjectViewModel">
+                  <StackPanel Spacing="4">
+                    <Grid Height="28" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="8,0,0,0">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextStrongBrush}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                 FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                                 ToolTip.Tip="{Binding Folder}"
+                                 AutomationProperties.AutomationId="ProjectName" />
+                      <Ellipse Grid.Column="2" Classes="status running" VerticalAlignment="Center"
+                               IsVisible="{Binding IsRunning}"
+                               ToolTip.Tip="A task runs"
+                               AutomationProperties.AutomationId="ProjectRunning"
+                               AutomationProperties.Name="A task runs" />
+                      <Button Grid.Column="3" Classes="icon"
+                              Click="OnNewWorkflow"
+                              ToolTip.Tip="New workflow"
+                              AutomationProperties.AutomationId="NewWorkflow"
+                              AutomationProperties.Name="{Binding Name, StringFormat='New workflow in {0}'}">
+                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
+                      </Button>
+                      <Button Grid.Column="4" Classes="icon"
+                              Click="OnCloseProject"
+                              ToolTip.Tip="Close project"
+                              AutomationProperties.AutomationId="CloseProject"
+                              AutomationProperties.Name="{Binding Name, StringFormat='Close {0}'}">
+                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
+                      </Button>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Workflows}" Margin="8,0,0,0">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
+                          <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="2">
+                              <ToggleButton Classes="chevron"
+                                            IsChecked="{Binding IsExpanded}"
+                                            ToolTip.Tip="{Binding ExpandLabel}"
+                                            AutomationProperties.AutomationId="WorkflowExpand"
+                                            AutomationProperties.Name="{Binding ExpandLabel}">
+                                <PathIcon Theme="{StaticResource Glyph}" />
+                              </ToggleButton>
+                              <Panel Grid.Column="1">
+                                <Button Classes="nav workflow" Classes.selected="{Binding IsSelected}" HorizontalContentAlignment="Stretch"
+                                        IsVisible="{Binding !IsRenamingWorkflow}"
+                                        Click="OnWorkflowClick"
+                                        KeyDown="OnWorkflowKeyDown"
+                                        ToolTip.Tip="{Binding Name}"
+                                        AutomationProperties.AutomationId="WorkflowRow"
+                                        AutomationProperties.Name="{Binding Name}">
+                                  <Button.ContextMenu>
+                                    <ContextMenu>
+                                      <MenuItem Header="Rename" InputGesture="F2"
+                                                Click="OnRenameWorkflow"
+                                                AutomationProperties.AutomationId="WorkflowRename"
+                                                AutomationProperties.Name="Rename">
+                                        <MenuItem.Icon>
+                                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRename}" />
+                                        </MenuItem.Icon>
+                                      </MenuItem>
+                                    </ContextMenu>
+                                  </Button.ContextMenu>
+                                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                               AutomationProperties.AutomationId="WorkflowName" />
+                                    <Ellipse Grid.Column="2" Classes="status" VerticalAlignment="Center"
+                                             IsVisible="{Binding HasUnsavedChanges}"
+                                             ToolTip.Tip="Unsaved changes"
+                                             AutomationProperties.AutomationId="WorkflowUnsaved"
+                                             AutomationProperties.Name="Unsaved changes" />
+                                    <Ellipse Grid.Column="3" Classes="status running" VerticalAlignment="Center"
+                                             IsVisible="{Binding IsRunning}"
+                                             ToolTip.Tip="A task runs"
+                                             AutomationProperties.AutomationId="WorkflowRunning"
+                                             AutomationProperties.Name="A task runs" />
+                                    <Border Grid.Column="4" Classes="badge">
+                                      <TextBlock Text="{Binding Nodes.Count}" AutomationProperties.AutomationId="TaskCount" />
+                                    </Border>
+                                  </Grid>
+                                </Button>
+                                <local:WorkflowNameBox IsVisible="{Binding IsRenamingWorkflow}" Height="32"
+                                                       AutomationProperties.AutomationId="WorkflowNameBox"
+                                                       AutomationProperties.Name="Workflow name" />
+                              </Panel>
+                            </Grid>
+                            <Border IsVisible="{Binding IsExpanded}"
+                                    Margin="12,0,0,0" Padding="12,0,0,0" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border60Brush}">
+                              <ListBox Classes="tasks" Classes.hidden="{Binding !IsSelected}"
+                                       ItemsSource="{Binding Outline}"
+                                       SelectedItem="{Binding SelectedNode}"
+                                       SelectionChanged="OnSidebarSelectionChanged"
+                                       Tapped="OnSidebarTapped"
+                                       KeyDown="OnSidebarKeyDown"
+                                       AutomationProperties.AutomationId="SidebarTasks"
+                                       AutomationProperties.Name="{Binding Name}">
+                                <ListBox.ItemsPanel>
+                                  <ItemsPanelTemplate>
+                                    <StackPanel Spacing="4" />
+                                  </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                  <DataTemplate DataType="canvas:TaskNodeViewModel">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" VerticalAlignment="Center" />
+                                      <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                 ToolTip.Tip="{Binding Title}" />
+                                    </Grid>
+                                  </DataTemplate>
+                                </ListBox.ItemTemplate>
+                              </ListBox>
+                            </Border>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ItemsControl ItemsSource="{Binding Unopened}"
+                          AutomationProperties.AutomationId="UnopenedProjects"
+                          AutomationProperties.Name="Projects that did not open">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="8" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="local:UnopenedProject">
+                  <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" Margin="8,0,0,0"
+                        Background="Transparent"
+                        ToolTip.Tip="{Binding Reason}">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextFaintBrush}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextMutedBrush}"
+                               AutomationProperties.AutomationId="UnopenedName" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                               FontSize="12" Foreground="{DynamicResource StateWarningStrongBrush}"
+                               AutomationProperties.AutomationId="UnopenedReason"
+                               AutomationProperties.HelpText="{Binding Reason}" />
+                    <Button Grid.Column="2" Classes="icon" VerticalAlignment="Center"
+                            Click="OnForgetProject"
+                            ToolTip.Tip="Forget this folder"
+                            AutomationProperties.AutomationId="ForgetProject"
+                            AutomationProperties.Name="{Binding Name, StringFormat='Forget {0}'}">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
+                    </Button>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
       </Grid>
 
       <Border Grid.Row="3" Padding="12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}">
@@ -200,11 +331,9 @@
                      HorizontalAlignment="Center" VerticalAlignment="Center"
                      FontSize="14" Foreground="{DynamicResource TextMutedBrush}" />
           <ContentControl x:Name="CanvasHost" Content="{Binding Canvas}">
-            <ContentControl.DataTemplates>
-              <DataTemplate DataType="canvas:WorkflowCanvasViewModel">
-                <canvas:WorkflowCanvasView />
-              </DataTemplate>
-            </ContentControl.DataTemplates>
+            <ContentControl.ContentTemplate>
+              <canvas:CanvasViewTemplate />
+            </ContentControl.ContentTemplate>
           </ContentControl>
 
           <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Spacing="8">
@@ -219,9 +348,9 @@
                              AutomationProperties.AutomationId="BreadcrumbProject" />
                 </StackPanel>
                 <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Foreground="{DynamicResource TextFaintBrush}" />
-                <!-- A project has one workflow, and the workflow has no name of its own. -->
-                <TextBlock Text="Workflow" Margin="8,0,10,0" VerticalAlignment="Center"
-                           FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}" />
+                <TextBlock Text="{Binding WorkflowName}" MaxWidth="220" TextTrimming="CharacterEllipsis" Margin="8,0,10,0" VerticalAlignment="Center"
+                           FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                           AutomationProperties.AutomationId="BreadcrumbWorkflow" />
                 <Border BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
                   <StackPanel Orientation="Horizontal">
                     <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"

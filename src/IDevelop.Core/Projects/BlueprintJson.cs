@@ -18,6 +18,8 @@ internal static class BlueprintJson
         Name = blueprint.Name,
         Description = Lines(blueprint.Description),
         DerivedFrom = blueprint.DerivedFrom?.ToString(),
+        Icon = blueprint.Icon is { } icon ? IconName(icon) : null,
+        Color = blueprint.Color is { } color ? ColorName(color) : null,
         Work = Work(blueprint.Work),
         Fields = [.. blueprint.Fields.Select(field => new FieldDto
         {
@@ -68,6 +70,12 @@ internal static class BlueprintJson
             {
                 Description = Text(dto.Description, entry, "description"),
                 DerivedFrom = derivedFrom,
+                Icon = dto.Icon is null ? null : Enum.GetValues<BlueprintIcon>()
+                    .Where(icon => IconName(icon) == dto.Icon).Select(icon => (BlueprintIcon?)icon).FirstOrDefault()
+                    ?? throw new ProjectException($"{entry} has unknown icon \"{dto.Icon}\"."),
+                Color = dto.Color is null ? null : Enum.GetValues<BlueprintColor>()
+                    .Where(color => ColorName(color) == dto.Color).Select(color => (BlueprintColor?)color).FirstOrDefault()
+                    ?? throw new ProjectException($"{entry} has unknown color \"{dto.Color}\"."),
             };
         }
         catch (BlueprintException e)
@@ -176,6 +184,26 @@ internal static class BlueprintJson
         }
     }
 
+    private static string IconName(BlueprintIcon icon) => icon switch
+    {
+        BlueprintIcon.Code => "code",
+        BlueprintIcon.TaskList => "taskList",
+        BlueprintIcon.Ruler => "ruler",
+        BlueprintIcon.Glasses => "glasses",
+        BlueprintIcon.PersonAvailable => "personAvailable",
+        BlueprintIcon.DocumentSearch => "documentSearch",
+    };
+
+    private static string ColorName(BlueprintColor color) => color switch
+    {
+        BlueprintColor.Indigo => "indigo",
+        BlueprintColor.Cyan => "cyan",
+        BlueprintColor.Purple => "purple",
+        BlueprintColor.Mint => "mint",
+        BlueprintColor.Brown => "brown",
+        BlueprintColor.Gray => "gray",
+    };
+
     private static string KindName(WorkKind kind) => kind switch
     {
         WorkKind.Agent => "agent",
@@ -202,6 +230,8 @@ internal class BlueprintDto
     public required string Name { get; init; }
     public required string?[] Description { get; init; }
     public required string? DerivedFrom { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Icon { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Color { get; init; }
     public required WorkDto Work { get; init; }
     public required List<FieldDto?> Fields { get; init; }
     public required SettingsDto Defaults { get; init; }

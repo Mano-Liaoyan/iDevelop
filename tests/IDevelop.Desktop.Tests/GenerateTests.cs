@@ -142,6 +142,7 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(planner.Id, canvas.SelectedNode?.Id);
         Assert.True(canvas.HasStarted(planner.Id));
         Assert.True(canvas.Generated(planner.Id));
+        shell.WaitUntil(() => shell.Window.ViewModel.ActiveRuns.IsEmpty, "the planner's turn ends before its folder goes");
     }
 
     [AvaloniaFact]
@@ -223,6 +224,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.InView<Button>("ProposalAcceptFinish"));
         shell.WaitUntil(() => node.State == NodeState.Succeeded, "the planner is done");
         Assert.Equal("Added 3 tasks.", shell.Status);
+        shell.ShowTasks();
         Assert.Equal([Prompt, "Export API", "Export button", "Export tests"], Shell.Texts(shell.Find<ListBox>("SidebarTasks")));
 
         var workflow = canvas.Workflow;

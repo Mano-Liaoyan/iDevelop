@@ -259,6 +259,8 @@ public sealed class ReviewTests : IDisposable
         Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
         Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
         Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), runs.Send(SubjectNode, "Go on.", stopTurn: false));
+        runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
+        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
 
         runs.Follow(Workflow);
 
@@ -269,19 +271,33 @@ public sealed class ReviewTests : IDisposable
     }
 
     [Fact]
+    public async Task Following_a_second_workflow_that_holds_a_followed_task_is_refused()
+    {
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var first = Workflow;
+        runs.Follow(first);
+
+        var error = Assert.Throws<InvalidOperationException>(() => runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(SubjectNode, new CanvasPoint(0, 0)))));
+
+        Assert.StartsWith("Workflow ", error.Message);
+        Assert.EndsWith($"shares a task with workflow {first.Id}. A task belongs to one workflow of a project.", error.Message);
+    }
+
+    [Fact]
     public async Task Deleting_a_review_that_goes_on_frees_its_subject()
     {
         Reviewer(1, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""));
         WriteTurn(_implementer, 2, FakeRule.On().Print(SessionLine(ClientId.Codex, ImplementerSession)).Hang());
         var clients = await _fakes.DiscoverAsync();
         await using var runs = ProjectRuns.Open(_project, clients);
-        runs.Follow(Workflow);
+        var workflow = Workflow;
+        runs.Follow(workflow);
         Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
         await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
         Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
         await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
 
-        runs.Follow(Workflow.Must(new WorkflowEdit.Delete([Review], [])));
+        runs.Follow(workflow.Must(new WorkflowEdit.Delete([Review], [])));
         Assert.Null(runs.Cancel(Subject));
         await Until(() => runs.Latest[Subject].Status == AttemptStatus.Cancelled && runs.Active.IsEmpty, "the fix round is cancelled");
 
@@ -316,6 +332,88 @@ public sealed class ReviewTests : IDisposable
         File.WriteAllText(_gate, "");
         await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the first review approves");
         Assert.Null(runs.Check(second));
+    }
+
+    [Fact]
+    public async Task Reviews_in_two_followed_workflows_check_and_fix_their_own_subjects()
+    {
+        var secondSubject = TestNodes.Implement(TestTasks.Design, "Multiply numbers", "Write multiply.py.", execution: SubjectNode.Execution);
+        var secondReview = new TaskDefinition(TaskId.New(), BuiltInBlueprints.Review)
+        {
+            Title = "Review multiply",
+            Execution = ReviewNode.Execution,
+        }.WithField("focus", "Check multiplication.")!;
+        var firstFixGate = Path.Combine(_temp.Create("first-fix-gate"), "go");
+        var secondFixGate = Path.Combine(_temp.Create("second-fix-gate"), "go");
+        var firstWorkflow = Workflow;
+        var secondWorkflow = Workflow.Empty(WorkflowId.New())
+            .Must(TestNodes.Place(secondSubject, new CanvasPoint(0, 0)))
+            .Must(TestNodes.Place(secondReview, new CanvasPoint(300, 0)))
+            .Must(new WorkflowEdit.Connect(new ConnectionKey(secondSubject.Id, secondReview.Id), ConnectionKind.Dependency));
+        WriteTurn(_implementer, 2, FakeRule.On()
+            .Print(SessionLine(ClientId.Codex, ImplementerSession))
+            .Write("multiply.py", "def multiply(a, b): return a + b\n")
+            .Print(ReplyLines(ClientId.Codex, "Wrote multiply.py.")));
+        WriteTurn(_implementer, 3, FakeRule.On()
+            .Print(SessionLine(ClientId.Codex, ImplementerSession))
+            .WaitForFile(firstFixGate)
+            .Write("calc.py", Fixed)
+            .Print(ReplyLines(ClientId.Codex, Answers("""[{"id": "add", "answer": "fixed", "note": "It adds now."}]"""))));
+        WriteTurn(_implementer, 4, FakeRule.On()
+            .Print(SessionLine(ClientId.Codex, ImplementerSession))
+            .WaitForFile(secondFixGate)
+            .Write("multiply.py", "def multiply(a, b): return a * b\n")
+            .Print(ReplyLines(ClientId.Codex, Answers("""[{"id": "multiply", "answer": "fixed", "note": "It multiplies now."}]"""))));
+        WriteTurn(_reviewer, 1, FakeRule.On()
+            .Print(SessionLine(ClientId.ClaudeCode, ReviewerSession))
+            .WaitForFile(_gate)
+            .Print(ReplyLines(ClientId.ClaudeCode, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "add", "text": "add subtracts.", "change": "Return a + b."}]}"""))));
+        Reviewer(2, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "multiply", "text": "multiply adds.", "change": "Return a * b."}]}"""));
+        Reviewer(3, Verdict("""{"status": "verdict", "verdict": "approve", "findings": []}"""));
+        Reviewer(4, Verdict("""{"status": "verdict", "verdict": "approve", "findings": []}"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(firstWorkflow);
+        runs.Follow(secondWorkflow);
+        Assert.Equal(new StartProblem.SubjectNotDone("Add numbers"), runs.Check(ReviewNode));
+        Assert.Equal(new StartProblem.SubjectNotDone("Multiply numbers"), runs.Check(secondReview));
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the first subject succeeds");
+        Assert.IsType<StartResult.Started>(runs.Start(secondSubject));
+        await Until(() => runs.Latest[secondSubject.Id].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the second subject succeeds");
+
+        Assert.Null(runs.Check(ReviewNode));
+        Assert.Null(runs.Check(secondReview));
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        await Until(() => File.Exists(Path.Combine(_reviewer, "1.stdin")), "the first workflow's reviewer starts");
+        runs.Follow(secondWorkflow.Must(new WorkflowEdit.Rename("Multiply")));
+        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
+        Assert.Equal(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add")), runs.CheckSend(SubjectNode));
+        File.WriteAllText(_gate, "");
+        await Until(() => File.Exists(Path.Combine(_implementer, "3.stdin")), "the first workflow's fix round starts");
+        Assert.IsType<StartResult.Started>(runs.Start(secondReview));
+        await Until(() => File.Exists(Path.Combine(_implementer, "4.stdin")), "the second workflow's fix round starts");
+        Assert.Equal(AttemptStatus.InReview, runs.Latest[Review].Status);
+        Assert.Equal(AttemptStatus.InReview, runs.Latest[secondReview.Id].Status);
+        Assert.Equal([Subject, secondSubject.Id], runs.Active.Select(attempt => attempt.Task));
+        runs.Follow(firstWorkflow.Must(new WorkflowEdit.Rename("Add")));
+        File.WriteAllText(firstFixGate, "");
+        await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the first review approves");
+        Assert.Equal(AttemptStatus.InReview, runs.Latest[secondReview.Id].Status);
+        File.WriteAllText(secondFixGate, "");
+        await Until(() => runs.Latest[secondReview.Id].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the second review approves");
+
+        Assert.Equal((Subject, 2, AttemptStatus.Succeeded), (runs.Latest[Review].Subject, runs.Latest[Review].Turns.Count, runs.Latest[Review].Status));
+        Assert.Equal((secondSubject.Id, 2, AttemptStatus.Succeeded), (runs.Latest[secondReview.Id].Subject, runs.Latest[secondReview.Id].Turns.Count, runs.Latest[secondReview.Id].Status));
+        Assert.Equal((Review, 1), (runs.Latest[Subject].Fix!.Review, runs.Latest[Subject].Fix!.Round));
+        Assert.Equal((secondReview.Id, 1), (runs.Latest[secondSubject.Id].Fix!.Review, runs.Latest[secondSubject.Id].Fix!.Round));
+        Assert.Equal(runs.Latest[Review].Id, runs.Latest[Subject].Fix!.Attempt);
+        Assert.Equal(runs.Latest[secondReview.Id].Id, runs.Latest[secondSubject.Id].Fix!.Attempt);
+        Assert.Contains("add subtracts.", Prompt(_implementer, 3));
+        Assert.DoesNotContain("multiply adds.", Prompt(_implementer, 3));
+        Assert.Contains("multiply adds.", Prompt(_implementer, 4));
+        Assert.DoesNotContain("add subtracts.", Prompt(_implementer, 4));
+        Assert.Equal(Fixed, File.ReadAllText(Path.Combine(_project, "calc.py")));
+        Assert.Equal("def multiply(a, b): return a * b\n", File.ReadAllText(Path.Combine(_project, "multiply.py")));
     }
 
     [Fact]

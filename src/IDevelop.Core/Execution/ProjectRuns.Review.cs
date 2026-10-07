@@ -26,22 +26,23 @@ public sealed partial class ProjectRuns
     /// <returns>True when a step changed an attempt without starting a run, so another pass may take the next step.</returns>
     private bool AdvanceOnce()
     {
-        Workflow workflow;
+        ImmutableDictionary<WorkflowId, Workflow> workflows;
         ImmutableDictionary<TaskId, AttemptRecord> latest;
         lock (_gate)
         {
-            if (_leaving is not null || _workflow is null)
+            if (_leaving is not null || _workflows.IsEmpty)
             {
                 return false;
             }
 
-            (workflow, latest) = (_workflow, Latest);
+            (workflows, latest) = (_workflows, Latest);
         }
 
         var progressed = false;
         foreach (var review in latest.Values.Where(record => record.Status == AttemptStatus.InReview).ToList())
         {
-            if (workflow.Tasks.GetValueOrDefault(review.Task) is not { Blueprint.Work: WorkSpec.Review } node)
+            var workflow = workflows.Values.FirstOrDefault(workflow => workflow.Tasks.ContainsKey(review.Task));
+            if (workflow?.Tasks.GetValueOrDefault(review.Task) is not { Blueprint.Work: WorkSpec.Review } node)
             {
                 continue;
             }

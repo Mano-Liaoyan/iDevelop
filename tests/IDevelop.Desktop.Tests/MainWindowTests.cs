@@ -22,7 +22,7 @@ public sealed class MainWindowTests : IDisposable
     private static readonly string LongTitle = string.Join(" ", Enumerable.Repeat("with every step of the release written out in full", 30));
 
     [AvaloniaFact]
-    public void Saving_beside_another_workflow_file_shows_why_and_keeps_the_unsaved_changes()
+    public void Saving_beside_another_workflow_file_preserves_it_and_saves_the_document()
     {
         var folder = _temp.Create("plan");
         var shell = Shell.Open(folder);
@@ -32,10 +32,11 @@ public sealed class MainWindowTests : IDisposable
 
         shell.Press(Key.S, RawInputModifiers.Control);
 
-        Assert.Equal($"Not saved. {other} is another workflow file, and this version of iDevelop keeps one workflow per project.", shell.Status);
-        Assert.Equal("plan* - iDevelop", shell.Window.Title);
-        Assert.True(shell.ShowsUnsavedChanges);
-        Assert.Equal(["other.json"], Directory.EnumerateFiles(Path.GetDirectoryName(other)!).Select(Path.GetFileName));
+        Assert.Equal("plan - iDevelop", shell.Window.Title);
+        Assert.False(shell.ShowsUnsavedChanges);
+        Assert.Equal(2, Directory.EnumerateFiles(Path.GetDirectoryName(other)!).Count());
+        Assert.Equal("{}", File.ReadAllText(other));
+        Assert.True(File.Exists(shell.Window.ViewModel.Canvas!.Document.FilePath));
     }
 
     [AvaloniaFact]
@@ -96,7 +97,7 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal([true, true, true], new[] { "AddTask", "Save", "OpenFolder" }.Select(id => shell.Find<Button>(id).IsEffectivelyEnabled));
         Assert.Equal(
             [
-                "Inspector", "plan", "0 tasks", "Filter properties", "Library",
+                "Inspector", "Workflow", "0 tasks", "Filter properties", "Library",
                 "Built-in", "Implement", "Plan", "Architect", "Review", "Approval",
                 "Project", "None yet. Derive a blueprint to add one.", "Personal", "None yet. Derive a blueprint to add one.",
                 "Reload Libraries", "Select a task or connection to edit it.",

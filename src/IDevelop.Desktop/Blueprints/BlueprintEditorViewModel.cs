@@ -274,6 +274,9 @@ public sealed class BlueprintEditorViewModel : ObservableObject
             {
                 Description = _description.Trim(),
                 DerivedFrom = IsNew ? _source.Key : _source.DerivedFrom,
+                // The editor offers no icon or color yet, so a derived or edited blueprint keeps its source's look.
+                Icon = _source.Icon,
+                Color = _source.Color,
             };
         }
         catch (BlueprintException e)
