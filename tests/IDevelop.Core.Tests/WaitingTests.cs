@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.Nodes;
@@ -163,6 +164,58 @@ public sealed class WaitingTests : IDisposable
         Assert.Equal(AttemptStatus.WaitingForInput, waiting.Status);
         Assert.Null(runs.MarkDone(SayHiId));
         Assert.Equal(AttemptStatus.Succeeded, runs.Latest[SayHiId].Status);
+    }
+
+    [Fact]
+    public async Task A_revision_cached_attempt_selector_reloads_the_waiting_status_when_teardown_finishes()
+    {
+        Install(_fakes, ClientId.Codex,
+            Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = SayHi(ClientId.Codex, ConversationMode.Chat);
+        using var session = runs.OpenConversation(SayHiId);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.BeforeRelease = () =>
+        {
+            entered.TrySetResult();
+            return release.Task;
+        };
+        ImmutableArray<AttemptSummary> cached = default;
+        long cachedRevision = 0;
+        async Task<ConversationSnapshot> SyncAsync()
+        {
+            var snapshot = session.Snapshot;
+            if (cached.IsDefault || snapshot.LogRevision != cachedRevision)
+            {
+                cached = await session.ListAttemptsAsync(default);
+                cachedRevision = snapshot.LogRevision;
+            }
+
+            return snapshot;
+        }
+
+        long heldRevision = 0;
+        await Settles(runs, async () =>
+        {
+            try
+            {
+                var started = Assert.IsType<StartResult.Started>(runs.Start(task));
+                await entered.Task.WaitAsync(Patience);
+                heldRevision = (await SyncAsync()).LogRevision;
+                Assert.Equal(AttemptStatus.Running, cached.Single().Status);
+                return started;
+            }
+            finally
+            {
+                release.TrySetResult();
+            }
+        });
+
+        var finished = await SyncAsync();
+        Assert.Equal(AttemptStatus.WaitingForInput, cached.Single().Status);
+        Assert.Equal((5L, 6L), (heldRevision, finished.LogRevision));
+        Assert.Equal((AttemptStatus.WaitingForInput, 6L), (finished.Latest!.Status, cachedRevision));
     }
 
     [Theory]
