@@ -17,6 +17,56 @@ public sealed class SalvageTests
     private const string Target = "adfe40b30c176fb407933286f51d15ea9b54cdc3";
 
     [Fact]
+    public async Task Salvage_captures_edits_hidden_by_a_writer_fsmonitor_hook()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Write("a/inside.txt", "inside\n");
+            return git.Commit("layout");
+        });
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var hook = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "fsmonitor-hook");
+        File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.fsmonitor", hook).ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
+        f.Git.Write("a/inside.txt", "edited\n", ready.Checkout);
+        f.Git.Write("a/new.txt", "new\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
+        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var commit = retained.Commit.Hex;
+        Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
+        Assert.Equal("new\n", f.Git.Git("show", commit + ":a/new.txt"));
+    }
+
+    [Fact]
+    public async Task Salvage_captures_a_same_size_edit_hidden_by_relaxed_stat_checks()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Write("a/inside.txt", "inside\n");
+            return git.Commit("layout");
+        });
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var file = Path.Combine(ready.Checkout, "a", "inside.txt");
+        var old = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(file, old);
+        await System.Threading.Tasks.Task.Delay(1100);
+        var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.checkStat", "minimal").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.trustctime", "false").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "update-index", "--refresh").ExitCode);
+        File.WriteAllText(file, "INSIDE\n");
+        File.SetLastWriteTimeUtc(file, old);
+        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var commit = retained.Commit.Hex;
+        Assert.Equal("INSIDE\n", f.Git.Git("show", commit + ":a/inside.txt"));
+    }
+
+    [Fact]
     public async Task A_symbolic_task_ref_after_salvage_blocks_retry_without_moving_the_foreign_branch()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));

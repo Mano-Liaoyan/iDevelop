@@ -13,6 +13,59 @@ public sealed class PublicationTests
     private static readonly OperationId Operation = new(Id(2000));
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Publish_captures_edits_hidden_by_a_writer_fsmonitor_hook(bool untrackedCache)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Write("a/inside.txt", "inside\n");
+            return git.Commit("layout");
+        });
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var hook = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "fsmonitor-hook");
+        File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.fsmonitor", hook).ExitCode);
+        if (untrackedCache) Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.untrackedCache", "true").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
+        f.Git.Write("a/inside.txt", "edited\n", ready.Checkout);
+        f.Git.Write("a/new.txt", "new\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
+        f.Close(ready);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
+        Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
+        Assert.Equal("new\n", f.Git.Git("show", commit + ":a/new.txt"));
+    }
+
+    [Fact]
+    public async Task Publish_captures_a_same_size_edit_hidden_by_relaxed_stat_checks()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Write("a/inside.txt", "inside\n");
+            return git.Commit("layout");
+        });
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var file = Path.Combine(ready.Checkout, "a", "inside.txt");
+        var old = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(file, old);
+        await System.Threading.Tasks.Task.Delay(1100);
+        var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.checkStat", "minimal").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.trustctime", "false").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "update-index", "--refresh").ExitCode);
+        File.WriteAllText(file, "INSIDE\n");
+        File.SetLastWriteTimeUtc(file, old);
+        f.Close(ready);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
+        Assert.Equal("INSIDE\n", f.Git.Git("show", commit + ":a/inside.txt"));
+    }
+
+    [Theory]
     [InlineData("--assume-unchanged", true)]
     [InlineData("--skip-worktree", true)]
     [InlineData("--assume-unchanged", false)]

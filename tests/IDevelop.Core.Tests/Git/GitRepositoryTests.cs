@@ -10,6 +10,40 @@ namespace IDevelop.Core.Tests.Git;
 public sealed class GitRepositoryTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Git_tree_snapshot_captures_an_edit_hidden_by_writer_stat_cache(bool fsmonitor)
+    {
+        using var f = new GitFixture();
+        f.Write("a.txt", "before\n");
+        f.Commit("base");
+        var file = f.PathOf("a.txt");
+        var old = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var environment = new Dictionary<string, string>(f.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        if (fsmonitor)
+        {
+            var hook = Path.Combine(Path.GetDirectoryName(f.Folder)!, "fsmonitor-hook");
+            File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            f.Git("config", "core.fsmonitor", hook);
+            Assert.Equal(0, f.Run(f.Folder, environment, "status", "--porcelain").ExitCode);
+        }
+        else
+        {
+            File.SetLastWriteTimeUtc(file, old);
+            await Task.Delay(1100);
+            f.Git("config", "core.checkStat", "minimal");
+            f.Git("config", "core.trustctime", "false");
+            Assert.Equal(0, f.Run(f.Folder, environment, "update-index", "--refresh").ExitCode);
+        }
+        f.Write("a.txt", "EDITED\n");
+        if (fsmonitor) Assert.Equal(0, f.Run(f.Folder, environment, "status", "--porcelain").ExitCode);
+        else File.SetLastWriteTimeUtc(file, old);
+        var tree = GitTree.Snapshot(f.Folder);
+        Assert.Equal("EDITED\n", f.Git("show", tree + ":a.txt"));
+    }
+
+    [Theory]
     [InlineData("--assume-unchanged", "unchanged")]
     [InlineData("--skip-worktree", "unchanged")]
     [InlineData("--assume-unchanged", "absent")]
