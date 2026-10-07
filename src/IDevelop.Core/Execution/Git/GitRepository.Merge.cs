@@ -53,7 +53,24 @@ internal sealed partial class GitRepository
         foreach (var temporary in new DirectoryInfo(folder).EnumerateDirectories())
         {
             if (IsLink(temporary) || !Regex.IsMatch(temporary.Name, @"\A[0-9]+-[0-9a-f]{32}\z", RegexOptions.CultureInvariant)) continue;
-            try { Directory.Delete(temporary.FullName, recursive: true); }
+            RemoveMergeScratchFolder(temporary.FullName);
+        }
+    }
+
+    private static void RemoveMergeScratchFolder(string folder)
+    {
+        if (IsLink(new DirectoryInfo(folder))) return;
+        foreach (var file in new[] { "HEAD", "config" })
+        {
+            try { File.Delete(Path.Combine(folder, file)); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+        var info = Path.Combine(folder, "info");
+        try { if (!IsLink(new DirectoryInfo(info))) File.Delete(Path.Combine(info, "attributes")); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        foreach (var directory in new[] { Path.Combine(folder, "refs"), info, folder })
+        {
+            try { Directory.Delete(directory, recursive: false); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
         }
     }
@@ -107,8 +124,7 @@ internal sealed partial class GitRepository
         }
         finally
         {
-            try { if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            RemoveMergeScratchFolder(temporary);
         }
     }
 

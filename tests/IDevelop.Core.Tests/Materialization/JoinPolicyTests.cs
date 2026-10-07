@@ -411,7 +411,7 @@ public sealed class JoinPolicyTests
     }
 
     [UnixFact]
-    public async Task Scratch_cleanup_removes_only_real_scratch_directories_without_following_nested_links()
+    public async Task Scratch_cleanup_leaves_unexpected_entries_without_following_nested_links()
     {
         using var f = new PreparationFixture(Diamond());
         await CleanSources(f);
@@ -429,8 +429,10 @@ public sealed class JoinPolicyTests
         File.WriteAllText(Path.Combine(merges, "README"), "keep readme\n");
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
         CleanContent(ready);
-        Assert.Equal(new[] { "456-fedcba9876543210fedcba9876543210", "README", "notes" },
+        Assert.Equal(new[] { "123-0123456789abcdef0123456789abcdef", "456-fedcba9876543210fedcba9876543210", "README", "notes" },
             Directory.GetFileSystemEntries(merges).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "escape" }, Directory.GetFileSystemEntries(scratch).Select(Path.GetFileName));
+        Assert.NotNull(new DirectoryInfo(Path.Combine(scratch, "escape")).LinkTarget);
         Assert.Equal("keep nested target\n", File.ReadAllText(Path.Combine(nestedOutside, "keep.txt")));
         Assert.Equal("keep linked target\n", File.ReadAllText(Path.Combine(linkedOutside, "keep.txt")));
         Assert.Equal("keep notes\n", File.ReadAllText(Path.Combine(notes, "keep.txt")));
@@ -501,7 +503,7 @@ public sealed class JoinPolicyTests
     }
 
     [UnixFact]
-    public async Task An_undeletable_scratch_folder_keeps_a_join_ready_and_a_restart_removes_it()
+    public async Task Unexpected_scratch_entries_keep_a_join_ready_and_stay_after_a_restart()
     {
         if (OperatingSystem.IsWindows()) return;
         var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U), Writer(D)), T, U), C, U), T, D), C, D);
@@ -520,8 +522,8 @@ public sealed class JoinPolicyTests
             File.SetUnixFileMode(Path.Combine(leftover, "held"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var restarted = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
             CleanContent(restarted);
-            Assert.False(Directory.Exists(leftover));
-            Assert.Empty(Directory.GetDirectories(merges));
+            Assert.Equal(new[] { leftover }, Directory.GetFileSystemEntries(merges));
+            Assert.Equal(new[] { "held" }, Directory.GetFileSystemEntries(leftover).Select(Path.GetFileName));
         }
         finally
         {
@@ -534,6 +536,41 @@ public sealed class JoinPolicyTests
                     Directory.Delete(scratch, recursive: true);
                 }
         }
+    }
+
+    [UnixTheory]
+    [InlineData("HEAD")]
+    [InlineData("config")]
+    [InlineData("info/attributes")]
+    [InlineData("refs")]
+    [InlineData("info")]
+    public async Task A_link_at_an_expected_scratch_entry_is_removed_without_following_it(string entry)
+    {
+        using var f = new PreparationFixture(Diamond());
+        await CleanSources(f);
+        using var dead = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("true") { UseShellExecute = false })!;
+        await dead.WaitForExitAsync();
+        var scratch = Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges", $"{dead.Id}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(scratch, "refs"));
+        Directory.CreateDirectory(Path.Combine(scratch, "info"));
+        File.WriteAllText(Path.Combine(scratch, "HEAD"), "ref: refs/heads/none\n");
+        File.WriteAllText(Path.Combine(scratch, "config"), "[core]\nbare = true\nrepositoryformatversion = 0\n");
+        var link = Path.Combine(scratch, entry);
+        var outside = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "outside");
+        var content = outside;
+        if (entry is "refs" or "info")
+        {
+            content = Path.Combine(Directory.CreateDirectory(outside).FullName, entry == "info" ? "attributes" : "heads");
+            Directory.Delete(link);
+            Directory.CreateSymbolicLink(link, outside);
+        }
+        else File.Delete(link);
+        File.WriteAllText(content, "keep outside\n");
+        if (entry is not ("refs" or "info")) File.CreateSymbolicLink(link, outside);
+        var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
+        CleanContent(ready);
+        Assert.Equal("keep outside\n", File.ReadAllText(content));
+        Assert.False(Path.Exists(scratch));
     }
 
     [UnixFact]
