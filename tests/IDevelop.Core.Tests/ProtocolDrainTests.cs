@@ -394,6 +394,36 @@ public sealed class ProtocolDrainTests : IDisposable
         Assert.Equal(["banana"], record.Queued.Select(message => message.Text));
     }
 
+    [Fact]
+    public async Task Cancel_between_a_turn_and_its_queued_message_cancels_without_launching_the_next_turn()
+    {
+        var gate = Path.Combine(_evidence, "go");
+        var resumed = Path.Combine(_evidence, "resumed");
+        Install(_fakes, ClientId.ClaudeCode,
+            Resuming(ClientId.ClaudeCode, Session).Write(resumed, "yes").Print(ReplyLines(ClientId.ClaudeCode, "Next")),
+            Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).WaitForFile(gate)
+                .Print(ReplyLines(ClientId.ClaudeCode, "First")).WaitForStdinEnd());
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = Task(ClientId.ClaudeCode);
+        runs.Start(task);
+        await Until(() => runs.Latest[task.Id].SessionId == Session);
+        Assert.Equal(new SendResult.Queued(), await runs.SendAsync(task, "banana", false));
+        Task<StartProblem?>? cancel = null;
+        runs.Changed += (_, _) =>
+        {
+            if (cancel is null && runs.Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.Running, Turns: [{ Outcome: TurnOutcome.Succeeded }] })
+            {
+                cancel = runs.CancelAsync(task.Id);
+            }
+        };
+        File.WriteAllText(gate, "go");
+        var record = await Settled(runs, task.Id);
+        Assert.NotNull(cancel);
+        Assert.Null(await cancel);
+        Assert.Equal((AttemptStatus.Cancelled, 1, false), (record.Status, record.Turns.Count, File.Exists(resumed)));
+        Assert.Equal(["banana"], record.Queued.Select(message => message.Text));
+    }
+
     private AttemptEvent[] Events(AttemptRecord record) => [.. AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), record.Task, record.Id))];
     private static IEnumerable<AgentEvent.Message> Messages(IEnumerable<AttemptEvent> events) => events.OfType<AttemptEvent.Agent>().Select(e => e.Event).OfType<AgentEvent.Message>();
     private static ExecutionSettings Settings(ClientId client) => new(client)

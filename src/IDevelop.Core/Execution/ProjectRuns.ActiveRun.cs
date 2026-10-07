@@ -664,7 +664,6 @@ public sealed partial class ProjectRuns
         private bool BeginStopping(RequestCloseReason reason)
         {
             var stopping = _turn.Stopping;
-            _turn.PromptCancellation.Cancel();
             _turn.StopReason = Record.InterruptReason is not null ? RequestCloseReason.Interrupted
                 : Record.CancelRequested ? RequestCloseReason.Cancelled : _turn.StopReason ?? reason;
             _turn.QuestionTimer?.Dispose();
@@ -683,6 +682,7 @@ public sealed partial class ProjectRuns
                 return;
             }
 
+            _turn.PromptCancellation.Cancel();
             Deadline(stopBy);
             if (_turn.Protocol.Interrupt() is { } interrupt)
             {
