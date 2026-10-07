@@ -39,11 +39,11 @@ public sealed class E2JournalTests
     public void Joined_reserved_codec_matches_a_handwritten_schema_two_line()
     {
         const string line = """
-            {"schema":2,"sequence":2,"operation":"00000000-0000-0000-0000-000000000090","command":{"sha256":"e0723a86a5b9408aee9113031785d3d15d9702892f31a46e5fe927c0c8552675"},"at":"2026-10-07T00:00:00+00:00","event":{"type":"reserved","attempt":{"id":"00000000-0000-0000-0000-000000000102","task":"00000000-0000-0000-0000-000000000005","revision":{"sha256":"4e59fcd81eea359ae4d1680bef9cb518a5b9d7a1a9b49e0b936062f90b4d3d7a"},"initialInputs":"00000000-0000-0000-0000-000000000101","cause":{"type":"initial"}},"inputs":{"id":"00000000-0000-0000-0000-000000000101","task":"00000000-0000-0000-0000-000000000005","revision":{"sha256":"4e59fcd81eea359ae4d1680bef9cb518a5b9d7a1a9b49e0b936062f90b4d3d7a"},"bindings":[],"code":{"type":"joined","join":{"operation":"00000000-0000-0000-0000-000000000091","sources":[{"task":"00000000-0000-0000-0000-000000000002","result":"00000000-0000-0000-0000-000000000103","owner":"00000000-0000-0000-0000-000000000002","attemptBase":{"hex":"1111111111111111111111111111111111111111"},"commit":{"hex":"2222222222222222222222222222222222222222"}},{"task":"00000000-0000-0000-0000-000000000003","result":"00000000-0000-0000-0000-000000000106","owner":"00000000-0000-0000-0000-000000000003","attemptBase":{"hex":"1111111111111111111111111111111111111111"},"commit":{"hex":"3333333333333333333333333333333333333333"}}],"commit":{"hex":"4444444444444444444444444444444444444444"},"tree":{"hex":"5555555555555555555555555555555555555555"},"ref":"refs/idp/join"}},"text":"","files":[],"review":null}}}
+            {"schema":2,"sequence":2,"operation":"00000000-0000-0000-0000-000000000090","command":{"sha256":"e0723a86a5b9408aee9113031785d3d15d9702892f31a46e5fe927c0c8552675"},"at":"2026-10-07T00:00:00+00:00","event":{"type":"reserved","attempt":{"id":"00000000-0000-0000-0000-000000000102","task":"00000000-0000-0000-0000-000000000005","revision":{"sha256":"4e59fcd81eea359ae4d1680bef9cb518a5b9d7a1a9b49e0b936062f90b4d3d7a"},"initialInputs":"00000000-0000-0000-0000-000000000101","cause":{"type":"initial"}},"inputs":{"id":"00000000-0000-0000-0000-000000000101","task":"00000000-0000-0000-0000-000000000005","revision":{"sha256":"4e59fcd81eea359ae4d1680bef9cb518a5b9d7a1a9b49e0b936062f90b4d3d7a"},"bindings":[],"code":{"type":"joined","join":{"operation":"00000000-0000-0000-0000-000000000091","sources":[{"task":"00000000-0000-0000-0000-000000000002","result":"00000000-0000-0000-0000-000000000103","owners":["00000000-0000-0000-0000-000000000002"],"attemptBase":{"hex":"1111111111111111111111111111111111111111"},"commit":{"hex":"2222222222222222222222222222222222222222"}},{"task":"00000000-0000-0000-0000-000000000003","result":"00000000-0000-0000-0000-000000000106","owners":["00000000-0000-0000-0000-000000000003"],"attemptBase":{"hex":"1111111111111111111111111111111111111111"},"commit":{"hex":"3333333333333333333333333333333333333333"}}],"commit":{"hex":"4444444444444444444444444444444444444444"},"tree":{"hex":"5555555555555555555555555555555555555555"},"ref":"refs/idp/join"}},"text":"","files":[],"review":null}}}
             """;
         var input = new InputRecord(new(Id(101)), D, new(V1), [], new CodeSelection.Joined(new(new(Id(91)),
-            [new(T, new(Id(103)), T, Base, new("2222222222222222222222222222222222222222")),
-                new(U, new(Id(106)), U, Base, new("3333333333333333333333333333333333333333"))],
+            [new(T, new(Id(103)), [T], Base, new("2222222222222222222222222222222222222222")),
+                new(U, new(Id(106)), [U], Base, new("3333333333333333333333333333333333333333"))],
             new("4444444444444444444444444444444444444444"), new("5555555555555555555555555555555555555555"), "refs/idp/join")), "", [], null);
         var entry = new RunEntry(2, 2, new(Id(90)), Prompt, At,
             new RunEvent.Reserved(new(A1, D, new(V1), input.Id, new AttemptCause.Initial()), input));
@@ -53,6 +53,13 @@ public sealed class E2JournalTests
         var decoded = RunJournal.Decode(RunJournal.Encode(approved) + line + "\n");
         Assert.Null(decoded.Rejection);
         Assert.Equal(RunJournal.Canonical(entry), RunJournal.Canonical(decoded.Entries[1]));
+        foreach (var owners in new[] { "[]", "[\"00000000-0000-0000-0000-000000000000\"]",
+            "[\"00000000-0000-0000-0000-000000000002\",\"00000000-0000-0000-0000-000000000002\"]",
+            "[\"00000000-0000-0000-0000-000000000003\",\"00000000-0000-0000-0000-000000000002\"]" })
+        {
+            var invalid = line.Replace("\"owners\":[\"00000000-0000-0000-0000-000000000002\"]", "\"owners\":" + owners, StringComparison.Ordinal);
+            Assert.Equal(new RunRejection(RunProblem.InvalidData, 2), RunJournal.Decode(RunJournal.Encode(approved) + invalid + "\n").Rejection);
+        }
     }
 
     [Fact]

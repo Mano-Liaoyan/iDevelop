@@ -6,8 +6,7 @@ namespace IDevelop.Execution;
 
 internal readonly record struct TreeId(string Hex);
 
-/// <summary>One accepted dependency result and the writer whose commit it resolves to.</summary>
-internal sealed record CodeSource(TaskId Task, ResultId Result, TaskId Owner, CommitId AttemptBase, CommitId Commit);
+internal sealed record CodeSource(TaskId Task, ResultId Result, ImmutableArray<TaskId> Owners, CommitId AttemptBase, CommitId Commit);
 
 internal sealed record JoinRecord(OperationId Operation, ImmutableArray<CodeSource> Sources, CommitId Commit, TreeId Tree, string Ref);
 
