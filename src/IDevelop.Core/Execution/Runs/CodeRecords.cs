@@ -92,7 +92,7 @@ internal sealed record MergeMessage(ImmutableArray<string> Paths, string Type, s
 
 internal sealed record ConfigEntry(string Key, string Value);
 
-/// <summary>A fan-in conflict as Git reported it. E2a stores and replays it without interpreting the merge.</summary>
+/// <summary>A fan-in conflict as Git reported it, stored and replayed without interpreting the merge.</summary>
 internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int Step, ImmutableArray<string> Paths,
     ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, EvidenceFile Stdout, EvidenceFile Stderr, string GitVersion,
     ImmutableArray<ConfigEntry> MergeConfig);

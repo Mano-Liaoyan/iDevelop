@@ -406,12 +406,16 @@ public sealed class SalvageTests
         File.WriteAllText(foreignLock, "foreign lock\n");
         var gitFile = Path.Combine(ready.Checkout, ".git");
         var original = File.ReadAllBytes(gitFile);
+        var attributes = File.GetAttributes(gitFile);
+        // Git for Windows hides the .git file, and Windows refuses to overwrite a hidden file.
+        File.SetAttributes(gitFile, FileAttributes.Normal);
         File.WriteAllText(gitFile, "gitdir: " + other.Open().CommonDirectory + "\n");
         var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("foreign lock\n", File.ReadAllText(foreignLock));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
         File.WriteAllBytes(gitFile, original);
+        File.SetAttributes(gitFile, attributes);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Equal("foreign lock\n", File.ReadAllText(foreignLock));

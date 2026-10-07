@@ -21,10 +21,12 @@ internal sealed partial class Materializer
                 .OrderBy(retained => record.Receipts.Values.Single(entry => entry.Event == retained).Sequence)]);
         if (GitRepository.Open(_project, _environment) is not RepositoryOpen.Opened opened) return workspace;
         var repository = opened.Repository;
+        // Git reports real paths, so compare through its toplevel (macOS /var is /private/var).
+        var real = Path.GetFullPath(Path.Combine(repository.ProjectFolder, owner?.RelativePath ?? RunLayout.TaskCheckout(runKey, taskKey)));
         var registered = repository.Worktrees() is GitRead<System.Collections.Immutable.ImmutableArray<GitWorktree>>.Read worktrees &&
-            worktrees.Value.Any(worktree => SamePath(worktree.Path, checkout));
+            worktrees.Value.Any(worktree => SamePath(worktree.Path, real));
         var tip = repository.ReadRef(owner?.Branch ?? RunLayout.TaskBranch(runKey, taskKey)) as GitRead<CommitId?>.Read;
-        var status = registered ? repository.Status(checkout) as GitRead<byte[]>.Read : null;
+        var status = registered ? repository.Status(real) as GitRead<byte[]>.Read : null;
         return workspace with { Registered = registered, BranchTip = tip?.Value, Clean = status is null ? null : status.Value.Length == 0 };
     }
 }
