@@ -17,20 +17,10 @@ internal sealed partial class Materializer
         VerifyRepository(record, repository);
         var actualLayout = record.Receipts.Single(pair => pair.Value.Event is RunEvent.LayoutAllocated { Key: LayoutKey.Run }).Key;
         var change = new RefChange(RunLayout.ApprovedBase(record.RunKey!), null, record.Base.Commit);
-        var intent = OperationIds.Derive(actualLayout, "base-intent");
-        Journal("base-intent", () => _store.Record(workflow, run, intent, new RunEvent.GitIntended(actualLayout, new GitMutation.MoveRef(change))));
-        var tip = Value(repository.ReadRef(change.Ref));
-        if (tip != change.Target)
-        {
-            if (tip is not null) throw Fault(MaterializationProblem.UncertainOwnership, "Approved base ref has an unexpected value.");
-            var move = Mutate("base-ref", () => repository.MoveRef(change));
-            if (move is RefMove.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail);
-            if (move is RefMove.Conflict) throw Fault(MaterializationProblem.UncertainOwnership, "Approved base retention failed: " + move);
-        }
+        RequirePublication(_refs.Publish(workflow, run, actualLayout, actualLayout, "base", repository, change));
+        if (Value(repository.ReadRef(change.Ref)) != change.Target)
+            throw Fault(MaterializationProblem.UncertainOwnership, "Approved base ref has an unexpected value.");
         record = Read(workflow, run);
-        if (!record.GitObservations.ContainsKey(intent))
-            record = DecisionRecord(Journal("base-observed", () => _store.Record(workflow, run,
-                OperationIds.Derive(actualLayout, "base-observed"), new RunEvent.GitObserved(intent, new(false, change.Target.Hex)))));
         if (!record.TaskKeys.ContainsKey(task))
         {
             var taken = record.TaskKeys.Values.ToHashSet(StringComparer.Ordinal);

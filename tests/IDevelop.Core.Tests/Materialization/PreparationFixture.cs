@@ -75,14 +75,6 @@ internal sealed class PreparationFixture : IDisposable
         Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(W, RunId, Op(), attempt.Id, outcome, Checkpoint(folder)));
     }
 
-    public void Observe(OperationId plan, RefChange change)
-    {
-        var intent = Op();
-        Assert.IsType<RunDecision.Recorded>(Store.Record(W, RunId, intent, new RunEvent.GitIntended(plan, new GitMutation.MoveRef(change))));
-        Assert.IsType<RefMove.Moved>(Git.Open().MoveRef(change));
-        Assert.IsType<RunDecision.Recorded>(Store.Record(W, RunId, Op(), new RunEvent.GitObserved(intent, new(false, change.Target.Hex))));
-    }
-
     public void Dispose() => Git.Dispose();
     public sealed class QuiescentBoundary : IExecutionBoundary
     { public WriterState Inspect(AttemptId attempt) => new WriterState.Quiescent(attempt, "controlled fixture"); }
