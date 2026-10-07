@@ -9,6 +9,113 @@ namespace IDevelop.Core.Tests.Git;
 [Collection(ProcessCollection.Name)]
 public sealed class GitRepositoryTests
 {
+    [Theory]
+    [InlineData("--assume-unchanged")]
+    [InlineData("--skip-worktree")]
+    public void Unchanged_flagged_files_allow_capture_and_preserve_the_index(string flag)
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        f.Git("update-index", flag, "a.txt", "plan.txt");
+        var repository = f.Open();
+        var index = Read(repository.IndexPath(f.Folder));
+        var before = File.ReadAllBytes(index);
+        var capture = Read(repository.Capture(f.Folder));
+        Assert.Equal(Read(repository.ReadCommit(a)).Tree.Hex, capture.Tree.Hex);
+        Assert.Equal("A\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        Assert.Equal("approved\n", f.Git("show", capture.Tree.Hex + ":plan.txt"));
+        Assert.Equal("", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
+        Assert.Equal(before, File.ReadAllBytes(index));
+    }
+
+    [Theory]
+    [InlineData("--assume-unchanged")]
+    [InlineData("--skip-worktree")]
+    [InlineData("both")]
+    public void Absent_flagged_files_allow_only_skip_worktree_capture(string flag)
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        if (flag == "both")
+        {
+            f.Git("update-index", "--assume-unchanged", "a.txt");
+            f.Git("update-index", "--skip-worktree", "a.txt");
+        }
+        else f.Git("update-index", flag, "a.txt");
+        File.Delete(f.PathOf("a.txt"));
+        var repository = f.Open();
+        var capture = repository.Capture(f.Folder);
+        if (flag == "--skip-worktree")
+        {
+            var captured = Read(capture);
+            Assert.Equal("A\n", f.Git("show", captured.Tree.Hex + ":a.txt"));
+            Assert.Equal("", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
+        }
+        else
+        {
+            var blocked = Assert.IsType<GitRead<GitCapture>.Failed>(capture);
+            Assert.Equal("DirtyWorktree", blocked.Problem.ToString());
+            Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Detail);
+        }
+        Assert.False(File.Exists(f.PathOf("a.txt")));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Read(repository.ReadRef("refs/heads/main"))?.Hex);
+    }
+
+    [Fact]
+    public void Flagged_blob_comparisons_apply_clean_filters_to_each_quoted_path()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write(".gitattributes", "*.txt text\n");
+        f.Write("clean one.txt", "one\n");
+        f.Write("clean two.txt", "two\n");
+        var commit = f.Commit("filtered");
+        f.Git("update-index", "--assume-unchanged", "clean one.txt");
+        f.Git("update-index", "--skip-worktree", "clean two.txt");
+        f.Write("clean one.txt", "one\r\n");
+        f.Write("clean two.txt", "two\r\n");
+        var repository = f.Open();
+        var index = Read(repository.IndexPath(f.Folder));
+        var before = File.ReadAllBytes(index);
+        var captured = Read(repository.Capture(f.Folder));
+        Assert.Equal(Read(repository.ReadCommit(commit)).Tree, captured.Tree);
+        Assert.Equal("one\n", f.Git("show", captured.Tree.Hex + ":clean one.txt"));
+        Assert.Equal("two\n", f.Git("show", captured.Tree.Hex + ":clean two.txt"));
+        Assert.Equal("one\r\n", File.ReadAllText(f.PathOf("clean one.txt")));
+        Assert.Equal("two\r\n", File.ReadAllText(f.PathOf("clean two.txt")));
+        Assert.Equal(before, File.ReadAllBytes(index));
+    }
+
+    [UnixFact]
+    public void Flagged_executable_mode_changes_block_capture_with_the_existing_detail()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--assume-unchanged", "a.txt");
+        File.SetUnixFileMode(f.PathOf("a.txt"), File.GetUnixFileMode(f.PathOf("a.txt")) | UnixFileMode.UserExecute);
+        var blocked = Assert.IsType<GitRead<GitCapture>.Failed>(f.Open().Capture(f.Folder));
+        Assert.Equal("DirtyWorktree", blocked.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Detail);
+        Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));
+        Assert.Equal("100644 f70f10e4db19068f79bc43844b49f3eece45c4e8 0\ta.txt\n", f.Git("ls-files", "--stage", "a.txt"));
+    }
+
+    [UnixFact]
+    public void Flagged_nonregular_paths_block_capture_with_the_existing_detail()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--skip-worktree", "a.txt");
+        f.Write("target.txt", "A\n");
+        File.Delete(f.PathOf("a.txt"));
+        File.CreateSymbolicLink(f.PathOf("a.txt"), f.PathOf("target.txt"));
+        var blocked = Assert.IsType<GitRead<GitCapture>.Failed>(f.Open().Capture(f.Folder));
+        Assert.Equal("DirtyWorktree", blocked.Problem.ToString());
+        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Detail);
+        Assert.Equal("A\n", File.ReadAllText(f.PathOf("target.txt")));
+    }
+
     [Fact]
     public void Symbolic_refs_are_refused_by_reads_and_snapshots()
     {

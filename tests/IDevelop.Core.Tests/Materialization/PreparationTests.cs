@@ -10,6 +10,35 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class PreparationTests
 {
+    [Fact]
+    public async Task Sparse_checkout_prepares_and_publishes_without_materializing_or_losing_out_of_cone_files()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
+        {
+            git.Write("a/inside.txt", "inside\n");
+            git.Write("outside/kept.bin", "outside\0bytes\n");
+            var commit = git.Commit("sparse");
+            git.Git("sparse-checkout", "set", "a");
+            return commit;
+        });
+        var operation = f.Op();
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
+        Assert.Equal(ready, await f.Prepare(T, operation));
+        Assert.False(File.Exists(Path.Combine(ready.Checkout, "outside/kept.bin")));
+        Assert.Equal("S outside/kept.bin\n", f.Git.Run(ready.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
+        f.Git.Write("a/inside.txt", "changed inside\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a/inside.txt").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "inside").ExitCode);
+        f.Close(ready);
+        var publicationOperation = f.Op();
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, publicationOperation, ready.Execution.Launch.Attempt));
+        var code = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code;
+        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 }, f.Git.Run(ready.Checkout, "show", code.Commit.Hex + ":outside/kept.bin").Stdout);
+        Assert.Equal("changed inside\n", f.Git.Git("show", code.Commit.Hex + ":a/inside.txt"));
+        Assert.False(File.Exists(Path.Combine(ready.Checkout, "outside/kept.bin")));
+        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, publicationOperation, ready.Execution.Launch.Attempt));
+    }
+
     [Theory]
     [InlineData("none", true)]
     [InlineData("git.submodules.before", true)]
