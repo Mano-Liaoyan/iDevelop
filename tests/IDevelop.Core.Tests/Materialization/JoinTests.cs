@@ -116,6 +116,32 @@ public sealed class JoinTests
         return git.Commit("settings");
     }
 
+    [Fact]
+    public async Task Late_conflict_replay_preserves_the_block_when_the_clock_advances()
+    {
+        using var f = new PreparationFixture(Diamond(true));
+        await Sources(f);
+        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+        OwnCommit(f, third, "b.txt", "different\n", "e");
+        f.Close(third);
+        Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), third.Execution.Launch.Attempt));
+        var operation = f.Op();
+        var first = Assert.IsType<Preparation.Blocked>(await Prepare(f, operation));
+        Assert.Equal("FanInConflict", first.Block.Problem.ToString());
+        Assert.Equal(2, first.Block.Conflict!.Step);
+        Assert.Equal(new[] { "b.txt" }, first.Block.Conflict.Paths);
+        Assert.Equal(3, first.Block.Conflict.Sources.Length);
+        var later = MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new LaterClock(), f.Git.Environment);
+        var second = Assert.IsType<Preparation.Blocked>(await later.Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+        Assert.Equal("FanInConflict", second.Block.Problem.ToString());
+        Assert.Equal(RunJournal.Canonical(first.Block), RunJournal.Canonical(second.Block));
+        Assert.Equal(1, f.Read().Blocks.Values.Count(block => block.Block.Task == U));
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef("refs/heads/idp/93f23689/join/c67f2fc3")));
+    }
+
+    private sealed class LaterClock : TimeProvider
+    { public override DateTimeOffset GetUtcNow() => At.AddMinutes(1); }
+
     private static void AssertConflict(PreparationFixture f, Preparation.Blocked blocked, int sources)
     {
         Assert.Equal("FanInConflict", blocked.Block.Problem.ToString());
@@ -249,7 +275,7 @@ public sealed class JoinTests
         {
             if (point == "journal.accepted.before") throw new PublicationTests.Crash();
         }).Publish(W, f.RunId, publish, second.Execution.Launch.Attempt));
-        var composer = new SupersedingComposer(new MergeJoins(f.Git.Folder, f.Store, new Clock(), f.Git.Environment), f, publish);
+        var composer = new SupersedingComposer(new MergeJoins(f.Git.Folder, f.Store, f.Git.Environment), f, publish);
         var outcome = await f.Materializer(composer).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial());
         Assert.Equal("StaleInput", Assert.IsType<Preparation.Rejected>(outcome).Reason.Problem.ToString());
         Assert.Equal("b350f18e8c7f922d58c54e415a95fb0a4b6fa249", GitFixture.Read(f.Git.Open().ReadRef(sources.B.ResultRef))?.Hex);

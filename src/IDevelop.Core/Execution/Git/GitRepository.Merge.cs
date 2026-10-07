@@ -14,6 +14,27 @@ internal abstract record TreeMerge
 
 internal sealed partial class GitRepository
 {
+    public GitRead<ImmutableArray<DateTimeOffset>> CommitterTimestamps(ImmutableArray<CommitId> commits)
+    {
+        if (commits.IsEmpty) return new GitRead<ImmutableArray<DateTimeOffset>>.Read([]);
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["log", "--no-walk=unsorted", "--format=%H%x09%ct", .. commits.Select(commit => commit.Hex)]);
+        if (result.ExitCode != 0) return Failure<ImmutableArray<DateTimeOffset>>(result);
+        var lines = result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length != commits.Length)
+            return new GitRead<ImmutableArray<DateTimeOffset>>.Failed(MaterializationProblem.GitFailed, "Git returned a different committer timestamp count.");
+        var timestamps = ImmutableArray.CreateBuilder<DateTimeOffset>(commits.Length);
+        for (var index = 0; index < commits.Length; index++)
+        {
+            var fields = lines[index].Split('\t');
+            if (fields.Length != 2 || !string.Equals(fields[0], commits[index].Hex, StringComparison.OrdinalIgnoreCase) ||
+                !long.TryParse(fields[1], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var seconds) ||
+                seconds < DateTimeOffset.MinValue.ToUnixTimeSeconds() || seconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds())
+                return new GitRead<ImmutableArray<DateTimeOffset>>.Failed(MaterializationProblem.GitFailed, "Git returned malformed or out-of-order committer timestamps.");
+            timestamps.Add(DateTimeOffset.FromUnixTimeSeconds(seconds));
+        }
+        return new GitRead<ImmutableArray<DateTimeOffset>>.Read(timestamps.ToImmutable());
+    }
+
     public TreeMerge MergeTrees(CommitId ours, CommitId theirs)
     {
         var result = Git(ProjectFolder, GitOperation.Worktree, ["merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex]);

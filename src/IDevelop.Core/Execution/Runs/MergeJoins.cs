@@ -3,19 +3,19 @@ using System.Text;
 
 namespace IDevelop.Execution;
 
-internal sealed class MergeJoins(string projectFolder, RunStore store, TimeProvider clock,
+internal sealed class MergeJoins(string projectFolder, RunStore store,
     IReadOnlyDictionary<string, string> environment, Action<string>? probe = null) : IJoinComposer
 {
     private GitRepository? _repository;
 
     public static Materializer Open(string projectFolder, RunStore store) => Materializer.Open(projectFolder, store,
-        new MergeJoins(projectFolder, store, TimeProvider.System, new Dictionary<string, string>()));
+        new MergeJoins(projectFolder, store, new Dictionary<string, string>()));
 
     internal static Materializer Open(string projectFolder, RunStore store, IExecutionBoundary boundary, TimeProvider clock,
         IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null)
     {
         var settings = environment ?? new Dictionary<string, string>();
-        return Materializer.Open(projectFolder, store, new MergeJoins(projectFolder, store, clock, settings, probe), boundary, clock, settings, probe);
+        return Materializer.Open(projectFolder, store, new MergeJoins(projectFolder, store, settings, probe), boundary, clock, settings, probe);
     }
 
     public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation)
@@ -36,11 +36,13 @@ internal sealed class MergeJoins(string projectFolder, RunStore store, TimeProvi
         if (existing is not null && (existing.Task != request.Task || existing.Inputs != request.Inputs || !RunReducer.Same(existing.Sources, request.Sources)))
             return Block(request, MaterializationProblem.InputUnavailable, $"Join operation {request.Operation.Value:D} has different inputs.");
         var repository = Repository();
-        var timestamp = existing?.Recipe.Timestamp ?? DateTimeOffset.FromUnixTimeSeconds(clock.GetUtcNow().ToUnixTimeSeconds());
+        var timestamps = Value(repository.CommitterTimestamps(parents));
+        var timestamp = timestamps[0];
         var accumulator = parents[0];
         TreeId tree = default;
         for (var step = 1; step < parents.Length; step++)
         {
+            if (timestamps[step] > timestamp) timestamp = timestamps[step];
             switch (Mutate("join-merge-" + step, () => repository.MergeTrees(accumulator, parents[step])))
             {
                 case TreeMerge.Clean clean:
@@ -80,9 +82,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store, TimeProvi
         {
             if (!RefOwnership.Accepts(record, repository, reference, request.ExpectedJoin))
                 return Block(request, MaterializationProblem.UncertainOwnership, $"Join ref {reference} has unexpected value {request.ExpectedJoin?.Hex ?? "absent"}.");
-            var recipe = record.Receipts.Values.OrderBy(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Planned>()
-                .Select(entry => entry.Plan).OfType<MaterializationPlan.Join>().FirstOrDefault(prior => prior.Task == request.Task &&
-                    prior.Recipe.Tree == tree && prior.Recipe.Parents.SequenceEqual(parents))?.Recipe ?? Recipe(tree, parents, timestamp);
+            var recipe = Recipe(tree, parents, timestamp);
             var commit = Value(Mutate("join-commit", () => repository.CreateCommit(recipe)));
             plan = new(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             probe?.Invoke("journal.join-plan.before");

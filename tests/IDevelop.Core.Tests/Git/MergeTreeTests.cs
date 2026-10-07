@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -7,6 +8,24 @@ namespace IDevelop.Core.Tests.Git;
 [Collection(ProcessCollection.Name)]
 public sealed class MergeTreeTests
 {
+    [Fact]
+    public void Committer_timestamps_preserve_argument_order_and_count()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        var environment = new Dictionary<string, string>(f.Environment) { ["GIT_COMMITTER_DATE"] = "2026-10-07T00:02:00Z" };
+        Assert.Equal(0, f.Run(f.Folder, environment, "-c", "commit.gpgSign=false", "commit", "--allow-empty", "-q", "-m", "b").ExitCode);
+        var b = new CommitId(f.Git("rev-parse", "HEAD").Trim());
+        environment["GIT_COMMITTER_DATE"] = "2026-10-07T00:01:00Z";
+        Assert.Equal(0, f.Run(f.Folder, environment, "-c", "commit.gpgSign=false", "commit", "--allow-empty", "-q", "-m", "c").ExitCode);
+        var c = new CommitId(f.Git("rev-parse", "HEAD").Trim());
+        var repository = f.Open();
+        Assert.Equal(new[] { new DateTimeOffset(2026, 10, 7, 0, 2, 0, TimeSpan.Zero), new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 10, 7, 0, 1, 0, TimeSpan.Zero) }, GitFixture.Read(repository.CommitterTimestamps([b, a, c])));
+        Assert.Equal("Git returned a different committer timestamp count.",
+            Assert.IsType<GitRead<ImmutableArray<DateTimeOffset>>.Failed>(repository.CommitterTimestamps([a, a])).Detail);
+    }
+
     [Fact]
     public void Clean_merge_returns_the_literal_tree()
     {
