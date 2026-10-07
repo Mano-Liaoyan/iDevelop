@@ -8,6 +8,21 @@ namespace IDevelop.Core.Tests.Runs;
 public sealed class JournalAccessTests
 {
     [Fact]
+    public void Own_torn_first_line_allows_approval_and_idempotent_retry()
+    {
+        using var f = new RunFixtures();
+        File.WriteAllText(f.Journal(W, Run), "{\"schema\":1");
+        var operation = f.Op();
+        var revision = Revision.Capture(f.Workflow);
+        var codeBase = new RunBase(Base, BaseChoice.Head);
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, operation, revision, codeBase));
+        var record = Assert.IsType<RunRead.Loaded>(f.Store.Read(W, Run)).Record;
+        Assert.Equal(RunPhase.Approved, record.Phase);
+        Assert.Equal(1, record.Sequence);
+        Assert.IsType<RunDecision.Existing>(f.Store.Approve(W, Run, operation, revision, codeBase));
+    }
+
+    [Fact]
     public void Empty_journals_allow_approval_and_reservation_retries()
     {
         using var f = new RunFixtures();
