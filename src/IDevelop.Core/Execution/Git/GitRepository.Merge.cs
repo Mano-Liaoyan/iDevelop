@@ -44,9 +44,20 @@ internal sealed partial class GitRepository
         new("merge.renormalize", "false"),
     ];
 
+    public void RemoveMergeScratchFolders()
+    {
+        var folder = Path.Combine(CommonDirectory, "idevelop", "merges");
+        if (!Directory.Exists(folder)) return;
+        foreach (var temporary in Directory.EnumerateDirectories(folder))
+        {
+            try { Directory.Delete(temporary, recursive: true); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
     public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource)
     {
-        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-merge-{Guid.NewGuid():N}");
+        var temporary = Path.Combine(CommonDirectory, "idevelop", "merges", $"{Environment.ProcessId}-{Guid.NewGuid():N}");
         try
         {
             Directory.CreateDirectory(Path.Combine(temporary, "refs"));
@@ -83,7 +94,8 @@ internal sealed partial class GitRepository
         }
         finally
         {
-            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+            try { if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
         }
     }
 

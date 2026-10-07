@@ -40,6 +40,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         var repository = Repository();
         if (GitRepository.ParseVersion(repository.Version) is not { } version || version < new Version(2, 43, 0))
             return Block(request, MaterializationProblem.GitVersionUnsupported, $"Joins need Git 2.43 or later. Installed: {repository.Version}.");
+        repository.RemoveMergeScratchFolders();
         var timestamps = Value(repository.CommitterTimestamps(parents));
         var timestamp = timestamps[0];
         var accumulator = parents[0];

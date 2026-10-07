@@ -372,4 +372,98 @@ public sealed class JoinPolicyTests
         Assert.Null(GitFixture.Read(f.Git.Open().ReadRef("refs/heads/driver-wrote")));
         Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
     }
+
+    [UnixFact]
+    public async Task An_undeletable_scratch_folder_keeps_a_join_ready_and_a_restart_removes_it()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U), Writer(D)), T, U), C, U), T, D), C, D);
+        using var f = new PreparationFixture(workflow);
+        await CleanSources(f);
+        var listing = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "merge-dirs");
+        var environment = GitShim(f, "for arg do\nif [ \"$arg\" = merge-tree ]; then mkdir -p \"$GIT_DIR/held\"; : > \"$GIT_DIR/held/f\"; chmod 500 \"$GIT_DIR/held\"; printf '%s\\n' \"$GIT_DIR\" >> '" + listing + "'; fi\ndone");
+        var merges = Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges");
+        try
+        {
+            var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: environment)
+                .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            CleanContent(ready);
+            var leftover = Assert.Single(Directory.GetDirectories(merges));
+            Assert.StartsWith(System.Environment.ProcessId + "-", Path.GetFileName(leftover));
+            File.SetUnixFileMode(Path.Combine(leftover, "held"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var restarted = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+            CleanContent(restarted);
+            Assert.False(Directory.Exists(leftover));
+            Assert.Empty(Directory.GetDirectories(merges));
+        }
+        finally
+        {
+            if (File.Exists(listing))
+                foreach (var scratch in File.ReadAllLines(listing))
+                {
+                    if (!Directory.Exists(scratch)) continue;
+                    var held = Path.Combine(scratch, "held");
+                    if (Directory.Exists(held)) File.SetUnixFileMode(held, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    Directory.Delete(scratch, recursive: true);
+                }
+        }
+    }
+
+    [UnixFact]
+    public async Task A_join_removes_scratch_state_owned_by_an_exited_process()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(Diamond());
+        await CleanSources(f);
+        using var dead = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("true") { UseShellExecute = false })!;
+        await dead.WaitForExitAsync();
+        var merges = Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges");
+        var leftover = Path.Combine(merges, $"{dead.Id}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(leftover, "refs"));
+        File.WriteAllText(Path.Combine(leftover, "HEAD"), "ref: refs/heads/none\n");
+        File.WriteAllText(Path.Combine(leftover, "config"), "[core]\nbare = true\nrepositoryformatversion = 0\n");
+        var stuck = Path.Combine(merges, $"{dead.Id}-{Guid.NewGuid():N}");
+        var held = Directory.CreateDirectory(Path.Combine(stuck, "held")).FullName;
+        File.WriteAllText(Path.Combine(held, "f"), "");
+        File.SetUnixFileMode(held, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
+            CleanContent(ready);
+            Assert.False(Directory.Exists(leftover));
+            Assert.Equal(new[] { stuck }, Directory.GetDirectories(merges));
+        }
+        finally
+        {
+            File.SetUnixFileMode(held, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [UnixTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Clean_and_conflicted_joins_use_repository_scratch_and_leave_it_empty(bool conflict)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(Diamond(), configureBase: Settings);
+        if (conflict) await ConflictingSources(f);
+        else await CleanSources(f);
+        var listing = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "merge-dirs");
+        var environment = GitShim(f, "for arg do\n[ \"$arg\" = merge-tree ] && printf '%s\\n' \"$GIT_DIR\" >> '" + listing + "'\ndone");
+        var temporary = Directory.GetDirectories(Path.GetTempPath(), "idevelop-merge-*");
+        var outcome = await Joins(f, environment: environment).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial());
+        if (conflict)
+        {
+            var blocked = Assert.IsType<Preparation.Blocked>(outcome);
+            Assert.Equal(MaterializationProblem.FanInConflict, blocked.Block.Problem);
+            Assert.Equal(new[] { "settings.txt" }, blocked.Block.Conflict!.Paths);
+        }
+        else CleanContent(Assert.IsType<Preparation.Ready>(outcome));
+        var merges = Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges");
+        var scratch = Assert.Single(File.ReadAllLines(listing));
+        Assert.Equal(merges, Path.GetDirectoryName(scratch));
+        Assert.StartsWith(System.Environment.ProcessId + "-", Path.GetFileName(scratch));
+        Assert.Empty(Directory.GetDirectories(merges));
+        Assert.Empty(Directory.GetDirectories(Path.GetTempPath(), "idevelop-merge-*").Except(temporary));
+    }
 }
