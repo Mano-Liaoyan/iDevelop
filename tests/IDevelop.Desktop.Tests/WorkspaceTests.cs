@@ -804,4 +804,16 @@ public sealed class WorkspaceTests : IDisposable
         next.Render();
         Assert.Equal([("alpha", ["Build", "Release"])], next.Tree());
     }
+
+    [AvaloniaFact]
+    public void With_nothing_selected_the_inspector_names_the_workflow_whose_tasks_it_counts()
+    {
+        var (shell, _, _) = OpenBoth();
+
+        shell.Click(shell.WorkflowRow("alpha", "Release"));
+        Assert.Equal(["Release", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+
+        Rename(shell, "alpha", "Release", "Ship it");
+        Assert.Equal(["Ship it", "1 task"], Shell.Texts(shell.Find<Control>("InspectorHeader")));
+    }
 }

@@ -8,7 +8,7 @@ namespace IDevelop.Desktop.Inspector;
 /// <summary>How many of the workflow's nodes are of one kind.</summary>
 public sealed record KindCount(NodeKind Kind, string Label, int Count);
 
-/// <summary>The workflow inspector's header and overview while nothing is selected: the project, its task count, and its kinds.</summary>
+/// <summary>The workflow inspector's header and overview while nothing is selected: the workflow, its task count, and its kinds.</summary>
 public sealed class WorkflowOverviewViewModel : ObservableObject
 {
     private readonly WorkflowCanvasViewModel _canvas;
@@ -18,10 +18,17 @@ public sealed class WorkflowOverviewViewModel : ObservableObject
     {
         _canvas = canvas;
         canvas.Nodes.CollectionChanged += (_, _) => Count();
+        canvas.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkflowCanvasViewModel.Name))
+            {
+                OnPropertyChanged(nameof(Name));
+            }
+        };
         Count();
     }
 
-    public string ProjectName => Path.GetFileName(Path.TrimEndingDirectorySeparator(_canvas.Document.ProjectFolder));
+    public string Name => _canvas.Name;
 
     public string TaskCount => _canvas.Nodes.Count == 1 ? "1 task" : $"{_canvas.Nodes.Count} tasks";
 

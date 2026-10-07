@@ -104,7 +104,7 @@
                   <Border Grid.RowSpan="2" Classes="neutralTile" VerticalAlignment="Top">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
                   </Border>
-                  <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding ProjectName}" />
+                  <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding Name}" />
                   <TextBlock Grid.Row="1" Grid.Column="1" Classes="kindLine" Text="{Binding TaskCount}" />
                 </Grid>
               </inspector:InspectorGrid>
