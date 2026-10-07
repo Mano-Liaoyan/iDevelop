@@ -202,6 +202,7 @@ public sealed class WorkspaceDocumentTests : IDisposable
         Assert.Equal(0, changes);
 
         document.Apply(new Rename("Build"));
+        Assert.Equal(("Build", true), (document.Current.Name, document.CanUndo));
         document.Save();
         var saved = document.Current;
         document.Apply(new Rename(" Build "));
