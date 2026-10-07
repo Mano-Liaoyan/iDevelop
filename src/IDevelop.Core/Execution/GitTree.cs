@@ -82,7 +82,7 @@ internal static class GitTree
 
     private static string? Git(string folder, string? indexFile, params string[] arguments)
     {
-        var start = new ProcessStartInfo("git", arguments)
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", .. arguments])
         {
             WorkingDirectory = folder,
             RedirectStandardOutput = true,
@@ -93,6 +93,8 @@ internal static class GitTree
             StandardOutputEncoding = Encoding.UTF8,
         };
         start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        start.Environment["GIT_NO_REPLACE_OBJECTS"] = "1";
+        start.Environment["GIT_GRAFT_FILE"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
         if (indexFile is not null)
         {
             start.Environment["GIT_INDEX_FILE"] = indexFile;

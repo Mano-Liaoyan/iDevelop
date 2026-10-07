@@ -579,7 +579,7 @@ internal sealed class GitRepository
     private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory, TimeSpan patience,
         IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
     {
-        var start = new ProcessStartInfo("git", arguments)
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", .. arguments])
         {
             WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -594,6 +594,8 @@ internal sealed class GitRepository
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
         start.Environment["LC_ALL"] = "C";
         start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        start.Environment["GIT_NO_REPLACE_OBJECTS"] = "1";
+        start.Environment["GIT_GRAFT_FILE"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
         try
         {
             using var process = Process.Start(start)!;

@@ -11,6 +11,34 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class PublicationOwnershipTests
 {
+    [Theory]
+    [InlineData("replace")]
+    [InlineData("grafts")]
+    public async Task Grafted_writer_history_without_the_attempt_base_blocks_publication(string mode)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "checkout", "-q", "--detach", "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
+        CommitFile(f, writer.Checkout, "b.txt", "B\n");
+        const string tip = "40abc7bebc8957e22d11b4c6b9603180652d95f1";
+        Assert.Equal(tip, Head(f, writer.Checkout));
+        if (mode == "replace") Assert.Equal(0, f.Git.Run(writer.Checkout, "replace", "--graft", tip, A).ExitCode);
+        else File.WriteAllText(Path.Combine(f.Git.Open().CommonDirectory, "info", "grafts"), tip + " " + A + "\n");
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", tip).ExitCode);
+        f.Close(writer);
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 40abc7bebc8957e22d11b4c6b9603180652d95f1.", blocked.Block.Detail);
+        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", Ref(f, writer.Execution.Location.Owner.Branch));
+        Assert.Equal("B\n", File.ReadAllText(Path.Combine(writer.Checkout, "b.txt")));
+        Assert.Empty(f.Read().Results);
+        var again = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(blocked.Block.Detail, again.Block.Detail);
+        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", Ref(f, writer.Execution.Location.Owner.Branch));
+    }
+
     [Fact]
     public async Task Salvage_adopted_rewind_blocks_publication_without_losing_retained_work_and_retry_converges()
     {

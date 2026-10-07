@@ -417,6 +417,38 @@ public sealed class GitRepositoryTests
     }
 
     [Fact]
+    public void Ancestry_uses_real_parents_even_when_a_graft_claims_an_unrelated_base()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        var below = new CommitId("81ddb7c330112c7f16700ed002803a04b0bce693");
+        f.Git("checkout", "-q", "--detach", below.Hex);
+        f.Write("b.txt", "B\n");
+        var tip = f.Commit("b.txt");
+        Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", tip.Hex);
+        var repository = f.Open();
+        Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
+        Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
+        File.WriteAllText(Path.Combine(repository.CommonDirectory, "info", "grafts"), tip.Hex + " " + a.Hex + "\n");
+        Assert.Equal(new GitAncestry.No(), repository.IsAncestor(a, tip));
+        Assert.Equal(new GitAncestry.Yes(), repository.IsAncestor(below, tip));
+        Assert.Equal(new[] { "81ddb7c330112c7f16700ed002803a04b0bce693" }, Read(repository.ReadCommit(tip)).Parents.Select(parent => parent.Hex));
+        var failed = Assert.IsType<GitAncestry.Failed>(repository.IsAncestor(new(new string('9', 40)), tip));
+        Assert.Equal("fatal: Not a valid commit name 9999999999999999999999999999999999999999\n", failed.Detail);
+    }
+
+    [Fact]
+    public void Git_tree_reads_real_commit_content_despite_replacement()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        f.Git("replace", a.Hex, "81ddb7c330112c7f16700ed002803a04b0bce693");
+        Assert.Equal("100644 blob 367ff430540e7bc5c23d699de65ee5af6706b274\tplan.txt\0" +
+            "100644 blob d8649da39ddf7910d29982e2f19cd9c0ff5ffe96\troot.txt\0" +
+            "100644 blob f70f10e4db19068f79bc43844b49f3eece45c4e8\ta.txt", GitTree.ContentOutsideData(f.Folder, a.Hex));
+    }
+
+    [Fact]
     public void Revision_and_ancestry_reads_distinguish_absence_detachment_and_failure()
     {
         using var f = new GitFixture();
