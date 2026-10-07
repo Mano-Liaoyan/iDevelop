@@ -175,7 +175,7 @@ internal static partial class RunReducer
                     e.Execution.Launch == prepared.Launch).Sequence).FirstOrDefault()?.Location.AttemptBase;
     }
 
-    private static bool Editable(RunRecord record, RunAttempt attempt) =>
+    internal static bool Editable(RunRecord record, RunAttempt attempt) =>
         record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
 
     internal static RunProblem? PlanProblem(RunRecord record, MaterializationPlan plan)
@@ -274,11 +274,12 @@ internal static partial class RunReducer
                 return publication.Recipe.Parents.Length == 1 && publication.Recipe.Parents[0] == publication.VerifiedTip ? null : RunProblem.InvalidData;
             case MaterializationPlan.Salvage salvage:
                 return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&
-                    salvage.Recipe.Parents.Length == 1 && salvage.Recipe.Parents[0] == salvage.ObservedTip ? null : RunProblem.InvalidData;
+                    salvage.Recipe.Parents.Length is 1 or 2 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
+                    (salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents[1] == salvage.BranchTip) ? null : RunProblem.InvalidData;
             case MaterializationPlan.RetryReset reset:
                 return record.Salvages.ContainsKey(reset.SalvagePlan) &&
                     record.Plans.GetValueOrDefault(reset.SalvagePlan) is MaterializationPlan.Salvage retained &&
-                    retained.Task == reset.Task && retained.Attempt == reset.Salvaged &&
+                    retained.Task == reset.Task && retained.Attempt == reset.Salvaged && reset.From == retained.BranchTip &&
                     reset.Remove.All(file => retained.Untracked.Any(captured => Same(captured, file))) ? null : RunProblem.InvalidData;
             default:
                 return RunProblem.InvalidData;

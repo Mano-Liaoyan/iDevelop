@@ -54,16 +54,24 @@ internal sealed partial class Materializer
                 if (capture.IndexBefore != capture.IndexAfter) throw Fault(MaterializationProblem.DirtyWorktree, "The index changed during salvage capture.");
                 var untracked = Untracked(repository, checkout);
                 var title = record.Revisions[writer.Revision].Snapshot.Tasks[task].Title;
-                var recipe = new CommitRecipe(capture.Tree, [tip],
+                var branchTip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
+                var parents = (branchTip is { } branch ? repository.IsAncestor(branch, tip) : null) switch
+                {
+                    null or GitAncestry.Yes => ImmutableArray.Create(tip),
+                    GitAncestry.No => ImmutableArray.Create(tip, branchTip!.Value),
+                    GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail),
+                    _ => throw new InvalidOperationException(),
+                };
+                var recipe = new CommitRecipe(capture.Tree, parents,
                     $"Salvage {title}\n\nIDP-Run: {run.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\n",
                     "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>",
                     DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds()));
                 step = "salvage-commit";
                 var commit = Value(Mutate("salvage-commit", () => repository.CreateCommit(recipe)));
                 var reference = RunLayout.SalvageRef(record.RunKey!, record.TaskKeys[task], attempt);
-                if (Value(repository.ReadRef(reference)) is { } previous && previous != commit)
+                if (Value(repository.ReadRef(reference)) is not null)
                     reference = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], attempt, operation);
-                plan = new(task, attempt, tip, capture.IndexBefore, recipe, commit, untracked, reference);
+                plan = new(task, attempt, tip, branchTip, capture.IndexBefore, recipe, commit, untracked, reference);
                 step = "salvage-plan";
                 Journal("salvage-plan", () => _store.Record(workflow, run, planId, new RunEvent.Planned(plan)));
             }

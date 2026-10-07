@@ -30,13 +30,7 @@ internal sealed partial class Materializer
             using var held = TakeTaskLock(task);
             var storage = new RunStorage(_project, workflow, run);
             var refreshPair = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Refresh refresh && refresh.Launch == key);
-            var verificationLocation = old.Location;
-            if (refreshPair.Value is MaterializationPlan.Refresh resetting &&
-                record.GitIntents.Values.Any(intent => intent.Plan == refreshPair.Key && intent.Mutation is GitMutation.ResetCheckout reset &&
-                    reset.Task == task && reset.Target == record.Inputs[resetting.Inputs].CodeBase) &&
-                Value(repository.ReadRef(old.Location.Owner.Branch)) == record.Inputs[resetting.Inputs].CodeBase)
-                verificationLocation = old.Location with { AttemptBase = record.Inputs[resetting.Inputs].CodeBase };
-            VerifyCheckout(repository, verificationLocation, keepChanges: true, record);
+            VerifyCheckout(repository, old.Location, keepChanges: true, record);
             var changed = record.Inputs[old.Inputs].Review is { } review && record.CurrentResults.GetValueOrDefault(review.Subject)?.Id != review.SubjectResult;
             if (record.Preparations.TryGetValue(key, out var existing))
             {
@@ -55,7 +49,13 @@ internal sealed partial class Materializer
             if (changed || refreshPair.Value is MaterializationPlan.Refresh)
             {
                 var checkout = Checkout(repository, old.Location.Owner);
-                if (Value(repository.Status(checkout)).Length != 0)
+                var captureTree = Value(Mutate("refresh-capture", () => repository.Capture(checkout))).Tree;
+                var indexTree = Value(repository.ReadIndexTree(checkout));
+                var oldTree = Value(repository.ReadCommit(old.Location.AttemptBase)).Tree;
+                var resetPending = refreshPair.Value is MaterializationPlan.Refresh refreshPlan && record.GitIntents.Values.Any(intent =>
+                    intent.Plan == refreshPair.Key && intent.Mutation is GitMutation.ResetCheckout);
+                var resetTree = resetPending ? Value(repository.ReadCommit(record.Inputs[((MaterializationPlan.Refresh)refreshPair.Value!).Inputs].CodeBase)).Tree : oldTree;
+                if (captureTree != indexTree || captureTree != oldTree && captureTree != resetTree)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The reviewer checkout must be clean before refreshing its inputs.");
                 JoinRecord? join = (refreshPair.Value as MaterializationPlan.Refresh)?.Composed;
                 if (refreshPair.Value is not MaterializationPlan.Refresh)
@@ -88,13 +88,21 @@ internal sealed partial class Materializer
                 var input = record.Inputs[plan.Inputs];
                 inputs = input.Id;
                 if (RunReducer.InputProblem(record, input, true) is { } stale) throw new Refusal(stale);
+                RequirePublication(_refs.Publish(workflow, run, operation, planId, "refresh-retain", repository,
+                    new(RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId), null, old.Location.AttemptBase)));
+                RequirePublication(_refs.Publish(workflow, run, operation, planId, "refresh-branch", repository,
+                    new(old.Location.Owner.Branch, old.Location.AttemptBase, input.CodeBase)));
                 var reset = new GitMutation.ResetCheckout(task, input.CodeBase);
                 if (!PublicationObserved(record, planId, reset))
                 {
                     var intended = OperationIds.Derive(operation, "refresh-reset-intent");
                     Journal("refresh-reset-intent", () => _store.Record(workflow, run, intended, new RunEvent.GitIntended(planId, reset)));
                     VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(input.CodeBase)));
-                    var result = Mutate("refresh-reset", () => repository.ResetCheckout(checkout, input.CodeBase));
+                    var result = Mutate("refresh-reset", () =>
+                    {
+                        VerifyResetHead(repository, checkout, old.Location.Owner.Branch, input.CodeBase);
+                        return repository.ResetCheckout(checkout, input.CodeBase);
+                    });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
                     Journal("refresh-reset-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "refresh-reset-observed"),
                         new RunEvent.GitObserved(intended, new(false, input.CodeBase.Hex))));

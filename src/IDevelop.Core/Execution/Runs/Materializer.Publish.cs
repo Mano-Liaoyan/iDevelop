@@ -59,8 +59,8 @@ internal sealed partial class Materializer
             {
                 plan = persisted;
                 step = "ownership";
+                VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
-                VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence, planId);
                 step = "commit";
                 if (Value(Mutate("commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
                     throw Fault(MaterializationProblem.UncertainOwnership, "The persisted publication recipe produced a different commit.");
@@ -68,11 +68,11 @@ internal sealed partial class Materializer
             else
             {
                 step = "ownership";
+                VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
                 if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
                 var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value;
-                VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 step = "capture";
                 var capture = Value(Mutate("capture", () => repository.Capture(checkout)));
                 if (capture.IndexBefore != capture.IndexAfter)
@@ -109,7 +109,11 @@ internal sealed partial class Materializer
             {
                 Journal("index-intent", () => _store.Record(workflow, run, indexIntent,
                     new RunEvent.GitIntended(planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree))));
-                var aligned = Mutate("align-index", () => repository.AlignIndex(checkout, plan.IndexBefore, plan.Recipe.Tree));
+                var aligned = Mutate("align-index", () =>
+                {
+                    VerifyCheckout(repository, prepared.Location, keepChanges: true, Read(workflow, run));
+                    return repository.AlignIndex(checkout, plan.IndexBefore, plan.Recipe.Tree);
+                });
                 if (aligned is IndexAlignment.Unexpected)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed before publication alignment.");
                 if (aligned is IndexAlignment.Failed failed)
@@ -122,8 +126,8 @@ internal sealed partial class Materializer
             RequirePublication(_refs.Publish(workflow, run, operation, planId, "result", repository,
                 new(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[task], attempt), null, plan.Commit)));
             step = "verify";
-            VerifyPublication(repository, prepared, plan, workflow, run);
             VerifyPublicationRefs(Read(workflow, run), repository, prepared, operation, workflow, run, ref evidence);
+            VerifyPublication(repository, prepared, plan, workflow, run);
             VerifyQuiescence(attempt);
             step = "accepted";
             var decision = Journal("accepted", () => _store.AcceptPublication(workflow, run, OperationIds.Derive(operation, "accepted"), planId));
