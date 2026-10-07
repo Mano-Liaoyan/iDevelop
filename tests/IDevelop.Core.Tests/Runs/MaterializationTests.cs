@@ -84,7 +84,7 @@ public sealed class MaterializationTests
             Artifacts:
 
             - payload: .idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/artifacts/payload (3 bytes, SHA-256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
-            """, input.Text);
+            """.ReplaceLineEndings("\n"), input.Text);
         Assert.Equal([".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md",
             ".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/artifacts/payload"], input.Files.Select(file => file.RelativePath));
         Assert.Equal([6L, 3L], input.Files.Select(file => file.ByteLength));
@@ -106,7 +106,7 @@ public sealed class MaterializationTests
             Report:
 
             .idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md (70000 bytes)
-            """, input.Text);
+            """.ReplaceLineEndings("\n"), input.Text);
         Assert.Equal(70000, input.Files.Single().ByteLength);
         Assert.Equal(70000, f.Read().Results.Single().Report.Length);
     }
