@@ -424,6 +424,69 @@ public sealed class JoinPolicyTests
     }
 
     [UnixFact]
+    public async Task An_orphaned_content_merge_after_scratch_cleanup_changes_no_refs_or_execution_files()
+    {
+        var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U), Writer(D)), T, U), C, U), T, D), C, D);
+        using var f = new PreparationFixture(workflow, configureBase: git =>
+        {
+            git.Write("m.txt", "1\n2\n3\n4\n5\n6\n7\n8\n");
+            return git.Commit("m");
+        });
+        await Write(f, T, ("m.txt", "ONE\n2\n3\n4\n5\n6\n7\n8\n"));
+        await Write(f, C, ("m.txt", "1\n2\n3\n4\n5\n6\n7\nEIGHT\n"));
+        var state = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "orphan-state")).FullName;
+        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+        var environment = GitShim(f, "STATE='" + state.Replace("'", "'\\''", StringComparison.Ordinal) + "'\nexport STATE\n" +
+            "for arg do\nif [ \"$arg\" = merge-tree ] && mkdir \"$STATE/first\" 2>/dev/null; then\n" +
+            "mkdir -p \"$GIT_DIR/info\"\nmkfifo \"$GIT_DIR/info/attributes\"\n" +
+            "sh -c '\"$0\" \"$@\" > \"$STATE/orphan.out\" 2> \"$STATE/orphan.err\"; echo $? > \"$STATE/orphan.exit\"' '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\" < /dev/null > /dev/null 2>&1 &\n" +
+            "( exec 3> \"$GIT_DIR/info/attributes\"; : > \"$STATE/paused\"; while [ ! -e \"$STATE/release\" ]; do sleep 0.05; done ) < /dev/null > /dev/null 2>&1 &\n" +
+            "while [ ! -e \"$STATE/paused\" ]; do sleep 0.05; done\nrm \"$GIT_DIR/info/attributes\"\nfi\ndone");
+        var merges = Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges");
+        var exit = Path.Combine(state, "orphan.exit");
+        try
+        {
+            var operation = f.Op();
+            var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: environment)
+                .Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+            Assert.Equal("ONE\n2\n3\n4\n5\n6\n7\nEIGHT\n", File.ReadAllText(Path.Combine(ready.Checkout, "m.txt")));
+            Assert.Equal("95b1feceb5015d66a187cd67ef90bc60e434deb7", f.Git.Git("rev-parse", ready.Execution.Location.AttemptBase.Hex + "^{tree}").Trim());
+            Assert.False(File.Exists(exit));
+            Assert.Empty(Directory.GetFileSystemEntries(merges));
+            var other = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+            Assert.Equal("ONE\n2\n3\n4\n5\n6\n7\nEIGHT\n", File.ReadAllText(Path.Combine(other.Checkout, "m.txt")));
+            var refs = f.Git.Git("for-each-ref");
+            var execution = Path.Combine(f.Git.Folder, ".idp");
+            var files = Directory.GetFiles(execution, "*", SearchOption.AllDirectories)
+                .ToDictionary(path => Path.GetRelativePath(execution, path), File.ReadAllBytes, StringComparer.Ordinal);
+            File.WriteAllText(Path.Combine(state, "release"), "");
+            await WaitForOrphan();
+            Assert.Equal("0\n", File.ReadAllText(exit));
+            Assert.Equal("95b1feceb5015d66a187cd67ef90bc60e434deb7", File.ReadAllText(Path.Combine(state, "orphan.out")).Split('\0')[0]);
+            Assert.Equal("", File.ReadAllText(Path.Combine(state, "orphan.err")));
+            Assert.Equal(refs, f.Git.Git("for-each-ref"));
+            Assert.Equal(files.Keys.Order(StringComparer.Ordinal), Directory.GetFiles(execution, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(execution, path)).Order(StringComparer.Ordinal));
+            foreach (var (path, bytes) in files) Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(execution, path)));
+            Assert.Empty(Directory.GetFileSystemEntries(merges));
+            Assert.Equal(0, f.Git.Run(f.Git.Folder, "fsck", "--strict", "--no-dangling").ExitCode);
+            Assert.Equal(ready, await Prepare(f, operation));
+        }
+        finally
+        {
+            File.WriteAllText(Path.Combine(state, "release"), "");
+            if (Directory.Exists(Path.Combine(state, "first"))) await WaitForOrphan();
+        }
+
+        async Task WaitForOrphan()
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+            while (!File.Exists(exit) && DateTime.UtcNow < deadline) await System.Threading.Tasks.Task.Delay(50);
+            Assert.True(File.Exists(exit), "The orphaned merge did not finish within 60 seconds.");
+        }
+    }
+
+    [UnixFact]
     public async Task An_undeletable_scratch_folder_keeps_a_join_ready_and_a_restart_removes_it()
     {
         if (OperatingSystem.IsWindows()) return;
