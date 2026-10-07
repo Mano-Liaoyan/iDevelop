@@ -6,7 +6,7 @@ E2 is the slice "Materialize dependency results" of the [approved execution plan
 
 E2 ships as two pull requests. Pull request [#41](https://github.com/Mano-Liaoyan/iDevelop/pull/41) is E2a, based on E1's branch `feat/e1-run-records`. It adds `Materializer` and a Git adapter to `IDevelop.Core`. It adds no UI, no scheduler, and no launch path. E3 is its first caller, and E2b is the next consumer.
 
-A fresh Opus backend review of the coordinator's design note made twelve findings. The revised note accepted eleven and partly accepted one. GPT-6.1 Sol wrote the code through Codex. A GPT-6 Astra difficult-task review and an Opus backend review reviewed the code in four rounds. The coordinator reviewed and amended every diff.
+A fresh Opus backend review of the coordinator's design note made twelve findings. The revised note accepted eleven and partly accepted one. GPT-6.1 Sol wrote the code through Codex. A GPT-6 Astra difficult-task review and an Opus backend review reviewed the code in six rounds. The coordinator reviewed and amended every diff.
 
 ## Decisions and reasons
 
@@ -55,7 +55,7 @@ Keys are the first eight hexadecimal characters of SHA-256 over the full lowerca
 | Later salvage of the same attempt | `refs/idp/<run>/resalvage/<task>/<attempt>/<operation>` |
 | Approved base retention | `refs/idp/<run>/base` |
 
-`Prepare` appends `/.worktrees/`, `/.idp/inputs/`, and `/.idp/outbox/` to the common `info/exclude`. It creates the checkout with `worktree add -b` and locks it with an ownership reason. A failed creation that left the branch is adopted only when the creation intent, the live tip, and the registration agree. It initializes submodules only when `submodule status --recursive` shows no `+` or `U` entry, so the update never moves a module that holds commits. A continuation turn keeps its checkout and changes. Cleanup and branch deletion are deferred.
+`Prepare` appends `/.worktrees/`, `/.idp/inputs/`, and `/.idp/outbox/` to the common `info/exclude`. It creates the checkout with `worktree add -b`, always as a full checkout, and locks it with an ownership reason. A failed creation that left the branch is adopted only when the creation intent, the live tip, and the registration agree. It initializes submodules only when `submodule status --recursive` shows no `+` or `U` entry, so the update never moves a module that holds commits. A continuation turn keeps its checkout and changes. Cleanup and branch deletion are deferred.
 
 ### Publication moves the branch, the index, and the result ref
 
@@ -63,17 +63,15 @@ Keys are the first eight hexadecimal characters of SHA-256 over the full lowerca
 
 ### Git reads real commit parents
 
-Every Git process that iDevelop starts sets `GIT_NO_REPLACE_OBJECTS=1` and points `GIT_GRAFT_FILE` at the null device. Without them, a writer can run `git replace --graft` or write `info/grafts` so that Git reports the attempt base as an ancestor of a commit that does not contain it. Publication would then accept a result outside its attempt base. Git prints a deprecation hint on stderr whenever it reads a graft file, even an empty one, so each process also passes `-c advice.graftFileDeprecated=false`.
+Every Git process that iDevelop starts directly sets `GIT_NO_REPLACE_OBJECTS=1`, points `GIT_GRAFT_FILE` at the null device, and passes `-c core.commitGraph=false`. Without them, a writer can run `git replace --graft`, write `info/grafts`, or edit a parent in a commit-graph file so that Git reports the attempt base as an ancestor of a commit that does not contain it. Publication would then accept a result outside its attempt base. A forged commit-graph works from the repository's own graph, a split graph chain, or an alternate object store. Git prints a deprecation hint on stderr whenever it reads a graft file, even an empty one, so each process also passes `-c advice.graftFileDeprecated=false`.
 
-### Flagged index entries block only when they hide a change
+### Task worktrees are always full checkouts
 
-An index entry flagged assume-unchanged or skip-worktree can hide an edit from capture. Retry's `reset --hard` would then destroy that edit. An earlier round blocked every flagged entry. A sparse checkout flags each path outside its cone as skip-worktree, so every sparse preparation blocked as `DirtyWorktree`.
+Rounds 4 and 5 each changed the code to support sparse checkouts in task worktrees, and each change failed the next review. The round 4 fix let a flagged index entry through when its content matched the index. The round 5 fix aligned the index with `read-tree --reset` to keep skip-worktree bits. The round 6 review measured lost work. A writer edited a file outside the cone, Git cleared the file's skip-worktree bit, and `git add --all` skipped the file because it lay outside the sparse patterns. Publication moved the branch without the edit and then blocked. Salvage left the edit out, and retry's `reset --hard` deleted it. Each fix assumed that a task worktree must keep the main checkout's cone. iDevelop creates every task worktree itself, so it does not need to.
 
-`VisibleIndex` now blocks a flagged entry only when it can hide a change. A skip-worktree path that is absent from the worktree passes. An absent assume-unchanged path blocks, because it hides a deletion. A present flagged path passes only when it is a regular file, its executable bit matches the staged mode, and `git hash-object --stdin-paths` returns the staged blob. Any other flagged path blocks as `DirtyWorktree` and names the path.
+Every Git process that the adapter starts passes `-c core.sparseCheckout=false`. With it, `worktree add` copies no sparse patterns and checks out every file, whatever the main checkout's setting. Capture, salvage, index alignment, and retry never apply sparse rules either, so capture never skips a file on disk because of sparse patterns. The main checkout keeps its cone. Index alignment is a plain `read-tree` again.
 
-### Sparse checkouts keep their cone through publication
-
-Git gives a new task worktree the main checkout's sparse-checkout patterns. Paths outside the cone stay absent, and capture keeps their staged blobs in the result tree. After the branch moves, publication aligns the index with `read-tree --reset`. A plain `read-tree` rebuilt the index without skip-worktree bits. The absent paths then looked deleted, and publication blocked after the branch had moved until a person ran `git sparse-checkout reapply`. The one-way merge in `read-tree --reset` keeps those bits.
+Sparse state that appears in a task worktree anyway blocks. Any index entry flagged assume-unchanged or skip-worktree blocks capture, publication, salvage, and retry as `DirtyWorktree`, and the detail names the path. The block changes no file, index entry, or ref. A writer that runs `git sparse-checkout set` in its own checkout therefore blocks with every file left in place.
 
 ### Salvage and retry keep every commit reachable
 
@@ -90,6 +88,8 @@ Every step journals its intent before the Git call and its observation after it,
 | Judge a ref by any journal entry or ancestry that could explain it | The census put every ref failure in this class. |
 | Let salvage adopt a branch tip only when it descends from the old state | It broke two salvage and retry recovery tests. The publish-time check that the tip contains the attempt base closes the same hole. |
 | End the writer's lease at its `AttemptClosed` event in E2a | `AttemptClosed` records no branch tip, so the fold has no exact value to fall back on. A probe failed 49 of 91 publication, ownership, and census tests, including every writer publishing its own commits. |
+| Keep the main checkout's sparse patterns in task worktrees | Two fixes on that premise failed review, and the round 6 review found a writer's edit to an out-of-cone file lost. |
+| Let a flagged entry through when its content matches the index | Only sparse checkouts needed it. It cost a file-type check, a mode check, and a hash for every flagged path on every capture. |
 | Compare the index file's bytes | A plain `git status` rewrites stat data and blocked retry. |
 | Write `HEAD` through its lock file for an atomic attach | It bypasses reftable. `update-ref --stdin` gained `symref-verify` only in Git 2.46. |
 | Reset a reviewer's branch with `reset --hard` on refresh | It dropped any reviewer commit. Refresh retains the old base and moves the branch by compare-and-swap. |
@@ -99,7 +99,7 @@ Every step journals its intent before the Git call and its observation after it,
 
 - `src/IDevelop.Core/Execution/Git/GitRepository.cs` is the Git adapter.
 - `src/IDevelop.Core/Execution/Runs/` adds the code records, `RunLayout`, `RefOwnership`, `RefPublisher`, and the `Materializer` partial classes for preparation, inputs, outbox, publication, salvage, retry, refresh, and inspection. `RunStore`, `RunReducer`, `RunJournal`, and `RunRecords` gain schema 2.
-- `src/IDevelop.Core/Execution/GitTree.cs` gives its Git processes the adapter's replace and graft settings.
+- `src/IDevelop.Core/Execution/GitTree.cs` gives its Git processes the adapter's replace, graft, and commit-graph settings.
 - `src/IDevelop.Core/Execution/Runs/RegularFile.cs` reads file types through `statx` or `lstat`, with `lstat$INODE64` on Intel macOS.
 - `tests/IDevelop.Core.Tests/Git/`, `Materialization/`, and `Runs/` test each behavior against real scratch Git.
 - `.github/workflows/dotnet.yml` adds `macos-26-intel` to the CI matrix.
@@ -109,10 +109,11 @@ Every step journals its intent before the Git call and its observation after it,
 | Command or check | Observed result |
 | --- | --- |
 | `dotnet build -c Release` | 0 warnings and 0 errors. |
-| `dotnet test -c Release` on Linux | Core passes 738 tests with 10 platform skips. Desktop passes 321. E1's baseline was Core 439. |
-| The census, `run-census.sh` in the coordinator's scratch folder | At `0f4a189`, 24 of 39 runs passed. At `eba029c`, 39 of 39 passed. The next round added 9 runs, and `d7dc51c` passed 48 of 48. The round after that adds 2 runs for a branch reset below its attempt base. Both fail at `d7dc51c`, and all 50 pass at `d181e4a`. The latest round adds 4 runs for a sparse checkout with an unstaged edit and for replaced or grafted parents. All 4 fail at `d181e4a`, and all 54 runs pass at the new head. |
+| `dotnet test -c Release` on Linux | Core passes 745 tests with 10 platform skips. Desktop passes 321. E1's baseline was Core 439. |
+| The census, `run-census.sh` in the coordinator's scratch folder | At `0f4a189`, 24 of 39 runs passed. At `eba029c`, 39 of 39 passed. The next round added 9 runs, and `d7dc51c` passed 48 of 48. The round after that adds 2 runs for a branch reset below its attempt base. Both fail at `d7dc51c`, and all 50 pass at `d181e4a`. The latest round adds 4 runs for a sparse checkout with an unstaged edit and for replaced or grafted parents. All 4 fail at `d181e4a`, and all 54 pass at `db39059`. Round 6 changes the 2 sparse runs to expect a full checkout and adds 11 runs for out-of-cone edits, sparse state that a writer creates, and forged commit-graph files. All 13 fail at `db39059`, and all 65 runs pass at the new head. |
 | The Opus re-verifier's scenarios, `Reverify2Tests.cs` in the coordinator's scratch folder | 28 of 31 pass. The three failures are by design. `V2_H` is open issue 1. Two `V2_F` modes assert `Salvage.Retained` where salvage now blocks a flagged edit and leaves it in the checkout. |
-| New tests against the previous head's source | Against `d7dc51c`, 6 of the 12 new test runs fail. The other 6 are controls that already passed, such as a writer that publishes on top of its base and a flagged file with a changed mode. Against `d181e4a`, 6 of the latest round's 7 new test runs fail. The seventh covers the persisted plan's attempt-base check, which already existed, and it fails when that one check is deleted. |
+| New tests against the previous head's source | Against `d7dc51c`, 6 of the 12 new test runs fail. The other 6 are controls that already passed, such as a writer that publishes on top of its base and a flagged file with a changed mode. Against `d181e4a`, 6 of the latest round's 7 new test runs fail. The seventh covers the persisted plan's attempt-base check, which already existed, and it fails when that one check is deleted. Against `db39059`, 17 of round 6's 18 new test runs fail. The control is an absent assume-unchanged entry, which already blocked. |
+| The Opus adversarial tests, `AdversarialR4Tests.cs` and `AdversarialR5Tests.cs` in the coordinator's scratch folder | All 42 runs pass. Their sparse runs now expect a full task checkout, and the diagnostics that always failed now assert the outcome. |
 | `node scripts/check-licenses.mjs`, `node scripts/planweave-tokens.mjs --check`, `node scripts/fluent-icons.mjs --check` | Each exits 0. |
 | `node scripts/check-handoffs.mjs` | It reports nine records, each linked from `docs/context.md` or `docs/product-direction.md`, and exits 0. |
 | CI on `d7dc51c` | Every check passes on Linux, Windows, arm64 macOS, and Intel macOS. The user has since disabled GitHub Actions, so later heads pass only the local checks in this table. |
@@ -129,6 +130,8 @@ Every step journals its intent before the Git call and its observation after it,
 5. Read-only and review results forward code but not artifacts, so a writer's artifacts reach only its direct dependents. Forwarding artifacts needs a rule for name collisions across several dependencies.
 6. Windows real-machine probes of long paths with long-path support disabled, open handles, and Job Object termination did not run beyond CI. A real Git 2.39 binary did not run. No real coding-agent client ran.
 7. Rebase, cleanup, resolution approval, recovered-code acceptance, and the preapproval intent file remain deferred, with their D0 requirements.
+8. Every task worktree checks out every file. In a large monorepo that people keep sparse, each task pays the disk space and checkout time of the whole tree. Support for sparse task worktrees needs its own design, with a capture that cannot skip a file the writer touched.
+9. A repository with `core.ignoreStat=true` gets the assume-unchanged flag on every file that Git checks out, so every task in it blocks as `DirtyWorktree`.
 
 ## Next action
 
