@@ -224,7 +224,6 @@ public sealed class Workflow
 
     public WorkflowId Id { get; }
 
-    /// <summary>What a workflow without a name is called.</summary>
     public const string UnnamedName = "Workflow";
 
     public string? Name { get; }
