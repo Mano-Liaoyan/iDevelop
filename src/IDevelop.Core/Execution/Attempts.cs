@@ -334,6 +334,8 @@ public sealed record AttemptRecord
 
     internal string? DeferredQuestion { get; init; }
 
+    internal ImmutableArray<string> DeferredRequestIds { get; init; } = [];
+
     internal bool ShutdownForced { get; init; }
 }
 
@@ -424,6 +426,7 @@ internal static partial class AttemptReducer
         }),
         Queued = turn.Consumed.IsDefault ? [] : record.Queued.RemoveAll(message => turn.Consumed.Contains(message.Id)),
         DeferredQuestion = null,
+        DeferredRequestIds = [],
         ShutdownForced = false,
         Stopping = false,
         StopTurnRequested = false,
@@ -485,7 +488,7 @@ internal static partial class AttemptReducer
             }
         }
 
-        return record with { DeferredQuestion = deferred.Question, Stopping = true };
+        return record with { DeferredQuestion = deferred.Question, DeferredRequestIds = deferred.RequestIds, Stopping = true };
     }
 
     private static ImmutableDictionary<RequestKey, RequestRecord> CloseTurnRequests(AttemptRecord record, RequestCloseReason reason) =>

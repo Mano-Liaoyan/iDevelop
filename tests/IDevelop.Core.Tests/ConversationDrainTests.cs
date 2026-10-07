@@ -69,6 +69,148 @@ public sealed class ConversationDrainTests : IDisposable
     private FakeRule InterruptAndEnd() => FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"").Print(Aborted);
 
     [Fact]
+    public async Task A_waiting_reply_uses_the_logged_deferral_ids_in_presentation_order()
+    {
+        var attempt = AttemptEvents.First;
+        using (var log = AttemptLog.Create(DataFolder.Attempts(_project), AttemptEvents.BuildRequested(attempt) with
+        {
+            Settings = Settings,
+            Conversation = ConversationMode.MayAsk,
+        }))
+        {
+            log.Append(AttemptEvents.Said(1, new AgentEvent.SessionStarted(Session)));
+            foreach (var id in new[] { "s:z", "s:a" })
+            {
+                log.Append(new AttemptEvent.QuestionRecorded(AttemptEvents.T0.AddSeconds(2), id,
+                    [new AskedQuestion("q:0", "Fixture", "Fixture?", [], false, true)],
+                    new QuestionState.Closed(RequestCloseReason.Deferred, null)));
+            }
+
+            log.Append(new AttemptEvent.RequestDeferred(AttemptEvents.T0.AddSeconds(3), ["s:z", "s:a"], "Fixture?"));
+            log.Append(new AttemptEvent.QuestionRecorded(AttemptEvents.T0.AddSeconds(4), "s:b",
+                [new AskedQuestion("q:0", "Late", "Late?", [], false, true)],
+                new QuestionState.Closed(RequestCloseReason.Deferred, null)));
+            log.Append(AttemptEvents.Exit(5, 0));
+        }
+
+        Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, Session)
+            .CapturePrompt(FileAt("prompt.txt")).Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync(), new HostQuestions.DeferImmediately());
+        runs.Follow(_workflow);
+        using var session = runs.OpenConversation(Node.Id);
+        var turn = new TurnKey(attempt, 1);
+        Assert.Equal(AttemptStatus.WaitingForInput, session.Snapshot.Latest!.Status);
+        Assert.Equal(new QuestionState.Closed(RequestCloseReason.Deferred, null),
+            Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(new RequestKey(turn, "s:b"), default)).State);
+        Assert.IsType<SendResult.Answered>(await session.SendAsync(turn, "Use Local", false, default));
+        var record = await Settled(runs);
+        Assert.Equal("Use Local", File.ReadAllText(FileAt("prompt.txt")));
+        Assert.Equal([new TurnRequestId(1, "s:z"), new TurnRequestId(1, "s:a")], record.Turns[1].Replies.ToArray());
+    }
+
+    [Fact]
+    public async Task The_leave_budget_starts_before_a_stop_waits_for_the_drain_acknowledgement()
+    {
+        InstallQuestion(FakeRule.On().Hang());
+        var runs = await Open();
+        runs.ShutdownTime = TimeSpan.FromSeconds(60);
+        using var session = runs.OpenConversation(Node.Id);
+        var key = await OpenRequest(session);
+        using var release = new ManualResetEventSlim();
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void HoldDrain(object? sender, EventArgs args)
+        {
+            if (runs.Latest[Node.Id].Queued is [{ Text: "Hold drain" }])
+            {
+                held.TrySetResult();
+                release.Wait(TimeSpan.FromSeconds(15));
+            }
+        }
+
+        runs.Changed += HoldDrain;
+        var send = session.SendAsync(key.Turn, "Hold drain", false, default);
+        try
+        {
+            await held.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var disposal = runs.DisposeAsync().AsTask();
+            _clock.Advance(TimeSpan.FromSeconds(10));
+            release.Set();
+            await disposal.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(new SendResult.Queued(), await send);
+            await using var reopened = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+            Assert.Equal(AttemptStatus.Interrupted, reopened.Latest[Node.Id].Status);
+        }
+        finally
+        {
+            release.Set();
+            runs.Changed -= HoldDrain;
+            _clock.Advance(TimeSpan.FromSeconds(60));
+            await runs.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_late_question_during_immediate_deferral_is_denied_and_only_the_shown_question_receives_a_reply()
+    {
+        InstallQuestion(FakeRule.On().WaitForLine("\"subtype\":\"interrupt\"")
+            .Print(Question.Replace("q1", "q2", StringComparison.Ordinal)).ReadLine(FileAt("decline.json"))
+            .Write(FileAt("declined"), "yes").WaitForFile(FileAt("go")).Print(Aborted));
+        await using var runs = await Open(new HostQuestions.DeferImmediately());
+        using var session = runs.OpenConversation(Node.Id);
+        try
+        {
+            await Until(() => File.Exists(FileAt("declined")));
+            var turn = session.Snapshot.Current!.Value;
+            var late = new RequestKey(turn, "s:q2");
+            var state = Assert.IsType<RequestRecord.Question>(await session.ReadRequestAsync(late, default)).State;
+            using var wire = JsonDocument.Parse(File.ReadAllText(FileAt("decline.json")));
+            Assert.Equal("deny", wire.RootElement.GetProperty("response").GetProperty("response").GetProperty("behavior").GetString());
+            File.WriteAllText(FileAt("go"), "go");
+            Assert.Equal(AttemptStatus.WaitingForInput, (await Settled(runs)).Status);
+            Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, Session).CapturePrompt(FileAt("prompt.txt"))
+                .Print(ReplyLines(ClientId.ClaudeCode, "Done")));
+            Assert.IsType<SendResult.Answered>(await session.SendAsync(turn, "Use Local", false, default));
+            var record = await Settled(runs);
+            Assert.Equal("Use Local", File.ReadAllText(FileAt("prompt.txt")));
+            Assert.Equal([new TurnRequestId(1, "s:q1")], record.Turns[1].Replies.ToArray());
+            Assert.Equal(new QuestionState.Closed(RequestCloseReason.PolicyDenied, null), state);
+        }
+        finally
+        {
+            File.WriteAllText(FileAt("go"), "go");
+            _clock.Advance(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Fact]
+    public async Task A_deferred_Claude_turn_has_only_attempt_configuration_and_deferral_markers()
+    {
+        InstallQuestion(InterruptAndEnd());
+        await using var runs = await Open(new HostQuestions.DeferImmediately());
+        using var session = runs.OpenConversation(Node.Id);
+        var record = await Settled(runs);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(record.Id, new HistoryQuery.Latest(), 50, default));
+        Assert.Equal(AttemptStatus.WaitingForInput, record.Status);
+        Assert.Equal(new[]
+        {
+            ("attempt", $"Attempt {record.Id}\nClaude Code, model claude-haiku-4-5, reasoning high, conversation MayAsk."),
+            ("configuration", "Client reported model claude-haiku-4-5, reasoning unspecified."),
+            ("deferred", "Fixture?\nLocal\nRemote"),
+        }, page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Marker>().Select(marker => (marker.Kind, marker.Text)));
+        var failedAttempt = AttemptEvents.First;
+        using (var log = AttemptLog.Create(DataFolder.Attempts(_project), AttemptEvents.BuildRequested(failedAttempt)))
+        {
+            log.Append(AttemptEvents.Said(1, new AgentEvent.Failed("The client could not execute.")));
+            log.Append(AttemptEvents.Exit(2, 1));
+        }
+
+        var failedPage = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(failedAttempt, new HistoryQuery.Latest(), 10, default));
+        Assert.Equal(AttemptStatus.Failed, (await session.ListAttemptsAsync(default)).Single(attempt => attempt.Id == failedAttempt).Status);
+        Assert.Equal(new[] { ("failure", "The client could not execute.") }, failedPage.Entries.Select(entry => entry.Content)
+            .OfType<ConversationContent.Marker>().Where(marker => marker.Kind == "failure").Select(marker => (marker.Kind, marker.Text)));
+    }
+
+    [Fact]
     public async Task Answer_twice_before_expiry()
     {
         InstallQuestion(FakeRule.On().ReadLine(FileAt("answer.json")).WaitForFile(FileAt("go")).Print(ReplyLines(ClientId.ClaudeCode, "Done"))

@@ -52,6 +52,65 @@ public sealed class ConversationSessionReadTests : IDisposable
         Assert.Equal(AttemptStatus.WaitingForInput, session.Snapshot.Latest!.Status);
     }
 
+    [Theory]
+    [InlineData("bTE1", "m10,m11,m12,m13,m14,m15,m16,m17,m18,m19", "m9", "m20", true, true)]
+    [InlineData("bTE", "attempt,prompt,m0,m1,m2,m3,m4,m5,m6,m7", null, "m8", false, true)]
+    [InlineData("bTI3", "m18,m19,m20,m21,m22,m23,m24,m25,m26,m27", "m17", null, true, false)]
+    public async Task Around_entry_centres_the_page_and_clamps_at_the_chain_ends(string identity, string expected, string? preceding, string? following, bool earlier, bool later)
+    {
+        using (var log = AttemptLog.Create(DataFolder.Attempts(_project), BuildRequested(First)))
+        {
+            for (var i = 0; i < 28; i++)
+            {
+                log.Append(Said(i + 1, new AgentEvent.Message($"m{i}") { Id = $"m{i}" }));
+            }
+
+            log.Append(Said(31, new AgentEvent.Succeeded(null)));
+            log.Append(Exit(32, 0));
+        }
+
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        using var session = runs.OpenConversation(Node.Id);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First,
+            new HistoryQuery.AroundEntry(new EntryId($"c1/{First}/1/message/i{identity}")), 10, default));
+        string Text(ConversationEntry entry) => entry.Content switch
+        {
+            ConversationContent.Message { Author: MessageAuthor.Agent } text => text.Text,
+            ConversationContent.Message => "prompt",
+            ConversationContent.Marker marker => marker.Kind,
+            _ => throw new InvalidOperationException(),
+        };
+        Assert.Equal(30, Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.Latest(), 100, default)).Entries.Length);
+        Assert.Equal(expected.Split(','), page.Entries.Select(Text));
+        Assert.Equal((earlier, later), (page.HasEarlier, page.HasLater));
+        var refreshed = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.RefreshWindow(page.Window), 10, default));
+        Assert.Equal(expected.Split(','), refreshed.Entries.Select(Text));
+        var before = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.Before(page.Before), 1, default));
+        var after = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(First, new HistoryQuery.After(page.After), 1, default));
+        Assert.Equal(preceding is null ? [] : new[] { preceding }, before.Entries.Select(Text));
+        Assert.Equal(following is null ? [] : new[] { following }, after.Entries.Select(Text));
+    }
+
+    [Fact]
+    public async Task Around_entry_refuses_an_entry_outside_the_selected_chain()
+    {
+        Seed();
+        var independent = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-000000000002"));
+        using (var log = AttemptLog.Create(DataFolder.Attempts(_project), BuildRequested(independent)))
+        {
+            log.Append(Said(1, new AgentEvent.Message("Elsewhere") { Id = "other" }));
+            log.Append(Said(2, new AgentEvent.Succeeded(null)));
+            log.Append(Exit(3, 0));
+        }
+
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        using var session = runs.OpenConversation(Node.Id);
+        var query = new HistoryQuery.AroundEntry(new EntryId("c1/019aa000-0000-7000-8000-000000000002/1/message/ib3RoZXI"));
+        Assert.Equal(["Elsewhere"], AgentTexts(Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(independent, query, 10, default))));
+        Assert.Equal(new HistoryResult.Unavailable("The entry is not in the selected attempt chain. Select its attempt to read it."),
+            await session.ReadPageAsync(First, query, 10, default));
+    }
+
     [Fact]
     public async Task Settled_reads_reuse_the_page_and_request_until_the_log_grows()
     {

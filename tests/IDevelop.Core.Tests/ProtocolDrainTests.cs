@@ -29,6 +29,62 @@ public sealed class ProtocolDrainTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [Fact]
+    public async Task Codex_stop_and_send_has_only_the_attempt_and_stopped_markers()
+    {
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session))
+            .WaitForLine("turn/interrupt")
+            .Print("""{"method":"turn/completed","params":{"turn":{"id":"turn-1","status":"interrupted"}}}"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = Task(ClientId.Codex);
+        runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(task, new CanvasPoint(0, 0))));
+        using var session = runs.OpenConversation(task.Id);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        await Until(() => session.Snapshot.Latest?.SessionId == Session);
+        Install(_fakes, ClientId.Codex, Resuming(ClientId.Codex, Session).Print(ReplyLines(ClientId.Codex, "Done")));
+        var turn = session.Snapshot.Current!.Value;
+        Assert.Equal(new SendResult.Queued(), await session.SendAsync(turn, "Continue", true, default));
+        var record = await Settled(runs, task.Id);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(record.Id, new HistoryQuery.Latest(), 50, default));
+        Assert.Equal((AttemptStatus.Succeeded, TurnOutcome.Stopped, 2), (record.Status, record.Turns[0].Outcome, record.Turns.Count));
+        Assert.Equal(new[]
+        {
+            ("attempt", $"Attempt {record.Id}\nCodex, model gpt-6-sol, reasoning high, conversation Autonomous."),
+            ("stopped", "The turn was stopped."),
+        }, page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Marker>().Select(marker => (marker.Kind, marker.Text)));
+    }
+
+    private sealed class NonPumpingContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state) { }
+    }
+
+    [Fact]
+    public async Task Leaving_from_a_non_pumping_context_completes_and_records_interruption()
+    {
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Hang());
+        var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.ShutdownTime = TimeSpan.FromMilliseconds(100);
+        runs.LeaveTimeout = TimeSpan.FromSeconds(1);
+        var task = Task(ClientId.Codex);
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        await Until(() => runs.Latest[task.Id].SessionId == Session);
+        var previous = SynchronizationContext.Current;
+        System.Threading.Tasks.Task disposal;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new NonPumpingContext());
+            disposal = runs.DisposeAsync().AsTask();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        await disposal.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (runs.Latest[task.Id].Status, runs.Latest[task.Id].Detail));
+    }
+
+    [Fact]
     public async Task Deltas_are_live_only_and_the_complete_message_is_persisted_once()
     {
         var gate = Path.Combine(_evidence, "go");
