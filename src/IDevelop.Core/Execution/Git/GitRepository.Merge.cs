@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace IDevelop.Execution;
 
@@ -46,17 +47,29 @@ internal sealed partial class GitRepository
 
     public void RemoveMergeScratchFolders()
     {
+        if (MergeScratchLink() is not null) return;
         var folder = Path.Combine(CommonDirectory, "idevelop", "merges");
         if (!Directory.Exists(folder)) return;
-        foreach (var temporary in Directory.EnumerateDirectories(folder))
+        foreach (var temporary in new DirectoryInfo(folder).EnumerateDirectories())
         {
-            try { Directory.Delete(temporary, recursive: true); }
+            if (IsLink(temporary) || !Regex.IsMatch(temporary.Name, @"\A[0-9]+-[0-9a-f]{32}\z", RegexOptions.CultureInvariant)) continue;
+            try { Directory.Delete(temporary.FullName, recursive: true); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
         }
     }
 
+    private static bool IsLink(DirectoryInfo folder) => folder.LinkTarget is not null || folder.Exists && folder.Attributes.HasFlag(FileAttributes.ReparsePoint);
+
+    private string? MergeScratchLink()
+    {
+        var folder = Path.Combine(CommonDirectory, "idevelop");
+        return new[] { folder, Path.Combine(folder, "merges") }.FirstOrDefault(component => IsLink(new DirectoryInfo(component)));
+    }
+
     public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource)
     {
+        if (MergeScratchLink() is { } link)
+            return new TreeMerge.Failed($"The merge scratch folder {link} is a link.");
         var temporary = Path.Combine(CommonDirectory, "idevelop", "merges", $"{Environment.ProcessId}-{Guid.NewGuid():N}");
         try
         {

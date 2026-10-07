@@ -373,6 +373,56 @@ public sealed class JoinPolicyTests
         Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
     }
 
+    [UnixTheory]
+    [InlineData("idevelop")]
+    [InlineData("merges")]
+    public async Task A_linked_scratch_component_blocks_a_join_without_deleting_outside_files(string component)
+    {
+        using var f = new PreparationFixture(Diamond());
+        await CleanSources(f);
+        var outside = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "outside")).FullName;
+        var journal = Path.Combine(Directory.CreateDirectory(Path.Combine(outside, "123-0123456789abcdef0123456789abcdef")).FullName, "journal.json");
+        File.WriteAllText(journal, "{\"journal\":\"keep\"}\n");
+        File.WriteAllText(Path.Combine(outside, "runs.txt"), "keep runs\n");
+        var idevelop = Path.Combine(f.Git.Open().CommonDirectory, "idevelop");
+        var link = component == "idevelop" ? idevelop : Path.Combine(idevelop, "merges");
+        if (Directory.Exists(link)) Directory.Delete(link, recursive: true);
+        Directory.CreateSymbolicLink(link, outside);
+        var blocked = Assert.IsType<Preparation.Blocked>(await Prepare(f, f.Op()));
+        Assert.Equal("GitFailed", blocked.Block.Problem.ToString());
+        Assert.Equal("The merge scratch folder " + link + " is a link.", blocked.Block.Detail);
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
+        Assert.Equal("{\"journal\":\"keep\"}\n", File.ReadAllText(journal));
+        Assert.Equal("keep runs\n", File.ReadAllText(Path.Combine(outside, "runs.txt")));
+    }
+
+    [UnixFact]
+    public async Task Scratch_cleanup_removes_only_real_scratch_directories_without_following_nested_links()
+    {
+        using var f = new PreparationFixture(Diamond());
+        await CleanSources(f);
+        var root = Path.GetDirectoryName(f.Git.Folder)!;
+        var nestedOutside = Directory.CreateDirectory(Path.Combine(root, "nested-outside")).FullName;
+        var linkedOutside = Directory.CreateDirectory(Path.Combine(root, "linked-outside")).FullName;
+        File.WriteAllText(Path.Combine(nestedOutside, "keep.txt"), "keep nested target\n");
+        File.WriteAllText(Path.Combine(linkedOutside, "keep.txt"), "keep linked target\n");
+        var merges = Directory.CreateDirectory(Path.Combine(f.Git.Open().CommonDirectory, "idevelop", "merges")).FullName;
+        var scratch = Directory.CreateDirectory(Path.Combine(merges, "123-0123456789abcdef0123456789abcdef")).FullName;
+        Directory.CreateSymbolicLink(Path.Combine(scratch, "escape"), nestedOutside);
+        Directory.CreateSymbolicLink(Path.Combine(merges, "456-fedcba9876543210fedcba9876543210"), linkedOutside);
+        var notes = Directory.CreateDirectory(Path.Combine(merges, "notes")).FullName;
+        File.WriteAllText(Path.Combine(notes, "keep.txt"), "keep notes\n");
+        File.WriteAllText(Path.Combine(merges, "README"), "keep readme\n");
+        var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
+        CleanContent(ready);
+        Assert.Equal(new[] { "456-fedcba9876543210fedcba9876543210", "README", "notes" },
+            Directory.GetFileSystemEntries(merges).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal("keep nested target\n", File.ReadAllText(Path.Combine(nestedOutside, "keep.txt")));
+        Assert.Equal("keep linked target\n", File.ReadAllText(Path.Combine(linkedOutside, "keep.txt")));
+        Assert.Equal("keep notes\n", File.ReadAllText(Path.Combine(notes, "keep.txt")));
+        Assert.Equal("keep readme\n", File.ReadAllText(Path.Combine(merges, "README")));
+    }
+
     [UnixFact]
     public async Task An_undeletable_scratch_folder_keeps_a_join_ready_and_a_restart_removes_it()
     {
