@@ -37,6 +37,7 @@ public sealed partial class ProjectRuns
         private bool _messageWaiting;
         private ConversationMode? _conversation;
         private bool _closed;
+        private AttemptEvent.InterruptRequested? _leave;
         private readonly List<string> _questionOrder = [];
         private readonly HashSet<Input.Answer> _deliveries = [];
 
@@ -163,7 +164,14 @@ public sealed partial class ProjectRuns
             }
         }
 
-        public void Abandon() => _abandon.Cancel();
+        public void Abandon(AttemptEvent.InterruptRequested leave)
+        {
+            lock (_gate)
+            {
+                _leave = leave;
+                _abandon.Cancel();
+            }
+        }
 
         private SendProblem? Problem() => (_closed, Record.SessionId) switch
         {
@@ -270,7 +278,7 @@ public sealed partial class ProjectRuns
                                 _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
                             }
 
-                            if (_turn.Failure is { } failure)
+                            if (_turn.Failure is { } failure && Record.Verdict != new AgentEvent.Failed(failure))
                             {
                                 Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(failure)));
                             }
@@ -338,6 +346,18 @@ public sealed partial class ProjectRuns
                 }
 
                 await DisposeTurnAsync();
+                try
+                {
+                    if (_leave is { } leave && Record is { Status: AttemptStatus.Running, InterruptReason: null })
+                    {
+                        Append(leave);
+                    }
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), _owner.TimeProvider.GetUtcNow());
+                }
+
                 _log.Dispose();
                 _held.Dispose();
                 try
