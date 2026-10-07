@@ -6,6 +6,7 @@ internal static partial class RunReducer
 {
     internal static bool Permitted(RunRecord record, RunEvent e)
     {
+        if (e is RunEvent.OwnershipFenced) return true;
         if (record.Phase == RunPhase.Approved)
         {
             return true;

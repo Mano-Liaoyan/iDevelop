@@ -22,7 +22,7 @@ public sealed partial class ProjectRuns
     {
         private readonly ProjectRuns _owner;
         private readonly AttemptLog _log;
-        private readonly RunLock _held;
+        private readonly TaskLease _held;
         private readonly Channel<Input> _events = Channel.CreateUnbounded<Input>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -41,7 +41,7 @@ public sealed partial class ProjectRuns
         private readonly List<string> _questionOrder = [];
         private readonly HashSet<Input.Answer> _deliveries = [];
 
-        public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunLock held, AttemptRecord record)
+        public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, TaskLease held, AttemptRecord record)
         {
             _owner = owner;
             Order = order;

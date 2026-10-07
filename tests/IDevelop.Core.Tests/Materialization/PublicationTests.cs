@@ -188,7 +188,7 @@ public sealed class PublicationTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await ChangedWriter(f);
         var boundary = new Boundary(mode);
-        using var held = mode == "task-lock" ? RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T) : null;
+        using var held = mode == "task-lock" ? TaskLease.TryTake(f.Git.Folder, T) : null;
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(boundary: boundary).Publish(W, f.RunId, Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("LiveWriter", blocked.Block.Problem.ToString());
         Assert.Empty(f.Read().Results);

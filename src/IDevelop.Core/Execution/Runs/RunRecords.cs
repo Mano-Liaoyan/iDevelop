@@ -167,6 +167,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(Blocked), "blocked")]
 [JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
+[JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -200,6 +201,8 @@ internal abstract record RunEvent
     internal sealed record AttemptClosed(AttemptId Attempt, AttemptEnd End) : RunEvent;
 
     internal sealed record ResultAccepted(ResultRecord Result, InputRecord Inputs) : RunEvent;
+
+    internal sealed record OwnershipFenced(ImmutableArray<LaunchKey> Claims) : RunEvent;
 
     internal sealed record StopRequested : RunEvent;
 
@@ -306,6 +309,8 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
 
     public ImmutableDictionary<LaunchKey, RunEvent.TurnClaimed> Claims { get; internal init; } = ImmutableDictionary<LaunchKey,
         RunEvent.TurnClaimed>.Empty;
+
+    public ImmutableHashSet<LaunchKey> Fenced { get; internal init; } = ImmutableHashSet<LaunchKey>.Empty;
 
     public ImmutableDictionary<LaunchKey, LogCheckpoint> TurnClosures { get; internal init; } = ImmutableDictionary<LaunchKey, LogCheckpoint>.Empty;
 

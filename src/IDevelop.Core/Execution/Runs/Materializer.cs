@@ -45,6 +45,9 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var repository = OpenRepository();
+            step = "task-lock";
+            using var taskLock = TakeTaskLock(task);
+            step = "open";
             using var held = repository.TakeMutationLock();
             if (held is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             var record = Read(workflow, run);
@@ -69,7 +72,6 @@ internal sealed partial class Materializer
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
-                using var taskLock = TakeTaskLock(task);
                 VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
                 VerifyDelivery(record, completed.Execution, repository);
                 RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
@@ -112,8 +114,6 @@ internal sealed partial class Materializer
             var start = RunReducer.AttemptBase(record, record.Attempts[plan.Attempt], input) ??
                 throw new Refusal(new(RunProblem.InputConflict));
             var location = new ExecutionLocation(owner, start);
-            step = "task-lock";
-            using var locked = TakeTaskLock(task);
             step = "worktree";
             EnsureCheckout(workflow, run, operation, planId, repository, location, record);
             step = "checkout";
@@ -193,7 +193,7 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
     }
 
-    private RunLock TakeTaskLock(TaskId task) => RunLock.TryTake(DataFolder.Attempts(_project), task) ??
+    private TaskLease TakeTaskLock(TaskId task) => TaskLease.TryTake(_project, task) ??
         throw Fault(MaterializationProblem.LiveWriter, "The task checkout is owned by a live writer.");
 
     private static T Value<T>(GitRead<T> read) => read switch

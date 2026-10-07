@@ -23,11 +23,11 @@ internal sealed partial class Materializer
                 return new Preparation.Rejected(new(RunProblem.InvalidClaim));
             inputs = old.Inputs;
             var repository = OpenRepository();
+            using var held = TakeTaskLock(task);
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             VerifyRepository(record, repository);
-            using var held = TakeTaskLock(task);
             var storage = new RunStorage(_project, workflow, run);
             var refreshPair = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Refresh refresh && refresh.Launch == key);
             VerifyCheckout(repository, old.Location, keepChanges: true, record);

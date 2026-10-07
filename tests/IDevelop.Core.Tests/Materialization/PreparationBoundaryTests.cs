@@ -74,7 +74,7 @@ public sealed class PreparationBoundaryTests
             Assert.Equal("JournalBusy", rejected.Reason.Problem.ToString());
             Assert.Null(f.Read().RunKey);
         }
-        using (var locked = RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T))
+        using (var locked = TaskLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(locked);
             Assert.Equal("LiveWriter", Assert.IsType<Preparation.Blocked>(await f.Prepare(T, operation)).Block.Problem.ToString());

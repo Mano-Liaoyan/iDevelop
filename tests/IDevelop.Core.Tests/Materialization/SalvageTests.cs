@@ -415,7 +415,7 @@ public sealed class SalvageTests
             f.Op(), f.Op())).Reason.Problem.ToString());
         Assert.Equal("LiveWriter", Assert.IsType<RetryReset.Blocked>(f.Materializer(boundary: new UnprovenBoundary()).ResetForRetry(W, f.RunId,
             ResetOperation, retained.Receipt.Plan, f.Op())).Block.Problem.ToString());
-        using (var held = RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T))
+        using (var held = TaskLease.TryTake(f.Git.Folder, T))
             Assert.Equal("LiveWriter", Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(W, f.RunId,
                 ResetOperation, retained.Receipt.Plan, f.Op())).Block.Problem.ToString());
         using (var held = f.Git.Open().TakeMutationLock())
@@ -633,7 +633,7 @@ public sealed class SalvageTests
         var ready = await FailedWriter(f);
         var indexLock = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
         File.WriteAllText(indexLock, "stale\n");
-        using (var held = mode == "task-lock" ? RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T) : null)
+        using (var held = mode == "task-lock" ? TaskLease.TryTake(f.Git.Folder, T) : null)
         {
             if (mode == "ownership") f.Git.Git("worktree", "unlock", ready.Execution.Location.Owner.RelativePath);
             var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer(boundary: mode == "boundary" ? new UnprovenBoundary() : null)

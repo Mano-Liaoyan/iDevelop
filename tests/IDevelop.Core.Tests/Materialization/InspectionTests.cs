@@ -31,7 +31,7 @@ public sealed class InspectionTests
         var index = f.Git.Run(ready.Checkout, "rev-parse", "--path-format=absolute", "--git-path", "index").Text.Trim();
         var indexBytes = File.ReadAllBytes(index);
         var registrations = f.Git.Git("worktree", "list", "--porcelain");
-        using var taskLock = RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T);
+        using var taskLock = TaskLease.TryTake(f.Git.Folder, T);
         using var mutationLock = f.Git.Open().TakeMutationLock();
         var workspace = Assert.IsType<TaskWorkspace>(materializer.Inspect(W, f.RunId, T));
         Assert.Equal(new WorktreeOwner(T, ".worktrees/93f23689/90d5b0a2", "refs/heads/idp/93f23689/task/90d5b0a2"), workspace.Owner);
