@@ -96,7 +96,7 @@ Each part is one pull request with a checkable completion condition. E3a's parts
 | E3b | Headless coordinator, deterministic dispatch, slot accounting, Stop, and recovery. Chain and diamond tests consume E3a unchanged. |
 | E3c to E3g | Run-owned conversation routing, review progression, preflight and approval, planner inclusion and amendments, human gates, stale-input rebase, and the run UI with recovery panels. |
 
-E3a needs the settled E2 and C1 contracts. E3b also needs E2b's isolation and join gate.
+E3a needs the settled E2 and C1 contracts. E3b also needs E2b's isolation and join gate, which landed in [#44](https://github.com/Mano-Liaoyan/iDevelop/pull/44). A join needs Git 2.43 or later. Other workflow execution needs Git 2.39 or later.
 
 The E2 record's [open issue 1](2026-10-07-dependency-results.md#open-issues) lists three cases, called N2 in the design trail, that become E3a.2 acceptance tests. A foreign commit after root exit must not become the published result's parent. A rewrite to another descendant must not replace the writer's commit. A rewind must not be adopted through salvage, excuse a sibling's publication, or permit a retry reset. The design note adds behavior tests with literal results, including a double-capture mismatch, a write after capture that blocks the next move, and descendant stop in workflow turns against standalone turns.
 
@@ -125,4 +125,4 @@ E3 has changed no application file. The design notes and reviews stay in the coo
 
 ## Next action
 
-E2b lands. A fresh review then confirms version 4, and E3a.1 starts.
+A fresh review confirms version 4, and then E3a.1 starts.
