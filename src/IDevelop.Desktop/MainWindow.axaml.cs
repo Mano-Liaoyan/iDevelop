@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Execution;
 using IDevelop.Projects;
 
@@ -35,6 +36,32 @@ public partial class MainWindow : Window
         // on the canvas that shows it.
         AddHandler(PointerPressedEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(GotFocusEvent, (_, e) => ShowWorkflowOf(e.Source), RoutingStrategies.Bubble, handledEventsToo: true);
+        ConversationLinkRouter.SetRouter(this, new ConversationLinkRouter(uri => Launcher.LaunchUriAsync(uri), text => Copy(text)));
+        ViewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.DockedConversation))
+            {
+                SizeDock();
+            }
+        };
+    }
+
+    // The dock keeps the height the person dragged it to while it is open, and gives it back when it closes.
+    private const double DockHeight = 320;
+
+    private void SizeDock()
+    {
+        var dock = MainArea.RowDefinitions[2];
+        if (ViewModel.DockedConversation is null)
+        {
+            dock.Height = GridLength.Auto;
+            MainArea.RowDefinitions[0].Height = GridLength.Star;
+        }
+        else
+        {
+            dock.MinHeight = 160;
+            dock.Height = new GridLength(DockHeight);
+        }
     }
 
     public MainWindowViewModel ViewModel { get; }

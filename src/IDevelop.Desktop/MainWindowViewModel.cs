@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Avalonia.Logging;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
@@ -27,6 +28,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _redo;
     private readonly RelayCommand _refreshAgents;
     private WorkflowCanvasViewModel? _canvas;
+    private ConversationViewModel? _conversation;
+    private bool _conversationDocked;
     private string? _status;
     private bool _refreshingAgents;
     private bool _restoring;
@@ -44,6 +47,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _undo = new RelayCommand(() => EditableCanvas?.Document.Undo(), () => EditableCanvas?.Document.CanUndo ?? false);
         _redo = new RelayCommand(() => EditableCanvas?.Document.Redo(), () => EditableCanvas?.Document.CanRedo ?? false);
         _refreshAgents = new RelayCommand(RefreshAgents, () => !_refreshingAgents);
+        CloseConversationCommand = new RelayCommand(CloseConversation);
+        ToggleConversationLayoutCommand = new RelayCommand(() => IsConversationDocked = !IsConversationDocked);
         clients.Changed += (_, _) => Dispatcher.UIThread.Post(OnClientsChanged);
     }
 
@@ -61,6 +66,46 @@ public sealed class MainWindowViewModel : ObservableObject
         get => _canvas;
         private set => SetProperty(ref _canvas, value);
     }
+
+    /// <summary>The open conversation, which the main area or the dock shows, or null.</summary>
+    public ConversationViewModel? Conversation
+    {
+        get => _conversation;
+        private set
+        {
+            if (SetProperty(ref _conversation, value))
+            {
+                OnConversationLayoutChanged();
+            }
+        }
+    }
+
+    /// <summary>The conversation sits in a dock under the canvas instead of taking the main area. The window keeps the choice.</summary>
+    public bool IsConversationDocked
+    {
+        get => _conversationDocked;
+        set
+        {
+            if (SetProperty(ref _conversationDocked, value))
+            {
+                OnConversationLayoutChanged();
+            }
+        }
+    }
+
+    /// <summary>The conversation that takes the main area, or null while it is docked or closed.</summary>
+    public ConversationViewModel? MainConversation => IsConversationDocked ? null : Conversation;
+
+    /// <summary>The conversation in the dock under the canvas, or null while it takes the main area or is closed.</summary>
+    public ConversationViewModel? DockedConversation => IsConversationDocked ? Conversation : null;
+
+    public bool ShowsCanvas => MainConversation is null;
+
+    public string ConversationLayoutLabel => IsConversationDocked ? "Expand to the main area" : "Dock under the canvas";
+
+    public ICommand CloseConversationCommand { get; }
+
+    public ICommand ToggleConversationLayoutCommand { get; }
 
     // The Generate sheet is modal, so a key or a button under its scrim neither saves nor takes an edit back.
     private WorkflowCanvasViewModel? EditableCanvas => Canvas is { Sheet: null } canvas ? canvas : null;
@@ -144,6 +189,41 @@ public sealed class MainWindowViewModel : ObservableObject
         var canvas = project.Add(document);
         Select(canvas);
         return canvas;
+    }
+
+    /// <summary>
+    /// Shows the task's conversation in the current layout, and its workflow and card with it. A request target scrolls to
+    /// that request. The conversation keeps its draft and place when it closes.
+    /// </summary>
+    internal void OpenConversation(ConversationTarget target)
+    {
+        if (target.Canvas != Canvas)
+        {
+            Select(target.Canvas);
+        }
+
+        if (Conversation is not { } open || open.Target.Canvas != target.Canvas || open.Target.Task != target.Task)
+        {
+            Conversation?.Dispose();
+            var project = target.Canvas.Project;
+            Conversation = new ConversationViewModel(target, project.ConversationOf(target.Canvas, target.Task), project.Runs.OpenConversation(target.Task), _copy);
+        }
+
+        if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } node && target.Canvas.SelectedNode != node)
+        {
+            target.Canvas.Inspect(node);
+        }
+
+        if (target.Request is { } request)
+        {
+            _ = Conversation!.SeekAsync(request);
+        }
+    }
+
+    public void CloseConversation()
+    {
+        Conversation?.Dispose();
+        Conversation = null;
     }
 
     /// <summary>
@@ -292,6 +372,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         var runs = ProjectRuns.Open(identity, _clients, new HostQuestions.Disabled());
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
+        project.ConversationRequested += OpenConversation;
         Projects.Add(project);
         foreach (var unopened in Unopened.Where(unopened => ProjectFolders.Comparer.Equals(unopened.Folder, identity)).ToList())
         {
@@ -331,6 +412,11 @@ public sealed class MainWindowViewModel : ObservableObject
             case nameof(WorkflowCanvasViewModel.Name) when canvas == Canvas:
                 OnPropertyChanged(nameof(WorkflowName));
                 break;
+            // An open conversation follows the task the person selects, so the sidebar's task list switches it.
+            case nameof(WorkflowCanvasViewModel.SelectedNode) when canvas == Canvas && Conversation is { } open
+                && canvas.SelectedNode is { HasAgent: true } node && node.Id != open.Target.Task:
+                OpenConversation(new ConversationTarget(canvas, node.Id));
+                break;
         }
     }
 
@@ -343,6 +429,11 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Canvas = canvas;
+        if (Conversation is not null && Conversation.Target.Canvas != canvas)
+        {
+            CloseConversation();
+        }
+
         if (canvas is not null)
         {
             canvas.IsSelected = true;
@@ -352,6 +443,14 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ProjectName));
         OnPropertyChanged(nameof(WorkflowName));
         OnDocumentChanged();
+    }
+
+    private void OnConversationLayoutChanged()
+    {
+        OnPropertyChanged(nameof(MainConversation));
+        OnPropertyChanged(nameof(DockedConversation));
+        OnPropertyChanged(nameof(ShowsCanvas));
+        OnPropertyChanged(nameof(ConversationLayoutLabel));
     }
 
     private void Persist()

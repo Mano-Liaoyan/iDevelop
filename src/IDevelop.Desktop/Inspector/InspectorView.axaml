@@ -463,6 +463,17 @@
 
                   <inspector:InspectorSection Key="Conversation" Title="{Binding ComposerSectionTitle}" TitleId="ComposerHeading">
                     <StackPanel>
+                      <inspector:InspectorRow Layout="Full">
+                        <Button Classes="action" Command="{Binding OpenConversationCommand}"
+                                ToolTip.Tip="{Binding AttentionLabel, FallbackValue='Open the full conversation'}"
+                                AutomationProperties.AutomationId="OpenConversation"
+                                AutomationProperties.Name="Open conversation">
+                          <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Width="14" Height="14" />
+                            <TextBlock Text="Open conversation" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                      </inspector:InspectorRow>
                       <ContentControl Content="{Binding LastRun}">
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="execution:AttemptViewModel">
