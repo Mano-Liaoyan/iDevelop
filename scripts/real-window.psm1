@@ -232,7 +232,7 @@ function New-FakeCodex([string] $Bin, [string] $Gate, [string] $SleeperPidFile, 
     $rules = [ordered]@{ rules = @(
         [ordered]@{ when = @('debug', 'models'); steps = @(@{ replay = (Join-Path $Fixtures 'codex-debug-models.json') }) },
         [ordered]@{ when = @('login', 'status'); steps = @(@{ print = 'Logged in using ChatGPT' }) },
-        [ordered]@{ when = @('exec'); steps = @(@{ spawnThroughCmd = $SleeperPidFile }, @{ waitForFile = $Gate }, @{ replay = (Join-Path $Fixtures 'codex-success.jsonl') }) }
+        [ordered]@{ when = @('app-server'); steps = @(@{ spawnThroughCmd = $SleeperPidFile }, @{ waitForFile = $Gate }, @{ replay = (Join-Path $Fixtures 'codex-success.jsonl') }) }
     ) }
     [IO.File]::WriteAllText((Join-Path $Bin 'codex.rules.json'), ($rules | ConvertTo-Json -Depth 6 -Compress))
     [IO.File]::WriteAllText((Join-Path $Bin 'codex.cmd'), "@`"$Agent`" --rules `"$(Join-Path $Bin 'codex.rules.json')`" -- %*`r`n")
