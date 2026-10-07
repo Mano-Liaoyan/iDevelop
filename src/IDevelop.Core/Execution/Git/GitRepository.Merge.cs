@@ -35,36 +35,57 @@ internal sealed partial class GitRepository
         return new GitRead<ImmutableArray<DateTimeOffset>>.Read(timestamps.ToImmutable());
     }
 
-    public TreeMerge MergeTrees(CommitId ours, CommitId theirs)
-    {
-        var result = Git(ProjectFolder, GitOperation.Worktree, ["merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex]);
-        if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages, out var messages))
-        {
-            return new TreeMerge.Failed(result.Stderr.Length == 0 ? "Git returned malformed merge-tree output." : result.Stderr);
-        }
-        return result.ExitCode switch
-        {
-            0 when stages.IsEmpty => new TreeMerge.Clean(tree),
-            0 => new TreeMerge.Failed("Git returned conflict stages for a clean merge."),
-            1 => new TreeMerge.Conflicted(stages, messages, result.Stdout, result.Stderr),
-            _ => throw new InvalidOperationException(),
-        };
-    }
+    public static ImmutableArray<ConfigEntry> MergeSettings { get; } =
+    [
+        new("core.attributesFile", OperatingSystem.IsWindows() ? "NUL" : "/dev/null"),
+        new("merge.conflictStyle", "merge"),
+        new("merge.renames", "true"),
+        new("merge.directoryRenames", "conflict"),
+        new("merge.renormalize", "false"),
+    ];
 
-    public GitRead<ImmutableArray<ConfigEntry>> MergeConfig()
+    public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource)
     {
-        var result = Git(ProjectFolder, GitOperation.Metadata, ["config", "-z", "--get-regexp",
-            @"^(merge\.|diff\.(renames|renamelimit|algorithm)$|core\.(autocrlf|eol|safecrlf|ignorecase|attributesfile)$)"]);
-        if (result.ExitCode == 1 && result.Stdout.Length == 0) return new GitRead<ImmutableArray<ConfigEntry>>.Read([]);
-        if (result.ExitCode != 0) return Failure<ImmutableArray<ConfigEntry>>(result);
-        var entries = ImmutableArray.CreateBuilder<ConfigEntry>();
-        foreach (var field in NulFields(result))
+        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-merge-{Guid.NewGuid():N}");
+        try
         {
-            var newline = field.IndexOf('\n');
-            if (newline <= 0) return new GitRead<ImmutableArray<ConfigEntry>>.Failed(MaterializationProblem.GitFailed, "Git returned malformed configuration output.");
-            entries.Add(new(field[..newline], field[(newline + 1)..]));
+            Directory.CreateDirectory(Path.Combine(temporary, "refs"));
+            File.WriteAllText(Path.Combine(temporary, "HEAD"), "ref: refs/heads/none\n");
+            File.WriteAllText(Path.Combine(temporary, "config"), ours.Hex.Length == 64
+                ? "[core]\nbare = true\nrepositoryformatversion = 1\n[extensions]\nobjectFormat = sha256\n"
+                : "[core]\nbare = true\nrepositoryformatversion = 0\n");
+            var environment = new Dictionary<string, string>
+            {
+                ["GIT_DIR"] = temporary,
+                ["GIT_OBJECT_DIRECTORY"] = Path.Combine(CommonDirectory, "objects"),
+                ["GIT_SHALLOW_FILE"] = Path.Combine(CommonDirectory, "shallow"),
+                ["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null",
+                ["GIT_CONFIG_NOSYSTEM"] = "1",
+                ["GIT_ATTR_NOSYSTEM"] = "1",
+                ["GIT_CONFIG_COUNT"] = "0",
+                ["GIT_CONFIG_PARAMETERS"] = "",
+            };
+            var result = Git(ProjectFolder, GitOperation.Worktree,
+                [.. MergeSettings.SelectMany(setting => new[] { "-c", setting.Key + "=" + setting.Value }),
+                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex], environment);
+            if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages, out var messages))
+                return new TreeMerge.Failed(result.Stderr.Length == 0 ? "Git returned malformed merge-tree output." : result.Stderr);
+            return result.ExitCode switch
+            {
+                0 when stages.IsEmpty => new TreeMerge.Clean(tree),
+                0 => new TreeMerge.Failed("Git returned conflict stages for a clean merge."),
+                1 => new TreeMerge.Conflicted(stages, messages, result.Stdout, result.Stderr),
+                _ => throw new InvalidOperationException(),
+            };
         }
-        return new GitRead<ImmutableArray<ConfigEntry>>.Read(entries.ToImmutable());
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new TreeMerge.Failed(error.Message);
+        }
+        finally
+        {
+            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+        }
     }
 
     private static bool ParseMerge(byte[] output, out TreeId tree, out ImmutableArray<StageEntry> stages, out ImmutableArray<MergeMessage> messages)
@@ -73,9 +94,7 @@ internal sealed partial class GitRepository
         stages = [];
         messages = [];
         if (output.Length == 0 || output[^1] != 0) return false;
-        string text;
-        try { text = new UTF8Encoding(false, true).GetString(output); }
-        catch (DecoderFallbackException) { return false; }
+        var text = Encoding.UTF8.GetString(output);
         var fields = text.Split('\0');
         if (!MergeObject(fields[0])) return false;
         tree = new(fields[0]);

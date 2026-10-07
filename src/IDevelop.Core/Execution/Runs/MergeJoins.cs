@@ -43,7 +43,7 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         for (var step = 1; step < parents.Length; step++)
         {
             if (timestamps[step] > timestamp) timestamp = timestamps[step];
-            switch (Mutate("join-merge-" + step, () => repository.MergeTrees(accumulator, parents[step])))
+            switch (Mutate("join-merge-" + step, () => repository.MergeTrees(accumulator, parents[step], record.Base.Commit)))
             {
                 case TreeMerge.Clean clean:
                     tree = clean.Tree;
@@ -51,17 +51,20 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                         accumulator = Value(Mutate("join-accumulator-" + step, () => repository.CreateCommit(Recipe(tree, [accumulator, parents[step]], timestamp))));
                     break;
                 case TreeMerge.Conflicted conflict:
-                    var configuration = Value(repository.MergeConfig());
+                {
                     var storage = new RunStorage(projectFolder, request.Workflow, request.Run);
-                    var stdout = storage.WriteEvidence(request.Operation, $"join-step-{step}.stdout", conflict.Stdout);
-                    var stderr = storage.WriteEvidence(request.Operation, $"join-step-{step}.stderr", Encoding.UTF8.GetBytes(conflict.Stderr));
+                    var stderrBytes = Encoding.UTF8.GetBytes(conflict.Stderr);
+                    var name = $"join-step-{step}-{Revision.Hash([.. conflict.Stdout, .. stderrBytes]).Sha256[..12]}";
+                    var stdout = Mutate("join-evidence-stdout", () => storage.WriteEvidence(request.Operation, name + ".stdout", conflict.Stdout));
+                    var stderr = Mutate("join-evidence-stderr", () => storage.WriteEvidence(request.Operation, name + ".stderr", stderrBytes));
                     ImmutableArray<string> paths = [.. conflict.Stages.Select(entry => entry.Path).Concat(conflict.Messages
                         .Where(message => message.Type.StartsWith("CONFLICT", StringComparison.Ordinal)).SelectMany(message => message.Paths))
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
                     var detail = $"Merge step {step} of {parents.Length - 1} conflicts" + (paths.IsEmpty ? "." : " in " + string.Join(", ", paths) + ".");
                     return new JoinOutcome.Blocked(new(request.Operation, request.Task, null, MaterializationProblem.FanInConflict,
                         request.Inputs, [stdout, stderr], detail, new(request.Sources, step, paths, conflict.Stages, conflict.Messages,
-                            stdout, stderr, repository.Version, configuration)));
+                            stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit)));
+                }
                 case TreeMerge.Failed failed:
                     return Block(request, MaterializationProblem.GitFailed, failed.Detail);
                 default:
