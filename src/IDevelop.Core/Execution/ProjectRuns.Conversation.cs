@@ -32,7 +32,7 @@ public sealed partial class ProjectRuns
             {
                 lock (_owner._gate)
                 {
-                    var record = _owner._active.GetValueOrDefault(Task)?.Record ?? _owner.Latest.GetValueOrDefault(Task);
+                    var record = _owner.Latest.GetValueOrDefault(Task);
                     var task = _owner.Resolve(Task);
                     var live = _owner.Live(Task);
                     var client = task?.Execution?.Client ?? record?.Requested.Client;
@@ -151,9 +151,9 @@ public sealed partial class ProjectRuns
 
             lock (_owner._gate)
             {
-                if (_owner._active.GetValueOrDefault(Task)?.Record is { } record && record.Id == key.Turn.Attempt)
+                if (_owner._active.GetValueOrDefault(Task) is { } active && active.AttemptId == key.Turn.Attempt)
                 {
-                    return record.Requests.GetValueOrDefault(key);
+                    return active.ReadRequest(key);
                 }
             }
 

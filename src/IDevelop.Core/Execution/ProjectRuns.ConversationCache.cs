@@ -13,15 +13,15 @@ public sealed partial class ProjectRuns
 
     private AttemptHistory? ReadConversationHistory(TaskId task, AttemptId attempt)
     {
-        ActiveRun? active;
+        (ActiveRun Run, AttemptRecord Published)? owned;
         lock (_gate)
         {
-            active = _active.GetValueOrDefault(task);
+            owned = _active.GetValueOrDefault(task) is { } active && active.AttemptId == attempt ? (active, Latest[task]) : null;
         }
 
-        if (active is not null && active.Record.Id == attempt)
+        if (owned is { } current)
         {
-            return active.ReadHistory();
+            return current.Run.ReadHistory(current.Published);
         }
 
         AttemptHistory? history;

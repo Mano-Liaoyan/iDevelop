@@ -50,6 +50,9 @@ public sealed partial class ProjectRuns
             _log = log;
             _held = held;
             Record = record;
+            TaskId = record.Task;
+            Title = record.TaskTitle;
+            AttemptId = record.Id;
             _revision = log.LineCount;
             _publishedRevision = _revision;
             _publishedRecord = record;
@@ -57,7 +60,13 @@ public sealed partial class ProjectRuns
 
         public long Order { get; }
 
-        public AttemptRecord Record { get; private set; }
+        private AttemptRecord Record { get; set; }
+
+        public TaskId TaskId { get; }
+
+        public string Title { get; }
+
+        public AttemptId AttemptId { get; }
 
         public Task Completion => _finished.Task;
 
@@ -137,7 +146,7 @@ public sealed partial class ProjectRuns
             }
         }
 
-        public AttemptHistory? ReadHistory()
+        public AttemptHistory? ReadHistory(AttemptRecord published)
         {
             ImmutableDictionary<string, LiveMessageBuffer> buffers;
             lock (_gate)
@@ -145,7 +154,15 @@ public sealed partial class ProjectRuns
                 buffers = _buffers;
             }
 
-            return AttemptLog.ReadHistory(_owner._attempts, Record.Task, Record.Id, buffers);
+            return AttemptLog.ReadHistory(_owner._attempts, TaskId, AttemptId, buffers) is { } history ? history with { Record = published } : null;
+        }
+
+        public RequestRecord? ReadRequest(RequestKey key)
+        {
+            lock (_gate)
+            {
+                return Record.Requests.GetValueOrDefault(key);
+            }
         }
 
         public SendProblem? GuideProblem()
@@ -363,7 +380,7 @@ public sealed partial class ProjectRuns
                 _held.Dispose();
                 try
                 {
-                    _owner.Finish(this);
+                    _owner.Finish(this, Record);
                 }
                 finally
                 {

@@ -88,7 +88,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             lock (_gate)
             {
-                return [.. _active.Values.OrderBy(run => run.Order).Select(run => Latest[run.Record.Task])];
+                return [.. _active.Values.OrderBy(run => run.Order).Select(run => Latest[run.TaskId])];
             }
         }
     }
@@ -302,7 +302,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             task = Resolve(task.Id) ?? task;
             if (_active.TryGetValue(task.Id, out var started))
             {
-                return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(task.Id, started.Record.TaskTitle)));
+                return new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(task.Id, started.Title)));
             }
 
             switch (TakeLock(task.Id))
@@ -422,7 +422,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
             if (_active.TryGetValue(task, out var run))
             {
-                return new TerminalResult.Refused(new TerminalProblem.TurnRunning(run.Record.TaskTitle));
+                return new TerminalResult.Refused(new TerminalProblem.TurnRunning(run.Title));
             }
 
             switch (TakeLock(task))
@@ -472,7 +472,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             _active.TryGetValue(task, out run);
-            before = run?.Record ?? Latest.GetValueOrDefault(task);
+            before = Latest.GetValueOrDefault(task);
         }
 
         StartProblem? problem;
@@ -708,25 +708,37 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         if (held is null)
         {
-            // Another instance holds the lock, so the read settles nothing.
-            (Latest, Warnings, var revisions) = AttemptLog.ReadLatest(_attempts);
-            foreach (var (key, lines) in revisions)
-            {
-                _logRevisions[key] = lines;
-            }
+            RefreshPublished(AttemptLog.ReadLatest(_attempts));
 
             NotifyConversations(null);
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
         }
 
-        (Latest, Warnings, var counts) = ReadAndReconcile(_attempts, held: task);
-        foreach (var (key, lines) in counts)
-        {
-            _logRevisions[key] = lines;
-        }
+        RefreshPublished(ReadAndReconcile(_attempts, held: task));
 
         NotifyConversations(null);
         return new LockTake.Taken(held);
+    }
+
+    private void RefreshPublished((ImmutableDictionary<TaskId, AttemptRecord> Latest, ImmutableArray<string> Warnings,
+        ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> LogRevisions) disk)
+    {
+        var latest = disk.Latest;
+        foreach (var task in _active.Keys)
+        {
+            latest = latest.SetItem(task, Latest[task]);
+        }
+
+        foreach (var (key, lines) in disk.LogRevisions)
+        {
+            if (!_active.ContainsKey(key.Task))
+            {
+                _logRevisions[key] = lines;
+            }
+        }
+
+        Latest = latest;
+        Warnings = disk.Warnings;
     }
 
     /// <summary>Raises <see cref="Changed"/> on the caller's thread, then starts reading the new run.</summary>
@@ -967,7 +979,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private StartVerdict Verdict(TaskDefinition task, PlanningContext? planning = null, SubjectView? subject = null) =>
         (_active.TryGetValue(task.Id, out var run), Latest.GetValueOrDefault(task.Id)) switch
         {
-            (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.Record.Task, run.Record.TaskTitle)),
+            (true, _) => new StartVerdict.Blocked(new StartProblem.AlreadyRunning(run!.TaskId, run.Title)),
             (_, { Status: AttemptStatus.WaitingForInput } waiting) => new StartVerdict.Blocked(new StartProblem.Waiting(waiting.TaskTitle)),
             (_, { Status: AttemptStatus.InReview } reviewing) =>
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
@@ -1000,7 +1012,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             ? new SendProblem.ClientChanged(last.Requested.Client, settings.Client) : null;
     }
 
-    private TurnKey? Current(TaskId task) => (_active.GetValueOrDefault(task)?.Record ?? Latest.GetValueOrDefault(task)) is { } record ? new TurnKey(record.Id, record.Turns.Count) : null;
+    private TurnKey? Current(TaskId task) => Latest.GetValueOrDefault(task) is { } record ? new TurnKey(record.Id, record.Turns.Count) : null;
 
     private void OnClientsChanged(object? sender, EventArgs e) => NotifyChanged(null);
 
@@ -1010,7 +1022,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         TaskId? subject;
         lock (_gate)
         {
-            subject = task is { } id ? (_active.GetValueOrDefault(id)?.Record ?? Latest.GetValueOrDefault(id))?.Subject : null;
+            subject = task is { } id ? Latest.GetValueOrDefault(id)?.Subject : null;
         }
 
         NotifyConversations(task);
@@ -1151,20 +1163,20 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         NotifyChanged(record.Task);
     }
 
-    private void Finish(ActiveRun run)
+    private void Finish(ActiveRun run, AttemptRecord record)
     {
         lock (_gate)
         {
-            if (_active.TryGetValue(run.Record.Task, out var current) && current == run)
+            if (_active.TryGetValue(record.Task, out var current) && current == run)
             {
-                _active.Remove(run.Record.Task);
+                _active.Remove(record.Task);
             }
 
-            Latest = Latest.SetItem(run.Record.Task, run.Record);
-            _logRevisions[(run.Record.Task, run.Record.Id)] = run.Live.LogRevision;
+            Latest = Latest.SetItem(record.Task, record);
+            _logRevisions[(record.Task, record.Id)] = run.Live.LogRevision;
         }
 
-        NotifyChanged(run.Record.Task);
+        NotifyChanged(record.Task);
         Advance();
     }
 
