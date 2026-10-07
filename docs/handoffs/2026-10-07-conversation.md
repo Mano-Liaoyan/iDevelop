@@ -14,7 +14,7 @@ A throwaway prototype compared the Markdown renderers and read D0's raw client l
 
 `MarkdownView` is iDevelop's own renderer on Markdig 1.4.0, which is BSD-2-Clause with no dependencies. It parses with `UsePipeTables().DisableHtml()` and maps blocks to Avalonia controls. A streamed message rebuilds only its changed blocks, and a block with selected text waits until the selection clears. History is a virtualized list.
 
-The prototype measured three candidates on Linux with a Release build under Xvfb. Each stream added one 16-character chunk per frame. The 500-message history used a virtualized list.
+The prototype measured three candidates on Linux with a Release build under Xvfb with software rendering. Each stream paced one 16-character chunk to each animation frame. CPU per append counts all threads. Each timing is the median of five runs, or of three for the 20 KB stream. The 500-message history used a virtualized list.
 
 | Candidate | CPU per append, 5 KB | UI-thread p95 per append | 20 KB stream, frames over 33 ms | 500 messages to first frame | Opened at the latest message |
 | --- | --- | --- | --- | --- | --- |
@@ -22,9 +22,11 @@ The prototype measured three candidates on Linux with a Release build under Xvfb
 | LiveMarkdown.Avalonia 1.12.2 | 11.4 ms | 0.2 ms | 1 | 364 ms | 1 of 5 |
 | Own renderer on Markdig 1.4.0 | 8.5 ms | 3.9 ms | 0 | 111 ms | 5 of 5 |
 
+The own renderer finished its 20 KB stream in 14.5 s, against 20.9 s at one append per frame, so some of its appends shared a frame. Its CPU per append may therefore be understated by up to about 30%. That bound is inferred from the wall time. Its UI-thread time is measured per append and is not affected.
+
 Without virtualization, the own renderer took 2.7 s and 568 MB for the same history, and the others took longer. Virtualization is therefore required whatever the renderer.
 
-The own renderer is the only candidate that passes the repository's license rules without a new decision. It also shows HTML as literal text, fetches no images, and sends every click to iDevelop's handler. Markdown.Avalonia.Tight missed the frame budget while streaming and launched links on a plain left click. LiveMarkdown.Avalonia embeds TextMate grammars under licenses outside the permissive list, drops HTML text silently, fetches remote images, and failed to open history at the latest message in 4 of 5 runs. Avalonia.Controls.Markdown depends on Avalonia's commercial licensing package. The renderer has no syntax highlighting and no selection across blocks.
+The own renderer and Markdown.Avalonia.Tight both pass the repository's license rules without a new decision. The prototype checked them with an adapted copy of `scripts/check-licenses.mjs`. The own renderer shows HTML as literal text, fetches no images, and sends every click to iDevelop's handler. Markdown.Avalonia.Tight lost on performance and link behavior. It missed the frame budget while streaming and launched links on a plain left click. LiveMarkdown.Avalonia embeds TextMate grammars under licenses outside the permissive list, drops HTML text silently, fetches remote images, and failed to open history at the latest message in 4 of 5 runs. Avalonia.Controls.Markdown depends on Avalonia's commercial licensing package. The renderer has no syntax highlighting and no selection across blocks.
 
 ### Rendering never fetches, runs, or opens anything by itself
 
@@ -54,13 +56,13 @@ One client process still runs each turn, and a node that waits between turns hol
 | Client | Protocol |
 | --- | --- |
 | Claude Code | Stream JSON in both directions with partial messages. iDevelop sends an `initialize` control request and then the user message, keeps stdin open for answers, denials, and `interrupt`, and closes it at the `result` event. |
-| Codex | `codex app-server`, one process per turn. iDevelop sends `initialize` and `initialized`, then `thread/start` or `thread/resume` with `excludeTurns: true`, then `turn/start`. It closes stdin at `turn/completed`. |
+| Codex | `codex app-server`, one process per turn. iDevelop sends `initialize` and `initialized`, then `thread/start` for a new session or `thread/resume` with `excludeTurns: true`, then `turn/start`. It closes stdin at `turn/completed`. |
 | Pi | `-p --mode json` as before. The prompt goes over stdin, which then closes. |
 | Antigravity CLI | Print mode with stream JSON as before. Its print mode skipped `ask_question` in D0's probe. |
 
 Codex moved to app-server because it alone supported all nine of D0's interaction cases. Claude Code raised `can_use_tool` only in this bidirectional mode. Pi's RPC mode adds only steering, and it also relays the user's Pi extensions.
 
-Stop and send and Cancel first send the client's own interrupt, keep reading until the turn's final result, and then stop the process tree. A stop or a deferral gives the client 5 seconds, `ProjectRuns.ShutdownTime`, to reach its result and exit. A client that reported success gets 60 seconds, `ProjectRuns.SuccessExitTime`, to exit after its input closes. A fake client that exited 6.5 seconds after its input closed failed both Claude Code and Codex turns under the old 5 second limit.
+For Claude Code and Codex, Stop and send and Cancel first send the client's own interrupt, keep reading until the turn's final result, and then stop the process tree. Pi and Antigravity CLI have no interrupt, so iDevelop stops their process tree at once. A stop or a deferral gives the client 5 seconds, `ProjectRuns.ShutdownTime`, to exit. A Claude Code or Codex client that reported success gets 60 seconds, `ProjectRuns.SuccessExitTime`, to exit after its input closes. Pi and Antigravity CLI have no deadline after success. A fake client that exited 6.5 seconds after its input closed failed both Claude Code and Codex turns under the old 5 second limit.
 
 ### Questions surface, and permission requests are declined
 
@@ -85,9 +87,11 @@ When a May ask or Chat turn asks a structured question, iDevelop records the una
 
 ### One published record per task, paired with its log revision
 
-`ProjectRuns.Latest` is the only published record of each task. Each published record and its log revision form one private value, `PublishedAttempt`, and every writer sets both through `SetPublished`. A run's live record is private to the run. Other readers see its task, title, attempt ID, and live requests. The conversation snapshot, the attempt list, `Current`, notification subjects, and Cancel all read the published pair, so the compiler rejects a new reader of a run's live status. Both lock-take rereads keep the published pair of every task that this window runs, and `Finish` publishes the settled record once, under the same lock, as the run leaves `_active`.
+`ProjectRuns.Latest` is the only published record of each task. Each published record and its log revision form one private value, `PublishedAttempt`. Every writer sets both through `SetPublished`. A run's live record is private to the run. Other readers see its task, title, attempt ID, and live requests. The conversation snapshot, the attempt list, `Current`, notification subjects, and Cancel all read the published pair. The compiler therefore rejects a new reader of a run's live status. Both lock-take rereads keep the published pair of every task that this window runs. `Finish` publishes the settled record once, under the same lock, as the run leaves `_active`.
 
-This fixed a race. A run published its waiting or cancelled record while it still disposed its turn and held the task lock. The gap took about 0.02 ms when idle and up to 700 ms under load. In it, Mark done was dropped silently, Send was refused, and a subject freed by deleting its review was still refused with `AlreadyRunning`. A 1 s gap injected by the coordinator reproduced both macOS CI timeouts. The same root cause made a review test fail with `AlreadyRunning` on `main`. The fix took three rounds. Round 4 kept a run's published record running until teardown ended. Round 5 stopped a lock-take reread from replacing a held run's record with its waiting one, and moved the snapshot and the attempt list to the published record. Round 6 paired the record with its own log revision, because the snapshot had shown `Running` at the final revision and then `WaitingForInput` at that same revision. A consumer that reloads attempts only when the revision changes, as C1b's attempt picker does, then kept `Running` until the next log change.
+This fixed a race. A run published its waiting or cancelled record while it still disposed its turn and held the task lock. The gap took about 0.02 ms when idle and up to 700 ms under load. In that gap, Mark done was dropped silently and Send was refused. A subject freed by deleting its review was still refused with `AlreadyRunning`. A 1 s gap injected by the coordinator reproduced both macOS CI timeouts. The same root cause made a review test fail with `AlreadyRunning` on `main`.
+
+The fix took three rounds. Round 4 kept a run's published record running until teardown ended. Round 5 stopped a lock-take reread from replacing a held run's record with its waiting one. It also moved the snapshot and the attempt list to the published record. Round 6 paired the record with its own log revision. Before round 6, the snapshot showed `Running` at the final revision and then `WaitingForInput` at that same revision. A consumer that reloads attempts only when the revision changes kept `Running` until the next log change. C1b's attempt picker is such a consumer.
 
 ### The view keeps one draft per task in the open-project session
 

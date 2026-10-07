@@ -4,7 +4,7 @@
 
 E3 is the slice "Execute the workflow" of the [approved execution plan](2026-10-06-workspace-execution-plan.md#approved-delivery-slices). Its completion condition is that Run Workflow finds roots, launches eligible work, waits at questions and approvals, starts successors once, and stops safely. Review advancement and scheduling share one launch authority. Failure affects only dependent branches.
 
-This record holds E3's design. No E3 code exists. GPT-6 Astra wrote the design note in four versions in the judgment role. Fresh Opus sessions reviewed version 1 and version 3. The note builds on the [D0 Git contract](2026-10-06-d0-design-validation.md), the [E1 run journal](2026-10-07-run-and-input-records.md), the [conversation backend](2026-10-07-conversation.md), and the [dependency results record](2026-10-07-dependency-results.md). Implementation waits for E2b, pull request [#44](https://github.com/Mano-Liaoyan/iDevelop/pull/44), and for a review that confirms version 4.
+This record holds E3's design. No E3 code exists. GPT-6 Astra wrote the design note in four versions in the judgment role. Fresh Opus sessions reviewed version 1 and version 3. The note builds on the [D0 Git contract](2026-10-06-d0-design-validation.md), the [E1 run journal](2026-10-07-run-and-input-records.md), the [conversation backend](2026-10-07-conversation.md), and the [dependency results record](2026-10-07-dependency-results.md). E2b, pull request [#44](https://github.com/Mano-Liaoyan/iDevelop/pull/44), merged as `04a976a`. Implementation now waits only for a review that confirms version 4.
 
 ## Decisions and reasons
 
@@ -94,7 +94,14 @@ Each part is one pull request with a checkable completion condition. E3a's parts
 | E3a.4 | The Unix process-group launcher and the Windows cleanup policy for workflow turns. |
 | E3a.5 | Single-turn runner, explicit checkout, root-exit notification, settled handles, and outcomes, exercised with fake clients and no scheduler. |
 | E3b | Headless coordinator, deterministic dispatch, slot accounting, Stop, and recovery. Chain and diamond tests consume E3a unchanged. |
-| E3c to E3g | Run-owned conversation routing, review progression, preflight and approval, planner inclusion and amendments, human gates, stale-input rebase, and the run UI with recovery panels. |
+| E3c.1 | Run-owned conversation routing and history. |
+| E3c.2 | Review progression, artifact forwarding, and explicit choices for an interrupted fix. |
+| E3d.1 | Preflight and durable snapshot approval. |
+| E3d.2 | Planner inclusion and proposal amendments. |
+| E3e | Human gates and forwarded results. |
+| E3f | Stale-input preview and approved clean rebase. |
+| E3g.1 | Run toolbar, preflight, status, conversation and gate navigation, and activity of retained projects. |
+| E3g.2 | Recovery, restoration, and stale-input panels, with real-window restart and Stop coverage. |
 
 E3a needs the settled E2 and C1 contracts. E3b also needs E2b's isolation and join gate, which landed in [#44](https://github.com/Mano-Liaoyan/iDevelop/pull/44). A join needs Git 2.43 or later. Other workflow execution needs Git 2.39 or later.
 
