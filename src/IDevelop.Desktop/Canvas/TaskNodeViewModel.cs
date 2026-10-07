@@ -70,7 +70,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Output = new PortViewModel(this, PortSide.Output);
         _run = new RelayCommand(Run, () => !RunsHere);
         _cancel = new RelayCommand(
-            () => _canvas.Notice(_canvas.Runs.Cancel(Id) is { } problem ? RunText.Describe(problem) : null),
+            async () => _canvas.Notice(await _canvas.Runs.CancelAsync(Id) is { } problem ? RunText.Describe(problem) : null),
             () => IsWaiting || _attempt is { Status: AttemptStatus.InReview } ||
                 _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
         _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(_draft) && _canvas.Runs.CheckSend(_task) is null);
@@ -495,15 +495,16 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private void Run() =>
         _canvas.Notice(_canvas.Runs.Start(_task, _canvas.Planning(Id)) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
-    private void Send(bool stopTurn)
+    private async void Send(bool stopTurn)
     {
-        if (_canvas.Runs.Send(_task, _draft, stopTurn) is SendResult.Refused refused)
+        var submitted = _draft;
+        if (await _canvas.Runs.SendAsync(_task, submitted, stopTurn) is SendResult.Refused refused)
         {
             _canvas.Notice(RunText.Describe(refused.Problem));
             return;
         }
 
-        Draft = "";
+        if (Draft == submitted) Draft = "";
         _canvas.Notice(null);
     }
 

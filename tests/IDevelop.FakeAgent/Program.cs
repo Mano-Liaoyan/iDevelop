@@ -62,6 +62,7 @@ using var stdin = new StreamReader(Console.OpenStandardInput(), utf8);
 var appServer = clientArguments.Contains("app-server");
 var claudeStream = clientArguments.Contains("--include-partial-messages");
 string? prompt = null;
+string? framesFile = null;
 JsonElement? matchedLine = null;
 JsonElement? threadRequest = null;
 JsonElement? turnRequest = null;
@@ -102,7 +103,13 @@ bool ThreadMatches(JsonElement candidate)
     return !candidate.TryGetProperty("threadId", out var id) || id.ValueKind == JsonValueKind.Null
         || id.GetString() == request.GetProperty("params").GetProperty("threadId").GetString();
 }
-JsonElement ReadInput() => JsonDocument.Parse(stdin.ReadLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
+string? ReadWireLine()
+{
+    var line = stdin.ReadLine();
+    if (line is not null && framesFile is not null) File.AppendAllText(framesFile, line + "\n");
+    return line;
+}
+JsonElement ReadInput() => JsonDocument.Parse(ReadWireLine() ?? throw new IOException("stdin ended before the next frame.")).RootElement.Clone();
 
 List<FileStream> held = [];
 return Run(matched.GetProperty("steps")) ?? 0;
@@ -132,17 +139,21 @@ int? Run(JsonElement steps)
                 File.WriteAllText(value.GetString()!, captured);
                 break;
             case "waitForStdinEnd":
-                stdin.ReadToEnd();
+                while (ReadWireLine() is not null) { }
+                break;
+            case "recordFrames":
+                framesFile = value.GetString();
+                File.WriteAllText(framesFile!, "");
                 break;
             case "readLine":
-                var inputLine = stdin.ReadLine() ?? throw new IOException("stdin ended before the next line.");
+                var inputLine = ReadWireLine() ?? throw new IOException("stdin ended before the next line.");
                 File.WriteAllText(value.GetString()!, inputLine);
                 matchedLine = JsonDocument.Parse(inputLine).RootElement.Clone();
                 break;
             case "waitForLine":
                 var pattern = value.GetString()!;
                 matchedLine = null;
-                while (stdin.ReadLine() is { } read)
+                while (ReadWireLine() is { } read)
                 {
                     if (!read.Contains(pattern, StringComparison.Ordinal)) continue;
                     matchedLine = JsonDocument.Parse(read).RootElement.Clone();

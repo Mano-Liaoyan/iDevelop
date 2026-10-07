@@ -24,7 +24,7 @@ public sealed class ActiveRunViewModel : ObservableObject
         _runs = runs;
         _clients = clients;
         _clock.Tick += (_, _) => OnPropertyChanged(nameof(Elapsed));
-        _cancel = new RelayCommand(() => _runs.Cancel(_run!.Task), () => _run is { Stopping: false });
+        _cancel = new RelayCommand(async () => await _runs.CancelAsync(_run!.Task), () => _run is { Stopping: false });
     }
 
     public bool IsVisible => _run is not null;

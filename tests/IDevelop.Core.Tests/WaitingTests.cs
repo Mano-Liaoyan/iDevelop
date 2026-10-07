@@ -51,7 +51,7 @@ public sealed class WaitingTests : IDisposable
         var task = SayHi(client, ConversationMode.MayAsk);
         await using (var first = ProjectRuns.Open(_project, clients))
         {
-            var asked = await Settles(first, () => first.Start(task));
+            var asked = await Settles(first, () => Task.FromResult<object>(first.Start(task)));
 
             Assert.Equal((AttemptStatus.WaitingForInput, new Pending.Question("Which fruit?")), (asked.Status, asked.Pending));
             Assert.Contains("If you cannot go on without an answer from the person, ask instead of guessing.", File.ReadAllText(Evidence("turn-1.txt")));
@@ -62,7 +62,7 @@ public sealed class WaitingTests : IDisposable
         var waiting = runs.Latest[SayHiId];
         Assert.Equal((AttemptStatus.WaitingForInput, new Pending.Question("Which fruit?")), (waiting.Status, waiting.Pending));
 
-        var answered = await Settles(runs, () => runs.Send(task, "banana", stopTurn: false));
+        var answered = await Settles(runs, async () => await runs.SendAsync(task, "banana", stopTurn: false));
 
         Assert.Equal((waiting.Id, AttemptStatus.Succeeded, "Wrote banana.", (Pending?)null), (answered.Id, answered.Status, answered.Result, answered.Pending));
         Assert.Equal([TurnOutcome.Succeeded, TurnOutcome.Succeeded], answered.Turns.Select(turn => turn.Outcome));
@@ -78,7 +78,7 @@ public sealed class WaitingTests : IDisposable
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Asking)));
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
 
-        var record = await Settles(runs, () => runs.Start(SayHi(ClientId.Codex, ConversationMode.Autonomous)));
+        var record = await Settles(runs, () => Task.FromResult<object>(runs.Start(SayHi(ClientId.Codex, ConversationMode.Autonomous))));
 
         Assert.Equal((AttemptStatus.Succeeded, (Pending?)null), (record.Status, record.Pending));
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.NotWaiting("Say hi")), runs.OpenInTerminal(SayHiId));
@@ -93,8 +93,8 @@ public sealed class WaitingTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var task = SayHi(ClientId.Codex, ConversationMode.MayAsk);
 
-        var done = await Settles(runs, () => runs.Start(task));
-        var unreadable = await Settles(runs, () => runs.Send(task, "Check again.", stopTurn: false));
+        var done = await Settles(runs, () => Task.FromResult<object>(runs.Start(task)));
+        var unreadable = await Settles(runs, async () => await runs.SendAsync(task, "Check again.", stopTurn: false));
 
         Assert.Equal(AttemptStatus.Succeeded, done.Status);
         Assert.Equal(AttemptStatus.WaitingForInput, unreadable.Status);
@@ -111,8 +111,8 @@ public sealed class WaitingTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, clients);
         var task = SayHi(ClientId.Codex, ConversationMode.Chat);
 
-        var first = await Settles(runs, () => runs.Start(task));
-        var second = await Settles(runs, () => runs.Send(task, "Change it.", stopTurn: false));
+        var first = await Settles(runs, () => Task.FromResult<object>(runs.Start(task)));
+        var second = await Settles(runs, async () => await runs.SendAsync(task, "Change it.", stopTurn: false));
         Assert.Null(runs.MarkDone(SayHiId));
 
         Assert.Equal((AttemptStatus.WaitingForInput, new Pending.Reply()), (first.Status, first.Pending));
@@ -129,10 +129,10 @@ public sealed class WaitingTests : IDisposable
         Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Asking)));
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var task = SayHi(ClientId.Codex, ConversationMode.MayAsk);
-        await Settles(runs, () => runs.Start(task));
+        await Settles(runs, () => Task.FromResult<object>(runs.Start(task)));
         Assert.IsType<StartResult.Refused>(runs.Start(task));
 
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         Assert.Equal((AttemptStatus.Cancelled, (Pending?)null), (runs.Latest[SayHiId].Status, runs.Latest[SayHiId].Pending));
         Assert.Null(runs.Check(task));
@@ -145,9 +145,9 @@ public sealed class WaitingTests : IDisposable
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Done.")),
             Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
-        await Settles(runs, () => runs.Start(SayHi(ClientId.Codex, ConversationMode.Chat)));
+        await Settles(runs, () => Task.FromResult<object>(runs.Start(SayHi(ClientId.Codex, ConversationMode.Chat))));
 
-        var record = await Settles(runs, () => runs.Send(SayHi(ClientId.Codex, ConversationMode.Autonomous), "Go ahead.", stopTurn: false));
+        var record = await Settles(runs, async () => await runs.SendAsync(SayHi(ClientId.Codex, ConversationMode.Autonomous), "Go ahead.", stopTurn: false));
 
         Assert.Equal((AttemptStatus.Succeeded, ConversationMode.Autonomous), (record.Status, record.Conversation));
     }
@@ -160,10 +160,10 @@ public sealed class WaitingTests : IDisposable
             Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var task = SayHi(ClientId.Codex, ConversationMode.Chat);
-        await Settles(runs, () => runs.Start(task));
+        await Settles(runs, () => Task.FromResult<object>(runs.Start(task)));
 
         var changed = task with { Execution = new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" } };
-        var record = await Settles(runs, () => runs.Send(changed, "Go ahead.", stopTurn: false));
+        var record = await Settles(runs, async () => await runs.SendAsync(changed, "Go ahead.", stopTurn: false));
 
         using var thread = JsonDocument.Parse(File.ReadAllText(Evidence("turn-2.json.thread.json")));
         using var turn = JsonDocument.Parse(File.ReadAllText(Evidence("turn-2.json.turn.json")));
@@ -241,7 +241,7 @@ public sealed class WaitingTests : IDisposable
         TestNodes.Implement(SayHiId, "Say hi", "Create hello.txt containing the fruit I name.", execution: Settings[client], conversation: mode);
 
     /// <summary>Does <paramref name="act"/>, then waits until the task's attempt neither runs nor is about to.</summary>
-    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<object> act)
+    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<Task<object>> act)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnChanged(object? sender, EventArgs e)
@@ -255,7 +255,7 @@ public sealed class WaitingTests : IDisposable
         runs.Changed += OnChanged;
         try
         {
-            var result = act();
+            var result = await act();
             Assert.False(result is StartResult.Refused or SendResult.Refused, $"refused: {result}");
             return await settled.Task.WaitAsync(Patience);
         }

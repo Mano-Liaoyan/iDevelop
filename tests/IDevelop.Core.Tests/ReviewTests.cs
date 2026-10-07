@@ -105,7 +105,7 @@ public sealed class ReviewTests : IDisposable
         var (review, runs) = await RunLoop(async runs =>
         {
             await Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 starts");
-            Assert.IsType<SendResult.Guided>(runs.Send(ReviewNode, "Keep add on two lines.", stopTurn: false));
+            Assert.IsType<SendResult.Guided>(await runs.SendAsync(ReviewNode, "Keep add on two lines.", stopTurn: false));
             File.WriteAllText(_gate, "");
         });
         await using (runs)
@@ -227,7 +227,7 @@ public sealed class ReviewTests : IDisposable
             await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
             Assert.Equal(AttemptStatus.InReview, runs.Latest[Review].Status);
             Assert.Equal(new StartProblem.InReview("Review add"), runs.Check(ReviewNode));
-            Assert.Null(runs.Cancel(Review));
+            Assert.Null(await runs.CancelAsync(Review));
         });
         await using (runs)
         {
@@ -258,7 +258,7 @@ public sealed class ReviewTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, clients);
         Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
         Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
-        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), runs.Send(SubjectNode, "Go on.", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), await runs.SendAsync(SubjectNode, "Go on.", stopTurn: false));
         runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
         Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
 
@@ -298,7 +298,7 @@ public sealed class ReviewTests : IDisposable
         await Until(() => runs.Latest.GetValueOrDefault(Subject) is { Fix: not null, SessionId: not null }, "fix round 1 runs");
 
         runs.Follow(workflow.Must(new WorkflowEdit.Delete([Review], [])));
-        Assert.Null(runs.Cancel(Subject));
+        Assert.Null(await runs.CancelAsync(Subject));
         await Until(() => runs.Latest[Subject].Status == AttemptStatus.Cancelled && runs.Active.IsEmpty, "the fix round is cancelled");
 
         Assert.Null(runs.Check(SubjectNode));
@@ -444,6 +444,28 @@ public sealed class ReviewTests : IDisposable
         Assert.Equal("diff --git a/a.txt b/a.txt", GitTree.Diff(_project, before!, after!)!.Split('\n')[0]);
         Assert.Contains("?? a.txt", Git("status", "--porcelain"));
         Assert.Null(GitTree.Snapshot(_temp.Create("plain")));
+    }
+
+    [Fact]
+    public async Task Review_receives_Check_null_handling()
+    {
+        WriteTurn(_reviewer, 1, FakeRule.On().Print(SessionLine(ClientId.ClaudeCode, ReviewerSession)).WaitForFile(_gate)
+            .Print(ReplyLines(ClientId.ClaudeCode, Verdict("""{"status":"verdict","verdict":"approve","findings":[]}"""))));
+        var (review, runs) = await RunLoop(async runs =>
+        {
+            await Until(() => runs.Latest[Review].SessionId == ReviewerSession, "the reviewer reports its session");
+            using var session = runs.OpenConversation(Review);
+            Assert.Equal(new SendResult.Guided(), await session.SendAsync(session.Snapshot.Current!.Value, "Check null handling", false, default));
+            var recorded = runs.Latest[Review];
+            Assert.Equal(["Check null handling"], recorded.Guidance.Select(note => note.Text));
+            Assert.Single(recorded.Turns);
+            File.WriteAllText(_gate, "go");
+        });
+        await using (runs)
+        {
+            Assert.Equal((AttemptStatus.Succeeded, 1), (review.Status, review.Turns.Count));
+            Assert.Equal(["Check null handling"], review.Guidance.Select(note => note.Text));
+        }
     }
 
     /// <summary>Runs the subject, then the review, and waits until the review settles.</summary>

@@ -65,8 +65,8 @@ public sealed class ProtocolDrainTests : IDisposable
         var task = Task(ClientId.ClaudeCode);
         runs.Start(task);
         await Until(() => runs.Live(task.Id)?.Buffers.GetValueOrDefault("m1:0")?.Text == "Hel");
-        if (stopAndSend) Assert.Equal(new SendResult.Queued(), runs.Send(task, "Continue", true));
-        else Assert.Null(runs.Cancel(task.Id));
+        if (stopAndSend) Assert.Equal(new SendResult.Queued(), await runs.SendAsync(task, "Continue", true));
+        else Assert.Null(await runs.CancelAsync(task.Id));
         var record = await Settled(runs, task.Id);
         var messages = Messages(Events(record)).ToArray();
         Assert.Equal([new AgentEvent.Message("Hello") { Id = "m1:0", Partial = true }], messages);
@@ -89,7 +89,7 @@ public sealed class ProtocolDrainTests : IDisposable
         var task = Task(ClientId.Codex);
         Assert.IsType<StartResult.Started>(runs.Start(task));
         await Until(() => runs.Live(task.Id)?.Buffers.GetValueOrDefault("i1")?.Text == "Hel");
-        Assert.Null(runs.Cancel(task.Id));
+        Assert.Null(await runs.CancelAsync(task.Id));
         var record = await Settled(runs, task.Id);
         Assert.Equal("""{"id":"stop-1","method":"turn/interrupt","params":{"threadId":"session-1","turnId":"turn-1"}}""", File.ReadAllText(wire));
         Assert.Equal([new AgentEvent.Message("Hello") { Id = "i1", Partial = true }], Messages(Events(record)).ToArray());
@@ -207,9 +207,9 @@ public sealed class ProtocolDrainTests : IDisposable
         var task = Task(ClientId.ClaudeCode);
         runs.Start(task);
         await Until(() => runs.Latest[task.Id].SessionId == Session);
-        Assert.Equal(new SendResult.Queued(), runs.Send(task, "banana", false));
+        Assert.Equal(new SendResult.Queued(), await runs.SendAsync(task, "banana", false));
         Assert.Equal("banana", Assert.Single(Events(runs.Latest[task.Id]).OfType<AttemptEvent.MessageQueued>()).Text);
-        Assert.Null(runs.Cancel(task.Id));
+        Assert.Null(await runs.CancelAsync(task.Id));
         var record = await Settled(runs, task.Id);
         Assert.Equal(AttemptStatus.Cancelled, record.Status);
         Assert.Equal(["banana"], record.Queued.Select(message => message.Text));
