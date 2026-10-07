@@ -579,7 +579,7 @@ internal sealed class GitRepository
     private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory, TimeSpan patience,
         IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null)
     {
-        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.commitGraph=false", .. arguments])
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
         {
             WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
