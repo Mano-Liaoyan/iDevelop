@@ -170,7 +170,7 @@ public sealed class ProtocolDrainTests : IDisposable
         Assert.Single(Events(record).OfType<AttemptEvent.ShutdownForced>());
     }
 
-    [Fact]
+    [UnixFact]
     public async Task A_broken_permission_pipe_closes_DeliveryUnknown_and_fails_the_turn()
     {
         Install(_fakes, ClientId.ClaudeCode, Fresh(ClientId.ClaudeCode).Print(SessionLine(ClientId.ClaudeCode, Session)).CloseStdin().Print(ExitPlan)

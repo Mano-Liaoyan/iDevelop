@@ -20,7 +20,7 @@ using System.Text.Json;
 //   readLine <file>               read and record one stdin frame
 //   waitForLine <pattern>         wait for a stdin frame containing the pattern
 //   echoId <line>                 print the line with $id replaced by the last matched frame's id
-//   closeStdin                   close this process's pipe readers, so host writes fail
+//   closeStdin                   Linux and macOS only: close this process's pipe readers, so host writes fail
 //   waitForStdinEnd               read stdin until it closes
 //   print <line>, stderr <line>   write one line
 //   replay <file>                 write a recorded stream line by line
@@ -345,12 +345,7 @@ internal static class NativePipes
 {
     public static void CloseInput()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            CloseHandle(GetStdHandle(-10));
-            return;
-        }
-
+        // On Windows the cmd.exe shim holds the pipe too, so only Linux and macOS tests use this step.
         // Console keeps a duplicate of the inherited descriptor. Every descriptor with stdin's device and inode is a
         // reader of the same pipe, and only once all are closed does the host's write fail. The first 16 bytes of
         // struct stat hold that identity on Linux and Darwin.
@@ -383,10 +378,4 @@ internal static class NativePipes
 
     [DllImport("libc", EntryPoint = "fstat")]
     private static extern int Stat(int descriptor, nint status);
-
-    [DllImport("kernel32.dll")]
-    private static extern nint GetStdHandle(int handle);
-
-    [DllImport("kernel32.dll")]
-    private static extern bool CloseHandle(nint handle);
 }
