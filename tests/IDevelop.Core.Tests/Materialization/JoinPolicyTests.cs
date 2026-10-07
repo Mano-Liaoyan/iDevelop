@@ -250,4 +250,73 @@ public sealed class JoinPolicyTests
         Assert.Equal(Evidence(f, first.Block.Conflict!.Stdout), Evidence(f, second.Block.Conflict.Stdout));
         Assert.NotEqual(first.Block.Conflict.Stdout.RelativePath, second.Block.Conflict.Stdout.RelativePath);
     }
+
+    private static IReadOnlyDictionary<string, string> GitShim(PreparationFixture f, string script)
+    {
+        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+        var bin = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "test-bin")).FullName;
+        var shim = Path.Combine(bin, "git");
+        File.WriteAllText(shim, "#!/bin/sh\n" + script + "\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return new Dictionary<string, string>(f.Git.Environment)
+        {
+            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+        };
+    }
+
+    private static IReadOnlyDictionary<string, string> GitVersion(PreparationFixture f, string version) =>
+        GitShim(f, "for arg do last=$arg; done\nif [ \"$last\" = version ]; then printf '%s\\n' '" + version + "'; exit 0; fi");
+
+    private static async Task CleanSources(PreparationFixture f)
+    {
+        await Write(f, T, ("b.txt", "B\n"));
+        await Write(f, C, ("c.txt", "C\n"));
+    }
+
+    private static void CleanContent(Preparation.Ready ready)
+    {
+        Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
+        Assert.Equal("C\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
+    }
+
+    [UnixFact]
+    public async Task Git_239_single_input_successor_prepares_literal_source_content()
+    {
+        using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U)), T, U));
+        await Write(f, T, ("b.txt", "B\n"));
+        var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: GitVersion(f, "git version 2.39.5 (Apple Git-154)"))
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
+    }
+
+    [UnixFact]
+    public async Task Git_239_join_blocks_with_its_literal_version_without_a_ref_or_plan()
+    {
+        using var f = new PreparationFixture(Diamond());
+        await CleanSources(f);
+        var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: GitVersion(f, "git version 2.39.5 (Apple Git-154)"))
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        Assert.Equal(MaterializationProblem.GitVersionUnsupported, blocked.Block.Problem);
+        Assert.Equal("Joins need Git 2.43 or later. Installed: git version 2.39.5 (Apple Git-154).", blocked.Block.Detail);
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
+        Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Join>());
+    }
+
+    [UnixFact]
+    public async Task Git_242_blocks_the_same_content_join_that_git_243_prepares()
+    {
+        using var f = new PreparationFixture(Diamond(), configureBase: RenameBase);
+        await Write(f, T, ("x.txt", Renamed));
+        await Write(f, C, ("x.txt", "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nchanged 10\n"));
+        var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: GitVersion(f, "git version 2.42.0"))
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        Assert.Equal(MaterializationProblem.GitVersionUnsupported, blocked.Block.Problem);
+        Assert.Equal("Joins need Git 2.43 or later. Installed: git version 2.42.0.", blocked.Block.Detail);
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
+        Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Join>());
+        var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: GitVersion(f, "git version 2.43.0"))
+            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+        Assert.Equal("changed 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nchanged 10\n", File.ReadAllText(Path.Combine(ready.Checkout, "x.txt")));
+    }
 }

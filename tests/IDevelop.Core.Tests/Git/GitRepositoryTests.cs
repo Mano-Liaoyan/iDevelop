@@ -186,7 +186,6 @@ public sealed class GitRepositoryTests
 
     [Theory]
     [InlineData("git version 2.38.1")]
-    [InlineData("git version 2.39.5 (Apple Git-154)")]
     [InlineData("not a Git version")]
     public void Unsupported_or_unknown_version_is_refused(string text)
     {
@@ -196,9 +195,9 @@ public sealed class GitRepositoryTests
     }
 
     [Fact]
-    public void Git_240_supports_the_committed_attribute_source()
+    public void Git_239_vendor_build_is_supported_for_general_operations()
     {
-        Assert.Null(GitRepository.CheckVersion("git version 2.40.0"));
+        Assert.Null(GitRepository.CheckVersion("git version 2.39.5 (Apple Git-154)"));
     }
 
     [Fact]

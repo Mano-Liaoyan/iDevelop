@@ -38,6 +38,8 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         if (existing is not null && (existing.Task != request.Task || existing.Inputs != request.Inputs || !RunReducer.Same(existing.Sources, request.Sources)))
             return Block(request, MaterializationProblem.InputUnavailable, $"Join operation {request.Operation.Value:D} has different inputs.");
         var repository = Repository();
+        if (GitRepository.ParseVersion(repository.Version) is not { } version || version < new Version(2, 43, 0))
+            return Block(request, MaterializationProblem.GitVersionUnsupported, $"Joins need Git 2.43 or later. Installed: {repository.Version}.");
         var timestamps = Value(repository.CommitterTimestamps(parents));
         var timestamp = timestamps[0];
         var accumulator = parents[0];

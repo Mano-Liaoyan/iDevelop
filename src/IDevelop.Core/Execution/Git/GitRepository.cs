@@ -121,7 +121,7 @@ internal sealed partial class GitRepository
             ? version : null;
     }
 
-    internal static RepositoryOpen.Refused? CheckVersion(string text) => ParseVersion(text) is not { } version || version < new Version(2, 40, 0)
+    internal static RepositoryOpen.Refused? CheckVersion(string text) => ParseVersion(text) is not { } version || version < new Version(2, 39, 0)
         ? new(MaterializationProblem.GitVersionUnsupported, text.TrimEnd('\r', '\n')) : null;
 
     /// <summary>The persistent lock file is never deleted, so concurrent owners cannot lock different files at the same path.</summary>
