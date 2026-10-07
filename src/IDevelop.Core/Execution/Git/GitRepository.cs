@@ -196,6 +196,17 @@ internal sealed class GitRepository
         };
     }
 
+    public GitRead<CommitId?> ResolveCheckoutHead(string checkout)
+    {
+        var result = Git(checkout, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+        return result.ExitCode switch
+        {
+            0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
+            1 => new GitRead<CommitId?>.Read(null),
+            _ => Failure<CommitId?>(result),
+        };
+    }
+
     public GitResult AttachHead(string checkout, string branch) => Git(checkout, GitOperation.Metadata, ["symbolic-ref", "HEAD", branch]);
 
     public GitRead<ImmutableArray<StageEntry>> UnmergedEntries(string checkout)
@@ -295,7 +306,9 @@ internal sealed class GitRepository
         }
         try
         {
-            return new GitRead<Digest?>.Read(HashIndex(path.Value));
+            if (!File.Exists(path.Value)) return new GitRead<Digest?>.Read(null);
+            var staged = Git(checkout, GitOperation.Metadata, ["ls-files", "--stage", "-z"]);
+            return staged.ExitCode == 0 ? new GitRead<Digest?>.Read(Revision.Hash(staged.Stdout)) : Failure<Digest?>(staged);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -313,7 +326,9 @@ internal sealed class GitRepository
         var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
         try
         {
-            var before = HashIndex(path.Value);
+            var digest = IndexDigest(checkout);
+            if (digest is not GitRead<Digest?>.Read read) return ConvertFailure<Digest?, GitCapture>(digest);
+            var before = read.Value;
             if (before is not null)
             {
                 File.Copy(path.Value, temporary);
@@ -329,9 +344,11 @@ internal sealed class GitRepository
                 return Failure<GitCapture>(added);
             }
             var tree = Git(checkout, GitOperation.Worktree, ["write-tree"], environment);
-            return tree.ExitCode == 0
-                ? new GitRead<GitCapture>.Read(new(new(tree.Text.Trim()), before, HashIndex(path.Value)))
-                : Failure<GitCapture>(tree);
+            if (tree.ExitCode != 0) return Failure<GitCapture>(tree);
+            var after = IndexDigest(checkout);
+            return after is GitRead<Digest?>.Read final
+                ? new GitRead<GitCapture>.Read(new(new(tree.Text.Trim()), before, final.Value))
+                : ConvertFailure<Digest?, GitCapture>(after);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -510,7 +527,7 @@ internal sealed class GitRepository
         {
             return PathRemoval.Unexpected;
         }
-        if (HashIndex(path) != expected)
+        if (HashFile(path) != expected)
         {
             return PathRemoval.Unexpected;
         }
@@ -589,7 +606,7 @@ internal sealed class GitRepository
         }
     }
 
-    private static Digest? HashIndex(string path) => File.Exists(path) ? new(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))) : null;
+    private static Digest? HashFile(string path) => File.Exists(path) ? new(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))) : null;
 
     private static (string Name, string Email)? Identity(string text)
     {
