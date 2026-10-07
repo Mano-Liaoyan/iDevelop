@@ -58,6 +58,9 @@ internal sealed partial class Materializer
             if (existing.Value is MaterializationPlan.Publication persisted)
             {
                 plan = persisted;
+                step = "ownership";
+                VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+                VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence, planId);
                 step = "commit";
                 if (Value(Mutate("commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
                     throw Fault(MaterializationProblem.UncertainOwnership, "The persisted publication recipe produced a different commit.");
