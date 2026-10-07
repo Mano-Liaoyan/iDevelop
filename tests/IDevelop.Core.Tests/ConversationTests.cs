@@ -78,7 +78,7 @@ public sealed class ConversationTests : IDisposable
         var started = Assert.IsType<StartResult.Started>(runs.Start(SayHi(Settings[client])));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
 
-        var sent = runs.Send(SayHi(Settings[client]), "banana", stopTurn: false);
+        var sent = await runs.SendAsync(SayHi(Settings[client]), "banana", stopTurn: false);
 
         Assert.Equal(new SendResult.Queued(), sent);
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
@@ -108,12 +108,12 @@ public sealed class ConversationTests : IDisposable
         var settled = NextSettled(runs);
         runs.Start(codex);
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
-        runs.Send(codex, "banana", stopTurn: false);
+        await runs.SendAsync(codex, "banana", stopTurn: false);
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.WriteAllText(_gate, "");
         await WaitUntilAsync(() => runs.Latest[SayHiId].Turns is [_, { Outcome: TurnOutcome.Running }]);
 
-        Assert.Equal(new SendResult.Queued(), runs.Send(codex, "and an apple", stopTurn: false));
+        Assert.Equal(new SendResult.Queued(), await runs.SendAsync(codex, "and an apple", stopTurn: false));
 
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "and an apple" }]);
         File.WriteAllText(second, "");
@@ -141,8 +141,8 @@ public sealed class ConversationTests : IDisposable
         runs.Start(codex);
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
 
-        runs.Send(codex, "banana", stopTurn: false);
-        runs.Send(codex, "and an apple", stopTurn: false);
+        await runs.SendAsync(codex, "banana", stopTurn: false);
+        await runs.SendAsync(codex, "and an apple", stopTurn: false);
 
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }, { Text: "and an apple" }]);
         File.WriteAllText(_gate, "");
@@ -158,13 +158,13 @@ public sealed class ConversationTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var codex = SayHi(Settings[ClientId.Codex]);
         var answer = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, _) =>
+        runs.Changed += async (_, _) =>
         {
             // The drain waits for this handler at the agent's answer, so the attempt still runs after its client exits.
             if (runs.Latest.GetValueOrDefault(SayHiId) is { Status: AttemptStatus.Running, Activity: [.., { Text: "Done." }] } && !answer.Task.IsCompleted)
             {
                 SpinWait.SpinUntil(() => runs.CheckSend(codex) is not null, Patience);
-                answer.TrySetResult(runs.Send(codex, "banana", stopTurn: false));
+                answer.TrySetResult(await runs.SendAsync(codex, "banana", stopTurn: false));
             }
         };
         var settled = NextSettled(runs);
@@ -192,7 +192,7 @@ public sealed class ConversationTests : IDisposable
         var grandchildId = await _spawned.PidAsync(grandchild);
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
 
-        Assert.Equal(new SendResult.Queued(), runs.Send(SayHi(Settings[ClientId.Codex]), "Stop. Use an apple.", stopTurn: true));
+        Assert.Equal(new SendResult.Queued(), await runs.SendAsync(SayHi(Settings[ClientId.Codex]), "Stop. Use an apple.", stopTurn: true));
 
         var record = await settled;
         Assert.Equal((AttemptStatus.Succeeded, "Using an apple."), (record.Status, record.Result));
@@ -218,7 +218,7 @@ public sealed class ConversationTests : IDisposable
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session && Exited(client));
 
         // The sleeping child holds the turn's output open, so the run has not seen the turn end yet.
-        Assert.Equal(new SendResult.Queued(), runs.Send(SayHi(Settings[ClientId.Codex]), "Use an apple.", stopTurn: true));
+        Assert.Equal(new SendResult.Queued(), await runs.SendAsync(SayHi(Settings[ClientId.Codex]), "Use an apple.", stopTurn: true));
 
         var record = await settled;
         Assert.Equal(
@@ -240,7 +240,7 @@ public sealed class ConversationTests : IDisposable
         await WaitUntilAsync(() => runs.Latest[SayHiId].Activity is [.., { Text: "Which fruit?" }] && Exited(client));
 
         // The sleeping child holds the turn's output open, so the run has not seen the turn end yet.
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         var record = await settled;
         Assert.Equal((AttemptStatus.Cancelled, (string?)null, "Which fruit?"), (record.Status, record.Detail, record.Result));
@@ -259,14 +259,14 @@ public sealed class ConversationTests : IDisposable
         var settled = NextSettled(runs);
         runs.Start(SayHi(Settings[ClientId.Codex]));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
-        runs.Send(SayHi(Settings[ClientId.Codex]), "banana", stopTurn: false);
+        await runs.SendAsync(SayHi(Settings[ClientId.Codex]), "banana", stopTurn: false);
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.WriteAllText(_gate, "");
         await WaitUntilAsync(() => runs.Latest[SayHiId].Turns is [_, { Outcome: TurnOutcome.Running }] && runs.Latest[SayHiId].Process is not null);
         var second = runs.Latest[SayHiId].Process!.Value.Id;
         _spawned.Add(second);
 
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         var record = await settled;
         Assert.Equal((AttemptStatus.Cancelled, (string?)null), (record.Status, record.Detail));
@@ -291,7 +291,7 @@ public sealed class ConversationTests : IDisposable
         Assert.Null(runs.CheckSend(SayHi(Settings[ClientId.Codex])));
         var settled = NextSettled(runs);
 
-        var continued = Assert.IsType<SendResult.Continued>(runs.Send(SayHi(Settings[ClientId.Codex]), "Go on.", stopTurn: false)).Attempt;
+        var continued = Assert.IsType<SendResult.Continued>(await runs.SendAsync(SayHi(Settings[ClientId.Codex]), "Go on.", stopTurn: false)).Attempt;
 
         Assert.Equal((AttemptStatus.Running, (AttemptId?)interrupted.Id, Session), (continued.Status, continued.Continues, continued.SessionId));
         var record = await settled;
@@ -313,19 +313,19 @@ public sealed class ConversationTests : IDisposable
             Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var codex = SayHi(Settings[ClientId.Codex]);
-        async Task<AttemptRecord> Settled(Func<AttemptId> start)
+        async Task<AttemptRecord> Settled(Func<Task<AttemptId>> start)
         {
             var settled = NextSettled(runs);
-            var id = start();
+            var id = await start();
             var record = await settled;
             Assert.Equal((id, AttemptStatus.Succeeded), (record.Id, record.Status));
             return record;
         }
 
-        var unrelated = await Settled(() => Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id);
-        var asked = await Settled(() => Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id);
-        var answered = await Settled(() => Assert.IsType<SendResult.Continued>(runs.Send(codex, "banana", stopTurn: false)).Attempt.Id);
-        var latest = await Settled(() => Assert.IsType<SendResult.Continued>(runs.Send(codex, "and an apple", stopTurn: false)).Attempt.Id);
+        var unrelated = await Settled(() => Task.FromResult(Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id));
+        var asked = await Settled(() => Task.FromResult(Assert.IsType<StartResult.Started>(runs.Start(codex)).Attempt.Id));
+        var answered = await Settled(async () => Assert.IsType<SendResult.Continued>(await runs.SendAsync(codex, "banana", stopTurn: false)).Attempt.Id);
+        var latest = await Settled(async () => Assert.IsType<SendResult.Continued>(await runs.SendAsync(codex, "and an apple", stopTurn: false)).Attempt.Id);
 
         var earlier = runs.EarlierAttempts(latest);
 
@@ -346,8 +346,8 @@ public sealed class ConversationTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, clients);
         var codex = SayHi(Settings[ClientId.Codex]);
 
-        Assert.Equal(new SendResult.Refused(new SendProblem.EmptyMessage()), runs.Send(codex, " \n", stopTurn: false));
-        Assert.Equal(new SendResult.Refused(new SendProblem.NeverRan()), runs.Send(codex, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.EmptyMessage()), await runs.SendAsync(codex, " \n", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.NeverRan()), await runs.SendAsync(codex, "banana", stopTurn: false));
         Assert.Equal(new SendProblem.NeverRan(), runs.CheckSend(codex));
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(_project, ".idp", "attempts", SayHiId.ToString())));
         var settled = NextSettled(runs);
@@ -355,12 +355,12 @@ public sealed class ConversationTests : IDisposable
         Assert.Equal(AttemptStatus.Succeeded, (await settled).Status);
 
         var claude = SayHi(Settings[ClientId.ClaudeCode]);
-        Assert.Equal(new SendResult.Refused(new SendProblem.ClientChanged(ClientId.Codex, ClientId.ClaudeCode)), runs.Send(claude, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.ClientChanged(ClientId.Codex, ClientId.ClaudeCode)), await runs.SendAsync(claude, "banana", stopTurn: false));
         Assert.Equal(new SendProblem.ClientChanged(ClientId.Codex, ClientId.ClaudeCode), runs.CheckSend(claude));
         var unoffered = SayHi(Settings[ClientId.Codex] with { Model = "gpt-4" });
         Assert.Equal(
             new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.ModelNotOffered(ClientId.Codex, "gpt-4"))),
-            runs.Send(unoffered, "banana", stopTurn: false));
+            await runs.SendAsync(unoffered, "banana", stopTurn: false));
         Assert.Equal(new SendProblem.CannotStart(new StartProblem.ModelNotOffered(ClientId.Codex, "gpt-4")), runs.CheckSend(unoffered));
         Assert.Single(Directory.EnumerateDirectories(Path.Combine(_project, ".idp", "attempts", SayHiId.ToString())));
     }
@@ -374,12 +374,12 @@ public sealed class ConversationTests : IDisposable
         var codex = SayHi(Settings[ClientId.Codex]);
         runs.Start(codex);
 
-        Assert.Equal(new SendResult.Refused(new SendProblem.NoSessionYet(ClientId.Codex)), runs.Send(codex, "banana", stopTurn: true));
+        Assert.Equal(new SendResult.Refused(new SendProblem.NoSessionYet(ClientId.Codex)), await runs.SendAsync(codex, "banana", stopTurn: true));
         Assert.Equal(new SendProblem.NoSessionYet(ClientId.Codex), runs.CheckSend(codex));
 
         File.WriteAllText(_gate, "");
         Assert.Equal(AttemptStatus.Succeeded, (await settled).Status);
-        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), runs.Send(codex, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), await runs.SendAsync(codex, "banana", stopTurn: false));
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.NoSession(ClientId.Codex)), runs.OpenInTerminal(SayHiId));
     }
 
@@ -396,7 +396,7 @@ public sealed class ConversationTests : IDisposable
         var codex = SayHi(Settings[ClientId.Codex]);
 
         Assert.Equal(new SendProblem.NoSession(ClientId.Codex), runs.CheckSend(codex));
-        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), runs.Send(codex, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), await runs.SendAsync(codex, "banana", stopTurn: false));
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.NoSession(ClientId.Codex)), runs.OpenInTerminal(SayHiId));
         Assert.Equal(["iDevelop ignored the session id Codex reported, because it is not a plain id."], runs.Latest[SayHiId].Activity.Select(line => line.Text));
         Assert.Single(Directory.EnumerateDirectories(AttemptLog.TaskFolder(Path.Combine(_project, ".idp", "attempts"), SayHiId)));
@@ -416,7 +416,7 @@ public sealed class ConversationTests : IDisposable
 
         Assert.Equal((AttemptStatus.Succeeded, (string?)null), (record.Status, record.SessionId));
         Assert.Equal(["iDevelop ignored the session id Codex reported, because it is not a plain id.", "Done."], record.Activity.Select(line => line.Text));
-        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), runs.Send(codex, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.NoSession(ClientId.Codex)), await runs.SendAsync(codex, "banana", stopTurn: false));
     }
 
     [Fact]
@@ -426,19 +426,19 @@ public sealed class ConversationTests : IDisposable
         await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
         var codex = SayHi(Settings[ClientId.Codex]);
         var answer = new TaskCompletionSource<SendResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        runs.Changed += (_, _) =>
+        runs.Changed += async (_, _) =>
         {
             // The drain waits for this handler, so the run is still stopping and has not exited yet.
             if (runs.Latest.GetValueOrDefault(SayHiId) is { Stopping: true })
             {
-                answer.TrySetResult(runs.Send(codex, "banana", stopTurn: false));
+                answer.TrySetResult(await runs.SendAsync(codex, "banana", stopTurn: false));
             }
         };
         var started = Assert.IsType<StartResult.Started>(runs.Start(codex));
         _spawned.Add(started.Attempt.Process!.Value.Id);
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
 
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         Assert.Equal(new SendResult.Refused(new SendProblem.Ending("Say hi")), await answer.Task.WaitAsync(Patience));
     }
@@ -454,12 +454,12 @@ public sealed class ConversationTests : IDisposable
         var started = Assert.IsType<StartResult.Started>(first.Start(codex));
         _spawned.Add(started.Attempt.Process!.Value.Id);
 
-        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(SayHiId, "Say hi"))), second.Send(codex, "banana", stopTurn: false));
+        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.AlreadyRunning(SayHiId, "Say hi"))), await second.SendAsync(codex, "banana", stopTurn: false));
         Assert.Equal(
             new TerminalResult.Refused(new TerminalProblem.Blocked(new StartProblem.AlreadyRunning(SayHiId, "Say hi"))),
             second.OpenInTerminal(SayHiId));
 
-        first.Cancel(SayHiId);
+        await first.CancelAsync(SayHiId);
         await WaitUntilAsync(() => first.Active.IsEmpty);
     }
 
@@ -545,14 +545,14 @@ public sealed class ConversationTests : IDisposable
         var settled = NextSettled(runs);
         var started = Assert.IsType<StartResult.Started>(runs.Start(codex));
         await WaitUntilAsync(() => runs.Latest[SayHiId].SessionId == Session);
-        runs.Send(codex, "banana", stopTurn: false);
+        await runs.SendAsync(codex, "banana", stopTurn: false);
         await WaitUntilAsync(() => runs.Latest[SayHiId].Queued is [{ Text: "banana" }]);
         File.Delete(shim);
         var accepted = new ConcurrentQueue<string>();
-        var sender = Task.Run(() =>
+        var sender = Task.Run(async () =>
         {
             SpinWait.SpinUntil(() => runs.Latest[SayHiId].Turns is [{ Outcome: not TurnOutcome.Running }, ..], Patience);
-            for (var i = 0; i < 10_000 && runs.Send(codex, $"message {i}", stopTurn: false) is SendResult.Queued; i++)
+            for (var i = 0; i < 10_000 && await runs.SendAsync(codex, $"message {i}", stopTurn: false) is SendResult.Queued; i++)
             {
                 accepted.Enqueue($"message {i}");
             }

@@ -225,8 +225,8 @@ public sealed class ProjectRunsTests : IDisposable
         _spawned.Add(started.Attempt.Process!.Value.Id);
         var grandchildId = await _spawned.PidAsync(grandchild);
 
-        runs.Cancel(SayHiId);
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         var record = await settled;
         Assert.Equal((AttemptStatus.Cancelled, null, "01a104d5-d442-71a1-9b08-8938c119e5ae"), (record.Status, record.Detail, record.SessionId));
@@ -246,7 +246,7 @@ public sealed class ProjectRunsTests : IDisposable
         _spawned.Add(started.Attempt.Process!.Value.Id);
         var sleeperId = await _spawned.PidAsync(sleeper);
 
-        runs.Cancel(SayHiId);
+        await runs.CancelAsync(SayHiId);
 
         Assert.Equal(AttemptStatus.Cancelled, (await settled).Status);
         AssertGone(started.Attempt.Process!.Value.Id);
@@ -328,11 +328,11 @@ public sealed class ProjectRunsTests : IDisposable
 
         Assert.False(Process.GetProcessById(sayHi.Attempt.Process!.Value.Id).HasExited);
         Assert.False(Process.GetProcessById(review.Attempt.Process!.Value.Id).HasExited);
-        first.Cancel(SayHiId);
+        await first.CancelAsync(SayHiId);
         Assert.Equal(AttemptStatus.Cancelled, (await settled).Status);
         Assert.Equal([ReviewId], first.Active.Select(record => record.Task));
         Assert.Null(first.Check(SayHi(Runs[ClientId.Codex].Settings)));
-        first.Cancel(ReviewId);
+        await first.CancelAsync(ReviewId);
         await WaitUntilAsync(() => first.Active.IsEmpty);
         Assert.Equal(AttemptStatus.Cancelled, first.Latest[ReviewId].Status);
     }

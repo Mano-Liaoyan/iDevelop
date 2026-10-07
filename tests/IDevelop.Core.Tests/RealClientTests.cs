@@ -51,14 +51,14 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
             execution: settings, conversation: ConversationMode.MayAsk);
         await using var runs = ProjectRuns.Open(project, clients);
 
-        var asked = await Settles(runs, () => runs.Start(task));
+        var asked = await Settles(runs, () => Task.FromResult<object>(runs.Start(task)));
         output.WriteLine($"{Clients.Name(client)} turn 1: {asked.Status} {asked.Pending} {asked.Detail}\n{asked.Result}");
 
         Assert.Equal(AttemptStatus.WaitingForInput, asked.Status);
         Assert.IsType<Pending.Question>(asked.Pending);
         Assert.False(File.Exists(Path.Combine(project, "answer.txt")));
 
-        var answered = await Settles(runs, () => runs.Send(task, "banana", stopTurn: false));
+        var answered = await Settles(runs, async () => await runs.SendAsync(task, "banana", stopTurn: false));
         output.WriteLine($"{Clients.Name(client)} turn 2: {answered.Status} {answered.Detail}\n{answered.Result}");
 
         Assert.Equal((asked.Id, AttemptStatus.Succeeded, 2), (answered.Id, answered.Status, answered.Turns.Count));
@@ -98,7 +98,7 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
             ])) is EditResult.Applied { Workflow: var drawn } ? drawn : throw new InvalidOperationException("The workflow did not build.");
         await using var runs = ProjectRuns.Open(project, clients);
 
-        var record = await Settles(runs, () => runs.Start(workflow.Tasks[TestTasks.Design], PlanningContext.For(workflow, TestTasks.Design, BuiltInBlueprints.All, _ => false)));
+        var record = await Settles(runs, () => Task.FromResult<object>(runs.Start(workflow.Tasks[TestTasks.Design], PlanningContext.For(workflow, TestTasks.Design, BuiltInBlueprints.All, _ => false))));
         output.WriteLine($"{Clients.Name(client)}: {record.Status} {record.Detail}\n{record.Result}");
 
         Assert.Equal(AttemptStatus.Succeeded, record.Status);
@@ -166,7 +166,7 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         var reviewed = runs.Latest[TestTasks.Review];
         if (reviewed.Status is AttemptStatus.Running or AttemptStatus.InReview)
         {
-            runs.Cancel(TestTasks.Review);
+            await runs.CancelAsync(TestTasks.Review);
         }
 
         var ledger = ReviewLedger.Fold(reviewed);
@@ -224,7 +224,7 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         }
     }
 
-    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<object> act)
+    private static async Task<AttemptRecord> Settles(ProjectRuns runs, Func<Task<object>> act)
     {
         var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnChanged(object? sender, EventArgs e)
@@ -238,7 +238,7 @@ public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
         runs.Changed += OnChanged;
         try
         {
-            var result = act();
+            var result = await act();
             Assert.False(result is StartResult.Refused or SendResult.Refused, $"refused: {result}");
             return await settled.Task.WaitAsync(TimeSpan.FromMinutes(5));
         }

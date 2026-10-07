@@ -290,7 +290,7 @@ public sealed class MainWindowViewModel : ObservableObject
             return null;
         }
 
-        var runs = ProjectRuns.Open(identity, _clients);
+        var runs = ProjectRuns.Open(identity, _clients, new HostQuestions.Disabled());
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
         Projects.Add(project);
         foreach (var unopened in Unopened.Where(unopened => ProjectFolders.Comparer.Equals(unopened.Folder, identity)).ToList())
