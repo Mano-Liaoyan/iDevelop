@@ -365,6 +365,38 @@ public sealed class GitRepositoryTests
     }
 
     [UnixFact]
+    public async Task Removal_rejects_a_fifo_without_opening_or_deleting_it()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var repository = f.Open();
+        var fifo = f.PathOf("pipe");
+        Assert.Equal(0, Mkfifo(fifo, 0x180));
+        var removal = Task.Run(() => repository.RemovePath(f.Folder, "pipe",
+            new("be02c0270dc16cf866391d81369ce9b50c9bd1c9cb0834a5c2788c70b35ead2e"), GitPathType.RegularFile));
+        try
+        {
+            Assert.Equal(PathRemoval.Unexpected, await removal.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(File.Exists(fifo));
+        }
+        finally
+        {
+            var writer = Open(fifo, 1 | (OperatingSystem.IsMacOS() ? 4 : 0x800));
+            if (writer >= 0) Close(writer);
+            await removal.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]
+    private static extern int Mkfifo([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
+
+    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
+    private static extern int Open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
+
+    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
+    private static extern int Close(int descriptor);
+
+    [UnixFact]
     public void Removal_preserves_symlink_targets()
     {
         using var f = new GitFixture();

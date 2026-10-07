@@ -500,21 +500,21 @@ internal sealed class GitRepository
         {
             return PathRemoval.Absent;
         }
-        if (!IsRegularFile(path) || HashIndex(path) != expected)
+        try
+        {
+            RegularFile.Verify(path);
+        }
+        catch (IOException)
+        {
+            return PathRemoval.Unexpected;
+        }
+        if (HashIndex(path) != expected)
         {
             return PathRemoval.Unexpected;
         }
         File.Delete(path);
         return PathRemoval.Removed;
     }
-
-    /// <summary>
-    /// Git adds only regular files and links, and callers remove a path only after a fresh capture proved the same inventory
-    /// under quiescence, so a pipe or device cannot appear here without a writer the caller has already excluded.
-    /// </summary>
-    private static bool IsRegularFile(string path) =>
-        (File.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Device)) == 0 &&
-        new FileInfo(path).LinkTarget is null;
 
     private GitResult Git(string checkout, GitOperation operation, string[] arguments, IReadOnlyDictionary<string, string>? overlay = null, byte[]? stdin = null)
     {
