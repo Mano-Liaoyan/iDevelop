@@ -14,12 +14,12 @@ internal sealed class PreparationFixture : IDisposable
     private int _id = 100;
     private int _op = 1000;
     public readonly CommitId A;
-    public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null)
+    public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null, Func<GitFixture, CommitId>? configureBase = null)
     {
         A = Git.Diamond();
         RunId = run ?? Run;
         Store = RunStore.Open(Git.Folder, new Clock(), () => Id(++_id));
-        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(runBase ?? A, BaseChoice.Head)));
+        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A, BaseChoice.Head)));
     }
 
     public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, IExecutionBoundary? boundary = null) =>

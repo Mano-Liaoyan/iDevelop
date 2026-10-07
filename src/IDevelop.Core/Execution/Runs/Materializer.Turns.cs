@@ -4,7 +4,7 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public ValueTask<Preparation> PrepareTurn(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, string prompt,
+    public async ValueTask<Preparation> PrepareTurn(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, string prompt,
         CancellationToken cancellation = default)
     {
         TaskId task = default;
@@ -13,32 +13,43 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var record = Read(workflow, run);
-            if (record.Phase != RunPhase.Approved) return ValueTask.FromResult<Preparation>(new Preparation.Rejected(new(RunProblem.RunStopped)));
+            if (record.Phase != RunPhase.Approved) return new Preparation.Rejected(new(RunProblem.RunStopped));
             if (!record.Attempts.TryGetValue(key.Attempt, out var attempt))
-                return ValueTask.FromResult<Preparation>(new Preparation.Rejected(new(RunProblem.UnknownAttempt)));
+                return new Preparation.Rejected(new(RunProblem.UnknownAttempt));
             task = attempt.Task;
             var previous = new LaunchKey(key.Attempt, key.Turn - 1);
             if (key.Turn < 2 || record.Closures.ContainsKey(key.Attempt) || !record.TurnClosures.ContainsKey(previous) ||
                 !record.Preparations.TryGetValue(previous, out var old))
-                return ValueTask.FromResult<Preparation>(new Preparation.Rejected(new(RunProblem.InvalidClaim)));
+                return new Preparation.Rejected(new(RunProblem.InvalidClaim));
             inputs = old.Inputs;
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
-            if (mutation is null) return ValueTask.FromResult<Preparation>(new Preparation.Rejected(new(RunProblem.JournalBusy)));
+            if (mutation is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             VerifyRepository(record, repository);
             using var held = TakeTaskLock(task);
-            VerifyCheckout(repository, old.Location, keepChanges: true, record);
             var storage = new RunStorage(_project, workflow, run);
             var refreshPair = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Refresh refresh && refresh.Launch == key);
+            var verificationLocation = old.Location;
+            if (refreshPair.Value is MaterializationPlan.Refresh resetting &&
+                record.GitIntents.Values.Any(intent => intent.Plan == refreshPair.Key && intent.Mutation is GitMutation.ResetCheckout reset &&
+                    reset.Task == task && reset.Target == record.Inputs[resetting.Inputs].CodeBase) &&
+                Value(repository.ReadRef(old.Location.Owner.Branch)) == record.Inputs[resetting.Inputs].CodeBase)
+                verificationLocation = old.Location with { AttemptBase = record.Inputs[resetting.Inputs].CodeBase };
+            VerifyCheckout(repository, verificationLocation, keepChanges: true, record);
             var changed = record.Inputs[old.Inputs].Review is { } review && record.CurrentResults.GetValueOrDefault(review.Subject)?.Id != review.SubjectResult;
             if (record.Preparations.TryGetValue(key, out var existing))
             {
                 var expectedPrompt = existing.Inputs == old.Inputs ? prompt : Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task],
                     record.Inputs[existing.Inputs], attempt.Id, prompt);
-                if (existing.Prompt != expectedPrompt) return ValueTask.FromResult<Preparation>(new Preparation.Rejected(new(RunProblem.OperationConflict)));
+                if (existing.Prompt != expectedPrompt) return new Preparation.Rejected(new(RunProblem.OperationConflict));
+                if (record.Inputs[existing.Inputs].Code is CodeSelection.Joined existingJoin)
+                    VerifyJoin(record, repository, task, existing.Inputs,
+                        refreshPair.Value is MaterializationPlan.Refresh refreshed ? refreshed.Sources :
+                            record.Plans.Values.OfType<MaterializationPlan.Preparation>().Single(plan => plan.Attempt == key.Attempt).Sources,
+                        existingJoin.Join);
                 VerifyDelivery(record, existing, repository);
-                return ValueTask.FromResult<Preparation>(new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner)));
+                return new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner));
             }
             var execution = old with { Launch = key, Prompt = prompt, PromptHash = Revision.Hash(prompt) };
             if (changed || refreshPair.Value is MaterializationPlan.Refresh)
@@ -46,7 +57,31 @@ internal sealed partial class Materializer
                 var checkout = Checkout(repository, old.Location.Owner);
                 if (Value(repository.Status(checkout)).Length != 0)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The reviewer checkout must be clean before refreshing its inputs.");
-                var refreshed = Journal("refresh-plan", () => _store.Refresh(workflow, run, OperationIds.Derive(operation, "refresh-plan"), key));
+                JoinRecord? join = (refreshPair.Value as MaterializationPlan.Refresh)?.Composed;
+                if (refreshPair.Value is not MaterializationPlan.Refresh)
+                {
+                    var capture = RunStore.Inputs(record, task, attempt.Revision, new(OperationIds.Derive(operation, "refresh-input").Value));
+                    if (capture.Rejection is { } rejection) throw new Refusal(rejection);
+                    var sources = InputMaterial.Sources(record, capture.Inputs!.Bindings);
+                    if (sources.Select(source => source.Commit).Distinct().Count() >= 2)
+                    {
+                        inputs = capture.Inputs.Id;
+                        var reference = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[task]);
+                        var outcome = await _joins.Compose(new(workflow, OperationIds.Derive(operation, "join"), run, task,
+                            inputs.Value, sources, Value(repository.ReadRef(reference))), cancellation);
+                        if (outcome is JoinOutcome.Blocked blocked)
+                            return Block(workflow, run, operation, "join", blocked.Block with { Operation = operation, Attempt = key.Attempt });
+                        join = ((JoinOutcome.Ready)outcome).Join;
+                        VerifyJoin(Read(workflow, run), repository, task, inputs.Value, sources, join);
+                    }
+                }
+                else if (join is not null)
+                {
+                    var persisted = (MaterializationPlan.Refresh)refreshPair.Value;
+                    VerifyJoin(record, repository, task, persisted.Inputs, persisted.Sources, join);
+                }
+                cancellation.ThrowIfCancellationRequested();
+                var refreshed = Journal("refresh-plan", () => _store.Refresh(workflow, run, OperationIds.Derive(operation, "refresh-plan"), key, join));
                 record = DecisionRecord(refreshed);
                 var plan = (MaterializationPlan.Refresh)((RunEvent.Planned)DecisionEvent(refreshed)).Plan;
                 var planId = record.Plans.Single(pair => RunReducer.Same(pair.Value, plan)).Key;
@@ -72,12 +107,12 @@ internal sealed partial class Materializer
             }
             var refs = Snapshot(storage, operation, repository, record);
             Journal("prepared", () => _store.Record(workflow, run, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
-            return ValueTask.FromResult<Preparation>(new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner)));
+            return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }
-        catch (Refusal refused) { return ValueTask.FromResult<Preparation>(new Preparation.Rejected(refused.Reason)); }
+        catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return ValueTask.FromResult(Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message))); }
+        { return Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return ValueTask.FromResult(Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message))); }
+        { return Block(workflow, run, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
 }

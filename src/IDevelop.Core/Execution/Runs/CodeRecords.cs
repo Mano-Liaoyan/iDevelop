@@ -62,7 +62,7 @@ internal sealed record RefChange(string Ref, CommitId? Expected, CommitId Target
 
 internal sealed record EvidenceFile(string RelativePath, Digest Content, long ByteLength);
 
-internal sealed record JoinRequest(OperationId Operation, RunId Run, TaskId Task, InputId Inputs, ImmutableArray<CodeSource> Sources,
+internal sealed record JoinRequest(WorkflowId Workflow, OperationId Operation, RunId Run, TaskId Task, InputId Inputs, ImmutableArray<CodeSource> Sources,
     CommitId? ExpectedJoin);
 
 internal abstract record JoinOutcome
