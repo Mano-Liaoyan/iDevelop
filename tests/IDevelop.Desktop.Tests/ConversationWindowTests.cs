@@ -67,7 +67,7 @@ public sealed class ConversationWindowTests : IDisposable
 
         Assert.Equal(expected, Messages(shell));
         Assert.Equal("Design", shell.Find<TextBlock>("ConversationTitle").Text);
-        Assert.Equal(3, Conversation(shell).Attempts.Length);
+        Assert.Equal(3, Conversation(shell).Attempts.Count);
         Assert.Equal("Attempt 3 (current) · Succeeded · Codex, continues 1", shell.Picked("AttemptPicker"));
         Assert.Equal(["iDevelop", "Codex", "You", "Codex", "You", "Codex"],
             Conversation(shell).Items.OfType<MessageItemViewModel>().Select(message => message.AuthorLabel));
@@ -98,6 +98,50 @@ public sealed class ConversationWindowTests : IDisposable
         Assert.Equal("Failed", shell.Find<TextBlock>("ConversationStatus").Text);
         Assert.Contains(Conversation(shell).Items.OfType<MarkerItemViewModel>(), marker => (marker.Title, marker.Detail) == ("Failed", "The model is not available."));
         Assert.Equal("Failed: The model is not available.", shell.Window.ViewModel.Canvas!.Nodes.Single().AttentionLabel);
+    }
+
+    [AvaloniaFact]
+    public void A_task_that_never_ran_names_its_chosen_agent_in_the_composer()
+    {
+        var shell = Shell.Open(Project(
+            TaskAt(TestTasks.Design, "Design", 105, 90, CodexHigh, "Draft it."),
+            TaskAt(TestTasks.Build, "Build", 105, 300)));
+        string Watermark(string title)
+        {
+            shell.Click(shell.Header(shell.Node(title)));
+            Invoke(shell.InView<Button>("OpenConversation"));
+            shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted, "the conversation finished reading");
+            shell.Render();
+            var watermark = shell.Find<TextBox>("ConversationComposer").Watermark ?? "";
+            Invoke(shell.Find<Button>("CloseConversation"));
+            shell.Render();
+            return watermark;
+        }
+
+        Assert.Equal(("Message Codex", "Message the agent"), (Watermark("Design"), Watermark("Build")));
+    }
+
+    [AvaloniaFact]
+    public void Expanding_or_closing_the_dock_gives_its_height_back_to_the_main_area()
+    {
+        var shell = Shell.Open(Project());
+        var canvas = shell.Window.CanvasHost.Bounds.Height;
+        shell.Click(shell.Header(shell.Node("Design")));
+        Invoke(shell.InView<Button>("OpenConversation"));
+        shell.Render();
+        var expanded = shell.Find<ConversationView>("ConversationView").Bounds.Height;
+
+        Invoke(shell.Find<Button>("ConversationLayout"));
+        shell.Render();
+        Invoke(shell.Find<Button>("ConversationLayout"));
+        shell.Render();
+        var again = shell.Find<ConversationView>("ConversationView").Bounds.Height;
+        Invoke(shell.Find<Button>("ConversationLayout"));
+        shell.Render();
+        Invoke(shell.Find<Button>("CloseConversation"));
+        shell.Render();
+
+        Assert.Equal((800.0, 800.0, 800.0, 800.0), (canvas, expanded, again, shell.Window.CanvasHost.Bounds.Height));
     }
 
     [AvaloniaFact]

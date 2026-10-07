@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         var dock = MainArea.RowDefinitions[2];
         if (ViewModel.DockedConversation is null)
         {
+            dock.MinHeight = 0;
             dock.Height = GridLength.Auto;
             MainArea.RowDefinitions[0].Height = GridLength.Star;
         }

@@ -236,6 +236,24 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_attempt_picker_keeps_showing_the_attempt_when_its_status_changes()
+    {
+        _session.Attempts = [new AttemptSummary(A, null, T0, AttemptStatus.Running, CodexHigh)];
+        _pager.Rows.Add(Said("m1", MessageAuthor.Agent, "Hello"));
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        var picker = view.GetVisualDescendants().OfType<ComboBox>().Single(box => Avalonia.Automation.AutomationProperties.GetAutomationId(box) == "AttemptPicker");
+        Assert.Equal("Attempt 1 (current) · Running · Codex", Shell.TextOf(picker));
+
+        _session.Attempts = [new AttemptSummary(A, null, T0, AttemptStatus.Succeeded, CodexHigh)];
+        Change(model);
+        Render();
+
+        Assert.Equal(("Attempt 1 (current) · Succeeded · Codex", "Attempt 1 (current) · Succeeded · Codex"),
+            ((picker.SelectedItem as AttemptChoice)?.Label, Shell.TextOf(picker)));
+    }
+
+    [AvaloniaFact]
     public void Prepending_an_earlier_page_keeps_the_entry_being_read_and_its_selected_text_in_place()
     {
         _pager.Rows.AddRange(Enumerable.Range(0, 70).Select(i => Said($"m{i}", MessageAuthor.Agent,
