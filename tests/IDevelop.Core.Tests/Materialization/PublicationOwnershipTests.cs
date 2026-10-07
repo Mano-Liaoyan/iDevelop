@@ -40,6 +40,31 @@ public sealed class PublicationOwnershipTests
     }
 
     [Fact]
+    public async Task Persisted_publication_plan_without_the_attempt_base_blocks_publication()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        const string below = "81ddb7c330112c7f16700ed002803a04b0bce693";
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", below).ExitCode);
+        f.Git.Write("b.txt", "B\n", writer.Checkout);
+        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), writer.Execution.Launch.Attempt));
+        f.Close(writer);
+        var repository = f.Git.Open();
+        var capture = GitFixture.Read(repository.Capture(writer.Checkout));
+        var recipe = new CommitRecipe(capture.Tree, [new CommitId(below)], "B\n", "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", At);
+        var commit = GitFixture.Read(repository.CreateCommit(recipe));
+        var plan = new MaterializationPlan.Publication(writer.Execution.Launch.Attempt, new ResultId(Guid.Parse("00000000-0000-0000-0000-00000000abcd")),
+            null, new CommitId(below), capture.IndexBefore, recipe, commit, "B ready.\n", []);
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(plan)));
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The writer branch tip 81ddb7c330112c7f16700ed002803a04b0bce693 does not contain the attempt base adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
+        Assert.Empty(f.Read().Results);
+    }
+
+    [Fact]
     public async Task Salvage_adopted_rewind_blocks_publication_without_losing_retained_work_and_retry_converges()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
