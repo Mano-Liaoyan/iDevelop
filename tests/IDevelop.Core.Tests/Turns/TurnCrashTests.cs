@@ -190,7 +190,8 @@ public sealed class TurnCrashTests
     {
         await using var f = new TurnFixture(client: ClientId.Pi, model: "deepseek/deepseek-flash");
         using var processes = new Processes();
-        await f.Open(FakeAgents.Fresh(ClientId.Pi).WaitForFile(Path.Combine(f.Evidence, "gate")));
+        var alive = Path.Combine(f.Evidence, "alive.txt");
+        await f.Open(FakeAgents.Fresh(ClientId.Pi).WaitForFile(Path.Combine(f.Evidence, "gate")).Write(alive, "alive\n"));
         var launch = await f.Crash(processes, f.Preparation.Op(), "runner.running");
         var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
         var identity = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted);
@@ -203,6 +204,8 @@ public sealed class TurnCrashTests
         Assert.Equal(root, ProcessCheck.Check(identity).ToString());
         Assert.Equal(1, f.Launches);
         File.WriteAllText(Path.Combine(f.Evidence, "gate"), "release");
+        if (root == "Same") await WaitUntilAsync(() => File.Exists(alive) && File.ReadAllText(alive) == "alive\n");
+        else Assert.False(File.Exists(alive));
         processes.Dispose();
         await WaitUntilAsync(() => ProcessCheck.Check(identity) == ProcessMatch.Gone);
         Assert.Equal("Gone", ProcessCheck.Check(identity).ToString());

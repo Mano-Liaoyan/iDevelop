@@ -422,10 +422,12 @@ public sealed class TurnRunnerTests
         Assert.IsType<LeaseTake.Busy>(f.Preparation.Permit.TakeTask(T));
     }
 
-    [Fact]
-    public async Task Stop_and_send_rests_until_an_explicit_next_turn()
+    [Theory]
+    [InlineData(ClientId.Codex, "gpt-6-sol")]
+    [InlineData(ClientId.Pi, "deepseek/deepseek-flash")]
+    public async Task Stop_and_send_rests_until_an_explicit_next_turn(ClientId client, string model)
     {
-        await using var f = new TurnFixture();
+        await using var f = new TurnFixture(client: client, model: model);
         await f.Open(f.Waiting());
         var running = await f.Start();
         await WaitUntilAsync(() => f.Log(running.Address.Launch).Record?.SessionId == "session-1");
@@ -436,10 +438,10 @@ public sealed class TurnRunnerTests
         Assert.Equal(new[] { "Use the fixture" }, resting.Queued);
         Assert.Equal(1, f.Launches);
         Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Launched>());
-        FakeAgents.Install(f.Fakes, ClientId.Codex, FakeAgents.Resuming(ClientId.Codex, "session-1")
+        FakeAgents.Install(f.Fakes, client, FakeAgents.Resuming(client, "session-1")
             .RecordWorkingDirectory(Path.Combine(f.Evidence, "next-cwd.txt"))
-            .Print(FakeAgents.SessionLine(ClientId.Codex, "session-1"))
-            .Print(FakeAgents.ReplyLines(ClientId.Codex, "Done.")));
+            .Print(FakeAgents.SessionLine(client, "session-1"))
+            .Print(FakeAgents.ReplyLines(client, "Done.")));
         var next = await f.Start(new TurnIntent.Next(f.Preparation.Op(), new(turn.Address.Launch.Attempt, 2), "Use the fixture"));
         var settled = await f.Settled(next);
         Assert.Equal("Succeeded", settled.Attempt.Status.ToString());
