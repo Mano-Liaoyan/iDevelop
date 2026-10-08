@@ -78,8 +78,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
         _openInTerminal = new RelayCommand(OpenInTerminal, () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
         _markDone = new RelayCommand(MarkDone, () => StandaloneWaiting);
-        _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => _problem is StartProblem.FixInterrupted { CanContinue: true });
-        _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => _problem is StartProblem.FixInterrupted);
+        _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => RunFix is { } fix
+            ? CanChooseRunFix && fix.ContinueUnavailable is null : RunTask is null && _problem is StartProblem.FixInterrupted { CanContinue: true });
+        _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => RunFix is not null ? CanChooseRunFix : RunTask is null && _problem is StartProblem.FixInterrupted);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
         (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
@@ -206,7 +207,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private bool StandaloneWaiting => RunTask is null && _attempt is { Status: AttemptStatus.WaitingForInput };
 
     /// <summary>Closing iDevelop interrupted the review's fix round, which waits for Continue fix or Retry fix.</summary>
-    public bool ShowsFixChoice => _problem is StartProblem.FixInterrupted;
+    public bool ShowsFixChoice => RunTask is null ? _problem is StartProblem.FixInterrupted : RunFix is not null;
 
     /// <summary>Continues the interrupted fix round in its session, when that session can go on.</summary>
     public ICommand ContinueFixCommand => _continueFix;
@@ -509,8 +510,16 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         }
     }
 
-    private void ChooseFix(FixChoice choice) =>
+    private void ChooseFix(FixChoice choice)
+    {
+        if (RunFix is not null)
+        {
+            _ = ChooseRunFixAsync(choice);
+            return;
+        }
+
         _canvas.Notice(_canvas.Runs.ChooseFix(Id, choice) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
+    }
 
     private void MarkDone() =>
         _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
