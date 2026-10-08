@@ -28,6 +28,9 @@ internal static partial class RunReducer
             launch.Attempt == attempt.Attempt && record.Settling(launch)) &&
             (attempt.End is not AttemptEnd.Recovered || HasUndisposedSettlement(record, attempt.Attempt)))
             return RunProblem.SettlementPending;
+        // The claim's rechecks run before this transaction, so a claim or drift block recorded since still holds the consumer.
+        if (e is RunEvent.TurnClaimed { Key.Turn: 1 } claim && ProducerHold(record, claim.Inputs))
+            return RunProblem.UnresolvedOwnership;
         return null;
     }
 

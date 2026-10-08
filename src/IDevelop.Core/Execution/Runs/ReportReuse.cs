@@ -87,6 +87,42 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         }
     }
 
+    /// <summary>
+    /// The events a log adds after <paramref name="prefix"/> up to <paramref name="whole"/>, read once and parsed with the
+    /// strict options. Null when the log's first bytes are not exactly <paramref name="whole"/>, or do not begin with
+    /// <paramref name="prefix"/>.
+    /// </summary>
+    public static ImmutableArray<AttemptEvent>? Suffix(string folder, LogCheckpoint prefix, LogCheckpoint whole)
+    {
+        try
+        {
+            if (!RunValidation.Checkpoint(prefix) || !RunValidation.Checkpoint(whole) || prefix.ByteLength > whole.ByteLength) return null;
+            var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
+            if (whole.ByteLength > bytes.LongLength) return null;
+            bytes = bytes[..checked((int)whole.ByteLength)];
+            if (Revision.Hash(bytes) != whole.Content || Revision.Hash(bytes.AsSpan(0, checked((int)prefix.ByteLength))) != prefix.Content) return null;
+            var rest = bytes[checked((int)prefix.ByteLength)..];
+            if (rest.Length == 0) return [];
+            if (rest[^1] != (byte)'\n') return null;
+            var events = ImmutableArray.CreateBuilder<AttemptEvent>();
+            foreach (var line in new UTF8Encoding(false, true).GetString(rest).Split('\n')[..^1])
+            {
+                if (JsonSerializer.Deserialize<AttemptEvent>(line, Options) is not { } next) return null;
+                events.Add(next);
+            }
+            return events.ToImmutable();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or
+            DecoderFallbackException or ArgumentException or InvalidOperationException or ProjectException or BlueprintException or FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether a closure log is the turn's checkpoint, or that checkpoint and one Mark done line.</summary>
+    public static bool Extends(string folder, LogCheckpoint turn, LogCheckpoint closure) =>
+        closure == turn || Suffix(folder, turn, closure) is [AttemptEvent.MarkedDone];
+
     public static TerminalAttemptOutcome? Terminal(AttemptEvidence read) => read.Record?.Status switch
     {
         AttemptStatus.Succeeded => TerminalAttemptOutcome.Succeeded,

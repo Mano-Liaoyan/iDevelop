@@ -36,6 +36,16 @@ internal static class GitTree
             : $"{diff[..DiffLimit]}\n… The diff goes on. Run git diff {from} {to} in the project to read all of it.";
     }
 
+    /// <summary>The tree a commit records, or null when it is not a commit in the folder's repository.</summary>
+    internal static string? TreeOf(string folder, string commit)
+    {
+        if (!Revision.IsCommit(commit)) return null;
+        var result = GitRepository.Run(["rev-parse", "--verify", "--quiet", commit + "^{tree}"], folder,
+            GitOperation.Metadata, Limits, Environment);
+        var tree = result.Text.Trim();
+        return result.ExitCode == 0 && Revision.IsCommit(tree) ? tree : null;
+    }
+
     /// <summary>The recursive entries of a tree or commit outside <c>.idp</c>, sorted, so two snapshots compare by content.</summary>
     internal static string? ContentOutsideData(string folder, string treeOrCommit)
     {

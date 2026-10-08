@@ -576,7 +576,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         TurnOwner[] owners = [];
-        Task<TurnStart>[] commands = [];
+        Task[] commands = [];
         Task[] standalone = [];
         TaskCompletionSource<Task>? source = null;
         var launches = Task.CompletedTask;
@@ -609,7 +609,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return new ValueTask(leaving);
     }
 
-    private async Task LeaveTurns(Task launches, TurnOwner[] owners, Task[] standalone, Task<TurnStart>[] commands)
+    private async Task LeaveTurns(Task launches, TurnOwner[] owners, Task[] standalone, Task[] commands)
     {
         await launches.ConfigureAwait(false);
         Probe?.Invoke("project.launches-closed");

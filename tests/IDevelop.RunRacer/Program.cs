@@ -62,6 +62,39 @@ internal static class Program
                 runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 return 6;
             }
+            case "close-crash":
+            {
+                var operation = new OperationId(Guid.Parse(args[4]));
+                var attempt = new AttemptId(Guid.Parse(args[5]));
+                RestingEnd end = args[6] switch
+                {
+                    "MarkDone" => new RestingEnd.MarkDone(),
+                    "Cancel" => new RestingEnd.Cancel(),
+                    _ => new RestingEnd.Conclude(args.Length > 8 ? args[8] : null),
+                };
+                var crashPoint = args[7];
+                var runs = ProjectRuns.Open(project, new ClientDirectory(CommandResolver.Create([], [])));
+                var take = store.TakeControl(workflow, run);
+                Console.WriteLine(Describe(take));
+                Console.Out.Flush();
+                if (take is not ControlTake.Owned owned)
+                {
+                    runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    return 2;
+                }
+                using var permit = owned.Permit;
+                runs.MaterializerClock = TimeProvider.System;
+                runs.Probe = point =>
+                {
+                    if (point != crashPoint) return;
+                    Console.WriteLine(point);
+                    Console.Out.Flush();
+                    Environment.Exit(73);
+                };
+                Console.WriteLine(runs.CloseResting(permit, operation, attempt, end).GetAwaiter().GetResult());
+                runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                return 6;
+            }
             case "control":
             {
                 At(args[4]);

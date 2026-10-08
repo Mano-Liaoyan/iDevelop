@@ -32,11 +32,12 @@ internal sealed partial class Materializer
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared))
                 return new Publication.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
-            var logged = AttemptEvidence.Read(_store.AttemptFolder(workflow, run, task, attempt), closure.Evidence);
+            var folder = _store.AttemptFolder(workflow, run, task, attempt);
+            var logged = AttemptEvidence.Read(folder, closure.Evidence);
             if (!AttemptEvidence.Matches(logged, TerminalAttemptOutcome.Succeeded) || logged.Record?.Result is null)
                 return new Publication.Rejected(new(RunProblem.OutcomeMismatch));
             var launch = new LaunchKey(attempt, logged.Record.Turns.Count);
-            var captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result);
+            var captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result, folder);
             var root = record.RootExits[launch];
             var existing = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == attempt);
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
@@ -56,7 +57,7 @@ internal sealed partial class Materializer
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Publication.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
-            captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result);
+            captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result, folder);
             root = record.RootExits[launch];
             existing = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == attempt);
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
@@ -177,11 +178,13 @@ internal sealed partial class Materializer
         }
     }
 
-    private static CaptureId PublicationCapture(RunRecord record, LaunchKey launch, LogCheckpoint log, string report)
+    // The captures froze the turn's log. The closure may add exactly one Mark done line, which uses that final capture.
+    private static CaptureId PublicationCapture(RunRecord record, LaunchKey launch, LogCheckpoint closure, string report, string folder)
     {
-        if (!record.Claims.ContainsKey(launch) || !record.RootExits.ContainsKey(launch) ||
+        if (!record.Claims.ContainsKey(launch) || !record.RootExits.ContainsKey(launch) || !record.TurnClosures.TryGetValue(launch, out var turn) ||
+            !AttemptEvidence.Extends(folder, turn, closure) ||
             !record.Settlements.TryGetValue(launch, out var capture) || !record.Dispositions.ContainsKey(capture) ||
-            !record.Captures.TryGetValue(capture, out var observations) || observations.Any(o => o.Launch != launch || o.Log != log || o.Report != report))
+            !record.Captures.TryGetValue(capture, out var observations) || observations.Any(o => o.Launch != launch || o.Log != turn || o.Report != report))
             throw new Refusal(new(RunProblem.OutcomeMismatch));
         return capture;
     }
