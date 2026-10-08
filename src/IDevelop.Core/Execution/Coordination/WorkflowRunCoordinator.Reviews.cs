@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -12,6 +13,13 @@ namespace IDevelop.Execution;
 /// </summary>
 internal sealed partial class WorkflowRunCoordinator
 {
+    /// <summary>
+    /// The first turn intent this window built for each review step's operation. A start that was refused is tried again
+    /// with the same intent, so guidance the person adds meanwhile reaches the review's next step instead of conflicting
+    /// with the operation's first request.
+    /// </summary>
+    private readonly ConcurrentDictionary<OperationId, TurnIntent> _reviewIntents = new();
+
     /// <summary>A review attempt that rests between its reviewer's turns, with its log read once.</summary>
     private sealed record RestingReview(TaskId Task, AttemptId Attempt, LaunchKey Last, AttemptRecord Log, TaskId Subject);
 
@@ -155,10 +163,17 @@ internal sealed partial class WorkflowRunCoordinator
         var next = new LaunchKey(review.Attempt, review.Last.Turn + 1);
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.review-turn");
-        Background(() => RunReviews.Step(record, review.Log, Log, Address.Project) is NodeStep.RunTurn turn
-                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report })
-                : Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim))),
-            start => Started(task, start), error => StartFaulted(task, error));
+        var operation = RunOperations.Turn(record, next);
+        Background(() =>
+        {
+            if (!_reviewIntents.TryGetValue(operation, out var intent))
+            {
+                if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.RunTurn turn)
+                    return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
+                intent = _reviewIntents.GetOrAdd(operation, new TurnIntent.Next(operation, next, turn.Prompt) { Report = turn.Report });
+            }
+            return _runs.StartTurn(_permit!, intent);
+        }, start => Started(task, start), error => StartFaulted(task, error));
     }
 
     /// <summary>A new attempt of the subject for the review's latest round, as <see cref="AttemptCause.ReviewFix"/>.</summary>
@@ -172,7 +187,8 @@ internal sealed partial class WorkflowRunCoordinator
             if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.FixRound fix)
                 return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
-            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt));
+            var operation = RunOperations.First(Address.Run, subject, cause);
+            return _runs.StartTurn(_permit!, _reviewIntents.GetOrAdd(operation, new TurnIntent.First(operation, subject, cause, fix.Prompt)));
         }, start => Started(subject, start), error => StartFaulted(subject, error));
     }
 
