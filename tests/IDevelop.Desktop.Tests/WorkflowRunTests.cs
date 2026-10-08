@@ -144,6 +144,7 @@ public sealed class WorkflowRunTests
         Assert.Equal("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run.", shell.Text("RunOwner"));
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Assert.False(shell.Find<Button>("CancelRun").IsEffectivelyVisible);
+        Assert.False(shell.Find<TextBlock>("StartProblem").IsEffectivelyVisible);
         Assert.False(shell.Has<TextBlock>("LastRunStatus") && shell.Find<TextBlock>("LastRunStatus").IsEffectivelyVisible);
 
         f.Open("a");
@@ -222,6 +223,32 @@ public sealed class WorkflowRunTests
 
         Assert.Equal((1, 1), (f.Launches("Plan"), f.Launches("Export API")));
         Assert.Equal(["Succeeded", "Succeeded"], new[] { "Plan", "Export API" }.Select(title => shell.CardText(title, "CardStatus")));
+    }
+
+    [AvaloniaFact]
+    public void Another_window_s_active_run_of_other_content_keeps_Start_from_approving_and_Show_opens_it()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready."));
+        var second = f.Window();
+        var first = f.Window();
+        first.StartRun();
+        first.WaitForCard("A", "Running");
+
+        Assert.IsType<EditResult.Applied>(second.Window.ViewModel.Canvas!.Document.Apply(new WorkflowEdit.EditTitle(B, "B2")));
+        var preflight = second.OpenPreflight();
+        Assert.True(second.Find<Button>("PreflightShowActive").IsEffectivelyVisible);
+        second.Click(second.Find<Button>("PreflightStart"));
+        second.WaitUntil(() => preflight.Notice is not null, "the approval is refused");
+
+        Assert.Equal("Another run of this workflow is still active, with other content. Show it to stop it or let it finish.", second.Text("PreflightNotice"));
+        Assert.Single(f.RunFolders());
+        second.Click(second.Find<Button>("PreflightShowActive"));
+        Assert.Null(second.Preflight);
+        Assert.Equal(first.WorkflowRun!.Address, second.WorkflowRun?.Address);
+        Assert.Equal("Controlled by another window", second.RunStatus);
+        f.Open("a");
+        first.WaitForStatus("Completed");
     }
 
     [AvaloniaFact]

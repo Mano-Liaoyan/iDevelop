@@ -79,6 +79,7 @@ public sealed class WorkflowRunNavigationTests
         shell.WaitForCard("Approve", "Waiting for approval");
 
         Assert.Equal("\"Approve\" waits for your approval.", shell.Text("RunActivity"));
+        Assert.True(shell.InCard<Button>("Approve", "CardAttention").IsEffectivelyEnabled);
         shell.Click(shell.InCard<Button>("Approve", "CardAttention"));
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.Equal(("Waiting for approval", "1 of this run"), (shell.InView<TextBlock>("RunTaskStatus").Text, shell.Text("GateRequest")));
