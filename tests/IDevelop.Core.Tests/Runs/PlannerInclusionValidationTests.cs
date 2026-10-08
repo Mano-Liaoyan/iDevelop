@@ -36,7 +36,8 @@ public sealed class PlannerInclusionValidationTests
         ```idevelop
         {"status": "proposal",
          "add": [{"id": "new-1", "type": "type-1", "title": "N1", "fields": {"brief": "Build N1."}},
-                 {"id": "new-2", "type": "type-1", "title": "N2", "fields": {"brief": "Build N2."}}],
+                 {"id": "new-2", "type": "type-1", "title": "N2", "fields": {"brief": "Build N2."}},
+                 {"id": "new-3", "type": "type-2", "title": "N3", "fields": {"instructions": "Build N3."}}],
          "connect": [{"from": "planner", "to": "new-1"}, {"from": "new-1", "to": "new-2"}]}
         ```
         """;
@@ -48,7 +49,7 @@ public sealed class PlannerInclusionValidationTests
             Title = "Plan", Execution = new(ClientId.Codex) { Model = "m1", Reasoning = "high" }, Conversation = ConversationMode.Chat,
         }.WithField("brief", brief)!;
 
-    /// <summary>The planner after the person accepted all of its second proposal.</summary>
+    /// <summary>The planner after the person accepted its second proposal but the built-in Implement N3.</summary>
     private static Workflow Accepted(TaskDefinition? planner = null)
     {
         var workflow = FixtureWorkflow(planner ?? PlannerTask());
@@ -86,7 +87,7 @@ public sealed class PlannerInclusionValidationTests
             StandaloneCapture = change == "uncaptured" ? null : JsonSerializer.SerializeToElement(
                 new StandaloneCapture(definition, change == "inputs" ? "Declared" : ""), RunJournal.Options),
             Conversation = ConversationMode.Chat,
-            Planning = change == "unplanned" ? null : new PlanningHandles(Plan, [], [Step.Key]),
+            Planning = change == "unplanned" ? null : new PlanningHandles(Plan, [], [Step.Key, BuiltInBlueprints.Implement.Key]),
             Tree = tree,
             ReadOnly = change != "writer",
             Continues = change == "continued" ? new(new(Id(89)), "session-1") : null,
@@ -183,6 +184,16 @@ public sealed class PlannerInclusionValidationTests
         Assert.Null(Validate(f.Project, f.Workflow, commit).Rejection);
     }
 
+    [Fact]
+    public void A_proposal_of_an_earlier_turn_cannot_be_included()
+    {
+        using var f = new RunFixtures(Accepted());
+        var commit = Repository(f.Project);
+        WritePlanner(f.Project, commit, "noProposal");
+
+        Assert.Equal(RunProblem.ReuseUnverifiable, Validate(f.Project, f.Workflow, commit, turn: 1).Rejection!.Problem);
+    }
+
     [Theory]
     [InlineData("notPlanner")]
     [InlineData("editor")]
@@ -263,6 +274,10 @@ public sealed class PlannerInclusionValidationTests
         Assert.False(File.Exists(f.Journal(W, Run)) && new FileInfo(f.Journal(W, Run)).Length > 0);
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow),
             new(commit, BaseChoice.Head), [new(T, Source, 2)])));
+        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow),
+            new(commit, BaseChoice.Head), [new(T, Source, 2), new(T, Source, 2)], f.Op())));
+        Assert.Equal(new RunRejection(RunProblem.ReuseUnverifiable, Task: U), Assert.IsType<RunDecision.Rejected>(f.Store.Approve(W, Run, f.Op(),
+            Revision.Capture(f.Workflow), new(commit, BaseChoice.Head), [new(U, Source, 2)], f.Op())).Reason);
     }
 
     [Theory]
@@ -273,6 +288,8 @@ public sealed class PlannerInclusionValidationTests
     [InlineData("origin")]
     [InlineData("definition")]
     [InlineData("source")]
+    [InlineData("empty")]
+    [InlineData("confirmation")]
     public void A_journal_whose_approval_includes_a_result_that_does_not_fit_is_rejected(string change)
     {
         using var f = new RunFixtures(Accepted());
@@ -290,11 +307,15 @@ public sealed class PlannerInclusionValidationTests
             "origin" => included with { Result = included.Result with { Origin = new ResultOrigin.Executed(new(Id(95))) } },
             "definition" => included with { Result = included.Result with { Origin = origin with { Evidence = origin.Evidence with { Definition = Revision.Hash("other") } } } },
             "source" => included with { Result = included.Result with { Origin = origin with { Source = new(U, Source) } } },
+            "confirmation" => included with { Result = included.Result with { Origin = origin with { Evidence = origin.Evidence with { Confirmation = default } } } },
             _ => included,
         };
-        ImmutableArray<IncludedResult> all = change == "twice"
-            ? [included, included with { Result = included.Result with { Id = new(Id(96)) }, Inputs = included.Inputs with { Id = new(Id(97)) } }]
-            : [broken];
+        ImmutableArray<IncludedResult> all = change switch
+        {
+            "twice" => [included, included with { Result = included.Result with { Id = new(Id(96)) }, Inputs = included.Inputs with { Id = new(Id(97)) } }],
+            "empty" => [],
+            _ => [broken],
+        };
         var entry = new RunEntry(3, 1, new(Id(98)), Prompt, At, approved with { Included = all });
 
         var read = Assert.IsType<RunRead.Rejected>(RunReducer.Replay(W, Run, [entry]));
@@ -303,6 +324,7 @@ public sealed class PlannerInclusionValidationTests
         {
             "twice" => RunProblem.StartConflict,
             "input" or "code" => RunProblem.InputConflict,
+            "empty" or "confirmation" => RunProblem.InvalidData,
             _ => RunProblem.ReuseUnverifiable,
         }, read.Reason.Problem);
         Assert.IsType<RunRead.Loaded>(RunReducer.Replay(W, Run, [new RunEntry(3, 1, new(Id(98)), Prompt, At, approved)]));

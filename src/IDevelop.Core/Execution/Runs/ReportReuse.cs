@@ -230,7 +230,7 @@ internal static class ReportReuse
         }
 
         var read = AttemptEvidence.Read(AttemptLog.FolderOf(DataFolder.Attempts(project), source.Task, source.Attempt));
-        if (read.Rejection is not null || read.Record is not { Continues: null, Terminal: null, Planning: not null, ReadOnly: true } record ||
+        if (read.Rejection is not null || read.Record is not { Continues: null, Terminal: null, ReadOnly: true } record ||
             record.Id != source.Attempt || record.Task != task.Id || record.Turns.Count != turn || !record.Queued.IsEmpty)
         {
             return Refuse();

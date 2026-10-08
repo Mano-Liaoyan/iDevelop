@@ -170,7 +170,7 @@ internal sealed class RunStore
         }
         else
         {
-            if (inclusion.Turn != 1 || revision.Snapshot.Connections.Keys.Any(edge => edge.To == inclusion.Task)) return null;
+            if (inclusion.Turn != 1) return null;
             var reuse = ReportReuse.Validate(_project, definition, source, codeBase.Commit, confirmation);
             if (reuse.Rejection is { } refused) return (null, refused with { Task = inclusion.Task });
             (report, origin) = (reuse.Report!, new ResultOrigin.Reused(source, reuse.Evidence!));
@@ -799,7 +799,7 @@ internal sealed class RunStore
                 return Missing();
             }
 
-            if (record.Revision.Id != previous)
+            if (!record.Revisions.TryGetValue(previous, out var basis))
             {
                 return Refuse(RunProblem.RevisionConflict);
             }
@@ -820,17 +820,30 @@ internal sealed class RunStore
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
-            if (Proposal.Read(read.Record, key => record.Revision.Snapshot.Blueprints.GetValueOrDefault(key)) is not ProposalRead.Ready ready ||
+            if (Proposal.Read(read.Record, key => RunPlanning.Find(basis.Snapshot, key)) is not ProposalRead.Ready ready ||
                 RunJournal.Canonical(ready.Proposal) != RunJournal.Canonical(proposal))
             {
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
+            // A reserved task counts as started, so the proposal neither fills it nor, through the reducer, gives it an input.
             bool Started(TaskId id) => record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
-            return record.Revision.Snapshot.Apply(proposal.Accept(record.Revision.Snapshot, chosen, Started, fallback)) is EditResult.Applied applied
-                ? new Mutation.Append(new RunEvent.Amended(previous, Revision.Capture(applied.Workflow),
-                    new AmendmentOrigin.Planner(planner.Id, proposal.Turn), confirmation))
-                : Refuse(RunProblem.InvalidData);
+            if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback)) is not EditResult.Applied applied)
+            {
+                return Refuse(RunProblem.InvalidData);
+            }
+
+            var origin = new AmendmentOrigin.Planner(planner.Id, proposal.Turn);
+            var candidate = Revision.Capture(applied.Workflow);
+            // The same acceptance again, under another confirmation, finds the amendment it recorded.
+            if (record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>().FirstOrDefault(amended =>
+                amended.Previous == previous && amended.Revision.Id == candidate.Id && RunReducer.Same<AmendmentOrigin>(amended.Origin, origin)) is { } recorded)
+            {
+                return new Mutation.Existing(recorded);
+            }
+
+            return record.Revision.Id != previous ? Refuse(RunProblem.RevisionConflict)
+                : new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
         });
 
     public RunDecision Stop(CoordinatorPermit permit, OperationId operation) =>

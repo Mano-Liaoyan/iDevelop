@@ -97,6 +97,22 @@ public sealed class ReportReuseTests
     }
 
     [Fact]
+    public void An_ordinary_report_is_included_at_approval_only_as_its_single_turn()
+    {
+        using var f = new RunFixtures();
+        var commit = Repository(f.Project);
+        WriteStandalone(f.Project, commit);
+        var revision = Revision.Capture(f.Workflow);
+
+        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.Approve(W, Run, f.Op(), revision, new(commit, BaseChoice.Head),
+            [new(T, new(Id(90)), 2)], f.Op())));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), revision, new(commit, BaseChoice.Head), [new(T, new(Id(90)), 1)], f.Op()));
+
+        var result = Assert.Single(f.Read().Results);
+        Assert.Equal(("Checked.", new AttemptSource.Standalone(T, new(Id(90)))), (result.Report, Assert.IsType<ResultOrigin.Reused>(result.Origin).Source));
+    }
+
+    [Fact]
     public void Tracked_idp_content_is_filtered_from_all_three_tree_comparisons()
     {
         using var f = new RunFixtures();

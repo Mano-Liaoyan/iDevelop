@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -132,3 +133,11 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
         _ => throw new InvalidOperationException(),
     };
 }
+
+/// <summary>
+/// The person's acceptance of the chosen items of a planner's proposal, against the run revision <paramref name="Previous"/>
+/// they saw. <paramref name="Fallback"/> is the agent a new task takes when its type has none. <paramref name="Confirmation"/>
+/// identifies the acceptance.
+/// </summary>
+internal sealed record RunAmendment(RevisionId Previous, Proposal Proposal, ImmutableArray<TaskId> Chosen, ExecutionSettings? Fallback,
+    OperationId Confirmation);

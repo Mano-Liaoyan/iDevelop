@@ -164,6 +164,50 @@ public sealed class PlannerInclusionTests
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task A_reply_after_the_preview_makes_the_preview_stale_and_finishes_nothing()
+    {
+        await using var f = Fixture();
+        await f.Open();
+        var waiting = await PlanTwoTurns(f);
+        var preview = f.Preflight();
+        await Waits(f.Runs, 3, async () => await f.Runs.SendAsync(f.Workflow.Tasks[X], "Keep it short.", stopTurn: false));
+
+        var changed = Assert.IsType<WorkflowStart.Changed>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, Confirm,
+            Assert.Single(preview.Planners))).WaitAsync(Bound));
+
+        Assert.Equal(3, Assert.Single(changed.Current.Planners).Turn);
+        Assert.Empty(f.ApprovedRuns());
+        Assert.Empty(Intents(f.Project));
+        Assert.Equal((waiting.Id, AttemptStatus.WaitingForInput, 3), (f.Runs.Latest[X].Id, f.Runs.Latest[X].Status, f.Runs.Latest[X].Turns.Count));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_planner_is_included_once_and_only_on_the_base_whose_files_it_read()
+    {
+        await using var f = Fixture();
+        await f.Open();
+        var waiting = await PlanTwoTurns(f);
+        f.Git.Write("notes.txt", "notes\n");
+        var preview = f.Preflight();
+        var planner = Assert.Single(preview.Planners);
+        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], preview.Choices);
+        Assert.Equal<BaseChoice>([BaseChoice.Head], planner.Bases);
+
+        var snapshot = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow,
+            Including(preview, Confirm, planner) with { Choice = BaseChoice.Snapshot }).WaitAsync(Bound));
+        var twice = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, Confirm, planner, planner))
+            .WaitAsync(Bound));
+
+        Assert.Equal((ApprovalProblem.InclusionRefused, "ReuseUnverifiable"), (snapshot.Problem, snapshot.Detail));
+        Assert.Equal(ApprovalProblem.NotConfirmable, twice.Problem);
+        Assert.Empty(f.ApprovedRuns());
+        Assert.Equal(AttemptStatus.WaitingForInput, f.Runs.Latest[X].Status);
+        f.Workflow = Connect(Edit(f.Workflow, IDevelop.TestSupport.TestNodes.Place(Agent(A), new(0, 300))), A, X, ConnectionKind.Context);
+        Assert.Empty(f.Preflight().Planners);
+        Assert.Equal(waiting.Id, f.Runs.Latest[X].Id);
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task A_planner_whose_settings_changed_since_it_ran_cannot_be_included()
     {
         await using var f = Fixture();

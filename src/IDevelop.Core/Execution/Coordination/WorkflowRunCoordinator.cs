@@ -100,6 +100,20 @@ internal sealed partial class WorkflowRunCoordinator
             _ => Accepted,
         }, wait);
 
+    /// <summary>
+    /// Amends the run from a planner's proposal, against the revision the person saw. The journal records the amendment
+    /// first; the workflow document follows it. A repeat, under the same
+    /// confirmation or another one, returns the recorded amendment. A task that is reserved or started keeps its
+    /// definition and inputs.
+    /// </summary>
+    public Task<RunCommand> Amend(RunAddress address, RunAmendment amendment, CancellationToken wait = default) => Command(address, _ =>
+    {
+        if (amendment.Confirmation.Value == Guid.Empty) return new RunCommand.Refused(new(RunProblem.ConfirmationRequired));
+        var decision = _store.AmendFromProposal(_permit!, RunOperations.Amend(amendment.Confirmation), amendment.Previous, amendment.Proposal,
+            amendment.Chosen.ToHashSet(), amendment.Confirmation, amendment.Fallback);
+        return decision is RunDecision.Rejected rejected ? new RunCommand.Refused(rejected.Reason) : Accepted;
+    }, wait);
+
     /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
     public void Refresh() => Post(() => { });
 
