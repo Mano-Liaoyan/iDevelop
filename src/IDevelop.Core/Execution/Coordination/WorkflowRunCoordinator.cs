@@ -102,7 +102,7 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Amends the run from a planner's proposal, against the revision the person saw. The journal records the amendment
-    /// first; the workflow document follows it. A repeat, under the same
+    /// first, and the workflow document follows it through <see cref="AmendmentProjection"/>. A repeat, under the same
     /// confirmation or another one, returns the recorded amendment. A task that is reserved or started keeps its
     /// definition and inputs.
     /// </summary>
