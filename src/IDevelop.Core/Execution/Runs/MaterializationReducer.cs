@@ -354,6 +354,7 @@ internal static partial class RunReducer
                     join.Ref == RunLayout.JoinBranch(run, key) &&
                     (record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(preparation =>
                         preparation.Task == join.Task && preparation.Inputs == join.Inputs && Same(preparation.Sources, join.Sources)) ||
+                        GateJoin(record, join) ||
                         record.Attempts.Values.Any(attempt => attempt.Task == join.Task && CanRefresh(record, attempt.Id) &&
                             RunStore.Inputs(record, attempt.Task, attempt.Revision, join.Inputs) is { Rejection: null, Inputs: { } capture } &&
                             Same(InputMaterial.Sources(record, capture.Bindings), join.Sources))) &&
@@ -566,7 +567,9 @@ internal static partial class RunReducer
         else
         {
             CodeOutput? code = accepted.Inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(accepted.Inputs.Id) : null;
-            if (!Same(result.Code, code) || result.Artifacts.Length != 0 || task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
+            // Only an approval forwards artifacts: exactly its inputs' dependency artifacts, stored under its own result.
+            var artifacts = result.Origin is ResultOrigin.Human ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id).Artifacts : [];
+            if (!Same(result.Code, code) || !Same(result.Artifacts, artifacts) || task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
             {
                 return RunProblem.InputConflict;
             }

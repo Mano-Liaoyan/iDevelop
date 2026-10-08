@@ -170,6 +170,7 @@ internal sealed record ReuseEvidence(LogCheckpoint SourceLog, Digest Definition,
 [JsonDerivedType(typeof(Executed), "executed")]
 [JsonDerivedType(typeof(Reused), "reused")]
 [JsonDerivedType(typeof(Rebased), "rebased")]
+[JsonDerivedType(typeof(Human), "human")]
 internal abstract record ResultOrigin
 {
     private ResultOrigin() { }
@@ -183,6 +184,9 @@ internal abstract record ResultOrigin
     /// plan <paramref name="Plan"/> recorded. No client ran; the source's provenance stays with the source.
     /// </summary>
     internal sealed record Rebased(ResultId Source, OperationId Plan) : ResultOrigin;
+
+    /// <summary>A person approved this Approval node's request. No client ran.</summary>
+    internal sealed record Human(GateId Request) : ResultOrigin;
 }
 
 internal sealed record ResultRecord(ResultId Id, TaskId Task, RevisionId Revision, InputId Inputs,
@@ -225,6 +229,8 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(RootExitObserved), "rootExitObserved")]
 [JsonDerivedType(typeof(TurnCaptured), "turnCaptured")]
 [JsonDerivedType(typeof(CaptureDisposed), "captureDisposed")]
+[JsonDerivedType(typeof(GateRequested), "gateRequested")]
+[JsonDerivedType(typeof(GateSentBack), "gateSentBack")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -296,6 +302,12 @@ internal abstract record RunEvent
     internal sealed record Settled(RunOutcome Outcome) : RunEvent;
 
     internal sealed record Abandoned(OperationId Confirmation, string Reason) : RunEvent;
+
+    /// <summary>An Approval node asks the person to decide on these inputs. It creates no attempt.</summary>
+    internal sealed record GateRequested(GateRequest Request, InputRecord Inputs) : RunEvent;
+
+    /// <summary>The person sent the request back with a reason. Its dependents stay held.</summary>
+    internal sealed record GateSentBack(GateId Request, InputId Inputs, string Reason) : RunEvent;
 }
 
 internal sealed record RunEntry(int Schema, long Sequence, OperationId Operation, Digest Command, DateTimeOffset At, RunEvent Event);
@@ -433,6 +445,9 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<AttemptId, AttemptEnd> Closures { get; internal init; } = ImmutableDictionary<AttemptId, AttemptEnd>.Empty;
 
     public ImmutableList<ResultRecord> Results { get; internal init; } = [];
+
+    /// <summary>Every Approval node request and its answer, by request.</summary>
+    public ImmutableDictionary<GateId, GateState> Gates { get; internal init; } = ImmutableDictionary<GateId, GateState>.Empty;
 
     public ImmutableDictionary<OperationId, RunEntry> Receipts { get; internal init; } = ImmutableDictionary<OperationId, RunEntry>.Empty;
 

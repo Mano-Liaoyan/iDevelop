@@ -205,6 +205,9 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     /// <summary>Writes <paramref name="text"/> to <paramref name="file"/>, relative to the client's current folder.</summary>
     public FakeRule Write(string file, string text) => Step("write", new JsonArray(JsonValue.Create(file), JsonValue.Create(text)));
 
+    /// <summary>Writes <paramref name="bytes"/> and declares them as the artifact <paramref name="name"/> in the outbox the prompt names.</summary>
+    public FakeRule Outbox(string name, byte[] bytes) => Step("outbox", new JsonArray(JsonValue.Create(name), JsonValue.Create(Convert.ToBase64String(bytes))));
+
     /// <summary>Copies <paramref name="file"/>, relative to the client's current folder, to <paramref name="destination"/>.</summary>
     public FakeRule Copy(string file, string destination) => Step("copy", new JsonArray(JsonValue.Create(file), JsonValue.Create(destination)));
 

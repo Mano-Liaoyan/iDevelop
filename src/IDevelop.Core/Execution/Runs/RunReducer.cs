@@ -291,7 +291,7 @@ internal static partial class RunReducer
                     }
 
                     if (resultTask.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } &&
-                        (record.Schema == 1 || resultTask.Blueprint.Work is WorkSpec.Person))
+                        (record.Schema == 1 || resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human))
                     {
                         return Reject(RunProblem.UnsupportedResult);
                     }
@@ -365,6 +365,13 @@ internal static partial class RunReducer
                             }
 
                             break;
+                        case ResultOrigin.Human human:
+                            if (HumanResultProblem(record, accepted, resultTask, human) is { } humanProblem)
+                            {
+                                return Reject(humanProblem);
+                            }
+
+                            break;
                         default:
                             return Reject(RunProblem.UnsupportedResult);
                     }
@@ -377,6 +384,31 @@ internal static partial class RunReducer
                         Results = record.Results.Add(result),
                         Inputs = record.Inputs.SetItem(accepted.Inputs.Id, accepted.Inputs)
                     };
+                    if (result.Origin is ResultOrigin.Human approval)
+                    {
+                        record = Decide(record, approval.Request, new GateDecision.Approved(result.Id, entry.Operation));
+                    }
+                    break;
+                case RunEvent.GateRequested requested:
+                    if (GateRequestProblem(record, requested) is { } gateProblem)
+                    {
+                        return Reject(gateProblem, requested.Request.Task);
+                    }
+
+                    record = record with
+                    {
+                        Gates = record.Gates.Add(requested.Request.Id, new(requested.Request, null)),
+                        Inputs = record.Inputs.Add(requested.Inputs.Id, requested.Inputs)
+                    };
+                    break;
+                case RunEvent.GateSentBack sent:
+                    var sentBack = SendBack(record, entry, sent);
+                    if (sentBack.Problem is { } sendBackProblem)
+                    {
+                        return Reject(sendBackProblem);
+                    }
+
+                    record = sentBack.Record;
                     break;
                 case RunEvent.OwnershipFenced fenced:
                     if (fenced.Claims.IsEmpty || fenced.Claims.Distinct().Count() != fenced.Claims.Length ||
@@ -467,7 +499,8 @@ internal static partial class RunReducer
                 return RunProblem.StartedTaskChanged;
             }
 
-            if (record.Attempts.Values.Any(attempt => attempt.Task == task.Id) || record.Results.Any(result => result.Task == task.Id))
+            if (record.Attempts.Values.Any(attempt => attempt.Task == task.Id) || record.Results.Any(result => result.Task == task.Id) ||
+                record.Gates.Values.Any(gate => gate.Request.Task == task.Id))
             {
                 if (!SameTask(record.Revision.Snapshot, candidate, task.Id))
                 {
@@ -675,6 +708,11 @@ internal static partial class RunValidation
             RunEvent.TurnClosed closed => closed.Capture?.Value == Guid.Empty || !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
             RunEvent.AttemptClosed closed => closed.Attempt.Value == Guid.Empty ? RunProblem.InvalidData : End(closed.End),
             RunEvent.ResultAccepted accepted => !Result(accepted.Result) || !Input(accepted.Inputs) ? RunProblem.InvalidData : null,
+            RunEvent.GateRequested { Request: var request } requested => request.Id.Value == Guid.Empty || request.Task.Value == Guid.Empty ||
+                request.Inputs.Value == Guid.Empty || request.Result.Value == Guid.Empty || request.Sequence < 1 ||
+                !Revision.IsHash(request.Revision.Sha256) || !Input(requested.Inputs) ? RunProblem.InvalidData : null,
+            RunEvent.GateSentBack sent => sent.Request.Value == Guid.Empty || sent.Inputs.Value == Guid.Empty ? RunProblem.InvalidData :
+                string.IsNullOrWhiteSpace(sent.Reason) ? RunProblem.ConfirmationRequired : null,
             RunEvent.Abandoned abandoned => abandoned.Confirmation.Value == Guid.Empty || string.IsNullOrWhiteSpace(abandoned.Reason) ?
                 RunProblem.ConfirmationRequired : null,
             RunEvent.Settled settled => !Enum.IsDefined(settled.Outcome) ? RunProblem.InvalidData : null,
@@ -743,6 +781,7 @@ internal static partial class RunValidation
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
             ResultOrigin.Rebased rebased => rebased.Source.Value != Guid.Empty && rebased.Plan.Value != Guid.Empty &&
                 rebased.Source == result.Supersedes,
+            ResultOrigin.Human human => human.Request.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&
                 Revision.IsHash(reused.Evidence.Inputs.Sha256) && Revision.IsHash(reused.Evidence.CodeTree.Sha256) &&
                 reused.Evidence.Confirmation.Value != Guid.Empty &&
