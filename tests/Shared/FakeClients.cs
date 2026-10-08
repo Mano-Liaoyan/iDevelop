@@ -211,6 +211,14 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     /// <summary>Runs the steps of <c>&lt;n&gt;.json</c> in <paramref name="folder"/> on the n-th call, after copying stdin to <c>&lt;n&gt;.stdin</c>.</summary>
     public FakeRule Scripted(string folder) => Step("scripted", folder);
 
+    /// <summary>Runs the steps of the first option whose text starts the turn's prompt, so one client answers each task of a workflow differently.</summary>
+    public FakeRule Choose(params (string Prompt, FakeRule Steps)[] options) => Step("choose", new JsonArray([.. options.Select(option =>
+        (JsonNode)new JsonObject
+        {
+            ["prompt"] = option.Prompt,
+            ["steps"] = new JsonArray([.. option.Steps.Steps.Select(step => step.DeepClone())]),
+        })]));
+
     /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
     public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();
 

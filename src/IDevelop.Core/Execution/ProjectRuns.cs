@@ -600,6 +600,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     commands = [.. _commands.Values.Select(command => command.Task)];
                 }
                 NotifyConversations(null);
+                _leaving = LeaveCoordinators(_leaving);
             }
 
             leaving = _leaving;

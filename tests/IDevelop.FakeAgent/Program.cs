@@ -47,6 +47,9 @@ using System.Text.Json;
 //   write [<file>, <text>]        write the text to the file, relative to the current folder
 //   scripted <folder>             count this call in <folder>/count, copy stdin to <folder>/<n>.stdin, and run the steps in
 //                                 <folder>/<n>.json, so each turn of a conversation can answer differently
+//   choose [{"prompt": <text>, "steps": [...]}, ...]
+//                                 run the steps of the first option whose text starts the turn's prompt, so one client
+//                                 answers each task of a workflow differently. Exit 95 when no option matches
 //   exit <code>
 
 if (args is ["--sleep-forever"])
@@ -354,6 +357,23 @@ int? Run(JsonElement steps)
                 break;
             case "copy":
                 File.Copy(value[0].GetString()!, value[1].GetString()!, overwrite: true);
+                break;
+            case "choose":
+                var turnPrompt = prompt ?? "";
+                var option = value.EnumerateArray()
+                    .Where(candidate => turnPrompt.StartsWith(candidate.GetProperty("prompt").GetString()!, StringComparison.Ordinal))
+                    .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
+                if (option is not { } chosen)
+                {
+                    stderr.WriteLine($"fake agent: no option for prompt {turnPrompt}");
+                    return 95;
+                }
+
+                if (Run(chosen.GetProperty("steps")) is { } chosenCode)
+                {
+                    return chosenCode;
+                }
+
                 break;
             case "scripted":
                 var folder = value.GetString()!;
