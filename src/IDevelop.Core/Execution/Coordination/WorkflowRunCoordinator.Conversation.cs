@@ -119,15 +119,13 @@ internal sealed partial class WorkflowRunCoordinator
         public LaunchKey Next => new(Attempt, Last.Turn + 1);
     }
 
+    /// <summary>The task's attempt that the projection shows waiting, after its last turn's closure, with its log read once.</summary>
     private RestingAttempt? Resting(RunRecord record, TaskView? view)
     {
-        if (view is not { State: TaskState.Waiting, Attempt: { } attempt } || record.Closures.ContainsKey(attempt) ||
-            RunProjection.LastLaunch(record, attempt) is not { } last || !record.TurnClosures.ContainsKey(last))
-            return null;
+        if (view is not { State: TaskState.Waiting, Attempt: { } attempt } || RunProjection.LastLaunch(record, attempt) is not { } last) return null;
         var folder = _store.AttemptFolder(Address.Workflow, Address.Run, view.Task, attempt);
         var evidence = AttemptEvidence.Read(folder);
-        return evidence is { Rejection: null, Record: { BetweenTurns: true, Status: AttemptStatus.WaitingForInput or AttemptStatus.Running } log } &&
-            log.Turns.Count == last.Turn ? new(attempt, last, folder, evidence) : null;
+        return evidence is { Rejection: null, Record: not null } ? new(attempt, last, folder, evidence) : null;
     }
 
     /// <summary>Whether the person wrote to the attempt after its last turn closed, which only a reply to a waiting attempt does.</summary>

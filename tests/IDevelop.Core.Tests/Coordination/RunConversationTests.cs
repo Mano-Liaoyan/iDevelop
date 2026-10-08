@@ -26,6 +26,11 @@ public sealed class RunConversationTests
         using var session = f.Session(A);
         Assert.Equal((0, 1, AttemptStatus.WaitingForInput), (waiting.Slots, f.TotalLaunches, session.Snapshot.Latest!.Status));
         Assert.True(session.Snapshot.Actions.Send.Enabled, session.Snapshot.Actions.Send.Reason);
+        var terminal = Assert.IsType<TerminalResult.Refused>(await session.OpenInTerminalAsync(session.Snapshot.Current!.Value, default));
+        Assert.Equal("Workflow", Assert.IsType<StartProblem.RunOwned>(Assert.IsType<TerminalProblem.Blocked>(terminal.Problem).Problem).Workflow);
+        Assert.IsType<SendProblem.EmptyMessage>(Assert.IsType<SendResult.Refused>(await Send(session, " ")).Problem);
+        Assert.IsType<SendProblem.MissingTask>(Assert.IsType<SendResult.Refused>(
+            await f.Coordinator.Send(f.Address, B, session.Snapshot.Current!.Value, "Use the fixture", false).WaitAsync(Bound)).Problem);
 
         Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
         await f.UntilWaiting(A, 2);
@@ -178,6 +183,31 @@ public sealed class RunConversationTests
     }
 
     [Fact]
+    public async Task A_reply_takes_the_slot_before_a_task_that_has_not_started()
+    {
+        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Chat),
+            RunConversationFixture.Agent(C, ConversationMode.Autonomous, readOnly: true), RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)]));
+        f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done.", gate: f.Gate("a2"))).Route("Use the fixture", A)
+            .Answer(C, f.Says(C, 1, "C ready.\n", "session-C", gate: f.Gate("c")))
+            .Answer(X, f.Says(X, 1, "X ready.\n", "session-X"));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[C].State == TaskState.Running);
+        using var session = f.Session(A);
+        Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
+        Assert.Equal(TaskState.Ready, f.View.Tasks[X].State);
+
+        f.Open("c");
+        await f.Until(view => view.Tasks[A].State == TaskState.Running);
+        await TurnFixture.WaitUntilAsync(() => f.Launches(A) == 2);
+        await f.Decided();
+        Assert.Equal((TaskState.Ready, 0), (f.View.Tasks[X].State, f.Launches(X)));
+        f.Open("a2");
+        await f.UntilWaiting(A, 2);
+        await TurnFixture.WaitUntilAsync(() => f.Launches(X) == 1);
+    }
+
+    [Fact]
     public async Task History_labels_each_attempt_with_its_owner()
     {
         await using var f = new RunConversationFixture(Chat(A));
@@ -294,6 +324,7 @@ public sealed class RunConversationTests
             }
             else
             {
+                Assert.Equal(CommandOutcome.Stale, (await session.CancelAsync(new TurnKey(f.Attempt(A), 2), default).WaitAsync(Bound)).Outcome);
                 Assert.Equal((CommandOutcome.Applied, "The cancellation was recorded."), await Outcome(session.CancelAsync(session.Snapshot.Current!.Value, default)));
                 await f.Until(view => view.Tasks[A].State == TaskState.Failed);
                 // A repeated closure finds the recorded one, with the unsent reply before its cancellation.
@@ -364,6 +395,7 @@ public sealed class RunConversationTests
         using var session = f.Session(A);
         await TurnFixture.WaitUntilAsync(() => session.Snapshot.Latest?.SessionId == "session-1");
         Assert.Equal(CommandOutcome.Stale, (await session.CancelAsync(new TurnKey(f.Attempt(A), 2), default).WaitAsync(Bound)).Outcome);
+        Assert.Equal((CommandOutcome.Refused, WorkflowRunCoordinator.NotWaitingMessage), await Outcome(session.MarkDoneAsync(session.Snapshot.Current!.Value, default)));
 
         Assert.Equal((CommandOutcome.Applied, "The cancellation was recorded."), await Outcome(session.CancelAsync(session.Snapshot.Current!.Value, default)));
         var stopped = await f.UntilStatus(RunStatus.NeedsAttention);
