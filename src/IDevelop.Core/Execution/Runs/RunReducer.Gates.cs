@@ -10,13 +10,11 @@ internal static partial class RunReducer
 
     /// <summary>
     /// Whether the inputs a request fixed were superseded: a provided result is stale or no longer its task's current one.
-    /// An approved request is superseded once its result is stale or replaced. Context that arrives later supersedes
-    /// nothing, as for a reserved attempt. A node takes a newer request only once its last one is superseded.
+    /// Context that arrives later supersedes nothing, as for a reserved attempt. A node takes a newer request only once its
+    /// last one is superseded, or once the result of its approval is stale.
     /// </summary>
     internal static bool Superseded(RunRecord record, GateState gate)
     {
-        if (gate.Decision is GateDecision.Approved approved)
-            return record.StaleResults.Contains(approved.Result) || record.CurrentResults.GetValueOrDefault(gate.Request.Task)?.Id != approved.Result;
         var stale = record.StaleResults;
         var current = record.CurrentResults;
         return record.Inputs[gate.Request.Inputs].Bindings.OfType<InputBinding.Provided>().Any(binding =>

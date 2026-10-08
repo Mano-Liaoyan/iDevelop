@@ -202,9 +202,9 @@ public sealed class GateJournalTests
         }
 
         Accepts(f, record, Requested(record, G));
-        Assert.Equal(RunProblem.InvalidData, Refusal(f, record, Requested(record, G, sequence: 0)));
         Assert.Equal(RunProblem.UnsupportedWork, Refusal(f, record, Requested(record, U)));
         var missing = Requested(record, G);
+        Assert.Equal(RunProblem.InvalidData, Refusal(f, record, missing with { Request = missing.Request with { Id = new(Guid.Empty) } }));
         Assert.Equal(RunProblem.IdentityMismatch, Refusal(f, record, missing with { Request = missing.Request with { Task = new(Guid.NewGuid()) } }));
         Assert.Equal(RunProblem.InputConflict, Refusal(f, record, missing with { Request = missing.Request with { Inputs = new(Guid.NewGuid()) } }));
         Assert.Equal(RunProblem.InputConflict, Refusal(f, record, Requested(record, G, change: inputs => inputs with { Text = "Other." })));

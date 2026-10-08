@@ -67,6 +67,23 @@ public sealed class GateProjectionTests
     }
 
     [Fact]
+    public async Task A_sent_back_gate_needs_attention_while_another_waits()
+    {
+        var other = new TaskId(Guid.Parse("00000000-0000-0000-0000-000000000007"));
+        using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Task(), new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" },
+            new TaskDefinition(other, BuiltInBlueprints.Approval) { Title = "Other" }), T, G), T, other));
+        f.Approve();
+        f.Complete(f.Reserve(T), report: "T ready.\n");
+        await Materializer.Open(f.Project, f.Store).RequestGate(f.Permit, RunOperations.Gate(Run, other), other);
+        var request = await Request(f);
+        Assert.Equal(RunStatus.Waiting, View(f).Status);
+        Assert.IsType<RunDecision.Recorded>(Answer(f, request, new GateAnswer.SendBack("Add tests.")));
+        var view = View(f);
+        Assert.Equal((TaskState.SentBack, TaskState.Waiting), (view.Tasks[G].State, view.Tasks[other].State));
+        Assert.Equal(RunStatus.NeedsAttention, view.Status);
+    }
+
+    [Fact]
     public async Task Superseded_inputs_make_the_gate_ready_for_a_new_request()
     {
         using var f = new RunFixtures(Graph());
