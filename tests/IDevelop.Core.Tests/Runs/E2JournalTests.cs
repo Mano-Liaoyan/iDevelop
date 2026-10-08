@@ -85,6 +85,30 @@ public sealed class E2JournalTests
     }
 
     [Fact]
+    public void A_released_standalone_lease_cannot_recover_a_legacy_attempt()
+    {
+        using var f = new RunFixtures();
+        var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
+        File.WriteAllBytes(f.Journal(W, Run), bytes);
+        var run = new LegacyRun(W, Run);
+        var operation = new OperationId(Id(2003));
+        var confirmation = new OperationId(Id(2004));
+        var attempt = new AttemptId(Id(104));
+        var released = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, U));
+        released.Dispose();
+
+        Assert.Equal(new RunDecision.Rejected(new(RunProblem.TaskBusy)),
+            f.Store.Recover(run, released, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
+        Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
+        using var held = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, U));
+        var recovered = Assert.IsType<RunDecision.Recorded>(
+            f.Store.Recover(run, held, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
+        Assert.Equal((2, 28L), (recovered.Record.Schema, recovered.Record.Sequence));
+        Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[attempt]).Outcome);
+        Assert.Empty(f.Read().UnresolvedClaims);
+    }
+
+    [Fact]
     public void Schema_two_ownership_fence_is_refused_at_sequence_28()
     {
         using var f = new RunFixtures();
