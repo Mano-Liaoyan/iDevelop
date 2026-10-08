@@ -694,10 +694,15 @@ internal sealed partial class GitRepository
                 start.Environment.Remove(key);
             foreach (var (key, value) in pinnedGitEnvironment) start.Environment[key] = value;
         }
-        // The group launcher needs a full path. Unlike Process.Start, the search never looks in the current folder.
+        // The launcher needs a full path. Only PATH is searched: Process.Start would also look beside the app and in the
+        // current folder, and a git found there could be one planted in a repository.
         if (!OperatingSystem.IsWindows())
-            start.FileName = CommandResolver.Create(((environment is not null && environment.TryGetValue("PATH", out var searchPath)
-                ? searchPath : System.Environment.GetEnvironmentVariable("PATH")) ?? "").Split(Path.PathSeparator), []).Resolve("git")?.Path ?? "git";
+        {
+            var searchPath = environment is not null && environment.TryGetValue("PATH", out var given) ? given : System.Environment.GetEnvironmentVariable("PATH");
+            if (CommandResolver.Create((searchPath ?? "").Split(Path.PathSeparator), []).Resolve("git")?.Path is not { } git)
+                return new(-1, [], "git was not found on PATH.");
+            start.FileName = git;
+        }
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
         start.Environment["LC_ALL"] = "C";
         start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
@@ -751,15 +756,15 @@ internal sealed partial class GitRepository
     }
 
     /// <summary>
-    /// One Git process and what contains it: its own process group on Linux and macOS, a job on Windows. Only a timeout
-    /// stops them, so a hook's background work outlives a call that ends on its own, as it did before.
+    /// One Git process and what contains it: its own session and process group on Linux and macOS, a job on Windows.
+    /// Only a timeout stops them. The job never kills on close, so Git and its hooks finish even when iDevelop exits or
+    /// dies during the call, and a hook's background work outlives a call that ends on its own, as it did before.
     /// </summary>
     private sealed class GitProcess : IDisposable
     {
         private readonly Process? _process;
         private readonly ProcessJob? _job;
         private readonly ProcessGroup? _group;
-        private bool _stopped;
 
         private GitProcess(ProcessGroup group)
         {
@@ -772,7 +777,7 @@ internal sealed partial class GitRepository
         private GitProcess(Process process)
         {
             _process = process;
-            _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
+            _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process, killOnClose: false) : null;
             Input = process.StandardInput.BaseStream;
             Output = process.StandardOutput.BaseStream;
             Error = process.StandardError;
@@ -787,6 +792,7 @@ internal sealed partial class GitRepository
         {
             if (!OperatingSystem.IsWindows())
             {
+                // Without the launcher, Process.Start gets the same full path and starts Git without a group.
                 try { return new GitProcess(ProcessGroup.Start(start)); }
                 catch (NotSupportedException) { }
             }
@@ -797,7 +803,6 @@ internal sealed partial class GitRepository
 
         public void Stop()
         {
-            _stopped = true;
             if (_group is not null)
             {
                 _group.Stop();
@@ -809,7 +814,6 @@ internal sealed partial class GitRepository
 
         public void Dispose()
         {
-            if (!_stopped) _job?.KeepProcessesOnClose();
             _job?.Dispose();
             _group?.Dispose();
             _process?.Dispose();

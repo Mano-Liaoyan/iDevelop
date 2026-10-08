@@ -832,6 +832,20 @@ public sealed class GitRepositoryTests
     }
 
     [UnixFact]
+    public void A_call_refuses_a_git_that_PATH_does_not_name_instead_of_searching_elsewhere()
+    {
+        using var f = new GitFixture();
+        var empty = Path.Combine(Path.GetDirectoryName(f.Folder)!, "empty-bin");
+        Directory.CreateDirectory(empty);
+        var environment = new Dictionary<string, string>(f.Environment) { ["PATH"] = empty };
+
+        var result = GitRepository.Run(["version"], f.Folder, GitOperation.Metadata, GitLimits.Default, environment);
+
+        Assert.Equal((-1, "", "git was not found on PATH."), (result.ExitCode, result.Text, result.Stderr));
+        Assert.Equal("git was not found on PATH.", Assert.IsType<RepositoryOpen.Refused>(GitRepository.Open(f.Folder, environment)).Detail);
+    }
+
+    [UnixFact]
     public void A_call_that_ends_on_its_own_leaves_a_hook_child_running()
     {
         using var f = new GitFixture();
