@@ -1,13 +1,11 @@
-using System.Diagnostics;
-using System.Text;
-
 namespace IDevelop.Execution;
 
 /// <summary>
 /// The project's files as Git trees. A snapshot stages every file that Git does not ignore into a temporary copy of the
 /// index and writes it as a tree, so it leaves the person's index, branch, and work tree as they were. The project's
 /// <c>.idp</c> folder stays out, so saving the workflow during a turn changes no snapshot. Every method returns null
-/// when the folder is not in a Git work tree or Git fails.
+/// when the folder is not in a Git work tree or Git fails. A snapshot also returns null when the index hides changes
+/// with assume-unchanged or skip-worktree.
 /// </summary>
 internal static class GitTree
 {
@@ -15,58 +13,23 @@ internal static class GitTree
     private const int DiffLimit = 200_000;
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+    private static readonly GitLimits Limits = new(Patience, Patience, Patience);
+    private static readonly IReadOnlyDictionary<string, string> Environment = new Dictionary<string, string>();
 
-    public static string? Snapshot(string folder)
-    {
-        if (Git(folder, null, "rev-parse", "--git-path", "index") is not { } indexPath)
-        {
-            return null;
-        }
-
-        var index = Path.GetFullPath(Path.Combine(folder, indexPath.Trim()));
-        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
-        try
-        {
-            if (File.Exists(index))
-            {
-                File.Copy(index, temporary);
-            }
-
-            string[] pathspec = [".", ":(exclude).idp"];
-            var entries = GitBytes(folder, temporary, null, ["ls-files", "--stage", "-z", "--", .. pathspec]);
-            if (entries is null || GitBytes(folder, temporary, entries, "update-index", "-z", "--index-info") is null)
-            {
-                return null;
-            }
-
-            return Git(folder, temporary, ["add", "--all", "--", .. pathspec]) is null
-                ? null
-                : Git(folder, temporary, "write-tree")?.Trim();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(temporary);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
-    }
+    public static string? Snapshot(string folder) => GitRepository.Snapshot(folder, [".idp"], Environment, Limits) is GitRead<TreeId>.Read tree
+        ? tree.Value.Hex
+        : null;
 
     /// <summary>The change from one tree to another as a unified diff, cut at <see cref="DiffLimit"/> characters.</summary>
     public static string? Diff(string folder, string from, string to)
     {
-        if (Git(folder, null, "diff", "--no-color", "--no-ext-diff", "--no-textconv", from, to) is not { } diff)
+        var result = GitRepository.Run(["diff", "--no-color", "--no-ext-diff", "--no-textconv", from, to], folder, GitOperation.Worktree, Limits, Environment);
+        if (result.ExitCode != 0)
         {
             return null;
         }
 
+        var diff = result.Text;
         return diff.Length <= DiffLimit
             ? diff
             : $"{diff[..DiffLimit]}\n… The diff goes on. Run git diff {from} {to} in the project to read all of it.";
@@ -75,74 +38,16 @@ internal static class GitTree
     /// <summary>The recursive entries of a tree or commit outside <c>.idp</c>, sorted, so two snapshots compare by content.</summary>
     internal static string? ContentOutsideData(string folder, string treeOrCommit)
     {
-        if (!Revision.IsCommit(treeOrCommit) || Git(folder, null, "ls-tree", "-r", "-z", "--full-tree", treeOrCommit) is not { } entries)
+        if (!Revision.IsCommit(treeOrCommit)) return null;
+        var result = GitRepository.Run(["ls-tree", "-r", "-z", "--full-tree", treeOrCommit], folder, GitOperation.Metadata, Limits, Environment);
+        if (result.ExitCode != 0)
         {
             return null;
         }
 
-        return string.Join('\0', entries.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+        return string.Join('\0', result.Text.Split('\0', StringSplitOptions.RemoveEmptyEntries)
             .Where(entry => entry.IndexOf('\t') is var tab && tab >= 0 &&
                 entry[(tab + 1)..] != ".idp" && !entry[(tab + 1)..].StartsWith(".idp/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal));
-    }
-
-    private static string? Git(string folder, string? indexFile, params string[] arguments)
-    {
-        var bytes = GitBytes(folder, indexFile, null, arguments);
-        return bytes is null ? null : Encoding.UTF8.GetString(bytes);
-    }
-
-    private static byte[]? GitBytes(string folder, string? indexFile, byte[]? stdin, params string[] arguments)
-    {
-        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
-        {
-            WorkingDirectory = folder,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-        };
-        start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        start.Environment["GIT_NO_REPLACE_OBJECTS"] = "1";
-        start.Environment["GIT_GRAFT_FILE"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
-        if (indexFile is not null)
-        {
-            start.Environment["GIT_INDEX_FILE"] = indexFile;
-        }
-
-        try
-        {
-            using var git = Process.Start(start);
-            if (git is null)
-            {
-                return null;
-            }
-
-            using var bytes = new MemoryStream();
-            var output = git.StandardOutput.BaseStream.CopyToAsync(bytes);
-            _ = git.StandardError.ReadToEndAsync();
-            var input = WriteInput();
-            if (!git.WaitForExit(Patience))
-            {
-                git.Kill(entireProcessTree: true);
-                return null;
-            }
-
-            input.GetAwaiter().GetResult();
-            output.GetAwaiter().GetResult();
-            return git.ExitCode == 0 ? bytes.ToArray() : null;
-
-            async Task WriteInput()
-            {
-                if (stdin is not null) await git.StandardInput.BaseStream.WriteAsync(stdin);
-                git.StandardInput.Close();
-            }
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            return null;
-        }
     }
 }
