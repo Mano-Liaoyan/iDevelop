@@ -84,8 +84,14 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new RootObservation.Rejected(refused.Reason); }
     }
 
-    public async ValueTask<Settlement> Settle(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint log,
-        CancellationToken cancellation = default)
+    public ValueTask<Settlement> Settle(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint log,
+        CancellationToken cancellation = default) => SettleCore(lease, operation, launch, log, false, cancellation);
+
+    public ValueTask<Settlement> RecoverSettlement(RunLease lease, OperationId operation, LaunchKey launch,
+        CancellationToken cancellation = default) => SettleCore(lease, operation, launch, null, true, cancellation);
+
+    private async ValueTask<Settlement> SettleCore(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint? log,
+        bool recovery, CancellationToken cancellation)
     {
         using var authority = lease.Use();
         if (authority is null) return new Settlement.Rejected(new(RunProblem.TaskBusy));
@@ -98,29 +104,55 @@ internal sealed partial class Materializer
             if (!record.Claims.ContainsKey(launch)) return new Settlement.Rejected(new(RunProblem.InvalidClaim));
             if (LeaseProblem(lease, record.Attempts[launch.Attempt].Task) is { } mismatch)
                 return new Settlement.Rejected(new(mismatch));
-            if (record.Fenced.Contains(launch) || !record.RootExits.ContainsKey(launch))
+            if (!record.RootExits.ContainsKey(launch) || !recovery && record.Fenced.Contains(launch))
                 return new Settlement.Rejected(new(RunProblem.UnresolvedOwnership));
             if (record.TurnClosures.ContainsKey(launch))
-                return record.Settlements.GetValueOrDefault(launch) == capture
-                    ? new Settlement.Closed(capture, record.Dispositions[capture].Disposition)
-                    : new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
+            {
+                if (!record.Settlements.TryGetValue(launch, out var linked) || !recovery && linked != capture)
+                    return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
+                return new Settlement.Closed(linked, record.Dispositions[linked].Disposition);
+            }
+            if (recovery)
+            {
+                capture = record.Captures.FirstOrDefault(pair => pair.Value.Any(observation => observation.Launch == launch)).Key;
+                if (capture.Value == Guid.Empty)
+                    capture = record.Dispositions.Values.FirstOrDefault(disposed => disposed.Launch == launch)?.Capture ??
+                        new CaptureId(OperationIds.Derive(operation, "capture").Value);
+            }
             if (RunReducer.CaptureForAnotherId(record, launch, capture))
                 return new Settlement.Rejected(new(RunProblem.OperationConflict));
+            var root = new OperationId(capture.Value);
             var observations = record.Captures.GetValueOrDefault(capture, []);
+            if (recovery)
+                log = observations.Count != 0 ? observations[0].Log :
+                    AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id,
+                        record.Attempts[launch.Attempt].Task, launch.Attempt)).Checkpoint;
             if (observations.Any(observation => observation.Launch != launch || observation.Log != log))
                 return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
+            var missingLog = recovery && observations.Count == 0 &&
+                (log is null || _store.TurnEvidenceProblem(record, launch, log) is not null);
             if (!record.Dispositions.TryGetValue(capture, out var disposed))
             {
-                if (observations.Count == 1) return new Settlement.Rejected(new(RunProblem.RecoveryEvidenceInsufficient));
                 CaptureDisposition? disposition = null;
-                GitRepository? repository = null;
-                if (observations.Count == 0)
+                if (recovery && observations.Count == 0)
                 {
-                    if (_store.TurnEvidenceProblem(record, launch, log) is { } rejection)
+                    disposition = new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable,
+                        missingLog ? "Missing turn-end log evidence." : "Missing turn-end capture evidence.", []);
+                }
+                else
+                {
+                    if (observations.Count == 0 && _store.TurnEvidenceProblem(record, launch, log!) is { } rejection)
                         return new Settlement.Rejected(rejection);
-                    for (var ordinal = 1; ordinal <= 2; ordinal++)
+                    var recoveringPair = observations.Count == 1;
+                    GitRepository? repository = null;
+                    for (var ordinal = observations.Count + 1; ordinal <= 2; ordinal++)
                     {
                         cancellation.ThrowIfCancellationRequested();
+                        if (ordinal == 2)
+                        {
+                            var remaining = observations[0].Completed + TimeSpan.FromMilliseconds(250) - _clock.GetUtcNow();
+                            if (remaining > TimeSpan.Zero) await Task.Delay(remaining, _clock, cancellation);
+                        }
                         ImmutableArray<EvidenceFile> evidence = [];
                         CaptureObservation observation;
                         try
@@ -130,8 +162,8 @@ internal sealed partial class Materializer
                             if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
                             repository ??= OpenRepository();
                             record = Read(permit.Workflow, permit.Run);
-                            observation = Mutate("capture-" + ordinal, () => ObserveCapture(repository, record, operation,
-                                capture, ordinal, launch, log, ref evidence));
+                            observation = Mutate("capture-" + ordinal, () => ObserveCapture(repository, record,
+                                capture, ordinal, launch, log!, ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
                         }
                         catch (MaterializationFailure failed)
                         {
@@ -144,33 +176,28 @@ internal sealed partial class Materializer
                             break;
                         }
                         var number = ordinal;
-                        Task? interval = null;
-                        record = DecisionRecord(Journal("capture-" + ordinal, () =>
-                        {
-                            var decision = _store.Record(permit, OperationIds.Derive(operation, "capture-" + number),
-                                new RunEvent.TurnCaptured(observation));
-                            if (number == 1 && decision is RunDecision.Recorded)
-                                interval = Task.Delay(TimeSpan.FromMilliseconds(250), _clock, cancellation);
-                            return decision;
-                        }));
-                        if (interval is not null) await interval;
+                        record = DecisionRecord(Journal("capture-" + ordinal, () => _store.Record(permit,
+                            OperationIds.Derive(number == 1 ? operation : root, "capture-" + number),
+                            new RunEvent.TurnCaptured(observation))));
+                        observations = record.Captures.GetValueOrDefault(capture, []);
                     }
-                    observations = record.Captures.GetValueOrDefault(capture, []);
+                    disposition ??= DisposeCapture(record, observations[0], observations[1]);
                 }
-                disposition ??= DisposeCapture(record, observations[0], observations[1]);
                 disposed = new(capture, launch, disposition);
                 var decision = Journal("capture-disposition", () => _store.Record(permit,
-                    OperationIds.Derive(operation, "capture-disposition"), disposed));
+                    OperationIds.Derive(root, "capture-disposition"), disposed));
                 disposed = (RunEvent.CaptureDisposed)DecisionEvent(decision);
             }
             if (disposed.Launch != launch) return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
-            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(operation, "close-turn"), launch, log, capture));
+            if (log is null || missingLog)
+                return new Settlement.Rejected(new(RunProblem.RecoveryEvidenceInsufficient));
+            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(root, "close-turn"), launch, log, capture));
             return new Settlement.Closed(capture, disposed.Disposition);
         }
         catch (Refusal refused) { return new Settlement.Rejected(refused.Reason); }
     }
 
-    private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, OperationId operation, CaptureId id,
+    private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id,
         int ordinal, LaunchKey launch, LogCheckpoint log, ref ImmutableArray<EvidenceFile> evidence)
     {
         var started = _clock.GetUtcNow();
@@ -201,7 +228,7 @@ internal sealed partial class Materializer
         var logged = AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id, task, launch.Attempt), log);
         if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString());
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
-            OperationIds.Derive(operation, "capture-" + ordinal), launch.Attempt,
+            OperationIds.Derive(new OperationId(id.Value), "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
         var unexplained = UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));

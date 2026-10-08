@@ -192,7 +192,7 @@ public sealed class TurnEndOwnershipTests
     }
 
     [Fact]
-    public async Task A_process_crash_after_the_first_capture_fences_the_launch_and_cannot_publish()
+    public async Task A_process_crash_after_the_first_capture_is_recovered_by_one_matching_capture()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
@@ -202,7 +202,7 @@ public sealed class TurnEndOwnershipTests
             T.Value.ToString("D"), writer.Execution.Launch.Attempt.Value.ToString("D"), operation.Value.ToString("D")))
         {
             Assert.Equal("Owned:", await racer.Line());
-            Assert.Equal("capture-1", await racer.Line());
+            Assert.Equal("journal.capture-1.after", await racer.Line());
             await racer.Exit();
             Assert.Equal(73, racer.ExitCode);
         }
@@ -217,11 +217,15 @@ public sealed class TurnEndOwnershipTests
             foreach (var retry in new[] { operation, f.Op() })
                 Assert.Equal("UnresolvedOwnership", Assert.IsType<Settlement.Rejected>(await f.Materializer().Settle(
                     lease, retry, writer.Execution.Launch, observation.Log)).Reason.Problem.ToString());
-            Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(
-                lease, f.Op(), writer.Execution.Launch.Attempt)).Reason.Problem.ToString());
-            Assert.Empty(f.Read().Results);
-            Assert.Single(Assert.Single(f.Read().Captures).Value);
-            Assert.Single(f.Read().Claims);
+            var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(lease, f.Op(), writer.Execution.Launch));
+            Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+            Assert.True(f.Read().Captures[closed.Capture][1].Recovery);
+            Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(owned.Permit, f.Op(), writer.Execution.Launch.Attempt,
+                TerminalAttemptOutcome.Succeeded, observation.Log));
+            var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(lease, f.Op(), writer.Execution.Launch.Attempt));
+            Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(published.Result.Code).Code.Commit.Hex + ":result.txt"));
+            Assert.Equal((1, 1), (f.Read().Results.Count, f.Read().Claims.Count));
         }
 
         var control = await PrepareAndClaim(f, U);
@@ -229,7 +233,7 @@ public sealed class TurnEndOwnershipTests
         await f.Close(control);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), control.Execution.Launch.Attempt));
         Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
-        Assert.Single(f.Read().Results);
+        Assert.Equal(2, f.Read().Results.Count);
     }
 
     private static void Recheck(PreparationFixture f, AttemptId attempt)

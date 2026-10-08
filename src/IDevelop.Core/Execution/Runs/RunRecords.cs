@@ -123,7 +123,11 @@ internal readonly record struct CaptureId(Guid Value);
 
 internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, LaunchKey Launch, LogCheckpoint Log,
     DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId Candidate, CommitId? Tip, string? Head,
-    EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, EvidenceFile SharedRefs, ImmutableArray<string> UnexplainedRefs);
+    EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, EvidenceFile SharedRefs, ImmutableArray<string> UnexplainedRefs)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Recovery { get; init; }
+}
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Matched), "matched")]
@@ -275,7 +279,7 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled,
+    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -322,7 +326,7 @@ internal abstract record RecoveryRead
     internal sealed record Rejected(RunRejection Reason) : RecoveryRead;
 }
 
-internal enum RecoveryState { RequestMissing, Reserved, Uncertain, Closed }
+internal enum RecoveryState { RequestMissing, Reserved, Uncertain, Closed, Settling }
 
 internal sealed record AttemptRecovery(AttemptId Attempt, RecoveryState State, ImmutableArray<LaunchKey> Claims);
 
@@ -418,6 +422,9 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
 
     public ImmutableArray<LaunchKey> UnresolvedClaims => [.. Claims.Keys.Where(key =>
         !TurnClosures.ContainsKey(key) && !Closures.ContainsKey(key.Attempt)).OrderBy(key => key.Attempt.Value).ThenBy(key => key.Turn)];
+
+    public bool Settling(LaunchKey launch) => RootExits.ContainsKey(launch) &&
+        !TurnClosures.ContainsKey(launch) && !Closures.ContainsKey(launch.Attempt);
 
     public ReviewLink? ReviewOf(AttemptId attempt) => Attempts[attempt].Cause switch
     {

@@ -2,6 +2,22 @@ namespace IDevelop.Execution;
 
 internal static partial class RunReducer
 {
+    internal static RunProblem? AppendProblem(RunRecord record, RunEvent e)
+    {
+        if (record.Schema != 3) return null;
+        if (e is RunEvent.TurnClosed { Capture: null } turn && record.RootExits.ContainsKey(turn.Key))
+            return RunProblem.SettlementPending;
+        if (e is RunEvent.AttemptClosed attempt && record.Claims.Keys.Any(launch =>
+            launch.Attempt == attempt.Attempt && record.Settling(launch)) &&
+            (attempt.End is not AttemptEnd.Recovered || !FailedSettlements(record, attempt.Attempt)))
+            return RunProblem.SettlementPending;
+        return null;
+    }
+
+    internal static bool FailedSettlements(RunRecord record, AttemptId attempt) =>
+        record.Claims.Keys.Where(launch => launch.Attempt == attempt && record.Settling(launch)).All(launch =>
+            record.Dispositions.Values.Any(disposed => disposed.Launch == launch && disposed.Disposition is CaptureDisposition.Failed));
+
     internal static bool CaptureForAnotherId(RunRecord record, LaunchKey launch, CaptureId capture) =>
         record.Captures.Any(pair => pair.Key != capture && pair.Value.Any(observation => observation.Launch == launch)) ||
         record.Dispositions.Any(pair => pair.Key != capture && pair.Value.Launch == launch);
@@ -29,7 +45,7 @@ internal static class CaptureComparison
 internal static partial class RunValidation
 {
     private static bool Capture(CaptureObservation observation) => observation.Capture.Value != Guid.Empty &&
-        Key(observation.Launch) && Checkpoint(observation.Log) && observation.Completed >= observation.Started &&
+        (!observation.Recovery || observation.Ordinal == 2) && Key(observation.Launch) && Checkpoint(observation.Log) && observation.Completed >= observation.Started &&
         Recipe(observation.Recipe) && Revision.IsCommit(observation.Candidate.Hex) &&
         (observation.Tip is null || Revision.IsCommit(observation.Tip.Value.Hex)) &&
         (observation.Head is null || !string.IsNullOrWhiteSpace(observation.Head)) &&

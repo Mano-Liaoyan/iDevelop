@@ -129,7 +129,7 @@ public sealed class JoinInvariantTests
 
     private static Workflow FanIn() => Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(D), Task(C), Reviewer()), D, C), C, U), T, U);
 
-    private static void CloseReviewTurn(PreparationFixture f, Preparation.Ready ready)
+    private static async Task CloseReviewTurn(PreparationFixture f, Preparation.Ready ready)
     {
         var execution = ready.Execution;
         var attempt = f.Read().Attempts[execution.Launch.Attempt];
@@ -146,7 +146,7 @@ public sealed class JoinInvariantTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
         Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, new RootExit.Exited(0)));
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
+        Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, Checkpoint(folder)));
     }
 
     private static async Task<Preparation.Ready> ReviewedJoin(PreparationFixture f)
@@ -157,7 +157,7 @@ public sealed class JoinInvariantTests
         await f.Close(forwarded, "Forwarded.\n");
         Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
         var review = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial(), "Review."));
-        CloseReviewTurn(f, review);
+        await CloseReviewTurn(f, review);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         OwnCommit(f, fix, "a.txt", "Fixed\n", "fix");
         await f.Close(fix, "Repaired.\n");

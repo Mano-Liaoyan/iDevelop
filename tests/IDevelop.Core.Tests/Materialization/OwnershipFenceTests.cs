@@ -58,6 +58,8 @@ public sealed class OwnershipFenceTests
             {
                 Assert.Equal(TipOwnership.Explained, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
                     f.Lease(T), f.Op(), t.Execution.Launch, new RootExit.Exited(0))).Observation.Ownership);
+                Assert.Equal("RecoveryEvidenceInsufficient", Assert.IsType<Settlement.Rejected>(await f.Materializer().RecoverSettlement(
+                    f.Lease(T), f.Op(), t.Execution.Launch)).Reason.Problem.ToString());
                 Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), t.Execution.Launch.Attempt,
                     RecoveryOutcome.Stopped, f.Op(), "Root stopped."));
             }

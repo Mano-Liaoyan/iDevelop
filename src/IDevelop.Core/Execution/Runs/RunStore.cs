@@ -361,7 +361,9 @@ internal sealed class RunStore
                 return Missing();
             }
 
-            if (record.Fenced.Contains(key)) return Refuse(RunProblem.UnresolvedOwnership);
+            if (record.Fenced.Contains(key) && capture is null) return Refuse(RunProblem.UnresolvedOwnership);
+            if (RunReducer.AppendProblem(record, new RunEvent.TurnClosed(key, evidence) { Capture = capture }) is { } appendProblem)
+                return Refuse(appendProblem);
 
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
@@ -399,10 +401,13 @@ internal sealed class RunStore
                 return Missing();
             }
 
+            var end = new AttemptEnd.Logged(outcome, evidence);
+            if (RunReducer.AppendProblem(record, new RunEvent.AttemptClosed(attempt, end)) is { } appendProblem)
+                return Refuse(appendProblem);
+
             if (record.UnresolvedClaims.Any(key => key.Attempt == attempt && record.Fenced.Contains(key)))
                 return Refuse(RunProblem.UnresolvedOwnership);
 
-            var end = new AttemptEnd.Logged(outcome, evidence);
             if (record.Closures.TryGetValue(attempt, out var existing))
             {
                 return RunReducer.Same<AttemptEnd>(existing, end)
@@ -440,7 +445,8 @@ internal sealed class RunStore
         return new RecoveryRead.Loaded([.. record.Attempts.Values.OrderBy(attempt => attempt.Id.Value).Select(attempt =>
         {
             var claims = record.UnresolvedClaims.Where(key => key.Attempt == attempt.Id).ToImmutableArray();
-            var state = record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Length != 0 ? RecoveryState.Uncertain :
+            var state = record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Any(record.Settling) ? RecoveryState.Settling :
+                claims.Any(key => !record.RootExits.ContainsKey(key)) ? RecoveryState.Uncertain :
                 File.Exists(Path.Combine(AttemptFolder(workflow, run, attempt.Task, attempt.Id), "events.jsonl")) ? RecoveryState.Reserved :
                     RecoveryState.RequestMissing;
             return new AttemptRecovery(attempt.Id, state, claims);
@@ -494,8 +500,12 @@ internal sealed class RunStore
                     return new Mutation.Existing(new RunEvent.AttemptClosed(attempt, existing));
                 }
 
+                var settling = record.Schema == 3 && record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
+                if (settling && (outcome is null || !RunReducer.FailedSettlements(record, attempt)))
+                    return Refuse(RunProblem.SettlementPending);
+
                 var read = AttemptEvidence.Read(AttemptFolder(workflow, run, owner.Task, owner.Id));
-                if (read.Rejection is null && read.Checkpoint is { } checkpoint && OwnedEvidence(record, owner, checkpoint).Rejection is null &&
+                if (!settling && read.Rejection is null && read.Checkpoint is { } checkpoint && OwnedEvidence(record, owner, checkpoint).Rejection is null &&
                     AttemptEvidence.Terminal(read) is { } terminal && AttemptEvidence.Matches(read, terminal))
                 {
                     return new Mutation.Append(new RunEvent.AttemptClosed(attempt, new AttemptEnd.Logged(terminal, checkpoint)));
@@ -939,6 +949,8 @@ internal sealed class RunStore
 
             var append = (Mutation.Append)mutation;
             var entry = new RunEntry(record?.Schema ?? 3, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
+            if (record is not null && RunReducer.AppendProblem(record, append.Event) is { } appendProblem)
+                return new RunDecision.Rejected(new(appendProblem));
             var reduced = RunReducer.Apply(workflow, run, record, entry);
             if (reduced is RunRead.Rejected refused)
             {

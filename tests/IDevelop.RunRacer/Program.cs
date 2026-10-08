@@ -127,8 +127,15 @@ internal static class Program
                 if (claim is not RunDecision.Granted) { Console.WriteLine(Describe(claim)); return 4; }
                 var checkout = Path.Combine(project, prepared.Location.Owner.RelativePath);
                 File.WriteAllText(Path.Combine(checkout, "result.txt"), "done\n");
-                var materializer = Materializer.Open(project, store);
-                if (materializer.ObserveRootExit(lease, OperationIds.Derive(operation, "root"), key,
+                var crashPoint = args.Length > 7 ? args[7] : "journal.capture-1.after";
+                var crashing = Materializer.Open(project, store, null, TimeProvider.System, null, point =>
+                {
+                    if (point != crashPoint) return;
+                    Console.WriteLine(point);
+                    Console.Out.Flush();
+                    Environment.Exit(73);
+                });
+                if (crashing.ObserveRootExit(lease, OperationIds.Derive(operation, "root"), key,
                     new RootExit.Exited(0)) is not RootObservation.Observed) return 5;
                 var attempt = record.Attempts[key.Attempt];
                 var definition = record.Revisions[attempt.Revision].Snapshot.Tasks[task];
@@ -146,13 +153,6 @@ internal static class Program
                 }
                 var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
                 var checkpoint = new LogCheckpoint(bytes.LongLength, Revision.Hash(bytes));
-                var crashing = Materializer.Open(project, store, null, TimeProvider.System, null, point =>
-                {
-                    if (point != "journal.capture-1.after") return;
-                    Console.WriteLine("capture-1");
-                    Console.Out.Flush();
-                    Environment.Exit(73);
-                });
                 var settlement = crashing.Settle(lease, operation, key, checkpoint).AsTask().GetAwaiter().GetResult();
                 Console.WriteLine(settlement);
                 return 6;
