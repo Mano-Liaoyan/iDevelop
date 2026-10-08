@@ -15,6 +15,10 @@ internal sealed class ProcessJob : IDisposable
     private const uint KillOnJobClose = 0x2000;
     private const int ExtendedLimitInformation = 9;
 
+    internal static bool AssignmentFailure { get; set; }
+
+    internal static int? TerminationFailure { get; set; }
+
     private readonly nint _handle;
 
     private ProcessJob(nint handle) => _handle = handle;
@@ -22,6 +26,11 @@ internal sealed class ProcessJob : IDisposable
     /// <summary>Null when the process could not join a job, such as one that already exited. Stopping its tree still works.</summary>
     public static ProcessJob? Assign(Process process)
     {
+        if (AssignmentFailure)
+        {
+            return null;
+        }
+
         var handle = CreateJobObjectW(0, null);
         if (handle == 0)
         {
@@ -37,7 +46,16 @@ internal sealed class ProcessJob : IDisposable
         return null;
     }
 
-    public void Terminate() => TerminateJobObject(_handle, uint.MaxValue);
+    public (bool Succeeded, int Error) Terminate()
+    {
+        if (TerminationFailure is { } error)
+        {
+            return (false, error);
+        }
+
+        var succeeded = TerminateJobObject(_handle, uint.MaxValue);
+        return (succeeded, Marshal.GetLastWin32Error());
+    }
 
     /// <summary>Closing the job then leaves its processes running.</summary>
     public void KeepProcessesOnClose() => SetLimits(_handle, 0);

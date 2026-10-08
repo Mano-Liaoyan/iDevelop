@@ -1,8 +1,30 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace IDevelop.Execution;
+
+internal enum ProcessLifetime { Standalone, Workflow }
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Containment.Job), "job")]
+[JsonDerivedType(typeof(Containment.None), "none")]
+internal abstract record Containment
+{
+    private Containment() { }
+
+    public sealed record Job : Containment;
+
+    public sealed record None(string Reason) : Containment;
+}
+
+internal sealed record CleanupStep(DateTimeOffset At, string Action, string? Failure);
+
+internal enum CleanupResult { Completed, Incomplete }
+
+internal sealed record Cleanup(CleanupResult Result, string? Detail, ImmutableArray<CleanupStep> Steps);
 
 /// <summary>The message is for the user.</summary>
 internal sealed class LaunchException(string message, Exception? inner = null) : Exception(message, inner);
@@ -26,14 +48,22 @@ internal sealed class ChildProcess : IDisposable
     private Task _stderr = Task.CompletedTask;
     private bool _disposed;
 
-    private ChildProcess(Process process)
+    private ChildProcess(Process process, ProcessLifetime lifetime)
     {
         _process = process;
         _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
         Identity = ProcessCheck.Identify(process);
+        Lifetime = lifetime;
+        Containment = _job is not null ? new Containment.Job() : new Containment.None(OperatingSystem.IsWindows()
+            ? "The client could not join a job object."
+            : "No process group contains this turn's descendants.");
     }
 
     public ProcessIdentity Identity { get; }
+
+    public ProcessLifetime Lifetime { get; }
+
+    public Containment Containment { get; }
 
     /// <summary>True once the process exited, even while a process it started still holds its pipes open.</summary>
     public bool HasExited
@@ -48,7 +78,7 @@ internal sealed class ChildProcess : IDisposable
     }
 
     /// <exception cref="LaunchException">The command did not start, or a batch shim was given an unsafe argument.</exception>
-    public static ChildProcess Start(ResolvedCommand command, IReadOnlyList<string> arguments, string workingDirectory)
+    public static ChildProcess Start(ResolvedCommand command, IReadOnlyList<string> arguments, string workingDirectory, ProcessLifetime lifetime)
     {
         if (command.UnsafeArgument(arguments) is { } argument)
         {
@@ -90,7 +120,7 @@ internal sealed class ChildProcess : IDisposable
 
         try
         {
-            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."));
+            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."), lifetime);
         }
         catch (Win32Exception e)
         {
@@ -169,6 +199,29 @@ internal sealed class ChildProcess : IDisposable
             _job?.Terminate();
             // The job holds the process only from just after its start, and Linux and macOS have no job.
             ProcessCheck.KillTreeQuietly(_process);
+        }
+    }
+
+    public Task<Cleanup> CleanUpAsync(TimeSpan grace, TimeProvider clock, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return Task.FromResult(new Cleanup(CleanupResult.Incomplete, "The turn's process was already released.", []));
+            }
+
+            var at = clock.GetUtcNow();
+            if (_job is not null)
+            {
+                var (succeeded, error) = _job.Terminate();
+                var failure = succeeded ? null : $"Win32 error {error}";
+                return Task.FromResult(new Cleanup(succeeded ? CleanupResult.Completed : CleanupResult.Incomplete,
+                    failure, [new CleanupStep(at, "terminateJob", failure)]));
+            }
+
+            return Task.FromResult(new Cleanup(CleanupResult.Incomplete, ((Containment.None)Containment).Reason,
+                [new CleanupStep(at, "killTree", ProcessCheck.KillTree(_process))]));
         }
     }
 

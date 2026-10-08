@@ -73,6 +73,8 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
     /// <summary>The turn runs in the client's read-only mode. Pi has none, so its turn can still edit files.</summary>
     public bool ReadOnly { get; init; }
 
+    public string? WorkingFolder { get; init; }
+
     public EffectivePolicy? Policy { get; init; }
 
     public EffectivePolicy PolicyFor(ClientId client) => Policy ?? ClientPolicy.For(

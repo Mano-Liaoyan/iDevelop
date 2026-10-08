@@ -94,6 +94,7 @@ public sealed record TerminalHandoff(DateTimeOffset At, string Folder, string Co
 [JsonDerivedType(typeof(RequestClosed), "requestClosed")]
 [JsonDerivedType(typeof(RequestDeferred), "requestDeferred")]
 [JsonDerivedType(typeof(ShutdownForced), "shutdownForced")]
+[JsonDerivedType(typeof(CleanedUp), "cleanedUp")]
 internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTimeOffset At)
 {
     /// <summary>
@@ -141,7 +142,16 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         public ReviewLink? Fix { get; init; }
     }
 
-    public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At);
+    public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At)
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ProcessLifetime? Lifetime { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Containment? Containment { get; init; }
+    }
+
+    public sealed record CleanedUp(DateTimeOffset At, CleanupResult Result, string? Detail, ImmutableArray<CleanupStep> Steps) : AttemptEvent(At);
 
     public sealed record LaunchFailed(DateTimeOffset At, string Reason) : AttemptEvent(At);
 
@@ -382,7 +392,7 @@ internal static partial class AttemptReducer
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e)
     {
         var next = ApplyEvent(record, e);
-        return record.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview
+        return e is not AttemptEvent.CleanedUp && record.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview
             ? next with { AppliedEvents = record.AppliedEvents + 1 }
             : next;
     }
@@ -404,7 +414,7 @@ internal static partial class AttemptReducer
             StopTurnRequested = record.StopTurnRequested || (message.StopsTurn && !record.BetweenTurns),
         },
         (_, { Status: not AttemptStatus.Running }) => record,
-        (AttemptEvent.Requested, _) => record,
+        (AttemptEvent.Requested or AttemptEvent.CleanedUp, _) => record,
         (AttemptEvent.Launched launched, _) => record with { Process = new ProcessIdentity(launched.ProcessId, launched.ProcessStarted) },
         (AttemptEvent.LaunchFailed failed, _) => EndAttempt(record, TurnOutcome.Failed, AttemptStatus.Failed, failed.Reason, failed.At),
         (AttemptEvent.Agent agent, _) => ApplyAgent(record, agent.Event, agent.At),

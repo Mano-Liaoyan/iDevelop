@@ -22,7 +22,14 @@ public sealed partial class ProjectRuns
     {
         private readonly ProjectRuns _owner;
         private readonly AttemptLog _log;
-        private readonly StandaloneLease _held;
+        private readonly RunOwnership _ownership;
+        private TurnOwner? Workflow => (_ownership as RunOwnership.Workflow)?.Owner;
+        private bool _brokenLog;
+        private Exception? _workflowError;
+        private int _startedRun;
+        private Task _watcher = Task.CompletedTask;
+        private Input.Exit? _workflowExit;
+        private bool _workflowExited;
         private readonly Channel<Input> _events = Channel.CreateUnbounded<Input>(new UnboundedChannelOptions { SingleReader = true });
         private readonly CancellationTokenSource _abandon = new();
         private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -42,13 +49,16 @@ public sealed partial class ProjectRuns
         private readonly HashSet<Input.Answer> _deliveries = [];
 
         public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, StandaloneLease held, AttemptRecord record)
+            : this(owner, order, plan, process, log, new RunOwnership.Standalone(held), record) { }
+
+        public ActiveRun(ProjectRuns owner, long order, LaunchPlan plan, ChildProcess process, AttemptLog log, RunOwnership ownership, AttemptRecord record)
         {
             _owner = owner;
             Order = order;
             _plan = plan;
             _turn = new Turn(process, plan.Client.Protocol(plan.Request));
             _log = log;
-            _held = held;
+            _ownership = ownership;
             Record = record;
             TaskId = record.Task;
             Title = record.TaskTitle;
@@ -81,7 +91,26 @@ public sealed partial class ProjectRuns
             }
         }
 
-        public void Start() => _ = Task.Run(RunAsync);
+        public void Start()
+        {
+            if (Interlocked.Exchange(ref _startedRun, 1) == 0) _ = Task.Run(RunAsync);
+        }
+
+        public void BreakLog()
+        {
+            lock (_gate)
+            {
+                _brokenLog = true;
+                if (_startedRun != 0) _abandon.Cancel();
+            }
+        }
+
+        public void Launched()
+        {
+            var process = _turn.Process;
+            Append(new AttemptEvent.Launched(_owner.TimeProvider.GetUtcNow(), process.Identity.Id, process.Identity.StartedAt)
+            { Lifetime = ProcessLifetime.Workflow, Containment = process.Containment });
+        }
 
         public Task<SendResult> StopAsync(AttemptEvent request, TurnKey? expected = null, CancellationToken ct = default)
         {
@@ -203,6 +232,7 @@ public sealed partial class ProjectRuns
             try
             {
                 Read(_turn);
+                if (_brokenLog && Workflow is not null) return;
                 Output(_turn.Protocol.Start());
                 await foreach (var next in _events.Reader.ReadAllAsync(_abandon.Token))
                 {
@@ -274,7 +304,8 @@ public sealed partial class ProjectRuns
                                 Append(new AttemptEvent.ShutdownForced(_owner.TimeProvider.GetUtcNow()));
                             }
 
-                            _turn.Process.StopTree();
+                            StopTree();
+                            if (Workflow is not null) return;
                             CloseInput();
                             break;
                         case Input.Exit exit when exit.Turn == _turn:
@@ -285,6 +316,11 @@ public sealed partial class ProjectRuns
                             }
 
                             _turn.Exit = null;
+                            if (Workflow is not null)
+                            {
+                                AppendWorkflowExit(exit);
+                                return;
+                            }
                             foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order).ThenBy(pair => pair.Value.PresentationSequence))
                             {
                                 Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Message(buffer.Text) { Id = id, Partial = true }) { Order = buffer.Order, PresentationSequence = buffer.PresentationSequence });
@@ -320,6 +356,8 @@ public sealed partial class ProjectRuns
                 }
             }
             catch (OperationCanceledException) { }
+            catch (Exception error) when (Workflow is not null && error is IOException or UnauthorizedAccessException) { _brokenLog = true; }
+            catch (Exception error) when (Workflow is not null) { _workflowError = error; }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), _owner.TimeProvider.GetUtcNow());
@@ -353,41 +391,50 @@ public sealed partial class ProjectRuns
                     delivery.Done.TrySetResult(new AnswerResult(AnswerOutcome.DeliveryUnknown, "Answer delivery could not be confirmed."));
                 }
 
-                if (exited)
+                if (Workflow is not null)
                 {
-                    _turn.Process.LeaveDescendantsRunning();
+                    await FinalizeWorkflowAsync();
+                    _owner.Probe?.Invoke("runner.finalized");
+                    _finished.TrySetResult();
                 }
                 else
                 {
-                    _turn.Process.StopTree();
-                }
-
-                await DisposeTurnAsync();
-                if (_owner.BeforeRelease is { } beforeRelease)
-                {
-                    await beforeRelease();
-                }
-                try
-                {
-                    if (_leave is { } leave && Record is { Status: AttemptStatus.Running, InterruptReason: null })
+                    if (exited)
                     {
-                        Append(leave);
+                        _turn.Process.LeaveDescendantsRunning();
                     }
-                }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                {
-                    Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), _owner.TimeProvider.GetUtcNow());
-                }
+                    else
+                    {
+                        _turn.Process.StopTree();
+                    }
 
-                _log.Dispose();
-                _held.Dispose();
-                try
-                {
-                    _owner.Finish(this, Record);
-                }
-                finally
-                {
-                    _finished.TrySetResult();
+                    await DisposeTurnAsync();
+                    if (_owner.BeforeRelease is { } beforeRelease)
+                    {
+                        await beforeRelease();
+                    }
+                    try
+                    {
+                        if (_leave is { } leave && Record is { Status: AttemptStatus.Running, InterruptReason: null })
+                        {
+                            Append(leave);
+                        }
+                    }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    {
+                        Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), _owner.TimeProvider.GetUtcNow());
+                    }
+
+                    _log.Dispose();
+                    ((RunOwnership.Standalone)_ownership).Lease.Dispose();
+                    try
+                    {
+                        _owner.Finish(this, Record);
+                    }
+                    finally
+                    {
+                        _finished.TrySetResult();
+                    }
                 }
             }
         }
@@ -412,13 +459,13 @@ public sealed partial class ProjectRuns
                 {
                     lock (_owner._gate)
                     {
-                        if (_owner.SendTarget(task, person.Expected) is { } target)
+                        if (Workflow is null && _owner.SendTarget(task, person.Expected) is { } target)
                         {
                             person.Done.TrySetResult(new SendResult.Refused(target));
                             return;
                         }
 
-                        _conversation = (_owner.Resolve(task.Id) ?? task).Conversation;
+                        _conversation = (Workflow is null ? _owner.Resolve(task.Id) ?? task : task).Conversation;
                     }
 
                     if (Record.Stopping)
@@ -551,7 +598,7 @@ public sealed partial class ProjectRuns
             {
                 if (_turn.Stopping && _turn.ClientRuns)
                 {
-                    _turn.Process.StopTree();
+                    StopTree();
                 }
 
                 CloseInput();
@@ -731,7 +778,7 @@ public sealed partial class ProjectRuns
             }
             else
             {
-                _turn.Process.StopTree();
+                StopTree();
                 CloseInput();
             }
         }
@@ -739,9 +786,10 @@ public sealed partial class ProjectRuns
         private void Fail(string detail)
         {
             BeginStopping(RequestCloseReason.TurnEnded);
+            if (_turn.ClientRuns) Deadline();
             _turn.Failure ??= detail;
             Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(detail)));
-            _turn.Process.StopTree();
+            StopTree();
             CloseInput();
         }
 
@@ -796,8 +844,12 @@ public sealed partial class ProjectRuns
                 {
                     if (turn.Open)
                     {
-                        _log.AppendStderr(line);
-                        stderr.Add(line);
+                        try
+                        {
+                            if (!_brokenLog || Workflow is null) _log.AppendStderr(line);
+                            stderr.Add(line);
+                        }
+                        catch (Exception) when (Workflow is not null) { BreakLog(); }
                     }
                 }
             });
@@ -813,7 +865,8 @@ public sealed partial class ProjectRuns
                     _events.Writer.TryWrite(new Input.WriteDone(turn, work.RequestId, success, work.Answer));
                 }
             });
-            _ = WatchExitAsync(turn, stderr);
+            if (Workflow is null) _ = WatchExitAsync(turn, stderr);
+            else _watcher = WatchExitAsync(turn, stderr);
         }
 
         private async Task WatchExitAsync(Turn turn, Tail stderr)
@@ -822,16 +875,106 @@ public sealed partial class ProjectRuns
             {
                 var code = await turn.Process.WaitForExitAsync();
                 turn.PromptCancellation.Cancel();
+                Cleanup? cleanup = null;
+                if (Workflow is { } workflow)
+                {
+                    if (!workflow.ObserveExit(new RootExit.Exited(code)))
+                    {
+                        turn.Process.Dispose();
+                        return;
+                    }
+                    _owner.Probe?.Invoke("runner.cleanup.inside");
+                    cleanup = await turn.Process.CleanUpAsync(TimeSpan.FromSeconds(2), _owner.TimeProvider, turn.Lifetime.Token);
+                }
                 var remaining = turn.Stopping && turn.StopBy is { } stopBy ? TimeSpan.FromTicks(Math.Max(0, (stopBy - _owner.TimeProvider.GetUtcNow()).Ticks)) : (TimeSpan?)null;
                 await turn.Process.WaitForOutputAsync(remaining);
                 lock (_gate)
                 {
                     turn.Open = false;
                     _closed |= !_messageWaiting;
-                    _events.Writer.TryWrite(new Input.Exit(turn, code, stderr.Text));
+                    var exit = new Input.Exit(turn, code, stderr.Text) { Cleanup = cleanup };
+                    if (Workflow is not null) _workflowExit = exit;
+                    _events.Writer.TryWrite(exit);
                 }
             }
+            catch (Exception) when (Workflow is not null)
+            {
+                if (Workflow.RootAbandoned) turn.Process.Dispose();
+                else BreakLog();
+            }
             catch (Exception error) when (error is ObjectDisposedException or InvalidOperationException) { }
+        }
+
+        private void StopTree()
+        {
+            if (Workflow is null || _owner.StopSeam is null || _owner.StopSeam(_turn.Process)) _turn.Process.StopTree();
+        }
+
+        private void AppendWorkflowExit(Input.Exit exit)
+        {
+            if (_leave is { } leave && Record.InterruptReason is null) Append(leave);
+            foreach (var (id, buffer) in _buffers.OrderBy(pair => pair.Value.Order).ThenBy(pair => pair.Value.PresentationSequence))
+                Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Message(buffer.Text) { Id = id, Partial = true })
+                { Order = buffer.Order, PresentationSequence = buffer.PresentationSequence });
+            _buffers = ImmutableDictionary<string, LiveMessageBuffer>.Empty;
+            if (_turn.Failure is { } failure && Record.Verdict != new AgentEvent.Failed(failure))
+                Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(failure)));
+            if (exit.Cleanup is { } cleanup)
+                Append(new AttemptEvent.CleanedUp(_owner.TimeProvider.GetUtcNow(), cleanup.Result, cleanup.Detail, cleanup.Steps));
+            var tree = Record.ReadOnly || Workflow!.Definition.Blueprint.Work is WorkSpec.Review
+                ? GitTree.Snapshot(_plan.Request.WorkingFolder!) : null;
+            Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = tree });
+            _workflowExited = true;
+        }
+
+        private async Task FinalizeWorkflowAsync()
+        {
+            var workflow = Workflow!;
+            RootObservation? root = null;
+            LogCheckpoint? checkpoint = null;
+            try
+            {
+                if (!_turn.Process.HasExited) StopTree();
+                root = await workflow.WaitForRoot();
+                if (root is null)
+                {
+                    await DisposeTurnAsync();
+                    _log.Dispose();
+                    if (_workflowError is { } detachedError) workflow.Fault(detachedError);
+                    return;
+                }
+                await _watcher;
+                if (!_brokenLog && !_workflowExited && _workflowExit is { } exit) AppendWorkflowExit(exit);
+                await DisposeTurnAsync();
+                if (_owner.BeforeRelease is { } beforeRelease) await beforeRelease();
+                _log.Dispose();
+                if (_workflowError is { } error)
+                {
+                    workflow.Fault(error);
+                    return;
+                }
+                _owner.Probe?.Invoke("runner.checkpoint.before");
+                checkpoint = AttemptEvidence.Read(_log.Folder).Checkpoint;
+                _owner.Probe?.Invoke("runner.checkpoint.after");
+                await workflow.Settle(checkpoint, root);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                await DisposeTurnAsync();
+                _log.Dispose();
+                if (_workflowError is { } failure) workflow.Fault(failure);
+                else
+                {
+                    workflow.RootExited.TrySetException(new InvalidOperationException("The turn's root observation could not be recorded."));
+                    workflow.Complete(workflow.Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)), checkpoint, root);
+                }
+            }
+            catch (Exception error)
+            {
+                await DisposeTurnAsync();
+                _log.Dispose();
+                workflow.Fault(_workflowError ?? error);
+            }
         }
 
         private async Task<bool> NextTurnAsync()
@@ -921,6 +1064,7 @@ public sealed partial class ProjectRuns
 
         private void Publish()
         {
+            if (Workflow is not null) return;
             var live = Live;
             if (ReferenceEquals(Record, _publishedRecord) && live.Revision == _publishedRevision)
             {
@@ -936,7 +1080,16 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                _log.Append(e);
+                try
+                {
+                    if (_brokenLog && Workflow is not null) throw new IOException("The turn's log is broken.");
+                    _log.Append(e);
+                }
+                catch (Exception error)
+                {
+                    if (Workflow is not null && error is IOException or UnauthorizedAccessException) _brokenLog = true;
+                    throw;
+                }
                 Record = AttemptReducer.Apply(Record, e);
                 _revision++;
             }
@@ -950,7 +1103,10 @@ public sealed partial class ProjectRuns
 
             public sealed record Person(AttemptEvent Event, TaskCompletionSource<SendResult> Done, TaskDefinition? Task, TurnKey? Expected, CancellationToken Ct) : Input;
 
-            public sealed record Exit(Turn Turn, int Code, string Stderr) : Input;
+            public sealed record Exit(Turn Turn, int Code, string Stderr) : Input
+            {
+                public Cleanup? Cleanup { get; init; }
+            }
 
             public sealed record Answer(RequestKey Key, QuestionsReply Reply, TaskCompletionSource<AnswerResult> Done, CancellationToken Ct) : Input;
 

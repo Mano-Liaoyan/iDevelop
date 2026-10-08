@@ -25,6 +25,50 @@ internal sealed class GitBashFactAttribute : FactAttribute
     }
 }
 
+/// <summary>Windows and macOS, whose volumes ignore case by default, when the temporary folder's volume does.</summary>
+internal sealed class CaseInsensitiveFactAttribute : FactAttribute
+{
+    public CaseInsensitiveFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        {
+            Skip = "Windows and macOS only.";
+        }
+        else if (!TemporaryVolume.IgnoresCase)
+        {
+            Skip = "Case-insensitive temporary folders only.";
+        }
+    }
+}
+
+internal sealed class CaseSensitiveFactAttribute : FactAttribute
+{
+    public CaseSensitiveFactAttribute()
+    {
+        if (TemporaryVolume.IgnoresCase) Skip = "Case-sensitive temporary folders only.";
+    }
+}
+
+/// <summary>Case sensitivity belongs to a volume, so the case facts probe the one that holds the temporary folder.</summary>
+internal static class TemporaryVolume
+{
+    private static readonly Lazy<bool> Probe = new(() =>
+    {
+        var name = "idevelop-case-" + Guid.NewGuid().ToString("N");
+        var probe = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), name.ToUpperInvariant()));
+        try
+        {
+            return Directory.Exists(Path.Combine(Path.GetTempPath(), name));
+        }
+        finally
+        {
+            probe.Delete();
+        }
+    });
+
+    public static bool IgnoresCase => Probe.Value;
+}
+
 internal sealed class UnixFactAttribute : FactAttribute
 {
     public UnixFactAttribute()

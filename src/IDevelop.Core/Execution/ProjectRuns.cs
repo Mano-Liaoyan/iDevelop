@@ -31,6 +31,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;
+    private readonly LaunchGate _launchGate = new();
+    internal bool Closing => Volatile.Read(ref _leaving) is not null;
     private ImmutableDictionary<WorkflowId, Workflow> _workflows = ImmutableDictionary<WorkflowId, Workflow>.Empty;
 
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
@@ -573,17 +575,53 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     public ValueTask DisposeAsync()
     {
+        TurnOwner[] owners = [];
+        Task<TurnStart>[] commands = [];
+        Task[] standalone = [];
+        TaskCompletionSource<Task>? source = null;
+        var launches = Task.CompletedTask;
+        Task leaving;
         lock (_gate)
         {
             if (_leaving is null)
             {
                 _clients.Changed -= OnClientsChanged;
-                _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+                launches = _launchGate.Close();
+                if (_owned.Count == 0 && _commands.Count == 0)
+                {
+                    _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+                }
+                else
+                {
+                    source = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _leaving = source.Task.Unwrap();
+                    standalone = [.. _active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout))];
+                    owners = [.. _owned.Values];
+                    commands = [.. _commands.Values.Select(command => command.Task)];
+                }
                 NotifyConversations(null);
             }
 
-            return new ValueTask(_leaving);
+            leaving = _leaving;
         }
+
+        source?.SetResult(Task.Run(() => LeaveTurns(launches, owners, standalone, commands)));
+        return new ValueTask(leaving);
+    }
+
+    private async Task LeaveTurns(Task launches, TurnOwner[] owners, Task[] standalone, Task<TurnStart>[] commands)
+    {
+        await launches.ConfigureAwait(false);
+        Probe?.Invoke("project.launches-closed");
+        foreach (var owner in owners) owner.Shutdown();
+        await Task.WhenAll(standalone.Concat(owners.Select(owner => owner.Leave()))
+            .Concat(commands.Select(command => WaitForCommand(command)))).ConfigureAwait(false);
+    }
+
+    private async Task WaitForCommand(Task command)
+    {
+        try { await command.WaitAsync(LeaveTimeout, TimeProvider).ConfigureAwait(false); }
+        catch (Exception) { }
     }
 
     private async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
@@ -694,6 +732,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private LockTake TakeLock(TaskId task)
     {
+        if (WorkflowOwner(task) is { } ownedHere) return new LockTake.HeldElsewhere(ownedHere);
         StandaloneLease? held;
         try
         {
@@ -1017,6 +1056,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return new SendProblem.ClosedOwner();
         }
 
+        if (WorkflowOwner(task.Id) is { } owned) return new SendProblem.CannotStart(owned);
+
         if ((expected is not null || !_workflows.IsEmpty) && Resolve(task.Id) is null)
         {
             return new SendProblem.MissingTask();
@@ -1123,7 +1164,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         ChildProcess process;
         try
         {
-            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, _projectFolder);
+            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, _projectFolder, ProcessLifetime.Standalone);
         }
         catch (LaunchException e)
         {

@@ -1,3 +1,5 @@
+using IDevelop.Projects;
+
 namespace IDevelop.Desktop;
 
 /// <summary>A remembered project folder that the start could not open, such as one on a drive that is not mounted.</summary>

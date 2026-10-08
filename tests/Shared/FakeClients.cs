@@ -50,6 +50,8 @@ internal sealed class FakeClients : IDisposable
 
     public string Folder { get; }
 
+    public string? LaunchFolder { get; set; }
+
     public CommandResolver Resolver => CommandResolver.Create([Folder], OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []);
 
     /// <summary>A client directory that searches only this folder, after its first refresh.</summary>
@@ -89,6 +91,11 @@ internal sealed class FakeClients : IDisposable
                 ["steps"] = new JsonArray([.. rule.Steps.Select(step => step.DeepClone())]),
             })]),
         };
+        if (LaunchFolder is { } launches)
+        {
+            json["launches"] = launches;
+        }
+
         File.WriteAllText(rulesFile, json.ToJsonString());
 
         if (_mode == FakeClientInstallMode.Direct)

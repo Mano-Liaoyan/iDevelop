@@ -63,20 +63,18 @@ internal sealed class AttemptLog : IDisposable
         Path.Combine(TaskFolder(attemptsFolder, task), attempt.ToString());
 
     /// <summary>Creates the attempt's folder and writes <paramref name="requested"/> as its first line.</summary>
-    public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested)
+    public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested, Func<Stream, Stream>? events = null)
     {
         var folder = Directory.CreateDirectory(FolderOf(attemptsFolder, requested.Task, requested.Attempt)).FullName;
-        var log = new AttemptLog(folder, FileMode.CreateNew);
-        try
+        var temporary = Path.Combine(folder, EventsFile + ".tmp");
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.Read))
         {
-            log.Append(requested);
-            return log;
+            using var stream = events is null ? file : events(file);
+            stream.Write(Utf8.GetBytes(JsonSerializer.Serialize<AttemptEvent>(requested, Options) + "\n"));
+            stream.Flush();
         }
-        catch
-        {
-            log.Dispose();
-            throw;
-        }
+        File.Move(temporary, Path.Combine(folder, EventsFile), overwrite: false);
+        return Open(folder);
     }
 
     /// <summary>Opens an existing log to append to it, as reconciliation does.</summary>
