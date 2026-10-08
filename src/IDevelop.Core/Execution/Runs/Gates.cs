@@ -71,22 +71,6 @@ internal static class GateForwarding
     /// An artifact reached through two inputs counts once. Two different artifacts whose names differ at most in case are a
     /// collision: the approval could not hand on both, so <c>Collision</c> names the second.
     /// </summary>
-    public static (ImmutableArray<ArtifactRecord> Artifacts, string? Collision) Artifacts(RunRecord record, InputRecord inputs, ResultId result)
-    {
-        var forwarded = ImmutableArray.CreateBuilder<ArtifactRecord>();
-        foreach (var binding in inputs.Bindings.OfType<InputBinding.Provided>().Where(binding => binding.Kind == ConnectionKind.Dependency))
-        {
-            foreach (var artifact in record.Results.Single(source => source.Id == binding.Result).Artifacts)
-            {
-                var rehomed = artifact with { StoredPath = RunStorage.ArtifactPath(result, artifact.Name) };
-                if (forwarded.FirstOrDefault(prior => string.Equals(prior.Name, artifact.Name, StringComparison.OrdinalIgnoreCase)) is { } prior)
-                {
-                    if (prior != rehomed) return ([], artifact.Name);
-                    continue;
-                }
-                forwarded.Add(rehomed);
-            }
-        }
-        return (forwarded.ToImmutable(), null);
-    }
+    public static (ImmutableArray<ArtifactRecord> Artifacts, string? Collision) Artifacts(RunRecord record, InputRecord inputs, ResultId result) =>
+        ArtifactForwarding.Artifacts(record, inputs.Bindings, result);
 }

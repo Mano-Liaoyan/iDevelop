@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using System.Text;
+using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
 
@@ -16,6 +18,14 @@ internal sealed partial class Materializer
                 { throw Fault(MaterializationProblem.InputUnavailable, $"Result {result.Id.Value:D}, stored path {artifact.StoredPath}: {error.Message}", new BlockScope.Operation()); }
             }
         }
+    }
+
+    /// <summary>A review hands on its inputs' artifacts, so two different ones with one name block it before it runs.</summary>
+    private static void VerifyForwarding(RunRecord record, TaskId task, RevisionId revision, ImmutableArray<InputBinding> bindings)
+    {
+        if (record.Schema == 3 && record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review &&
+            ArtifactForwarding.Collision(record, bindings) is { } name)
+            throw Fault(MaterializationProblem.ArtifactCollision, $"Two inputs hand on different artifacts named {name}.", new BlockScope.Operation());
     }
 
     private static byte[] DeliveredBytes(RunRecord record, DeliveredFile file, RunStorage storage)

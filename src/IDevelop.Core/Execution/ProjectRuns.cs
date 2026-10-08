@@ -1137,7 +1137,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         var last = latest.GetValueOrDefault(id);
         var canResume = last is { SessionId: not null } && (node.Execution is null || node.Execution.Client == last.Requested.Client);
         var view = new SubjectView(node, last) { CanResume = canResume };
-        if (last is not { Status: AttemptStatus.Succeeded, StartTree: { } start, EndTree: { } end })
+        // An interrupted fix round's change so far ends where the attempt it continued ended.
+        var ended = last is { Status: AttemptStatus.Interrupted, Fix: not null } && readChanges
+            ? EarlierAttempts(last).LastOrDefault(attempt => attempt.Status == AttemptStatus.Succeeded) : last;
+        if (ended is not { Status: AttemptStatus.Succeeded, StartTree: { } start, EndTree: { } end })
         {
             return view;
         }
@@ -1148,7 +1151,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         }
 
         // The whole change starts where the conversation that the latest attempt continues started.
-        var first = EarlierAttempts(last).FirstOrDefault() ?? last;
+        var first = EarlierAttempts(ended).FirstOrDefault() ?? ended;
         return view with
         {
             Change = first.StartTree is { } origin ? GitTree.Diff(_projectFolder, origin, end) : null,

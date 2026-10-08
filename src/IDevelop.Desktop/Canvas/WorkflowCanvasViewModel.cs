@@ -344,7 +344,10 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal void ShowAttempts()
     {
         var changed = Nodes.Where(node => node.ShowAttempt(Runs.Latest.GetValueOrDefault(node.Id))).Select(node => node.Id).ToList();
-        RecheckProblems(changed.Concat(changed.SelectMany(DependencyNeighbors)));
+        // A review that rests between its turns can stop for a reason that changes no attempt, such as a fix round that
+        // closing iDevelop interrupted, which waits for the person's choice.
+        var resting = Nodes.Where(node => node.IsReview && Runs.Latest.GetValueOrDefault(node.Id) is { Status: AttemptStatus.InReview }).Select(node => node.Id);
+        RecheckProblems(changed.Concat(changed.SelectMany(DependencyNeighbors)).Concat(resting));
 
         foreach (var node in Nodes)
         {

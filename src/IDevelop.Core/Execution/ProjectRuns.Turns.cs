@@ -34,16 +34,20 @@ public sealed partial class ProjectRuns
             var key = (permit.Workflow, permit.Run, operation);
             if (_commands.TryGetValue(key, out var prior))
             {
-                if (!Equals(prior.Intent, intent) || prior.Task is not Task<TurnStart> priorTask)
+                if (prior.Task is not Task<TurnStart> priorTask)
                     return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
-                if (!priorTask.IsCompleted)
+                var launched = priorTask.IsCompletedSuccessfully && LaunchOf(priorTask.Result) is not null;
+                // An earlier start that ended without a launch holds nothing in this window. Whatever it recorded is in the
+                // journal, whose receipts refuse a different intent for the operation, so a retry may ask anew.
+                if (priorTask.IsCompleted && !launched) _commands.Remove(key);
+                else if (!Equals(prior.Intent, intent))
+                    return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
+                else if (!priorTask.IsCompleted)
                 {
                     command = priorTask;
                     duplicate = true;
                 }
-                else if (priorTask.IsCompletedSuccessfully && LaunchOf(priorTask.Result) is { } launch)
-                    existing = launch;
-                else _commands.Remove(key);
+                else existing = LaunchOf(priorTask.Result);
             }
             if (command is null && existing is null)
             {
@@ -88,7 +92,7 @@ public sealed partial class ProjectRuns
 
     private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent)
     {
-        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue) })
+        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
         var store = TurnStore;
         var materializer = TurnMaterializer(store);
@@ -147,6 +151,13 @@ public sealed partial class ProjectRuns
                     return new TurnStart.Refused(new(RunProblem.SessionUnavailable));
                 continues = new(continued.Previous, session);
             }
+            else if (intent is TurnIntent.First { Cause: AttemptCause.ReviewFix })
+            {
+                // A fix round resumes the session of the subject's attempt before it, while the subject keeps its client.
+                continues = RunReviews.FixSession(record, attempt.Id,
+                    earlier => AttemptEvidence.Read(store.AttemptFolder(permit.Workflow, permit.Run, earlier.Task, earlier.Id)).Record);
+                session = continues?.Session;
+            }
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
                 new Resumption(session, prepared.Prompt), questions: _questions);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);
@@ -174,6 +185,8 @@ public sealed partial class ProjectRuns
                         {
                             RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
                             Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues, Planning = RunPlanning.Handles(record, attempt),
+                            // A reviewer's attempt names its subject, so it rests in review between its turns.
+                            Subject = definition.Blueprint.Work is WorkSpec.Review ? record.Revisions[attempt.Revision].Snapshot.SubjectOf(task) : null,
                         }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }
@@ -220,6 +233,7 @@ public sealed partial class ProjectRuns
                 owner.Log!.Append(new AttemptEvent.TurnRequested(TimeProvider.GetUtcNow(), prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                 {
                     Conversation = definition.Conversation, Consumed = [.. resting.Queued.Select(message => message.Id)], Tree = tree,
+                    Report = ((TurnIntent.Next)intent).Report,
                     // A reply to a waiting attempt answers its deferred questions, as a standalone reply does.
                     Replies = resting.Status == AttemptStatus.WaitingForInput
                         ? [.. resting.DeferredRequestIds.Select(id => new TurnRequestId(resting.Turns.Count, id))] : default,

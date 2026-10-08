@@ -396,7 +396,8 @@ internal static partial class RunReducer
                     if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||
                         !Same(publication.Recipe, first.Recipe) || publication.Commit != first.Candidate || publication.Report != first.Report ||
                         !Same(publication.Artifacts, first.Artifacts.Select(artifact => artifact with
-                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()))
+                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()
+                            .AddRange(CarriedArtifacts(record, publisher.Id, first.Artifacts, publication.Result))))
                         return RunProblem.EvidenceMismatch;
                 }
                 else if (publication.Capture is not null) return RunProblem.InvalidData;
@@ -567,9 +568,11 @@ internal static partial class RunReducer
         else
         {
             CodeOutput? code = accepted.Inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(accepted.Inputs.Id) : null;
-            // Only an approval forwards artifacts: exactly its inputs' dependency artifacts, stored under its own result.
-            var artifacts = result.Origin is ResultOrigin.Human ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id).Artifacts : [];
-            if (!Same(result.Code, code) || !Same(result.Artifacts, artifacts) || task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
+            // An approval and a schema-3 review forward artifacts: exactly their inputs' dependency artifacts, stored under their own result.
+            var reviews = record.Schema == 3 && task.Blueprint.Work is WorkSpec.Review && result.Origin is ResultOrigin.Executed;
+            var artifacts = result.Origin is ResultOrigin.Human || reviews ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id) : ([], null);
+            if (!Same(result.Code, code) || reviews && artifacts.Collision is not null || !Same(result.Artifacts, artifacts.Artifacts) ||
+                task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
             {
                 return RunProblem.InputConflict;
             }

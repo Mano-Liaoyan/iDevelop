@@ -59,7 +59,7 @@ internal sealed partial class Materializer
             var attempt = record.Attempts[claim.Key.Attempt];
             if (attempt.Task != task || !RunReducer.Same(attempt.Cause, cause) ||
                 Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], record.Inputs[prepared.Execution.Inputs],
-                    attempt.Id, basePrompt, RunPlanning.Context(record, attempt)) != prepared.Execution.Prompt)
+                    attempt.Id, basePrompt, RunPlanning.Context(record, attempt), RunReducer.FixArtifacts(record, attempt.Id)) != prepared.Execution.Prompt)
                 return new ClaimCheck.Rejected(new(RunProblem.OperationConflict));
             return new ClaimCheck.Existing(claim);
         }

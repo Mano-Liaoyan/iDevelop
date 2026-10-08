@@ -42,12 +42,28 @@ public abstract record NodeStep
     /// <summary>Nothing to do until the review's subject settles its fix round.</summary>
     public sealed record WaitForSubject : NodeStep;
 
+    /// <summary>
+    /// Closing iDevelop interrupted fix round <paramref name="Round"/>, which never goes on by itself. The person chooses
+    /// <see cref="FixChoice.Continue"/> or <see cref="FixChoice.Retry"/>.
+    /// </summary>
+    public sealed record ChooseFix(int Round) : NodeStep;
+
     public sealed record WaitForPerson(Pending Pending) : NodeStep;
 
     /// <summary>The node is done. <paramref name="Report"/> is what it hands on.</summary>
     public sealed record Finish(string? Report) : NodeStep;
 
     public sealed record Fail(string Reason) : NodeStep;
+}
+
+/// <summary>How the person goes on with a fix round that closing iDevelop interrupted.</summary>
+public enum FixChoice
+{
+    /// <summary>The round goes on in the interrupted fix's session, from the files it left.</summary>
+    Continue,
+
+    /// <summary>The round starts again in a fresh session.</summary>
+    Retry,
 }
 
 /// <summary>A node and what earlier nodes handed on to it.</summary>
