@@ -26,7 +26,9 @@ public sealed class DispatchTests
         await using var f = new CoordinatorFixture(Chain());
         f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Writes(B, "b.txt", "B\n")).Answer(X, Reports(X));
         await f.Open();
-        Assert.Equal(RunStatus.Paused, f.View.Status);
+        var paused = await f.Decided();
+        Assert.Equal(RunStatus.Paused, paused.Status);
+        Assert.Equal([TaskState.Ready, TaskState.Pending, TaskState.Ready], new[] { A, B, X }.Select(task => paused.Tasks[task].State));
         Assert.Equal(0, f.TotalLaunches);
         await Task.WhenAll(f.Coordinator.Resume(f.Address), f.Coordinator.Resume(f.Address));
         for (var refresh = 0; refresh < 20; refresh++) f.Coordinator.Refresh();

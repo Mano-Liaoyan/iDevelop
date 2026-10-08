@@ -111,6 +111,9 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
     /// <summary>Whether this window released the settled run's retention pins.</summary>
     public bool PinsReleased { get; init; }
 
+    /// <summary>Counts this window's decisions, so a reader can wait for one after its own signal.</summary>
+    public long Decision { get; init; }
+
     public string Label => Status switch
     {
         RunStatus.Paused => "Paused",

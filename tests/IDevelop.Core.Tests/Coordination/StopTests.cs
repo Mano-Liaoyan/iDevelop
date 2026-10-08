@@ -101,6 +101,29 @@ public sealed class StopTests
     }
 
     [Fact]
+    public async Task Stop_closes_a_reserved_attempt_whose_start_was_blocked()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        var drifted = false;
+        f.Runs.Probe = point =>
+        {
+            if (point != "runner.claim.before" || drifted || f.Read().Results.IsEmpty) return;
+            drifted = true;
+            File.WriteAllText(Path.Combine(f.Checkout(A), "result.txt"), "late\n");
+        };
+        await f.Resume();
+        var stuck = await f.UntilStatus(RunStatus.NeedsAttention);
+        Assert.Equal(TaskState.Blocked, stuck.Tasks[B].State);
+        var reserved = RunProjection.LatestAttempts(f.Read())[B];
+        Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Stopped);
+        Assert.Equal(RecoveryOutcome.NotStarted, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[reserved]).Outcome);
+        Assert.Equal(0, f.Launches(B));
+    }
+
+    [Fact]
     public async Task A_repeated_stop_converges_and_a_settled_run_refuses_it()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A)]));

@@ -24,11 +24,16 @@ public sealed class RecoveryTests
         await f.Crash(A, point);
         Assert.Equal(launches, f.Launches(A));
         await f.Open();
-        f.Coordinator.Refresh();
-        var paused = await f.UntilStatus(RunStatus.Paused);
+        var dispatched = 0;
+        f.Runs.Probe = point => { if (point.StartsWith("coordinator.", StringComparison.Ordinal) || point.StartsWith("runner.", StringComparison.Ordinal)) Interlocked.Increment(ref dispatched); };
+        var paused = await f.Decided();
+        Assert.Equal(RunStatus.Paused, paused.Status);
         Assert.Equal(outcome == "Uncertain" ? TaskState.Uncertain : outcome == "Reserved" ? TaskState.Ready : TaskState.Settling, paused.Tasks[A].State);
+        Assert.Equal(TaskState.Ready, paused.Tasks[X].State);
+        Assert.Equal(0, dispatched);
         Assert.Equal(launches, f.TotalLaunches);
         Assert.Empty(f.Read().Results);
+        f.Runs.Probe = null;
 
         await f.Resume();
         switch (outcome)

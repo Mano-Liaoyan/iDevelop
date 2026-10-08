@@ -180,6 +180,14 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
         Coordinator = Assert.IsType<RunOpen.Opened>(Runs.OpenRun(W, Preparation.RunId)).Coordinator;
     }
 
+    /// <summary>Signals the coordinator and returns the projection of a decision made after the signal.</summary>
+    public Task<RunView> Decided()
+    {
+        var before = View.Decision;
+        Coordinator.Refresh();
+        return Until(view => view.Decision > before);
+    }
+
     public async Task Resume() => Assert.IsType<RunCommand.Accepted>(await Coordinator.Resume(Address).WaitAsync(Bound));
 
     public async Task<RunView> Until(Func<RunView, bool> condition)

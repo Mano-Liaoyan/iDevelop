@@ -40,6 +40,7 @@ internal sealed partial class WorkflowRunCoordinator
     private bool _pinsReleasing;
     private bool _pinsReleased;
     private string? _problem;
+    private long _decisions;
     private readonly Dictionary<TaskId, Live> _live = [];
     private readonly Dictionary<TaskId, TaskHold> _holds = [];
     private readonly Dictionary<TaskId, SettledTurn> _handles = [];
@@ -198,7 +199,7 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     private RunView Project(RunRecord record) => RunProjection.Of(Address, record, Log,
-        _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased };
+        _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions };
 
     private AttemptRecord? Log(RunAttempt attempt)
     {
@@ -208,9 +209,10 @@ internal sealed partial class WorkflowRunCoordinator
 
     private void Decide()
     {
+        _decisions++;
         if (Read() is not { } record)
         {
-            Publish(View with { Problem = _problem });
+            Publish(View with { Problem = _problem, Decision = _decisions });
             return;
         }
         if (_permit is not null && !_halting) record = Act(record);
