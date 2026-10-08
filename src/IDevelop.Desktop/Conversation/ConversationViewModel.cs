@@ -87,7 +87,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
             _earlier = true;
             Invalidate();
         }, () => HasEarlier);
-        ReturnToCurrentCommand = new RelayCommand(() => SelectedAttempt = Attempts.LastOrDefault());
+        // The session's current attempt, which a newer attempt of a workflow run can follow in the list.
+        ReturnToCurrentCommand = new RelayCommand(() => SelectedAttempt = Attempts.FirstOrDefault(choice => choice.Id == _snapshot.Latest?.Id) ?? Attempts.LastOrDefault());
         state.PropertyChanged += OnStateChanged;
         if (_node is not null)
         {
