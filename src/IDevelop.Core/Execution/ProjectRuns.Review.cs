@@ -234,18 +234,17 @@ public sealed partial class ProjectRuns
         }
 
         var subject = Subject(node.Id, workflow, latest, readChanges: true, recorded: record.Subject);
-        var context = new NodeContext(node, "") { Subject = subject };
-        if (ReviewWork.Instance.Next(context, record) is not NodeStep.ChooseFix choose)
+        if (ReviewWork.Instance.Recover(new NodeContext(node, "") { Subject = subject }, record, choice) is not { } fix)
         {
             return none;
         }
 
         if (choice == FixChoice.Continue && !subject!.CanResume)
         {
-            return new StartResult.Refused(new StartProblem.FixInterrupted(subject.Node.Title, choose.Round, CanContinue: false));
+            return new StartResult.Refused(new StartProblem.FixInterrupted(subject.Node.Title, fix.Round, CanContinue: false));
         }
 
-        return LaunchFix(record, subject!, ReviewWork.Instance.Recover(context, record, choice)!) switch
+        return LaunchFix(record, subject!, fix) switch
         {
             FixLaunch.Started started => new StartResult.Started(started.Attempt),
             FixLaunch.Stalled stalled => new StartResult.Refused(stalled.Problem),
