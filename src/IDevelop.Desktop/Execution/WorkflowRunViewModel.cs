@@ -174,7 +174,10 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
             case RunStatus.Elsewhere:
                 return "Another iDevelop window controls this run. This window shows it and takes over once that window closes.";
             case RunStatus.Stopping:
-                return "Stopping. Finished work stays.";
+                // A turn whose end was never recorded keeps the run stopping until the person closes it (ADR 0005).
+                return tasks.FirstOrDefault(task => task.State == TaskState.Uncertain) is { } uncertain
+                    ? $"Stopping waits for {Named(uncertain)}: close its unresolved turn in its Recovery section."
+                    : "Stopping. Finished work stays.";
             case RunStatus.Stopped:
                 return "Stopped. Finished work stays.";
             case RunStatus.Completed:
