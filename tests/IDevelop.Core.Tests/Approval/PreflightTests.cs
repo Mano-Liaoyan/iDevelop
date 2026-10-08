@@ -17,6 +17,7 @@ public sealed class PreflightTests
         var workflow = Chain();
         await using var f = new ApprovalFixture(workflow);
         f.Git.Write($".idp/workflows/{workflow.Id}.json", "{}\n");
+        f.GitText("add", ".idp");
         await f.Open();
 
         var preview = f.Preflight();

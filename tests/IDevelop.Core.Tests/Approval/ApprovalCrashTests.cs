@@ -77,24 +77,54 @@ public sealed class ApprovalCrashTests
         Assert.Equal(["draft\n", "notes\n"], new[] { "plan.txt", "notes.txt" }.Select(f.Text));
     }
 
-    [Fact]
-    public async Task A_pending_intent_whose_content_changed_is_replaced_by_the_refreshed_confirmation()
+    [Theory]
+    [InlineData("file")]
+    [InlineData("title")]
+    [InlineData("commit")]
+    [InlineData("base")]
+    public async Task A_pending_intent_whose_content_changed_is_replaced_by_the_refreshed_confirmation(string change)
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         Uncommitted(f);
         await Crash(f, BaseChoice.Snapshot, "approval.snapshot.after");
         var stale = Intent(f)!;
-        f.Git.Write("notes.txt", "notes again\n");
+        var choice = change == "base" ? BaseChoice.Head : BaseChoice.Snapshot;
+        if (change == "file") f.Git.Write("notes.txt", "notes again\n");
+        if (change == "title") f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
+        if (change == "commit")
+        {
+            f.GitText("add", "notes.txt");
+            f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "notes");
+        }
         await f.Open();
 
-        var started = await Start(f, f.Preflight(), BaseChoice.Snapshot, AfterRestart);
+        var started = await Start(f, f.Preflight(), choice, AfterRestart);
 
         await Completed(started.Coordinator);
         var run = Assert.Single(f.ApprovedRuns());
         Assert.NotEqual(stale.Run, run);
         Assert.Equal(run, Intent(f)!.Run);
         Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", W.ToString(), stale.Run.ToString())));
-        Assert.Equal("notes again\n", f.ResultFile(run, A, "notes.txt"));
+        Assert.Equal(choice, f.Read(run).Base.Choice);
+        Assert.Equal(change == "file" ? "notes again\n" : change == "base" ? null : "notes\n", f.ResultFile(run, A, "notes.txt"));
+        Assert.Equal(change == "title" ? "X checks" : "X", f.Read(run).Revision.Snapshot.Tasks[X].Title);
         Assert.Equal(1, f.Launches(A));
+    }
+
+    [Fact]
+    public async Task A_journal_torn_in_its_first_write_finishes_as_the_intent_s_run()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await Crash(f, BaseChoice.Head, "approval.intent.after");
+        var intended = Intent(f)!;
+        File.WriteAllText(Path.Combine(f.Project, ".idp", "runs", W.ToString(), intended.Run.ToString(), "events.jsonl"), "{\"schema\":3,\"seq");
+        await f.Open();
+
+        var started = await Start(f, f.Preflight(), BaseChoice.Head, AfterRestart);
+
+        Assert.False(started.Existing);
+        await Completed(started.Coordinator);
+        Assert.Equal([intended.Run], f.ApprovedRuns());
+        Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }
 }
