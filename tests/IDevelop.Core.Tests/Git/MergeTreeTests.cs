@@ -6,7 +6,6 @@ using IDevelop.TestSupport;
 
 namespace IDevelop.Core.Tests.Git;
 
-[Collection(ProcessCollection.Name)]
 public sealed class MergeTreeTests
 {
     [Fact]

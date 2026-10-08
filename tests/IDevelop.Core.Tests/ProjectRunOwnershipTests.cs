@@ -8,7 +8,6 @@ using AsyncTask = System.Threading.Tasks.Task;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
 public sealed class ProjectRunOwnershipTests : IDisposable
 {
     private readonly TempFolder _temp = new();

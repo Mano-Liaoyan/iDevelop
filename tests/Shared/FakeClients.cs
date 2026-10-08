@@ -100,11 +100,7 @@ internal sealed class FakeClients : IDisposable
             }
 
             var apphost = Path.Combine(Folder, executable);
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "IDevelop.FakeAgent" + (OperatingSystem.IsWindows() ? ".exe" : "")), apphost, overwrite: true);
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(apphost, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
+            Executable.Copy(Path.Combine(AppContext.BaseDirectory, "IDevelop.FakeAgent" + (OperatingSystem.IsWindows() ? ".exe" : "")), apphost);
 
             return apphost;
         }
@@ -112,14 +108,13 @@ internal sealed class FakeClients : IDisposable
         if (OperatingSystem.IsWindows())
         {
             var shim = Path.Combine(Folder, $"{command}.cmd");
-            File.WriteAllText(shim, $"@\"{Dotnet}\" \"{Agent}\" --rules \"{rulesFile}\" -- %*\r\n");
+            Executable.Write(shim, $"@\"{Dotnet}\" \"{Agent}\" --rules \"{rulesFile}\" -- %*\r\n");
             return shim;
         }
         else
         {
             var shim = Path.Combine(Folder, command);
-            File.WriteAllText(shim, $"#!/bin/sh\nexec \"{Dotnet}\" \"{Agent}\" --rules \"{rulesFile}\" -- \"$@\"\n");
-            File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Executable.Write(shim, $"#!/bin/sh\nexec \"{Dotnet}\" \"{Agent}\" --rules \"{rulesFile}\" -- \"$@\"\n");
             return shim;
         }
     }

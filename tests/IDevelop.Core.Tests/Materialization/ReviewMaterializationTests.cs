@@ -9,7 +9,6 @@ using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class ReviewMaterializationTests
 {
     private const string First = "d4d26ecdf72779dbc9c5c983025fb51546c8f9ea";

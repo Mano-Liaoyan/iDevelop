@@ -12,7 +12,6 @@ namespace IDevelop.Core.Tests;
 /// clients' wire names, such as "claude-code,codex,pi,antigravity". The models default to small ones, and
 /// IDEVELOP_REAL_MODEL_&lt;WIRE NAME&gt; changes one, such as IDEVELOP_REAL_MODEL_PI.
 /// </summary>
-[Collection(ProcessCollection.Name)]
 public sealed class RealClientTests(ITestOutputHelper output) : IDisposable
 {
     private static readonly Dictionary<ClientId, string> SmallModels = new()

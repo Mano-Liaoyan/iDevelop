@@ -7,7 +7,6 @@ using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class JoinBoundaryTests
 {
     private static Workflow Diamond() => Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U)), T, U), C, U);

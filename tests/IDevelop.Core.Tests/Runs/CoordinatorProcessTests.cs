@@ -8,7 +8,6 @@ using static IDevelop.Core.Tests.Runs.RunFixtures;
 
 namespace IDevelop.Core.Tests.Runs;
 
-[Collection(ProcessCollection.Name)]
 public sealed class CoordinatorProcessTests
 {
     private static string G(Guid id) => id.ToString("D");
@@ -41,62 +40,68 @@ public sealed class CoordinatorProcessTests
         Assert.Equal(4, Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op())).Record.Sequence);
     }
 
-    [Fact]
-    public async System.Threading.Tasks.Task Two_processes_race_for_one_permit_and_exactly_one_owns_it_each_round()
+    public sealed class PermitRace
     {
-        using var f = new RunFixtures();
-        f.Approve();
-        for (var round = 0; round < 10; round++)
-        {
-            var release = Path.Combine(f.Project, $"release-{round}");
-            var start = Soon();
-            using var a = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            using var b = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            string[] outcomes = [await a.Line(), await b.Line()];
-            File.WriteAllText(release, "");
-            await a.Exit();
-            await b.Exit();
-            Assert.Equal(new[] { "Busy", "Owned:" }, outcomes.Order());
-        }
-        Assert.Equal(1, f.Read().Sequence);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task Three_processes_race_to_take_over_a_killed_owner_and_the_claim_is_fenced_once()
-    {
-        for (var round = 0; round < 4; round++)
+        [Fact]
+        public async System.Threading.Tasks.Task Two_processes_race_for_one_permit_and_exactly_one_owns_it_each_round()
         {
             using var f = new RunFixtures();
             f.Approve();
-            f.Prepare(f.Reserve());
-            f.ReleaseControl();
-            using (var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), G(A1.Value), "hold", "-",
-                Path.Combine(f.Project, "never")))
+            for (var round = 0; round < 10; round++)
             {
-                Assert.Equal("Owned:", await owner.Line());
-                Assert.Equal("claim:Granted@7", await owner.Line());
-                Assert.Equal("ready:True,-,True", await owner.Line());
-                owner.Kill();
+                var release = Path.Combine(f.Project, $"release-{round}");
+                var start = Soon();
+                using var a = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                using var b = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                string[] outcomes = [await a.Line(), await b.Line()];
+                File.WriteAllText(release, "");
+                await a.Exit();
+                await b.Exit();
+                Assert.Equal(new[] { "Busy", "Owned:" }, outcomes.Order());
             }
-            var before = f.Read().Sequence;
-            var release = Path.Combine(f.Project, "release");
-            var start = Soon();
-            using var a = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            using var b = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            using var c = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            string[] outcomes = [await a.Line(), await b.Line(), await c.Line()];
-            var record = f.Read();
-            File.WriteAllText(release, "");
-            await a.Exit();
-            await b.Exit();
-            await c.Exit();
-            Assert.Equal(new[] { "Busy", "Busy", A1Key }, outcomes.Order());
-            Assert.Equal(before + 1, record.Sequence);
-            Assert.Equal(new[] { new LaunchKey(A1, 1) },
-                Assert.IsType<RunEvent.OwnershipFenced>(record.Receipts.Values.Single(entry => entry.Sequence == before + 1).Event).Claims);
-            var again = Assert.IsType<ControlTake.Owned>(f.NewStore().TakeControl(W, Run));
-            using (again.Permit) Assert.Equal(new[] { new LaunchKey(A1, 1) }, again.Fenced);
-            Assert.Equal(before + 1, f.Read().Sequence);
+            Assert.Equal(1, f.Read().Sequence);
+        }
+    }
+
+    public sealed class TakeoverRace
+    {
+        [Fact]
+        public async System.Threading.Tasks.Task Three_processes_race_to_take_over_a_killed_owner_and_the_claim_is_fenced_once()
+        {
+            for (var round = 0; round < 4; round++)
+            {
+                using var f = new RunFixtures();
+                f.Approve();
+                f.Prepare(f.Reserve());
+                f.ReleaseControl();
+                using (var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), G(A1.Value), "hold", "-",
+                    Path.Combine(f.Project, "never")))
+                {
+                    Assert.Equal("Owned:", await owner.Line());
+                    Assert.Equal("claim:Granted@7", await owner.Line());
+                    Assert.Equal("ready:True,-,True", await owner.Line());
+                    owner.Kill();
+                }
+                var before = f.Read().Sequence;
+                var release = Path.Combine(f.Project, "release");
+                var start = Soon();
+                using var a = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                using var b = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                using var c = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                string[] outcomes = [await a.Line(), await b.Line(), await c.Line()];
+                var record = f.Read();
+                File.WriteAllText(release, "");
+                await a.Exit();
+                await b.Exit();
+                await c.Exit();
+                Assert.Equal(new[] { "Busy", "Busy", A1Key }, outcomes.Order());
+                Assert.Equal(before + 1, record.Sequence);
+                Assert.Equal(new[] { new LaunchKey(A1, 1) },
+                    Assert.IsType<RunEvent.OwnershipFenced>(record.Receipts.Values.Single(entry => entry.Sequence == before + 1).Event).Claims);
+                var again = Assert.IsType<ControlTake.Owned>(f.NewStore().TakeControl(W, Run));
+                using (again.Permit) Assert.Equal(new[] { new LaunchKey(A1, 1) }, again.Fenced);
+                Assert.Equal(before + 1, f.Read().Sequence);
+            }
         }
     }
 
@@ -181,96 +186,105 @@ public sealed class CoordinatorProcessTests
         }
     }
 
-    [Theory]
-    [InlineData("lease", "lease")]
-    [InlineData("lease", "permit-lease")]
-    public async System.Threading.Tasks.Task Two_processes_race_for_one_task_lease_and_exactly_one_takes_it(string first, string second)
+    public sealed class LeaseRace
     {
-        using var f = new RunFixtures();
-        f.Approve();
-        for (var round = 0; round < 10; round++)
-        {
-            var release = Path.Combine(f.Project, $"release-{round}");
-            var start = Soon();
-            using var a = new Racer(first, f.Project, G(W.Value), G(Run.Value), G(T.Value), start, release);
-            using var b = new Racer(second, f.Project, G(W.Value), G(Run.Value), G(T.Value), start, release);
-            string[] outcomes = [await a.Line(), await b.Line()];
-            File.WriteAllText(release, "");
-            await a.Exit();
-            await b.Exit();
-            Assert.Equal(new[] { "Busy", "Taken" }, outcomes.Order());
-        }
-        Assert.Equal(1, f.Read().Sequence);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task Close_turn_and_takeover_race_for_control_and_fence_once()
-    {
-        for (var round = 0; round < 8; round++)
+        [Theory]
+        [InlineData("lease", "lease")]
+        [InlineData("lease", "permit-lease")]
+        public async System.Threading.Tasks.Task Two_processes_race_for_one_task_lease_and_exactly_one_takes_it(string first, string second)
         {
             using var f = new RunFixtures();
             f.Approve();
-            var reserved = f.Reserve();
-            f.Claim(reserved);
-            var checkpoint = f.WriteLog(reserved);
-            f.ReleaseControl();
-            var release = Path.Combine(f.Project, "release");
-            var start = Soon();
-            using var closer = new Racer("closeturn", f.Project, G(W.Value), G(Run.Value), G(A1.Value), "1",
-                checkpoint.ByteLength.ToString(), checkpoint.Content.Sha256, start, release);
-            using var control = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
-            var closed = await closer.Line();
-            var owned = await control.Line();
-            Assert.Equal(new[] { "Busy", A1Key }, new[] { closed.Split('|')[0], owned }.Order());
-            if (closed != "Busy") Assert.Equal(A1Key + "|Rejected:UnresolvedOwnership", closed);
-            var record = f.Read();
-            Assert.Equal(8, record.Sequence);
-            Assert.Equal(new[] { new LaunchKey(A1, 1) }, record.Fenced);
-            Assert.Empty(record.TurnClosures);
-            Assert.Equal(new[] { new LaunchKey(A1, 1) }, record.UnresolvedClaims);
-            var bytes = File.ReadAllBytes(f.Journal(W, Run));
-            var decoded = RunJournal.Decode(bytes);
-            Assert.Null(decoded.Rejection);
-            Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
-            File.WriteAllText(release, "");
-            await closer.Exit();
-            await control.Exit();
-            Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), A1,
-                RecoveryOutcome.Stopped, f.Op(), "Stopped."));
-            Assert.Equal(9, f.Read().Sequence);
-            Assert.True(f.Read().Closures.ContainsKey(A1));
+            for (var round = 0; round < 10; round++)
+            {
+                var release = Path.Combine(f.Project, $"release-{round}");
+                var start = Soon();
+                using var a = new Racer(first, f.Project, G(W.Value), G(Run.Value), G(T.Value), start, release);
+                using var b = new Racer(second, f.Project, G(W.Value), G(Run.Value), G(T.Value), start, release);
+                string[] outcomes = [await a.Line(), await b.Line()];
+                File.WriteAllText(release, "");
+                await a.Exit();
+                await b.Exit();
+                Assert.Equal(new[] { "Busy", "Taken" }, outcomes.Order());
+            }
+            Assert.Equal(1, f.Read().Sequence);
         }
     }
 
-    [Fact]
-    public async System.Threading.Tasks.Task A_stopper_racing_the_owners_first_claim_is_busy_every_round()
+    public sealed class CloseTurnRace
     {
-        for (var round = 0; round < 8; round++)
+        [Fact]
+        public async System.Threading.Tasks.Task Close_turn_and_takeover_race_for_control_and_fence_once()
         {
-            using var f = new RunFixtures();
-            f.Approve();
-            f.Prepare(f.Reserve());
-            f.ReleaseControl();
-            var start = Soon(2500);
-            var release = Path.Combine(f.Project, "release");
-            var go = Path.Combine(f.Project, "go");
-            using var stopper = new Racer("stale-stop", f.Project, G(W.Value), G(Run.Value), Shift(start, round * 15), go);
-            Assert.Equal("ready", await stopper.Line());
-            using var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), G(A1.Value), "hold", start, release);
-            Assert.Equal("Owned:", await owner.Line());
-            File.WriteAllText(go, "");
-            Assert.Equal("claim:Granted@7", await owner.Line());
-            var bytes = File.ReadAllBytes(f.Journal(W, Run));
-            Assert.Equal("Busy|Rejected:TaskBusy", await stopper.Line());
-            Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
-            Assert.Equal("ready:True,-,True", await owner.Line());
-            Assert.Equal(RunPhase.Approved, f.Read().Phase);
-            Assert.Equal(7, f.Read().Sequence);
-            File.WriteAllText(release, "");
-            await owner.Exit();
-            await stopper.Exit();
-            Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
-            Assert.Equal(RunPhase.StopRequested, f.Read().Phase);
+            for (var round = 0; round < 8; round++)
+            {
+                using var f = new RunFixtures();
+                f.Approve();
+                var reserved = f.Reserve();
+                f.Claim(reserved);
+                var checkpoint = f.WriteLog(reserved);
+                f.ReleaseControl();
+                var release = Path.Combine(f.Project, "release");
+                var start = Soon();
+                using var closer = new Racer("closeturn", f.Project, G(W.Value), G(Run.Value), G(A1.Value), "1",
+                    checkpoint.ByteLength.ToString(), checkpoint.Content.Sha256, start, release);
+                using var control = new Racer("control", f.Project, G(W.Value), G(Run.Value), start, release);
+                var closed = await closer.Line();
+                var owned = await control.Line();
+                Assert.Equal(new[] { "Busy", A1Key }, new[] { closed.Split('|')[0], owned }.Order());
+                if (closed != "Busy") Assert.Equal(A1Key + "|Rejected:UnresolvedOwnership", closed);
+                var record = f.Read();
+                Assert.Equal(8, record.Sequence);
+                Assert.Equal(new[] { new LaunchKey(A1, 1) }, record.Fenced);
+                Assert.Empty(record.TurnClosures);
+                Assert.Equal(new[] { new LaunchKey(A1, 1) }, record.UnresolvedClaims);
+                var bytes = File.ReadAllBytes(f.Journal(W, Run));
+                var decoded = RunJournal.Decode(bytes);
+                Assert.Null(decoded.Rejection);
+                Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
+                File.WriteAllText(release, "");
+                await closer.Exit();
+                await control.Exit();
+                Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), A1,
+                    RecoveryOutcome.Stopped, f.Op(), "Stopped."));
+                Assert.Equal(9, f.Read().Sequence);
+                Assert.True(f.Read().Closures.ContainsKey(A1));
+            }
+        }
+    }
+
+    public sealed class StopperRace
+    {
+        [Fact]
+        public async System.Threading.Tasks.Task A_stopper_racing_the_owners_first_claim_is_busy_every_round()
+        {
+            for (var round = 0; round < 8; round++)
+            {
+                using var f = new RunFixtures();
+                f.Approve();
+                f.Prepare(f.Reserve());
+                f.ReleaseControl();
+                var start = Soon(2500);
+                var release = Path.Combine(f.Project, "release");
+                var go = Path.Combine(f.Project, "go");
+                using var stopper = new Racer("stale-stop", f.Project, G(W.Value), G(Run.Value), Shift(start, round * 15), go);
+                Assert.Equal("ready", await stopper.Line());
+                using var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), G(A1.Value), "hold", start, release);
+                Assert.Equal("Owned:", await owner.Line());
+                File.WriteAllText(go, "");
+                Assert.Equal("claim:Granted@7", await owner.Line());
+                var bytes = File.ReadAllBytes(f.Journal(W, Run));
+                Assert.Equal("Busy|Rejected:TaskBusy", await stopper.Line());
+                Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
+                Assert.Equal("ready:True,-,True", await owner.Line());
+                Assert.Equal(RunPhase.Approved, f.Read().Phase);
+                Assert.Equal(7, f.Read().Sequence);
+                File.WriteAllText(release, "");
+                await owner.Exit();
+                await stopper.Exit();
+                Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
+                Assert.Equal(RunPhase.StopRequested, f.Read().Phase);
+            }
         }
     }
 

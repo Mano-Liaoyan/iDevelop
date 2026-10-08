@@ -8,7 +8,6 @@ using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class PreparationBoundaryTests
 {
     [Theory]

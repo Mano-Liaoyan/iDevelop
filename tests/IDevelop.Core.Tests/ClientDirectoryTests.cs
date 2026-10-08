@@ -5,7 +5,6 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
 public sealed class ClientDirectoryTests : IDisposable
 {
     private const string PiCodexSignedOut = "Pi's sign-in for openai-codex is invalid. Sign in to openai-codex in Pi again.";

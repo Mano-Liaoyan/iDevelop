@@ -12,7 +12,6 @@ using static IDevelop.TestSupport.Processes;
 namespace IDevelop.Core.Tests;
 
 /// <summary>A person talks to a task's agent through <see cref="ProjectRuns"/>, with the fake agent behind on-disk shims.</summary>
-[Collection(ProcessCollection.Name)]
 public sealed class ConversationTests : IDisposable
 {
     private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";

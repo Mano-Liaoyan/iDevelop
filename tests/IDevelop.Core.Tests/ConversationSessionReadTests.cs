@@ -7,7 +7,6 @@ using static IDevelop.TestSupport.FakeAgents;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
 public sealed class ConversationSessionReadTests : IDisposable
 {
     private readonly TempFolder _temp = new();

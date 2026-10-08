@@ -6,7 +6,6 @@ using static IDevelop.Core.Tests.Git.GitFixture;
 
 namespace IDevelop.Core.Tests.Git;
 
-[Collection(ProcessCollection.Name)]
 public sealed class GitRepositoryTests
 {
     [Theory]
@@ -23,8 +22,7 @@ public sealed class GitRepositoryTests
         if (fsmonitor)
         {
             var hook = Path.Combine(Path.GetDirectoryName(f.Folder)!, "fsmonitor-hook");
-            File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Executable.Write(hook, "#!/bin/sh\nprintf 'token\\0'\n");
             f.Git("config", "core.fsmonitor", hook);
             Assert.Equal(0, f.Run(f.Folder, environment, "status", "--porcelain").ExitCode);
         }
@@ -561,8 +559,7 @@ public sealed class GitRepositoryTests
         var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
         var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment, limits)).Repository;
         var shim = Path.Combine(bin, "git");
-        File.WriteAllText(shim, "#!/bin/sh\nsleep 3\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(shim, "#!/bin/sh\nsleep 3\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
         var failed = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/heads/main"));
         Assert.Equal("GitFailed", failed.Problem.ToString());
         Assert.Equal("Git timed out.", failed.Detail);

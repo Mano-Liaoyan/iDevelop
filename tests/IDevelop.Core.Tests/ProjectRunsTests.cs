@@ -10,7 +10,6 @@ using static IDevelop.TestSupport.Processes;
 namespace IDevelop.Core.Tests;
 
 /// <summary>Runs go through real child processes: the fake agent behind on-disk shims, resolved like a real client.</summary>
-[Collection(ProcessCollection.Name)]
 public sealed class ProjectRunsTests : IDisposable
 {
     private static readonly TaskId SayHiId = TestTasks.Design;
@@ -176,8 +175,7 @@ public sealed class ProjectRunsTests : IDisposable
     public async Task A_client_script_finds_node_in_the_folders_the_client_was_found_in()
     {
         var codex = Path.Combine(_fakes.Folder, "codex");
-        File.WriteAllText(codex, "#!/usr/bin/env node\n");
-        File.SetUnixFileMode(codex, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(codex, "#!/usr/bin/env node\n");
         _fakes.Install("node",
             On(codex, "debug", "models").Replay(Fixture.Path("codex-debug-models.json")),
             On(codex, "login", "status").Print("Logged in using ChatGPT"),
