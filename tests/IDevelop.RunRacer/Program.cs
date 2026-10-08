@@ -29,6 +29,8 @@ internal static class Program
             Environment.Exit(73);
         }
 
+        if (mode == "approve-crash") return ApprovalRacer.Crash(args);
+
         var project = args[1];
         var workflow = new WorkflowId(Guid.Parse(args[2]));
         var run = new RunId(Guid.Parse(args[3]));
