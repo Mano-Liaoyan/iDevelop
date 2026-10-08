@@ -97,6 +97,16 @@ public sealed class NodeStateTests
     }
 
     [Fact]
+    public void An_interrupted_fix_round_names_the_choice_the_review_waits_for()
+    {
+        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"Build\". Continue the fix in its session, or retry it in a fresh one.",
+            RunText.Describe(new StartProblem.FixInterrupted("Build", 2, CanContinue: true)));
+        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"Build\". Its session cannot go on, so retry the fix in a fresh session.",
+            RunText.Describe(new StartProblem.FixInterrupted("Build", 2, CanContinue: false)));
+        Assert.Equal("\"Review\" has no interrupted fix round to continue or retry.", RunText.Describe(new StartProblem.NoFixChoice("Review")));
+    }
+
+    [Fact]
     public void A_run_owned_task_has_the_same_plain_reason_for_start_send_and_terminal_handoff()
     {
         var problem = new StartProblem.RunOwned("Delivery");

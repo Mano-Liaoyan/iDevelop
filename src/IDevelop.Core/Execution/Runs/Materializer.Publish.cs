@@ -77,6 +77,7 @@ internal sealed partial class Materializer
             {
                 plan = persisted;
                 CopyPublicationArtifacts(workflow, run, frozen, plan.Result);
+                CopyCarriedArtifacts(workflow, run, record, attempt, frozen, plan.Result);
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
@@ -95,7 +96,7 @@ internal sealed partial class Materializer
                 VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence, frozen.IndexTree);
                 var result = new ResultId(OperationIds.Derive(operation, "result").Value);
                 step = "outbox";
-                var artifacts = CopyPublicationArtifacts(workflow, run, frozen, result);
+                var artifacts = CopyPublicationArtifacts(workflow, run, frozen, result).AddRange(CopyCarriedArtifacts(workflow, run, record, attempt, frozen, result));
                 step = "commit";
                 var commit = Value(Mutate("commit", () => repository.CreateCommit(frozen.Recipe)));
                 if (commit != frozen.Candidate)
@@ -268,6 +269,26 @@ internal sealed partial class Materializer
             _probe?.Invoke("artifact." + artifact.Name + ".after");
             return artifact with { StoredPath = destination };
         })];
+    }
+
+    /// <summary>Copies the prior result's artifacts that a review fix keeps to <paramref name="result"/>, and returns them.</summary>
+    private ImmutableArray<ArtifactRecord> CopyCarriedArtifacts(WorkflowId workflow, RunId run, RunRecord record, AttemptId attempt,
+        CaptureObservation frozen, ResultId result)
+    {
+        var storage = new RunStorage(_project, workflow, run);
+        var prior = RunReducer.PriorResult(record, attempt);
+        var carried = RunReducer.CarriedArtifacts(record, attempt, frozen.Artifacts, result);
+        foreach (var artifact in carried)
+        {
+            var source = prior!.Artifacts.First(stored => stored.Name == artifact.Name);
+            try { RunStorage.Publish(storage.Folder, artifact.StoredPath, storage.ReadArtifact(prior.Id, source), artifact.Content, artifact.ByteLength); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                throw Fault(MaterializationProblem.InputUnavailable,
+                    $"Attempt {attempt.Value:D}, kept artifact {source.StoredPath}, result path {artifact.StoredPath}: {error.Message}", new BlockScope.Operation());
+            }
+        }
+        return carried;
     }
 
     // Publish reruns its own evidence and repository checks, so only drift elsewhere, or another operation's fault there, stops it.

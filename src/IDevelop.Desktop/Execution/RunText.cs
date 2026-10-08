@@ -213,6 +213,11 @@ public static class RunText
         StartProblem.UnderReview p => $"\"{p.Review}\" reviews this task and sends it each fix round. Cancel the review to run it yourself.",
         StartProblem.SubjectInReview p => $"\"{p.Review}\" is reviewing \"{p.Subject}\". Run this review once that one ends.",
         StartProblem.SubjectBlocked p => $"The review waits, because \"{p.Title}\" cannot start its fix. {Describe(p.Problem)}",
+        StartProblem.FixInterrupted { CanContinue: true } p =>
+            $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Continue the fix in its session, or retry it in a fresh one.",
+        StartProblem.FixInterrupted p =>
+            $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Its session cannot go on, so retry the fix in a fresh session.",
+        StartProblem.NoFixChoice p => $"\"{p.Review}\" has no interrupted fix round to continue or retry.",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",

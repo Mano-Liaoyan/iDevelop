@@ -41,15 +41,23 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// While no client root of the run is starting or running, starts a resting attempt's next turn that has text for its
-    /// agent, or else the first ready task, each in task order.
+    /// Concludes the reviews that agreed or failed. Then, while no client root of the run is starting or running, starts a
+    /// resting attempt's next turn that has text for its agent, or else the first ready task, or else a review's next
+    /// reviewer turn or fix round, each in task order.
     /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
+        EndFixes(record, view);
+        ConcludeReviews(record, view);
         if (!Slotted.IsEmpty) return;
         if (Continue(record, view)) return;
-        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task));
-        if (next is null) return;
+        // A reserved fix of a review round resumes from its review, which knows its prompt.
+        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task) && !FixesReview(record, task));
+        if (next is null)
+        {
+            AdvanceReviews(record, view);
+            return;
+        }
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
         var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
@@ -57,7 +65,7 @@ internal sealed partial class WorkflowRunCoordinator
         var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause)),
+        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
             start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);
@@ -337,7 +345,7 @@ internal sealed partial class WorkflowRunCoordinator
         }, error => Faulted(task, error));
     }
 
-    private void CloseUnclaimed(TaskId task, AttemptId attempt, OperationId stop)
+    private void CloseUnclaimed(TaskId task, AttemptId attempt, OperationId stop, string reason = StoppedReason)
     {
         _live[task] = new(LiveStage.Settling);
         Offload(() =>
@@ -345,7 +353,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RunRejection(RunProblem.TaskBusy);
             using (taken.Lease)
             {
-                return _store.Recover(taken.Lease, RunOperations.NotStarted(stop, attempt), attempt, RecoveryOutcome.NotStarted, stop, StoppedReason)
+                return _store.Recover(taken.Lease, RunOperations.NotStarted(stop, attempt), attempt, RecoveryOutcome.NotStarted, stop, reason)
                     is RunDecision.Rejected rejected ? rejected.Reason : null;
             }
         }, refusal =>

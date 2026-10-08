@@ -185,7 +185,8 @@ internal sealed partial class WorkflowRunCoordinator
             return;
         }
         var definition = record.Revision.Snapshot.Tasks[task];
-        if ((NodeWorks.For(definition.Blueprint.Work) as IConverses)?.Receive(text) is not MessageUse.Turn turn)
+        var use = (NodeWorks.For(definition.Blueprint.Work) as IConverses)?.Receive(text);
+        if (use is not (MessageUse.Turn or MessageUse.Guidance))
         {
             complete(Refused(new SendProblem.CannotStart(new StartProblem.NoConversation())));
             return;
@@ -227,7 +228,7 @@ internal sealed partial class WorkflowRunCoordinator
         }
         // The task stays out of dispatch until the message is written.
         _live[task] = new(LiveStage.Settling);
-        Offload(() => Queue(task, resting, turn.Prompt), result =>
+        Offload(() => use is MessageUse.Guidance guidance ? Guide(task, resting, guidance.Text) : Queue(task, resting, ((MessageUse.Turn)use).Prompt), result =>
         {
             _live.Remove(task);
             complete(result);
@@ -266,6 +267,26 @@ internal sealed partial class WorkflowRunCoordinator
             using var append = AttemptLog.Open(resting.Folder);
             append.Append(new AttemptEvent.MessageQueued(_runs.TimeProvider.GetUtcNow(), text, false) { Id = Guid.CreateVersion7().ToString() });
             return new SendResult.Queued();
+        }
+    }
+
+    /// <summary>
+    /// Records the person's guidance in the resting review's log under the task's lease. The review's next fix round and
+    /// its next reviewer turn read it, as a standalone review's do.
+    /// </summary>
+    private SendResult Guide(TaskId task, RestingAttempt resting, string text)
+    {
+        if (resting.Log.Status != AttemptStatus.InReview) return Refused(NotWaitingMessage);
+        if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return Refused(BusyMessage);
+        using (taken.Lease)
+        using (var authority = taken.Lease.Use())
+        {
+            if (authority is null) return Refused(BusyMessage);
+            if (Record() is not { } record) return Refused(Describe(new(RunProblem.StorageUnavailable)));
+            if (Unconversable(record, task) is { } stopped) return Refused(stopped);
+            using var append = AttemptLog.Open(resting.Folder);
+            append.Append(new AttemptEvent.GuidanceAdded(_runs.TimeProvider.GetUtcNow(), text));
+            return new SendResult.Guided();
         }
     }
 

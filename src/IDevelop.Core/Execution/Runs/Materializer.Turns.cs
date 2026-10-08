@@ -68,6 +68,7 @@ internal sealed partial class Materializer
                 {
                     var capture = RunStore.Inputs(record, task, attempt.Revision, new(OperationIds.Derive(operation, "refresh-input").Value));
                     if (capture.Rejection is { } rejection) throw new Refusal(rejection);
+                    VerifyForwarding(record, task, attempt.Revision, capture.Inputs!.Bindings);
                     var sources = InputMaterial.Sources(record, capture.Inputs!.Bindings);
                     if (sources.Select(source => source.Commit).Distinct().Count() >= 2)
                     {
