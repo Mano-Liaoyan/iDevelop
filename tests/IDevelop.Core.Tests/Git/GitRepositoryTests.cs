@@ -78,6 +78,53 @@ public sealed class GitRepositoryTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Capture_and_snapshot_recheck_a_same_size_edit_whose_mtime_is_restored_to_an_early_epoch(int second)
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var file = f.PathOf("a.txt");
+        var mtime = DateTime.UnixEpoch.AddSeconds(second);
+        var now = DateTimeOffset.UtcNow;
+        await Task.Delay(DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds() + 1).AddMilliseconds(20) - now);
+        File.SetLastWriteTimeUtc(file, mtime);
+        Assert.Equal(0, f.Run(f.Folder, f.Environment, "update-index", "--refresh").ExitCode);
+        f.Write("a.txt", "B\n");
+        File.SetLastWriteTimeUtc(file, mtime);
+        var hidden = f.Run(f.Folder, f.Environment, "status", "--porcelain");
+        Assert.Equal(0, hidden.ExitCode);
+        Assert.Equal("", hidden.Text);
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Multiple(
+            () => Assert.Equal("B\n", f.Git("show", capture.Tree.Hex + ":a.txt")),
+            () => Assert.Equal("B\n", f.Git("show", snapshot + ":a.txt")));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_include_new_intent_to_add_files_and_omit_excluded_intent_to_add_files()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("new.txt", "N\n");
+        f.Git("add", "-N", "new.txt");
+        f.Write("kept.txt", "K\n");
+        f.Git("add", "-N", "kept.txt");
+        f.Write(".idp/w.json", "{}\n");
+        f.Git("add", "-N", ".idp/w.json");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder, "kept.txt")).Value;
+        Assert.Equal("N\n", f.Git("show", capture.Tree.Hex + ":new.txt"));
+        Assert.Equal("a.txt\nnew.txt\nplan.txt\nroot.txt\n", f.Git("ls-tree", "-r", "--name-only", capture.Tree.Hex));
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Equal("N\n", f.Git("show", snapshot + ":new.txt"));
+        Assert.Equal("K\n", f.Git("show", snapshot + ":kept.txt"));
+        Assert.Equal("a.txt\nkept.txt\nnew.txt\nplan.txt\nroot.txt\n", f.Git("ls-tree", "-r", "--name-only", snapshot!));
+    }
+
+    [Theory]
     [InlineData("--assume-unchanged", "unchanged")]
     [InlineData("--skip-worktree", "unchanged")]
     [InlineData("--assume-unchanged", "absent")]
