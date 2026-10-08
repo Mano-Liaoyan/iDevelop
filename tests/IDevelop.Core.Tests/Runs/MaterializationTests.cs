@@ -232,7 +232,7 @@ public sealed class MaterializationTests
         var consumer = f.Reserve(U);
         f.Complete(consumer);
         var replacement = f.Reserve(cause: new AttemptCause.Retry(writer.Attempt.Id, f.Op()));
-        Close(f, replacement, "Updated.");
+        Close(f, replacement, "Updated.", OtherCommit);
         var operation = f.Op();
         var publication = Publication(replacement, f.NextResultId(), OtherCommit, "Updated.") with
         {
@@ -364,22 +364,38 @@ public sealed class MaterializationTests
     private static MaterializationPlan.Publication Publication(RunEvent.Reserved reservation, ResultId result, CommitId commit,
         string report = "Checked.", ImmutableArray<ArtifactRecord> artifacts = default) =>
         new(reservation.Attempt.Id, result, null, reservation.Inputs.CodeBase, null, Recipe(reservation.Inputs.CodeBase), commit, report,
-            artifacts.IsDefault ? [] : artifacts);
+            artifacts.IsDefault ? [] : [.. artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(result, artifact.Name) })])
+        { Capture = new(reservation.Attempt.Id.Value) };
 
-    private static void Close(RunFixtures f, RunEvent.Reserved reservation, string report = "Checked.")
+    private static void Close(RunFixtures f, RunEvent.Reserved reservation, string report = "Checked.",
+        CommitId? candidate = null, ImmutableArray<ArtifactRecord> artifacts = default)
     {
         f.Claim(reservation);
         var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
             prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch, TipOwnership.Explained)));
+        var log = f.WriteLog(reservation, report: report);
+        var capture = new CaptureId(reservation.Attempt.Id.Value);
+        foreach (var ordinal in new[] { 1, 2 })
+        {
+            var at = ordinal == 1 ? At : At.AddMilliseconds(250);
+            var frozenArtifacts = artifacts.IsDefault ? [] : artifacts.Select(artifact => artifact with
+                { StoredPath = RunStorage.CapturePath(capture, ordinal, "artifacts/" + artifact.Name) }).ToImmutableArray();
+            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(new(capture, ordinal,
+                prepared.Launch, log, at, at, Recipe(prepared.Location.AttemptBase), candidate ?? WriterCommit,
+                prepared.Location.AttemptBase, prepared.Location.Owner.Branch, null, report, frozenArtifacts, []))));
+        }
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(capture, prepared.Launch,
+            new CaptureDisposition.Matched())));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), prepared.Launch, log, capture));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), reservation.Attempt.Id,
-            TerminalAttemptOutcome.Succeeded, f.WriteLog(reservation, report: report)));
+            TerminalAttemptOutcome.Succeeded, log));
     }
 
     private static ResultRecord Publish(RunFixtures f, RunEvent.Reserved reservation, CommitId commit, string report = "Checked.",
         ImmutableArray<ArtifactRecord> artifacts = default)
     {
-        Close(f, reservation, report);
+        Close(f, reservation, report, commit, artifacts);
         var operation = f.Op();
         var publication = Publication(reservation, f.NextResultId(), commit, report, artifacts);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));

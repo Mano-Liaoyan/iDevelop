@@ -169,7 +169,7 @@ public sealed class OutboxTests
         File.WriteAllBytes(path, [1, 2, 3]);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("manifest.json", blocked.Block.Detail);
+        Assert.Contains("results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload", blocked.Block.Detail);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
         Assert.Empty(f.Read().Results);
     }

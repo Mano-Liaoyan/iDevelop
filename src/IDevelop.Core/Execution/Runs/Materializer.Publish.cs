@@ -32,6 +32,12 @@ internal sealed partial class Materializer
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared))
                 return new Publication.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
+            var logged = AttemptEvidence.Read(_store.AttemptFolder(workflow, run, task, attempt), closure.Evidence);
+            if (!AttemptEvidence.Matches(logged, TerminalAttemptOutcome.Succeeded) || logged.Record?.Result is null)
+                return new Publication.Rejected(new(RunProblem.OutcomeMismatch));
+            var launch = new LaunchKey(attempt, logged.Record.Turns.Count);
+            var captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result);
+            var root = record.RootExits[launch];
             var existing = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == attempt);
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
             if (record.Results.FirstOrDefault(result => result.Origin is ResultOrigin.Executed e && e.Attempt == attempt) is { } accepted)
@@ -40,13 +46,16 @@ internal sealed partial class Materializer
                 return new Publication.Accepted(accepted);
             }
             if (record.Phase is not (RunPhase.Approved or RunPhase.StopRequested)) return new Publication.Rejected(new(RunProblem.RunStopped));
-            step = "quiescence";
-            VerifyQuiescence(attempt);
+            step = "settlement";
+            VerifyPublicationDisposition(record, captureId, ref evidence);
+            var frozen = record.Captures[captureId][0];
             step = "repository";
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Publication.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
+            captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result);
+            root = record.RootExits[launch];
             existing = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == attempt);
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
             if (record.Results.FirstOrDefault(result => result.Origin is ResultOrigin.Executed e && e.Attempt == attempt) is { } concurrent)
@@ -54,6 +63,9 @@ internal sealed partial class Materializer
                 ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(concurrent);
             }
+            step = "settlement";
+            VerifyPublicationDisposition(record, captureId, ref evidence);
+            frozen = record.Captures[captureId][0];
             VerifyRepository(record, repository);
             var checkout = Checkout(repository, prepared.Location.Owner);
             var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
@@ -62,6 +74,8 @@ internal sealed partial class Materializer
             if (existing.Value is MaterializationPlan.Publication persisted)
             {
                 plan = persisted;
+                if (plan.Capture != frozen.Capture) return new Publication.Rejected(new(RunProblem.OperationConflict));
+                CopyPublicationArtifacts(workflow, run, frozen, plan.Result, missingOnly: true);
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
@@ -78,27 +92,22 @@ internal sealed partial class Materializer
                 if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
                 var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value;
-                VerifyPublicationParent(repository, prepared.Location.AttemptBase, tip);
+                if (tip != root.Tip)
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The writer branch tip differs from the root observation.");
+                VerifyPublicationParent(repository, prepared.Location.AttemptBase, root.Tip);
                 step = "capture";
-                var capture = Value(Mutate("capture", () => repository.Capture(checkout)));
-                if (capture.IndexBefore != capture.IndexAfter)
-                    throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed during capture.");
-                step = "report";
-                var logged = AttemptEvidence.Read(_store.AttemptFolder(workflow, run, task, attempt), closure.Evidence);
-                if (logged.Rejection is { } refused) return new Publication.Rejected(refused);
-                if (!AttemptEvidence.Matches(logged, TerminalAttemptOutcome.Succeeded) || logged.Record!.Result is null)
-                    return new Publication.Rejected(new(RunProblem.OutcomeMismatch));
+                var live = Value(Mutate("capture", () => repository.Capture(checkout)));
+                if (live.Tree != frozen.Recipe.Tree || live.IndexBefore != frozen.Index?.Content || live.IndexAfter != frozen.Index?.Content)
+                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
                 var result = new ResultId(OperationIds.Derive(operation, "result").Value);
                 step = "outbox";
-                var artifacts = FreezeOutbox(workflow, run, operation, attempt, $"results/{result.Value:D}/artifacts", checkout, ref evidence);
-                var timestamp = DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds());
-                var recipe = new CommitRecipe(capture.Tree, [tip],
-                    $"{definition.Title}\n\nIDP-Run: {run.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\n",
-                    "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", timestamp);
+                var artifacts = CopyPublicationArtifacts(workflow, run, frozen, result);
                 step = "commit";
-                var commit = Value(Mutate("commit", () => repository.CreateCommit(recipe)));
-                plan = new(attempt, result, record.CurrentResults.GetValueOrDefault(task)?.Id, tip, capture.IndexBefore, recipe, commit,
-                    logged.Record.Result, artifacts);
+                var commit = Value(Mutate("commit", () => repository.CreateCommit(frozen.Recipe)));
+                if (commit != frozen.Candidate)
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The frozen publication recipe produced a different commit.");
+                plan = new(attempt, result, record.CurrentResults.GetValueOrDefault(task)?.Id, root.Tip, frozen.Index?.Content,
+                    frozen.Recipe, frozen.Candidate, frozen.Report!, artifacts) { Capture = frozen.Capture };
                 step = "plan";
                 var plannedOperation = OperationIds.Derive(operation, "plan");
                 Journal("plan", () => _store.Record(permit, plannedOperation, new RunEvent.Planned(plan)));
@@ -134,7 +143,6 @@ internal sealed partial class Materializer
             step = "verify";
             VerifyPublicationRefs(Read(workflow, run), repository, prepared, operation, workflow, run, ref evidence);
             VerifyPublication(repository, prepared, plan, workflow, run);
-            VerifyQuiescence(attempt);
             step = "accepted";
             var decision = Journal("accepted", () => _store.AcceptPublication(permit, OperationIds.Derive(operation, "accepted"), planId));
             var resultRecord = ((RunEvent.ResultAccepted)DecisionEvent(decision)).Result;
@@ -159,10 +167,51 @@ internal sealed partial class Materializer
         }
     }
 
-    private void VerifyQuiescence(AttemptId attempt)
+    private static CaptureId PublicationCapture(RunRecord record, LaunchKey launch, LogCheckpoint log, string report)
     {
-        if (_boundary.Inspect(attempt) is not WriterState.Quiescent { Attempt: var owner } || owner != attempt)
-            throw Fault(MaterializationProblem.LiveWriter, $"Attempt {attempt.Value:D} has no verified process-tree quiescence.");
+        if (!record.Claims.ContainsKey(launch) || !record.RootExits.ContainsKey(launch) ||
+            !record.Settlements.TryGetValue(launch, out var capture) || !record.Dispositions.ContainsKey(capture) ||
+            !record.Captures.TryGetValue(capture, out var observations) || observations.Any(o => o.Launch != launch || o.Log != log || o.Report != report))
+            throw new Refusal(new(RunProblem.OutcomeMismatch));
+        return capture;
+    }
+
+    private static void VerifyPublicationDisposition(RunRecord record, CaptureId capture, ref ImmutableArray<EvidenceFile> evidence)
+    {
+        switch (record.Dispositions[capture].Disposition)
+        {
+            case CaptureDisposition.Diverged diverged:
+                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)));
+            case CaptureDisposition.Failed failed:
+                evidence = failed.Evidence;
+                throw Fault(failed.Problem, failed.Detail);
+        }
+    }
+
+    private ImmutableArray<ArtifactRecord> CopyPublicationArtifacts(WorkflowId workflow, RunId run, CaptureObservation frozen,
+        ResultId result, bool missingOnly = false)
+    {
+        var storage = new RunStorage(_project, workflow, run);
+        return [.. frozen.Artifacts.Select(artifact =>
+        {
+            var destination = RunStorage.ArtifactPath(result, artifact.Name);
+            if (!missingOnly || !File.Exists(RunStorage.SafePath(storage.Folder, destination)))
+            {
+                _probe?.Invoke("artifact." + artifact.Name + ".before");
+                try
+                {
+                    var bytes = RunStorage.Read(storage.Folder, artifact.StoredPath, artifact.Content, artifact.ByteLength);
+                    RunStorage.Publish(storage.Folder, destination, bytes, artifact.Content, artifact.ByteLength);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    throw Fault(MaterializationProblem.InputUnavailable,
+                        $"Attempt {frozen.Launch.Attempt.Value:D}, capture path {artifact.StoredPath}, result path {destination}: {error.Message}");
+                }
+                _probe?.Invoke("artifact." + artifact.Name + ".after");
+            }
+            return artifact with { StoredPath = destination };
+        })];
     }
 
     private static void RequirePublication(RefPublication outcome)
@@ -202,7 +251,10 @@ internal sealed partial class Materializer
     {
         var workflow = permit.Workflow;
         var run = permit.Run;
-        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved &&
+        var record = Read(workflow, run);
+        var accepted = record.Receipts.Values.Single(entry => entry.Event is RunEvent.ResultAccepted { Result.Origin: ResultOrigin.Executed e } &&
+            record.Plans[plan] is MaterializationPlan.Publication publication && e.Attempt == publication.Attempt);
+        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && record.Receipts[pair.Key].Sequence < accepted.Sequence &&
             (pair.Value.Block.Operation == plan || pair.Value.Block.Operation == operation)).OrderBy(pair => pair.Key.Value))
             Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, "Publication verified.")));

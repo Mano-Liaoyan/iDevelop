@@ -103,7 +103,7 @@ public sealed class PlatformTests
         var store = RunStore.Open(moved);
         using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, f.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
-        var materializer = Execution.Materializer.Open(moved, store, null, new QuiescentBoundary(), new Clock(), f.Git.Environment);
+        var materializer = Execution.Materializer.Open(moved, store, null, new Clock(), f.Git.Environment);
         if (action == "prepare")
             Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, operation, new AttemptCause.Initial())).Block.Problem.ToString());
         else

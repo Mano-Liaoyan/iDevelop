@@ -26,7 +26,7 @@ public sealed class JoinInvariantTests
             Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "-c", "commit.gpgSign=false", "commit", "-q", "-m", message).ExitCode);
         }
         await f.Close(ready);
-        var materializer = clock is null ? Open(f) : MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), clock, f.Git.Environment);
+        var materializer = clock is null ? Open(f) : MergeJoins.Open(f.Git.Folder, f.Store, clock, f.Git.Environment);
         return Assert.IsType<CodeOutput.Produced>(Assert.IsType<Publication.Accepted>(materializer.Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
             ready.Execution.Launch.Attempt)).Result.Code).Code;
     }
@@ -39,7 +39,7 @@ public sealed class JoinInvariantTests
         await Write(f, C, "c.txt", "C\n", "c", "2026-10-07T00:03:00Z", new FixedClock(At.AddMinutes(3)));
         await Write(f, D, "e.txt", "E\n", "e", "2026-10-07T00:02:00Z", new FixedClock(At.AddMinutes(2)));
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
-        Assert.Equal("1791331380\n", f.Git.Git("show", "-s", "--format=%ct", ready.Execution.Location.AttemptBase.Hex));
+        Assert.Equal("1791331200\n", f.Git.Git("show", "-s", "--format=%ct", ready.Execution.Location.AttemptBase.Hex));
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
         Assert.Equal("C\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
         Assert.Equal("E\n", File.ReadAllText(Path.Combine(ready.Checkout, "e.txt")));

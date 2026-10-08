@@ -414,16 +414,30 @@ public sealed class SalvageTests
     }
 
     [Fact]
-    public async Task Retry_requires_confirmation_retention_approved_phase_quiescence_and_both_locks()
+    public async Task Retry_requires_confirmation_retention_approved_phase_resolved_ownership_and_both_locks()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await FailedWriter(f);
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("a.txt", "modified\n", ready.Checkout);
+        f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
+        RootExitTests.Claim(f, ready);
+        f.ReleaseControl();
+        Assert.True(f.Permit.Held);
+        Assert.Equal(new[] { ready.Execution.Launch }, f.Read().Fenced);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("ConfirmationRequired", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation,
             retained.Receipt.Plan, default)).Reason.Problem.ToString());
         Assert.Equal("InvalidData", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, f.Op(), f.Op())).Reason.Problem.ToString());
-        Assert.Equal("LiveWriter", Assert.IsType<RetryReset.Blocked>(f.Materializer(boundary: new UnprovenBoundary()).ResetForRetry(f.Lease(T), ResetOperation,
-            retained.Receipt.Plan, f.Op())).Block.Problem.ToString());
+        var branch = Ref(f, ready.Execution.Location.Owner.Branch);
+        var journal = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl");
+        var bytes = File.ReadAllBytes(journal);
+        Assert.Equal("UnresolvedOwnership", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation,
+            retained.Receipt.Plan, f.Op())).Reason.Problem.ToString());
+        Assert.Equal(branch, Ref(f, ready.Execution.Location.Owner.Branch));
+        Assert.Equal(bytes, File.ReadAllBytes(journal));
+        Assert.Equal(0, f.Read().GitIntents.Values.Count(intent => intent.Mutation is GitMutation.ResetCheckout));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt,
+            RecoveryOutcome.Stopped, f.Op(), "Writer stopped."));
         var lease = f.Lease(T);
         f.Release(T);
         var before = f.Read().Sequence;
@@ -558,12 +572,20 @@ public sealed class SalvageTests
     }
 
     [Fact]
-    public async Task Unclosed_quiescent_attempt_can_be_salvaged_without_inventing_a_successful_closure()
+    public async Task An_unobserved_claim_is_rejected_and_a_root_observation_allows_salvage_without_a_closure()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("a.txt", "modified\n", ready.Checkout);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
+        RootExitTests.Claim(f, ready);
+        var journal = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl");
+        var bytes = File.ReadAllBytes(journal);
+        Assert.Equal("UnresolvedOwnership", Assert.IsType<Salvage.Rejected>(f.Materializer().Salvage(f.Lease(T), Operation,
+            ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal(bytes, File.ReadAllBytes(journal));
+        Assert.Empty(f.Read().Salvages);
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), ready.Execution.Launch, new RootExit.Exited(1)));
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.False(f.Read().Closures.ContainsKey(ready.Execution.Launch.Attempt));
@@ -583,23 +605,29 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
+        var indexLock = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
+        File.WriteAllText(indexLock, "lock\n");
         if (resolution)
         {
-            Assert.Equal("LiveWriter", Assert.IsType<Salvage.Blocked>(f.Materializer(boundary: new UnprovenBoundary())
-                .Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+            Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(f.Materializer()
+                .Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+            File.Delete(indexLock);
         }
-        Assert.Throws<Crash>(() => f.Materializer(boundary: resolution ? null : new UnprovenBoundary(), probe: step =>
+        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
         {
             if (resolution ? step.StartsWith("journal.maintenance-resolve-", StringComparison.Ordinal) && step.EndsWith("." + side, StringComparison.Ordinal)
-                : step == "journal.salvage-quiescence-blocked." + side) throw new Crash();
+                : step == "journal.salvage-index-lock-blocked." + side) throw new Crash();
         }).Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        if (!resolution) File.Delete(indexLock);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Single(f.Read().Salvages);
         Assert.All(f.Read().Blocks.Values, block => Assert.True(block.Resolved));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
-        var reset = Assert.IsType<RetryReset.Blocked>(f.Materializer(boundary: new UnprovenBoundary()).ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
-        Assert.Equal("LiveWriter", reset.Block.Problem.ToString());
+        f.Git.Write("new.txt", "changing\n", ready.Checkout);
+        var reset = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
+        Assert.Equal("DirtyWorktree", reset.Block.Problem.ToString());
+        f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
         Assert.Throws<Crash>(() => f.Materializer(probe: step =>
         {
             if (step.StartsWith("journal.maintenance-resolve-", StringComparison.Ordinal) && step.EndsWith("." + side, StringComparison.Ordinal)) throw new Crash();
@@ -611,7 +639,7 @@ public sealed class SalvageTests
     }
 
     [Fact]
-    public async Task Redirected_checkout_git_directory_cannot_authorize_removing_another_repository_index_lock()
+    public async Task Redirected_checkout_git_directory_blocks_salvage_and_preserves_another_repository_index_lock()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
@@ -639,38 +667,56 @@ public sealed class SalvageTests
     }
 
     [Theory]
-    [InlineData("boundary")]
+    [InlineData("index-lock")]
     [InlineData("task-lock")]
     [InlineData("ownership")]
-    public async Task Stale_index_lock_is_removed_only_with_quiescence_and_checkout_ownership(string mode)
+    public async Task An_index_lock_is_retained_with_evidence_and_salvage_proceeds_after_external_removal(string mode)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
         var indexLock = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
-        File.WriteAllText(indexLock, "stale\n");
+        File.WriteAllText(indexLock, "lock\n");
+        var indexBytes = File.ReadAllBytes(indexLock[..^5]);
         var lease = f.Lease(T);
         var before = f.Read().Sequence;
         if (mode == "task-lock") f.Release(T);
         using (var held = mode == "task-lock" ? StandaloneLease.TryTake(f.Git.Folder, T) : null)
         {
             if (mode == "ownership") f.Git.Git("worktree", "unlock", ready.Execution.Location.Owner.RelativePath);
-            var result = f.Materializer(boundary: mode == "boundary" ? new UnprovenBoundary() : null)
-                .Salvage(lease, Operation, ready.Execution.Launch.Attempt);
+            var result = f.Materializer().Salvage(lease, Operation, ready.Execution.Launch.Attempt);
             if (mode == "task-lock")
             {
                 Assert.NotNull(held);
                 Assert.Equal("TaskBusy", Assert.IsType<Salvage.Rejected>(result).Reason.Problem.ToString());
                 Assert.Equal(before, f.Read().Sequence);
             }
-            else Assert.Equal(mode == "ownership" ? "UncertainOwnership" : "LiveWriter", Assert.IsType<Salvage.Blocked>(result).Block.Problem.ToString());
-            Assert.Equal("stale\n", File.ReadAllText(indexLock));
+            else
+            {
+                var blocked = Assert.IsType<Salvage.Blocked>(result);
+                Assert.Equal(mode == "ownership" ? "UncertainOwnership" : "DirtyWorktree", blocked.Block.Problem.ToString());
+                if (mode == "index-lock")
+                {
+                    Assert.Equal("An index.lock exists in the writer checkout; it is retained and was not removed.", blocked.Block.Detail);
+                    var evidence = Assert.Single(blocked.Block.Evidence);
+                    Assert.Equal("lock\n", System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
+                        evidence.RelativePath, evidence.Content, evidence.ByteLength)));
+                    Assert.Equal(0, f.Read().Plans.Values.Count(plan => plan is MaterializationPlan.Salvage));
+                }
+            }
+            Assert.Equal("lock\n", File.ReadAllText(indexLock));
+            Assert.Equal(indexBytes, File.ReadAllBytes(indexLock[..^5]));
+            Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+            Assert.Empty(f.Read().Salvages);
         }
         if (mode == "ownership") f.Git.Git("worktree", "lock", "--reason", "idevelop 93f23689/90d5b0a2", ready.Execution.Location.Owner.RelativePath);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+        Assert.Equal("lock\n", File.ReadAllText(indexLock));
+        File.Delete(indexLock);
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
-        Assert.False(File.Exists(indexLock));
+        Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
+        Assert.Single(f.Read().Salvages);
         Assert.True(File.Exists(Path.Combine(DataFolder.Attempts(f.Git.Folder), T.ToString(), "run.lock")));
-        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
     }
 
     private static string? Ref(PreparationFixture f, string name) => GitFixture.Read(f.Git.Open().ReadRef(name))?.Hex;

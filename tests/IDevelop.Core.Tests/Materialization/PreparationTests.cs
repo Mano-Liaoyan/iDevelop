@@ -168,7 +168,7 @@ public sealed class PreparationTests
             ["GIT_CONFIG_COUNT"] = "1", ["GIT_CONFIG_KEY_0"] = "protocol.file.allow", ["GIT_CONFIG_VALUE_0"] = "always",
         };
         Materializer Materializer(Action<string>? probe = null) => IDevelop.Execution.Materializer.Open(f.Git.Folder, f.Store,
-            null, new QuiescentBoundary(), new Clock(), environment, probe);
+            null, new Clock(), environment, probe);
         var ready = Assert.IsType<Preparation.Ready>(await Materializer().Prepare(f.Lease(T), f.Op(), new AttemptCause.Initial()));
         var checkout = Path.Combine(ready.Checkout, "m");
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
@@ -312,7 +312,7 @@ public sealed class PreparationTests
             new(refused.A, BaseChoice.Head)));
         using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, refused.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
-        var materializer = Execution.Materializer.Open(sub, store, null, new QuiescentBoundary(), new Clock(), refused.Git.Environment);
+        var materializer = Execution.Materializer.Open(sub, store, null, new Clock(), refused.Git.Environment);
         var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, refused.Op(), new AttemptCause.Initial()));
         Assert.Equal("NotRepositoryRoot", blocked.Block.Problem.ToString());
         Assert.Null(refused.Read().RunKey);

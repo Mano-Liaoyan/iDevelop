@@ -17,7 +17,7 @@ public sealed class JoinTests
     }
 
     internal static Materializer Open(PreparationFixture f, Action<string>? probe = null) =>
-        MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), f.Git.Environment, probe);
+        MergeJoins.Open(f.Git.Folder, f.Store, new Clock(), f.Git.Environment, probe);
 
     internal static async Task<(OwnedCode B, OwnedCode C)> Sources(PreparationFixture f, string bPath = "b.txt", string bText = "B\n",
         string cPath = "c.txt", string cText = "C\n")
@@ -134,7 +134,7 @@ public sealed class JoinTests
         Assert.Equal(2, first.Block.Conflict!.Step);
         Assert.Equal(new[] { "b.txt" }, first.Block.Conflict.Paths);
         Assert.Equal(3, first.Block.Conflict.Sources.Length);
-        var later = MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new LaterClock(), f.Git.Environment);
+        var later = MergeJoins.Open(f.Git.Folder, f.Store, new LaterClock(), f.Git.Environment);
         var second = Assert.IsType<Preparation.Blocked>(await later.Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", second.Block.Problem.ToString());
         Assert.Equal(RunJournal.Canonical(first.Block), RunJournal.Canonical(second.Block));

@@ -9,30 +9,28 @@ internal sealed partial class Materializer
     private readonly RunStore _store;
     private readonly IJoinComposer _joins;
     private readonly RefPublisher _refs;
-    private readonly IExecutionBoundary _boundary;
     private readonly TimeProvider _clock;
     private readonly IReadOnlyDictionary<string, string> _environment;
     private readonly Action<string>? _probe;
 
-    private Materializer(string project, RunStore store, IJoinComposer joins, IExecutionBoundary boundary, TimeProvider clock,
+    private Materializer(string project, RunStore store, IJoinComposer joins, TimeProvider clock,
         IReadOnlyDictionary<string, string> environment, Action<string>? probe)
     {
         _project = Path.GetFullPath(project);
         _store = store;
         _refs = new(store, probe);
         _joins = joins;
-        _boundary = boundary;
         _clock = clock;
         _environment = environment;
         _probe = probe;
     }
 
     public static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins = null) =>
-        Open(projectFolder, store, joins, new UnprovenBoundary(), TimeProvider.System, null, null);
+        Open(projectFolder, store, joins, TimeProvider.System, null, null);
 
-    internal static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins, IExecutionBoundary boundary,
+    internal static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins,
         TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null) =>
-        new(projectFolder, store, joins ?? new UnavailableJoins(), boundary, clock, environment ?? new Dictionary<string, string>(), probe);
+        new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe);
 
     public async ValueTask<Preparation> Prepare(RunLease lease, OperationId operation, AttemptCause cause,
         string? basePrompt = null, CancellationToken cancellation = default)

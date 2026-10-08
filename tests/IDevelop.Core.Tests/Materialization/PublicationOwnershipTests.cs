@@ -29,7 +29,7 @@ public sealed class PublicationOwnershipTests
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 40abc7bebc8957e22d11b4c6b9603180652d95f1.", blocked.Block.Detail);
+        Assert.Equal("The capture contains unexplained shared refs. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", blocked.Block.Detail);
         Assert.Equal("40abc7bebc8957e22d11b4c6b9603180652d95f1", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(writer.Checkout, "b.txt")));
         Assert.Empty(f.Read().Results);
@@ -79,7 +79,7 @@ public sealed class PublicationOwnershipTests
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 1d16e561de9187d92215b37e2ea2d8d456081ac8.", blocked.Block.Detail);
+        Assert.Equal("The capture contains unexplained shared refs. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", blocked.Block.Detail);
         Assert.Equal("1d16e561de9187d92215b37e2ea2d8d456081ac8", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Empty(f.Read().Results);
         Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
@@ -103,11 +103,11 @@ public sealed class PublicationOwnershipTests
         var commit = GitFixture.Read(repository.CreateCommit(recipe));
         var plan = new MaterializationPlan.Publication(writer.Execution.Launch.Attempt, new ResultId(Guid.Parse("00000000-0000-0000-0000-00000000abcd")),
             null, new CommitId(below), capture.IndexBefore, recipe, commit, "B ready.\n", []);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(plan)));
+        Assert.Equal("OutcomeMismatch", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(plan))).Reason.Problem.ToString());
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 81ddb7c330112c7f16700ed002803a04b0bce693.", blocked.Block.Detail);
+        Assert.Equal("The capture contains unexplained shared refs. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", blocked.Block.Detail);
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Empty(f.Read().Results);
     }
@@ -130,7 +130,7 @@ public sealed class PublicationOwnershipTests
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 81ddb7c330112c7f16700ed002803a04b0bce693.", blocked.Block.Detail);
+        Assert.Equal("The capture contains unexplained shared refs. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", blocked.Block.Detail);
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "--format=%(objectname)", retained.Receipt.Ref));
         Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
@@ -627,8 +627,8 @@ public sealed class PublicationOwnershipTests
         var writer = await PublicationTests.ChangedWriter(f, assertMatched: false);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102, absent to absent.", blocked.Block.Detail);
-        Assert.Equal(2, blocked.Block.Evidence.Length);
+        Assert.Equal("The capture contains unexplained shared refs. Paths or refs: refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102", blocked.Block.Detail);
+        Assert.Empty(blocked.Block.Evidence);
         Assert.Equal("366602c243fddab716b8f02fc03fdacaf56e6058", Ref(f, "refs/heads/idp/93f23689/task/c67f2fc3"));
         Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
         Assert.Single(f.Read().Results);

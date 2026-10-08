@@ -23,12 +23,12 @@ internal sealed partial class Materializer
             if (LeaseProblem(lease, writer.Task) is { } mismatch) return new Salvage.Rejected(new(mismatch));
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared)) return new Salvage.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
-            step = "salvage-quiescence";
-            VerifyQuiescence(attempt);
+            if (SalvageOwnershipUnresolved(record, attempt)) return new Salvage.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Salvage.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
+            if (SalvageOwnershipUnresolved(record, attempt)) return new Salvage.Rejected(new(RunProblem.UnresolvedOwnership));
             VerifyRepository(record, repository);
             VerifyOwnedCheckout(repository, prepared.Location, record);
             var planId = OperationIds.Derive(operation, "salvage-plan");
@@ -41,7 +41,14 @@ internal sealed partial class Materializer
             }
             var checkout = Checkout(repository, prepared.Location.Owner);
             step = "salvage-index-lock";
-            Mutate("salvage-index-lock", () => File.Delete(Value(repository.IndexPath(checkout)) + ".lock"));
+            var indexLock = Value(repository.IndexPath(checkout)) + ".lock";
+            if (File.Exists(indexLock))
+            {
+                var storage = new RunStorage(_project, workflow, run);
+                var evidence = storage.WriteEvidence(OperationIds.Derive(operation, "index-lock"), "index.lock", File.ReadAllBytes(indexLock));
+                return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.DirtyWorktree,
+                    inputs, [evidence], "An index.lock exists in the writer checkout; it is retained and was not removed."));
+            }
             MaterializationPlan.Salvage plan;
             if (existing is MaterializationPlan.Salvage persisted)
             {
@@ -95,6 +102,9 @@ internal sealed partial class Materializer
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
+
+    private static bool SalvageOwnershipUnresolved(RunRecord record, AttemptId attempt) =>
+        record.UnresolvedClaims.Any(key => key.Attempt == attempt && !record.RootExits.ContainsKey(key) && !record.Fenced.Contains(key));
 
     private static ImmutableArray<EvidenceFile> Untracked(GitRepository repository, string checkout) =>
         [.. Value(repository.UntrackedFiles(checkout)).Where(path => path != ".idp" && !path.StartsWith(".idp/", StringComparison.Ordinal) &&

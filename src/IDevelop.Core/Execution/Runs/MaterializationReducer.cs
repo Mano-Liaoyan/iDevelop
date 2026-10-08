@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -272,6 +273,23 @@ internal static partial class RunReducer
                 {
                     return RunProblem.StartConflict;
                 }
+                if (record.Schema == 3)
+                {
+                    var closure = (AttemptEnd.Logged)record.Closures[publisher.Id];
+                    var launch = new LaunchKey(publisher.Id, record.TurnClosures.Keys.Where(key => key.Attempt == publisher.Id).Select(key => key.Turn).DefaultIfEmpty(0).Max());
+                    if (publication.Capture is not { } capture || record.Settlements.GetValueOrDefault(launch) != capture ||
+                        record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
+                        !record.RootExits.TryGetValue(launch, out var root) || !record.Captures.TryGetValue(capture, out var observations) ||
+                        observations.Count != 2 || observations.Any(o => o.Log != closure.Evidence || o.Report != publication.Report))
+                        return RunProblem.OutcomeMismatch;
+                    var first = observations[0];
+                    if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||
+                        !Same(publication.Recipe, first.Recipe) || publication.Commit != first.Candidate || publication.Report != first.Report ||
+                        !Same(publication.Artifacts, first.Artifacts.Select(artifact => artifact with
+                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()))
+                        return RunProblem.EvidenceMismatch;
+                }
+                else if (publication.Capture is not null) return RunProblem.InvalidData;
                 return publication.Recipe.Parents.Length == 1 && publication.Recipe.Parents[0] == publication.VerifiedTip ? null : RunProblem.InvalidData;
             case MaterializationPlan.Salvage salvage:
                 return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&

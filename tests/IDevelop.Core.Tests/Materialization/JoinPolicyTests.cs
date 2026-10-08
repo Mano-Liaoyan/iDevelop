@@ -17,7 +17,7 @@ public sealed class JoinPolicyTests
     private static Workflow Diamond() => Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U)), T, U), C, U);
 
     private static Materializer Joins(PreparationFixture f, Action<string>? probe = null, IReadOnlyDictionary<string, string>? environment = null) =>
-        MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), environment ?? f.Git.Environment, probe);
+        MergeJoins.Open(f.Git.Folder, f.Store, new Clock(), environment ?? f.Git.Environment, probe);
 
     private static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
         Joins(f, probe).Prepare(f.Lease(U), operation, new AttemptCause.Initial());

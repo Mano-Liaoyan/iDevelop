@@ -10,23 +10,6 @@ internal abstract record Preparation
     internal sealed record Rejected(RunRejection Reason) : Preparation;
 }
 
-internal abstract record WriterState
-{
-    private WriterState() { }
-    internal sealed record Quiescent(AttemptId Attempt, string Mechanism) : WriterState;
-    internal sealed record Unproven(string Reason) : WriterState;
-}
-
-internal interface IExecutionBoundary
-{
-    WriterState Inspect(AttemptId attempt);
-}
-
-internal sealed class UnprovenBoundary : IExecutionBoundary
-{
-    public WriterState Inspect(AttemptId attempt) => new WriterState.Unproven("No launch authority owns this attempt's process tree yet.");
-}
-
 internal sealed class UnavailableJoins : IJoinComposer
 {
     public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation) =>

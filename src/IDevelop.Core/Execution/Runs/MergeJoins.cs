@@ -11,11 +11,11 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
     public static Materializer Open(string projectFolder, RunStore store) => Materializer.Open(projectFolder, store,
         new MergeJoins(projectFolder, store, new Dictionary<string, string>()));
 
-    internal static Materializer Open(string projectFolder, RunStore store, IExecutionBoundary boundary, TimeProvider clock,
+    internal static Materializer Open(string projectFolder, RunStore store, TimeProvider clock,
         IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null)
     {
         var settings = environment ?? new Dictionary<string, string>();
-        return Materializer.Open(projectFolder, store, new MergeJoins(projectFolder, store, settings, probe), boundary, clock, settings, probe);
+        return Materializer.Open(projectFolder, store, new MergeJoins(projectFolder, store, settings, probe), clock, settings, probe);
     }
 
     public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation)

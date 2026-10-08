@@ -16,7 +16,7 @@ public sealed class CaptureTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var log = f.ObserveAndLog(ready);
         var clock = new ManualTimeProvider();
-        var materializer = Materializer.Open(f.Git.Folder, f.Store, null, new QuiescentBoundary(), clock, f.Git.Environment);
+        var materializer = Materializer.Open(f.Git.Folder, f.Store, null, clock, f.Git.Environment);
         var settling = materializer.Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log).AsTask();
         Assert.Single(Assert.Single(f.Read().Captures).Value);
         clock.Advance(TimeSpan.FromMilliseconds(249));
