@@ -47,12 +47,15 @@ Publication requires strict successful closure, a matching capture, checked owne
 
 A capture or drift block offers **Preserve and restore**. It retains the current files, index, and any commit a restore could displace. It takes two matching captures, previews the current state against a named journal baseline, and restores only after confirmation. A preservation never creates a successful result.
 
-### E3a.2 settled four details while it built captures
+### E3a.2 settled seven details while it built captures
 
 1. A schema-3 turn can still close without a capture, through `CloseTurn` without one or through recovery. Such a turn can never publish. Publication requires the final turn's capture, and a capture-linked closure still requires readable log evidence. An unreadable log leaves a durable failed capture and an unresolved claim.
 2. Salvage takes one capture, as in E2. The design's two matching preservation captures arrive with **Preserve and restore** in E3a.3. Retry reset keeps its unchanged-inventory check, which guards the destructive step.
-3. Salvage never removes an existing `index.lock`. It blocks as `DirtyWorktree` and keeps the lock's bytes as evidence. Removal waits for E3a.3's confirmed restoration.
+3. Salvage and `Publish` never remove an existing `index.lock`. Each blocks as `DirtyWorktree` before any move and keeps the lock's bytes as evidence. Removal waits for E3a.3's confirmed restoration.
 4. Rechecking a producer's checkout before a consumer's first claim moves to E3a.5's check-inputs-and-claim operation. E3a.2 makes the drift visible at the producer's own next move, and a repeated `Publish` no longer resolves a block recorded after acceptance.
+5. A drift block is an unresolved `DirtyWorktree` or `UncertainOwnership` block of the publishing attempt. `Publish` returns it unchanged and never resolves it, even when the live bytes again equal the capture. Only a `BlockResolved` that a person's recheck or E3's repair path records clears it. A block identical to a resolved one is recorded again as a new block.
+6. A capture judges shared refs without the repository lock. It snapshots the refs, then rereads the journal. A ref value counts as explained when the journal explains it at any sequence between the read before the snapshot and the read after it, so a sibling's journaled move during the observation never diverges a correct capture.
+7. Root tips and capture candidates are pinned under `refs/idp/<run>/pin/` before their events are recorded, so reflog expiry and `gc` keep them. Pins carry no ownership, so they stay out of shared-ref snapshots and need no journaled intents. `ReleasePins` removes them by compare-and-swap once the run is settled. E3b's coordinator calls it.
 
 ### Workflow cleanup uses a process group on Unix
 
