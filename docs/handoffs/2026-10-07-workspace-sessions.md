@@ -59,7 +59,7 @@ W1 carries the fields through the model, both file formats, library saves, and t
 - `WorkflowDocument.OpenProject` and `WorkflowDocument.Create` replace the single-workflow open, and `Save` no longer refuses to write beside another workflow file.
 - `ProjectRuns` follows several workflows and resolves each task through the workflow that holds it.
 - `src/IDevelop.Desktop/` adds the project tree, `ProjectViewModel`, `WorkspaceSession` for the session file, and the close questions across projects.
-- `skills/verify-idevelop/features/workspace.md` is the workspace navigation guide.
+- `.claude/skills/verify-idevelop/features/workspace.md` is the workspace navigation guide.
 
 ## Commands and observed results
 

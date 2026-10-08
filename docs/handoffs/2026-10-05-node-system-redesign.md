@@ -86,7 +86,7 @@ The table lists the merges in the order they reached `main`. #24 and #29 formed 
 - `Inspector/` holds the sections, rows, filter, and revert arrows. `Blueprints/PaletteView.axaml` became the Library section.
 - `Canvas/GenerateLayer.axaml`, `Canvas/GenerateSheet.axaml`, and `Canvas/GenerateWorkflowViewModel.cs` hold Generate Workflow. `src/IDevelop.Core/Nodes/Proposal.cs` gains layered columns and the fallback agent.
 - `src/IDevelop.Core/Projects/WorkflowDocument.cs` and `MainWindowViewModel.cs` hold undo and redo.
-- `README.md`, `docs/product-direction.md`, `docs/context.md`, and `skills/verify-idevelop` describe the redesign. `scripts/check-real-window.ps1` adds a node through the popover.
+- `README.md`, `docs/product-direction.md`, `docs/context.md`, and `.claude/skills/verify-idevelop` describe the redesign. `scripts/check-real-window.ps1` adds a node through the popover.
 
 ## Commands and observed results
 

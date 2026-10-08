@@ -281,44 +281,97 @@ public sealed class TurnStateTests
 
     [Fact]
     public Task An_unfenced_owner_is_found_from_the_project_path_with_a_trailing_separator() =>
-        UnfencedOwnerIsFoundFrom(folder => folder + Path.DirectorySeparatorChar);
+        UnfencedOwnerIsFound(closing: folder => folder, reopening: folder => folder + Path.DirectorySeparatorChar);
+
+    [Fact]
+    public Task An_unfenced_owner_left_under_a_trailing_separator_is_found_from_the_plain_project_path() =>
+        UnfencedOwnerIsFound(closing: folder => folder + Path.DirectorySeparatorChar, reopening: folder => folder);
 
     [CaseInsensitiveFact]
     public Task An_unfenced_owner_is_found_from_the_project_path_in_another_case() =>
-        UnfencedOwnerIsFoundFrom(folder => folder.ToUpperInvariant());
+        UnfencedOwnerIsFound(closing: folder => folder, reopening: folder => folder.ToUpperInvariant());
 
-    private static async Task UnfencedOwnerIsFoundFrom(Func<string, string> spell)
+    [CaseSensitiveFact]
+    public async Task Unfenced_owners_in_folders_named_Repo_and_repo_are_each_found_from_their_own_folder()
     {
-        await using var f = new TurnFixture();
+        using var projects = new TempFolder();
+        await using var upper = new TurnFixture(folder: projects.Create("Repo"));
+        await using var lower = new TurnFixture(folder: projects.Create("repo"));
+        List<Process> processes = [];
+        try
+        {
+            var upperLaunch = await LeaveUnfencedOwner(upper, processes);
+            var lowerLaunch = await LeaveUnfencedOwner(lower, processes);
+            await AdoptUnfencedOwner(upper, upper.Preparation.Git.Folder, upperLaunch);
+            await AdoptUnfencedOwner(lower, lower.Preparation.Git.Folder, lowerLaunch);
+        }
+        finally
+        {
+            await Stop(processes);
+        }
+    }
+
+    /// <summary>The closing window and the reopened one name the same project folder each in its own spelling.</summary>
+    private static async Task UnfencedOwnerIsFound(Func<string, string> closing, Func<string, string> reopening)
+    {
+        using var projects = new TempFolder();
+        var folder = projects.Create("Repo");
+        await using var f = new TurnFixture(folder: closing(folder));
+        List<Process> processes = [];
+        try
+        {
+            var launch = await LeaveUnfencedOwner(f, processes);
+            var spelled = reopening(folder);
+            Assert.NotEqual(f.Preparation.Git.Folder, spelled);
+            await AdoptUnfencedOwner(f, spelled, launch);
+        }
+        finally
+        {
+            await Stop(processes);
+        }
+    }
+
+    private static async Task Stop(List<Process> processes)
+    {
+        foreach (var process in processes)
+        {
+            using (process)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync().WaitAsync(Bound);
+            }
+        }
+    }
+
+    /// <summary>Closes the window after its permit is gone, so the close fence fails and the turn's owner stays listed.</summary>
+    private static async Task<LaunchKey> LeaveUnfencedOwner(TurnFixture f, List<Process> processes)
+    {
         await f.Open(f.Waiting(hang: true));
         f.Runs.StopSeam = _ => false;
         var running = await f.Start();
         var launch = running.Address.Launch;
         var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
-        using var process = Process.GetProcessById(launched.ProcessId);
-        try
-        {
-            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
-            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
-            Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound));
-            f.Preparation.ReleaseControl();
-            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
-            var spelled = spell(f.Preparation.Git.Folder);
-            Assert.NotEqual(f.Preparation.Git.Folder, spelled);
-            using var permit = Assert.IsType<ControlTake.Owned>(RunStore.Open(spelled).TakeControl(W, f.Preparation.RunId)).Permit;
-            await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
-            var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
-                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
-            Assert.Equal("Uncertain", found.Reason.ToString());
-            Assert.Equal(ProcessMatch.Same, found.Root);
-            Assert.True(found.Lease.Held);
-            Assert.Equal(1, f.Launches);
-        }
-        finally
-        {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync().WaitAsync(Bound);
-        }
+        processes.Add(Process.GetProcessById(launched.ProcessId));
+        await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+        Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+        Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound));
+        f.Preparation.ReleaseControl();
+        await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+        Assert.DoesNotContain(launch, f.Preparation.Read().Fenced);
+        return launch;
+    }
+
+    /// <summary>A reopened window on <paramref name="project"/> takes the task from the listed owner and adopts the turn.</summary>
+    private static async Task AdoptUnfencedOwner(TurnFixture f, string project, LaunchKey launch)
+    {
+        using var permit = Assert.IsType<ControlTake.Owned>(RunStore.Open(project).TakeControl(W, f.Preparation.RunId)).Permit;
+        await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+        var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+            await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+        Assert.Equal("Uncertain", found.Reason.ToString());
+        Assert.Equal(ProcessMatch.Same, found.Root);
+        Assert.True(found.Lease.Held);
+        Assert.Equal(1, f.Launches);
     }
 
     [Fact]

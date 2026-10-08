@@ -4,7 +4,7 @@ A project for building a graphical interface that coordinates multiple coding ag
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 
-The agents that develop iDevelop use PStack and the project's client launchers, which [`docs/development-environment.md`](docs/development-environment.md) describes.
+The agents that develop iDevelop use Matt Pocock's skills with GitHub Issues, which [`docs/development-environment.md`](docs/development-environment.md) describes.
 
 ## Build and run the application
 

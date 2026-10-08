@@ -1,4 +1,5 @@
 {
-  "disableBundledSkills": true,
-  "skillOverrides": { "doctor": "off" }
+  "enabledPlugins": {
+    "mattpocock-skills@claude-plugins-official": true
+  }
 }
