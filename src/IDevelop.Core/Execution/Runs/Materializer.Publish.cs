@@ -52,6 +52,7 @@ internal sealed partial class Materializer
             var frozen = record.Captures[captureId][0];
             step = "repository";
             var repository = OpenRepository();
+            _probe?.Invoke("publish.lock.before");
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Publication.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);

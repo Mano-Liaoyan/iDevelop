@@ -580,6 +580,101 @@ public sealed class PublicationTests
         Assert.Equal("done\n", control.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
     }
 
+    [Fact]
+    public async Task A_diverged_capture_returns_the_existing_block_for_a_new_operation_until_recheck()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "first\n", ready.Checkout);
+        var log = f.ObserveAndLog(ready);
+        var clock = new ManualTimeProvider();
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(clock: clock, probe: step =>
+        {
+            if (step != "journal.capture-1.after") return;
+            f.Git.Write("result.txt", "second\n", ready.Checkout);
+            clock.Advance(TimeSpan.FromMilliseconds(250));
+        }).Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
+        Assert.Equal("DirtyWorktree", diverged.Problem.ToString());
+        Assert.Equal(new[] { "result.txt" }, diverged.Paths);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("The captures differ in recipe, candidate. Paths or refs: result.txt", blocked.Block.Detail);
+        Assert.Equal(Operation, blocked.Block.Operation);
+        var firstId = Assert.Single(f.Read().Blocks).Key;
+        var sequence = f.Read().Sequence;
+        var next = new OperationId(Id(2001));
+        Assert.Equal(blocked, f.Materializer().Publish(f.Lease(T), next, ready.Execution.Launch.Attempt));
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Single(f.Read().Blocks);
+        Assert.Empty(f.Read().Results);
+
+        Recheck(f, firstId);
+        var reblocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), next, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", reblocked.Block.Problem.ToString());
+        Assert.Equal("The captures differ in recipe, candidate. Paths or refs: result.txt", reblocked.Block.Detail);
+        Assert.Equal(next, reblocked.Block.Operation);
+        var record = f.Read();
+        Assert.Equal(sequence + 2, record.Sequence);
+        Assert.Equal(2, record.Blocks.Count);
+        Assert.True(record.Blocks[firstId].Resolved);
+        Assert.False(record.Blocks[OperationIds.Derive(next, "settlement-blocked")].Resolved);
+        Assert.Equal(1, record.Blocks.Values.Count(block => !block.Resolved));
+        Assert.Equal("Rechecked by the person.", Assert.Single(record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.BlockResolved>()).Reason);
+        Assert.Empty(record.Results);
+
+        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var valid = Assert.IsType<Preparation.Ready>(await control.Prepare(T));
+        control.Git.Write("result.txt", "done\n", valid.Checkout);
+        await control.Close(valid);
+        var accepted = Assert.IsType<Publication.Accepted>(control.Materializer().Publish(control.Lease(T), next, valid.Execution.Launch.Attempt));
+        Assert.Equal("done\n", control.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Single(control.Read().Results);
+    }
+
+    [Fact]
+    public async Task Drift_recorded_before_the_publication_lock_blocks_moves_until_recheck()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready);
+        var record = f.Read();
+        var moves = record.GitIntents.Count;
+        var sequence = record.Sequence;
+        var branch = ready.Execution.Location.Owner.Branch;
+        var drift = new MaterializationBlock(new(Id(2001)), T, ready.Execution.Launch.Attempt,
+            MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Concurrent salvage observed drift.");
+        var blockId = new OperationId(Id(9000));
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(probe: step =>
+        {
+            if (step == "publish.lock.before")
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, blockId, new RunEvent.Blocked(drift)));
+        }).Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal(drift, blocked.Block);
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("Concurrent salvage observed drift.", blocked.Block.Detail);
+        record = f.Read();
+        Assert.Equal(sequence + 1, record.Sequence);
+        Assert.Equal(0, record.GitIntents.Count - moves);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(branch))?.Hex);
+        Assert.Single(record.Blocks);
+        Assert.False(record.Blocks[blockId].Resolved);
+        Assert.Empty(record.Results);
+
+        Recheck(f, blockId);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        var code = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code;
+        Assert.Equal("done\n", f.Git.Git("show", code.Commit.Hex + ":result.txt"));
+        Assert.Equal(code.Commit, GitFixture.Read(f.Git.Open().ReadRef(branch)));
+        record = f.Read();
+        Assert.Equal(3, record.GitIntents.Count - moves);
+        Assert.Single(record.Results);
+        Assert.True(record.Blocks[blockId].Resolved);
+        Assert.Equal("Rechecked by the person.", Assert.Single(record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.BlockResolved>()).Reason);
+    }
+
     [Theory]
     [InlineData("DirtyWorktree")]
     [InlineData("UncertainOwnership")]
