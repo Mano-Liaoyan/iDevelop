@@ -315,36 +315,12 @@ internal sealed partial class WorkflowRunCoordinator
         // The turn's own operation, so a publication that this cannot finish converges with the one Resume finishes.
         var operation = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(async () =>
-        {
-            var closing = await _runs.CloseResting(_permit!, OperationIds.Derive(operation, "conversation/mark-done"), resting.Attempt,
-                new RestingEnd.MarkDone()).ConfigureAwait(false);
-            switch (closing)
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.MarkDone(), MarkDoneOperation(operation), operation),
+            closing => Closed(task, closing, "The task was marked done.", complete), error =>
             {
-                case RestingClose.Closed closed:
-                    if (Finish(closed.Attempt.Lease, task, resting.Attempt, operation) is { } refusal)
-                    {
-                        // The closure is recorded. Its publication is finished later, under a lease of its own.
-                        closed.Attempt.Lease.Dispose();
-                        return Declined(Describe(refusal));
-                    }
-                    return closed.Attempt.Release() is Release.Held held ? Declined(Describe(held.Reason)) : Applied("The task was marked done.");
-                case RestingClose.Blocked blocked:
-                    return Declined(blocked.Block.Detail);
-                case RestingClose.Refused refused:
-                    return Declined(Describe(refused.Reason));
-                default:
-                    throw new InvalidOperationException();
-            }
-        }, result =>
-        {
-            _live.Remove(task);
-            complete(result);
-        }, error =>
-        {
-            _live.Remove(task);
-            complete(Declined(error.Message));
-        });
+                _live.Remove(task);
+                complete(Declined(error.Message));
+            });
     }
 
     private void CancelCore(RunRecord record, TaskId task, TurnKey expected, Action<ConversationCommandResult> complete)
@@ -380,26 +356,115 @@ internal sealed partial class WorkflowRunCoordinator
             complete(new(CommandOutcome.Stale, "The conversation has moved to another turn."));
             return;
         }
-        var operation = OperationIds.Derive(RunOperations.Turn(record, resting.Last), "conversation/cancel");
+        var turn = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(async () =>
-        {
-            var closing = await _runs.CloseResting(_permit!, operation, resting.Attempt, new RestingEnd.Cancel()).ConfigureAwait(false);
-            return closing switch
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.Cancel(), CancelOperation(turn), turn),
+            closing => Closed(task, closing, "The cancellation was recorded.", complete), error =>
             {
-                RestingClose.Closed closed => closed.Attempt.Release() is Release.Held held ? Declined(Describe(held.Reason)) : Applied("The cancellation was recorded."),
-                RestingClose.Blocked blocked => Declined(blocked.Block.Detail),
-                RestingClose.Refused refused => Declined(Describe(refused.Reason)),
-                _ => throw new InvalidOperationException(),
-            };
-        }, result =>
+                _live.Remove(task);
+                complete(Declined(error.Message));
+            });
+    }
+
+    private static OperationId MarkDoneOperation(OperationId turn) => OperationIds.Derive(turn, "conversation/mark-done");
+
+    private static OperationId CancelOperation(OperationId turn) => OperationIds.Derive(turn, "conversation/cancel");
+
+    /// <summary>How a resting closure went: recorded, still pending in the log after a refused journal write, or refused.</summary>
+    private abstract record Closing
+    {
+        private Closing() { }
+        internal sealed record Recorded : Closing;
+        internal sealed record Pending(RunRejection Reason) : Closing;
+        internal sealed record Refused(string Detail, RunRejection? Reason) : Closing;
+    }
+
+    /// <summary>
+    /// Closes a resting attempt with <paramref name="end"/>, publishes or accepts the result of one marked done under the
+    /// turn's operation, and lets go of the closure's lease. When the journal refuses a closure whose request already
+    /// reached the log, the closure is pending: the run finishes it from the log (<see cref="FinishClosing"/>).
+    /// </summary>
+    private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn)
+    {
+        var closing = await _runs.CloseResting(_permit!, operation, attempt, end).ConfigureAwait(false);
+        switch (closing)
+        {
+            case RestingClose.Closed closed:
+                if (end is RestingEnd.MarkDone && Finish(closed.Attempt.Lease, task, attempt, turn) is { } refusal)
+                {
+                    // The closure is recorded. Its publication is finished later, under a lease of its own.
+                    closed.Attempt.Lease.Dispose();
+                    return new Closing.Refused(Describe(refusal), refusal);
+                }
+                return closed.Attempt.Release() is Release.Held held ? new Closing.Refused(Describe(held.Reason), held.Reason) : new Closing.Recorded();
+            case RestingClose.Blocked blocked:
+                return new Closing.Refused(blocked.Block.Detail, null);
+            case RestingClose.Refused refused:
+                return Record() is { } record && PendingClosure(record, task, attempt) is not null
+                    ? new Closing.Pending(refused.Reason) : new Closing.Refused(Describe(refused.Reason), refused.Reason);
+            default:
+                throw new InvalidOperationException();
+        }
+    }
+
+    /// <summary>A person's closure is applied once it is recorded, or once its request is in the log for the run to finish.</summary>
+    private void Closed(TaskId task, Closing closing, string applied, Action<ConversationCommandResult> complete)
+    {
+        _live.Remove(task);
+        complete(closing is Closing.Refused refused ? Declined(refused.Detail) : Applied(applied));
+    }
+
+    /// <summary>
+    /// The resting end whose request the attempt's log holds after its last turn's closure while the journal records no
+    /// closure: a resting closure whose journal write was refused or cut short. Null otherwise.
+    /// </summary>
+    private (RestingEnd End, LaunchKey Last)? PendingClosure(RunRecord record, TaskId task, AttemptId attempt)
+    {
+        if (record.Closures.ContainsKey(attempt) || RunProjection.LastLaunch(record, attempt) is not { } last ||
+            !record.TurnClosures.TryGetValue(last, out var turn))
+            return null;
+        var folder = _store.AttemptFolder(Address.Workflow, Address.Run, task, attempt);
+        if (AttemptEvidence.Read(folder).Checkpoint is not { } whole || AttemptEvidence.Suffix(folder, turn, whole) is not { } suffix) return null;
+        var replies = suffix.TakeWhile(e => e is AttemptEvent.MessageQueued).Count();
+        RestingEnd? end = suffix.Skip(replies).ToArray() switch
+        {
+            [AttemptEvent.CancelRequested] => new RestingEnd.Cancel(),
+            [AttemptEvent.MarkedDone] when replies == 0 => new RestingEnd.MarkDone(),
+            [AttemptEvent.Concluded concluded] when replies == 0 => new RestingEnd.Conclude(concluded.Failure),
+            _ => null,
+        };
+        return end is null ? null : (end, last);
+    }
+
+    /// <summary>
+    /// Finishes a pending resting closure from its log, under the operation its command derives: Mark done's, the recorded
+    /// stop's, or the conversation's Cancel. E3a.5b's closure checks the exact closing event, so the rerun converges.
+    /// </summary>
+    private bool FinishClosing(RunRecord record, TaskId task, AttemptId attempt)
+    {
+        if (PendingClosure(record, task, attempt) is not { } pending) return false;
+        var turn = RunOperations.Turn(record, pending.Last);
+        var operation = pending.End switch
+        {
+            RestingEnd.MarkDone => MarkDoneOperation(turn),
+            RestingEnd.Cancel when RunOperations.Stop(record) is { } stop => RunOperations.Cancel(stop, attempt),
+            RestingEnd.Cancel => CancelOperation(turn),
+            _ => OperationIds.Derive(turn, "conversation/conclude"),
+        };
+        _live[task] = new(LiveStage.Settling);
+        Background(() => CloseResting(task, attempt, pending.End, operation, turn), closing =>
         {
             _live.Remove(task);
-            complete(result);
-        }, error =>
-        {
-            _live.Remove(task);
-            complete(Declined(error.Message));
-        });
+            switch (closing)
+            {
+                case Closing.Pending still:
+                    Hold(task, new TaskHold.Refused(still.Reason, null, Transient: true));
+                    break;
+                case Closing.Refused { Reason: { } reason }:
+                    Hold(task, new TaskHold.Refused(reason, null, Transient(reason.Problem)));
+                    break;
+            }
+        }, error => Faulted(task, error));
+        return true;
     }
 }

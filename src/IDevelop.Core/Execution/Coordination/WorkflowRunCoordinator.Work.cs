@@ -19,6 +19,7 @@ internal sealed partial class WorkflowRunCoordinator
         {
             case RunPhase.Approved when _resumed:
                 Reconcile(record, view);
+                RequestGates(record, view);
                 Dispatch(record, view);
                 record = Complete(record, view);
                 break;
@@ -201,6 +202,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation) is { } refusal)
                 return new Release.Held(refusal);
         }
+        _runs.Probe?.Invoke("coordinator.release.before");
         return turn.Release();
     }
 
@@ -224,7 +226,8 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Settles what an earlier window or an earlier step left: every unclosed claim through <see cref="ProjectRuns.Reconcile"/>,
-    /// which never launches, and every successful closure without a result through its publication.
+    /// which never launches, every successful closure without a result through its publication, and every approved rebase
+    /// without its result.
     /// </summary>
     private void Reconcile(RunRecord record, RunView view)
     {
@@ -241,10 +244,13 @@ internal sealed partial class WorkflowRunCoordinator
                 if (state.State == TaskState.Settling && end is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded }) FinishClosed(record, task, attempt);
                 continue;
             }
+            // A resting closure that reached the log but not the journal is finished from the log.
+            if (state.State == TaskState.Settling && FinishClosing(record, task, attempt)) continue;
             // A waiting attempt rests as it is. Only a stop closes it here.
             if (state.State is TaskState.Settling or TaskState.Uncertain && RunProjection.LastLaunch(record, attempt) is { } claimed)
                 ReconcileLaunch(record, task, claimed);
         }
+        FinishRebases(record);
     }
 
     private void ReconcileLaunch(RunRecord record, TaskId task, LaunchKey launch)

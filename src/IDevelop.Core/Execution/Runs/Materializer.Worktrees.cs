@@ -22,6 +22,7 @@ internal sealed partial class Materializer
         RequirePublication(_refs.Publish(permit, actualLayout, actualLayout, "base", repository, change), new BlockScope.Refs([change.Ref]));
         if (Value(repository.ReadRef(change.Ref)) != change.Target)
             throw Fault(MaterializationProblem.UncertainOwnership, "Approved base ref has an unexpected value.", new BlockScope.Refs([change.Ref]));
+        ApprovalPin.Release(repository, run, change.Target, change.Ref);
         record = Read(workflow, run);
         if (!record.TaskKeys.ContainsKey(task))
         {

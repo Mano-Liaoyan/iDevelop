@@ -40,11 +40,12 @@ public sealed partial class ProjectRuns
 
         private RunAddress Address => _run.Address;
 
-        /// <summary>The task's newest attempt in the run, live while this window runs its turn.</summary>
-        private (TaskView? State, CachedConversation? Read) Current(RunView view)
+        /// <summary>The task's newest attempt in the run and its log revision, live while this window runs its turn.</summary>
+        private (TaskView? State, AttemptRecord? Latest, long LogRevision) Current(RunView view)
         {
             var state = view.Tasks.GetValueOrDefault(Task);
-            return (state, state?.Attempt is { } attempt ? _owner.ReadRunHistory(Address.Workflow, Address.Run, Task, attempt) : null);
+            var (latest, revision) = state?.Attempt is { } attempt ? _owner.ReadRunRecord(Address.Workflow, Address.Run, Task, attempt) : (null, 0);
+            return (state, latest, revision);
         }
 
         public ConversationSnapshot Snapshot
@@ -52,8 +53,7 @@ public sealed partial class ProjectRuns
             get
             {
                 var view = _run.View;
-                var (state, read) = Current(view);
-                var latest = read?.History.Record;
+                var (state, latest, logRevision) = Current(view);
                 var unavailable = Unavailable ? ClosedOwner : !view.Controlled ? WorkflowRunCoordinator.ElsewhereMessage : view.Phase switch
                 {
                     RunPhase.Approved => null,
@@ -84,7 +84,7 @@ public sealed partial class ProjectRuns
                     Availability(unavailable is null && resting && latest?.Status == AttemptStatus.WaitingForInput,
                         unavailable ?? WorkflowRunCoordinator.NotWaitingMessage, "Mark this task done."),
                     Availability(false, unavailable ?? "A workflow run owns this task's session.", ""));
-                return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), read?.Lines ?? 0,
+                return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), logRevision,
                     latest is null ? null : new TurnKey(latest.Id, latest.Turns.Count), latest, Capabilities(latest), actions);
             }
         }

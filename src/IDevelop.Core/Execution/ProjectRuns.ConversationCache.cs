@@ -16,6 +16,9 @@ public sealed partial class ProjectRuns
     // Keyed by the attempt's folder, which names its owner: the project's standalone attempts or one run's.
     private readonly Dictionary<string, CachedConversation> _histories = [];
     private readonly Dictionary<AttemptId, RunAttemptPlace> _runAttempts = [];
+
+    // Each run journal as last read, by its path and length. A journal only grows, so the same length is the same record.
+    private readonly Dictionary<string, (long Length, RunRecord Record)> _journals = [];
     private sealed record PublishedAttempt(AttemptRecord Record, long LogRevision);
 
     private readonly Dictionary<TaskId, PublishedAttempt> _published = [];
@@ -49,18 +52,45 @@ public sealed partial class ProjectRuns
     /// <summary>The history of a run-owned attempt, with this window's live text and record while its turn runs here.</summary>
     private CachedConversation? ReadRunHistory(WorkflowId workflow, RunId run, TaskId task, AttemptId attempt)
     {
+        if (LiveRun(workflow, run, attempt) is { } active && Read(active) is { } live)
+        {
+            return new CachedConversation(0, active.Live.LogRevision, live);
+        }
+
+        return ReadAttemptHistory(TurnStore.AttemptFolder(workflow, run, task, attempt), task, attempt);
+
+        AttemptHistory? Read(ActiveRun active)
+        {
+            Probe?.Invoke("history.attempt.read");
+            return active.ReadHistory(active.Current);
+        }
+    }
+
+    /// <summary>
+    /// A run-owned attempt's record and log revision, for a snapshot. While this window runs its turn they come from the turn
+    /// in memory, so a snapshot never parses a log that grows as the turn streams.
+    /// </summary>
+    private (AttemptRecord? Record, long LogRevision) ReadRunRecord(WorkflowId workflow, RunId run, TaskId task, AttemptId attempt)
+    {
+        if (LiveRun(workflow, run, attempt) is { } active)
+        {
+            return (active.Current, active.Live.LogRevision);
+        }
+
+        return ReadAttemptHistory(TurnStore.AttemptFolder(workflow, run, task, attempt), task, attempt) is { } read
+            ? (read.History.Record, read.Lines) : (null, 0);
+    }
+
+    /// <summary>The client run of a run-owned attempt's turn while it runs in this window.</summary>
+    private ActiveRun? LiveRun(WorkflowId workflow, RunId run, AttemptId attempt)
+    {
         TurnOwner[] owners;
         lock (_gate)
         {
             owners = [.. _owned.Values.Where(owner => owner.Address.Workflow == workflow && owner.Address.Run == run && owner.Address.Launch.Attempt == attempt)];
         }
 
-        if (owners.Select(owner => owner.Active).FirstOrDefault(active => active is not null) is { } active && active.ReadHistory(active.Current) is { } live)
-        {
-            return new CachedConversation(0, active.Live.LogRevision, live);
-        }
-
-        return ReadAttemptHistory(TurnStore.AttemptFolder(workflow, run, task, attempt), task, attempt);
+        return owners.Select(owner => owner.Active).FirstOrDefault(active => active is not null);
     }
 
     private CachedConversation? ReadAttemptHistory(string folder, TaskId task, AttemptId attempt)
@@ -75,6 +105,7 @@ public sealed partial class ProjectRuns
                     return cached;
                 }
 
+                Probe?.Invoke("history.attempt.read");
                 var events = AttemptLog.ReadPositioned(folder, out var lines, out var observedLength);
                 var history = ConversationHistory.Project(events);
                 if (history is null || history.Record.Task != task || history.Id != attempt)
@@ -139,10 +170,9 @@ public sealed partial class ProjectRuns
                 foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder))
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (Guid.TryParse(Path.GetFileName(runFolder), out var run) && File.Exists(Path.Combine(runFolder, "events.jsonl")) &&
-                        store.Read(workflow, new RunId(run)) is RunRead.Loaded loaded)
+                    if (Guid.TryParse(Path.GetFileName(runFolder), out var run) && Journal(store, workflow, new RunId(run), runFolder) is { } record)
                     {
-                        runs.Add(loaded.Record);
+                        runs.Add(record);
                     }
                 }
 
@@ -172,6 +202,38 @@ public sealed partial class ProjectRuns
         return found.ToImmutable();
 
         static DateTimeOffset Approved(RunRecord record) => record.Receipts.Values.MinBy(entry => entry.Sequence)?.At ?? DateTimeOffset.MaxValue;
+    }
+
+    /// <summary>The run's journal, read again only when it grew since the last read.</summary>
+    private RunRecord? Journal(RunStore store, WorkflowId workflow, RunId run, string runFolder)
+    {
+        var path = Path.Combine(runFolder, "events.jsonl");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var length = new FileInfo(path).Length;
+        lock (_historyGate)
+        {
+            if (_journals.TryGetValue(path, out var cached) && cached.Length == length)
+            {
+                return cached.Record;
+            }
+        }
+
+        Probe?.Invoke("history.journal.read");
+        if (store.Read(workflow, run) is not RunRead.Loaded loaded)
+        {
+            return null;
+        }
+
+        lock (_historyGate)
+        {
+            _journals[path] = (length, loaded.Record);
+        }
+
+        return loaded.Record;
     }
 
     private static string Label(RunAttemptPlace place) => place.Cause switch

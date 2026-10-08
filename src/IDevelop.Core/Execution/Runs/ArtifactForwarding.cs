@@ -6,7 +6,7 @@ namespace IDevelop.Execution;
 /// <summary>
 /// What an agreed review hands on besides the code it forwards: its dependency inputs' artifacts, stored under the
 /// review's own result with their names, bytes, and digests kept. The reviewer owns none of the code, and the artifacts
-/// keep their identity. This is the rule an approval's result follows too.
+/// keep their identity. An approval's result follows the same rule (<see cref="GateForwarding.Artifacts"/>).
 /// </summary>
 internal static class ArtifactForwarding
 {

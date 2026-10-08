@@ -38,6 +38,7 @@ internal abstract record LayoutKey
 [JsonDerivedType(typeof(RetryReset), "retryReset")]
 [JsonDerivedType(typeof(Preservation), "preservation")]
 [JsonDerivedType(typeof(Restoration), "restoration")]
+[JsonDerivedType(typeof(Rebase), "rebase")]
 internal abstract record MaterializationPlan
 {
     private MaterializationPlan() { }
@@ -79,6 +80,20 @@ internal abstract record MaterializationPlan
 
     internal sealed record RetryReset(TaskId Task, AttemptId Salvaged, OperationId SalvagePlan, CommitId? From, CommitId To,
         ImmutableArray<EvidenceFile> Remove) : MaterializationPlan;
+
+    /// <summary>
+    /// A person's approved rebase of <paramref name="Task"/>'s stale result <paramref name="Source"/>: the candidate
+    /// <paramref name="Commit"/>, built by <paramref name="Recipe"/> on the current inputs' code base, replaces the branch
+    /// tip <paramref name="From"/>, and <paramref name="Ref"/> retains it. <paramref name="Inputs"/> are the current inputs
+    /// it was approved against. <paramref name="Preview"/> is the identity the person approved under <paramref name="Approval"/>.
+    /// </summary>
+    internal sealed record Rebase(TaskId Task, ResultId Source, ResultId Result, InputRecord Inputs, CommitId From,
+        CommitRecipe Recipe, CommitId Commit, string Ref, OperationId Approval, Digest Preview) : MaterializationPlan
+    {
+        /// <summary>The recipe of the join commit the candidate is based on, when the current inputs carry several code results.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CommitRecipe? JoinRecipe { get; init; }
+    }
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]

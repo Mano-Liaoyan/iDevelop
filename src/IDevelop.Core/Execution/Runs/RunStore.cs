@@ -7,7 +7,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>The project-scoped run journals and their locked commands.</summary>
-internal sealed class RunStore
+internal sealed partial class RunStore
 {
     private readonly string _project;
 
@@ -262,7 +262,7 @@ internal sealed class RunStore
                 return Missing();
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
-                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration } or RunEvent.GitIntended or RunEvent.GitObserved or
+                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration or MaterializationPlan.Rebase } or RunEvent.GitIntended or RunEvent.GitObserved or
                 RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
             {
                 return Refuse(RunProblem.InvalidData);
@@ -308,6 +308,17 @@ internal sealed class RunStore
             }
             var result = RunReducer.PublicationResult(record, plan);
             return new Mutation.Append(new RunEvent.ResultAccepted(result, record.Inputs[result.Inputs]));
+        });
+
+    /// <summary>Records the person-approved rebased result of a rebase plan whose branch, retention ref, and checkout moves were observed.</summary>
+    public RunDecision AcceptRebase(CoordinatorPermit permit, OperationId operation, OperationId rebase) =>
+        Transact(permit, operation, Fingerprint("acceptRebase", new { rebase }), (record, _) =>
+        {
+            if (record is null) return Missing();
+            if (record.Plans.GetValueOrDefault(rebase) is not MaterializationPlan.Rebase plan) return Refuse(RunProblem.InvalidData);
+            if (record.Results.FirstOrDefault(result => result.Id == plan.Result) is { } existing)
+                return new Mutation.Existing(new RunEvent.ResultAccepted(existing, record.Inputs[existing.Inputs]));
+            return new Mutation.Append(new RunEvent.ResultAccepted(RunReducer.RebaseResult(record, rebase, plan), plan.Inputs));
         });
 
     public RunDecision Claim(RunLease lease, OperationId operation, LaunchKey key, InputRecord inputs, Digest prompt)

@@ -257,6 +257,29 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Return_to_current_goes_to_the_session_s_current_attempt_and_not_to_a_newer_run_attempt()
+    {
+        _session.Snapshot = Snapshot(Record(B), Actions());
+        _session.Attempts = [new AttemptSummary(A, null, T0, AttemptStatus.Succeeded, CodexHigh),
+            new AttemptSummary(B, null, T0.AddMinutes(1), AttemptStatus.Succeeded, CodexHigh),
+            new AttemptSummary(C, null, T0.AddMinutes(2), AttemptStatus.WaitingForInput, CodexHigh) { Label = "Run 1" }];
+        _session.ReadPage = call => new HistoryResult.Page(1, [Said(call.Head == A ? "a1" : call.Head == B ? "b1" : "c1", MessageAuthor.Agent, "Text")],
+            new HistoryWindow("w"), new HistoryCursor("c"), new HistoryCursor("c"), false, false);
+        var model = Open();
+        Assert.Equal(B, model.SelectedAttempt!.Id);
+        model.SelectedAttempt = model.Attempts[0];
+        Settle(model);
+        Assert.True(model.IsHistorical);
+
+        model.ReturnToCurrentCommand.Execute(null);
+        Settle(model);
+
+        Assert.Equal(B, model.SelectedAttempt!.Id);
+        Assert.Equal(["b1"], Ids(model));
+        Assert.False(model.IsHistorical);
+    }
+
+    [AvaloniaFact]
     public void A_click_in_the_scroll_track_while_output_streams_stops_following_the_end_among_rows_of_different_heights()
     {
         _pager.Rows.AddRange(Enumerable.Range(0, 40).Select(i => Said($"m{i}", MessageAuthor.Agent,

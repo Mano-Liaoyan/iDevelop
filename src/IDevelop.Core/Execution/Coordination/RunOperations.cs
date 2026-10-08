@@ -43,6 +43,9 @@ internal static class RunOperations
 
     public static OperationId Accept(OperationId turn) => OperationIds.Derive(turn, "coordinator/accept");
 
+    /// <summary>The root of an Approval node's requests. Each request derives from it and the inputs it fixes.</summary>
+    public static OperationId Gate(RunId run, TaskId task) => OperationIds.Derive(Root(run), "gate/" + task.Value.ToString("D"));
+
     public static OperationId Completed(RunId run) => OperationIds.Derive(Root(run), "settle/completed");
 
     public static OperationId ReleasePins(RunId run) => OperationIds.Derive(Root(run), "release-pins");

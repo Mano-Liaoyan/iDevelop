@@ -94,6 +94,9 @@ internal static partial class RunValidation
             p.Confirmation.Value != Guid.Empty && Revision.IsHash(p.Preview.Sha256) && p.Supersedes?.Value != Guid.Empty,
         MaterializationPlan.RetryReset p => p.Task.Value != Guid.Empty && p.Salvaged.Value != Guid.Empty && p.SalvagePlan.Value != Guid.Empty &&
             (p.From is null || Revision.IsCommit(p.From.Value.Hex)) && Revision.IsCommit(p.To.Hex) && !p.Remove.IsDefault && p.Remove.All(Evidence),
+        MaterializationPlan.Rebase p => p.Task.Value != Guid.Empty && p.Source.Value != Guid.Empty && p.Result.Value != Guid.Empty &&
+            Input(p.Inputs) && Revision.IsCommit(p.From.Hex) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) && Reference(p.Ref) &&
+            p.Approval.Value != Guid.Empty && Revision.IsHash(p.Preview.Sha256) && (p.JoinRecipe is null || Recipe(p.JoinRecipe)),
         _ => false,
     };
 
