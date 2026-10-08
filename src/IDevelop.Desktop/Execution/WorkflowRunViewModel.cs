@@ -277,6 +277,10 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
         {
             // The project is closing, and this view model goes with it.
         }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // The run's records cannot be read now. The next tick asks again; a timer callback must not throw.
+        }
         finally
         {
             Volatile.Write(ref _asking, 0);

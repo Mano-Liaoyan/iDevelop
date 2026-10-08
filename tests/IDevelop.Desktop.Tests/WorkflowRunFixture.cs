@@ -20,6 +20,7 @@ internal sealed class WorkflowRunFixture : IDisposable
     private readonly Dictionary<string, FakeRule[]> _turns = [];
     private readonly List<(string Prompt, string Title)> _routes = [];
     private readonly List<string> _gates = [];
+    private readonly List<Shell> _windows = [];
     private ClientDirectory? _clients;
 
     public WorkflowRunFixture(params WorkflowEdit[] edits)
@@ -136,7 +137,12 @@ internal sealed class WorkflowRunFixture : IDisposable
     }
 
     /// <summary>A window that shows the project, with the runner pointed at the scratch Git.</summary>
-    public Shell Window() => Shell.Open(Project, Clients(), Configure);
+    public Shell Window()
+    {
+        var shell = Shell.Open(Project, Clients(), Configure);
+        _windows.Add(shell);
+        return shell;
+    }
 
     public void Configure(ProjectRuns runs)
     {
@@ -170,9 +176,15 @@ internal sealed class WorkflowRunFixture : IDisposable
         return output;
     }
 
-    // A fake client that a failed test left waiting at a gate ends here.
+    // A fake client that a failed test left waiting at a gate ends here. Each window's runs stop following their
+    // coordinators, so no timer of a window that only read a run asks for control after the test.
     public void Dispose()
     {
+        foreach (var canvas in _windows.SelectMany(shell => shell.Window.ViewModel.Projects).SelectMany(project => project.Workflows))
+        {
+            canvas.DisposeRun();
+        }
+
         foreach (var gate in _gates)
         {
             File.WriteAllText(gate, "");
