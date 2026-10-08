@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -117,19 +118,24 @@ public sealed class ProjectViewModel : ObservableObject
     /// launches nothing: a run this window takes control of waits for Resume, and one that another window controls is only
     /// read until that window lets go.
     /// </summary>
-    private void ShowActiveRun(WorkflowCanvasViewModel canvas)
+    /// <remarks>
+    /// The journal is read and written off the UI thread, and a busy journal or lock is tried again. A run that still cannot
+    /// be opened says why in the window's status line.
+    /// </remarks>
+    private async void ShowActiveRun(WorkflowCanvasViewModel canvas)
     {
-        if (Runs.ActiveRunOf(canvas.Workflow.Id) is not { } run)
+        var workflow = canvas.Workflow.Id;
+        RunId? run;
+        try
+        {
+            run = await Task.Run(() => Runs.ActiveRunOf(workflow));
+        }
+        catch (ObjectDisposedException)
         {
             return;
         }
 
-        RunOpen open;
-        try
-        {
-            open = Runs.OpenRun(canvas.Workflow.Id, run);
-        }
-        catch (ObjectDisposedException)
+        if (run is not { } active || await WorkflowRunViewModel.OpenAsync(Runs, workflow, active) is not { } open || Runs.Closing)
         {
             return;
         }
@@ -137,6 +143,10 @@ public sealed class ProjectViewModel : ObservableObject
         if (open is RunOpen.Opened opened)
         {
             canvas.Adopt(opened.Coordinator);
+        }
+        else if (open is RunOpen.Rejected rejected)
+        {
+            canvas.Notice($"Couldn't show the active run of \"{canvas.Name}\". {WorkflowRunText.Problem(rejected.Reason)}");
         }
     }
 

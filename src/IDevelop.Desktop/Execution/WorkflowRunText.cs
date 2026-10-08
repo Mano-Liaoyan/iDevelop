@@ -103,8 +103,27 @@ internal static class WorkflowRunText
         RunProblem.IdentityMismatch => "This was meant for another run.",
         RunProblem.StaleInput => "The request changed since you saw it.",
         RunProblem.IncompleteResults => "Not every task has a current result yet.",
-        var other => $"The run refused this ({other}).",
+        RunProblem.ReuseUnverifiable => "The earlier report no longer matches the workflow, its settings, or the base.",
+        RunProblem.UnsupportedWork => "Workflow runs do not run this kind of node yet.",
+        RunProblem.TaskUnconfigured => "A task is missing its agent or a required field.",
+        RunProblem.NotApproved => "The run has no approval yet.",
+        RunProblem.UnresolvedOwnership or RunProblem.UnclosedAttempts or RunProblem.SettlementPending or RunProblem.NotSettled =>
+            "A task's last turn is not settled yet.",
+        _ => "The run could not do this now.",
     };
+
+    /// <summary>
+    /// A sentence for an approval refusal's detail, which names a <see cref="RunProblem"/>, a client problem's kind, or a
+    /// message from the system. A name never shows as it is.
+    /// </summary>
+    public static string ApprovalDetail(string detail) =>
+        Enum.TryParse<RunProblem>(detail, out var problem) && Enum.IsDefined(problem) ? Problem(new RunRejection(problem))
+        : detail.Length > 0 && !detail.Contains(' ', StringComparison.Ordinal) ? "The planner could not be marked done."
+        : detail;
+
+    /// <summary>Whether an approval refusal comes from a lock or a journal that another step holds for a moment.</summary>
+    public static bool Transient(ApprovalProblem problem, string detail) => problem == ApprovalProblem.ApprovalBusy ||
+        problem == ApprovalProblem.StorageUnavailable && Enum.TryParse<RunProblem>(detail, out var run) && Transient(new RunRejection(run));
 
     /// <summary>Whether a refusal comes from a lock or a journal that another step holds for a moment, so trying again can succeed.</summary>
     public static bool Transient(RunRejection rejection) => rejection.Problem is RunProblem.JournalBusy or RunProblem.TaskBusy or RunProblem.RunBusy;

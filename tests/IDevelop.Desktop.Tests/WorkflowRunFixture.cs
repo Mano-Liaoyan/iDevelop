@@ -212,6 +212,27 @@ internal sealed class WorkflowRunFixture : IDisposable
         runs.CoordinatorRetry = TimeSpan.FromMilliseconds(50);
     }
 
+    /// <summary>
+    /// Holds the run journals' write lock, as another window's step does. The run's own short writes can hold it for a
+    /// moment, so taking it tries for up to two seconds.
+    /// </summary>
+    public FileStream HoldJournal()
+    {
+        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(Project, ".idp", "runs")).FullName, "write.lock");
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(20);
+            }
+        }
+    }
+
     /// <summary>HEAD's commit, cut to seven characters.</summary>
     public string Head() => Run("rev-parse", "--short=7", "HEAD").Trim();
 

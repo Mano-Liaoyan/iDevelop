@@ -148,6 +148,23 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
         return outcome;
     }
 
+    /// <summary>
+    /// Opens the run off the UI thread, because opening takes the run's control and reads and writes its journal, and tries
+    /// again while a busy journal or lock refuses it. Null when the project closed meanwhile.
+    /// </summary>
+    internal static async Task<RunOpen?> OpenAsync(ProjectRuns runs, WorkflowId workflow, RunId run)
+    {
+        try
+        {
+            return await Retrying(() => Task.Run(() => runs.OpenRun(workflow, run)),
+                outcome => outcome is RunOpen.Rejected rejected && WorkflowRunText.Transient(rejected.Reason));
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Tries <paramref name="attempt"/> up to <see cref="Tries"/> times while its outcome is <paramref name="transient"/>.</summary>
     internal static async Task<T> Retrying<T>(Func<Task<T>> attempt, Func<T, bool> transient)
     {

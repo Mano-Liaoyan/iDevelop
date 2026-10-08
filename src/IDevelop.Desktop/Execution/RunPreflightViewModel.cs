@@ -73,6 +73,7 @@ public sealed class RunPreflightViewModel : ObservableObject
     private RunPreflight? _preview;
     private bool _checking = true;
     private bool _starting;
+    private bool _opening;
     private bool _detached;
     private bool _useSnapshot;
     private string? _notice;
@@ -82,7 +83,7 @@ public sealed class RunPreflightViewModel : ObservableObject
     {
         _canvas = canvas;
         _start = new RelayCommand(() => _ = StartAsync(), () => CanStart);
-        _showActive = new RelayCommand(ShowActive, () => _active is not null && !_starting);
+        _showActive = new RelayCommand(ShowActive, () => _active is not null && !_starting && !_opening);
         CancelCommand = new RelayCommand(canvas.ClosePreflight);
         _ = CheckAsync();
     }
@@ -249,7 +250,7 @@ public sealed class RunPreflightViewModel : ObservableObject
         {
             start = await WorkflowRunViewModel.Retrying(
                 () => _canvas.Runs.StartWorkflow(current, confirmation),
-                outcome => outcome is WorkflowStart.Refused { Problem: ApprovalProblem.ApprovalBusy });
+                outcome => outcome is WorkflowStart.Refused refused && WorkflowRunText.Transient(refused.Problem, refused.Detail));
         }
         catch (ObjectDisposedException)
         {
@@ -291,8 +292,9 @@ public sealed class RunPreflightViewModel : ObservableObject
                     ApprovalProblem.ApprovalBusy => "Another confirmation of this workflow is still running. Start again in a moment.",
                     ApprovalProblem.NotConfirmable => "The preview has something to fix first.",
                     ApprovalProblem.GitFailed => $"Git could not record the run's base. {refused.Detail}",
-                    ApprovalProblem.InclusionRefused => $"An included report can no longer be used ({refused.Detail}). Clear it to run its task again.",
-                    _ => $"iDevelop could not approve the run. {refused.Detail}",
+                    ApprovalProblem.InclusionRefused =>
+                        $"An included report can no longer be used. {WorkflowRunText.ApprovalDetail(refused.Detail)} Clear it to run its task again.",
+                    _ => $"iDevelop could not approve the run. {WorkflowRunText.ApprovalDetail(refused.Detail)}",
                 };
                 break;
             case WorkflowStart.Busy busy:
@@ -320,23 +322,18 @@ public sealed class RunPreflightViewModel : ObservableObject
     }
 
     /// <summary>Opens the active run in this window, which controls it unless another window does, and closes the sheet.</summary>
-    private void ShowActive()
+    private async void ShowActive()
     {
-        if (_active is not { } run)
+        if (_active is not { } run || _opening)
         {
             return;
         }
 
-        RunOpen open;
-        try
-        {
-            open = _canvas.Runs.OpenRun(_canvas.Workflow.Id, run);
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
-        }
-
+        _opening = true;
+        _showActive.NotifyCanExecuteChanged();
+        var open = await WorkflowRunViewModel.OpenAsync(_canvas.Runs, _canvas.Workflow.Id, run);
+        _opening = false;
+        _showActive.NotifyCanExecuteChanged();
         if (open is RunOpen.Opened opened)
         {
             _canvas.Adopt(opened.Coordinator);

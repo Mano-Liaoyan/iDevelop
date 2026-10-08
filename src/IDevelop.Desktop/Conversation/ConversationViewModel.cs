@@ -96,10 +96,17 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         }
 
         session.Changed += OnSessionChanged;
+        target.Canvas.PropertyChanged += OnCanvasChanged;
         Invalidate();
     }
 
     public ConversationTarget Target { get; }
+
+    /// <summary>
+    /// The run of the conversation's workflow, whose status, Resume, and Stop Workflow the view repeats while it covers the
+    /// canvas and its run bar.
+    /// </summary>
+    public WorkflowRunViewModel? Run => Target.Canvas.Run;
 
     internal ConversationState State { get; }
 
@@ -215,6 +222,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _generation++;
         _closed.Cancel();
         _session.Changed -= OnSessionChanged;
+        Target.Canvas.PropertyChanged -= OnCanvasChanged;
         State.PropertyChanged -= OnStateChanged;
         if (_node is not null)
         {
@@ -225,6 +233,14 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     }
 
     internal Task CopyAsync(string text) => _copy(text);
+
+    private void OnCanvasChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkflowCanvasViewModel.Run))
+        {
+            OnPropertyChanged(nameof(Run));
+        }
+    }
 
     internal async Task<AnswerResult> AnswerAsync(RequestKey key, QuestionsReply reply)
     {

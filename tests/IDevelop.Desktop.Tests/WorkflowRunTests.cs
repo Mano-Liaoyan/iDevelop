@@ -244,11 +244,91 @@ public sealed class WorkflowRunTests
         Assert.Equal("Another run of this workflow is still active, with other content. Show it to stop it or let it finish.", second.Text("PreflightNotice"));
         Assert.Single(f.RunFolders());
         second.Click(second.Find<Button>("PreflightShowActive"));
-        Assert.Null(second.Preflight);
+        second.WaitUntil(() => second.Preflight is null, "the sheet shows the active run", () => $"Notice: {preflight.Notice}");
         Assert.Equal(first.WorkflowRun!.Address, second.WorkflowRun?.Address);
         Assert.Equal("Controlled by another window", second.RunStatus);
         f.Open("a");
         first.WaitForStatus("Completed");
+    }
+
+    [AvaloniaFact]
+    public void A_confirmation_that_finds_the_journal_busy_is_tried_again()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        var preflight = shell.OpenPreflight();
+        // A step of another window holds the run journals' write lock for longer than an approval waits for it.
+        var held = f.HoldJournal();
+        _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(1600)).ContinueWith(_ => held.Dispose());
+
+        shell.Click(shell.Find<Button>("PreflightStart"));
+
+        shell.WaitUntil(() => shell.WorkflowRun is not null, "the retried confirmation starts the run", () => $"Notice: {preflight.Notice}");
+        shell.WaitForStatus("Completed");
+        Assert.Single(f.RunFolders());
+    }
+
+    [AvaloniaFact]
+    public void A_journal_that_stays_busy_is_shown_as_a_sentence_and_Start_tries_again()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        var preflight = shell.OpenPreflight();
+        using (f.HoldJournal())
+        {
+            shell.Click(shell.Find<Button>("PreflightStart"));
+            shell.WaitUntil(() => preflight.Notice is not null, "the approval is refused", () => "No notice yet.");
+            Assert.Equal("iDevelop could not approve the run. The run's records are busy. Try again in a moment.", shell.Text("PreflightNotice"));
+            Assert.Null(shell.WorkflowRun);
+            Assert.True(shell.Find<Button>("PreflightStart").IsEffectivelyEnabled);
+        }
+
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitUntil(() => shell.WorkflowRun is not null, "the run starts", () => $"Notice: {preflight.Notice}");
+        shell.WaitForStatus("Completed");
+        Assert.Single(f.RunFolders());
+    }
+
+    [AvaloniaFact]
+    public void Stop_Workflow_is_off_while_its_stop_is_being_recorded()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("A", "Running");
+
+        using (f.HoldJournal())
+        {
+            shell.Click(shell.Find<Button>("StopWorkflow"));
+            Assert.False(shell.Find<Button>("StopWorkflow").IsEffectivelyEnabled);
+        }
+
+        shell.WaitForStatus("Stopped");
+        Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
+    }
+
+    [AvaloniaFact]
+    public void Closing_a_project_from_the_sidebar_during_a_run_asks_first_and_Stop_records_the_stop()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        var address = shell.StartRun().Address;
+        shell.WaitForCard("A", "Running");
+
+        shell.Click(Shell.ById<Button>(shell.ProjectItem("seed"), "CloseProject").Single());
+
+        Assert.Equal(["A run of the \"Workflow\" workflow is active. Stop it and close seed?", "Stop and leave", "Keep running"], shell.DialogTexts());
+        shell.Choose("StopAndLeave");
+
+        // The project leaves the sidebar at once, and its run records the stop before the project's runner closes.
+        Assert.Empty(shell.Window.ViewModel.Projects);
+        RunPhase Phase() => Assert.IsType<RunRead.Loaded>(RunStore.Open(f.Project).Read(address.Workflow, address.Run)).Record.Phase;
+        shell.WaitUntil(() => Phase() != RunPhase.Approved, "the run records the stop", () => $"Its phase is {Phase()}.");
+        Assert.Equal(0, f.Launches("B"));
     }
 
     [AvaloniaFact]
@@ -280,7 +360,8 @@ public sealed class WorkflowRunTests
 
         Assert.IsType<EditResult.Applied>(canvas.Document.Apply(new WorkflowEdit.EditTitle(B, "B2")));
         shell.Click(shell.Find<Button>("PreflightStart"));
-        shell.WaitUntil(() => shell.Preflight?.Notice is not null, "the preview is refused");
+        // The new preview's rows lay out after the refusal that brings them, so the wait renders once more.
+        shell.WaitUntil(() => shell.Preflight?.Notice is not null, "the preview is refused", () => "No notice yet.");
 
         Assert.Equal("The workflow or the project changed since this preview. Check it again, then start.", shell.Text("PreflightNotice"));
         Assert.Equal(["A", "B2"], shell.TextsOf("PreflightTask"));
