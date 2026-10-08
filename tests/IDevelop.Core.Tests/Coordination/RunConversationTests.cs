@@ -318,6 +318,9 @@ public sealed class RunConversationTests
             using var session = f.Session(A);
             Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
             Assert.Equal((CommandOutcome.Refused, WorkflowRunCoordinator.ReplyPendingMessage), await Outcome(session.MarkDoneAsync(session.Snapshot.Current!.Value, default)));
+            // Only a cancellation leaves a reply unsent; Mark done never closes over one.
+            Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RestingClose.Refused>(await f.Runs.CloseResting(f.Coordinator.Permit!, f.Preparation.Op(),
+                f.Attempt(A), new RestingEnd.MarkDone()).WaitAsync(Bound)).Reason.Problem);
             if (stop)
             {
                 Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
@@ -450,6 +453,26 @@ public sealed class RunConversationTests
         await f.Resume();
         await f.UntilWaiting(A, 2);
         Assert.Equal(("Use the fixture", 2, 1), (f.Prompt(A, 2), f.Launches(A), f.Lines(A, "messageQueued")));
+    }
+
+    [Fact]
+    public async Task The_run_s_decisions_notify_the_task_s_conversation()
+    {
+        await using var f = new RunConversationFixture(Chat(A));
+        f.Answer(A, f.Says(A, 1, "Which fixture?"));
+        await f.Open();
+        await f.Resume();
+        await f.UntilWaiting(A, 1);
+        using var session = f.Session(A);
+        var changes = 0;
+        session.Changed += _ => Interlocked.Increment(ref changes);
+        await f.Decided();
+        Assert.Equal(0, Volatile.Read(ref changes));
+
+        Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Stopped);
+        await TurnFixture.WaitUntilAsync(() => Volatile.Read(ref changes) > 0);
+        Assert.Equal(WorkflowRunCoordinator.EndedMessage, session.Snapshot.Actions.Send.Reason);
     }
 
     [Fact]

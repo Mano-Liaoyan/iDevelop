@@ -152,7 +152,8 @@ internal sealed partial class WorkflowRunCoordinator
         foreach (var state in view.Tasks.Values)
         {
             var task = state.Task;
-            if (_live.ContainsKey(task) || Resting(record, state) is not { } resting ||
+            // A task this window works on projects as starting, running, or settling, never as waiting.
+            if (Resting(record, state) is not { } resting ||
                 Continuation(record, resting) is not { } prompt)
                 continue;
             var next = resting.Next;
@@ -274,8 +275,7 @@ internal sealed partial class WorkflowRunCoordinator
             complete(Declined(Text(unconversable)));
             return;
         }
-        if (_live.ContainsKey(task) ||
-            Resting(record, Project(record).Tasks.GetValueOrDefault(task)) is not { Log.Status: AttemptStatus.WaitingForInput } resting)
+        if (Resting(record, Project(record).Tasks.GetValueOrDefault(task)) is not { Log.Status: AttemptStatus.WaitingForInput } resting)
         {
             complete(Declined(NotWaitingMessage));
             return;
