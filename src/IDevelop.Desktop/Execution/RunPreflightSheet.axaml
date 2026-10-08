@@ -165,9 +165,34 @@
               <StackPanel Spacing="8">
                 <TextBlock Classes="sheetCaption" Text="Isolation" />
                 <TextBlock Classes="note" Text="{Binding WorktreeNote}" AutomationProperties.AutomationId="PreflightIsolation" />
-                <TextBlock Classes="note" Text="{Binding ReusableNote}"
-                           IsVisible="{Binding ReusableNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           AutomationProperties.AutomationId="PreflightReusable" />
+              </StackPanel>
+
+              <StackPanel Spacing="8" IsVisible="{Binding HasInclusions}">
+                <TextBlock Classes="sheetCaption" Text="Earlier Results" />
+                <ItemsControl ItemsSource="{Binding Inclusions}" AutomationProperties.AutomationId="PreflightInclusions" AutomationProperties.Name="Earlier results">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="10" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="execution:PreflightInclusionRow">
+                      <StackPanel Spacing="4">
+                        <CheckBox IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsAvailable}" Content="{Binding Label}"
+                                  AutomationProperties.AutomationId="PreflightInclude"
+                                  AutomationProperties.Name="{Binding Label}" />
+                        <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="28,0,0,0"
+                                IsVisible="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                          <TextBlock Text="{Binding Report}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                     AutomationProperties.AutomationId="PreflightIncludedReport" />
+                        </Border>
+                        <TextBlock Classes="note" Text="{Binding Note}" Margin="28,0,0,0"
+                                   IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   AutomationProperties.AutomationId="PreflightIncludeNote" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
               </StackPanel>
             </StackPanel>
           </ScrollViewer>

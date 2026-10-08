@@ -14,7 +14,7 @@ public sealed partial class TaskNodeViewModel
     private static readonly string[] RunDependents =
     [
         nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
-        nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
+        nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
     ];
 
     private TaskView? _runTask;
@@ -42,7 +42,10 @@ public sealed partial class TaskNodeViewModel
     public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
-    public string? RunDetail => RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf) : null;
+    public string? RunDetail => RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
+
+    /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
+    public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
 
     /// <summary>An Approval node's request in the run, with Approve and Send back, or null.</summary>
     public GateViewModel? Gate
@@ -58,9 +61,15 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    private string RunOwnedProblem => _runActive
-        ? $"A run of the \"{_runWorkflow ?? Workflow.UnnamedName}\" workflow owns this task. Talk to it through its conversation, or stop the run."
-        : $"A run of the \"{_runWorkflow ?? Workflow.UnnamedName}\" workflow ran this task last. Run it on its own to show its own result again.";
+    private string RunOwnedProblem => (_runActive, HasAgent) switch
+    {
+        (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
+        (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. Answer its request below, or stop the run.",
+        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last. Run it on its own to show its own result again.",
+        (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval last.",
+    };
+
+    private string RunWorkflowName => _runWorkflow ?? Workflow.UnnamedName;
 
     /// <summary>
     /// Called on the UI thread with the task's view in the canvas's run, or null when the run does not hold it. A new run

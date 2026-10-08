@@ -178,6 +178,53 @@ public sealed class WorkflowRunTests
     }
 
     [AvaloniaFact]
+    public void A_planner_that_ran_on_its_own_can_be_included_and_the_run_starts_only_what_it_planned()
+    {
+        const string proposal = """
+            Here is the plan.
+
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "api", "type": "type-1", "title": "Export API", "fields": {"instructions": "Add the CSV endpoint."}}],
+             "connect": [{"from": "planner", "to": "api"}]}
+            ```
+            """;
+        var plan = new WorkflowEdit.PlaceNode(A, BuiltInBlueprints.Plan, new CanvasPoint(105, 90))
+        {
+            Title = "Plan",
+            Fields = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("goal", "Add CSV export."),
+            Settings = new NodeSettings(WorkflowRunFixture.Codex, ConversationMode.Chat),
+        };
+        using var f = new WorkflowRunFixture(plan);
+        f.Answer("Plan", f.Says(proposal)).Answer("Export API", f.Says("API ready."));
+        var shell = f.Window();
+        shell.Click(shell.Header(shell.Node("Plan")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.Has<Button>("AcceptProposal") && shell.Find<Button>("AcceptProposal").IsEffectivelyEnabled, "the plan's proposal shows");
+        // The planned task takes the planner's agent, as Generate's planner gives it.
+        shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        shell.WaitUntil(() => shell.Nodes().Count() == 2, "the planned task is added");
+
+        var preflight = shell.OpenPreflight();
+
+        var row = Assert.Single(preflight.Inclusions);
+        Assert.Equal(("Include \"Plan\"'s plan instead of running it again", "It waits for you. Including it marks it done when the run starts."),
+            (row.Label, row.Note));
+        Assert.Equal("Include \"Plan\"'s plan instead of running it again", shell.Find<CheckBox>("PreflightInclude").Content);
+        Assert.Equal("Here is the plan.", shell.Text("PreflightIncludedReport").Split('\n')[0]);
+        shell.Click(shell.Find<CheckBox>("PreflightInclude"));
+        Assert.True(row.IsIncluded);
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitUntil(() => shell.WorkflowRun is not null, "the run starts",
+            () => $"Notice: {preflight.Notice}, starting {preflight.IsStarting}, can start {preflight.CanStart}, gaps [{string.Join("; ", preflight.Gaps.Select(gap => gap.Text))}]");
+        shell.WaitForStatus("Completed");
+
+        Assert.Equal((1, 1), (f.Launches("Plan"), f.Launches("Export API")));
+        Assert.Equal(["Succeeded", "Succeeded"], new[] { "Plan", "Export API" }.Select(title => shell.CardText(title, "CardStatus")));
+    }
+
+    [AvaloniaFact]
     public void A_confirmation_that_finds_the_approval_lock_busy_is_tried_again()
     {
         using var f = Chain();

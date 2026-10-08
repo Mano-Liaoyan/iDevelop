@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Windows.Input;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Mvvm;
@@ -13,6 +14,49 @@ public sealed record PreflightTaskRow(NodeKind Kind, string Title, string Agent,
 public sealed record PreflightGapRow(string Text, ICommand? ShowCommand)
 {
     public bool HasNode => ShowCommand is not null;
+}
+
+/// <summary>
+/// An earlier report that the run can include instead of running its task again: a root planner's plan, or another root
+/// task's report. Listing it includes nothing; the person checks it.
+/// </summary>
+public sealed class PreflightInclusionRow : ObservableObject
+{
+    private readonly ImmutableArray<BaseChoice> _bases;
+    private readonly Func<BaseChoice> _choice;
+    private bool _isIncluded;
+
+    internal PreflightInclusionRow(ReportInclusion inclusion, string label, string? report, string? note, ImmutableArray<BaseChoice> bases,
+        Func<BaseChoice> choice)
+    {
+        Inclusion = inclusion;
+        Label = label;
+        Report = report;
+        Note = note;
+        _bases = bases;
+        _choice = choice;
+    }
+
+    public string Label { get; }
+
+    /// <summary>The start of the report the run would hand on.</summary>
+    public string? Report { get; }
+
+    /// <summary>What including it does besides, or why it cannot be included.</summary>
+    public string? Note { get; }
+
+    /// <summary>The run can include it on the chosen base.</summary>
+    public bool IsAvailable => _bases.Contains(_choice());
+
+    public bool IsIncluded
+    {
+        get => _isIncluded;
+        set => SetProperty(ref _isIncluded, value);
+    }
+
+    internal ReportInclusion Inclusion { get; }
+
+    internal void OnChoiceChanged() => OnPropertyChanged(nameof(IsAvailable));
 }
 
 /// <summary>
@@ -67,6 +111,11 @@ public sealed class RunPreflightViewModel : ObservableObject
             if (SetProperty(ref _useSnapshot, value))
             {
                 OnPropertyChanged(nameof(UseHead));
+                foreach (var row in Inclusions)
+                {
+                    row.OnChoiceChanged();
+                }
+
                 _start.NotifyCanExecuteChanged();
             }
         }
@@ -102,10 +151,10 @@ public sealed class RunPreflightViewModel : ObservableObject
         ? $"Each task works in its own checkout under {preview.Worktrees.Checkouts}/, on a branch under {preview.Worktrees.Branches}. Your branch, index, and files stay as they are."
         : null;
 
-    /// <summary>Earlier reports the run could reuse. Listing one includes nothing.</summary>
-    public string? ReusableNote => _preview is { Reusable: { IsEmpty: false } reusable } preview
-        ? $"Earlier reports of {List([.. reusable.Select(report => Title(preview, report.Task))])} could be reused. This run starts every task again."
-        : null;
+    /// <summary>Earlier reports the run can include instead of running their tasks again. Listing one includes nothing.</summary>
+    public IReadOnlyList<PreflightInclusionRow> Inclusions { get; private set; } = [];
+
+    public bool HasInclusions => Inclusions.Count > 0;
 
     /// <summary>Why the last Start started nothing, or what changed since the preview, or null.</summary>
     public string? Notice
@@ -159,10 +208,18 @@ public sealed class RunPreflightViewModel : ObservableObject
             _useSnapshot = false;
         }
 
+        // A new preview keeps what the person included, when it still offers the same report.
+        var included = Inclusions.Where(row => row.IsIncluded).Select(row => row.Inclusion).ToHashSet();
+        Inclusions = [.. InclusionRows(preview)];
+        foreach (var row in Inclusions)
+        {
+            row.IsIncluded = included.Contains(row.Inclusion);
+        }
+
         foreach (var property in new[]
         {
             nameof(IsChecking), nameof(IsReady), nameof(Tasks), nameof(Gaps), nameof(HasGaps), nameof(OffersSnapshot), nameof(UseSnapshot), nameof(UseHead),
-            nameof(HeadLabel), nameof(ChangedNote), nameof(IgnoredNote), nameof(SubmodulesNote), nameof(WorktreeNote), nameof(ReusableNote),
+            nameof(HeadLabel), nameof(ChangedNote), nameof(IgnoredNote), nameof(SubmodulesNote), nameof(WorktreeNote), nameof(Inclusions), nameof(HasInclusions),
             nameof(CanStart), nameof(ShowsActive),
         })
         {
@@ -182,7 +239,10 @@ public sealed class RunPreflightViewModel : ObservableObject
 
         SetStarting(true);
         Notice = null;
-        var confirmation = new RunConfirmation(_preview!, Choice, _command);
+        var confirmation = new RunConfirmation(_preview!, Choice, _command)
+        {
+            Include = [.. Inclusions.Where(row => row.IsIncluded && row.IsAvailable).Select(row => row.Inclusion)],
+        };
         var current = _canvas.Workflow;
         WorkflowStart start;
         try
@@ -231,6 +291,7 @@ public sealed class RunPreflightViewModel : ObservableObject
                     ApprovalProblem.ApprovalBusy => "Another confirmation of this workflow is still running. Start again in a moment.",
                     ApprovalProblem.NotConfirmable => "The preview has something to fix first.",
                     ApprovalProblem.GitFailed => $"Git could not record the run's base. {refused.Detail}",
+                    ApprovalProblem.InclusionRefused => $"An included report can no longer be used ({refused.Detail}). Clear it to run its task again.",
                     _ => $"iDevelop could not approve the run. {refused.Detail}",
                 };
                 break;
@@ -295,6 +356,36 @@ public sealed class RunPreflightViewModel : ObservableObject
         var inputs = task.Inputs.IsEmpty ? null
             : $"After {string.Join(", ", task.Inputs.Select(input => input.Kind == ConnectionKind.Context ? $"{Title(_preview!, input.From)} (context)" : Title(_preview!, input.From)))}";
         return new PreflightTaskRow(node?.Kind ?? NodeKind.Implement, task.Title, agent, inputs);
+    }
+
+    private IEnumerable<PreflightInclusionRow> InclusionRows(RunPreflight preview)
+    {
+        foreach (var planner in preview.Planners)
+        {
+            var note = planner.Problem is { } problem ? $"It cannot be included: {WorkflowRunText.Problem(new RunRejection(problem))}"
+                : planner.Status == AttemptStatus.WaitingForInput ? "It waits for you. Including it marks it done when the run starts."
+                : null;
+            yield return new(new ReportInclusion(planner.Task, planner.Source, planner.Turn),
+                $"Include {Title(preview, planner.Task)}'s plan instead of running it again", Excerpt(planner.Report), note, planner.Bases, () => Choice);
+        }
+
+        foreach (var report in preview.Reusable.Where(report => preview.Planners.All(planner => planner.Task != report.Task)))
+        {
+            yield return new(new ReportInclusion(report.Task, report.Source, 1),
+                $"Reuse {Title(preview, report.Task)}'s earlier report instead of running it again", Excerpt(report.Report), null, report.Bases, () => Choice);
+        }
+    }
+
+    /// <summary>The report's first three lines that have text.</summary>
+    private static string? Excerpt(string? report)
+    {
+        if (string.IsNullOrWhiteSpace(report))
+        {
+            return null;
+        }
+
+        var lines = report.Split('\n').Select(line => line.TrimEnd()).Where(line => line.Length > 0).ToArray();
+        return lines.Length <= 3 ? string.Join("\n", lines) : string.Join("\n", lines.Take(3)) + " …";
     }
 
     private IEnumerable<PreflightGapRow> GapRows(RunPreflight preview)

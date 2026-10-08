@@ -237,10 +237,12 @@
                                 Classes.complete="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                                 Classes.problem="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                                 Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Theme="{StaticResource Glyph}" />
-                            <TextBlock Text="{Binding RunStatusLabel}" AutomationProperties.AutomationId="RunTaskStatus" />
-                          </StackPanel>
+                          <!-- A long status, such as what a pending task waits for, trims inside the value column. -->
+                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
+                            <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
+                            <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}" TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.AutomationId="RunTaskStatus" />
+                          </Grid>
                         </Border>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsRunState}">
@@ -365,20 +367,10 @@
                       <ContentControl.ContentTemplate>
                         <DataTemplate DataType="execution:GateViewModel">
                           <StackPanel>
-                            <inspector:InspectorRow Label="Request" Icon="{StaticResource IconStatus}">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Border Classes="pill" HorizontalAlignment="Left"
-                                        Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
-                                        Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                        Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Theme="{StaticResource Glyph}" />
-                                    <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="GateStatus" />
-                                  </StackPanel>
-                                </Border>
-                                <TextBlock Classes="caption" Text="{Binding RequestLabel}" VerticalAlignment="Center"
-                                           AutomationProperties.AutomationId="GateRequest" />
-                              </StackPanel>
+                            <!-- The Run section above shows the request's status, so this section shows what it is about. -->
+                            <inspector:InspectorRow Label="Request" Icon="{StaticResource IconVersion}">
+                              <TextBlock Text="{Binding RequestLabel}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                         AutomationProperties.AutomationId="GateRequest" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}"
                                                     IsShown="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -642,7 +634,13 @@
                           </DataTemplate>
                         </ContentControl.ContentTemplate>
                       </ContentControl>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsRunState}">
+                      <inspector:InspectorRow Layout="Full">
+                        <inspector:InspectorRow.IsShown>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="ShowsRunState" />
+                            <Binding Path="HasAgent" />
+                          </MultiBinding>
+                        </inspector:InspectorRow.IsShown>
                         <TextBlock Classes="caption" Text="The run's conversation with this task opens in the conversation view." TextWrapping="Wrap"
                                    AutomationProperties.AutomationId="RunConversationNote" />
                       </inspector:InspectorRow>

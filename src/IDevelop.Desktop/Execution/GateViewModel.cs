@@ -34,19 +34,11 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         _ = LoadReportAsync();
     }
 
+    /// <summary>"Waiting for approval", "Approved", "Sent back", or "Closed".</summary>
     public string StatusLabel => _gate.Label;
 
-    public StatusTone Tone => _gate.Status switch
-    {
-        GateStatus.Waiting => StatusTone.Waiting,
-        GateStatus.Approved => StatusTone.Complete,
-        GateStatus.SentBack => StatusTone.Problem,
-        GateStatus.Closed => StatusTone.Neutral,
-        _ => StatusTone.Neutral,
-    };
-
-    /// <summary>"Request 2", which counts the node's requests in this run.</summary>
-    public string RequestLabel => $"Request {_gate.Request.Sequence}";
+    /// <summary>"1 of this run", which counts the node's requests in its run.</summary>
+    public string RequestLabel => $"{_gate.Request.Sequence} of this run";
 
     /// <summary>What approving hands on: each input's report under its task's title, once it is read.</summary>
     public string? Report
@@ -101,7 +93,7 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         }
 
         _gate = gate;
-        foreach (var property in new[] { nameof(StatusLabel), nameof(Tone), nameof(SentBackReason), nameof(IsWaiting), nameof(CanAnswer) })
+        foreach (var property in new[] { nameof(StatusLabel), nameof(SentBackReason), nameof(IsWaiting), nameof(CanAnswer) })
         {
             OnPropertyChanged(property);
         }

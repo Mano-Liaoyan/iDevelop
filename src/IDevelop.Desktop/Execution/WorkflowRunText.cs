@@ -59,8 +59,10 @@ internal static class WorkflowRunText
     };
 
     /// <summary>Why the task stands where it does, in a sentence or two, or null when its label says enough.</summary>
-    public static string? Detail(TaskView task, Func<TaskId, string> title) => task.State switch
+    /// <param name="active">The run is approved or stopping. A settled run says nothing more about a task it never started.</param>
+    public static string? Detail(TaskView task, Func<TaskId, string> title, bool active = true) => task.State switch
     {
+        TaskState.Pending or TaskState.Ready or TaskState.Unsupported when !active => null,
         TaskState.Pending when !task.HeldBy.IsEmpty => $"It starts once {Names(task.HeldBy, title)} {(task.HeldBy.Count == 1 ? "hands" : "hand")} on a result.",
         TaskState.Blocked when task.Block is { } block => $"{Problem(block.Problem)} {block.Detail}".Trim(),
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),

@@ -81,7 +81,9 @@ public sealed class WorkflowRunNavigationTests
         Assert.Equal("\"Approve\" waits for your approval.", shell.Text("RunActivity"));
         shell.Click(shell.InCard<Button>("Approve", "CardAttention"));
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
-        Assert.Equal(("Waiting for approval", "Request 1"), (shell.InView<TextBlock>("GateStatus").Text, shell.Text("GateRequest")));
+        Assert.Equal(("Waiting for approval", "1 of this run"), (shell.InView<TextBlock>("RunTaskStatus").Text, shell.Text("GateRequest")));
+        Assert.Equal("A run of the \"Workflow\" workflow owns this approval. Answer its request below, or stop the run.", shell.Text("RunOwner"));
+        Assert.False(shell.Find<TextBlock>("RunConversationNote").IsEffectivelyVisible);
         shell.WaitUntil(() => shell.Find<TextBox>("GateReport").Text is { Length: > 0 }, "the panel reads what approving hands on");
         Assert.Equal("## A (dependency)\n\nA ready.", shell.Find<TextBox>("GateReport").Text?.TrimEnd());
 
@@ -89,7 +91,7 @@ public sealed class WorkflowRunNavigationTests
 
         shell.WaitForStatus("Completed");
         Assert.Equal("Approved", shell.CardText("Approve", "CardStatus"));
-        Assert.Equal("Approved", shell.InView<TextBlock>("GateStatus").Text);
+        Assert.Equal("Approved", shell.InView<TextBlock>("RunTaskStatus").Text);
         Assert.False(shell.Find<Button>("ApproveGate").IsEffectivelyVisible);
     }
 
@@ -125,7 +127,7 @@ public sealed class WorkflowRunNavigationTests
         second.WaitUntil(() => second.WorkflowRun is not null, "the second window shows the run");
         second.Click(second.InCard<Button>("Approve", "CardAttention"));
 
-        Assert.Equal("Waiting for approval", second.InView<TextBlock>("GateStatus").Text);
+        Assert.Equal("Waiting for approval", second.InView<TextBlock>("RunTaskStatus").Text);
         Assert.False(second.Find<Button>("ApproveGate").IsEffectivelyEnabled);
         first.Click(first.Find<Button>("NextWaiting"));
         Assert.True(first.InView<Button>("ApproveGate").IsEffectivelyEnabled);

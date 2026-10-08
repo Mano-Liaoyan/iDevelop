@@ -19,9 +19,9 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     private readonly RelayCommand _resume;
     private readonly OperationId _stopCommand = new(Guid.NewGuid());
     private Timer? _control;
-    private bool _asking;
+    private int _asking;
     private bool _busy;
-    private bool _disposed;
+    private volatile bool _disposed;
     private string? _commandProblem;
 
     /// <param name="title">A task's title, as the workflow names it now.</param>
@@ -259,12 +259,12 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     private void AskForControl()
     {
         var reader = Coordinator;
-        if (_disposed || reader.Controlled || _asking)
+        // A tick that comes while the last one still asks skips its turn.
+        if (_disposed || reader.Controlled || Interlocked.Exchange(ref _asking, 1) != 0)
         {
             return;
         }
 
-        _asking = true;
         try
         {
             reader.Refresh();
@@ -279,7 +279,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            _asking = false;
+            Volatile.Write(ref _asking, 0);
         }
     }
 
