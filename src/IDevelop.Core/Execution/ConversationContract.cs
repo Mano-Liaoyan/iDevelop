@@ -94,7 +94,13 @@ public sealed record ConversationEntry(
 
 public sealed record AttemptSummary(
     AttemptId Id, AttemptId? Continues, DateTimeOffset Started,
-    AttemptStatus Status, ExecutionSettings Settings);
+    AttemptStatus Status, ExecutionSettings Settings)
+{
+    /// <summary>Who owns the attempt: <c>"Standalone"</c>, or its workflow run, such as <c>"Run 1"</c> or <c>"Run 1 retry"</c>.</summary>
+    public string Label { get; init; } = StandaloneLabel;
+
+    public const string StandaloneLabel = "Standalone";
+}
 
 public abstract record HistoryQuery
 {
