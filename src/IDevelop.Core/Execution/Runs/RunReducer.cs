@@ -366,6 +366,14 @@ internal static partial class RunReducer
                             }
 
                             break;
+                        case ResultOrigin.Rebased rebased:
+                            if (record.Schema != 3 || record.Plans.GetValueOrDefault(rebased.Plan) is not MaterializationPlan.Rebase rebase ||
+                                rebase.Task != result.Task || rebase.Source != rebased.Source || rebase.Result != result.Id)
+                            {
+                                return Reject(RunProblem.UnknownResult);
+                            }
+
+                            break;
                         case ResultOrigin.Human human:
                             if (HumanResultProblem(record, accepted, resultTask, human) is { } humanProblem)
                             {
@@ -433,6 +441,12 @@ internal static partial class RunReducer
                 case RunEvent.Settled settled:
                     if (record.Plans.Any(pair => pair.Value is MaterializationPlan.Publication publication &&
                         !record.Results.Any(result => result.Id == publication.Result) &&
+                        !record.Blocks.Values.Any(block => block.Block.Operation == pair.Key)))
+                    {
+                        return Reject(RunProblem.UnfinishedPublication);
+                    }
+                    if (record.Plans.Any(pair => pair.Value is MaterializationPlan.Rebase rebase &&
+                        !record.Results.Any(result => result.Id == rebase.Result) &&
                         !record.Blocks.Values.Any(block => block.Block.Operation == pair.Key)))
                     {
                         return Reject(RunProblem.UnfinishedPublication);
@@ -804,6 +818,8 @@ internal static partial class RunValidation
             result.Code is CodeOutput.Produced produced && Owned(produced.Code)) && (result.Origin switch
         {
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
+            ResultOrigin.Rebased rebased => rebased.Source.Value != Guid.Empty && rebased.Plan.Value != Guid.Empty &&
+                rebased.Source == result.Supersedes,
             ResultOrigin.Human human => human.Request.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&
                 Revision.IsHash(reused.Evidence.Inputs.Sha256) && Revision.IsHash(reused.Evidence.CodeTree.Sha256) &&

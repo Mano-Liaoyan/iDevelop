@@ -114,6 +114,7 @@ internal sealed partial class Materializer
             MaterializationPlan.RetryReset => "Retry reset",
             MaterializationPlan.Refresh => "Refresh",
             MaterializationPlan.Publication => "Publication",
+            MaterializationPlan.Rebase => "Rebase",
             _ => "Preparation",
         };
         return $"{kind} {owner.Value:D} has an unfinished Git step on this checkout. Run it again, or salvage and retry.";

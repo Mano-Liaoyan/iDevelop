@@ -27,6 +27,30 @@ public sealed class MergeTreeTests
     }
 
     [Fact]
+    public void A_named_merge_base_replays_only_the_change_after_it()
+    {
+        using var f = new GitFixture();
+        var a = f.Diamond();
+        f.Write("f.txt", "1\n");
+        var start = f.Commit("start");
+        f.Git("checkout", "-q", "-b", "old", start.Hex);
+        f.Write("f.txt", "2\n");
+        var old = f.Commit("old");
+        f.Git("checkout", "-q", "-b", "work", old.Hex);
+        f.Write("g.txt", "G\n");
+        var work = f.Commit("work");
+        f.Git("checkout", "-q", "-b", "updated", start.Hex);
+        f.Write("h.txt", "H\n");
+        var updated = f.Commit("updated");
+        var repository = f.Open();
+        var replayed = Assert.IsType<TreeMerge.Clean>(repository.MergeTrees(updated, work, a, mergeBase: old)).Tree;
+        Assert.Equal(["1\n", "G\n", "H\n"], new[] { "f.txt", "g.txt", "h.txt" }.Select(file => f.Git("show", $"{replayed.Hex}:{file}")));
+        // Git's own merge base would also carry the old base's f.txt.
+        var merged = Assert.IsType<TreeMerge.Clean>(repository.MergeTrees(updated, work, a)).Tree;
+        Assert.Equal("2\n", f.Git("show", $"{merged.Hex}:f.txt"));
+    }
+
+    [Fact]
     public void Clean_merge_returns_the_literal_tree()
     {
         using var f = new GitFixture();

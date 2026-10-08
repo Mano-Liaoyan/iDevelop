@@ -181,6 +181,7 @@ internal sealed record ReportInclusion(TaskId Task, AttemptId Source, int Turn);
 [JsonDerivedType(typeof(Executed), "executed")]
 [JsonDerivedType(typeof(Reused), "reused")]
 [JsonDerivedType(typeof(Included), "included")]
+[JsonDerivedType(typeof(Rebased), "rebased")]
 [JsonDerivedType(typeof(Human), "human")]
 internal abstract record ResultOrigin
 {
@@ -192,6 +193,12 @@ internal abstract record ResultOrigin
 
     /// <summary>A standalone planner's report, included at approval. No code, ownership, or session comes with it.</summary>
     internal sealed record Included(AttemptSource.Standalone Source, InclusionEvidence Evidence) : ResultOrigin;
+
+    /// <summary>
+    /// A person approved replaying <paramref name="Source"/>'s recorded change onto its updated inputs, as the rebase
+    /// plan <paramref name="Plan"/> recorded. No client ran; the source's provenance stays with the source.
+    /// </summary>
+    internal sealed record Rebased(ResultId Source, OperationId Plan) : ResultOrigin;
 
     /// <summary>A person approved this Approval node's request. No client ran.</summary>
     internal sealed record Human(GateId Request) : ResultOrigin;

@@ -213,7 +213,8 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Settles what an earlier window or an earlier step left: every unclosed claim through <see cref="ProjectRuns.Reconcile"/>,
-    /// which never launches, and every successful closure without a result through its publication.
+    /// which never launches, every successful closure without a result through its publication, and every approved rebase
+    /// without its result.
     /// </summary>
     private void Reconcile(RunRecord record, RunView view)
     {
@@ -234,6 +235,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (state.State is TaskState.Settling or TaskState.Uncertain && RunProjection.LastLaunch(record, attempt) is { } claimed)
                 ReconcileLaunch(record, task, claimed);
         }
+        FinishRebases(record);
     }
 
     private void ReconcileLaunch(RunRecord record, TaskId task, LaunchKey launch)
