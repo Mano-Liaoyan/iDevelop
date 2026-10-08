@@ -95,7 +95,7 @@ public sealed class PublicationOwnershipTests
         const string below = "81ddb7c330112c7f16700ed002803a04b0bce693";
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", below).ExitCode);
         f.Git.Write("b.txt", "B\n", writer.Checkout);
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
+        Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         await f.Close(writer, assertMatched: false);
         var repository = f.Git.Open();
         var capture = GitFixture.Read(repository.Capture(writer.Checkout));
@@ -123,7 +123,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", Head(f, writer.Checkout));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "checkout", "--detach", "-q", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67").ExitCode);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "HEAD").ExitCode);
         await f.Close(writer, assertMatched: false);
@@ -138,8 +138,8 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
             f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt)).Block));
         var salvageOperation = f.Op();
-        var recovered = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
-        Assert.Equal(recovered, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
+        var recovered = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(recovered, await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         var resetOperation = f.Op();
         var confirmation = f.Op();
         var reset = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, recovered.Receipt.Plan, confirmation));
@@ -159,7 +159,7 @@ public sealed class PublicationOwnershipTests
         f.Git.Write("b.txt", "B\n", writer.Checkout);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "b.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
+        Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         await f.Close(writer);
         var operation = f.Op();
         if (resume) Assert.Throws<Crash>(() => f.Materializer(probe: step =>
@@ -189,7 +189,7 @@ public sealed class PublicationOwnershipTests
         var before = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), operation, sibling.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", before.Block.Problem.ToString());
         Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, 81cae59086bf9597301026b65f1bb57380b74686 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", before.Block.Detail);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(first.Execution.Location.Owner.Task), f.Op(), first.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(first.Execution.Location.Owner.Task), f.Op(), first.Execution.Launch.Attempt));
         var after = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), operation, sibling.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", after.Block.Problem.ToString());
         Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, 81cae59086bf9597301026b65f1bb57380b74686 to adfe40b30c176fb407933286f51d15ea9b54cdc3.", after.Block.Detail);

@@ -5,7 +5,7 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public Salvage Salvage(RunLease lease, OperationId operation, AttemptId attempt)
+    public async ValueTask<Salvage> Salvage(RunLease lease, OperationId operation, AttemptId attempt, CancellationToken cancellation = default)
     {
         using var authority = lease.Use();
         if (authority is null) return new Salvage.Rejected(new(RunProblem.TaskBusy));
@@ -40,6 +40,8 @@ internal sealed partial class Materializer
                 ResolveMaintenanceBlocks(permit, operation, "Salvage retained.");
                 return new Salvage.Retained(receipt, receipt.Commit);
             }
+            if (record.PreservationDivergences.TryGetValue(operation, out var divergence))
+                return SalvageBlock(permit, operation, "salvage-diverged", DivergenceBlock(operation, task, attempt, inputs, divergence));
             var checkout = Checkout(repository, prepared.Location.Owner);
             step = "salvage-index-lock";
             VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
@@ -53,22 +55,20 @@ internal sealed partial class Materializer
             }
             else
             {
-                var tip = Value(repository.Worktrees()).Single(worktree => SamePath(worktree.Path, checkout)).Head ??
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.");
-                step = "salvage-capture";
-                var capture = Value(Mutate("salvage-capture", () => repository.Capture(checkout)));
-                if (capture.IndexBefore != capture.IndexAfter) throw Fault(MaterializationProblem.DirtyWorktree, "The index changed during salvage capture.");
-                var untracked = Untracked(repository, checkout);
+                step = "salvage-observe";
                 var title = record.Revisions[writer.Revision].Snapshot.Tasks[task].Title;
-                var branchTip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
-                var parents = (branchTip is { } branch ? repository.IsAncestor(branch, tip) : null) switch
+                var pair = await ObservePreservationPair(repository, record, prepared.Location, attempt, operation, "salvage",
+                    PreservationMessage(record, task, attempt, operation, title), cancellation);
+                if (pair.Scope is { } scope)
                 {
-                    null or GitAncestry.Yes => ImmutableArray.Create(tip),
-                    GitAncestry.No => ImmutableArray.Create(tip, branchTip!.Value),
-                    GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail),
-                    _ => throw new InvalidOperationException(),
-                };
-                var recipe = new CommitRecipe(capture.Tree, parents,
+                    step = "salvage-diverged";
+                    divergence = RecordPreservationDivergence(permit, operation, "salvage", pair.First, pair.Second, scope);
+                    return SalvageBlock(permit, operation, step, DivergenceBlock(operation, task, attempt, inputs, divergence));
+                }
+                var state = pair.First.State;
+                var tip = state.Head!.Value;
+                var branchTip = state.Branch;
+                var recipe = new CommitRecipe(state.Files, PreservationParents(repository, branchTip, tip),
                     $"Salvage {title}\n\nIDP-Run: {run.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\n",
                     "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>",
                     DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds()));
@@ -77,7 +77,7 @@ internal sealed partial class Materializer
                 var reference = RunLayout.SalvageRef(record.RunKey!, record.TaskKeys[task], attempt);
                 if (Value(repository.ReadRef(reference)) is not null)
                     reference = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], attempt, operation);
-                plan = new(task, attempt, tip, branchTip, capture.IndexBefore, recipe, commit, untracked, reference);
+                plan = new(task, attempt, tip, branchTip, state.Index?.Content, recipe, commit, state.Untracked, reference) { Preserved = state };
                 step = "salvage-plan";
                 Journal("salvage-plan", () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }

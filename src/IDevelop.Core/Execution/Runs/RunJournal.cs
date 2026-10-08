@@ -20,7 +20,7 @@ internal static class RunJournal
         "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured", "captureDisposed"];
 
     private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
-        "prepared", "blocked", "salvageRetained", "blockResolved"];
+        "prepared", "blocked", "salvageRetained", "blockResolved", "preserved", "preservationDiverged"];
 
     public static string Encode(RunEntry entry) => JsonSerializer.Serialize(entry, Options) + "\n";
 

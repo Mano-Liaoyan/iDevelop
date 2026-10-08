@@ -97,4 +97,13 @@ internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int 
     ImmutableArray<ConfigEntry> MergeConfig, CommitId AttributeSource);
 
 internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, AttemptId? Attempt, MaterializationProblem Problem,
-    InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null);
+    InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BlockScope? Scope { get; init; }
+}
+
+internal sealed record BlockScope(ImmutableArray<string> Paths, ImmutableArray<string> Refs, bool IndexLock);
+
+internal sealed record PreservationObservation(int Ordinal, DateTimeOffset Started, DateTimeOffset Completed, CheckoutState State,
+    CommitRecipe Recipe, CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, ImmutableArray<StageEntry> Stages);

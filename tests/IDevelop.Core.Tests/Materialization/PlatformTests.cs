@@ -130,7 +130,7 @@ public sealed class PlatformTests
         Assert.Equal("fb88360ef5a51929c241ce46428ee8571a45722c\n", f.Git.Run(Path.Combine(ready.Checkout, "m"), "rev-parse", "HEAD").Text);
         f.Git.Write("m/module.txt", "dirty module\n", ready.Checkout);
         f.Git.Write("m/new.txt", "module unfinished\n", ready.Checkout);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("dirty module\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/module.txt")));
         Assert.Equal("module unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/new.txt")));
         Assert.Equal("160000 commit fb88360ef5a51929c241ce46428ee8571a45722c\tm\n", f.Git.Git("ls-tree", retained.Commit.Hex, "m"));

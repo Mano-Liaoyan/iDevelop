@@ -15,3 +15,11 @@ internal abstract record RetryReset
     internal sealed record Blocked(MaterializationBlock Block) : RetryReset;
     internal sealed record Rejected(RunRejection Reason) : RetryReset;
 }
+
+internal abstract record Preservation
+{
+    private Preservation() { }
+    internal sealed record Preserved(RunEvent.Preserved Receipt, CommitId Commit) : Preservation;
+    internal sealed record Blocked(MaterializationBlock Block) : Preservation;
+    internal sealed record Rejected(RunRejection Reason) : Preservation;
+}

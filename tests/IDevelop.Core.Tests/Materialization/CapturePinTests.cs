@@ -46,7 +46,7 @@ public sealed class CapturePinTests
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "cat-file", "-e", observations[0].Candidate.Hex).ExitCode);
         Assert.Equal("writer\n", f.Git.Git("show", observations[0].Candidate.Hex + ":result.txt"));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", root.Hex).ExitCode);
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+        Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         f.Git.Write("sibling.txt", "sibling\n", sibling.Checkout);
         await f.Close(sibling);
@@ -58,7 +58,7 @@ public sealed class CapturePinTests
         Assert.Equal(RunPhase.Failed, Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed)).Record.Phase);
         var sequence = f.Read().Sequence;
         var operation = f.Op();
-        Assert.Equal(10, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+        Assert.Equal(12, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(0, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Equal(sequence, f.Read().Sequence);
@@ -238,15 +238,15 @@ public sealed class CapturePinTests
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(blocked, "Rechecked.")));
         var salvage = f.Op();
-        Assert.Throws<PublicationTests.Crash>(() => f.Materializer(probe: point =>
+        await Assert.ThrowsAsync<PublicationTests.Crash>(async () => await f.Materializer(probe: point =>
         {
             if (point == "journal.salvage-plan.after") throw new PublicationTests.Crash();
         }).Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
-        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
+        Assert.Equal(7, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
         var operation = f.Op();
-        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+        Assert.Equal(7, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(0, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
     }

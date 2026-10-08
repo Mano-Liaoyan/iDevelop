@@ -53,10 +53,10 @@ public sealed class PreparationTests
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
         await f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
         var salvageOperation = f.Op();
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
         Assert.Equal("edited\n", f.Git.Git("show", retained.Commit.Hex + ":a/inside.txt"));
-        Assert.Equal(retained, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(retained, await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         var resetOperation = f.Op();
         var confirmation = f.Op();
         var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, retained.Receipt.Plan, confirmation));
@@ -92,9 +92,9 @@ public sealed class PreparationTests
         }
         else
         {
-            var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+            var blocked = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
             block = blocked.Block;
-            Assert.Equal(blocked, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+            Assert.Equal(blocked, await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         }
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The index hides changes to outside/kept.bin with assume-unchanged or skip-worktree.", block.Detail);

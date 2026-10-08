@@ -33,7 +33,7 @@ public sealed class SalvageTests
         f.Git.Write("a/new.txt", "new\n", ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = retained.Commit.Hex;
         Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
         Assert.Equal("new\n", f.Git.Git("show", commit + ":a/new.txt"));
@@ -59,7 +59,7 @@ public sealed class SalvageTests
         File.WriteAllText(file, "INSIDE\n");
         File.SetLastWriteTimeUtc(file, old);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = retained.Commit.Hex;
         Assert.Equal("INSIDE\n", f.Git.Git("show", commit + ":a/inside.txt"));
     }
@@ -69,7 +69,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f, ownCommit: true);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         f.Git.Git("branch", "foreign", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67");
         f.Git.Git("symbolic-ref", ready.Execution.Location.Owner.Branch, "refs/heads/foreign");
         var confirmation = f.Op();
@@ -91,7 +91,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f, ownCommit: true);
-        var retained = afterSalvage ? Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation,
+        var retained = afterSalvage ? Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation,
             ready.Execution.Launch.Attempt)) : null;
         Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
         var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
@@ -101,9 +101,9 @@ public sealed class SalvageTests
         MaterializationBlock block;
         if (retained is null)
         {
-            var blocked = Assert.IsType<Salvage.Blocked>(materializer.Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+            var blocked = Assert.IsType<Salvage.Blocked>(await materializer.Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
             block = blocked.Block;
-            Assert.Equal(blocked, materializer.Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+            Assert.Equal(blocked, await materializer.Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         }
         else
         {
@@ -146,7 +146,7 @@ public sealed class SalvageTests
         var repository = f.Git.Open();
         var index = GitFixture.Read(repository.IndexPath(ready.Checkout));
         var before = File.ReadAllBytes(index);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Equal("unfinished\n", f.Git.Git("show", Commit + ":new.txt"));
         Assert.Equal("modified\n", f.Git.Git("show", Commit + ":a.txt"));
@@ -176,7 +176,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var path = mode == "new" ? "other.txt" : mode == "tracked" ? "a.txt" : "new.txt";
         f.Git.Write(path, "changed\n", ready.Checkout);
         if (mode == "staged") Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "new.txt").ExitCode);
@@ -194,7 +194,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         f.Git.Write("a.txt", "staged\n", ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a.txt").ExitCode);
         f.Git.Write("a.txt", "modified\n", ready.Checkout);
@@ -211,7 +211,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var confirmation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-plan.after") throw new Crash(); })
             .ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, confirmation));
@@ -248,7 +248,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DivergedWriter(f, detached);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
             new[] { "81ddb7c330112c7f16700ed002803a04b0bce693" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
@@ -275,7 +275,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DivergedWriter(f, true);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         f.Git.Git("worktree", "add", ".worktrees/foreign", "idp/93f23689/task/90d5b0a2");
         var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
@@ -289,9 +289,9 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var first = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var first = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         f.Git.Write("new.txt", "changed\n", ready.Checkout);
-        var second = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var second = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, GitFixture.Read(f.Git.Open().ReadRef(first.Receipt.Ref))?.Hex);
         Assert.Equal("1df94d83e2d8a4355dd2a2024eca4475c2b11b64", second.Commit.Hex);
         Assert.Contains("/resalvage/", second.Receipt.Ref);
@@ -314,7 +314,7 @@ public sealed class SalvageTests
         using (var baseline = new PreparationFixture(FixtureWorkflow(Writer(T))))
         {
             var writer = await Setup(baseline);
-            Assert.IsType<Salvage.Retained>(baseline.Materializer(probe: steps.Add).Salvage(baseline.Lease(writer.Execution.Location.Owner.Task), Operation,
+            Assert.IsType<Salvage.Retained>(await baseline.Materializer(probe: steps.Add).Salvage(baseline.Lease(writer.Execution.Location.Owner.Task), Operation,
                 writer.Execution.Launch.Attempt));
         }
         Assert.Contains("git.salvage-ref.after", steps);
@@ -325,9 +325,9 @@ public sealed class SalvageTests
             var ready = await Setup(f);
             var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
             var bytes = File.ReadAllBytes(index);
-            Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
+            await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == point) throw new Crash(); })
                 .Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
-            var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+            var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
             Assert.Equal(Commit, retained.Commit.Hex);
             Assert.Equal(bytes, File.ReadAllBytes(index));
             Assert.Single(f.Read().Receipts.Values, entry => entry.Event is RunEvent.SalvageRetained);
@@ -339,7 +339,7 @@ public sealed class SalvageTests
                 var claim = f.Store.Claim(f.Lease(f.Read().Attempts[next.Attempt].Task), f.Op(), next, f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash);
                 Assert.Equal("RunStopped", Assert.IsType<RunDecision.Rejected>(claim).Reason.Problem.ToString());
             }
-            Assert.Equal(retained, Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation,
+            Assert.Equal(retained, Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation,
                 ready.Execution.Launch.Attempt)));
         }
     }
@@ -354,7 +354,7 @@ public sealed class SalvageTests
         using (var baseline = new PreparationFixture(FixtureWorkflow(Writer(T))))
         {
             var ready = detached ? await DivergedWriter(baseline, true) : await FailedWriter(baseline, ownCommit);
-            var retained = Assert.IsType<Salvage.Retained>(baseline.Materializer().Salvage(baseline.Lease(ready.Execution.Location.Owner.Task), Operation,
+            var retained = Assert.IsType<Salvage.Retained>(await baseline.Materializer().Salvage(baseline.Lease(ready.Execution.Location.Owner.Task), Operation,
                 ready.Execution.Launch.Attempt));
             Assert.IsType<RetryReset.Reset>(baseline.Materializer(probe: steps.Add).ResetForRetry(baseline.Lease(T), ResetOperation, retained.Receipt.Plan, baseline.Op()));
         }
@@ -367,7 +367,7 @@ public sealed class SalvageTests
         {
             using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
             var ready = detached ? await DivergedWriter(f, true) : await FailedWriter(f, ownCommit);
-            var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+            var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
             if (!detached) Assert.Equal(ownCommit ? "fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b" : Commit, retained.Commit.Hex);
             Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
                 new[] { ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : Target },
@@ -400,7 +400,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var confirmation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
             .ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, confirmation));
@@ -424,7 +424,7 @@ public sealed class SalvageTests
         f.ReleaseControl();
         Assert.True(f.Permit.Held);
         Assert.Equal(new[] { ready.Execution.Launch }, f.Read().Fenced);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("ConfirmationRequired", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation,
             retained.Receipt.Plan, default)).Reason.Problem.ToString());
         Assert.Equal("InvalidData", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, f.Op(), f.Op())).Reason.Problem.ToString());
@@ -473,7 +473,7 @@ public sealed class SalvageTests
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
         f.Git.Write("cache.txt", "cache\n", ready.Checkout);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "git.retry-reset.after") throw new Crash(); })
             .ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
@@ -489,7 +489,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-reset-observed.after") throw new Crash(); })
             .ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         f.Git.Write("a.txt", "later tracked\n", ready.Checkout);
@@ -514,7 +514,7 @@ public sealed class SalvageTests
         File.AppendAllText(Path.Combine(f.Git.Open().CommonDirectory, "info/exclude"), "/a.txt\n");
         f.Git.Write("a.txt", "ignored unfinished\n", ready.Checkout);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal("ignored unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -537,7 +537,7 @@ public sealed class SalvageTests
         f.Git.Write("new.txt", "outer unfinished\n", ready.Checkout);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var before = File.ReadAllBytes(GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)));
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("outer unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("dirty module\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/module.txt")));
         Assert.Equal("module unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/new.txt")));
@@ -563,7 +563,7 @@ public sealed class SalvageTests
         else if (Enum.TryParse<RunOutcome>(phase, out var outcome)) Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), outcome));
         f.Git.Write("a.txt", "modified\n", checkout);
         f.Git.Write("new.txt", "unfinished\n", checkout);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), Operation, A1));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), Operation, A1));
         Assert.Equal("627595566cb613dbc7757977f238ad71adad6983", retained.Commit.Hex);
         Assert.Equal(phase, f.Read().Phase.ToString());
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
@@ -581,12 +581,12 @@ public sealed class SalvageTests
         RootExitTests.Claim(f, ready);
         var journal = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl");
         var bytes = File.ReadAllBytes(journal);
-        Assert.Equal("UnresolvedOwnership", Assert.IsType<Salvage.Rejected>(f.Materializer().Salvage(f.Lease(T), Operation,
+        Assert.Equal("UnresolvedOwnership", Assert.IsType<Salvage.Rejected>(await f.Materializer().Salvage(f.Lease(T), Operation,
             ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
         Assert.Equal(bytes, File.ReadAllBytes(journal));
         Assert.Empty(f.Read().Salvages);
         Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), ready.Execution.Launch, new RootExit.Exited(1)));
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.False(f.Read().Closures.ContainsKey(ready.Execution.Launch.Attempt));
         Assert.Empty(f.Read().Results);
@@ -609,17 +609,17 @@ public sealed class SalvageTests
         File.WriteAllText(indexLock, "lock\n");
         if (resolution)
         {
-            Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(f.Materializer()
+            Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(await f.Materializer()
                 .Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
             File.Delete(indexLock);
         }
-        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
         {
             if (resolution ? step.StartsWith("journal.maintenance-resolve-", StringComparison.Ordinal) && step.EndsWith("." + side, StringComparison.Ordinal)
                 : step == "journal.salvage-index-lock-blocked." + side) throw new Crash();
         }).Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         if (!resolution) File.Delete(indexLock);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Single(f.Read().Salvages);
         Assert.All(f.Read().Blocks.Values, block => Assert.True(block.Resolved));
@@ -655,13 +655,13 @@ public sealed class SalvageTests
         // Git for Windows hides the .git file, and Windows refuses to overwrite a hidden file.
         File.SetAttributes(gitFile, FileAttributes.Normal);
         File.WriteAllText(gitFile, "gitdir: " + other.Open().CommonDirectory + "\n");
-        var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("foreign lock\n", File.ReadAllText(foreignLock));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
         File.WriteAllBytes(gitFile, original);
         File.SetAttributes(gitFile, attributes);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Equal("foreign lock\n", File.ReadAllText(foreignLock));
     }
@@ -683,7 +683,7 @@ public sealed class SalvageTests
         using (var held = mode == "task-lock" ? StandaloneLease.TryTake(f.Git.Folder, T) : null)
         {
             if (mode == "ownership") f.Git.Git("worktree", "unlock", ready.Execution.Location.Owner.RelativePath);
-            var result = f.Materializer().Salvage(lease, Operation, ready.Execution.Launch.Attempt);
+            var result = await f.Materializer().Salvage(lease, Operation, ready.Execution.Launch.Attempt);
             if (mode == "task-lock")
             {
                 Assert.NotNull(held);
@@ -709,10 +709,10 @@ public sealed class SalvageTests
             Assert.Empty(f.Read().Salvages);
         }
         if (mode == "ownership") f.Git.Git("worktree", "lock", "--reason", "idevelop 93f23689/90d5b0a2", ready.Execution.Location.Owner.RelativePath);
-        Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+        Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.Equal("lock\n", File.ReadAllText(indexLock));
         File.Delete(indexLock);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, retained.Commit.Hex);
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Single(f.Read().Salvages);
@@ -748,7 +748,7 @@ public sealed class SalvageTests
         }).ExitCode);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
         await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("3292b7a2adf71a45a545bbfb04cefc7d663bbe93", branchCommit);
         Assert.Equal(mode == "rewound" ? "76e7826be3fb35d52157bac1d88e8f6a188758e6" : "33893cedcad25a1a43d30ed215d4813b66e66853", retained.Commit.Hex);
@@ -769,7 +769,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
         var before = File.ReadAllBytes(index);
         File.SetLastWriteTimeUtc(Path.Combine(ready.Checkout, "plan.txt"), DateTime.UtcNow.AddMinutes(1));
@@ -791,7 +791,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var operation = f.Op();
         var confirmation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-attach-observed.after") throw new Crash(); })
@@ -810,7 +810,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var fresh = f.Git.Run(f.Git.Folder, "commit-tree", Target + "^{tree}", "-p", Target, "-m", "out of band").Text.Trim();
         Assert.Equal("8d14445e6226129e327b4f1f807c957d99479399", fresh);
         f.Git.Git("update-ref", ready.Execution.Location.Owner.Branch, fresh);
@@ -828,7 +828,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var operation = f.Op();
         var confirmation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "git.retry-attach.after") throw new Crash(); })
@@ -848,11 +848,11 @@ public sealed class SalvageTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
         var operation = f.Op();
-        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.salvage-plan.after") throw new Crash(); })
+        await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == "journal.salvage-plan.after") throw new Crash(); })
             .Salvage(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         var plan = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Salvage>());
         f.Git.Git("update-ref", plan.Ref, plan.Commit.Hex);
-        var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("Publication ref refs/idp/93f23689/salvage/90d5b0a2/00000000-0000-0000-0000-000000000102 has unexpected value 0dbf5cbc9310ef3abbc28073142652917c69dc2f.", blocked.Block.Detail);
         Assert.Equal(0, f.Read().Receipts.Values.Count(entry => entry.Event is RunEvent.SalvageRetained));
@@ -863,7 +863,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f, ownCommit: true);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         f.Git.Git("update-ref", ready.Execution.Location.Owner.Branch, Target);
         var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op()));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
@@ -876,7 +876,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var operation = f.Op();
         var confirmation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.retry-reset-observed.after") throw new Crash(); })
@@ -898,7 +898,7 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         f.Git.Git("branch", "foreign", "81ddb7c330112c7f16700ed002803a04b0bce693");
         var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer(probe: step =>
         {
@@ -915,8 +915,8 @@ public sealed class SalvageTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
-        var first = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
-        var second = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        var first = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var second = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", first.Commit.Hex);
         Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", second.Commit.Hex);
         Assert.Equal("refs/idp/93f23689/resalvage/90d5b0a2/00000000-0000-0000-0000-000000000102/00000000-0000-0000-0000-000000001006", second.Receipt.Ref);
@@ -932,7 +932,7 @@ public sealed class SalvageTests
         var ready = await FailedWriter(f, ownCommit: true);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "--detach", "HEAD").ExitCode);
         f.Git.Git("update-ref", "-d", ready.Execution.Location.Owner.Branch);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b", retained.Commit.Hex);
         Assert.Null(Assert.IsType<MaterializationPlan.Salvage>(f.Read().Plans[retained.Receipt.Plan]).BranchTip);
         Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
@@ -954,13 +954,13 @@ public sealed class SalvageTests
         var lockPath = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout)) + ".lock";
         var operation = f.Op();
         File.WriteAllText(lockPath, "first\n");
-        var first = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        var first = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
         Assert.Equal(MaterializationProblem.DirtyWorktree, first.Problem);
         Assert.Equal("first\n", LockEvidence(first));
         var key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked.")));
         File.WriteAllText(lockPath, "second\n");
-        var second = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        var second = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
         Assert.Equal(MaterializationProblem.DirtyWorktree, second.Problem);
         Assert.Equal("second\n", LockEvidence(second));
         Assert.Equal(new[] { (MaterializationProblem.DirtyWorktree, true), (MaterializationProblem.DirtyWorktree, false) },
@@ -968,7 +968,7 @@ public sealed class SalvageTests
         File.Delete(lockPath);
         key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked second lock.")));
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("done\n", f.Git.Git("show", retained.Commit.Hex + ":result.txt"));
 
         string LockEvidence(MaterializationBlock block)

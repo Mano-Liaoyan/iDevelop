@@ -11,7 +11,8 @@ internal static partial class RunValidation
             return RunProblem.UnsupportedSchema;
         }
         if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced or RunEvent.RootExitObserved or
-            RunEvent.TurnCaptured or RunEvent.CaptureDisposed or RunEvent.TurnClosed { Capture: not null })
+            RunEvent.TurnCaptured or RunEvent.CaptureDisposed or RunEvent.Preserved or RunEvent.PreservationDiverged or
+            RunEvent.Planned { Plan: MaterializationPlan.Preservation } or RunEvent.TurnClosed { Capture: not null })
         {
             return RunProblem.UnsupportedSchema;
         }
@@ -54,8 +55,11 @@ internal static partial class RunValidation
         RunEvent.Blocked { Block: var block } => block.Operation.Value != Guid.Empty && block.Task.Value != Guid.Empty &&
             block.Attempt?.Value != Guid.Empty && block.Inputs?.Value != Guid.Empty && Enum.IsDefined(block.Problem) &&
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
-            (block.Conflict is null || Conflict(block.Conflict)),
+            (block.Conflict is null || Conflict(block.Conflict)) && (block.Scope is null || Scope(block.Scope)),
         RunEvent.SalvageRetained retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
+        RunEvent.Preserved retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
+        RunEvent.PreservationDiverged diverged => diverged.Operation.Value != Guid.Empty &&
+            Observation(diverged.First, 1) && Observation(diverged.Second, 2) && Scope(diverged.Scope),
         RunEvent.BlockResolved resolved => resolved.Block.Value != Guid.Empty && !string.IsNullOrWhiteSpace(resolved.Reason),
         _ => false,
     }) ? null : RunProblem.InvalidData;
@@ -74,7 +78,10 @@ internal static partial class RunValidation
             Revision.IsCommit(p.VerifiedTip.Hex) && Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) &&
             p.Report is not null && !p.Artifacts.IsDefault && p.Artifacts.All(Artifact),
         MaterializationPlan.Salvage p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && Revision.IsCommit(p.ObservedTip.Hex) && (p.BranchTip is null || Revision.IsCommit(p.BranchTip.Value.Hex)) &&
-            Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) && !p.Untracked.IsDefault && p.Untracked.All(Evidence) && Reference(p.Ref),
+            Hash(p.IndexBefore) && Recipe(p.Recipe) && Revision.IsCommit(p.Commit.Hex) && !p.Untracked.IsDefault && p.Untracked.All(Evidence) && Reference(p.Ref) && (p.Preserved is null || State(p.Preserved)),
+        MaterializationPlan.Preservation p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && State(p.Preserved) &&
+            Recipe(p.Recipe) && p.Recipe.Tree == p.Preserved.Files && Revision.IsCommit(p.Commit.Hex) &&
+            !p.Outbox.IsDefault && p.Outbox.All(PreservedArtifact) && Reference(p.Ref),
         MaterializationPlan.RetryReset p => p.Task.Value != Guid.Empty && p.Salvaged.Value != Guid.Empty && p.SalvagePlan.Value != Guid.Empty &&
             (p.From is null || Revision.IsCommit(p.From.Value.Hex)) && Revision.IsCommit(p.To.Hex) && !p.Remove.IsDefault && p.Remove.All(Evidence),
         _ => false,
@@ -114,6 +121,30 @@ internal static partial class RunValidation
 
     private static bool Artifact(ArtifactRecord file) => Path(file.Name) && !file.Name.Contains('/') && Path(file.StoredPath) &&
         Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0;
+
+    private static bool PreservedArtifact(ArtifactRecord file) => Path(file.Name) && Path(file.StoredPath) &&
+        Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0;
+
+    private static bool State(CheckoutState state) =>
+        (state.Branch is null || Revision.IsCommit(state.Branch.Value.Hex)) &&
+        (state.Head is null || Revision.IsCommit(state.Head.Value.Hex)) &&
+        (state.SymbolicHead is null || Reference(state.SymbolicHead)) && Revision.IsCommit(state.Files.Hex) &&
+        (state.Index is null || Evidence(state.Index)) && (state.IndexTree is null || Revision.IsCommit(state.IndexTree.Value.Hex)) &&
+        !state.Untracked.IsDefault && state.Untracked.All(Evidence) && (state.IndexLock is null || Evidence(state.IndexLock.Bytes));
+
+    private static bool Scope(BlockScope scope) => !scope.Paths.IsDefault && scope.Paths.All(Path) &&
+        !scope.Refs.IsDefault && scope.Refs.All(reference => reference == "HEAD" || ScopedReference(reference));
+
+    private static bool ScopedReference(string reference) => Reference(reference) && !reference.EndsWith('.') &&
+        !reference.Contains("@{", StringComparison.Ordinal) && !reference.Any(c => c is '~' or '^' or '?' or '*' or '[' or '\u007f') &&
+        reference.Split('/').All(part => !part.StartsWith('.') && !part.EndsWith(".lock", StringComparison.Ordinal));
+
+    private static bool Observation(PreservationObservation observation, int ordinal) => observation.Ordinal == ordinal &&
+        observation.Completed >= observation.Started && State(observation.State) && Recipe(observation.Recipe) &&
+        observation.Recipe.Tree == observation.State.Files && Revision.IsCommit(observation.Commit.Hex) &&
+        !observation.Outbox.IsDefault && observation.Outbox.All(PreservedArtifact) &&
+        !observation.Stages.IsDefault && observation.Stages.All(stage => stage.Stage is >= 1 and <= 3 &&
+            Path(stage.Path) && Revision.IsCommit(stage.Object) && stage.Mode.Length == 6 && stage.Mode.All(c => c is >= '0' and <= '7'));
 
     private static bool StoredEvidence(string path) => path.Split('/') is ["evidence", var operation, var name] &&
         Guid.TryParseExact(operation, "D", out var id) && id != Guid.Empty && Path(name);

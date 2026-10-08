@@ -19,11 +19,15 @@ internal static partial class RunReducer
         }
         return e switch
         {
-            RunEvent.Planned { Plan: MaterializationPlan.Salvage } => true,
+            RunEvent.Planned { Plan: MaterializationPlan.Salvage or MaterializationPlan.Preservation } => true,
             RunEvent.GitIntended { Mutation: GitMutation.MoveRef move } intent =>
-                record.Plans.GetValueOrDefault(intent.Plan) is MaterializationPlan.Salvage salvage &&
-                move.Change.Expected is null && move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
-            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained => true,
+                move.Change.Expected is null && (record.Plans.GetValueOrDefault(intent.Plan) switch
+                {
+                    MaterializationPlan.Salvage salvage => move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
+                    MaterializationPlan.Preservation preservation => move.Change.Ref == preservation.Ref && move.Change.Target == preservation.Commit,
+                    _ => false,
+                }),
+            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged => true,
             RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured or RunEvent.CaptureDisposed => record.Phase == RunPhase.Abandoned,
             _ => false,
         };
@@ -138,6 +142,15 @@ internal static partial class RunReducer
                     return Reject(RunProblem.InvalidData);
                 }
                 return (record with { Salvages = record.Salvages.Add(retained.Plan, retained) }, null);
+            case RunEvent.Preserved preserved:
+                if (record.Plans.GetValueOrDefault(preserved.Plan) is not MaterializationPlan.Preservation preservation ||
+                    preserved.Ref != preservation.Ref || preserved.Commit != preservation.Commit || record.Preservations.ContainsKey(preserved.Plan) ||
+                    !ObservedMove(record, preserved.Plan, preserved.Ref, null, preserved.Commit))
+                    return Reject(RunProblem.InvalidData);
+                return (record with { Preservations = record.Preservations.Add(preserved.Plan, preserved) }, null);
+            case RunEvent.PreservationDiverged diverged:
+                if (record.PreservationDivergences.ContainsKey(diverged.Operation)) return Reject(RunProblem.InvalidData);
+                return (record with { PreservationDivergences = record.PreservationDivergences.Add(diverged.Operation, diverged) }, null);
             case RunEvent.BlockResolved resolved:
                 if (!record.Blocks.TryGetValue(resolved.Block, out var state) || state.Resolved)
                 {
@@ -295,6 +308,15 @@ internal static partial class RunReducer
                 return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&
                     salvage.Recipe.Parents.Length is 1 or 2 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
                     (salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents[1] == salvage.BranchTip) ? null : RunProblem.InvalidData;
+            case MaterializationPlan.Preservation preservation:
+                if (!record.Attempts.TryGetValue(preservation.Attempt, out var preservedAttempt) || preservedAttempt.Task != preservation.Task ||
+                    !record.Preparations.ContainsKey(new(preservation.Attempt, 1)) || preservation.Recipe.Tree != preservation.Preserved.Files ||
+                    record.RunKey is not { } preservedRun || !record.TaskKeys.TryGetValue(preservation.Task, out var preservedKey))
+                    return RunProblem.InvalidData;
+                var prefix = RunLayout.PreserveRef(preservedRun, preservedKey, new(Guid.Empty))[..^36];
+                return preservation.Ref.StartsWith(prefix, StringComparison.Ordinal) &&
+                    Guid.TryParseExact(preservation.Ref[prefix.Length..], "D", out var operation) && operation != Guid.Empty
+                    ? null : RunProblem.InvalidData;
             case MaterializationPlan.RetryReset reset:
                 return record.Salvages.ContainsKey(reset.SalvagePlan) &&
                     record.Plans.GetValueOrDefault(reset.SalvagePlan) is MaterializationPlan.Salvage retained &&

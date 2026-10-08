@@ -36,6 +36,7 @@ internal abstract record LayoutKey
 [JsonDerivedType(typeof(Join), "join")]
 [JsonDerivedType(typeof(Salvage), "salvage")]
 [JsonDerivedType(typeof(RetryReset), "retryReset")]
+[JsonDerivedType(typeof(Preservation), "preservation")]
 internal abstract record MaterializationPlan
 {
     private MaterializationPlan() { }
@@ -57,7 +58,14 @@ internal abstract record MaterializationPlan
     }
 
     internal sealed record Salvage(TaskId Task, AttemptId Attempt, CommitId ObservedTip, CommitId? BranchTip, Digest? IndexBefore, CommitRecipe Recipe,
-        CommitId Commit, ImmutableArray<EvidenceFile> Untracked, string Ref) : MaterializationPlan;
+        CommitId Commit, ImmutableArray<EvidenceFile> Untracked, string Ref) : MaterializationPlan
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CheckoutState? Preserved { get; init; }
+    }
+
+    internal sealed record Preservation(TaskId Task, AttemptId Attempt, CheckoutState Preserved, CommitRecipe Recipe,
+        CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, string Ref) : MaterializationPlan;
 
     internal sealed record RetryReset(TaskId Task, AttemptId Salvaged, OperationId SalvagePlan, CommitId? From, CommitId To,
         ImmutableArray<EvidenceFile> Remove) : MaterializationPlan;

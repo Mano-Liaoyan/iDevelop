@@ -164,7 +164,13 @@ internal sealed partial class Materializer
     private void VerifyRetryInventory(GitRepository repository, string checkout, MaterializationPlan.Salvage salvage, TreeId tree)
     {
         var capture = Value(Mutate("retry-capture", () => repository.Capture(checkout)));
-        if (capture.Tree != tree || capture.IndexBefore != salvage.IndexBefore || capture.IndexBefore != capture.IndexAfter || !RunReducer.Same(Untracked(repository, checkout), salvage.Untracked))
+        var preserved = salvage.Preserved;
+        var indexBytes = preserved is null ? null : Value(repository.IndexBytes(checkout));
+        var indexTree = preserved is null ? (TreeId?)null : Value(repository.WriteTree(indexBytes is null ? [] : GitRepository.ParseIndex(indexBytes)));
+        if (capture.Tree != (preserved?.Files ?? tree) || capture.IndexBefore != (preserved is null ? salvage.IndexBefore : preserved.Index?.Content) ||
+            capture.IndexBefore != capture.IndexAfter || preserved is not null &&
+                (indexTree != preserved.IndexTree || (indexBytes is null ? (Digest?)null : Revision.Hash(indexBytes)) != preserved.Index?.Content) ||
+            !RunReducer.Same(Untracked(repository, checkout), preserved?.Untracked ?? salvage.Untracked))
             throw Fault(MaterializationProblem.DirtyWorktree, "The tracked or nonignored untracked inventory differs from retained salvage.");
     }
 
