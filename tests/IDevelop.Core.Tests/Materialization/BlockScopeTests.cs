@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
@@ -7,6 +8,8 @@ namespace IDevelop.Core.Tests.Materialization;
 
 public sealed class BlockScopeTests
 {
+    private sealed class Crash : Exception;
+
     [LinuxOrWindowsTheory]
     [InlineData(true)]
     [InlineData(false)]
@@ -135,6 +138,118 @@ public sealed class BlockScopeTests
         var replay = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), failed, previous, confirmation, first));
         Assert.Equal(second, replay.Receipt.Baseline.Preservation);
         Assert.Equal("keep more\n", File.ReadAllText(Path.Combine(ready.Checkout, "keep.txt")));
+    }
+
+    [LinuxOrWindowsTheory]
+    [InlineData("restore")]
+    [InlineData("baseline")]
+    public async Task A_receipt_cannot_resolve_a_block_its_command_did_not_check(string command)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        var foreign = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, foreign, new RunEvent.Blocked(
+            new(foreign, T, attempt, MaterializationProblem.InputUnavailable, ready.Execution.Inputs, [], "Another operation's evidence.")
+            { Scope = new BlockScope.Operation() })).GetType().Name);
+        var stash = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, stash, new RunEvent.Blocked(
+            new(stash, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Stash drift.")
+            { Scope = new BlockScope.Refs(["refs/stash"]) })).GetType().Name);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var plan = OperationIds.Derive(operation, "restore-plan");
+        RunEvent forged = command == "restore"
+            ? new RunEvent.Restored(plan, [drift, foreign])
+            : new RunEvent.RecoveryBaselined(new(attempt, confirmation, "fixture", preservation), [drift, stash]);
+        var identity = Revision.Hash("unused");
+        if (command == "restore")
+        {
+            var preview = RestoreTests.Preview(f, ready, preservation);
+            identity = preview.Identity;
+            Assert.Equal(new[] { drift }, preview.Repairs);
+            Assert.Equal(new[] { stash }, preview.Rechecks);
+            Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restored.before") throw new Crash(); })
+                .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        }
+        var sequence = f.Read().Sequence;
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), forged)).Reason.Problem.ToString());
+        Assert.Equal(sequence, f.Read().Sequence);
+        ImmutableArray<OperationId> resolved = command == "restore"
+            ? Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation,
+                identity)).Receipt.Resolved
+            : Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), operation, attempt, confirmation,
+                preservation)).Receipt.Resolved;
+        Assert.Equal(command == "restore" ? new[] { drift, stash } : new[] { drift }, resolved);
+        Assert.False(f.Read().Blocks[foreign].Resolved);
+        Assert.Equal(command == "restore", f.Read().Blocks[stash].Resolved);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Publish_reruns_past_its_own_evidence_block_but_not_past_checkout_drift(bool own)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await DoneWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var publication = f.Op();
+        var block = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, block, new RunEvent.Blocked(
+            new(publication, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "The frozen publication recipe produced a different commit.")
+            { Scope = own ? new BlockScope.Operation() : BlockScope.Checkout.Whole })).GetType().Name);
+        var outcome = f.Materializer().Publish(f.Lease(T), publication, attempt);
+        if (own)
+        {
+            Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(outcome).Result.Report);
+            Assert.True(f.Read().Blocks[block].Resolved);
+            Assert.Single(f.Read().Results);
+        }
+        else
+        {
+            Assert.Equal("The frozen publication recipe produced a different commit.", Assert.IsType<Publication.Blocked>(outcome).Block.Detail);
+            Assert.False(f.Read().Blocks[block].Resolved);
+            Assert.Empty(f.Read().Results);
+        }
+    }
+
+    [Fact]
+    public async Task A_ready_preparation_resolves_only_its_own_earlier_blocks()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var operation = f.Op();
+        var own = f.Op();
+        var other = f.Op();
+        foreach (var (id, recorder) in new[] { (own, operation), (other, f.Op()) })
+            Assert.Equal("Recorded", f.Store.Record(f.Permit, id, new RunEvent.Blocked(
+                new(recorder, T, null, MaterializationProblem.InputUnavailable, null, [], "Stored input was unreadable.")
+                { Scope = new BlockScope.Operation() })).GetType().Name);
+        Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
+        Assert.True(f.Read().Blocks[own].Resolved);
+        Assert.False(f.Read().Blocks[other].Resolved);
+        Assert.Equal("Prepared.", Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
+    }
+
+    [Fact]
+    public void A_block_journaled_before_scopes_replays_as_unrecorded_and_encodes_unchanged()
+    {
+        var operation = new OperationId(Guid.Parse("6f9619ff-8b86-4d01-b42d-00c04fc964ff"));
+        var block = new MaterializationBlock(operation, T, null, MaterializationProblem.DirtyWorktree, null, [], "Checkout changed.")
+            { Scope = BlockScope.Checkout.Whole };
+        var scoped = RunJournal.Encode(new RunEntry(3, 1, operation, Revision.Hash("legacy"), At, new RunEvent.Blocked(block)));
+        const string scope = ",\"scope\":{\"type\":\"checkout\",\"paths\":[],\"branch\":false,\"head\":false,\"indexLock\":false}";
+        Assert.Contains(scope, scoped);
+        var legacy = scoped.Replace(scope, "");
+        var read = RunJournal.Decode(legacy);
+        Assert.Null(read.Rejection);
+        var entry = Assert.Single(read.Entries);
+        Assert.Same(BlockScope.Unrecorded.Value, Assert.IsType<RunEvent.Blocked>(entry.Event).Block.Scope);
+        Assert.Equal(legacy, RunJournal.Encode(entry));
     }
 
     private static string[] Open(PreparationFixture f) =>
