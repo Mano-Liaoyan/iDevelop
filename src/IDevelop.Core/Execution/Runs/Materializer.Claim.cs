@@ -34,9 +34,9 @@ internal sealed partial class Materializer
         }
         catch (Refusal refused) { return new ClaimCheck.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return ClaimBlock(new(operation, lease.Task, launch.Attempt, failed.Problem, inputs, [], failed.Message)); }
+        { return ClaimBlock(new(operation, lease.Task, launch.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return ClaimBlock(new(operation, lease.Task, launch.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return ClaimBlock(new(operation, lease.Task, launch.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
 
         ClaimCheck ClaimBlock(MaterializationBlock block) => Block(permit, operation, "claim", block) switch
         {
