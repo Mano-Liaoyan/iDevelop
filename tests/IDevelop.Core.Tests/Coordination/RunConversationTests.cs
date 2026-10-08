@@ -223,8 +223,9 @@ public sealed class RunConversationTests
         await f.Resume();
         await f.UntilStatus(RunStatus.NeedsAttention);
         var first = f.Attempt(A);
+        var cause = new AttemptCause.Retry(first, f.Preparation.Op());
         var retry = Assert.IsType<TurnStart.Started>(await f.Runs.StartTurn(f.Coordinator.Permit!,
-            new TurnIntent.First(f.Preparation.Op(), A, new AttemptCause.Retry(first, f.Preparation.Op()))).WaitAsync(Bound)).Turn;
+            new TurnIntent.First(RunOperations.First(f.Read().Id, A, cause), A, cause)).WaitAsync(Bound)).Turn;
         await retry.Settlement.WaitAsync(Bound);
         f.Coordinator.Refresh();
         await f.Until(view => view.Tasks[A] is { State: TaskState.Waiting } state && state.Attempt == retry.Address.Launch.Attempt);

@@ -94,6 +94,55 @@ public sealed class RecoveryTests
     }
 
     [Fact]
+    public async Task A_reserved_retry_resumes_with_its_own_cause_and_operation()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-A")).Exit(1), Writes(A, "result.txt", "done\n"))
+            .Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        await f.Resume();
+        var failed = await f.UntilStatus(RunStatus.NeedsAttention);
+        var previous = failed.Tasks[A].Attempt!.Value;
+        var cause = new AttemptCause.Retry(previous, f.Preparation.Op());
+        var lease = Assert.IsType<LeaseTake.Taken>(f.Coordinator.Permit!.TakeTask(A)).Lease;
+        using (lease)
+            Assert.IsType<Preparation.Ready>(await f.Preparation.Materializer().Prepare(lease, RunOperations.First(f.Preparation.RunId, A, cause), cause));
+        // The decision after the reservation already starts it, under the reservation's own operation.
+        var reserved = await f.Decided();
+        Assert.Contains(reserved.Tasks[A].State, new[] { TaskState.Starting, TaskState.Running, TaskState.Settling });
+        Assert.NotEqual(previous, reserved.Tasks[A].Attempt);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(["Initial", "Retry"], f.Read().Attempts.Values.Where(attempt => attempt.Task == A)
+            .OrderBy(attempt => f.Read().Receipts.Values.Single(entry => entry.Event is RunEvent.Reserved r && r.Attempt.Id == attempt.Id).Sequence)
+            .Select(attempt => attempt.Cause.GetType().Name));
+        Assert.Equal([2, 1], new[] { f.Launches(A), f.Launches(B) });
+        Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
+    }
+
+    [Fact]
+    public async Task Closing_the_project_gives_up_the_lease_of_a_held_disposition()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "result.txt", "done\n"));
+        await f.Open();
+        FileStream? held = null;
+        var journal = Path.Combine(f.Preparation.Git.Folder, ".idp", "runs", "write.lock");
+        f.Runs.Probe = point => { if (point == "coordinator.publish.before" && held is null) held = new(journal, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); };
+        try
+        {
+            await f.Resume();
+            Assert.Equal(RunProblem.JournalBusy, (await f.Until(view => view.Tasks[A].State == TaskState.Refused)).Tasks[A].Refusal!.Problem);
+            await f.Close();
+        }
+        finally { held?.Dispose(); }
+        await f.OpenAgain();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
+        Assert.Equal(1, f.Launches(A));
+    }
+
+    [Fact]
     public async Task Closing_the_project_interrupts_running_work_and_reopening_relaunches_nothing()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B), Agent(X, readOnly: true)], (A, B)));

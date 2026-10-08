@@ -124,6 +124,79 @@ public sealed class StopTests
     }
 
     [Fact]
+    public async Task A_start_blocked_after_the_stop_still_closes_its_reserved_attempt()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        using var claim = new TurnFixture.ProbeBarrier("runner.claim.before");
+        f.Runs.Probe = point =>
+        {
+            // B's claim waits here; by the time it rechecks its producer, the run is stopping and A's checkout drifted.
+            if (point != "runner.claim.before" || f.Read().Results.IsEmpty) return;
+            File.WriteAllText(Path.Combine(f.Checkout(A), "result.txt"), "late\n");
+            claim.Probe(point);
+        };
+        await f.Resume();
+        await claim.Reached.Task.WaitAsync(Bound);
+        Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Stopping);
+        var reserved = RunProjection.LatestAttempts(f.Read())[B];
+        claim.Dispose();
+        await f.UntilStatus(RunStatus.Stopped);
+        Assert.Equal(RecoveryOutcome.NotStarted, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[reserved]).Outcome);
+        Assert.Contains(f.Read().Blocks.Values, block => !block.Resolved && block.Block.Task == A);
+        Assert.Equal(0, f.Launches(B));
+    }
+
+    [Fact]
+    public async Task Stop_lets_a_settling_success_publish()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        using (var cleanup = new TurnFixture.ProbeBarrier("runner.cleanup.inside"))
+        {
+            f.Runs.Probe = cleanup.Probe;
+            await f.Resume();
+            await cleanup.Reached.Task.WaitAsync(Bound);
+            Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+            Assert.Equal(TaskState.Settling, (await f.UntilStatus(RunStatus.Stopping)).Tasks[A].State);
+        }
+        var stopped = await f.UntilStatus(RunStatus.Stopped);
+        Assert.Equal(TaskState.Done, stopped.Tasks[A].State);
+        Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
+        Assert.Equal([1, 0], new[] { f.Launches(A), f.Launches(B) });
+    }
+
+    [Theory]
+    [InlineData("journal.capture-1.after", "Stopped")]
+    [InlineData("runner.request.after", "Stopped")]
+    [InlineData("runner.claim.after", "Stopping")]
+    public async Task Stop_after_a_reopen_reconciles_without_resume(string point, string status)
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Crash(A, point);
+        var launches = f.Launches(A);
+        await f.Open();
+        Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+        if (status == "Stopped")
+        {
+            var stopped = await f.UntilStatus(RunStatus.Stopped);
+            if (point == "journal.capture-1.after") Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
+            else Assert.IsType<AttemptEnd.Recovered>(stopped.Tasks[A].End);
+        }
+        else
+        {
+            var stopping = await f.Until(view => view.Status == RunStatus.Stopping && view.Tasks[A].State == TaskState.Uncertain);
+            Assert.Equal(UnresolvedReason.Uncertain, stopping.Tasks[A].Unresolved);
+            Assert.Equal(RunPhase.StopRequested, f.Read().Phase);
+        }
+        Assert.Equal([launches, 0], new[] { f.Launches(A), f.Launches(B) });
+    }
+
+    [Fact]
     public async Task A_repeated_stop_converges_and_a_settled_run_refuses_it()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A)]));

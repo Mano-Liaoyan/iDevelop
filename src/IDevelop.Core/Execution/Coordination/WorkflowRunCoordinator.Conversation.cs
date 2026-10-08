@@ -159,7 +159,12 @@ internal sealed partial class WorkflowRunCoordinator
             _live[task] = new(LiveStage.Starting);
             _runs.Probe?.Invoke("coordinator.continue");
             Background(() => _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, prompt)),
-                start => Started(task, start), error => Faulted(task, error));
+                start => Started(task, start), error =>
+                {
+                    _live.Remove(task);
+                    _problem = error.Message;
+                    HoldStart(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
+                });
             return true;
         }
         return false;

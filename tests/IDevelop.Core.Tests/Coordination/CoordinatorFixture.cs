@@ -175,7 +175,16 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
     /// <summary>Closes the project and opens it again in a new window, as a restart does.</summary>
     public async Task Reopen()
     {
-        await Runs.DisposeAsync();
+        await Close();
+        await OpenAgain();
+    }
+
+    /// <summary>Closes the project's window.</summary>
+    public Task Close() => Runs.DisposeAsync().AsTask();
+
+    /// <summary>Opens the project and the run in a new window after <see cref="Close"/>.</summary>
+    public async Task OpenAgain()
+    {
         Runs = OpenRuns(await Fakes.DiscoverAsync());
         Coordinator = Assert.IsType<RunOpen.Opened>(Runs.OpenRun(W, Preparation.RunId)).Coordinator;
     }
