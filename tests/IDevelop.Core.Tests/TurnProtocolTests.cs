@@ -91,6 +91,34 @@ public sealed class TurnProtocolTests
     }
 
     [Fact]
+    public void Codex_sends_the_working_folder_only_when_set()
+    {
+        foreach (var resume in new string?[] { null, "session-1" })
+        {
+            var request = new LaunchRequest("m", null, "banana") { ResumeSession = resume };
+            var withFolder = new CodexProtocol(request with { WorkingFolder = "/w/checkout" });
+            withFolder.Start();
+            var frame = withFolder.Read("""{"id":"init-1","result":{}}""").Writes[1];
+            using var json = JsonDocument.Parse(frame);
+            Assert.Equal(resume is null ? "thread/start" : "thread/resume", json.RootElement.GetProperty("method").GetString());
+            Assert.Equal("/w/checkout", json.RootElement.GetProperty("params").GetProperty("cwd").GetString());
+            if (resume is not null)
+            {
+                Assert.Equal("session-1", json.RootElement.GetProperty("params").GetProperty("threadId").GetString());
+            }
+
+            var withoutFolder = new CodexProtocol(request);
+            withoutFolder.Start();
+            var standalone = withoutFolder.Read("""{"id":"init-1","result":{}}""").Writes[1];
+            Assert.Equal(resume is null
+                ? """{"id":"thread-1","method":"thread/start","params":{"model":"m","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"workspace-write"}}"""
+                : """{"id":"thread-1","method":"thread/resume","params":{"model":"m","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"workspace-write","threadId":"session-1","excludeTurns":true}}""", standalone);
+            using var absent = JsonDocument.Parse(standalone);
+            Assert.False(absent.RootElement.GetProperty("params").TryGetProperty("cwd", out _));
+        }
+    }
+
+    [Fact]
     public void Codex_initializes_resumes_and_starts_a_turn_with_the_schema_fields()
     {
         var protocol = Clients.Get(ClientId.Codex).Protocol(new LaunchRequest("gpt-6-sol", "high", "banana") { ResumeSession = "thread-a", ReadOnly = true });

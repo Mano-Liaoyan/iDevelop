@@ -26,6 +26,12 @@ internal static class ProcessCheck
         }
     }
 
+    public static ProcessMatch Check(ProcessIdentity identity)
+    {
+        using var process = Find(identity.Id);
+        return process is null ? ProcessMatch.Gone : Compare(process, identity);
+    }
+
     /// <summary>
     /// Finds the process and stops its tree when it is the same process. It does not wait for the exit, because opening a
     /// project calls it on the UI thread.
@@ -47,17 +53,20 @@ internal static class ProcessCheck
         return match;
     }
 
-    public static void KillTreeQuietly(Process process)
+    public static string? KillTree(Process process)
     {
         try
         {
             process.Kill(entireProcessTree: true);
+            return null;
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // Already exited, or a descendant could not be stopped. Neither is the caller's to handle.
+            return e.Message;
         }
     }
+
+    public static void KillTreeQuietly(Process process) => KillTree(process);
 
     private static Process? Find(int id)
     {

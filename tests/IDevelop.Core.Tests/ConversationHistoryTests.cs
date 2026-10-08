@@ -12,6 +12,21 @@ public class ConversationHistoryTests
     private static readonly AttemptId B = new(Guid.Parse("019aa000-0000-7000-8000-000000000002"));
     private static readonly AttemptId C = new(Guid.Parse("019aa000-0000-7000-8000-000000000003"));
 
+    [Fact]
+    public void Cleanup_diagnostics_leave_the_running_conversation_unchanged()
+    {
+        AttemptEvent[] events = [BuildRequested(First), LaunchedAt1s, Said(2, new AgentEvent.Message("Working."))];
+        var cleanedUp = new AttemptEvent.CleanedUp(T0.AddSeconds(3), CleanupResult.Incomplete, "x", [new CleanupStep(T0.AddSeconds(3), "killTree", null)]);
+
+        var before = Project(events);
+        var after = Project([.. events, cleanedUp]);
+
+        Assert.Equal(["Working."], Messages(after, MessageAuthor.Agent).Select(message => message.Text));
+        Assert.Equivalent(before.Record, after.Record);
+        Assert.Equal(before.Record.AppliedEvents, after.Record.AppliedEvents);
+        Assert.Equal(before.Rows.ToArray(), after.Rows.ToArray());
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

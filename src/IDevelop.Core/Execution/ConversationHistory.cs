@@ -214,6 +214,7 @@ internal static class ConversationHistory
                     break;
                 case AttemptEvent.Requested:
                 case AttemptEvent.Launched:
+                case AttemptEvent.CleanedUp:
                 case AttemptEvent.RequestAnswered:
                 case AttemptEvent.RequestClosed:
                 case AttemptEvent.ShutdownForced:

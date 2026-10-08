@@ -48,6 +48,11 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
                     ["approvalsReviewer"] = native.ApprovalsReviewer,
                     ["sandbox"] = native.Sandbox,
                 };
+                if (launch.WorkingFolder is { } folder)
+                {
+                    args["cwd"] = folder;
+                }
+
                 if (launch.ResumeSession is { } session)
                 {
                     args["threadId"] = session;

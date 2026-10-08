@@ -29,7 +29,7 @@ internal static class Probes
     /// <exception cref="LaunchException">The command did not start.</exception>
     public static async Task<ProbeOutput> RunAsync(ResolvedCommand command, Probe probe)
     {
-        using var child = ChildProcess.Start(command, probe.Arguments, Path.GetTempPath());
+        using var child = ChildProcess.Start(command, probe.Arguments, Path.GetTempPath(), ProcessLifetime.Standalone);
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
         var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

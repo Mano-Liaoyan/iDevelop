@@ -10,6 +10,7 @@ using System.Text.Json;
 //   IDevelop.FakeAgent --spawn-sleeper <file>   start a sleeping copy, write its pid, and exit, as spawnThroughCmd runs it
 //
 // The rules file is {"rules": [{"when": ["auth", "status"], "has": ["--resume", "id"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
+// Optional top-level "launches" names a folder for <pid>-<guid>.json argument markers, written before protocol input.
 // The first rule whose "when" is a prefix of the client arguments after any leading "-c key=value" pairs, as Git takes
 // them, and whose optional "has" appears among them in that order without gaps, runs its steps in order. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
@@ -65,6 +66,13 @@ var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 using var stdout = new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true, NewLine = "\n" };
 using var stderr = new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true, NewLine = "\n" };
 using var rules = JsonDocument.Parse(File.ReadAllBytes(rulesFile));
+if (rules.RootElement.TryGetProperty("launches", out var launches))
+{
+    var folder = Directory.CreateDirectory(launches.GetString()!).FullName;
+    using var marker = new FileStream(Path.Combine(folder, $"{Environment.ProcessId}-{Guid.NewGuid():N}.json"), FileMode.CreateNew);
+    JsonSerializer.Serialize(marker, clientArguments);
+}
+
 using var stdin = new StreamReader(Console.OpenStandardInput(), utf8);
 var appServer = clientArguments.Contains("app-server");
 var claudeStream = clientArguments.Contains("--include-partial-messages");

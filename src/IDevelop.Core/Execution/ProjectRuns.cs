@@ -1123,7 +1123,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         ChildProcess process;
         try
         {
-            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, _projectFolder);
+            process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, _projectFolder, ProcessLifetime.Standalone);
         }
         catch (LaunchException e)
         {
