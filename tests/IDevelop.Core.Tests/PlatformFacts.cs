@@ -36,6 +36,23 @@ internal sealed class CaseInsensitiveFactAttribute : FactAttribute
     }
 }
 
+internal sealed class CaseSensitiveFactAttribute : FactAttribute
+{
+    public CaseSensitiveFactAttribute()
+    {
+        var name = "idevelop-case-" + Guid.NewGuid().ToString("N");
+        var probe = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), name.ToUpperInvariant()));
+        try
+        {
+            if (Directory.Exists(Path.Combine(Path.GetTempPath(), name))) Skip = "Case-sensitive temporary folders only.";
+        }
+        finally
+        {
+            probe.Delete();
+        }
+    }
+}
+
 internal sealed class UnixFactAttribute : FactAttribute
 {
     public UnixFactAttribute()

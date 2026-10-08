@@ -9,6 +9,35 @@ public static class ProjectFolders
 
     public static string Identity(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
 
+    /// <summary>
+    /// The folder as its file system spells it. Each part keeps an exact entry, or else takes the only entry that matches
+    /// it in another case. Case sensitivity belongs to the volume rather than the platform, and a Mac volume can hold Repo
+    /// and repo side by side.
+    /// </summary>
+    public static string OnDisk(string folder)
+    {
+        var full = Identity(folder);
+        var root = Path.GetPathRoot(full)!;
+        var resolved = OperatingSystem.IsWindows() ? root.ToUpperInvariant() : root;
+        foreach (var part in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+            resolved = Path.Combine(resolved, Spelling(resolved, part));
+        return resolved;
+    }
+
     /// <summary>The folder's own name, or the whole path for a drive's root.</summary>
     public static string Name(string folder) => Path.GetFileName(folder) is { Length: > 0 } name ? name : folder;
+
+    private static string Spelling(string parent, string part)
+    {
+        try
+        {
+            var matches = new DirectoryInfo(parent).EnumerateFileSystemInfos().Select(entry => entry.Name)
+                .Where(name => string.Equals(name, part, StringComparison.OrdinalIgnoreCase)).ToArray();
+            return matches.Contains(part) ? part : matches is [var only] ? only : part;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return part;
+        }
+    }
 }

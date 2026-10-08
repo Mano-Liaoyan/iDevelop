@@ -9,7 +9,7 @@ public sealed partial class ProjectRuns
 {
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, OperationId Operation), TurnCommand> _commands = [];
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, LaunchKey Launch), TurnOwner> _owned = [];
-    private static readonly Dictionary<(string Project, TaskId Task), TurnOwner> Unfenced = new(new ProjectTask());
+    private static readonly Dictionary<(string Project, TaskId Task), TurnOwner> Unfenced = [];
 
     internal Action<string>? Probe { get; set; }
     internal Func<Stream, Stream>? RequestStream { get; set; }
@@ -301,7 +301,8 @@ public sealed partial class ProjectRuns
 
     private static TurnOwner? UnfencedOwner(string project, TaskId task)
     {
-        lock (Unfenced) return Unfenced.GetValueOrDefault((project, task));
+        var key = (ProjectFolders.OnDisk(project), task);
+        lock (Unfenced) return Unfenced.GetValueOrDefault(key);
     }
 
     private void Forget(TurnOwner owner)
@@ -316,10 +317,7 @@ public sealed partial class ProjectRuns
                 _commands.Remove(command);
         }
         lock (Unfenced)
-        {
-            var key = (owner.Lease.Permit.Project, address.Task);
-            if (Unfenced.GetValueOrDefault(key) == owner) Unfenced.Remove(key);
-        }
+            foreach (var pair in Unfenced.Where(pair => pair.Value == owner).ToArray()) Unfenced.Remove(pair.Key);
     }
 
     private StartProblem? WorkflowOwner(TaskId task)
@@ -336,15 +334,6 @@ public sealed partial class ProjectRuns
     }
 
     private sealed record TurnCommand(TurnIntent Intent, Task<TurnStart> Task);
-
-    private sealed class ProjectTask : IEqualityComparer<(string Project, TaskId Task)>
-    {
-        public bool Equals((string Project, TaskId Task) x, (string Project, TaskId Task) y) =>
-            ProjectFolders.Comparer.Equals(ProjectFolders.Identity(x.Project), ProjectFolders.Identity(y.Project)) && x.Task == y.Task;
-
-        public int GetHashCode((string Project, TaskId Task) key) =>
-            HashCode.Combine(ProjectFolders.Comparer.GetHashCode(ProjectFolders.Identity(key.Project)), key.Task);
-    }
 
     private abstract record RunOwnership
     {
@@ -810,13 +799,14 @@ public sealed partial class ProjectRuns
             bool fenced;
             try { fenced = Materializer.FenceLaunch(Lease, _closeOperation, Address.Launch, project.ShutdownTime); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { fenced = false; }
+            var folder = ProjectFolders.OnDisk(Lease.Permit.Project);
             lock (_gate)
             {
                 switch (_state)
                 {
                     case TurnState.HandedOff: return true;
                     case TurnState.Settled { Outcome: TurnSettlement.Unresolved } or TurnState.Faulted when !fenced:
-                        lock (Unfenced) Unfenced[(Lease.Permit.Project, Address.Task)] = this;
+                        lock (Unfenced) Unfenced[(folder, Address.Task)] = this;
                         return false;
                     case TurnState.Settled { Outcome: TurnSettlement.Unresolved } settled:
                         _state = new TurnState.HandedOff(settled.Outcome);
