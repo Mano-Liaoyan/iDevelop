@@ -290,6 +290,70 @@ public sealed class BlockScopeTests
     }
 
     [UnixFact]
+    public async Task A_restore_that_fails_before_its_plan_refuses_without_a_block()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var first = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), first, attempt));
+        var preview = RestoreTests.Preview(f, ready, first);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var sequence = f.Read().Sequence;
+        var refused = Assert.IsType<Restoration.Refused>(f.FailingGit("ls-tree")
+            .Restore(f.Lease(T), operation, attempt, first, confirmation, preview.Identity));
+        Assert.Equal("GitFailed: fatal: injected failure\n", refused.Problem + ": " + refused.Detail);
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(new[] { "DirtyWorktree" }, Open(f));
+        f.Git.Write("a.txt", "later\n", ready.Checkout);
+        var second = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), second, attempt));
+        var next = RestoreTests.Preview(f, ready, second);
+        Assert.Null(next.Supersedes);
+        Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), attempt, second, f.Op(), next.Identity));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        sequence = f.Read().Sequence;
+        var rerun = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, attempt, first, confirmation, preview.Identity));
+        Assert.Equal("DirtyWorktree", rerun.Problem.ToString());
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Empty(Open(f));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
+        Assert.Equal(9, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))));
+    }
+
+    [LinuxOrWindowsFact]
+    public async Task A_restore_that_cannot_store_its_evidence_before_its_plan_refuses_without_a_block()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
+        File.WriteAllText(lockPath, "lock\n");
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var preview = RestoreTests.Preview(f, ready, preservation);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var stored = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "evidence",
+            OperationIds.Derive(operation, "restore-lock-" + Revision.Hash("lock\n"u8.ToArray()).Sha256).Value.ToString("D"), "index.lock");
+        Directory.CreateDirectory(Path.GetDirectoryName(stored)!);
+        File.WriteAllText(stored, "other\n");
+        var sequence = f.Read().Sequence;
+        var refused = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        Assert.Equal("InputUnavailable: Stored bytes differ from the recorded digest or length.", refused.Problem + ": " + refused.Detail);
+        Assert.Equal(sequence, f.Read().Sequence);
+        File.Delete(stored);
+        Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        Assert.False(File.Exists(lockPath));
+        Assert.Empty(Open(f));
+    }
+
+    [UnixFact]
     public async Task A_restore_receipt_replays_with_the_fault_of_the_restore_it_supersedes_but_not_a_foreign_one()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));

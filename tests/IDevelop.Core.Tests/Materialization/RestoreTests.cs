@@ -45,10 +45,10 @@ public sealed class RestoreTests
         Assert.Equal(new BlockScope.Checkout(["a.txt"]), refused.Scope);
         Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         var operation = f.Op();
-        var blocked = Assert.IsType<Restoration.Blocked>(materializer.Restore(f.Lease(T), operation, attempt, preservation, f.Op(), Revision.Hash("refused preview")));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal(detail, blocked.Block.Detail);
-        Assert.Equal(new BlockScope.Checkout(["a.txt"]), blocked.Block.Scope);
+        var refusal = Assert.IsType<Restoration.Refused>(materializer.Restore(f.Lease(T), operation, attempt, preservation, f.Op(), Revision.Hash("refused preview")));
+        Assert.Equal("DirtyWorktree", refusal.Problem.ToString());
+        Assert.Equal(detail, refusal.Detail);
+        Assert.Equal(new BlockScope.Checkout(["a.txt"]), refusal.Scope);
         Assert.Equal(0, Moves(f, operation));
         Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         var preview = Preview(f, ready, preservation);
@@ -159,9 +159,9 @@ public sealed class RestoreTests
         Assert.Equal("DirtyWorktree", refused.Problem.ToString());
         Assert.Equal("Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", refused.Detail);
         var operation = f.Op();
-        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, f.Op(), preview.Identity));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", blocked.Block.Detail);
+        var refusal = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, f.Op(), preview.Identity));
+        Assert.Equal("DirtyWorktree", refusal.Problem.ToString());
+        Assert.Equal("Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", refusal.Detail);
         Assert.Equal(0, Moves(f, operation));
         Assert.Equal("root\n", File.ReadAllText(Path.Combine(ready.Checkout, "root.txt")));
         Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", clear, "root.txt").ExitCode);
@@ -456,7 +456,7 @@ public sealed class RestoreTests
     }
 
     [LinuxOrWindowsFact]
-    public async Task A_restore_success_resolves_its_own_registration_refusal()
+    public async Task A_restore_refused_for_its_registration_journals_nothing_and_succeeds_when_relocked()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
@@ -472,18 +472,17 @@ public sealed class RestoreTests
         var reason = f.Git.Run(f.Git.Folder, "worktree", "list", "--porcelain").Text.Split('\n')
             .Single(line => line.StartsWith("locked ", StringComparison.Ordinal))["locked ".Length..];
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
-        var refused = Assert.IsType<Restoration.Blocked>(f.Materializer()
+        var sequence = f.Read().Sequence;
+        var refused = Assert.IsType<Restoration.Refused>(f.Materializer()
             .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
-        Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
-        Assert.Equal(new BlockScope.Ownership(), refused.Block.Scope);
-        var own = f.Read().Blocks.Single(b => b.Value.Block.Operation == OperationIds.Derive(operation, "restore-plan")).Key;
-        Assert.False(f.Read().Blocks[own].Resolved);
+        Assert.Equal("UncertainOwnership", refused.Problem.ToString());
+        Assert.Equal(new BlockScope.Ownership(), refused.Scope);
+        Assert.Equal(sequence, f.Read().Sequence);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
         var fresh = Preview(f, ready, preservation);
         var result = Assert.IsType<Restoration.Restored>(f.Materializer()
             .Restore(f.Lease(T), operation, attempt, preservation, confirmation, fresh.Identity));
-        Assert.Equal(new[] { drift, own }, result.Receipt.Resolved);
-        Assert.True(f.Read().Blocks[own].Resolved);
+        Assert.Equal(new[] { drift }, result.Receipt.Resolved);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal(1, Moves(f, operation));
     }
@@ -716,10 +715,10 @@ public sealed class RestoreTests
         Assert.Equal("DirtyWorktree", read.Problem.ToString());
         Assert.Equal(detail, read.Detail);
         var operation = f.Op();
-        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), operation, ready.Execution.Launch.Attempt,
+        var refused = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, ready.Execution.Launch.Attempt,
             preservation, f.Op(), Revision.Hash("refused preview")));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal(detail, blocked.Block.Detail);
+        Assert.Equal("DirtyWorktree", refused.Problem.ToString());
+        Assert.Equal(detail, refused.Detail);
         Assert.Equal(0, Moves(f, operation));
         Assert.Equal("late\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal(preserved.Commit, GitFixture.Read(f.Git.Open().ReadRef(preserved.Receipt.Ref)));
@@ -765,10 +764,10 @@ public sealed class RestoreTests
         var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch));
         f.Git.Write("extra.txt", "extra\n", ready.Checkout);
         var operation = f.Op();
-        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), operation, ready.Execution.Launch.Attempt, preservation, f.Op(), preview.Identity));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("The checkout changed after it was preserved. Preserve it again.", blocked.Block.Detail);
-        Assert.Equal(new BlockScope.Checkout(["extra.txt"]), blocked.Block.Scope);
+        var refused = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, ready.Execution.Launch.Attempt, preservation, f.Op(), preview.Identity));
+        Assert.Equal("DirtyWorktree", refused.Problem.ToString());
+        Assert.Equal("The checkout changed after it was preserved. Preserve it again.", refused.Detail);
+        Assert.Equal(new BlockScope.Checkout(["extra.txt"]), refused.Scope);
         Assert.Equal(0, Moves(f, operation));
         Assert.Equal("extra\n", File.ReadAllText(Path.Combine(ready.Checkout, "extra.txt")));
         Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch)));
@@ -995,10 +994,10 @@ public sealed class RestoreTests
             var refusal = Assert.IsType<RestorePreviewRead.Refused>(f.Materializer().PreviewRestore(f.Lease(T), attempt, preservation));
             Assert.Equal("UncertainOwnership", refusal.Problem.ToString());
             Assert.Equal(detail, refusal.Detail);
-            var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), operation, attempt,
+            var refused = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), operation, attempt,
                 preservation, f.Op(), Revision.Hash("unfinished preview")));
-            Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-            Assert.Equal(detail, blocked.Block.Detail);
+            Assert.Equal("UncertainOwnership", refused.Problem.ToString());
+            Assert.Equal(detail, refused.Detail);
             Assert.Equal(0, Moves(f, operation));
         }
         else
@@ -1303,6 +1302,13 @@ public sealed class RestoreTests
             Assert.Equal(4, before);
             Assert.Equal(sequence, f.Read().Sequence);
             Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
+        }
+        else if (point == "journal.restore-plan.before")
+        {
+            var refused = Assert.IsType<Restoration.Refused>(outcome);
+            Assert.Equal("DirtyWorktree", refused.Problem.ToString());
+            Assert.Contains("root.txt", Assert.IsType<BlockScope.Checkout>(refused.Scope).Paths);
+            Assert.Equal(sequence, f.Read().Sequence);
         }
         else
         {

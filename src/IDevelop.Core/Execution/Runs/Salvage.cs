@@ -47,5 +47,6 @@ internal abstract record Restoration
     private Restoration() { }
     internal sealed record Restored(RunEvent.Restored Receipt) : Restoration;
     internal sealed record Blocked(MaterializationBlock Block) : Restoration;
+    internal sealed record Refused(MaterializationProblem Problem, string Detail, BlockScope Scope) : Restoration;
     internal sealed record Rejected(RunRejection Reason) : Restoration;
 }

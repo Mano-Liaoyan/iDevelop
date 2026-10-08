@@ -258,10 +258,10 @@ public sealed class PreservationTests
         Assert.Equal("DirtyWorktree", preview.Problem.ToString());
         Assert.Equal("Restore needs a plain index. The index has unresolved stages.", preview.Detail);
         var restoreOperation = f.Op();
-        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), restoreOperation,
+        var refused = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), restoreOperation,
             ready.Execution.Launch.Attempt, Operation, f.Op(), Revision.Hash("conflicts")));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("Restore needs a plain index. The index has unresolved stages.", blocked.Block.Detail);
+        Assert.Equal("DirtyWorktree", refused.Problem.ToString());
+        Assert.Equal("Restore needs a plain index. The index has unresolved stages.", refused.Detail);
         Assert.Equal(0, RestoreTests.Moves(f, restoreOperation));
         Assert.Equal(3, GitFixture.Read(f.Git.Open().UnmergedEntries(ready.Checkout)).Length);
         Assert.Equal("conflicted\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
@@ -324,11 +324,11 @@ public sealed class PreservationTests
                 File.WriteAllText(replacement, identical ? "lock\n" : "lock2\n");
                 File.Move(replacement, lockPath, overwrite: true);
                 var replacementOperation = f.Op();
-                var refusal = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), replacementOperation,
+                var refusal = Assert.IsType<Restoration.Refused>(f.Materializer().Restore(f.Lease(T), replacementOperation,
                     ready.Execution.Launch.Attempt, preservation, f.Op(), fresh.Identity));
-                Assert.Equal("DirtyWorktree", refusal.Block.Problem.ToString());
-                Assert.Equal("The checkout changed after it was preserved. Preserve it again.", refusal.Block.Detail);
-                Assert.Equal(new BlockScope.Checkout([], IndexLock: true), refusal.Block.Scope);
+                Assert.Equal("DirtyWorktree", refusal.Problem.ToString());
+                Assert.Equal("The checkout changed after it was preserved. Preserve it again.", refusal.Detail);
+                Assert.Equal(new BlockScope.Checkout([], IndexLock: true), refusal.Scope);
                 Assert.Equal(0, RestoreTests.Moves(f, replacementOperation));
                 Assert.Equal(identical ? "lock\n" : "lock2\n", File.ReadAllText(lockPath));
                 Assert.NotEqual(fresh.IndexLock!.Identity, FileIdentities.ReadFile(lockPath)!.Value.Identity);
