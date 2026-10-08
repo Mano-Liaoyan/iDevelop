@@ -5,6 +5,11 @@ internal static partial class RunReducer
     internal static RunProblem? AppendProblem(RunRecord record, RunEvent e)
     {
         if (record.Schema != 3) return null;
+        if (e is RunEvent.GitIntended intended && record.Plans.GetValueOrDefault(intended.Plan) is MaterializationPlan.Restoration &&
+            RestorationSuperseded(record, intended.Plan) || e is RunEvent.GitObserved observed &&
+            record.GitIntents.TryGetValue(observed.Mutation, out var oldIntent) &&
+            record.Plans.GetValueOrDefault(oldIntent.Plan) is MaterializationPlan.Restoration && RestorationSuperseded(record, oldIntent.Plan))
+            return RunProblem.ReplacementConflict;
         if (e is RunEvent.TurnClosed { Capture: null } turn && record.RootExits.ContainsKey(turn.Key))
             return RunProblem.SettlementPending;
         if (e is RunEvent.AttemptClosed attempt && record.Claims.Keys.Any(launch =>

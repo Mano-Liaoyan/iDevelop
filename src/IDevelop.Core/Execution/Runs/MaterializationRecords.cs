@@ -37,6 +37,7 @@ internal abstract record LayoutKey
 [JsonDerivedType(typeof(Salvage), "salvage")]
 [JsonDerivedType(typeof(RetryReset), "retryReset")]
 [JsonDerivedType(typeof(Preservation), "preservation")]
+[JsonDerivedType(typeof(Restoration), "restoration")]
 internal abstract record MaterializationPlan
 {
     private MaterializationPlan() { }
@@ -67,6 +68,15 @@ internal abstract record MaterializationPlan
     internal sealed record Preservation(TaskId Task, AttemptId Attempt, CheckoutState Preserved, CommitRecipe Recipe,
         CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, string Ref) : MaterializationPlan;
 
+    internal sealed record Restoration(TaskId Task, AttemptId Attempt, OperationId Preservation, CheckoutState From, CheckoutState To,
+        ImmutableArray<PathRestore> Paths, ImmutableArray<OperationId> Repairs, ImmutableArray<OperationId> Rechecks,
+        OperationId Confirmation, Digest Preview) : MaterializationPlan
+    {
+        public new OperationId Preservation { get; init; } = Preservation;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public OperationId? Supersedes { get; init; }
+    }
+
     internal sealed record RetryReset(TaskId Task, AttemptId Salvaged, OperationId SalvagePlan, CommitId? From, CommitId To,
         ImmutableArray<EvidenceFile> Remove) : MaterializationPlan;
 }
@@ -78,6 +88,9 @@ internal abstract record MaterializationPlan
 [JsonDerivedType(typeof(ResetCheckout), "resetCheckout")]
 [JsonDerivedType(typeof(RemovePaths), "removePaths")]
 [JsonDerivedType(typeof(AttachHead), "attachHead")]
+[JsonDerivedType(typeof(RestoreRef), "restoreRef")]
+[JsonDerivedType(typeof(RestoreFiles), "restoreFiles")]
+[JsonDerivedType(typeof(RemoveIndexLock), "removeIndexLock")]
 internal abstract record GitMutation
 {
     private GitMutation() { }
@@ -91,6 +104,12 @@ internal abstract record GitMutation
     internal sealed record ResetCheckout(TaskId Task, CommitId Target) : GitMutation;
 
     internal sealed record AttachHead(TaskId Task, string Branch) : GitMutation;
+
+    internal sealed record RestoreRef(RefChange Change) : GitMutation;
+
+    internal sealed record RestoreFiles(TaskId Task, ImmutableArray<PathRestore> Paths) : GitMutation;
+
+    internal sealed record RemoveIndexLock(TaskId Task, LockEvidence Lock) : GitMutation;
 
     internal sealed record RemovePaths(TaskId Task, ImmutableArray<EvidenceFile> Paths) : GitMutation;
 }

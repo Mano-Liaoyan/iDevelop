@@ -111,10 +111,13 @@ internal sealed partial class Materializer
     private static void VerifyCheckout(GitRepository repository, ExecutionLocation location, bool keepChanges, RunRecord record)
     {
         VerifyRegistration(repository, location, record);
-        var tip = Value(repository.ReadRef(location.Owner.Branch));
-        if (tip is null) throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.");
+        var branch = repository.ReadRef(location.Owner.Branch);
+        if (branch is GitRead<CommitId?>.Failed failed)
+            throw Fault(failed.Problem, failed.Detail, new([], [location.Owner.Branch], false));
+        var tip = Value(branch);
+        if (tip is null) throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new([], [location.Owner.Branch], false));
         if (!RefOwnership.Accepts(record, repository, location.Owner.Branch, tip))
-            throw Fault(MaterializationProblem.UncertainOwnership, "The task branch differs from its journaled state.");
+            throw Fault(MaterializationProblem.UncertainOwnership, "The task branch differs from its journaled state.", new([], [location.Owner.Branch], false));
         if (!keepChanges && (tip != location.AttemptBase || Value(repository.Status(Checkout(repository, location.Owner))).Length != 0))
             throw Fault(MaterializationProblem.DirtyWorktree, "The checkout tip or contents differ from the recorded attempt base.");
         VerifyOwnedCheckout(repository, location, record);

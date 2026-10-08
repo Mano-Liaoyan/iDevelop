@@ -91,7 +91,7 @@ internal sealed partial class Materializer
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, root.Tip);
                 step = "capture";
-                VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence);
+                VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence, frozen.IndexTree);
                 var result = new ResultId(OperationIds.Derive(operation, "result").Value);
                 step = "outbox";
                 var artifacts = CopyPublicationArtifacts(workflow, run, frozen, result);
@@ -152,15 +152,16 @@ internal sealed partial class Materializer
                 var current = Read(workflow, run);
                 if (PublicationObserved(current, planId, move)) return;
                 var compareIndex = !current.GitIntents.Values.Any(intent => intent.Plan == planId && intent.Mutation is GitMutation.AlignIndex);
-                VerifyPublicationBaseline(repository, checkout, plan.Recipe.Tree, plan.IndexBefore, compareIndex, permit, operation, ref evidence);
+                VerifyPublicationBaseline(repository, checkout, plan.Recipe.Tree, plan.IndexBefore, compareIndex, permit, operation, ref evidence, frozen.IndexTree);
                 if (PublicationObserved(current, planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree)) &&
                     (repository.ReadIndexTree(checkout) is not GitRead<TreeId>.Read index || index.Value != plan.Recipe.Tree))
-                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
+                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.",
+                        new(repository.ReadIndexTree(checkout) is GitRead<TreeId>.Read actual ? Value(repository.DiffTreePaths(actual.Value, plan.Recipe.Tree)) : [], [], false));
             }
         }
         catch (Refusal refused) { return new Publication.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
+        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         { return PublicationBlock(permit, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }
@@ -202,9 +203,9 @@ internal sealed partial class Materializer
                         throw Fault(MaterializationProblem.InputUnavailable, "The shared-ref snapshot is absent.")).ToArray();
                     var detail = diverged.Refs.Select(name => $"{name}: prepared {Tip(snapshots[0], name)}, " +
                         $"observation 1 {Tip(snapshots[1], name)}, observation 2 {Tip(snapshots[2], name)}");
-                    throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail));
+                    throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail), new(diverged.Paths, diverged.Refs, false));
                 }
-                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)));
+                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)), new(diverged.Paths, diverged.Refs, false));
             case CaptureDisposition.Failed failed:
                 evidence = failed.Evidence;
                 throw Fault(failed.Problem, failed.Detail);
@@ -215,18 +216,23 @@ internal sealed partial class Materializer
         refs.TryGetValue(name, out var tip) ? tip.Hex : "absent";
 
     private void VerifyPublicationBaseline(GitRepository repository, string checkout, TreeId tree, Digest? index,
-        bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence)
+        bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence, TreeId? indexTree = null)
     {
         VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
         if (repository.UnmergedEntries(checkout) is not GitRead<ImmutableArray<StageEntry>>.Read stages)
             throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
         if (!stages.Value.IsEmpty)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", new([.. stages.Value.Select(s => s.Path).Distinct().Order(StringComparer.Ordinal)], [], false));
         var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
-        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked));
+        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new(tracked, [], false));
         var live = Value(Mutate("capture", () => repository.Capture(checkout)));
         if (live.Tree != tree || compareIndex && (live.IndexBefore != index || live.IndexAfter != index))
-            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
+        {
+            var paths = new SortedSet<string>(Value(repository.DiffTreePaths(live.Tree, tree)), StringComparer.Ordinal);
+            if (compareIndex && indexTree is { } expectedIndex && repository.ReadIndexTree(checkout) is GitRead<TreeId>.Read actualIndex)
+                paths.UnionWith(Value(repository.DiffTreePaths(actualIndex.Value, expectedIndex)));
+            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.", new([.. paths], [], false));
+        }
     }
 
     private ImmutableArray<ArtifactRecord> CopyPublicationArtifacts(WorkflowId workflow, RunId run, CaptureObservation frozen,
@@ -262,7 +268,7 @@ internal sealed partial class Materializer
     private static void RequirePublication(RefPublication outcome)
     {
         if (outcome is RefPublication.Rejected rejected) throw new Refusal(rejected.Reason);
-        if (outcome is RefPublication.Blocked blocked) throw Fault(blocked.Problem, blocked.Detail);
+        if (outcome is RefPublication.Blocked blocked) throw Fault(blocked.Problem, blocked.Detail, blocked.Scope);
     }
 
     private static bool PublicationObserved(RunRecord record, OperationId plan, GitMutation mutation) =>

@@ -4,7 +4,7 @@ internal abstract record RefPublication
 {
     private RefPublication() { }
     internal sealed record Completed(GitObservation Observation) : RefPublication;
-    internal sealed record Blocked(MaterializationProblem Problem, string Detail) : RefPublication;
+    internal sealed record Blocked(MaterializationProblem Problem, string Detail, BlockScope? Scope = null) : RefPublication;
     internal sealed record Rejected(RunRejection Reason) : RefPublication;
 }
 
@@ -20,14 +20,14 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
         var record = ((RunRead.Loaded)read).Record;
         var live = repository.ReadRef(change.Ref);
         if (live is GitRead<CommitId?>.Failed failedRead)
-            return new RefPublication.Blocked(failedRead.Problem, failedRead.Detail);
+            return new RefPublication.Blocked(failedRead.Problem, failedRead.Detail, new([], [change.Ref], false));
         var value = ((GitRead<CommitId?>.Read)live).Value;
         var mutation = new GitMutation.MoveRef(change);
         var prior = record.GitIntents.FirstOrDefault(pair => pair.Value.Plan == plan && RunReducer.Same(pair.Value.Mutation, mutation) &&
             record.GitObservations.ContainsKey(pair.Key));
         if (!RefOwnership.Accepts(record, repository, change.Ref, value, prior.Value is null ? change : null))
             return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
-                $"Publication ref {change.Ref} has unexpected value {value?.Hex ?? "absent"}.");
+                $"Publication ref {change.Ref} has unexpected value {value?.Hex ?? "absent"}.", new([], [change.Ref], false));
         if (prior.Value is not null) return new RefPublication.Completed(record.GitObservations[prior.Key]);
         var intended = OperationIds.Derive(operation, step + "-intent");
         var intent = Journal(step + "-intent", intended, new RunEvent.GitIntended(plan, mutation));
@@ -37,7 +37,7 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
         probe?.Invoke("git." + step + ".after");
         if (moved is RefMove.Conflict conflict)
             return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
-                $"Publication ref {change.Ref} has unexpected value {conflict.Observed?.Hex ?? "absent"}.");
+                $"Publication ref {change.Ref} has unexpected value {conflict.Observed?.Hex ?? "absent"}.", new([], [change.Ref], false));
         if (moved is RefMove.Failed failed) return new RefPublication.Blocked(MaterializationProblem.GitFailed, failed.Detail);
         var observation = new GitObservation(moved is RefMove.AlreadyAtTarget, change.Target.Hex);
         var observed = Journal(step + "-observed", OperationIds.Derive(operation, step + "-observed"),
@@ -52,4 +52,49 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
             return decision;
         }
     }
+    public RefPublication Restore(CoordinatorPermit permit, OperationId operation, OperationId plan, string step,
+        GitRepository repository, RefChange change)
+    {
+        var read = store.Read(permit.Workflow, permit.Run);
+        if (read is RunRead.Rejected rejected) return new RefPublication.Rejected(rejected.Reason);
+        var record = ((RunRead.Loaded)read).Record;
+        if (RunReducer.RestorationSuperseded(record, plan)) return new RefPublication.Rejected(new(RunProblem.ReplacementConflict));
+        var mutation = new GitMutation.RestoreRef(change);
+        var prior = record.GitIntents.FirstOrDefault(pair => pair.Value.Plan == plan && RunReducer.Same(pair.Value.Mutation, mutation));
+        if (prior.Value is not null && record.GitObservations.TryGetValue(prior.Key, out var completed))
+            return new RefPublication.Completed(completed);
+        var live = repository.ReadRef(change.Ref);
+        if (live is GitRead<CommitId?>.Failed failed) return new RefPublication.Blocked(failed.Problem, failed.Detail, new([], [change.Ref], false));
+        var value = ((GitRead<CommitId?>.Read)live).Value;
+        var adopted = prior.Value is not null && value == change.Target;
+        if (value != change.Expected && !adopted)
+            return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
+                $"Restoration ref {change.Ref} has unexpected value {value?.Hex ?? "absent"}.", new([], [change.Ref], false));
+        var intended = OperationIds.Derive(operation, step + "-intent");
+        var intent = Journal(step + "-intent", intended, new RunEvent.GitIntended(plan, mutation));
+        if (intent is RunDecision.Rejected refused) return new RefPublication.Rejected(refused.Reason);
+        if (!adopted)
+        {
+            probe?.Invoke("git." + step + ".before");
+            var moved = repository.MoveRef(change);
+            probe?.Invoke("git." + step + ".after");
+            if (moved is RefMove.Conflict conflict)
+                return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
+                    $"Restoration ref {change.Ref} has unexpected value {conflict.Observed?.Hex ?? "absent"}.", new([], [change.Ref], false));
+            if (moved is RefMove.Failed failure) return new RefPublication.Blocked(MaterializationProblem.GitFailed, failure.Detail, new([], [change.Ref], false));
+            adopted = moved is RefMove.AlreadyAtTarget;
+        }
+        var observation = new GitObservation(adopted, change.Target.Hex);
+        var observed = Journal(step + "-observed", OperationIds.Derive(operation, step + "-observed"), new RunEvent.GitObserved(intended, observation));
+        return observed is RunDecision.Rejected refusal ? new RefPublication.Rejected(refusal.Reason) : new RefPublication.Completed(observation);
+
+        RunDecision Journal(string label, OperationId id, RunEvent entry)
+        {
+            probe?.Invoke("journal." + label + ".before");
+            var decision = store.Record(permit, id, entry);
+            probe?.Invoke("journal." + label + ".after");
+            return decision;
+        }
+    }
+
 }

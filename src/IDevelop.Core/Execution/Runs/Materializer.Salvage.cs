@@ -92,7 +92,7 @@ internal sealed partial class Materializer
             return new Salvage.Retained(retained, retained.Commit);
         }
         catch (Refusal refused) { return new Salvage.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
+        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }

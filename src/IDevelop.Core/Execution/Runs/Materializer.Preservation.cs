@@ -34,13 +34,19 @@ internal sealed partial class Materializer
             if (record.Plans.TryGetValue(planId, out var existing) &&
                 (existing is not MaterializationPlan.Preservation old || old.Attempt != attempt))
                 return new Preservation.Rejected(new(RunProblem.OperationConflict));
-            if (record.Preservations.TryGetValue(planId, out var receipt)) return new Preservation.Preserved(receipt, receipt.Commit);
+            if (record.Preservations.TryGetValue(planId, out var receipt))
+            {
+                RecordPreservationDrift(permit, operation, repository, record, prepared.Location.Owner, attempt,
+                    ((MaterializationPlan.Preservation)existing!).Preserved, inputs);
+                return new Preservation.Preserved(receipt, receipt.Commit);
+            }
             if (record.PreservationDivergences.TryGetValue(operation, out var divergence))
                 return PreservationBlock(permit, operation, "preserve-diverged", DivergenceBlock(operation, task, attempt, inputs, divergence));
             MaterializationPlan.Preservation plan;
             if (existing is MaterializationPlan.Preservation persisted)
             {
                 plan = persisted;
+                RecordPreservationDrift(permit, operation, repository, record, prepared.Location.Owner, attempt, plan.Preserved, inputs);
                 step = "preserve-commit";
                 VerifyPreservationCommit(repository, record, operation, plan);
             }
@@ -56,6 +62,7 @@ internal sealed partial class Materializer
                     divergence = RecordPreservationDivergence(permit, operation, "preserve", pair.First, pair.Second, scope);
                     return PreservationBlock(permit, operation, step, DivergenceBlock(operation, task, attempt, inputs, divergence));
                 }
+                RecordPreservationDrift(permit, operation, repository, record, prepared.Location.Owner, attempt, pair.First.State, inputs);
                 plan = new(task, attempt, pair.First.State, pair.First.Recipe, pair.First.Commit, pair.First.Outbox,
                     RunLayout.PreserveRef(record.RunKey!, record.TaskKeys[task], operation));
                 step = "preserve-plan";
@@ -72,9 +79,47 @@ internal sealed partial class Materializer
         }
         catch (Refusal refused) { return new Preservation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return PreservationBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        { return PreservationBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return PreservationBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+    }
+
+    private void RecordPreservationDrift(CoordinatorPermit permit, OperationId operation, GitRepository repository, RunRecord record,
+        WorktreeOwner owner, AttemptId attempt, CheckoutState state, InputId? inputs)
+    {
+        var id = OperationIds.Derive(operation, "preserve-drift");
+        if (record.Receipts.ContainsKey(id)) return;
+        if (record.Receipts.TryGetValue(OperationIds.Derive(operation, "preserve-plan"), out var planned))
+            record = record with { Receipts = record.Receipts.Where(e => e.Value.Sequence < planned.Sequence).ToImmutableDictionary() };
+        var baseline = CheckoutBaseline.Fold(record, owner, commit => Value(repository.ReadCommit(commit)).Tree);
+        var paths = new SortedSet<string>(StringComparer.Ordinal);
+        var refs = ImmutableArray.CreateBuilder<string>();
+        var drifted = state.IndexLock is not null;
+        foreach (var component in baseline.Components)
+        {
+            var live = ComponentValue(state, component.Key);
+            var differs = component.Value switch
+            {
+                ComponentBaseline.Fixed { Value: null } when component.Key == "index" => !SameBytes(state.Index, baseline.Index),
+                ComponentBaseline.Fixed fixedValue => live != fixedValue.Value,
+                ComponentBaseline.Pending pending => live != pending.Before && live != pending.After,
+                _ => false,
+            };
+            if (!differs) continue;
+            drifted = true;
+            if (component.Key == "branch") refs.Add(owner.Branch);
+            else if (component.Key == "head") refs.Add("HEAD");
+            else
+            {
+                var expected = component.Value is ComponentBaseline.Fixed f ? f.Value : ((ComponentBaseline.Pending)component.Value).Before;
+                if (live is not null && expected is not null) paths.UnionWith(Value(repository.DiffTreePaths(new(live), new(expected))));
+            }
+        }
+        if (!drifted) return;
+        var block = new MaterializationBlock(id, owner.Task, attempt,
+            refs.Count == 0 ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership, inputs, [],
+            "The checkout differs from its recorded baseline.") { Scope = new([.. paths], refs.ToImmutable(), state.IndexLock is not null) };
+        Journal("preserve-drift", () => _store.Record(permit, id, new RunEvent.Blocked(block)));
     }
 
     private void VerifyPreservationCommit(GitRepository repository, RunRecord record, OperationId operation,
@@ -113,15 +158,46 @@ internal sealed partial class Materializer
         var folder = RunStorage.SafePath(storage.Folder, destination);
         if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         var started = _clock.GetUtcNow();
+        var observation = ReadPreservationCheckout(repository, record, location, attempt, StoreBytes);
+        var state = observation.State;
+        var stages = observation.Stages;
+        var completed = _clock.GetUtcNow();
+        var parents = PreservationParents(repository, state.Branch, state.Head);
+        var recipe = new CommitRecipe(state.Files, parents, message, "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>",
+            timestamp ?? DateTimeOffset.FromUnixTimeSeconds(started.ToUnixTimeSeconds()));
+        if (state.IndexTree != state.Files)
+            parents = parents.Add(Value(repository.CreateCommit(recipe with { Tree = state.IndexTree!.Value, Parents = [], Message = "Index of " + message })));
+        if (!stages.IsEmpty)
+        {
+            var stageTree = Value(repository.WriteTree(stages.Select(stage => stage with { Stage = 0, Path = $"stages/{stage.Stage}/{stage.Path}" })));
+            parents = parents.Add(Value(repository.CreateCommit(recipe with { Tree = stageTree, Parents = [], Message = "Stages of " + message })));
+        }
+        recipe = recipe with { Parents = parents };
+        var commit = Value(repository.CreateCommit(recipe));
+        Pin(repository, RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[location.Owner.Task], attempt, operation, ordinal), commit);
+        return new(ordinal, started, completed, state,
+            recipe, commit, observation.Outbox, stages);
+
+        EvidenceFile StoreBytes(string name, byte[] bytes)
+        {
+            var file = new EvidenceFile(destination + "/" + name, Revision.Hash(bytes), bytes.LongLength);
+            RunStorage.Publish(storage.Folder, file.RelativePath, bytes, file.Content, file.ByteLength);
+            return file;
+        }
+    }
+
+    private static (CheckoutState State, ImmutableArray<ArtifactRecord> Outbox, ImmutableArray<StageEntry> Stages) ReadPreservationCheckout(
+        GitRepository repository, RunRecord record, ExecutionLocation location, AttemptId attempt, Func<string, byte[], EvidenceFile> storeBytes)
+    {
         VerifyOwnedCheckout(repository, location, record);
         var checkout = Checkout(repository, location.Owner);
         var branch = Value(repository.ReadRef(location.Owner.Branch));
         var head = Value(repository.ResolveCheckoutHead(checkout));
         var symbolicHead = Value(repository.SymbolicHead(checkout));
         var lockFile = FileIdentities.ReadFile(Value(repository.IndexPath(checkout)) + ".lock");
-        LockEvidence? indexLock = lockFile is { } locked ? new(StoreBytes("index.lock", locked.Bytes), locked.Identity) : null;
+        LockEvidence? indexLock = lockFile is { } locked ? new(storeBytes("index.lock", locked.Bytes), locked.Identity) : null;
         var indexBytes = Value(repository.IndexBytes(checkout));
-        EvidenceFile? index = indexBytes is { } bytes ? StoreBytes("index", bytes) : null;
+        EvidenceFile? index = indexBytes is { } bytes ? storeBytes("index", bytes) : null;
         var stages = Value(repository.UnmergedEntries(checkout));
         var capture = Value(repository.Capture(checkout));
         if (capture.IndexBefore != capture.IndexAfter || capture.IndexBefore != index?.Content)
@@ -137,33 +213,11 @@ internal sealed partial class Materializer
             {
                 var source = RunStorage.SafePath(outboxPath, path);
                 RegularFile.Verify(source);
-                var file = StoreBytes("outbox/" + path, File.ReadAllBytes(source));
+                var file = storeBytes("outbox/" + path, File.ReadAllBytes(source));
                 outbox.Add(new(path, file.RelativePath, file.Content, file.ByteLength));
             }
         }
-        var completed = _clock.GetUtcNow();
-        var parents = PreservationParents(repository, branch, head);
-        var recipe = new CommitRecipe(capture.Tree, parents, message, "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>",
-            timestamp ?? DateTimeOffset.FromUnixTimeSeconds(started.ToUnixTimeSeconds()));
-        if (indexTree != capture.Tree)
-            parents = parents.Add(Value(repository.CreateCommit(recipe with { Tree = indexTree, Parents = [], Message = "Index of " + message })));
-        if (!stages.IsEmpty)
-        {
-            var stageTree = Value(repository.WriteTree(stages.Select(stage => stage with { Stage = 0, Path = $"stages/{stage.Stage}/{stage.Path}" })));
-            parents = parents.Add(Value(repository.CreateCommit(recipe with { Tree = stageTree, Parents = [], Message = "Stages of " + message })));
-        }
-        recipe = recipe with { Parents = parents };
-        var commit = Value(repository.CreateCommit(recipe));
-        Pin(repository, RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[location.Owner.Task], attempt, operation, ordinal), commit);
-        return new(ordinal, started, completed, new(branch, head, symbolicHead, capture.Tree, index, indexTree, untracked, indexLock),
-            recipe, commit, outbox.ToImmutable(), stages);
-
-        EvidenceFile StoreBytes(string name, byte[] bytes)
-        {
-            var file = new EvidenceFile(destination + "/" + name, Revision.Hash(bytes), bytes.LongLength);
-            RunStorage.Publish(storage.Folder, file.RelativePath, bytes, file.Content, file.ByteLength);
-            return file;
-        }
+        return (new(branch, head, symbolicHead, capture.Tree, index, indexTree, untracked, indexLock), outbox.ToImmutable(), stages);
     }
 
     private static ImmutableArray<CommitId> PreservationParents(GitRepository repository, CommitId? branch, CommitId? head)

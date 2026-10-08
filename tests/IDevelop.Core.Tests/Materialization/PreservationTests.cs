@@ -45,6 +45,11 @@ public sealed class PreservationTests
             Assert.Equal("InvalidData", reset.Reason.Problem.ToString());
             Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch)));
         }
+        var restoreOperation = f.Op();
+        var restore = Assert.IsType<Restoration.Rejected>(f.Materializer().Restore(f.Lease(T), restoreOperation,
+            ready.Execution.Launch.Attempt, Operation, f.Op(), Revision.Hash("diverged")));
+        Assert.Equal("InvalidData", restore.Reason.Problem.ToString());
+        Assert.Equal(0, RestoreTests.Moves(f, restoreOperation));
         Assert.Equal("changing\n", File.ReadAllText(Path.Combine(ready.Checkout, "changing.txt")));
         var sequence = f.Read().Sequence;
         var replay = label == "salvage"
@@ -178,6 +183,27 @@ public sealed class PreservationTests
         Assert.Equal("theirs\n", f.Git.Git("show", stages.Hex + ":stages/3/c.txt"));
         Assert.Equal("conflicted\n", f.Git.Git("show", preserved.Commit.Hex + ":c.txt"));
         Assert.Equal(3, GitFixture.Read(f.Git.Open().UnmergedEntries(ready.Checkout)).Length);
+        var preview = Assert.IsType<RestorePreviewRead.Refused>(f.Materializer().PreviewRestore(f.Lease(T), ready.Execution.Launch.Attempt, Operation));
+        Assert.Equal("DirtyWorktree", preview.Problem.ToString());
+        Assert.Equal("Restore needs a plain index. The index has unresolved stages.", preview.Detail);
+        var restoreOperation = f.Op();
+        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), restoreOperation,
+            ready.Execution.Launch.Attempt, Operation, f.Op(), Revision.Hash("conflicts")));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("Restore needs a plain index. The index has unresolved stages.", blocked.Block.Detail);
+        Assert.Equal(0, RestoreTests.Moves(f, restoreOperation));
+        Assert.Equal(3, GitFixture.Read(f.Git.Open().UnmergedEntries(ready.Checkout)).Length);
+        Assert.Equal("conflicted\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "read-tree", f.A.Hex).ExitCode);
+        var controlPreservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), controlPreservation, ready.Execution.Launch.Attempt));
+        var controlPreview = RestoreTests.Preview(f, ready, controlPreservation);
+        var controlOperation = f.Op();
+        Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), controlOperation,
+            ready.Execution.Launch.Attempt, controlPreservation, f.Op(), controlPreview.Identity));
+        Assert.Equal(1, RestoreTests.Moves(f, controlOperation));
+        Assert.False(File.Exists(Path.Combine(ready.Checkout, "c.txt")));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
 
     [Fact]
@@ -201,6 +227,46 @@ public sealed class PreservationTests
         {
             Assert.NotNull(evidence.Identity);
             Assert.Equal(FileIdentities.ReadFile(lockPath)!.Value.Identity, evidence.Identity);
+            var preview = RestoreTests.Preview(f, ready, Operation);
+            var withoutLock = preview with { IndexLock = null, Current = preview.Current with { IndexLock = null }, Identity = new Digest("") };
+            var operation = f.Op();
+            var rejected = Assert.IsType<Restoration.Rejected>(f.Materializer().Restore(f.Lease(T), operation,
+                ready.Execution.Launch.Attempt, Operation, f.Op(), Revision.Hash(RunJournal.Canonical(withoutLock))));
+            Assert.Equal("EvidenceMismatch", rejected.Reason.Problem.ToString());
+            Assert.Equal(0, RestoreTests.Moves(f, operation));
+            Assert.Equal("lock\n", File.ReadAllText(lockPath));
+            var restoreOperation = f.Op();
+            Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), restoreOperation,
+                ready.Execution.Launch.Attempt, Operation, f.Op(), preview.Identity));
+            Assert.False(File.Exists(lockPath));
+            Assert.Equal(1, RestoreTests.Moves(f, restoreOperation));
+            Assert.Equal(1, f.Read().GitObservations.Keys.Count(intent => f.Read().GitIntents[intent].Plan == OperationIds.Derive(restoreOperation, "restore-plan") &&
+                f.Read().GitIntents[intent].Mutation is GitMutation.RemoveIndexLock));
+            foreach (var identical in new[] { false, true })
+            {
+                File.WriteAllText(lockPath, "lock\n");
+                var preservation = f.Op();
+                Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, ready.Execution.Launch.Attempt));
+                var fresh = RestoreTests.Preview(f, ready, preservation);
+                var replacement = lockPath + ".new";
+                File.WriteAllText(replacement, identical ? "lock\n" : "lock2\n");
+                File.Move(replacement, lockPath, overwrite: true);
+                var replacementOperation = f.Op();
+                var refusal = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), replacementOperation,
+                    ready.Execution.Launch.Attempt, preservation, f.Op(), fresh.Identity));
+                Assert.Equal("DirtyWorktree", refusal.Block.Problem.ToString());
+                Assert.Equal("The checkout changed after it was preserved. Preserve it again.", refusal.Block.Detail);
+                Assert.True(refusal.Block.Scope!.IndexLock);
+                Assert.Equal(0, RestoreTests.Moves(f, replacementOperation));
+                Assert.Equal(identical ? "lock\n" : "lock2\n", File.ReadAllText(lockPath));
+                Assert.NotEqual(fresh.IndexLock!.Identity, FileIdentities.ReadFile(lockPath)!.Value.Identity);
+            }
+        }
+        else
+        {
+            var refusal = Assert.IsType<RestorePreviewRead.Refused>(f.Materializer().PreviewRestore(f.Lease(T), ready.Execution.Launch.Attempt, Operation));
+            Assert.Equal("iDevelop cannot read this file's identity on this system, so it will not remove index.lock. Remove it outside iDevelop, then preserve again.", refusal.Detail);
+            Assert.Equal("lock\n", File.ReadAllText(lockPath));
         }
     }
 

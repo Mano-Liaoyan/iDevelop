@@ -124,7 +124,7 @@ internal sealed partial class Materializer
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message)); }
+        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }

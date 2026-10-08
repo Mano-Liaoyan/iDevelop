@@ -210,6 +210,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(Blocked), "blocked")]
 [JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
 [JsonDerivedType(typeof(Preserved), "preserved")]
+[JsonDerivedType(typeof(Restored), "restored")]
 [JsonDerivedType(typeof(PreservationDiverged), "preservationDiverged")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
@@ -233,6 +234,8 @@ internal abstract record RunEvent
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
 
     internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
+
+    internal sealed record Restored(OperationId Plan) : RunEvent;
 
     internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 
@@ -360,6 +363,8 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<LaunchKey, PreparedExecution> Preparations { get; internal init; } = ImmutableDictionary<LaunchKey, PreparedExecution>.Empty;
 
     public ImmutableDictionary<OperationId, MaterializationBlockState> Blocks { get; internal init; } = ImmutableDictionary<OperationId, MaterializationBlockState>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.Restored> Restorations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Restored>.Empty;
 
     public ImmutableDictionary<OperationId, RunEvent.Preserved> Preservations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Preserved>.Empty;
 

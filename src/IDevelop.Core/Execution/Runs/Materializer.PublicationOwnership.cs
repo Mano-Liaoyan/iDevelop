@@ -21,7 +21,7 @@ internal sealed partial class Materializer
         var identity = OperationIds.Derive(operation, "ownership-" + Revision.Hash(observed).Sha256);
         evidence = [storage.WriteEvidence(identity, "refs-before.json", bytes), storage.WriteEvidence(identity, "refs-after.json", observed)];
         throw Fault(MaterializationProblem.UncertainOwnership,
-            $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.");
+            $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.", new([], names, false));
     }
 
     private static SortedDictionary<string, CommitId> SharedRefSnapshot(GitRepository repository, RunRecord record) =>
@@ -53,6 +53,7 @@ internal sealed partial class Materializer
         {
             GitMutation.CreateWorktree create => create.Owner.Branch,
             GitMutation.MoveRef move => move.Change.Ref,
+            GitMutation.RestoreRef restore => restore.Change.Ref,
             _ => null,
         }).OfType<string>();
         var unexplained = ImmutableArray.CreateBuilder<string>();

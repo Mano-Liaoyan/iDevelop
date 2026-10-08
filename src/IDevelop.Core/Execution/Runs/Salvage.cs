@@ -23,3 +23,19 @@ internal abstract record Preservation
     internal sealed record Blocked(MaterializationBlock Block) : Preservation;
     internal sealed record Rejected(RunRejection Reason) : Preservation;
 }
+
+internal abstract record RestorePreviewRead
+{
+    private RestorePreviewRead() { }
+    internal sealed record Previewed(RestorePreview Preview) : RestorePreviewRead;
+    internal sealed record Refused(MaterializationProblem Problem, string Detail, BlockScope? Scope) : RestorePreviewRead;
+    internal sealed record Rejected(RunRejection Reason) : RestorePreviewRead;
+}
+
+internal abstract record Restoration
+{
+    private Restoration() { }
+    internal sealed record Restored(RunEvent.Restored Receipt) : Restoration;
+    internal sealed record Blocked(MaterializationBlock Block) : Restoration;
+    internal sealed record Rejected(RunRejection Reason) : Restoration;
+}

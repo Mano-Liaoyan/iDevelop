@@ -142,7 +142,7 @@ internal sealed partial class Materializer
             return new Preparation.Ready(execution, Checkout(repository, owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return Block(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return Block(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
@@ -249,9 +249,9 @@ internal sealed partial class Materializer
         return prompt;
     }
 
-    private static MaterializationFailure Fault(MaterializationProblem problem, string detail) => new(problem, detail);
-    private sealed class MaterializationFailure(MaterializationProblem problem, string detail) : Exception(detail)
-    { public MaterializationProblem Problem { get; } = problem; }
+    private static MaterializationFailure Fault(MaterializationProblem problem, string detail, BlockScope? scope = null) => new(problem, detail, scope);
+    private sealed class MaterializationFailure(MaterializationProblem problem, string detail, BlockScope? scope = null) : Exception(detail)
+    { public MaterializationProblem Problem { get; } = problem; public BlockScope? Scope { get; } = scope; }
     private sealed class Refusal(RunRejection reason) : Exception
     { public RunRejection Reason { get; } = reason; }
 }

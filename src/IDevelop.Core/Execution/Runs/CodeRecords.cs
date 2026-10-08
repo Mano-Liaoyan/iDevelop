@@ -103,7 +103,13 @@ internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, 
     public BlockScope? Scope { get; init; }
 }
 
-internal sealed record BlockScope(ImmutableArray<string> Paths, ImmutableArray<string> Refs, bool IndexLock);
+internal sealed record BlockScope(ImmutableArray<string> Paths, ImmutableArray<string> Refs, bool IndexLock)
+{
+    public bool Equals(BlockScope? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) &&
+        Refs.SequenceEqual(other.Refs, StringComparer.Ordinal) && IndexLock == other.IndexLock;
+
+    public override int GetHashCode() => HashCode.Combine(Paths.Length, Refs.Length, IndexLock);
+}
 
 internal sealed record PreservationObservation(int Ordinal, DateTimeOffset Started, DateTimeOffset Completed, CheckoutState State,
     CommitRecipe Recipe, CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, ImmutableArray<StageEntry> Stages);

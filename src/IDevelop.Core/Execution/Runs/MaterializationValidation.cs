@@ -12,7 +12,8 @@ internal static partial class RunValidation
         }
         if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced or RunEvent.RootExitObserved or
             RunEvent.TurnCaptured or RunEvent.CaptureDisposed or RunEvent.Preserved or RunEvent.PreservationDiverged or
-            RunEvent.Planned { Plan: MaterializationPlan.Preservation } or RunEvent.TurnClosed { Capture: not null })
+            RunEvent.Restored or RunEvent.GitIntended { Mutation: GitMutation.RestoreRef or GitMutation.RestoreFiles or GitMutation.RemoveIndexLock } or
+            RunEvent.Planned { Plan: MaterializationPlan.Preservation or MaterializationPlan.Restoration } or RunEvent.TurnClosed { Capture: not null })
         {
             return RunProblem.UnsupportedSchema;
         }
@@ -57,6 +58,7 @@ internal static partial class RunValidation
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
             (block.Conflict is null || Conflict(block.Conflict)) && (block.Scope is null || Scope(block.Scope)),
         RunEvent.SalvageRetained retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
+        RunEvent.Restored restored => restored.Plan.Value != Guid.Empty,
         RunEvent.Preserved retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
         RunEvent.PreservationDiverged diverged => diverged.Operation.Value != Guid.Empty &&
             Observation(diverged.First, 1) && Observation(diverged.Second, 2) && Scope(diverged.Scope),
@@ -82,6 +84,10 @@ internal static partial class RunValidation
         MaterializationPlan.Preservation p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && State(p.Preserved) &&
             Recipe(p.Recipe) && p.Recipe.Tree == p.Preserved.Files && Revision.IsCommit(p.Commit.Hex) &&
             !p.Outbox.IsDefault && p.Outbox.All(PreservedArtifact) && Reference(p.Ref),
+        MaterializationPlan.Restoration p => p.Task.Value != Guid.Empty && p.Attempt.Value != Guid.Empty && p.Preservation.Value != Guid.Empty &&
+            State(p.From) && State(p.To) && !p.Paths.IsDefault && p.Paths.All(RestorePath) &&
+            !p.Repairs.IsDefault && p.Repairs.All(id => id.Value != Guid.Empty) && !p.Rechecks.IsDefault && p.Rechecks.All(id => id.Value != Guid.Empty) &&
+            p.Confirmation.Value != Guid.Empty && Revision.IsHash(p.Preview.Sha256) && p.Supersedes?.Value != Guid.Empty,
         MaterializationPlan.RetryReset p => p.Task.Value != Guid.Empty && p.Salvaged.Value != Guid.Empty && p.SalvagePlan.Value != Guid.Empty &&
             (p.From is null || Revision.IsCommit(p.From.Value.Hex)) && Revision.IsCommit(p.To.Hex) && !p.Remove.IsDefault && p.Remove.All(Evidence),
         _ => false,
@@ -92,12 +98,17 @@ internal static partial class RunValidation
         GitMutation.CreateWorktree m => Owner(m.Owner) && Revision.IsCommit(m.Start.Hex),
         GitMutation.MoveRef m => Reference(m.Change.Ref) && (m.Change.Expected is null || Revision.IsCommit(m.Change.Expected.Value.Hex)) &&
             Revision.IsCommit(m.Change.Target.Hex),
+        GitMutation.RestoreRef m => Reference(m.Change.Ref) && (m.Change.Expected is null || Revision.IsCommit(m.Change.Expected.Value.Hex)) && Revision.IsCommit(m.Change.Target.Hex),
+        GitMutation.RestoreFiles m => m.Task.Value != Guid.Empty && !m.Paths.IsDefault && m.Paths.All(RestorePath),
+        GitMutation.RemoveIndexLock m => m.Task.Value != Guid.Empty && Evidence(m.Lock.Bytes) && m.Lock.Identity is not null,
         GitMutation.AlignIndex m => m.Task.Value != Guid.Empty && Hash(m.Expected) && Revision.IsCommit(m.Target.Hex),
         GitMutation.ResetCheckout m => m.Task.Value != Guid.Empty && Revision.IsCommit(m.Target.Hex),
         GitMutation.AttachHead m => m.Task.Value != Guid.Empty && Reference(m.Branch),
         GitMutation.RemovePaths m => m.Task.Value != Guid.Empty && !m.Paths.IsDefault && m.Paths.All(Evidence),
         _ => false,
     };
+
+    private static bool RestorePath(PathRestore path) => Path(path.Path) && Hash(path.From) && Hash(path.To);
 
     private static bool Code(CodeSelection code) => code switch
     {

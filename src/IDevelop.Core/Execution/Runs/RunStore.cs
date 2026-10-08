@@ -259,8 +259,8 @@ internal sealed class RunStore
                 return Missing();
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
-                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation } or RunEvent.GitIntended or RunEvent.GitObserved or
-                RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
+                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration } or RunEvent.GitIntended or RunEvent.GitObserved or
+                RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
             {
                 return Refuse(RunProblem.InvalidData);
             }

@@ -150,7 +150,7 @@ internal sealed partial class Materializer
             return new RetryReset.Reset(plan.To);
         }
         catch (Refusal refused) { return new RetryReset.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return RetryBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return RetryBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return RetryBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
@@ -176,9 +176,11 @@ internal sealed partial class Materializer
 
     private static void VerifyIgnoredObstructions(GitRepository repository, string checkout, ImmutableArray<string> targetPaths)
     {
-        if (Value(repository.IgnoredFiles(checkout)).Any(ignored => targetPaths.Any(path => path == ignored ||
-            path.StartsWith(ignored + "/", StringComparison.Ordinal) || ignored.StartsWith(path + "/", StringComparison.Ordinal))))
-            throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the reset target and must be preserved.");
+        var ignored = Value(repository.IgnoredFiles(checkout));
+        var obstructed = targetPaths.Where(path => ignored.Any(file => path == file ||
+            path.StartsWith(file + "/", StringComparison.Ordinal) || file.StartsWith(path + "/", StringComparison.Ordinal))).ToImmutableArray();
+        if (!obstructed.IsEmpty)
+            throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the reset target and must be preserved.", new(obstructed, [], false));
     }
 
     private RetryReset RetryBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
