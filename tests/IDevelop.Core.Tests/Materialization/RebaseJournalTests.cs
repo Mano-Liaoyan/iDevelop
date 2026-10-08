@@ -89,6 +89,12 @@ public sealed class RebaseJournalTests
             return;
         }
         Assert.IsType<RunRead.Loaded>(Accept(result));
+        // Each of the retention ref, the branch, and the reset must be observed on its own.
+        var moves = record.GitIntents.Where(pair => pair.Value.Plan == id).ToArray();
+        Assert.Equal(3, moves.Length);
+        foreach (var move in moves)
+            Assert.Equal(RunProblem.InputConflict, Problem(Apply(f, record with { GitObservations = record.GitObservations.Remove(move.Key) }, f.Op(),
+                new RunEvent.ResultAccepted(result, plan.Inputs))));
         Assert.Equal(RunProblem.InputConflict, Problem(Accept(result with { Report = "changed" })));
         Assert.Equal(RunProblem.InputConflict, Problem(Accept(result, plan.Inputs with { Text = "changed" })));
         Assert.Equal(RunProblem.UnknownResult, Problem(Accept(result with { Origin = new ResultOrigin.Rebased(plan.Source, f.Op()) })));

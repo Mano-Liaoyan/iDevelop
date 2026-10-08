@@ -351,6 +351,7 @@ public sealed class RebaseTests
         Assert.Equal(stale.Id, f.Read().CurrentResults[U].Id);
         File.Delete(late);
         Assert.IsType<Rebasing.Rebased>(Rebaser(f).Rebase(f.Lease(U), approval, preview.Identity));
+        Assert.DoesNotContain(f.Read().Blocks.Values, block => !block.Resolved);
     }
 
     [Fact]
@@ -536,8 +537,9 @@ public sealed class RebaseTests
     {
         var realGit = CommandResolver.Create((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
         var bin = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "version-bin")).FullName;
+        // Git 2.41 and 2.42 end merge-tree with a segmentation fault on a content merge, so this one never merges.
         Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\nfor arg do last=$arg; done\nif [ \"$last\" = version ]; then printf '%s\\n' '" + version +
-            "'; exit 0; fi\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+            "'; exit 0; fi\ncase \" $* \" in *' merge-tree '*) exit 139;; esac\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
         return new Dictionary<string, string>(f.Git.Environment) { ["PATH"] = bin + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH") };
     }
 }

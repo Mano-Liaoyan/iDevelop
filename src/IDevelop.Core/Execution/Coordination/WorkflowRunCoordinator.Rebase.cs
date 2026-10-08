@@ -103,6 +103,9 @@ internal sealed partial class WorkflowRunCoordinator
             {
                 _live.Remove(task);
                 Rebased(task, outcome);
+                // Any other refusal waits for Resume, which clears this window's holds, rather than repeating at once.
+                if (outcome is Rebasing.Rejected { Reason: var reason } && !Transient(reason.Problem))
+                    Hold(task, new TaskHold.Refused(reason, null, Transient: false));
             }, error => Faulted(task, error));
         }
     }
