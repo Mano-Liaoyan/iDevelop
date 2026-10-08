@@ -133,6 +133,38 @@ public sealed class CaptureTests
         }
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task A_HEAD_detached_after_root_observation_diverges_as_UncertainOwnership_and_blocks_publication()
+    {
+        foreach (var detach in new[] { false, true })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            f.Git.Write("result.txt", "writer\n", ready.Checkout);
+            var log = f.ObserveAndLog(ready);
+            if (detach) Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "-q", "--detach").ExitCode);
+            var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
+                TerminalAttemptOutcome.Succeeded, log));
+            var publication = f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt);
+            if (detach)
+            {
+                var diverged = Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
+                Assert.Equal(new[] { "HEAD" }, diverged.Refs);
+                Assert.Empty(diverged.Paths);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(publication).Block.Problem);
+                Assert.Empty(f.Read().Results);
+            }
+            else
+            {
+                Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+                Assert.Equal("writer\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(
+                    Assert.IsType<Publication.Accepted>(publication).Result.Code).Code.Commit.Hex + ":result.txt"));
+            }
+        }
+    }
+
     [Theory]
     [InlineData("git.capture-1.before", false)]
     [InlineData("git.capture-1.after", false)]

@@ -91,9 +91,6 @@ internal sealed partial class Materializer
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
                 if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
-                var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch))!.Value;
-                if (tip != root.Tip)
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The writer branch tip differs from the root observation.");
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, root.Tip);
                 step = "capture";
                 var live = Value(Mutate("capture", () => repository.Capture(checkout)));
