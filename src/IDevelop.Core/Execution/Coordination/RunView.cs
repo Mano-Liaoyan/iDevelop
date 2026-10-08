@@ -51,7 +51,7 @@ internal enum TaskState
     /// <summary>Its root exited, and settlement, publication, or the turn's disposition is not finished.</summary>
     Settling,
 
-    /// <summary>Its attempt rests for the person: a question, a review, or queued text.</summary>
+    /// <summary>Its attempt rests for the person: a question, a review, or queued text. Or its approval request waits for them.</summary>
     Waiting,
 
     /// <summary>It has a current accepted result.</summary>
@@ -74,6 +74,9 @@ internal enum TaskState
 
     /// <summary>The coordinator does not run this kind of node yet.</summary>
     Unsupported,
+
+    /// <summary>A person sent back its approval request. It holds its dependents until its inputs change.</summary>
+    SentBack,
 }
 
 internal sealed record TaskView(TaskId Task, TaskState State)
@@ -102,6 +105,9 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>The tasks that hold back a <see cref="TaskState.Pending"/> task.</summary>
     public ImmutableSortedSet<TaskId> HeldBy { get; init; } = [];
+
+    /// <summary>An Approval node's newest request and its answer, or null before its first request.</summary>
+    public GateView? Gate { get; init; }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>

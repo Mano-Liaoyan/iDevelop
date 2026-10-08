@@ -82,7 +82,7 @@ internal enum MaterializationProblem
 {
     JoinRequired, FanInConflict, UncertainOwnership, LiveWriter, DirtyWorktree, InputUnavailable, SubmoduleUnavailable,
 
-    NotRepositoryRoot, GitVersionUnsupported, GitFailed,
+    NotRepositoryRoot, GitVersionUnsupported, GitFailed, ArtifactCollision,
 }
 
 internal sealed record StageEntry(string Mode, string Object, int Stage, string Path);

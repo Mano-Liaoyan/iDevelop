@@ -7,7 +7,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>The project-scoped run journals and their locked commands.</summary>
-internal sealed class RunStore
+internal sealed partial class RunStore
 {
     private readonly string _project;
 
