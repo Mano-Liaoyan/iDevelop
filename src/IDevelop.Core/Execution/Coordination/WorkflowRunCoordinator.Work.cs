@@ -155,6 +155,7 @@ internal sealed partial class WorkflowRunCoordinator
             case TurnSettlement.Unresolved unresolved:
                 _live.Remove(task);
                 var turn = unresolved.Turn;
+                _unresolved[task] = turn;
                 Hold(task, new TaskHold.Unresolved(turn.Reason, turn.Rejection, Transient(turn.Rejection?.Problem)));
                 break;
         }

@@ -36,7 +36,12 @@ internal sealed partial class WorkflowRunCoordinator
     /// outcome, on the loop. With <paramref name="mark"/> the task counts as settling while it runs, so nothing else starts it.
     /// </summary>
     private Task<T> Request<T, TWork>(RunAddress address, TaskId task, Func<string, T> unavailable, Func<RunRejection, T> refused, bool mark,
-        Func<TWork> work, Func<TWork, T> finish, CancellationToken wait)
+        Func<TWork> work, Func<TWork, T> finish, CancellationToken wait) =>
+        Request(address, task, unavailable, refused, mark, () => Task.FromResult(work()), finish, wait);
+
+    /// <inheritdoc cref="Request{T, TWork}(RunAddress, TaskId, Func{string, T}, Func{RunRejection, T}, bool, Func{TWork}, Func{TWork, T}, CancellationToken)"/>
+    private Task<T> Request<T, TWork>(RunAddress address, TaskId task, Func<string, T> unavailable, Func<RunRejection, T> refused, bool mark,
+        Func<Task<TWork>> work, Func<TWork, T> finish, CancellationToken wait)
     {
         var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!Post(() =>
@@ -47,7 +52,7 @@ internal sealed partial class WorkflowRunCoordinator
                 else
                 {
                     if (mark) _live[task] = new(LiveStage.Settling);
-                    Offload(work, outcome =>
+                    Background(work, outcome =>
                     {
                         if (mark) _live.Remove(task);
                         done.TrySetResult(finish(outcome));
