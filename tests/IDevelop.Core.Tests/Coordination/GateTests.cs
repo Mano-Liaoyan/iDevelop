@@ -271,6 +271,28 @@ public sealed class GateTests
         Assert.Equal(1, f.Launches(A));
     }
 
+    [Fact]
+    public async Task A_refused_request_holds_the_gate_and_is_tried_again()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Gate()], (A, G)));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        FileStream? journal = null;
+        f.Runs.Probe = step =>
+        {
+            // Another writer holds the journal, so the request is refused as busy.
+            if (step == "journal.gate-request.before" && journal is null)
+                journal = new FileStream(Path.Combine(f.Preparation.Git.Folder, ".idp", "runs", "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        };
+        await f.Resume();
+        var refused = await f.Until(view => view.Tasks[G].State == TaskState.Refused);
+        Assert.Equal(RunProblem.JournalBusy, refused.Tasks[G].Refusal!.Problem);
+        Assert.Equal(RunStatus.Running, refused.Status);
+        journal!.Dispose();
+        await Waiting(f);
+        Assert.Single(f.Read().Gates);
+    }
+
     [Theory]
     [InlineData("journal.gate-request.before")]
     [InlineData("journal.gate-request.after")]
