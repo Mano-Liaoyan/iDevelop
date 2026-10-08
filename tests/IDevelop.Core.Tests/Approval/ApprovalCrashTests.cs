@@ -139,6 +139,22 @@ public sealed class ApprovalCrashTests
         Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(f.Read(run).RunKey!)));
     }
 
+    [Fact]
+    public async Task A_pin_stays_while_the_run_s_base_ref_does_not_hold_the_base()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await f.Open();
+        var started = await Start(f, f.Preflight(), BaseChoice.Head, First);
+        await Completed(started.Coordinator);
+        var run = started.Coordinator.Address.Run;
+        f.GitText("update-ref", "-d", RunLayout.ApprovedBase(f.Read(run).RunKey!));
+        f.GitText("update-ref", $"refs/idp/approvals/{run}", Head.Hex);
+
+        Assert.True((await Start(f, f.Preflight(), BaseChoice.Head, First)).Existing);
+
+        Assert.Equal($"{Head.Hex} refs/idp/approvals/{run}\n", f.GitText("for-each-ref", "--format=%(objectname) %(refname)", "refs/idp/approvals/"));
+    }
+
     [Theory]
     [InlineData("file")]
     [InlineData("title")]
