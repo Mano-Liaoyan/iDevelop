@@ -352,6 +352,9 @@ int? Run(JsonElement steps)
             case "write":
                 File.WriteAllText(value[0].GetString()!, value[1].GetString());
                 break;
+            case "copy":
+                File.Copy(value[0].GetString()!, value[1].GetString()!, overwrite: true);
+                break;
             case "scripted":
                 var folder = value.GetString()!;
                 var counter = Path.Combine(folder, "count");

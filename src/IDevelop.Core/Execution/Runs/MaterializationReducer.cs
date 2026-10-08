@@ -377,12 +377,13 @@ internal static partial class RunReducer
                 }
                 if (record.Schema == 3)
                 {
-                    var closure = (AttemptEnd.Logged)record.Closures[publisher.Id];
+                    // The captures froze the turn's log. Publish checks the closure against it, which Mark done extends by one line.
                     var launch = new LaunchKey(publisher.Id, record.TurnClosures.Keys.Where(key => key.Attempt == publisher.Id).Select(key => key.Turn).DefaultIfEmpty(0).Max());
                     if (publication.Capture is not { } capture || record.Settlements.GetValueOrDefault(launch) != capture ||
                         record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
                         !record.RootExits.TryGetValue(launch, out var root) || !record.Captures.TryGetValue(capture, out var observations) ||
-                        observations.Count != 2 || observations.Any(o => o.Log != closure.Evidence || o.Report != publication.Report))
+                        !record.TurnClosures.TryGetValue(launch, out var turn) ||
+                        observations.Count != 2 || observations.Any(o => o.Log != turn || o.Report != publication.Report))
                         return RunProblem.OutcomeMismatch;
                     var first = observations[0];
                     if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||
