@@ -249,14 +249,23 @@ internal sealed partial class WorkflowRunCoordinator
             return;
         }
         AttemptCause Cause(AttemptId fix) => choice == FixChoice.Continue ? new AttemptCause.Continue(fix, confirmation) : new AttemptCause.Retry(fix, confirmation);
-        // A choice already reserved the round's replacement: the same choice converges on it, any other is refused.
         var latest = RunProjection.LatestAttempts(record);
-        if (record.Revision.Snapshot.SubjectOf(task) is { } owner && latest.GetValueOrDefault(task) is { } reviewer &&
-            latest.GetValueOrDefault(owner) is { } newest && RunReducer.Previous(record.Attempts[newest].Cause) is { } replaced &&
-            record.ReviewOf(newest)?.Attempt == reviewer)
+        if (record.Revision.Snapshot.SubjectOf(task) is { } owner && latest.GetValueOrDefault(task) is { } reviewer)
         {
-            complete(RunReducer.Same(record.Attempts[newest].Cause, Cause(replaced)) ? new FixReply.Reserved(newest) : Refused(RunProblem.ReplacementConflict));
-            return;
+            bool Replaces(RunAttempt attempt) => attempt.Task == owner && RunReducer.Previous(attempt.Cause) is not null && record.ReviewOf(attempt.Id)?.Attempt == reviewer;
+            // A confirmation is one choice: it converges on its replacement while that is open, and never makes another.
+            if (record.Attempts.Values.FirstOrDefault(attempt => Replaces(attempt) && Confirmation(attempt.Cause) == confirmation) is { } chosen)
+            {
+                complete(!record.Closures.ContainsKey(chosen.Id) && RunReducer.Same(chosen.Cause, Cause(RunReducer.Previous(chosen.Cause)!.Value))
+                    ? new FixReply.Reserved(chosen.Id) : Refused(RunProblem.ReplacementConflict));
+                return;
+            }
+            // Another choice already reserved the round's replacement, which is still open.
+            if (latest.GetValueOrDefault(owner) is { } newest && Replaces(record.Attempts[newest]) && !record.Closures.ContainsKey(newest))
+            {
+                complete(Refused(RunProblem.ReplacementConflict));
+                return;
+            }
         }
         if (Reviewing(record, Project(record).Tasks.GetValueOrDefault(task)) is not { } review)
         {
@@ -292,6 +301,13 @@ internal sealed partial class WorkflowRunCoordinator
             complete(new FixReply.Refused(new(RunProblem.StorageUnavailable, Task: task)));
         });
     }
+
+    private static OperationId? Confirmation(AttemptCause cause) => cause switch
+    {
+        AttemptCause.Continue continued => continued.Confirmation,
+        AttemptCause.Retry retry => retry.Confirmation,
+        _ => null,
+    };
 
     /// <summary>
     /// Under the subject's task lease: preserves and baselines the checkout for Continue, or salvages and resets it for
