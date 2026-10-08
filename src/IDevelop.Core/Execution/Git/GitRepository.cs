@@ -694,8 +694,10 @@ internal sealed partial class GitRepository
                 start.Environment.Remove(key);
             foreach (var (key, value) in pinnedGitEnvironment) start.Environment[key] = value;
         }
-        if (!OperatingSystem.IsWindows() && environment is not null && environment.TryGetValue("PATH", out var searchPath))
-            start.FileName = CommandResolver.Create(searchPath.Split(Path.PathSeparator), []).Resolve("git")?.Path ?? "git";
+        // The group launcher needs a full path. Unlike Process.Start, the search never looks in the current folder.
+        if (!OperatingSystem.IsWindows())
+            start.FileName = CommandResolver.Create(((environment is not null && environment.TryGetValue("PATH", out var searchPath)
+                ? searchPath : System.Environment.GetEnvironmentVariable("PATH")) ?? "").Split(Path.PathSeparator), []).Resolve("git")?.Path ?? "git";
         start.Environment["GIT_TERMINAL_PROMPT"] = "0";
         start.Environment["LC_ALL"] = "C";
         start.Environment["GIT_OPTIONAL_LOCKS"] = "0";
@@ -709,13 +711,13 @@ internal sealed partial class GitRepository
                 var remaining = patience - elapsed.Elapsed;
                 return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
             }
-            using var process = Process.Start(start)!;
+            using var process = GitProcess.Start(start);
             using var stop = new CancellationTokenSource();
             using var output = new MemoryStream();
-            using var stdoutPipe = process.StandardOutput;
-            using var stderrPipe = process.StandardError;
-            using var stdinPipe = process.StandardInput.BaseStream;
-            var stdout = Task.Run(() => stdoutPipe.BaseStream.CopyToAsync(output, stop.Token));
+            using var stdoutPipe = process.Output;
+            using var stderrPipe = process.Error;
+            using var stdinPipe = process.Input;
+            var stdout = Task.Run(() => stdoutPipe.CopyToAsync(output, stop.Token));
             var stderr = Task.Run(() => stderrPipe.ReadToEndAsync(stop.Token));
             var input = Task.Run(async () =>
             {
@@ -734,9 +736,10 @@ internal sealed partial class GitRepository
                     return new(-1, output.ToArray(), stderr.Result + error.GetBaseException().Message);
                 throw error.GetBaseException();
             }
-            // A process that outlived Git, such as one a hook started, can hold the pipes open, and no tree kill finds it.
-            // On Windows, closing a pipe does not end a read blocked on it, so the reads are canceled first.
-            ProcessCheck.KillTreeQuietly(process);
+            // The group or job also stops what a hook started after its parent exited, which no tree kill finds. A process
+            // that left them can still hold the pipes open. On Windows, closing a pipe does not end a read blocked on it,
+            // so the reads are canceled first.
+            process.Stop();
             process.WaitForExit(Settle);
             if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
             return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
@@ -744,6 +747,72 @@ internal sealed partial class GitRepository
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             return new(-1, [], error.Message);
+        }
+    }
+
+    /// <summary>
+    /// One Git process and what contains it: its own process group on Linux and macOS, a job on Windows. Only a timeout
+    /// stops them, so a hook's background work outlives a call that ends on its own, as it did before.
+    /// </summary>
+    private sealed class GitProcess : IDisposable
+    {
+        private readonly Process? _process;
+        private readonly ProcessJob? _job;
+        private readonly ProcessGroup? _group;
+        private bool _stopped;
+
+        private GitProcess(ProcessGroup group)
+        {
+            _group = group;
+            Input = group.Input;
+            Output = group.Output;
+            Error = new StreamReader(group.Error, Encoding.UTF8);
+        }
+
+        private GitProcess(Process process)
+        {
+            _process = process;
+            _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
+            Input = process.StandardInput.BaseStream;
+            Output = process.StandardOutput.BaseStream;
+            Error = process.StandardError;
+        }
+
+        public Stream Input { get; }
+        public Stream Output { get; }
+        public StreamReader Error { get; }
+        public int ExitCode => _group?.Exited.Result ?? _process!.ExitCode;
+
+        public static GitProcess Start(ProcessStartInfo start)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                try { return new GitProcess(ProcessGroup.Start(start)); }
+                catch (NotSupportedException) { }
+            }
+            return new GitProcess(Process.Start(start)!);
+        }
+
+        public bool WaitForExit(TimeSpan timeout) => _group?.Exited.Wait(timeout) ?? _process!.WaitForExit(timeout);
+
+        public void Stop()
+        {
+            _stopped = true;
+            if (_group is not null)
+            {
+                _group.Stop();
+                return;
+            }
+            _job?.Terminate();
+            ProcessCheck.KillTreeQuietly(_process!);
+        }
+
+        public void Dispose()
+        {
+            if (!_stopped) _job?.KeepProcessesOnClose();
+            _job?.Dispose();
+            _group?.Dispose();
+            _process?.Dispose();
         }
     }
 

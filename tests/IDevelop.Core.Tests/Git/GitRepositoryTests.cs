@@ -808,6 +808,51 @@ public sealed class GitRepositoryTests
     }
 
     [UnixFact]
+    public void A_timed_out_call_stops_a_hook_child_that_outlived_its_parent_and_never_writes()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        var child = Path.Combine(bin, "child");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(sleep 300 & echo $! > {Quote(child)})\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        elapsed.Stop();
+        var id = int.Parse(File.ReadAllText(child), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(10), $"The call took {elapsed.Elapsed}.");
+            Assert.True(Exits(id, TimeSpan.FromSeconds(5)), "The hook's child outlived the timed-out Git call.");
+        }
+        finally
+        {
+            Kill(id);
+        }
+    }
+
+    [UnixFact]
+    public void A_call_that_ends_on_its_own_leaves_a_hook_child_running()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        var child = Path.Combine(bin, "child");
+        Executable.Write(Path.Combine(bin, "git"),
+            $"#!/bin/sh\n(sleep 300 >/dev/null 2>&1 </dev/null & echo $! > {Quote(child)})\nexec {Quote(RealGit)} \"$@\"\n");
+        var result = GitRepository.Run(["rev-parse", "--is-inside-work-tree"], f.Folder, GitOperation.Metadata, GitLimits.Default, environment);
+        var id = int.Parse(File.ReadAllText(child), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.Equal((0, "true\n"), (result.ExitCode, result.Text));
+            Assert.False(Exits(id, TimeSpan.FromMilliseconds(500)), "A call that ended on its own stopped what its hook started.");
+        }
+        finally
+        {
+            Kill(id);
+        }
+    }
+
+    [UnixFact]
     public void A_Git_that_exits_without_reading_its_input_keeps_its_error()
     {
         using var f = new GitFixture();
