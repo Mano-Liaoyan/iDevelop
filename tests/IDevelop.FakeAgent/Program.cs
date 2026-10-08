@@ -45,6 +45,7 @@ using System.Text.Json;
 //                                 of stopping
 //   hang                          wait until killed
 //   write [<file>, <text>]        write the text to the file, relative to the current folder
+//   outbox [<name>, <base64>]     write the bytes and declare them as one artifact in the outbox the prompt names
 //   scripted <folder>             count this call in <folder>/count, copy stdin to <folder>/<n>.stdin, and run the steps in
 //                                 <folder>/<n>.json, so each turn of a conversation can answer differently
 //   choose [{"prompt": <text>, "steps": [...]}, ...]
@@ -357,6 +358,24 @@ int? Run(JsonElement steps)
                 break;
             case "copy":
                 File.Copy(value[0].GetString()!, value[1].GetString()!, overwrite: true);
+                break;
+            case "outbox":
+                const string declare = "Declare artifacts in ";
+                var named = prompt ?? "";
+                var start = named.IndexOf(declare, StringComparison.Ordinal);
+                if (start < 0)
+                {
+                    stderr.WriteLine("fake agent: the prompt names no outbox");
+                    return 94;
+                }
+
+                start += declare.Length;
+                var outbox = named[start..named.IndexOf("/manifest.json", start, StringComparison.Ordinal)];
+                Directory.CreateDirectory(outbox);
+                var artifact = value[0].GetString()!;
+                File.WriteAllBytes(Path.Combine(outbox, artifact + ".bin"), Convert.FromBase64String(value[1].GetString()!));
+                File.WriteAllText(Path.Combine(outbox, "manifest.json"),
+                    JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name = artifact, path = artifact + ".bin" } } }));
                 break;
             case "choose":
                 var turnPrompt = prompt ?? "";

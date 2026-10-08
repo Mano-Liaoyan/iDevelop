@@ -188,7 +188,7 @@ public sealed class DispatchTests
     [Fact]
     public async Task Missing_context_never_holds_a_task_back()
     {
-        var gate = new TaskDefinition(C, BuiltInBlueprints.Approval) { Title = "Gate" };
+        var gate = new TaskDefinition(C, BuiltInBlueprints.Review) { Title = "Review" };
         var workflow = RunFixtures.Connect(Graph([Agent(A), Agent(B), gate], (A, B)), C, B, ConnectionKind.Context);
         await using var f = new CoordinatorFixture(workflow);
         f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Writes(B, "b.txt", "B\n"));
