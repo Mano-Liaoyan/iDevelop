@@ -68,6 +68,16 @@ internal sealed class WorkflowRunFixture : IDisposable
 
     public static WorkflowEdit.Connect Dependency(TaskId from, TaskId to) => new(new ConnectionKey(from, to), ConnectionKind.Dependency);
 
+    /// <summary>A Review node whose reviewer is Codex, whose first prompt starts with its title.</summary>
+    public static WorkflowEdit.PlaceNode Review(TaskId id, string title, double x) =>
+        new(id, BuiltInBlueprints.Review, new CanvasPoint(x, 90)) { Title = title, Settings = new NodeSettings(Codex, ConversationMode.Autonomous) };
+
+    /// <summary>A reviewer's answer with its verdict block.</summary>
+    public static string Verdict(string json) => $"I read the change.\n\n```idevelop\n{json}\n```";
+
+    /// <summary>A fix round's answer to each finding.</summary>
+    public static string Answers(string answers) => $"I answered each finding.\n\n```idevelop\n{{\"status\": \"answers\", \"answers\": {answers}}}\n```";
+
     /// <summary>Called with every probe point of each window's runs, off the UI thread.</summary>
     public Action<string>? Probe { get; set; }
 
