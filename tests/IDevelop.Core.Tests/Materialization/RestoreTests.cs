@@ -126,6 +126,8 @@ public sealed class RestoreTests
         Assert.Equal("Rejected", restored.GetType().Name);
         Assert.Equal("UnresolvedOwnership", Assert.IsType<Restoration.Rejected>(restored).Reason.Problem.ToString());
         Assert.Equal(new[] { ready.Execution.Launch }, f.Read().UnresolvedClaims);
+        Assert.Equal(point == "before" ? "no plan" : "planned",
+            f.Read().Plans.ContainsKey(OperationIds.Derive(operation, "restore-plan")) ? "planned" : "no plan");
         Assert.Equal(0, Moves(f, operation));
         Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
