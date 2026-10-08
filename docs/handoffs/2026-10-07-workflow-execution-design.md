@@ -16,7 +16,7 @@ The Opus review of version 1 found two places where the note reversed or extende
 2. Workflow turns stop the processes their agent started when the turn ends. Standalone single-task runs keep the recorded rule that what the agent started on purpose keeps running. On Linux and macOS the stop is best effort. A process that leaves its group escapes, and correctness does not rely on the stop.
 3. A review fix interrupted by closing the app does not resume by itself. On reopen the person chooses **Continue fix** or **Retry fix**.
 
-These decisions replace the process-tree evidence that E2a expected through `IExecutionBoundary`. Production `Publish` blocks as `LiveWriter` until E3 replaces that gate with execution, capture, and ownership evidence.
+These decisions replace the process-tree evidence that E2a expected through `IExecutionBoundary`. E3a.2 removed that interface. `Publish` now consumes a turn's root observation and matching captures, and salvage and retry reset check recorded claim ownership instead.
 
 ### One coordinator decides from durable records
 
@@ -46,6 +46,13 @@ Ending ancestry permission at root exit closes the gap that the E2 record's [ope
 Publication requires strict successful closure, a matching capture, checked ownership, and attempt-base ancestry. E2 publishes the frozen candidate by a journaled compare-and-swap. Every later Git move keeps E2a's live checks. Before a consumer's first claim, the coordinator rechecks its producers' checkouts against their journaled baselines. A change found there creates a durable block, and an accepted result stays immutable. Completion uses recorded outcomes and runs no fresh filesystem census.
 
 A capture or drift block offers **Preserve and restore**. It retains the current files, index, and any commit a restore could displace. It takes two matching captures, previews the current state against a named journal baseline, and restores only after confirmation. A preservation never creates a successful result.
+
+### E3a.2 settled four details while it built captures
+
+1. A schema-3 turn can still close without a capture, through `CloseTurn` without one or through recovery. Such a turn can never publish. Publication requires the final turn's capture, and a capture-linked closure still requires readable log evidence. An unreadable log leaves a durable failed capture and an unresolved claim.
+2. Salvage takes one capture, as in E2. The design's two matching preservation captures arrive with **Preserve and restore** in E3a.3. Retry reset keeps its unchanged-inventory check, which guards the destructive step.
+3. Salvage never removes an existing `index.lock`. It blocks as `DirtyWorktree` and keeps the lock's bytes as evidence. Removal waits for E3a.3's confirmed restoration.
+4. Rechecking a producer's checkout before a consumer's first claim moves to E3a.5's check-inputs-and-claim operation. E3a.2 makes the drift visible at the producer's own next move, and a repeated `Publish` no longer resolves a block recorded after acceptance.
 
 ### Workflow cleanup uses a process group on Unix
 
