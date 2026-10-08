@@ -32,7 +32,11 @@ internal sealed partial class Materializer
         bytes = RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
             throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.");
+        var firstSequence = record.Sequence;
         after = Value(repository.RefSnapshot("refs/stash", $"refs/heads/idp/{record.RunKey}/", $"refs/idp/{record.RunKey}/"));
+        _probe?.Invoke("refs.snapshot.after");
+        record = Read(record.Workflow, record.Id);
+        var sequences = record.Receipts.Values.Where(entry => entry.Sequence >= firstSequence).Select(entry => entry.Sequence).ToArray();
         var owned = record.GitIntents.Values.Select(intent => intent.Mutation switch
         {
             GitMutation.CreateWorktree create => create.Owner.Branch,
@@ -44,7 +48,11 @@ internal sealed partial class Materializer
         {
             CommitId? previous = before.TryGetValue(name, out var old) ? old : null;
             CommitId? current = after.TryGetValue(name, out var tip) ? tip : null;
-            if (name == "refs/stash" ? previous == current : RefOwnership.Accepts(record, repository, name, current)) continue;
+            if (name == "refs/stash")
+            {
+                if (previous == current) continue;
+            }
+            else if (sequences.Any(sequence => RefOwnership.Accepts(record, repository, name, current, sequence: sequence))) continue;
             unexplained.Add(name);
         }
         return unexplained.ToImmutable();

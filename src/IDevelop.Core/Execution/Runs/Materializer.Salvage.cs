@@ -98,7 +98,8 @@ internal sealed partial class Materializer
     }
 
     private static bool SalvageOwnershipUnresolved(RunRecord record, AttemptId attempt) =>
-        record.UnresolvedClaims.Any(key => key.Attempt == attempt && !record.RootExits.ContainsKey(key) && !record.Fenced.Contains(key));
+        record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == record.Preparations[new(attempt, 1)].Location.Owner &&
+            !record.RootExits.ContainsKey(key) && !record.Fenced.Contains(key));
 
     private static ImmutableArray<EvidenceFile> Untracked(GitRepository repository, string checkout) =>
         [.. Value(repository.UntrackedFiles(checkout)).Where(path => path != ".idp" && !path.StartsWith(".idp/", StringComparison.Ordinal) &&

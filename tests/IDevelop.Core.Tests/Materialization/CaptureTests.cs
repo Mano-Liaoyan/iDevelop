@@ -385,9 +385,13 @@ public sealed class CaptureTests
         }).Settle(f.Lease(T), operation, ready.Execution.Launch, checkpoint));
         Assert.Equal(RunProblem.EvidenceMismatch, rejected.Reason.Problem);
         var capture = new CaptureId(OperationIds.Derive(operation, "capture").Value);
-        var failure = Assert.IsType<CaptureDisposition.Failed>(f.Read().Dispositions[capture].Disposition);
-        Assert.Equal(MaterializationProblem.InputUnavailable, failure.Problem);
-        Assert.Equal("EvidenceMismatch", failure.Detail);
+        if (ordinal == 1) Assert.False(f.Read().Dispositions.ContainsKey(capture));
+        else
+        {
+            var failure = Assert.IsType<CaptureDisposition.Failed>(f.Read().Dispositions[capture].Disposition);
+            Assert.Equal(MaterializationProblem.InputUnavailable, failure.Problem);
+            Assert.Equal("EvidenceMismatch", failure.Detail);
+        }
         Assert.Equal(ordinal - 1, f.Read().Captures.GetValueOrDefault(capture, []).Count);
         Assert.False(f.Read().TurnClosures.ContainsKey(ready.Execution.Launch));
         Assert.Equal(new[] { ready.Execution.Launch }, f.Read().UnresolvedClaims);
@@ -403,6 +407,131 @@ public sealed class CaptureTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), bytes);
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Journaled_sibling_moves_during_a_ref_observation_match_and_foreign_moves_block()
+    {
+        foreach (var (sibling, point) in new[]
+        {
+            ("prepare", "git.capture-2.before"),
+            ("publish", "git.capture-2.before"),
+            ("publish", "refs.snapshot.after"),
+        })
+        {
+            foreach (var foreign in new[] { false, true })
+            {
+                using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+                Preparation.Ready? other = null;
+                if (sibling == "publish" || foreign)
+                {
+                    other = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+                    f.Git.Write("u.txt", "U\n", other.Checkout);
+                    await f.Close(other);
+                }
+                var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+                f.Git.Write("result.txt", "done\n", writer.Checkout);
+                var log = f.ObserveAndLog(writer);
+                var snapshots = 0;
+                var fired = 0;
+                var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: probe =>
+                {
+                    if (probe == "refs.snapshot.after") snapshots++;
+                    if (fired != 0 || probe != point || point == "refs.snapshot.after" && snapshots != (foreign ? 1 : 2)) return;
+                    fired++;
+                    if (foreign)
+                        Assert.Equal(0, f.Git.Run(other!.Checkout, "update-ref", other.Execution.Location.Owner.Branch,
+                            "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
+                    else if (sibling == "prepare")
+                        Assert.IsType<Preparation.Ready>(f.Prepare(U).AsTask().GetAwaiter().GetResult());
+                    else
+                        Assert.Equal(U, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(),
+                            other!.Execution.Launch.Attempt)).Result.Task);
+                }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+                Assert.Equal(1, fired);
+                Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+                Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
+                    TerminalAttemptOutcome.Succeeded, log));
+                if (foreign)
+                {
+                    var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
+                    Assert.Equal("UncertainOwnership", diverged.Problem.ToString());
+                    Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
+                    Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                        f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem.ToString());
+                    Assert.Empty(f.Read().Results);
+                }
+                else
+                {
+                    Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+                    Assert.Equal(0, f.Read().Captures[settled.Capture].Sum(observation => observation.UnexplainedRefs.Length));
+                    var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+                    Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+                    Assert.Equal(1, f.Read().Results.Count(result => result.Task == T));
+                }
+            }
+        }
+    }
+
+    private static async System.Threading.Tasks.Task VerifyUnreadableLogAfterMatch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        var log = f.ObserveAndLog(ready);
+        var path = Path.Combine(f.Store.AttemptFolder(W, f.RunId, T, ready.Execution.Launch.Attempt), "events.jsonl");
+        var bytes = File.ReadAllBytes(path);
+        var operation = f.Op();
+        var rejected = Assert.IsType<Settlement.Rejected>(await f.Materializer(probe: point =>
+        {
+            if (point == "journal.close-turn.before") File.AppendAllText(path, "not-json\n");
+        }).Settle(f.Lease(T), operation, ready.Execution.Launch, log));
+        Assert.Equal("EvidenceMismatch", rejected.Reason.Problem.ToString());
+        var capture = new CaptureId(OperationIds.Derive(operation, "capture").Value);
+        Assert.IsType<CaptureDisposition.Matched>(f.Read().Dispositions[capture].Disposition);
+        Assert.Empty(f.Read().TurnClosures);
+        Assert.Equal(new[] { ready.Execution.Launch }, f.Read().UnresolvedClaims);
+        File.WriteAllBytes(path, bytes);
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation, ready.Execution.Launch, log));
+        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        Assert.Single(f.Read().TurnClosures);
+        Assert.Empty(f.Read().UnresolvedClaims);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
+            TerminalAttemptOutcome.Succeeded, log));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_running_checkpoint_records_nothing_and_the_same_operation_can_settle_the_finished_turn()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        var full = f.ObserveAndLog(ready);
+        var path = Path.Combine(f.Store.AttemptFolder(W, f.RunId, T, ready.Execution.Launch.Attempt), "events.jsonl");
+        var bytes = File.ReadAllBytes(path);
+        var lines = System.Text.Encoding.UTF8.GetString(bytes).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var early = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines.Take(2)) + "\n");
+        File.WriteAllBytes(path, early);
+        var operation = f.Op();
+        var sequence = f.Read().Sequence;
+        var rejected = Assert.IsType<Settlement.Rejected>(await f.Materializer().Settle(f.Lease(T), operation,
+            ready.Execution.Launch, new(early.LongLength, Revision.Hash(early))));
+        Assert.Equal("OutcomeMismatch", rejected.Reason.Problem.ToString());
+        Assert.Equal(0, f.Read().Captures.Values.Sum(pair => pair.Count));
+        Assert.Equal(sequence, f.Read().Sequence);
+        File.WriteAllBytes(path, bytes);
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation, ready.Execution.Launch, full));
+        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+        Assert.Single(f.Read().TurnClosures);
+        Assert.Equal(full, f.Read().TurnClosures[ready.Execution.Launch]);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
+            TerminalAttemptOutcome.Succeeded, full));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        await VerifyUnreadableLogAfterMatch();
     }
 
     private sealed class CaptureCrash : Exception;

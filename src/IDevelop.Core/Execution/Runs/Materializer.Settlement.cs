@@ -96,6 +96,8 @@ internal sealed partial class Materializer
                 GitRepository? repository = null;
                 if (observations.Count == 0)
                 {
+                    if (_store.TurnEvidenceProblem(record, launch, log) is { } rejection)
+                        return new Settlement.Rejected(rejection);
                     for (var ordinal = 1; ordinal <= 2; ordinal++)
                     {
                         cancellation.ThrowIfCancellationRequested();

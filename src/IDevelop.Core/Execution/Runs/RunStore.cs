@@ -369,29 +369,21 @@ internal sealed class RunStore
                             ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing) { Capture = capture }) : Refuse(RunProblem.EvidenceMismatch);
             }
 
-            if (!record.Attempts.TryGetValue(key.Attempt, out var attempt))
-            {
-                return Refuse(RunProblem.UnknownAttempt);
-            }
-
-            var read = OwnedEvidence(record, attempt, evidence);
-            if (read.Rejection is { } rejection)
-            {
+            if (TurnEvidenceProblem(record, key, evidence) is { } rejection)
                 return new Mutation.Rejected(rejection);
-            }
-
-            if (read.Events.Any(e => e is AttemptEvent.Reconciled))
-            {
-                return Refuse(RunProblem.RecoveryEvidenceInsufficient);
-            }
-
-            if (key.Turn < 1 || read.Record!.Turns.Count < key.Turn || read.Record.Turns[key.Turn - 1].Outcome == TurnOutcome.Running)
-            {
-                return Refuse(RunProblem.OutcomeMismatch);
-            }
 
             return new Mutation.Append(new RunEvent.TurnClosed(key, evidence) { Capture = capture });
         });
+
+    internal RunRejection? TurnEvidenceProblem(RunRecord record, LaunchKey key, LogCheckpoint evidence)
+    {
+        if (!record.Attempts.TryGetValue(key.Attempt, out var attempt)) return new(RunProblem.UnknownAttempt);
+        var read = OwnedEvidence(record, attempt, evidence);
+        if (read.Rejection is { } rejection) return rejection;
+        if (read.Events.Any(e => e is AttemptEvent.Reconciled)) return new(RunProblem.RecoveryEvidenceInsufficient);
+        return key.Turn < 1 || read.Record!.Turns.Count < key.Turn || read.Record.Turns[key.Turn - 1].Outcome == TurnOutcome.Running
+            ? new(RunProblem.OutcomeMismatch) : null;
+    }
 
     public RunDecision CloseAttempt(CoordinatorPermit permit, OperationId operation, AttemptId attempt,
         TerminalAttemptOutcome outcome, LogCheckpoint evidence) =>
