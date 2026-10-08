@@ -4,8 +4,9 @@ namespace IDevelop.Execution;
 /// The project's files as Git trees. A snapshot stages every file that Git does not ignore into a temporary copy of the
 /// index and writes it as a tree, so it leaves the person's index, branch, and work tree as they were. The project's
 /// <c>.idp</c> folder stays out, so saving the workflow during a turn changes no snapshot. Every method returns null
-/// when the folder is not in a Git work tree or Git fails. A snapshot also returns null when the index hides changes
-/// with assume-unchanged or skip-worktree.
+/// when the folder is not in a Git work tree or Git fails. A snapshot takes the work tree's content under assume-unchanged
+/// and skip-worktree entries, and returns null when a skip-worktree file is missing from the work tree, as in a sparse
+/// checkout.
 /// </summary>
 internal static class GitTree
 {

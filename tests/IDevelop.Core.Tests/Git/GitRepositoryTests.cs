@@ -191,6 +191,47 @@ public sealed class GitRepositoryTests
             () => Assert.Equal("The index hides changes to out/o.txt with assume-unchanged or skip-worktree.", capture.Detail));
     }
 
+    [Fact]
+    public void Git_tree_snapshot_records_the_work_tree_under_assume_unchanged_and_present_skip_worktree_entries()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--assume-unchanged", "a.txt", "root.txt");
+        f.Git("update-index", "--skip-worktree", "plan.txt");
+        f.Write("a.txt", "BB\n");
+        f.Write("plan.txt", "changed\n");
+        File.Delete(f.PathOf("root.txt"));
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.NotNull(snapshot);
+        Assert.Equal("a.txt\nplan.txt\n", f.Git("ls-tree", "-r", "--name-only", snapshot));
+        Assert.Equal("BB\n", f.Git("show", snapshot + ":a.txt"));
+        Assert.Equal("changed\n", f.Git("show", snapshot + ":plan.txt"));
+    }
+
+    [Fact]
+    public void Git_tree_snapshot_refuses_a_skip_worktree_file_missing_from_the_work_tree()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--skip-worktree", "plan.txt");
+        File.Delete(f.PathOf("plan.txt"));
+        Assert.Null(GitTree.Snapshot(f.Folder));
+    }
+
+    [UnixFact]
+    public void Git_tree_snapshot_records_a_skip_worktree_symlink_whose_target_is_missing()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        File.CreateSymbolicLink(f.PathOf("link"), "missing");
+        f.Commit("link");
+        f.Git("update-index", "--skip-worktree", "link");
+        File.Delete(f.PathOf("link"));
+        File.CreateSymbolicLink(f.PathOf("link"), "elsewhere");
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Equal("120000 blob f98eb10ae82b19af44956c0891e3cc36187fa092\tlink\n", f.Git("ls-tree", snapshot!, "link"));
+    }
+
     [Theory]
     [InlineData("--assume-unchanged", "unchanged")]
     [InlineData("--skip-worktree", "unchanged")]
@@ -697,24 +738,143 @@ public sealed class GitRepositoryTests
     [UnixFact]
     public void Metadata_times_out_while_a_worktree_scan_uses_its_longer_limit()
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new GitFixture();
         f.Diamond();
-        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
-        var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
-        var environment = new Dictionary<string, string>(f.Environment)
-        {
-            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
-        };
+        var (bin, environment) = ShimBin(f);
         var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
         var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment, limits)).Repository;
-        var shim = Path.Combine(bin, "git");
-        Executable.Write(shim, "#!/bin/sh\nsleep 3\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+        var sleeper = Path.Combine(bin, "sleeper");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\nif mkdir {Quote(Path.Combine(bin, "slow"))} 2>/dev/null; then sleep 30 & echo $! > {Quote(sleeper)}; wait; fi\nexec {Quote(RealGit)} \"$@\"\n");
         var failed = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/heads/main"));
+        var id = int.Parse(File.ReadAllText(sleeper), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.True(Exits(id, TimeSpan.FromSeconds(5)), "The timed-out Git process left its child running.");
+        }
+        finally
+        {
+            Kill(id);
+        }
         Assert.Equal("GitFailed", failed.Problem.ToString());
         Assert.Equal("Git timed out.", failed.Detail);
         f.Write("new.txt", "new\n");
         Assert.Equal("?? new.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_returns_and_stops_feeding_a_child_that_outlives_Git_and_keeps_its_output()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var (bin, environment) = ShimBin(f);
+        var child = Path.Combine(bin, "child");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(while echo tick; do sleep 0.1; done) &\necho $! > {Quote(child)}\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        elapsed.Stop();
+        var id = int.Parse(File.ReadAllText(child), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(10), $"The call took {elapsed.Elapsed}.");
+            Assert.True(Exits(id, TimeSpan.FromSeconds(5)), "The child that outlived Git still writes into a pipe that iDevelop keeps open.");
+        }
+        finally
+        {
+            Kill(id);
+        }
+    }
+
+    [UnixFact]
+    public void A_Git_that_exits_without_reading_its_input_keeps_its_error()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'fatal: boom' >&2\nexit 128\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "fatal: boom\nBroken pipe"), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_that_Git_never_read_input_for_says_it_timed_out()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_keeps_what_Git_wrote_once_a_process_outside_its_tree_lets_go_of_the_pipes()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'waiting for the lock' >&2\n(sleep 2 &)\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        Assert.Equal((-1, "waiting for the lock\nGit timed out."), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void Capture_returns_its_tree_when_the_temporary_index_lock_cannot_be_deleted()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("a.txt", "C\n");
+        var (bin, environment) = ShimBin(f);
+        var lockPath = Path.Combine(bin, "lock");
+        Executable.Write(Path.Combine(bin, "git"),
+            $"#!/bin/sh\n{Quote(RealGit)} \"$@\"\nstatus=$?\ncase \" $* \" in *\" write-tree \"*) mkdir \"$GIT_INDEX_FILE.lock\" && printf %s \"$GIT_INDEX_FILE.lock\" > {Quote(lockPath)};; esac\nexit $status\n");
+        var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment)).Repository;
+        try
+        {
+            var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+            Assert.Equal("C\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        }
+        finally
+        {
+            if (File.Exists(lockPath)) Directory.Delete(File.ReadAllText(lockPath));
+        }
+    }
+
+    private static string RealGit => CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+
+    private static (string Bin, Dictionary<string, string> Environment) ShimBin(GitFixture f)
+    {
+        var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
+        return (bin, new Dictionary<string, string>(f.Environment)
+        {
+            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+        });
+    }
+
+    private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static bool Exits(int id, TimeSpan patience)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(id);
+            return process.WaitForExit(patience);
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+    }
+
+    private static void Kill(int id)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(id);
+            process.Kill();
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException) { }
     }
 
     [UnixFact]

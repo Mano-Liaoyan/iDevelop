@@ -89,6 +89,14 @@ public sealed class NodeStateTests
     }
 
     [Fact]
+    public void A_review_whose_subject_has_no_readable_change_says_how_to_record_one()
+    {
+        Assert.Equal(
+            "iDevelop could not record or read what \"Build\" changed. Run it again in a Git project, then review it. If the project is a sparse checkout, check out every file first.",
+            RunText.Describe(new StartProblem.NoChange("Build")));
+    }
+
+    [Fact]
     public void A_run_owned_task_has_the_same_plain_reason_for_start_send_and_terminal_handoff()
     {
         var problem = new StartProblem.RunOwned("Delivery");

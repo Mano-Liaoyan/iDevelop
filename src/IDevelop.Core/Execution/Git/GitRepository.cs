@@ -67,6 +67,9 @@ internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan 
 
 internal sealed partial class GitRepository
 {
+    /// <summary>How long a timed-out call waits for Git to stop and for its pipes to close.</summary>
+    private static readonly TimeSpan Settle = TimeSpan.FromSeconds(2);
+
     private readonly GitLimits _limits;
     private readonly IReadOnlyDictionary<string, string> _environment;
 
@@ -344,7 +347,9 @@ internal sealed partial class GitRepository
     {
         var before = IndexDigest(checkout);
         if (before is not GitRead<Digest?>.Read initial) return ConvertFailure<Digest?, GitCapture>(before);
-        var snapshot = Snapshot(checkout, [".idp", ".worktrees", .. excludedPaths], _environment, _limits);
+        var visible = VisibleIndex(checkout, _environment, _limits);
+        if (visible is GitRead<byte[]>.Failed) return ConvertFailure<byte[], GitCapture>(visible);
+        var snapshot = WriteTree(checkout, [".idp", ".worktrees", .. excludedPaths], _environment, _limits);
         if (snapshot is not GitRead<TreeId>.Read tree) return ConvertFailure<TreeId, GitCapture>(snapshot);
         var after = IndexDigest(checkout);
         return after is GitRead<Digest?>.Read final
@@ -352,11 +357,31 @@ internal sealed partial class GitRepository
             : ConvertFailure<Digest?, GitCapture>(after);
     }
 
+    /// <summary>
+    /// <see cref="GitTree"/>'s snapshot. Unlike capture, it takes the work tree's content under assume-unchanged and
+    /// skip-worktree entries. It refuses a skip-worktree file missing from the work tree, as a sparse checkout leaves it,
+    /// because the rebuilt index would record that file as deleted.
+    /// </summary>
     internal static GitRead<TreeId> Snapshot(string folder, IEnumerable<string> excludedPaths,
         IReadOnlyDictionary<string, string> environment, GitLimits limits)
     {
-        var visible = VisibleIndex(folder, environment, limits);
-        if (visible is GitRead<byte[]>.Failed) return ConvertFailure<byte[], TreeId>(visible);
+        var listed = Run(["ls-files", "-v", "-z", "--", .. Pathspec(excludedPaths)], folder, GitOperation.Worktree, limits, environment);
+        if (listed.ExitCode != 0) return Failure<TreeId>(listed);
+        foreach (var path in NulFields(listed).Where(entry => char.ToUpperInvariant(entry[0]) == 'S').Select(entry => entry[2..]))
+        {
+            var full = Path.Combine(folder, path);
+            if (!Path.Exists(full))
+                return new GitRead<TreeId>.Failed(MaterializationProblem.DirtyWorktree, $"The index marks {path} skip-worktree, and the work tree has no such file.");
+        }
+        return WriteTree(folder, excludedPaths, environment, limits);
+    }
+
+    private static string[] Pathspec(IEnumerable<string> excludedPaths) =>
+        [".", .. excludedPaths.Distinct(StringComparer.Ordinal).Select(exclusion => ":(exclude)" + exclusion)];
+
+    private static GitRead<TreeId> WriteTree(string folder, IEnumerable<string> excludedPaths,
+        IReadOnlyDictionary<string, string> environment, GitLimits limits)
+    {
         var index = ReadText(Run(["rev-parse", "--path-format=absolute", "--git-path", "index"], folder, GitOperation.Metadata, limits, environment), trim: true);
         if (index is not GitRead<string>.Read path) return ConvertFailure<string, TreeId>(index);
         var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
@@ -364,7 +389,7 @@ internal sealed partial class GitRepository
         {
             if (File.Exists(path.Value)) File.Copy(path.Value, temporary);
             var snapshotEnvironment = new Dictionary<string, string>(environment) { ["GIT_INDEX_FILE"] = temporary };
-            string[] pathspec = [".", .. excludedPaths.Distinct(StringComparer.Ordinal).Select(exclusion => ":(exclude)" + exclusion)];
+            var pathspec = Pathspec(excludedPaths);
             var entries = Run(["ls-files", "--stage", "-z", "--full-name", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment);
             if (entries.ExitCode != 0) return Failure<TreeId>(entries);
             var invalidated = Run(["update-index", "-z", "--index-info"], folder, GitOperation.Worktree, limits, snapshotEnvironment, entries.Stdout);
@@ -380,8 +405,20 @@ internal sealed partial class GitRepository
         }
         finally
         {
-            File.Delete(temporary);
-            File.Delete(temporary + ".lock");
+            DeleteTemporary(temporary);
+            DeleteTemporary(temporary + ".lock");
+        }
+    }
+
+    /// <summary>A file that a scanner holds open on Windows stays in the temporary folder rather than failing the call.</summary>
+    private static void DeleteTemporary(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -471,8 +508,8 @@ internal sealed partial class GitRepository
         }
         finally
         {
-            File.Delete(temporary);
-            File.Delete(temporary + ".lock");
+            DeleteTemporary(temporary);
+            DeleteTemporary(temporary + ".lock");
         }
     }
 
@@ -622,14 +659,19 @@ internal sealed partial class GitRepository
                 return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
             }
             using var process = Process.Start(start)!;
+            using var stop = new CancellationTokenSource();
             using var output = new MemoryStream();
-            var stdout = Task.Run(() => process.StandardOutput.BaseStream.CopyTo(output));
-            var stderr = Task.Run(() => process.StandardError.ReadToEnd());
-            var input = Task.Run(() =>
+            using var stdoutPipe = process.StandardOutput;
+            using var stderrPipe = process.StandardError;
+            using var stdinPipe = process.StandardInput.BaseStream;
+            var stdout = Task.Run(() => stdoutPipe.BaseStream.CopyToAsync(output, stop.Token));
+            var stderr = Task.Run(() => stderrPipe.ReadToEndAsync(stop.Token));
+            var input = Task.Run(async () =>
             {
-                if (stdin is not null) process.StandardInput.BaseStream.Write(stdin);
-                process.StandardInput.Close();
+                if (stdin is not null) await stdinPipe.WriteAsync(stdin, stop.Token).ConfigureAwait(false);
+                stdinPipe.Close();
             });
+            var pipes = Task.WhenAll(stdout, stderr, input);
             try
             {
                 if (process.WaitForExit(Remaining()) && Task.WaitAll([stdout, stderr, input], Remaining()))
@@ -641,7 +683,11 @@ internal sealed partial class GitRepository
                     return new(-1, output.ToArray(), stderr.Result + error.GetBaseException().Message);
                 throw error.GetBaseException();
             }
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            // A process that outlived Git, such as one a hook started, can hold the pipes open, and no tree kill finds it.
+            // On Windows, closing a pipe does not end a read blocked on it, so the reads are canceled first.
+            ProcessCheck.KillTreeQuietly(process);
+            process.WaitForExit(Settle);
+            if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
             return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
         }
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
