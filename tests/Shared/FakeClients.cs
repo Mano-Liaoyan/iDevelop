@@ -187,6 +187,15 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule SpawnThroughCmd(string pidFile) => Step("spawnThroughCmd", pidFile);
 
+    public FakeRule SpawnResponder(string pidFile, string ping, string pong) => Step("spawnResponder", Strings(pidFile, ping, pong));
+
+    public FakeRule SpawnEscapedWriter(string pidFile, string gate, string file, string text) =>
+        Step("spawnEscapedWriter", Strings(pidFile, gate, file, text));
+
+    public FakeRule SpawnPartialWriter(string pidFile, string file, string text) => Step("spawnPartialWriter", Strings(pidFile, file, text));
+
+    public FakeRule TrapSignals(string file) => Step("trapSignals", file);
+
     public FakeRule Hang() => Step("hang", true);
 
     public FakeRule Exit(int code) => Step("exit", code);
@@ -199,6 +208,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
     public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();
+
+    private static JsonArray Strings(params string[] values) => new([.. values.Select(value => JsonValue.Create(value))]);
 
     private FakeRule Step(string name, JsonNode value) => this with { Steps = Steps.Add(new JsonObject { [name] = value }) };
 }
