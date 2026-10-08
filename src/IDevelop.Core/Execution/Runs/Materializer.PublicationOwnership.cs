@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using IDevelop.Workflows;
@@ -10,7 +11,7 @@ internal sealed partial class Materializer
     private void VerifyPublicationRefs(RunRecord record, GitRepository repository, PreparedExecution prepared, OperationId operation,
         WorkflowId workflow, RunId run, ref ImmutableArray<EvidenceFile> evidence)
     {
-        var names = UnexplainedPublicationRefs(record, repository, prepared, operation, ref evidence, out var bytes, out var before, out var after);
+        var names = UnexplainedPublicationRefs(record, repository, prepared, out var bytes, out var before, out var after);
         if (names.IsEmpty) return;
         var name = names[0];
         CommitId? previous = before.TryGetValue(name, out var old) ? old : null;
@@ -28,7 +29,7 @@ internal sealed partial class Materializer
             RunLayout.PinPrefix(record.RunKey!)));
 
     private ImmutableArray<string> UnexplainedPublicationRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
-        OperationId operation, ref ImmutableArray<EvidenceFile> evidence, out byte[] bytes,
+        out byte[] bytes,
         out SortedDictionary<string, CommitId> before, out SortedDictionary<string, CommitId> after)
     {
         var snapshot = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
@@ -37,24 +38,16 @@ internal sealed partial class Materializer
         bytes = RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
             throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.");
-        after = new(StringComparer.Ordinal);
-        var stable = false;
-        for (var snapshotNumber = 0; snapshotNumber < 3; snapshotNumber++)
+        var patience = Stopwatch.StartNew();
+        for (var cap = 4; ; cap = Math.Min(cap * 2, 64))
         {
-            record = Read(record.Workflow, record.Id);
-            after = SharedRefSnapshot(repository, record);
+            var basis = Read(record.Workflow, record.Id);
+            after = SharedRefSnapshot(repository, basis);
             _probe?.Invoke("refs.snapshot.after");
-            var latest = Read(record.Workflow, record.Id);
-            if (record.Sequence != latest.Sequence) continue;
-            stable = true;
-            break;
-        }
-        if (!stable)
-        {
-            var observed = Encoding.UTF8.GetBytes(RunJournal.Canonical(after));
-            var identity = OperationIds.Derive(operation, "ownership-" + Revision.Hash(observed).Sha256);
-            evidence = [storage.WriteEvidence(identity, "refs-before.json", bytes), storage.WriteEvidence(identity, "refs-after.json", observed)];
-            throw Fault(MaterializationProblem.UncertainOwnership, "The journal changed during every shared-ref snapshot.");
+            record = Read(record.Workflow, record.Id);
+            if (RefOwnership.Basis(basis) == RefOwnership.Basis(record)) break;
+            if (patience.Elapsed >= TimeSpan.FromSeconds(1)) throw new Refusal(new(RunProblem.JournalBusy));
+            Thread.Sleep(Random.Shared.Next(1, cap + 1));
         }
         var owned = record.GitIntents.Values.Select(intent => intent.Mutation switch
         {

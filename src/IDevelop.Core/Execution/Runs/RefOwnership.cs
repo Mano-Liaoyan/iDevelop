@@ -2,12 +2,23 @@ namespace IDevelop.Execution;
 
 internal static class RefOwnership
 {
+    private static bool Reads(RunRecord record, RunEvent e) => e switch
+    {
+        RunEvent.GitIntended { Mutation: GitMutation.MoveRef or GitMutation.CreateWorktree } => true,
+        RunEvent.GitObserved observed => record.GitIntents[observed.Mutation].Mutation is GitMutation.MoveRef or GitMutation.CreateWorktree,
+        RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.RootExitObserved or RunEvent.TurnClosed or
+            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained => true,
+        _ => false,
+    };
+
+    public static int Basis(RunRecord record) => record.Receipts.Values.Count(entry => Reads(record, entry.Event));
+
     public static bool Accepts(RunRecord record, GitRepository repository, string name, CommitId? live, RefChange? change = null)
     {
         CommitId? expected = null;
         CommitId? target = null;
         var lease = false;
-        foreach (var entry in record.Receipts.Values.OrderBy(entry => entry.Sequence))
+        foreach (var entry in record.Receipts.Values.Where(entry => Reads(record, entry.Event)).OrderBy(entry => entry.Sequence))
         {
             switch (entry.Event)
             {

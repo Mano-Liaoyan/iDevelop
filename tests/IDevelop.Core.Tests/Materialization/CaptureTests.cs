@@ -818,48 +818,100 @@ public sealed class CaptureTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task Shared_ref_snapshots_retry_once_or_fail_after_three_journal_changes_with_evidence()
+    public async System.Threading.Tasks.Task Irrelevant_sibling_journal_churn_does_not_retry_shared_ref_snapshots()
     {
-        foreach (var changing in new[] { true, false })
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var log = f.ObserveAndLog(writer);
+        var snapshots = 0;
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
         {
-            using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
-            var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-            var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-            var log = f.ObserveAndLog(writer);
-            var snapshots = 0;
-            var firstSnapshots = 0;
-            var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
-            {
-                if (point == "journal.capture-1.after") firstSnapshots = snapshots;
-                if (point != "refs.snapshot.after") return;
-                snapshots++;
-                if (!changing && snapshots != 1) return;
-                var operation = f.Op();
-                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(new(
-                    operation, U, sibling.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable,
-                    sibling.Execution.Inputs, [], "Sibling input became unavailable."))));
-            }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
-            if (changing)
-            {
-                var failed = Assert.IsType<CaptureDisposition.Failed>(settled.Disposition);
-                Assert.Equal(MaterializationProblem.UncertainOwnership, failed.Problem);
-                Assert.Equal("The journal changed during every shared-ref snapshot.", failed.Detail);
-                Assert.Equal(3, snapshots);
-                Assert.Empty(f.Read().Captures.GetValueOrDefault(settled.Capture, []));
-                Assert.Equal(2, failed.Evidence.Length);
-                var after = Assert.Single(failed.Evidence, file => file.RelativePath.EndsWith("/refs-after.json", StringComparison.Ordinal));
-                var storage = new RunStorage(f.Git.Folder, W, f.RunId);
-                var refs = System.Text.Json.JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
-                    RunStorage.Read(storage.Folder, after.RelativePath, after.Content, after.ByteLength), RunJournal.Options)!;
-                Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", refs["refs/heads/idp/93f23689/task/c67f2fc3"].Hex);
-            }
-            else
-            {
-                Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
-                Assert.Equal(2, firstSnapshots);
-                Assert.Equal(3, snapshots);
-                Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
-            }
-        }
+            if (point != "refs.snapshot.after") return;
+            snapshots++;
+            var operation = f.Op();
+            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(new(
+                operation, U, sibling.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable,
+                sibling.Execution.Inputs, [], "Sibling input became unavailable."))));
+        }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+        Assert.Equal("Matched", settled.Disposition.GetType().Name);
+        Assert.Equal(2, snapshots);
+        Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+        Assert.Equal(2, f.Read().Blocks.Count);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Relevant_sibling_ref_churn_retries_beyond_three_snapshots_then_matches()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        var plan = f.Read().Plans.Single(pair => pair.Value is MaterializationPlan.Preparation p &&
+            p.Attempt == sibling.Execution.Launch.Attempt).Key;
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var log = f.ObserveAndLog(writer);
+        var snapshots = 0;
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+        {
+            if (point != "refs.snapshot.after") return;
+            if (++snapshots <= 5) RecordSiblingRefObservation(f, plan, sibling.Execution.Location.Owner.Branch);
+        }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+        Assert.Equal("Matched", settled.Disposition.GetType().Name);
+        Assert.Equal(7, snapshots);
+        Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3",
+            GitFixture.Read(f.Git.Open().ReadRef("refs/heads/idp/93f23689/task/c67f2fc3"))!.Value.Hex);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Exhausted_shared_ref_snapshots_reject_settlement_and_publication_and_same_operations_retry()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        var plan = f.Read().Plans.Single(pair => pair.Value is MaterializationPlan.Preparation p &&
+            p.Attempt == sibling.Execution.Launch.Attempt).Key;
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        var log = f.ObserveAndLog(writer);
+        var operation = f.Op();
+        var capture = new CaptureId(OperationIds.Derive(operation, "capture").Value);
+        var snapshots = 0;
+        var churn = f.Materializer(probe: point =>
+        {
+            if (point != "refs.snapshot.after") return;
+            snapshots++;
+            RecordSiblingRefObservation(f, plan, sibling.Execution.Location.Owner.Branch);
+        });
+        var rejected = Assert.IsType<Settlement.Rejected>(await churn.Settle(f.Lease(T), operation, writer.Execution.Launch, log));
+        Assert.Equal("JournalBusy", rejected.Reason.Problem.ToString());
+        Assert.True(snapshots > 3);
+        Assert.Empty(f.Read().Captures.GetValueOrDefault(capture, []));
+        Assert.False(f.Read().Dispositions.ContainsKey(capture));
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation, writer.Execution.Launch, log));
+        Assert.Equal(capture, settled.Capture);
+        Assert.Equal("Matched", settled.Disposition.GetType().Name);
+        Assert.Equal(2, f.Read().Captures[capture].Count);
+        Assert.Equal("Matched", f.Read().Dispositions[capture].Disposition.GetType().Name);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
+            TerminalAttemptOutcome.Succeeded, log));
+        operation = f.Op();
+        snapshots = 0;
+        var publication = Assert.IsType<Publication.Rejected>(churn.Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal("JournalBusy", publication.Reason.Problem.ToString());
+        Assert.True(snapshots > 3);
+        Assert.Equal(0, f.Read().Blocks.Count(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == writer.Execution.Launch.Attempt));
+        Assert.Empty(f.Read().Results);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(T, accepted.Result.Task);
+        Assert.Equal(T, Assert.Single(f.Read().Results).Task);
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+    }
+
+    private static void RecordSiblingRefObservation(PreparationFixture f, OperationId plan, string branch)
+    {
+        var intent = f.Op();
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, intent,
+            new RunEvent.GitIntended(plan, new GitMutation.MoveRef(new(branch, f.A, f.A)))));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(),
+            new RunEvent.GitObserved(intent, new(true, f.A.Hex))));
     }
 }

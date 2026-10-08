@@ -241,7 +241,7 @@ public sealed class RootExitTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_late_refused_root_observation_leaves_no_pin_after_settlement_and_release()
+    public async System.Threading.Tasks.Task A_late_refused_root_observation_keeps_its_pin_until_the_next_release()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
@@ -267,6 +267,9 @@ public sealed class RootExitTests
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RootObservation.Rejected>(f.Materializer().ObserveRootExit(
             f.Lease(T), f.Op(), writer.Execution.Launch, new RootExit.Exited(1))).Reason.Problem);
+        Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000104/1/root", f.A) },
+            GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Select(pair => (pair.Key, pair.Value)));
+        Assert.Equal(1, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var open = Assert.IsType<Preparation.Ready>(await control.Prepare(T));
@@ -286,14 +289,159 @@ public sealed class RootExitTests
         var launch = ready.Execution.Launch;
         var tip = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))!.Value;
         var head = GitFixture.Read(f.Git.Open().SymbolicHead(ready.Checkout));
+        var recorded = new RunEvent.RootExitObserved(launch, new RootExit.Exited(0), At.AddSeconds(1), tip, head, TipOwnership.Explained);
         var outcome = f.Materializer(probe: point =>
         {
             if (point != "journal.root-exit.before" || f.Read().RootExits.ContainsKey(launch)) return;
-            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(launch, new RootExit.Exited(0),
-                At, tip, head, TipOwnership.Explained)));
+            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), recorded));
         }).ObserveRootExit(f.Lease(T), f.Op(), launch, new RootExit.Exited(0));
-        Assert.Equal(launch, Assert.IsType<RootObservation.Fenced>(outcome).Launch);
-        Assert.Equal(new[] { (RunLayout.RootPin(f.Read().RunKey!, f.Read().TaskKeys[T], launch), tip) },
+        var observed = Assert.IsType<RootObservation.Observed>(outcome).Observation;
+        Assert.Equal(recorded, observed);
+        Assert.Equal(At.AddSeconds(1), observed.At);
+        Assert.Empty(f.Read().Fenced);
+        Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root", tip) },
             GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))).Select(pair => (pair.Key, pair.Value)));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_mismatching_competing_root_observation_fences_the_launch_and_keeps_the_pin()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        var recorded = new RunEvent.RootExitObserved(launch, new RootExit.Exited(1), At, f.A,
+            "refs/heads/idp/93f23689/task/90d5b0a2", TipOwnership.Explained);
+        var outcome = f.Materializer(probe: point =>
+        {
+            if (point == "journal.root-exit.before")
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), recorded));
+        }).ObserveRootExit(f.Lease(T), f.Op(), launch, new RootExit.Exited(0));
+        var fenced = Assert.IsType<RootObservation.Fenced>(outcome);
+        Assert.Equal(launch, fenced.Launch);
+        Assert.Equal("InvalidClaim", fenced.Detail);
+        Assert.Equal(new[] { launch }, f.Read().Fenced);
+        Assert.Equal(new RootExit.Exited(1), f.Read().RootExits[launch].Exit);
+        Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root", f.A) },
+            GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))).Select(pair => (pair.Key, pair.Value)));
+        var control = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        Claim(f, control);
+        var matching = new RunEvent.RootExitObserved(control.Execution.Launch, new RootExit.Exited(0), At.AddSeconds(1), f.A,
+            "refs/heads/idp/93f23689/task/c67f2fc3", TipOwnership.Explained);
+        var accepted = f.Materializer(probe: point =>
+        {
+            if (point == "journal.root-exit.before")
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), matching));
+        }).ObserveRootExit(f.Lease(U), f.Op(), control.Execution.Launch, new RootExit.Exited(0));
+        Assert.Equal(matching, Assert.IsType<RootObservation.Observed>(accepted).Observation);
+        Assert.Equal(new[] { launch }, f.Read().Fenced);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Concurrent_duplicate_root_observations_converge_without_fencing_in_twenty_rounds()
+    {
+        for (var round = 0; round < 20; round++)
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            Claim(f, ready);
+            var launch = ready.Execution.Launch;
+            var lease = f.Lease(T);
+            var operations = new[] { f.Op(), f.Op() };
+            using var barrier = new Barrier(2);
+            var outcomes = await System.Threading.Tasks.Task.WhenAll(operations.Select(operation =>
+                System.Threading.Tasks.Task.Factory.StartNew(() => f.Materializer(probe: point =>
+                {
+                    if (point == "journal.root-exit.before") Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(10)));
+                }).ObserveRootExit(lease, operation, launch, new RootExit.Exited(0)),
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)));
+            Assert.Equal(new[] { "Observed", "Observed" }, outcomes.Select(outcome => outcome.GetType().Name));
+            var record = f.Read();
+            var recorded = Assert.Single(record.RootExits).Value;
+            foreach (var outcome in outcomes)
+            {
+                var observed = Assert.IsType<RootObservation.Observed>(outcome).Observation;
+                Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", observed.Tip.Hex);
+                Assert.Equal(recorded, observed);
+            }
+            Assert.Empty(record.Fenced);
+            Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root", recorded.Tip) },
+                GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(record.RunKey!))).Select(pair => (pair.Key, pair.Value)));
+            if (round != 19) continue;
+            var log = f.ObserveAndLog(ready);
+            var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(lease, f.Op(), launch, log));
+            Assert.Equal("Matched", settled.Disposition.GetType().Name);
+            Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_busy_root_observation_never_deletes_a_competing_observers_pin_or_fences_the_launch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        var operation = f.Op();
+        var competingOperation = f.Op();
+        RootObservation? competing = null;
+        FileStream? held = null;
+        RootObservation outcome;
+        try
+        {
+            outcome = f.Materializer(probe: point =>
+            {
+                if (point == "journal.root-exit.before")
+                    held = new FileStream(Path.Combine(f.Git.Folder, ".idp", "runs", "write.lock"),
+                        FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                if (point == "journal.root-exit.after") held?.Dispose();
+                if (point == "git.release-root-pin.before")
+                    competing = f.Materializer().ObserveRootExit(f.Lease(T), competingOperation, launch, new RootExit.Exited(0));
+            }).ObserveRootExit(f.Lease(T), operation, launch, new RootExit.Exited(0));
+        }
+        finally { held?.Dispose(); }
+        competing ??= f.Materializer().ObserveRootExit(f.Lease(T), competingOperation, launch, new RootExit.Exited(0));
+        var recorded = Assert.IsType<RootObservation.Observed>(competing).Observation;
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", recorded.Tip.Hex);
+        Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root", recorded.Tip) },
+            GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))).Select(pair => (pair.Key, pair.Value)));
+        Assert.Equal("JournalBusy", Assert.IsType<RootObservation.Rejected>(outcome).Reason.Problem.ToString());
+        Assert.Empty(f.Read().Fenced);
+        Assert.Equal(recorded, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+            f.Lease(T), operation, launch, new RootExit.Exited(0))).Observation);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_busy_root_observation_retries_the_same_operation_and_records_the_retained_tip()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        var operation = f.Op();
+        FileStream? held = null;
+        RootObservation outcome;
+        try
+        {
+            outcome = f.Materializer(probe: point =>
+            {
+                if (point == "journal.root-exit.before")
+                    held = new FileStream(Path.Combine(f.Git.Folder, ".idp", "runs", "write.lock"),
+                        FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                if (point == "journal.root-exit.after") held?.Dispose();
+            }).ObserveRootExit(f.Lease(T), operation, launch, new RootExit.Exited(0));
+        }
+        finally { held?.Dispose(); }
+        Assert.Equal("JournalBusy", Assert.IsType<RootObservation.Rejected>(outcome).Reason.Problem.ToString());
+        Assert.Empty(f.Read().RootExits);
+        Assert.Empty(f.Read().Fenced);
+        var pin = "refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root";
+        Assert.Equal(new[] { (pin, f.A) }, GitFixture.Read(f.Git.Open().RefSnapshot("refs/idp/93f23689/pin/"))
+            .Select(pair => (pair.Key, pair.Value)));
+        var observed = Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+            f.Lease(T), operation, launch, new RootExit.Exited(0))).Observation;
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", observed.Tip.Hex);
+        Assert.Equal(observed, Assert.Single(f.Read().RootExits).Value);
+        Assert.Equal(observed.Tip, GitFixture.Read(f.Git.Open().ReadRef(pin)));
     }
 }
