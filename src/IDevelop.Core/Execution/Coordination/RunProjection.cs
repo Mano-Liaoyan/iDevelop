@@ -42,11 +42,20 @@ internal static class RunProjection
             if (Started(record, task, latest.TryGetValue(task, out var attempt) ? attempt : null, results.GetValueOrDefault(task), log, live, holds) is { } view)
                 progress.Add(task, view);
         }
+        foreach (var (task, view) in progress.ToArray())
+        {
+            // A review whose fix round was interrupted names it, so the person can choose how it goes on.
+            if (view is { State: TaskState.Waiting, Status: AttemptStatus.InReview, Attempt: { } review } &&
+                log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer)
+                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log) };
+        }
         var plan = Schedule.Of(snapshot, progress, view => view.State == TaskState.Done);
         var tasks = ImmutableSortedDictionary.CreateBuilder<TaskId, TaskView>();
         foreach (var (task, view) in progress) tasks[task] = view;
         foreach (var task in plan.Ready)
-            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ? TaskState.Ready : TaskState.Unsupported);
+            // A review without a subject has nothing to review, so it never starts.
+            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ||
+                snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review && snapshot.SubjectOf(task) is not null ? TaskState.Ready : TaskState.Unsupported);
         foreach (var (task, holders) in plan.Blocked) tasks[task] = new(task, TaskState.Pending) { HeldBy = [.. holders.Keys] };
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);

@@ -76,14 +76,14 @@ public sealed class ReviewWork : IConverses
         {
             return subject.Latest is { Status: AttemptStatus.Running or AttemptStatus.WaitingForInput }
                 ? new NodeStep.WaitForSubject()
-                : new NodeStep.FixRound(FixPrompt(context.Node, subject, review, ledger), round.Number, review.Guidance.Count, subject.CanResume);
+                : Round(context.Node, subject, review, ledger, review.Guidance.Count, subject.CanResume, choice: null);
         }
 
         return fix.Status switch
         {
             AttemptStatus.Running or AttemptStatus.WaitingForInput => new NodeStep.WaitForSubject(),
-            // Quitting iDevelop interrupts a running fix round. The round goes on in the same session once the project opens.
-            AttemptStatus.Interrupted => new NodeStep.FixRound(FixPrompt(context.Node, subject, review, ledger), round.Number, review.Guidance.Count, subject.CanResume),
+            // Quitting iDevelop interrupts a running fix round. It never goes on by itself: the person chooses how.
+            AttemptStatus.Interrupted => new NodeStep.ChooseFix(round.Number),
             AttemptStatus.Succeeded => new NodeStep.RunTurn(RoundPrompt(subject, review, ledger, round.Number, fix))
             {
                 Report = new FixReport(fix.Id, fix.Result, link.Guidance),
@@ -93,6 +93,35 @@ public sealed class ReviewWork : IConverses
         };
     }
 
+    /// <summary>
+    /// The fix round that the person's choice starts after closing iDevelop interrupted it, or null when the review waits
+    /// for no choice. Continue resumes the interrupted fix's session, which the caller checks with
+    /// <see cref="SubjectView.CanResume"/>; Retry starts a fresh one. Both keep the review, the round, and the guidance count.
+    /// </summary>
+    public NodeStep.FixRound? Recover(NodeContext context, AttemptRecord review, FixChoice choice)
+    {
+        if (context.Subject is not { } subject || Next(context, review) is not NodeStep.ChooseFix)
+        {
+            return null;
+        }
+
+        var resumes = choice == FixChoice.Continue;
+        return Round(context.Node, subject, review, ReviewLedger.Fold(review), review.Guidance.Count, resumes, choice);
+    }
+
+    /// <summary>
+    /// The fix round of the review's latest round with the guidance notes up to <paramref name="guidance"/>, as a run
+    /// rebuilds a reserved round's prompt from its recorded link. <paramref name="choice"/> names the person's choice after
+    /// an interruption, which only changes how the prompt begins.
+    /// </summary>
+    public NodeStep.FixRound Round(NodeContext context, AttemptRecord review, int guidance, bool resumes, FixChoice? choice) =>
+        Round(context.Node, context.Subject ?? throw new ArgumentException("A fix round needs the review's subject.", nameof(context)),
+            review, ReviewLedger.Fold(review), guidance, resumes, choice);
+
+    private static NodeStep.FixRound Round(TaskDefinition node, SubjectView subject, AttemptRecord review, ReviewLedger ledger, int guidance,
+        bool resumes, FixChoice? choice) =>
+        new(FixPrompt(node, subject, review, ledger, guidance, resumes, choice), ledger.Round, guidance, resumes);
+
     /// <summary>The reviewer template with the subject's ticket, its report, and its whole change, then the verdict contract.</summary>
     private static string FirstPrompt(TaskDefinition review, SubjectView subject)
     {
@@ -101,18 +130,25 @@ public sealed class ReviewWork : IConverses
     }
 
     /// <summary>
-    /// The fix template with the findings that stand, then a repeat notice and the guidance the implementer has not read,
-    /// then the fix contract. A fresh session first reads the ticket and its change so far.
+    /// The fix template with the findings that stand, then a repeat notice and the guidance up to <paramref name="guidance"/>
+    /// that the implementer has not read, then the fix contract. A fresh session first reads the ticket and its change so far.
     /// </summary>
-    private static string FixPrompt(TaskDefinition node, SubjectView subject, AttemptRecord review, ReviewLedger ledger)
+    private static string FixPrompt(TaskDefinition node, SubjectView subject, AttemptRecord review, ReviewLedger ledger, int guidance,
+        bool resumes, FixChoice? choice)
     {
         var round = ledger.Round;
         var text = new StringBuilder();
-        if (!subject.CanResume)
+        if (!resumes)
         {
-            text.Append("Your earlier session could not continue, so this one starts fresh. This is the ticket you worked on, and your change so far.\n\n")
+            text.Append(choice == FixChoice.Retry
+                    ? "You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.\n\n"
+                    : "Your earlier session could not continue, so this one starts fresh. This is the ticket you worked on, and your change so far.\n\n")
                 .Append("## The ticket\n\n").Append(AgentWork.Ticket(subject.Node)).Append("\n\n")
                 .Append("## Your change so far\n\n").Append(Fenced(subject.Change)).Append("\n\n");
+        }
+        else if (choice == FixChoice.Continue)
+        {
+            text.Append("Closing iDevelop interrupted your work on these findings. Go on from where you stopped.\n\n");
         }
 
         text.Append(Template(node, ((WorkSpec.Review)node.Blueprint.Work).Fix, subject, subject.Change, Findings(ledger)).TrimEnd()).Append("\n\n");
@@ -122,7 +158,7 @@ public sealed class ReviewWork : IConverses
         }
 
         var delivered = ledger.Rounds.Select(each => each.Report?.Guidance).LastOrDefault(count => count is not null) ?? 0;
-        AppendGuidance(text, review.Guidance.Skip(delivered));
+        AppendGuidance(text, review.Guidance.Take(guidance).Skip(delivered));
         return text.Append(FixContract).Append('\n').ToString();
     }
 

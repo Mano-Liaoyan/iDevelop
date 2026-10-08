@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -66,7 +67,7 @@ internal sealed partial class Materializer
                 if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
                 if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
-                        original.Id, basePrompt, RunPlanning.Context(record, original)) != completed.Execution.Prompt)
+                        original.Id, basePrompt, RunPlanning.Context(record, original), RunReducer.FixArtifacts(record, original.Id)) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
                 attempt = original.Id;
                 inputs = completed.Execution.Inputs;
@@ -102,6 +103,7 @@ internal sealed partial class Materializer
             step = "artifacts";
             var storage = new RunStorage(_project, workflow, run);
             VerifyArtifacts(record, plan, storage);
+            VerifyForwarding(record, plan.Task, plan.Revision, plan.Bindings);
             JoinRecord? join = null;
             if (plan.Sources.Select(source => source.Commit).Distinct().Count() >= 2)
             {
@@ -137,7 +139,8 @@ internal sealed partial class Materializer
             if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(Checkout(repository, owner), outbox));
             VerifyOutbox(repository, Checkout(repository, owner), outbox);
             step = "prompt";
-            var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]));
+            var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]),
+                RunReducer.FixArtifacts(record, plan.Attempt));
             var execution = new PreparedExecution(new(plan.Attempt, 1), input.Id, location, prompt, Revision.Hash(prompt), outbox);
             step = "shared-refs";
             var refs = Snapshot(storage, operation, repository, record);
@@ -249,7 +252,7 @@ internal sealed partial class Materializer
 
     /// <param name="planning">What a planner's first prompt lists, from <see cref="RunPlanning.Context"/>.</param>
     private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
-        PlanningContext? planning = null)
+        PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default)
     {
         if (basePrompt is null && definition.Blueprint.Work is not WorkSpec.Agent)
             throw new Refusal(new(RunProblem.InvalidData));
@@ -261,6 +264,9 @@ internal sealed partial class Materializer
             prompt += "\n\nDeclare artifacts in " + RunLayout.Outbox(attempt) +
                 "/manifest.json using {\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}. " +
                 "Artifact paths are relative to that folder.";
+        if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } && !kept.IsDefaultOrEmpty)
+            prompt += " Your earlier result's artifacts stay with your new result unless you declare one with the same name: " +
+                string.Join(", ", kept.Select(artifact => artifact.Name)) + ".";
         return prompt;
     }
 

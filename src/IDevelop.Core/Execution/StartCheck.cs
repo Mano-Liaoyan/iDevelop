@@ -51,6 +51,16 @@ public abstract record StartProblem
     /// <summary>The review cannot go on, because its subject cannot start its fix round.</summary>
     public sealed record SubjectBlocked(string Title, StartProblem Problem) : StartProblem;
 
+    /// <summary>
+    /// Closing iDevelop interrupted fix round <paramref name="Round"/> of <paramref name="Subject"/>, so the review waits
+    /// until the person chooses Continue fix or Retry fix. <paramref name="CanContinue"/> is false when the interrupted
+    /// session cannot go on, and then only Retry fix starts the round again.
+    /// </summary>
+    public sealed record FixInterrupted(string Subject, int Round, bool CanContinue) : StartProblem;
+
+    /// <summary>The review has no interrupted fix round to continue or retry, or another choice already started it.</summary>
+    public sealed record NoFixChoice(string Review) : StartProblem;
+
     public sealed record NoModel(ClientId Client) : StartProblem;
 
     public sealed record ClientChecking(ClientId Client) : StartProblem;

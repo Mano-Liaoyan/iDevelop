@@ -108,6 +108,9 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>An Approval node's newest request and its answer, or null before its first request.</summary>
     public GateView? Gate { get; init; }
+
+    /// <summary>On a review: the fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix.</summary>
+    public FixRecovery? Fix { get; init; }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
