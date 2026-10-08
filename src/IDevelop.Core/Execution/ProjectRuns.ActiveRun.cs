@@ -183,7 +183,19 @@ public sealed partial class ProjectRuns
                 buffers = _buffers;
             }
 
-            return AttemptLog.ReadHistory(_owner._attempts, TaskId, AttemptId, buffers) is { } history ? history with { Record = published } : null;
+            return AttemptLog.ReadHistoryAt(_log.Folder, TaskId, AttemptId, buffers) is { } history ? history with { Record = published } : null;
+        }
+
+        /// <summary>The attempt as this run folds it now, ahead of any published record.</summary>
+        public AttemptRecord Current
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return Record;
+                }
+            }
         }
 
         public RequestRecord? ReadRequest(RequestKey key)
@@ -1064,7 +1076,6 @@ public sealed partial class ProjectRuns
 
         private void Publish()
         {
-            if (Workflow is not null) return;
             var live = Live;
             if (ReferenceEquals(Record, _publishedRecord) && live.Revision == _publishedRevision)
             {
@@ -1073,6 +1084,13 @@ public sealed partial class ProjectRuns
 
             _publishedRecord = Record;
             _publishedRevision = live.Revision;
+            if (Workflow is not null)
+            {
+                // A run's turn never reaches the task's published record. Its conversation reads the run's log and this live state.
+                _owner.NotifyConversations(TaskId);
+                return;
+            }
+
             _owner.Publish(Record, live.LogRevision);
         }
 

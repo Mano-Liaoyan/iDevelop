@@ -216,11 +216,15 @@ internal sealed class AttemptLog : IDisposable
     }
 
     public static AttemptHistory? ReadHistory(string attemptsFolder, TaskId task, AttemptId attempt,
+        IReadOnlyDictionary<string, LiveMessageBuffer>? live = null) => ReadHistoryAt(FolderOf(attemptsFolder, task, attempt), task, attempt, live);
+
+    /// <summary>The history of the attempt whose log is in <paramref name="folder"/>, standalone or run-owned.</summary>
+    public static AttemptHistory? ReadHistoryAt(string folder, TaskId task, AttemptId attempt,
         IReadOnlyDictionary<string, LiveMessageBuffer>? live = null)
     {
         try
         {
-            var events = ReadPositioned(FolderOf(attemptsFolder, task, attempt));
+            var events = ReadPositioned(folder);
             return events.FirstOrDefault(line => line.Event is AttemptEvent.Requested)?.Event is AttemptEvent.Requested requested
                 && requested.Task == task && requested.Attempt == attempt
                 ? ConversationHistory.Project(events, live) : null;
