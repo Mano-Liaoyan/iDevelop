@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text;
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
@@ -245,7 +246,6 @@ public sealed class JoinPolicyTests
     [UnixFact]
     public async Task Changed_git_diagnostics_on_a_conflict_retry_publish_new_evidence()
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(Diamond(), configureBase: Settings);
         await ConflictingSources(f);
         var operation = f.Op();
@@ -339,7 +339,6 @@ public sealed class JoinPolicyTests
     [InlineData("GIT_CONFIG_GLOBAL")]
     public async Task Inherited_git_configuration_cannot_run_a_driver_or_publish_its_ref(string variable)
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(Diamond(), configureBase: git =>
         {
             git.Write(".gitattributes", "settings.txt merge=keep\n");
@@ -510,9 +509,9 @@ public sealed class JoinPolicyTests
     }
 
     [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public async Task Unexpected_scratch_entries_keep_a_join_ready_and_stay_after_a_restart()
     {
-        if (OperatingSystem.IsWindows()) return;
         var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U), Writer(D)), T, U), C, U), T, D), C, D);
         using var f = new PreparationFixture(workflow);
         await CleanSources(f);
@@ -581,9 +580,9 @@ public sealed class JoinPolicyTests
     }
 
     [UnixFact]
+    [UnsupportedOSPlatform("windows")]
     public async Task A_join_removes_scratch_state_owned_by_an_exited_process()
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(Diamond());
         await CleanSources(f);
         using var dead = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("true") { UseShellExecute = false })!;
@@ -615,7 +614,6 @@ public sealed class JoinPolicyTests
     [InlineData(true)]
     public async Task Clean_and_conflicted_joins_use_repository_scratch_and_leave_it_empty(bool conflict)
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(Diamond(), configureBase: Settings);
         if (conflict) await ConflictingSources(f);
         else await CleanSources(f);

@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Globalization;
+using System.Text;
 
 namespace IDevelop.Execution;
 
@@ -33,6 +35,26 @@ internal sealed partial class GitRepository
     {
         var result = Git(checkout, GitOperation.Worktree, ["cat-file", "--filters", "--path=" + relativePath, objectId]);
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
+    }
+
+    public GitRead<bool> TrustsExecutableBit(string checkout)
+    {
+        var result = Git(checkout, GitOperation.Metadata, ["config", "--type=bool", "--get", "core.fileMode"]);
+        return result.ExitCode switch
+        {
+            0 => new GitRead<bool>.Read(result.Text.Trim() == "true"),
+            1 => new GitRead<bool>.Read(true),
+            _ => Failure<bool>(result),
+        };
+    }
+
+    public GitRead<bool> ForgetStat(string checkout, IEnumerable<StageEntry> entries)
+    {
+        var bytes = Encoding.UTF8.GetBytes(string.Concat(entries.Select(entry =>
+            $"{entry.Mode} {entry.Object} {entry.Stage.ToString(CultureInfo.InvariantCulture)}\t{entry.Path}\0")));
+        if (bytes.Length == 0) return new GitRead<bool>.Read(true);
+        var result = Git(checkout, GitOperation.Worktree, ["update-index", "-z", "--index-info"], stdin: bytes);
+        return result.ExitCode == 0 ? new GitRead<bool>.Read(true) : Failure<bool>(result);
     }
 
     public GitRead<bool> PlainIndex(string checkout)

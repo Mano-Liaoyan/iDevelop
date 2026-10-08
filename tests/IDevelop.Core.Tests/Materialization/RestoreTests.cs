@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
 using IDevelop.Workflows;
@@ -14,14 +15,13 @@ public sealed class RestoreTests
     private sealed record RestoreCase(Preparation.Ready Ready, OperationId Preservation, OperationId Operation,
         OperationId Confirmation, RestorePreview Preview, string IndexPath, string ScratchRoot);
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("both unknown")]
     [InlineData("checkout unknown")]
     [InlineData("Git folder unknown")]
     [InlineData("different")]
     public async Task Restore_requires_proven_same_volume_evidence(string evidence)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -80,10 +80,9 @@ public sealed class RestoreTests
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_restore_receipt_crash_resolves_every_covered_block_atomically()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -115,10 +114,9 @@ public sealed class RestoreTests
         Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_applies_the_repository_clean_and_smudge_filter()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -172,10 +170,9 @@ public sealed class RestoreTests
         Assert.Equal("root\n", File.ReadAllText(Path.Combine(ready.Checkout, "root.txt")));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_refuses_a_smudge_result_that_does_not_clean_to_the_preview_blob()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -237,14 +234,13 @@ public sealed class RestoreTests
         Assert.Equal(new BlockScope.Checkout(["c.txt"]), refused.Scope);
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("before")]
     [InlineData("journal.restore-plan.after")]
     [InlineData("git.restore-file-a.txt.before")]
     [InlineData("restore.file.a.txt.written")]
     public async Task An_unresolved_claim_before_or_during_restore_prevents_every_move(string point)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var attempt = ready.Execution.Launch.Attempt;
@@ -278,14 +274,13 @@ public sealed class RestoreTests
         Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("none")]
     [InlineData("journal.restore-head-intent.after")]
     [InlineData("git.restore-head.after")]
     [InlineData("journal.restore-head-observed.before")]
     public async Task Detached_head_restore_converges_after_a_crash(string point)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -361,10 +356,9 @@ public sealed class RestoreTests
         Assert.Equal(new BlockScope.Checkout(["a.txt"]), f.Read().Blocks[drift].Block.Scope);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_completed_restore_rerun_after_publication_returns_its_receipt_without_appending()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -389,10 +383,9 @@ public sealed class RestoreTests
         Assert.Equal(sequence, f.Read().Sequence);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_restore_rerun_resolves_its_own_block_and_enables_publication()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -418,10 +411,9 @@ public sealed class RestoreTests
         Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_restore_success_resolves_its_own_registration_refusal()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -452,10 +444,9 @@ public sealed class RestoreTests
         Assert.Equal(1, Moves(f, operation));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_after_a_registration_refusal_enables_publication()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -481,10 +472,9 @@ public sealed class RestoreTests
         Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_applies_the_repository_line_ending_conversion()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -506,10 +496,9 @@ public sealed class RestoreTests
         Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_after_a_skip_worktree_refusal_enables_publication()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -533,10 +522,9 @@ public sealed class RestoreTests
         Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Preserve_and_restore_an_accepted_baseline()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -575,10 +563,9 @@ public sealed class RestoreTests
         Assert.Equal(sequence, f.Read().Sequence);
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_a_waiting_baseline()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T) with { Conversation = ConversationMode.Chat }));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "staged\n", ready.Checkout);
@@ -603,10 +590,9 @@ public sealed class RestoreTests
         Assert.Equal(2, Moves(f, operation));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_resumes_a_pending_publication_from_its_original_capture()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -628,10 +614,9 @@ public sealed class RestoreTests
         Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Restore_removes_exactly_the_preserved_extras()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -653,14 +638,13 @@ public sealed class RestoreTests
         Assert.Equal(1, Moves(f, operation));
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("run.sh", "mode", "an executable file", "a file")]
     [InlineData("link", "link", "a symbolic link", "a file")]
     [InlineData("docs", "folder", "a folder", "a file")]
     [InlineData("tool.sh", "executable", "an executable file", "an executable file")]
     public async Task Restore_refuses_type_and_mode_changes_before_any_move(string path, string change, string now, string baseline)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>
         {
             git.Write(path, "before\n");
@@ -723,12 +707,11 @@ public sealed class RestoreTests
         Assert.Equal(1, Moves(f, control));
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("git.restore-file-a.txt.before")]
     [InlineData("restore.file.a.txt.written")]
     public async Task A_file_added_after_preservation_blocks_restore(string point)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -769,10 +752,9 @@ public sealed class RestoreTests
         Assert.Equal(1, Moves(f, finalRestore));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_stale_preview_is_refused()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);
@@ -823,7 +805,7 @@ public sealed class RestoreTests
         Assert.True(RefOwnership.Accepts(f.Read(), f.Git.Open(), ready.Execution.Location.Owner.Branch, f.A));
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData("a", "journal.branch-intent.after", "DirtyWorktree", 0, 0)]
     [InlineData("b", "git.branch.after", "DirtyWorktree", 0, 0)]
     [InlineData("c", "journal.index-intent.after", "DirtyWorktree", 0, 1)]
@@ -831,7 +813,6 @@ public sealed class RestoreTests
     public async Task Restore_clears_drift_around_a_pending_publication_move(string row, string point, string problem,
         int refMoves, int indexMoves)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DoneWriter(f);
         var attempt = ready.Execution.Launch.Attempt;
@@ -869,12 +850,11 @@ public sealed class RestoreTests
         Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Refresh_with_a_partial_reset_is_restored_as_one_component(bool withLateWrite)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         var reviewer = new TaskDefinition(U, new Blueprint(new("example.review", 1), "Review",
             new WorkSpec.Review(PromptTemplate.Parse("Review"), PromptTemplate.Parse("Fix")), [],
             new(Task().Execution, ConversationMode.Autonomous))) { Title = "Review" };
@@ -943,12 +923,14 @@ public sealed class RestoreTests
         Assert.Single(f.Read().Results);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_lock_only_restore_unblocks_an_unfinished_retry(bool withLock)
+    [Fact]
+    public Task An_unfinished_retry_without_a_lock_refuses_restore() => LockOnlyRestore(false);
+
+    [LinuxOrWindowsFact]
+    public Task A_lock_only_restore_unblocks_an_unfinished_retry() => LockOnlyRestore(true);
+
+    private static async Task LockOnlyRestore(bool withLock)
     {
-        if (withLock && !OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await SalvageTests.FailedWriter(f);
         var attempt = ready.Execution.Launch.Attempt;
@@ -996,12 +978,11 @@ public sealed class RestoreTests
         Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Restore_recovers_from_its_own_index_lock(bool publicationLock)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DoneWriter(f);
         var attempt = ready.Execution.Launch.Attempt;
@@ -1167,7 +1148,6 @@ public sealed class RestoreTests
 
     private static readonly Lazy<string[]> RecordedRestorePoints = new(() =>
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return [];
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var restore = RestoreMatrixSetup(f).GetAwaiter().GetResult();
         var points = new List<string>();
@@ -1193,7 +1173,7 @@ public sealed class RestoreTests
 
     public static IEnumerable<object[]> RestoreCrashPoints => RecordedRestorePoints.Value.Select(point => new object[] { point });
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [MemberData(nameof(RestoreCrashPoints), DisableDiscoveryEnumeration = true)]
     public async Task Every_restore_probe_converges_on_the_baseline(string point)
     {
@@ -1252,7 +1232,7 @@ public sealed class RestoreTests
         Assert.Equal(sequence, f.Read().Sequence);
     }
 
-    [Theory]
+    [LinuxOrWindowsTheory]
     [MemberData(nameof(RestoreCrashPoints), DisableDiscoveryEnumeration = true)]
     public async Task A_late_write_at_every_restore_probe_blocks_until_the_receipt_is_recorded(string point)
     {
@@ -1301,6 +1281,124 @@ public sealed class RestoreTests
         Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), replacement, attempt, preservation, f.Op(), preview.Identity));
         Assert.Single(Observations<GitMutation.RestoreFiles>(f, replacement));
         AssertMatrixBaseline(f, restore);
+    }
+
+    [UnixTheory]
+    [InlineData("executable", false, "true")]
+    [InlineData("executable", true, "true")]
+    [InlineData("unchanged", false, "true")]
+    [InlineData("directory", false, "true")]
+    [InlineData("executable", false, "false")]
+    [InlineData("executable", false, "unset")]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Restore_keeps_a_later_paths_changed_type_or_executable_mode(string change, bool crash, string fileMode)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        Assert.Equal(0, fileMode == "unset"
+            ? f.Git.Run(f.Git.Folder, "config", "--unset", "core.fileMode").ExitCode
+            : f.Git.Run(f.Git.Folder, "config", "core.fileMode", fileMode).ExitCode);
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        f.Git.Write("b.txt", "extra\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var materializer = f.Materializer(volumes: _ => 1UL);
+        var preview = Assert.IsType<RestorePreviewRead.Previewed>(materializer.PreviewRestore(f.Lease(T), attempt, preservation)).Preview;
+        Assert.Equal(new[] { "a.txt", "b.txt" }, preview.Paths.Select(path => path.Path));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var b = Path.Combine(ready.Checkout, "b.txt");
+        void Change()
+        {
+            if (change == "executable")
+                File.SetUnixFileMode(b, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            if (change == "directory")
+            {
+                File.Delete(b);
+                Directory.CreateDirectory(b);
+                File.WriteAllText(Path.Combine(b, "inner.txt"), "inner\n");
+            }
+        }
+        Restoration outcome;
+        if (crash)
+        {
+            Assert.Throws<Crash>(() => f.Materializer(volumes: _ => 1UL, probe: step =>
+            {
+                if (step == "git.restore-file-a.txt.after") throw new Crash();
+            }).Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+            Change();
+            outcome = materializer.Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
+        }
+        else
+        {
+            var fired = false;
+            outcome = f.Materializer(volumes: _ => 1UL, probe: step =>
+            {
+                if (step != "git.restore-file-a.txt.after" || fired) return;
+                fired = true;
+                Change();
+            }).Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
+            Assert.True(fired);
+        }
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        if (change == "unchanged" || fileMode == "false")
+        {
+            Assert.IsType<Restoration.Restored>(outcome);
+            Assert.False(Path.Exists(b));
+        }
+        else
+        {
+            Assert.Equal("DirtyWorktree", Assert.IsType<Restoration.Blocked>(outcome).Block.Problem.ToString());
+            if (change == "directory") Assert.Equal("inner\n", File.ReadAllText(Path.Combine(b, "inner.txt")));
+            else
+            {
+                Assert.Equal("extra\n", File.ReadAllText(b));
+                Assert.Equal(UnixFileMode.UserExecute, File.GetUnixFileMode(b) & UnixFileMode.UserExecute);
+            }
+        }
+    }
+
+    [Fact]
+    public Task Restore_forgets_cached_stat_when_autocrlf_changes_after_checkout() => RestoreAutocrlf(null);
+
+    [Theory]
+    [InlineData("journal.restore-files-observed.after")]
+    [InlineData("git.restore-stat.after")]
+    public Task Restore_forgets_cached_stat_after_a_files_or_stat_step_crash(string crashPoint) => RestoreAutocrlf(crashPoint);
+
+    private static async Task RestoreAutocrlf(string? crashPoint)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "core.autocrlf", "true").ExitCode);
+        File.WriteAllBytes(Path.Combine(ready.Checkout, "a.txt"), [108, 97, 116, 101, 13, 10]);
+        f.Git.Write("u.txt", "untracked\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var materializer = f.Materializer(volumes: _ => 1UL);
+        var preview = Assert.IsType<RestorePreviewRead.Previewed>(materializer.PreviewRestore(f.Lease(T), attempt, preservation)).Preview;
+        Assert.Equal(new[] { "a.txt", "u.txt" }, preview.Paths.Select(path => path.Path));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        if (crashPoint is not null)
+            Assert.Throws<Crash>(() => f.Materializer(volumes: _ => 1UL, probe: step =>
+            {
+                if (step == crashPoint) throw new Crash();
+            }).Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        Assert.IsType<Restoration.Restored>(materializer.Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        Assert.Equal(new byte[] { 65, 13, 10 }, File.ReadAllBytes(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain", "--untracked-files=no").Text);
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), attempt));
+        Assert.Single(f.Read().Results);
+        var again = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), again, attempt));
+        var second = Assert.IsType<RestorePreviewRead.Previewed>(materializer.PreviewRestore(f.Lease(T), attempt, again)).Preview;
+        Assert.Empty(second.Paths);
     }
 
     private static async Task<RestoreCase> RestoreMatrixSetup(PreparationFixture f)

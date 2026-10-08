@@ -342,10 +342,9 @@ public sealed class PreservationTests
         }
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task Replacing_an_index_lock_with_identical_bytes_is_a_divergence()
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);

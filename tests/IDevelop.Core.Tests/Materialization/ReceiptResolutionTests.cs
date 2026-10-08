@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
@@ -10,13 +11,6 @@ public sealed class ReceiptResolutionTests
     private sealed class Crash : Exception;
 
     [Theory]
-    [InlineData("restore", "unknown")]
-    [InlineData("restore", "not-block")]
-    [InlineData("restore", "resolved")]
-    [InlineData("restore", "duplicate")]
-    [InlineData("restore", "other-task")]
-    [InlineData("restore", "default")]
-    [InlineData("restore", "empty-id")]
     [InlineData("baseline", "unknown")]
     [InlineData("baseline", "not-block")]
     [InlineData("baseline", "resolved")]
@@ -24,9 +18,22 @@ public sealed class ReceiptResolutionTests
     [InlineData("baseline", "other-task")]
     [InlineData("baseline", "default")]
     [InlineData("baseline", "empty-id")]
-    public async Task A_receipt_rejects_invalid_resolutions_without_partially_resolving_blocks(string command, string invalid)
+    public Task A_receipt_rejects_invalid_resolutions_without_partially_resolving_blocks(string command, string invalid)
+        => RejectInvalidResolutions(command, invalid);
+
+    [LinuxOrWindowsTheory]
+    [InlineData("restore", "unknown")]
+    [InlineData("restore", "not-block")]
+    [InlineData("restore", "resolved")]
+    [InlineData("restore", "duplicate")]
+    [InlineData("restore", "other-task")]
+    [InlineData("restore", "default")]
+    [InlineData("restore", "empty-id")]
+    public Task A_restore_receipt_rejects_invalid_resolutions_without_partially_resolving_blocks(string command, string invalid)
+        => RejectInvalidResolutions(command, invalid);
+
+    private static async Task RejectInvalidResolutions(string command, string invalid)
     {
-        if (command == "restore" && !OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(C)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await f.Close(ready);

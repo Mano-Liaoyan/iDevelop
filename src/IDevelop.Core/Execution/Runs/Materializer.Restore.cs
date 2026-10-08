@@ -332,6 +332,7 @@ internal sealed partial class Materializer
                 RequirePublication(publisher.Restore(permit, operation, planId, step, repository,
                     new(prepared.Location.Owner.Branch, plan.From.Branch, plan.To.Branch!.Value)), new BlockScope.Checkout([], Branch: true));
             }
+            var trustsExecutableBit = Value(repository.TrustsExecutableBit(checkout));
             if (!plan.Paths.IsEmpty)
             {
                 var files = new GitMutation.RestoreFiles(plan.Task, plan.Paths);
@@ -348,7 +349,7 @@ internal sealed partial class Materializer
                         {
                             RecheckRecord();
                             var destination = RunStorage.SafePath(checkout, path.Path);
-                            var content = LiveContent(repository, checkout, path.Path);
+                            var content = LiveContent(repository, checkout, path.Path, trustsExecutableBit);
                             if (content == path.To) return true;
                             if (content != path.From) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([path.Path]));
                             if (path.To is null) File.Delete(destination);
@@ -362,7 +363,7 @@ internal sealed partial class Materializer
                                     throw Fault(MaterializationProblem.InputUnavailable, "The restore blob differs from its preview.", new BlockScope.Checkout([path.Path]));
                                 _probe?.Invoke("restore.file." + path.Path + ".written");
                                 RecheckRecord();
-                                if (LiveContent(repository, checkout, path.Path) != path.From)
+                                if (LiveContent(repository, checkout, path.Path, trustsExecutableBit) != path.From)
                                     throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([path.Path]));
                                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                                 File.Move(temporary, destination, overwrite: true);
@@ -373,6 +374,15 @@ internal sealed partial class Materializer
                     }
                     Observed(step, intended, allAdopted, plan.To.Files.Hex);
                 }
+                step = "restore-stat";
+                Recheck();
+                Mutate(step, () =>
+                {
+                    Recheck();
+                    var entries = GitRepository.ParseIndex(Value(repository.IndexBytes(checkout)) ?? []);
+                    return Value(repository.ForgetStat(checkout, entries.Where(entry => entry.Stage == 0 && entry.Mode == "100644" &&
+                        plan.Paths.Any(path => path.Path == entry.Path && path.To is not null && path.To == entry.Object))));
+                });
             }
             if (IndexDiffers(plan.From, plan.To))
             {
@@ -448,11 +458,15 @@ internal sealed partial class Materializer
         { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = BlockScope.Checkout.Whole }); }
     }
 
-    private static string? LiveContent(GitRepository repository, string checkout, string relativePath)
+    private static string? LiveContent(GitRepository repository, string checkout, string relativePath, bool trustsExecutableBit)
     {
         var path = RunStorage.SafePath(checkout, relativePath);
         if (!File.Exists(path) && !Directory.Exists(path)) return null;
-        RegularFile.Verify(path);
+        try { RegularFile.Verify(path); }
+        catch (IOException)
+        { throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([relativePath])); }
+        if (trustsExecutableBit && !OperatingSystem.IsWindows() && (File.GetUnixFileMode(path) & UnixFileMode.UserExecute) != 0)
+            throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([relativePath]));
         return Value(repository.WorkingFileBlob(checkout, relativePath, path));
     }
 
