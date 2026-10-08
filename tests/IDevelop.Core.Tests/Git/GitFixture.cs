@@ -10,9 +10,11 @@ internal sealed class GitFixture : IDisposable
         new(CreateDiamondTemplate, LazyThreadSafetyMode.ExecutionAndPublication);
     private readonly TempFolder _temp = new();
 
-    public GitFixture(bool initialize = true)
+    /// <param name="folder">The repository's folder, which the caller cleans up. A new temporary folder by default.</param>
+    public GitFixture(bool initialize = true, string? folder = null)
     {
-        Folder = _temp.Create("r");
+        Folder = folder ?? _temp.Create("r");
+        Directory.CreateDirectory(Folder);
         var config = Path.Combine(_temp.Create("config"), "empty");
         File.WriteAllText(config, "[maintenance]\n\tauto = false\n");
         Environment = new Dictionary<string, string>

@@ -24,7 +24,7 @@ internal sealed class TurnFixture : IAsyncDisposable
     public string JournalLock => Path.Combine(Preparation.Git.Folder, ".idp", "runs", "write.lock");
 
     public TurnFixture(ConversationMode conversation = ConversationMode.Autonomous, bool readOnly = false,
-        ClientId client = ClientId.Codex, string model = "gpt-6-sol", Func<Workflow, Workflow>? configure = null)
+        ClientId client = ClientId.Codex, string model = "gpt-6-sol", Func<Workflow, Workflow>? configure = null, string? folder = null)
     {
         Client = client;
         Writer = PreparationFixture.Writer(T) with
@@ -39,7 +39,7 @@ internal sealed class TurnFixture : IAsyncDisposable
             { Title = Writer.Title, Execution = Writer.Execution, Conversation = conversation };
         }
         var workflow = FixtureWorkflow(Writer);
-        Preparation = new(configure?.Invoke(workflow) ?? workflow);
+        Preparation = new(configure?.Invoke(workflow) ?? workflow, folder: folder);
         Evidence = _temp.Create("evidence");
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
     }
