@@ -45,6 +45,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private readonly RelayCommand _stopAndSend;
     private readonly RelayCommand _openInTerminal;
     private readonly RelayCommand _markDone;
+    private readonly RelayCommand _continueFix;
+    private readonly RelayCommand _retryFix;
     private TaskDefinition _task;
     private Point _location;
     private AttemptRecord? _attempt;
@@ -76,6 +78,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
         _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
         _markDone = new RelayCommand(MarkDone, () => IsWaiting);
+        _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => _problem is StartProblem.FixInterrupted { CanContinue: true });
+        _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => _problem is StartProblem.FixInterrupted);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
         (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
@@ -196,6 +200,15 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     /// <summary>The question or the reason the task waits for the person, or null.</summary>
     public string? Waiting => _attempt is { Status: AttemptStatus.WaitingForInput, Pending: { } pending } ? RunText.Waiting(pending) : null;
+
+    /// <summary>Closing iDevelop interrupted the review's fix round, which waits for Continue fix or Retry fix.</summary>
+    public bool ShowsFixChoice => _problem is StartProblem.FixInterrupted;
+
+    /// <summary>Continues the interrupted fix round in its session, when that session can go on.</summary>
+    public ICommand ContinueFixCommand => _continueFix;
+
+    /// <summary>Starts the interrupted fix round again in a fresh session.</summary>
+    public ICommand RetryFixCommand => _retryFix;
 
     /// <summary>Records the waiting task as done, with the agent's last reply as its result.</summary>
     public ICommand MarkDoneCommand => _markDone;
@@ -392,6 +405,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         {
             _problem = problem;
             OnPropertyChanged(nameof(Problem));
+            OnPropertyChanged(nameof(ShowsFixChoice));
+            _continueFix.NotifyCanExecuteChanged();
+            _retryFix.NotifyCanExecuteChanged();
         }
 
         ShowState();
@@ -484,6 +500,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             Fields.First(field => field.Spec.Key == key).Refresh();
         }
     }
+
+    private void ChooseFix(FixChoice choice) =>
+        _canvas.Notice(_canvas.Runs.ChooseFix(Id, choice) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
     private void MarkDone() =>
         _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
