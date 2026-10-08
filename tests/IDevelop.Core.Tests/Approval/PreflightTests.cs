@@ -4,6 +4,7 @@ using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Approval.ApprovalFixture;
 using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
+using Connections = IDevelop.Core.Tests.Runs.RunFixtures;
 
 namespace IDevelop.Core.Tests.Approval;
 
@@ -15,6 +16,7 @@ public sealed class PreflightTests
     {
         var workflow = Chain();
         await using var f = new ApprovalFixture(workflow);
+        f.Git.Write($".idp/workflows/{workflow.Id}.json", "{}\n");
         await f.Open();
 
         var preview = f.Preflight();
@@ -58,7 +60,8 @@ public sealed class PreflightTests
     public async Task Configuration_gaps_name_their_tasks_and_keep_the_workflow_from_being_approved()
     {
         var workflow = Graph([Agent(A) with { Execution = null }, Agent(B).WithField("brief", " ")!,
-            Agent(X) with { Execution = new(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro" } }], (A, B));
+            Agent(X) with { Execution = new(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro" } },
+            new TaskDefinition(C, BuiltInBlueprints.Approval) { Title = "Sign off" }], (A, B), (B, C));
         await using var f = new ApprovalFixture(workflow);
         await f.Open();
 
@@ -67,6 +70,7 @@ public sealed class PreflightTests
         Assert.Equal<PreflightGap>([new PreflightGap.Task(A, new StartProblem.NoAgent()), new PreflightGap.Task(B, new StartProblem.FieldMissing("Brief")),
             new PreflightGap.Task(X, new StartProblem.ClientMissing(ClientId.Pi, "No pi command was found on PATH."))], preview.Gaps);
         Assert.Empty(preview.Choices);
+        Assert.Equal((WorkKind.Person, (ExecutionSettings?)null), (preview.Tasks[2].Kind, preview.Tasks[2].Settings));
         await AssertRefused(f, preview, BaseChoice.Head);
     }
 
@@ -189,6 +193,8 @@ public sealed class PreflightTests
         var preview = f.Preflight();
 
         Assert.Equal<PreflightReport>([new(X, attempt.Id, "X ready.\n", [BaseChoice.Head])], preview.Reusable);
+        f.Workflow = Connections.Connect(f.Workflow, A, X, ConnectionKind.Context);
+        Assert.Empty(f.Preflight().Reusable);
     }
 
     [Fact]

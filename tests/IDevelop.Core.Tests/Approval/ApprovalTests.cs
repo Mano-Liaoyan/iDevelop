@@ -129,4 +129,30 @@ public sealed class ApprovalTests
         Assert.Equal([run], f.ApprovedRuns());
         Assert.Equal([1, 1], new[] { f.Launches(A), f.Launches(X) });
     }
+
+    [Fact]
+    public async Task A_window_closed_right_after_the_approval_leaves_the_run_for_a_repeated_confirmation()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await f.Open();
+        var preview = f.Preflight();
+        Task<WorkflowStart> start;
+        using (var held = new Turns.TurnFixture.ProbeBarrier("approval.approved.after"))
+        {
+            f.Runs.Probe = held.Probe;
+            start = f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(6)));
+            await held.Reached.Task.WaitAsync(Bound);
+            await f.Reopen();
+        }
+
+        var unopened = Assert.IsType<WorkflowStart.Unopened>(await start.WaitAsync(Bound));
+        Assert.Equal(RunProblem.RunStopped, unopened.Reason.Problem);
+        Assert.Equal(0, f.TotalLaunches);
+        var again = await Start(f, f.Preflight(), BaseChoice.Head, Command(6));
+        Assert.True(again.Existing);
+        Assert.Equal(unopened.Run, again.Coordinator.Address.Run);
+        await Completed(again.Coordinator);
+        Assert.Equal([unopened.Run], f.ApprovedRuns());
+        Assert.Equal(3, f.TotalLaunches);
+    }
 }

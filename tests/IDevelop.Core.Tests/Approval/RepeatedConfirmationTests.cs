@@ -47,7 +47,10 @@ public sealed class RepeatedConfirmationTests
         var first = await Start(f, f.Preflight(), BaseChoice.Head, Command(3));
         await Completed(first.Coordinator);
 
-        var second = await Start(f, f.Preflight(), BaseChoice.Head, Command(4));
+        var again = f.Preflight();
+        Assert.Equal((0, 0), (again.Base!.Changed.Length, again.Base.Ignored.Length));
+        Assert.Equal<BaseChoice>([BaseChoice.Head], again.Choices);
+        var second = await Start(f, again, BaseChoice.Head, Command(4));
 
         Assert.False(second.Existing);
         Assert.NotEqual(first.Coordinator.Address.Run, second.Coordinator.Address.Run);
