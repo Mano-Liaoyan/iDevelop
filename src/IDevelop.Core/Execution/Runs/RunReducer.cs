@@ -216,7 +216,8 @@ internal static partial class RunReducer
                 case RunEvent.TurnCaptured captured:
                     var observation = captured.Observation;
                     var observations = record.Captures.GetValueOrDefault(observation.Capture, []);
-                    if (!record.RootExits.ContainsKey(observation.Launch) || record.Fenced.Contains(observation.Launch) ||
+                    if (!record.RootExits.ContainsKey(observation.Launch) ||
+                        record.Fenced.Contains(observation.Launch) && !(observation.Ordinal == 2 && observation.Recovery && observations.Count == 1) ||
                         record.TurnClosures.ContainsKey(observation.Launch) || record.Closures.ContainsKey(observation.Launch.Attempt) ||
                         record.Dispositions.ContainsKey(observation.Capture) || observation.Ordinal != observations.Count + 1 ||
                         observation.Ordinal is not (1 or 2) || CaptureForAnotherId(record, observation.Launch, observation.Capture))
@@ -227,7 +228,7 @@ internal static partial class RunReducer
                     break;
                 case RunEvent.CaptureDisposed disposed:
                     var pair = record.Captures.GetValueOrDefault(disposed.Capture, []);
-                    if (!record.RootExits.ContainsKey(disposed.Launch) || record.Fenced.Contains(disposed.Launch) ||
+                    if (!record.RootExits.ContainsKey(disposed.Launch) ||
                         record.TurnClosures.ContainsKey(disposed.Launch) || record.Closures.ContainsKey(disposed.Launch.Attempt) ||
                         record.Dispositions.ContainsKey(disposed.Capture) || CaptureForAnotherId(record, disposed.Launch, disposed.Capture) ||
                         disposed.Disposition is CaptureDisposition.Failed && pair.Count > 1 ||
@@ -244,7 +245,7 @@ internal static partial class RunReducer
                     };
                     break;
                 case RunEvent.TurnClosed closed:
-                    if (record.Schema == 3 && record.Fenced.Contains(closed.Key) || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
+                    if (record.Schema == 3 && record.Fenced.Contains(closed.Key) && closed.Capture is null || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
                         record.Closures.ContainsKey(closed.Key.Attempt))
                     {
                         return Reject(RunProblem.InvalidClaim);

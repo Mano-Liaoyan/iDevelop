@@ -361,13 +361,13 @@ internal sealed class RunStore
                 return Missing();
             }
 
-            if (record.Fenced.Contains(key)) return Refuse(RunProblem.UnresolvedOwnership);
-
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
                 return RunReducer.Same(existing, evidence) && (record.Settlements.TryGetValue(key, out var settled) ? settled : (CaptureId?)null) == capture
                             ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing) { Capture = capture }) : Refuse(RunProblem.EvidenceMismatch);
             }
+
+            if (record.Fenced.Contains(key) && capture is null) return Refuse(RunProblem.UnresolvedOwnership);
 
             if (TurnEvidenceProblem(record, key, evidence) is { } rejection)
                 return new Mutation.Rejected(rejection);
@@ -440,7 +440,8 @@ internal sealed class RunStore
         return new RecoveryRead.Loaded([.. record.Attempts.Values.OrderBy(attempt => attempt.Id.Value).Select(attempt =>
         {
             var claims = record.UnresolvedClaims.Where(key => key.Attempt == attempt.Id).ToImmutableArray();
-            var state = record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Length != 0 ? RecoveryState.Uncertain :
+            var state = record.Closures.ContainsKey(attempt.Id) ? RecoveryState.Closed : claims.Any(record.Settling) ? RecoveryState.Settling :
+                claims.Any(key => !record.RootExits.ContainsKey(key)) ? RecoveryState.Uncertain :
                 File.Exists(Path.Combine(AttemptFolder(workflow, run, attempt.Task, attempt.Id), "events.jsonl")) ? RecoveryState.Reserved :
                     RecoveryState.RequestMissing;
             return new AttemptRecovery(attempt.Id, state, claims);
@@ -494,8 +495,12 @@ internal sealed class RunStore
                     return new Mutation.Existing(new RunEvent.AttemptClosed(attempt, existing));
                 }
 
+                var settling = record.Schema == 3 && record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
+                if (settling && (outcome is null || !TurnsCannotClose(record, owner)))
+                    return Refuse(RunProblem.SettlementPending);
+
                 var read = AttemptEvidence.Read(AttemptFolder(workflow, run, owner.Task, owner.Id));
-                if (read.Rejection is null && read.Checkpoint is { } checkpoint && OwnedEvidence(record, owner, checkpoint).Rejection is null &&
+                if (!settling && read.Rejection is null && read.Checkpoint is { } checkpoint && OwnedEvidence(record, owner, checkpoint).Rejection is null &&
                     AttemptEvidence.Terminal(read) is { } terminal && AttemptEvidence.Matches(read, terminal))
                 {
                     return new Mutation.Append(new RunEvent.AttemptClosed(attempt, new AttemptEnd.Logged(terminal, checkpoint)));
@@ -517,6 +522,25 @@ internal sealed class RunStore
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             return new RunDecision.Rejected(new(RunProblem.StorageUnavailable));
+        }
+    }
+
+    private bool TurnsCannotClose(RunRecord record, RunAttempt owner) =>
+        record.Claims.Keys.Where(launch => launch.Attempt == owner.Id && record.Settling(launch)).All(launch =>
+            record.Dispositions.Values.FirstOrDefault(disposed => disposed.Launch == launch) is { } disposed &&
+            (disposed.Disposition is CaptureDisposition.Failed ||
+                record.Captures.GetValueOrDefault(disposed.Capture, []) is [var first, ..] && LogMovedPast(record, owner, first.Log)));
+
+    private bool LogMovedPast(RunRecord record, RunAttempt owner, LogCheckpoint frozen)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(AttemptFolder(record.Workflow, record.Id, owner.Task, owner.Id), "events.jsonl"));
+            return bytes.LongLength > frozen.ByteLength && Revision.Hash(bytes.AsSpan(0, (int)frozen.ByteLength)) == frozen.Content;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -939,6 +963,8 @@ internal sealed class RunStore
 
             var append = (Mutation.Append)mutation;
             var entry = new RunEntry(record?.Schema ?? 3, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
+            if (record is not null && RunReducer.AppendProblem(record, append.Event) is { } appendProblem)
+                return new RunDecision.Rejected(new(appendProblem));
             var reduced = RunReducer.Apply(workflow, run, record, entry);
             if (reduced is RunRead.Rejected refused)
             {

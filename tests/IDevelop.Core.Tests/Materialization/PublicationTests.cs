@@ -320,7 +320,7 @@ public sealed class PublicationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Publication_requires_a_capture_of_the_final_turn(bool secondTurn)
+    public async Task Publication_requires_a_matching_capture_of_the_final_turn(bool secondTurn)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T) with
         { Conversation = secondTurn ? IDevelop.Workflows.ConversationMode.Chat : IDevelop.Workflows.ConversationMode.Autonomous }));
@@ -330,7 +330,7 @@ public sealed class PublicationTests
         if (secondTurn)
             Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, checkpoint));
         else
-            Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), ready.Execution.Launch, checkpoint));
+            Assert.Equal("SettlementPending", Assert.IsType<RunDecision.Rejected>(f.Store.CloseTurn(f.Permit, f.Op(), ready.Execution.Launch, checkpoint)).Reason.Problem.ToString());
         if (secondTurn)
         {
             ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(T), f.Op(), new(ready.Execution.Launch.Attempt, 2), "Continue."));
@@ -344,12 +344,16 @@ public sealed class PublicationTests
                 log.Append(new AttemptEvent.Exited(At, 0, ""));
             }
             checkpoint = Checkpoint(folder);
-            Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), ready.Execution.Launch, checkpoint));
+            Assert.Equal("SettlementPending", Assert.IsType<RunDecision.Rejected>(f.Store.CloseTurn(f.Permit, f.Op(), ready.Execution.Launch, checkpoint)).Reason.Problem.ToString());
         }
+        var failed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
+        Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<CaptureDisposition.Failed>(failed.Disposition).Detail);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint));
         var journal = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl");
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("Missing turn-end capture evidence.", blocked.Block.Detail);
         var bytes = File.ReadAllBytes(journal);
-        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal(blocked, f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Empty(f.Read().Results);
         Assert.Equal(bytes, File.ReadAllBytes(journal));
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));

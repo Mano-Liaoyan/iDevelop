@@ -108,7 +108,7 @@ public sealed class PreparationBoundaryTests
         Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), f.Op(),
             next, " Continue.\n")).Reason.Problem.ToString());
         Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), first.Launch, new RootExit.Exited(0)));
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), first.Launch, Checkpoint(folder)));
+        Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), first.Launch, Checkpoint(folder)));
         f.Git.Write("left.txt", "ongoing\n", ready.Checkout);
         f.Git.Write("a.txt", "edited\n", ready.Checkout);
         var operation = f.Op();
