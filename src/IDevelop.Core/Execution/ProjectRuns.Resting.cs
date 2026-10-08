@@ -65,7 +65,7 @@ public sealed partial class ProjectRuns
             var log = AttemptEvidence.Read(folder);
             if (log.Rejection is not null || AttemptEvidence.Suffix(folder, turn, log.Checkpoint!) is not { } suffix)
                 return Refused(RunProblem.EvidenceMismatch);
-            switch (suffix)
+            switch (WithoutReplies(suffix, end))
             {
                 case []:
                     if (!Rests(AttemptEvidence.ReadPrefix(folder, turn).Record, end)) return Refused(RunProblem.InvalidClaim);
@@ -113,7 +113,14 @@ public sealed partial class ProjectRuns
     private static bool ClosedAs(RunRecord record, string folder, AttemptId attempt, AttemptEnd ended, RestingEnd end) =>
         ended is AttemptEnd.Logged logged && logged.Outcome == Outcome(end) &&
         record.TurnClosures.GetValueOrDefault(LastLaunch(record, attempt)) is { } turn &&
-        AttemptEvidence.Suffix(folder, turn, logged.Evidence) is [var only] && ClosingEnd(only) == end;
+        AttemptEvidence.Suffix(folder, turn, logged.Evidence) is { } suffix && WithoutReplies(suffix, end) is [var only] && ClosingEnd(only) == end;
+
+    /// <summary>
+    /// What the log adds after the last turn, less the person's replies that a cancellation leaves unsent. Only a run-owned
+    /// conversation writes a reply after a turn closed, and the next turn consumes it; a stop or a cancel closes it unsent.
+    /// </summary>
+    private static ImmutableArray<AttemptEvent> WithoutReplies(ImmutableArray<AttemptEvent> suffix, RestingEnd end) =>
+        end is RestingEnd.Cancel ? [.. suffix.SkipWhile(e => e is AttemptEvent.MessageQueued)] : suffix;
 
     private static RestingClose Closed(RunStore store, ExecutionAddress address, AttemptEnd end, ref RunLease? lease)
     {

@@ -19,7 +19,7 @@ internal sealed partial class WorkflowRunCoordinator
         {
             case RunPhase.Approved when _resumed:
                 Reconcile(record, view);
-                Dispatch(view);
+                Dispatch(record, view);
                 record = Complete(record, view);
                 break;
             case RunPhase.StopRequested:
@@ -39,10 +39,14 @@ internal sealed partial class WorkflowRunCoordinator
         return record;
     }
 
-    /// <summary>Starts the first ready task, in task order, while no client root of the run is starting or running.</summary>
-    private void Dispatch(RunView view)
+    /// <summary>
+    /// While no client root of the run is starting or running, starts a resting attempt's next turn that has text for its
+    /// agent, or else the first ready task, each in task order.
+    /// </summary>
+    private void Dispatch(RunRecord record, RunView view)
     {
         if (!Slotted.IsEmpty) return;
+        if (Continue(record, view)) return;
         var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready);
         if (next is null) return;
         var task = next.Task;
