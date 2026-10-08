@@ -196,6 +196,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
 
     public FakeRule TrapSignals(string file) => Step("trapSignals", file);
 
+    public FakeRule RecordSession(string file) => Step("recordSession", file);
+
     public FakeRule Hang() => Step("hang", true);
 
     public FakeRule Exit(int code) => Step("exit", code);

@@ -19,7 +19,12 @@ internal abstract record Containment
     public sealed record Job : Containment;
 
     /// <summary>The process group a Linux or macOS workflow turn leads. Its ID is the root's process ID.</summary>
-    public sealed record Group(int Id) : Containment;
+    public sealed record Group(int Id) : Containment
+    {
+        /// <summary>Why the turn could not have a session of its own, or null when it does.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Detail { get; init; }
+    }
 
     public sealed record None(string Reason) : Containment;
 }
@@ -37,8 +42,8 @@ internal sealed class LaunchException(string message, Exception? inner = null) :
 /// A started command with redirected pipes. It knows nothing about any client: runs and probes both use it.
 /// Text crosses the pipes as UTF-8 without a byte order mark on every platform. On Windows the process and everything
 /// it starts share a job, so disposing it, or iDevelop exiting, stops whatever is still running, unless
-/// <see cref="LeaveDescendantsRunning"/> came first. On Linux and macOS a workflow turn leads its own process group,
-/// which only <see cref="StopTree"/> and <see cref="CleanUpAsync"/> signal.
+/// <see cref="LeaveDescendantsRunning"/> came first. On Linux and macOS a workflow turn leads its own session and process
+/// group, which only <see cref="StopTree"/> and <see cref="CleanUpAsync"/> signal.
 /// </summary>
 internal sealed class ChildProcess : IDisposable
 {
@@ -81,7 +86,7 @@ internal sealed class ChildProcess : IDisposable
         _groupError = new StreamReader(group.Error, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
         Identity = group.Identity;
         Lifetime = lifetime;
-        Containment = new Containment.Group(group.Id);
+        Containment = new Containment.Group(group.Id) { Detail = group.SessionDetail };
     }
 
     public ProcessIdentity Identity { get; }

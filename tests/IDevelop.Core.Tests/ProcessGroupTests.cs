@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.Processes;
@@ -30,6 +31,7 @@ public sealed class ProcessGroupTests : IDisposable
     {
         ProcessGroup.LaunchFailure = false;
         ProcessGroup.SignalFailure = null;
+        ProcessGroup.SessionFailure = false;
         _spawned.Dispose();
         _temp.Dispose();
     }
@@ -66,6 +68,64 @@ public sealed class ProcessGroupTests : IDisposable
         Assert.Equal(["err=é"], standalone.Errors);
         Assert.Equal(["err=é"], workflow.Errors);
         Assert.Equal((7, 7), (standalone.Exit, workflow.Exit));
+    }
+
+    [UnixTheory]
+    [InlineData("workflow")]
+    [InlineData("standalone")]
+    [InlineData("no session")]
+    public async Task A_workflow_root_leads_a_new_session_so_no_terminal_can_stop_it(string launch)
+    {
+        var session = Path.Combine(_evidence, "session.txt");
+        using var fakes = new FakeClients(_temp.Create("fakes"));
+        fakes.Install("client", FakeRule.On().RecordSession(session));
+        ProcessGroup.SessionFailure = launch == "no session";
+        ChildProcess child;
+        try
+        {
+            child = ChildProcess.Start(fakes.Resolver.Resolve("client")!, [], _folder,
+                launch == "standalone" ? ProcessLifetime.Standalone : ProcessLifetime.Workflow);
+        }
+        finally
+        {
+            ProcessGroup.SessionFailure = false;
+        }
+
+        using (child)
+        {
+            _spawned.Add(child.Identity.Id);
+            Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
+            var ids = File.ReadAllText(session).Split(' ').Select(id => int.Parse(id, CultureInfo.InvariantCulture)).ToArray();
+            Assert.Equal(child.Identity.Id, ids[0]);
+            if (launch == "workflow")
+            {
+                Assert.Equal((child.Identity.Id, child.Identity.Id), (ids[1], ids[2]));
+                Assert.NotEqual(GetSid(0), ids[1]);
+                Assert.Equal(new Containment.Group(child.Identity.Id), child.Containment);
+                Assert.Null(((Containment.Group)child.Containment).Detail);
+            }
+            else if (launch == "standalone")
+            {
+                Assert.Equal(GetSid(0), ids[1]);
+                Assert.NotEqual(child.Identity.Id, ids[2]);
+            }
+            else
+            {
+                Assert.Equal((GetSid(0), child.Identity.Id), (ids[1], ids[2]));
+                Assert.Equal("The client shares iDevelop's terminal session, so a read from that terminal would stop it. " +
+                    "posix_spawn refused POSIX_SPAWN_SETSID: Invalid argument", ((Containment.Group)child.Containment).Detail);
+            }
+        }
+    }
+
+    [UnixFact]
+    public async Task A_workflow_root_has_no_terminal_to_read()
+    {
+        var command = new ResolvedCommand(Script("client", "if (exec 3</dev/tty) 2>/dev/null; then echo tty=open; else echo tty=none; fi\n"), IsBatchShim: false);
+
+        var workflow = await Run(command, [], ProcessLifetime.Workflow);
+
+        Assert.Equal(["tty=none"], workflow.Output);
     }
 
     [UnixFact]
@@ -351,6 +411,9 @@ public sealed class ProcessGroupTests : IDisposable
         process.WaitForExit();
         return int.Parse(group, CultureInfo.InvariantCulture);
     }
+
+    [DllImport("libc", EntryPoint = "getsid")]
+    private static extern int GetSid(int process);
 
     private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 

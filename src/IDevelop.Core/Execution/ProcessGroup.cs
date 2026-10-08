@@ -6,11 +6,14 @@ using System.Runtime.InteropServices;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// A command that Linux or macOS starts through posix_spawn with POSIX_SPAWN_SETPGROUP and group ID 0, so the child leads
-/// a new process group before the command runs. Every process it starts stays in that group unless it calls setsid or
-/// setpgid, including one whose parent has exited, which Process.Kill(entireProcessTree) cannot find there. The group ID
-/// is the root's process ID. It keeps what Process.Start gives a child: the working folder, the arguments, the
-/// environment, three redirected pipes, the signal mask, and ignored signals.
+/// A command that Linux or macOS starts through posix_spawn with POSIX_SPAWN_SETSID, so the child leads a new session and
+/// a new process group before the command runs. It has no controlling terminal, so a read from a terminal fails at once,
+/// as it does under a desktop launch, instead of stopping it in the background when iDevelop runs in a terminal. Where
+/// posix_spawn refuses that flag, POSIX_SPAWN_SETPGROUP with group ID 0 still makes the group, and
+/// <see cref="SessionDetail"/> says why the child shares iDevelop's session. Every process it starts stays in that group
+/// unless it calls setsid or setpgid, including one whose parent has exited, which Process.Kill(entireProcessTree) cannot
+/// find there. The group ID is the root's process ID. It keeps what Process.Start gives a child: the working folder, the
+/// arguments, the environment, three redirected pipes, the signal mask, and ignored signals.
 ///
 /// The root is not reaped when it exits, so its ID, and with it the group ID, cannot be reused while the root is a zombie.
 /// Cleanup reaps it, and from then on the ID is reserved only while a member lives: each later signal follows a check
@@ -23,12 +26,15 @@ internal sealed class ProcessGroup : IDisposable
 
     internal static int? SignalFailure { get; set; }
 
+    internal static bool SessionFailure { get; set; }
+
     private const int Sigkill = 9;
     private const int Sigterm = 15;
     private const int Eperm = 1;
     private const int Esrch = 3;
     private const int Eintr = 4;
     private const short SetProcessGroup = 0x02;
+    private const int Einval = 22;
     private const int ProcessIdType = 1;
     private const int ExitedChild = 4;
     private const int NoHang = 1;
@@ -50,9 +56,10 @@ internal sealed class ProcessGroup : IDisposable
     private bool _empty;
     private bool _disposed;
 
-    private ProcessGroup(int id, Stream input, Stream output, Stream error)
+    private ProcessGroup(int id, string? sessionDetail, Stream input, Stream output, Stream error)
     {
         Id = id;
+        SessionDetail = sessionDetail;
         Input = input;
         Output = output;
         Error = error;
@@ -72,6 +79,9 @@ internal sealed class ProcessGroup : IDisposable
     public int Id { get; }
 
     public ProcessIdentity Identity { get; }
+
+    /// <summary>Why the root shares iDevelop's session and terminal, or null when it leads a session of its own.</summary>
+    public string? SessionDetail { get; }
 
     public Stream Input { get; }
 
@@ -113,11 +123,11 @@ internal sealed class ProcessGroup : IDisposable
             new(PipeDirection.In, HandleInheritability.None),
             new(PipeDirection.In, HandleInheritability.None),
         ];
-        int id;
+        (int Id, string? SessionDetail) spawned;
         try
         {
             // Both ends are close-on-exec, so no other child inherits them. Only the child's copies at 0, 1, and 2 stay open.
-            id = Spawn(start, [.. pipes.Select(pipe => (int)pipe.ClientSafePipeHandle.DangerousGetHandle())]);
+            spawned = Spawn(start, [.. pipes.Select(pipe => (int)pipe.ClientSafePipeHandle.DangerousGetHandle())]);
         }
         catch
         {
@@ -136,7 +146,7 @@ internal sealed class ProcessGroup : IDisposable
             }
         }
 
-        return new ProcessGroup(id, pipes[0], pipes[1], pipes[2]);
+        return new ProcessGroup(spawned.Id, spawned.SessionDetail, pipes[0], pipes[1], pipes[2]);
     }
 
     /// <summary>
@@ -347,7 +357,10 @@ internal sealed class ProcessGroup : IDisposable
 
     private static string Describe(int error) => new Win32Exception(error).Message;
 
-    private static int Spawn(ProcessStartInfo start, int[] pipes)
+    // POSIX_SPAWN_SETSID is 0x80 on glibc 2.26 and later and on musl, and 0x400 in macOS's sys/spawn.h.
+    private static short NewSession => OperatingSystem.IsMacOS() ? (short)0x400 : (short)0x80;
+
+    private static (int Id, string? SessionDetail) Spawn(ProcessStartInfo start, int[] pipes)
     {
         var fileActions = Marshal.AllocHGlobal(OpaqueSize);
         var attributes = Marshal.AllocHGlobal(OpaqueSize);
@@ -376,9 +389,19 @@ internal sealed class ProcessGroup : IDisposable
                         Check(FileActionsAddChdir(fileActions, start.WorkingDirectory));
                     }
 
-                    // Group 0 makes the child's own ID its group ID. The child joins it before it runs the command.
-                    Check(AttributesSetFlags(attributes, SetProcessGroup));
-                    Check(AttributesSetGroup(attributes, 0));
+                    // A session leader's group ID is its own ID. Without a new session, group 0 does the same. The child
+                    // joins either before it runs the command. The two flags never go together: a session leader cannot
+                    // change its group.
+                    string? sessionDetail = null;
+                    var session = SessionFailure ? Einval : AttributesSetFlags(attributes, NewSession);
+                    if (session != 0)
+                    {
+                        sessionDetail = "The client shares iDevelop's terminal session, so a read from that terminal would stop it. " +
+                            $"posix_spawn refused POSIX_SPAWN_SETSID: {Describe(session)}";
+                        Check(AttributesSetFlags(attributes, SetProcessGroup));
+                        Check(AttributesSetGroup(attributes, 0));
+                    }
+
                     var arguments = Strings([start.FileName, .. start.ArgumentList], strings);
                     var environment = Strings(start.Environment.Select(pair => pair.Key + "=" + pair.Value), strings);
                     var result = PosixSpawn(out var id, start.FileName, fileActions, attributes, arguments, environment);
@@ -389,7 +412,7 @@ internal sealed class ProcessGroup : IDisposable
                             $"An error occurred trying to start process '{start.FileName}' with working directory '{folder}'. {Describe(result)}");
                     }
 
-                    return id;
+                    return (id, sessionDetail);
                 }
                 finally
                 {

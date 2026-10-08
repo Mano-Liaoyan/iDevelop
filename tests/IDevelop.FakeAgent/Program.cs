@@ -40,6 +40,7 @@ using System.Text.Json;
 //   spawnPartialWriter [<pid file>, <file>, <text>]
 //                                 start a copy that writes the text to the file in the current folder, keeps it open,
 //                                 writes its pid, and hangs, as a writer cut off in the middle of its write
+//   recordSession <file>          Linux and macOS only: write "<pid> <session id> <process group id>"
 //   trapSignals <file>            Linux and macOS only: record SIGTERM, SIGINT, SIGHUP, and SIGQUIT in the file instead
 //                                 of stopping
 //   hang                          wait until killed
@@ -330,6 +331,9 @@ int? Run(JsonElement steps)
             case "spawnPartialWriter":
                 StartDetached(value[0].GetString()!, "--write-and-hang", value[0].GetString()!, value[1].GetString()!, value[2].GetString()!);
                 break;
+            case "recordSession":
+                File.WriteAllText(value.GetString()!, $"{Environment.ProcessId} {NativePipes.Session()} {NativePipes.Group()}");
+                break;
             case "trapSignals":
                 var trapFile = value.GetString()!;
                 foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP, PosixSignal.SIGQUIT })
@@ -523,6 +527,16 @@ internal static class NativePipes
     }
 
     public static int NewSession() => SetSid();
+
+    public static int Session() => GetSid(0);
+
+    public static int Group() => GetPgid(0);
+
+    [DllImport("libc", EntryPoint = "getsid")]
+    private static extern int GetSid(int process);
+
+    [DllImport("libc", EntryPoint = "getpgid")]
+    private static extern int GetPgid(int process);
 
     [DllImport("libc", EntryPoint = "setsid")]
     private static extern int SetSid();
