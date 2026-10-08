@@ -236,6 +236,7 @@ internal sealed partial class Materializer
         var planId = OperationIds.Derive(operation, "restore-plan");
         InputId? inputs = null;
         var step = "restore-preconditions";
+        var planned = false;
         ImmutableArray<EvidenceFile> evidence = [];
         try
         {
@@ -244,6 +245,7 @@ internal sealed partial class Materializer
             if (RunReducer.RestorationSuperseded(record, planId)) return new Restoration.Rejected(new(RunProblem.ReplacementConflict));
             var preserved = RestorationPreservation(record, lease, attempt, preservation);
             var existing = record.Plans.GetValueOrDefault(planId);
+            planned = existing is not null;
             if (existing is not null && (existing is not MaterializationPlan.Restoration old || old.Attempt != attempt ||
                 old.Preservation != preservation || old.Confirmation != confirmation || old.Preview != preview))
                 return new Restoration.Rejected(new(RunProblem.OperationConflict));
@@ -276,6 +278,7 @@ internal sealed partial class Materializer
                 plan = new(lease.Task, attempt, preservation, fresh.Current, fresh.To, fresh.Paths, fresh.Repairs, fresh.Rechecks, confirmation, preview)
                     { Supersedes = fresh.Supersedes };
                 step = "restore-plan";
+                planned = true;
                 Journal(step, () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
             var scratchRoot = Path.Combine(Path.GetDirectoryName(Value(repository.IndexPath(checkout)))!, "idevelop-restore");
@@ -455,9 +458,15 @@ internal sealed partial class Materializer
         }
         catch (Refusal refused) { return new Restoration.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
+        {
+            if (!planned) return new Restoration.Refused(failed.Problem, failed.Message, failed.Scope);
+            return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope });
+        }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
-        { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = BlockScope.Checkout.Whole }); }
+        {
+            if (!planned) return new Restoration.Refused(MaterializationProblem.InputUnavailable, error.Message, BlockScope.Checkout.Whole);
+            return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = BlockScope.Checkout.Whole });
+        }
     }
 
     private static string? LiveContent(GitRepository repository, string checkout, string relativePath, bool trustsExecutableBit)
