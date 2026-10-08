@@ -262,6 +262,9 @@ internal sealed class RunApprovals
         var other => throw new IOException($"Run {run}: {((RunRead.Rejected)other).Reason.Problem}."),
     };
 
+    /// <summary>The workflow's run that is approved or stopping, if any. Throws <see cref="IOException"/> for a run it cannot read.</summary>
+    public RunId? ActiveRun(WorkflowId workflow) => Active(workflow)?.Id;
+
     /// <summary>The workflow's run that is approved or stopping, if any.</summary>
     private RunRecord? Active(WorkflowId workflow)
     {
