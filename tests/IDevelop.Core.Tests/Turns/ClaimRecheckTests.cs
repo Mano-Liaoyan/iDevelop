@@ -182,6 +182,32 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
+    public async Task A_code_owner_with_an_unfinished_publication_holds_back_the_consumer()
+    {
+        await using var f = new TurnFixture(configure: Consumer);
+        await f.Open();
+        var producer = await Published(f);
+        FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Fresh(f.Client)
+            .Print(FakeAgents.SessionLine(f.Client, "session-2"))
+            .Write("result.txt", "retry\n")
+            .Print(FakeAgents.ReplyLines(f.Client, "Done.")));
+        var retry = await f.Settled(await f.Start(new TurnIntent.First(f.Preparation.Op(), T,
+            new AttemptCause.Retry(producer.Address.Launch.Attempt, f.Preparation.Op()))));
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
+            retry.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, retry.Log));
+        // The retry's publication stops after it recorded the branch move it intends.
+        Assert.Throws<InvalidOperationException>(() => f.Preparation.Materializer(probe: point =>
+        {
+            if (point == "journal.branch-intent.after") throw new InvalidOperationException("Stopped.");
+        }).Publish(retry.Lease, f.Preparation.Op(), retry.Address.Launch.Attempt));
+        Assert.Single(f.Preparation.Read().Results);
+        Assert.Equal("UnresolvedOwnership", Assert.IsType<TurnStart.Refused>(await Begin(f, Start(f, U))).Reason.Problem.ToString());
+        Assert.Empty(f.Preparation.Read().Blocks);
+        Assert.Equal(0, f.Claims(U));
+        Assert.Equal(2, f.Launches);
+    }
+
+    [Fact]
     public async Task An_unsettled_forwarding_reviewer_holds_back_the_consumer()
     {
         await using var f = new TurnFixture(configure: Forwarded);

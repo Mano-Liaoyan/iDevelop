@@ -191,6 +191,23 @@ public sealed class RestingClosureTests
         Assert.Equal(row == "review" ? 1 : 1, f.Claims(T));
     }
 
+    [Theory]
+    [InlineData("MarkDone")]
+    [InlineData("Conclude")]
+    public async Task A_closure_needs_the_rest_it_ends(string end)
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var attempt = end == "MarkDone" ? await InReview(f, T) : (await Waiting(f)).Address.Launch.Attempt;
+        var before = File.ReadAllBytes(Path.Combine(Folder(f, T, attempt), "events.jsonl"));
+        var refused = Assert.IsType<RestingClose.Refused>(await Close(f, f.Preparation.Op(), attempt,
+            end == "MarkDone" ? new RestingEnd.MarkDone() : new RestingEnd.Conclude(null)));
+        Assert.Equal("InvalidClaim", refused.Reason.Problem.ToString());
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(Folder(f, T, attempt), "events.jsonl")));
+        Assert.Equal(0, Closures(f, attempt));
+        Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
+    }
+
     [Fact]
     public async Task A_resting_closure_binds_its_operation_by_content()
     {
