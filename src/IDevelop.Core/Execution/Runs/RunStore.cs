@@ -607,12 +607,44 @@ internal sealed class RunStore
                 return Refuse(RunProblem.OutcomeMismatch);
             }
 
+            var final = new LaunchKey(attempt, read.Record.Turns.Count);
+            if (record.Schema == 3 && (record.RootExits.ContainsKey(final) || read.Events.Any(e => e is AttemptEvent.Launched)) &&
+                !UnchangedCode(record, final))
+            {
+                return Refuse(RunProblem.OutcomeMismatch);
+            }
+
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), owner.Task, owner.Revision, inputs,
                             new ResultOrigin.Executed(attempt), report, supersedes)
             {
                 Code = record.Schema >= 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
             }, capture));
         });
+
+    /// <summary>
+    /// A read-only or review result whose client ran needs the final launch's matched capture, with its tip, files and index
+    /// all at that launch's attempt base. A refresh moves the base, and the index catches a change staged without touching
+    /// the files. Only a journal whose launches never ran a client or observed a root, as hand-built store tests write, keeps
+    /// the log check alone.
+    /// </summary>
+    private bool UnchangedCode(RunRecord record, LaunchKey launch)
+    {
+        if (!record.Preparations.TryGetValue(launch, out var prepared) || !record.Settlements.TryGetValue(launch, out var capture) ||
+            record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
+            !record.Captures.TryGetValue(capture, out var observations) || observations.IsEmpty)
+        {
+            return false;
+        }
+
+        var commit = prepared.Location.AttemptBase;
+        if (GitTree.TreeOf(_project, commit.Hex) is not { } hex)
+        {
+            return false;
+        }
+
+        var tree = new TreeId(hex);
+        return observations.All(observation => observation.Tip == commit && observation.Recipe.Tree == tree && observation.IndexTree == tree);
+    }
 
     public RunDecision ReuseReport(CoordinatorPermit permit, OperationId operation, TaskId task, AttemptSource.Standalone source,
         OperationId confirmation) =>
