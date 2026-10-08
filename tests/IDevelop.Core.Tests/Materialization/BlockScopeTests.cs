@@ -218,18 +218,28 @@ public sealed class BlockScopeTests
         }
     }
 
-    [Fact]
-    public async Task A_ready_preparation_resolves_only_its_own_earlier_blocks()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_ready_preparation_resolves_only_its_own_earlier_blocks(bool turn)
     {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T) with { Conversation = IDevelop.Workflows.ConversationMode.Chat }));
+        Preparation.Ready? first = null;
+        if (turn)
+        {
+            first = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), first.Execution.Launch, f.ObserveAndLog(first)));
+        }
         var operation = f.Op();
         var own = f.Op();
         var other = f.Op();
         foreach (var (id, recorder) in new[] { (own, operation), (other, f.Op()) })
             Assert.Equal("Recorded", f.Store.Record(f.Permit, id, new RunEvent.Blocked(
-                new(recorder, T, null, MaterializationProblem.InputUnavailable, null, [], "Stored input was unreadable.")
+                new(recorder, T, first?.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable, null, [], "Stored input was unreadable.")
                 { Scope = new BlockScope.Operation() })).GetType().Name);
-        Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
+        Assert.IsType<Preparation.Ready>(turn
+            ? await f.Materializer().PrepareTurn(f.Lease(T), operation, new(first!.Execution.Launch.Attempt, 2), "Continue.")
+            : await f.Prepare(T, operation));
         Assert.True(f.Read().Blocks[own].Resolved);
         Assert.False(f.Read().Blocks[other].Resolved);
         Assert.Equal("Prepared.", Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
