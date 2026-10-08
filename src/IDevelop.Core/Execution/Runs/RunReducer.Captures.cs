@@ -9,14 +9,14 @@ internal static partial class RunReducer
             return RunProblem.SettlementPending;
         if (e is RunEvent.AttemptClosed attempt && record.Claims.Keys.Any(launch =>
             launch.Attempt == attempt.Attempt && record.Settling(launch)) &&
-            (attempt.End is not AttemptEnd.Recovered || !FailedSettlements(record, attempt.Attempt)))
+            (attempt.End is not AttemptEnd.Recovered || HasUndisposedSettlement(record, attempt.Attempt)))
             return RunProblem.SettlementPending;
         return null;
     }
 
-    internal static bool FailedSettlements(RunRecord record, AttemptId attempt) =>
-        record.Claims.Keys.Where(launch => launch.Attempt == attempt && record.Settling(launch)).All(launch =>
-            record.Dispositions.Values.Any(disposed => disposed.Launch == launch && disposed.Disposition is CaptureDisposition.Failed));
+    internal static bool HasUndisposedSettlement(RunRecord record, AttemptId attempt) =>
+        record.Claims.Keys.Any(launch => launch.Attempt == attempt && record.Settling(launch) &&
+            !record.Dispositions.Values.Any(disposed => disposed.Launch == launch));
 
     internal static bool CaptureForAnotherId(RunRecord record, LaunchKey launch, CaptureId capture) =>
         record.Captures.Any(pair => pair.Key != capture && pair.Value.Any(observation => observation.Launch == launch)) ||

@@ -361,15 +361,13 @@ internal sealed class RunStore
                 return Missing();
             }
 
-            if (record.Fenced.Contains(key) && capture is null) return Refuse(RunProblem.UnresolvedOwnership);
-            if (RunReducer.AppendProblem(record, new RunEvent.TurnClosed(key, evidence) { Capture = capture }) is { } appendProblem)
-                return Refuse(appendProblem);
-
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
                 return RunReducer.Same(existing, evidence) && (record.Settlements.TryGetValue(key, out var settled) ? settled : (CaptureId?)null) == capture
                             ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing) { Capture = capture }) : Refuse(RunProblem.EvidenceMismatch);
             }
+
+            if (record.Fenced.Contains(key) && capture is null) return Refuse(RunProblem.UnresolvedOwnership);
 
             if (TurnEvidenceProblem(record, key, evidence) is { } rejection)
                 return new Mutation.Rejected(rejection);
@@ -401,13 +399,10 @@ internal sealed class RunStore
                 return Missing();
             }
 
-            var end = new AttemptEnd.Logged(outcome, evidence);
-            if (RunReducer.AppendProblem(record, new RunEvent.AttemptClosed(attempt, end)) is { } appendProblem)
-                return Refuse(appendProblem);
-
             if (record.UnresolvedClaims.Any(key => key.Attempt == attempt && record.Fenced.Contains(key)))
                 return Refuse(RunProblem.UnresolvedOwnership);
 
+            var end = new AttemptEnd.Logged(outcome, evidence);
             if (record.Closures.TryGetValue(attempt, out var existing))
             {
                 return RunReducer.Same<AttemptEnd>(existing, end)
@@ -501,7 +496,7 @@ internal sealed class RunStore
                 }
 
                 var settling = record.Schema == 3 && record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
-                if (settling && (outcome is null || !RunReducer.FailedSettlements(record, attempt)))
+                if (settling && (outcome is null || RunReducer.HasUndisposedSettlement(record, attempt)))
                     return Refuse(RunProblem.SettlementPending);
 
                 var read = AttemptEvidence.Read(AttemptFolder(workflow, run, owner.Task, owner.Id));

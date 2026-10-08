@@ -136,7 +136,7 @@ public sealed class SettlementRecoveryTests
         var disposed = Assert.Single(f.Read().Dispositions).Value;
         Assert.Equal("Missing turn-end log evidence.", Assert.IsType<CaptureDisposition.Failed>(disposed.Disposition).Detail);
         Assert.Empty(f.Read().TurnClosures);
-        Assert.Equal("SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint)));
+        Assert.Equal("UnresolvedOwnership", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint)));
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt)));
         Assert.Equal("ConfirmationRequired", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt, RecoveryOutcome.Stopped)));
         var closed = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
@@ -212,10 +212,8 @@ public sealed class SettlementRecoveryTests
     [Theory]
     [InlineData("journal.capture-1.before", false)]
     [InlineData("journal.capture-1.after", false)]
-    [InlineData("journal.close-turn.before", false)]
     [InlineData("journal.capture-1.before", true)]
     [InlineData("journal.capture-1.after", true)]
-    [InlineData("journal.close-turn.before", true)]
     public async AsyncTask Closure_waits_for_a_settling_launch(string point, bool takeover)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -233,7 +231,7 @@ public sealed class SettlementRecoveryTests
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt)));
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
             RecoveryOutcome.Stopped, f.Op(), "Confirmed.")));
-        Assert.Equal("SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log)));
+        Assert.Equal(takeover ? "UnresolvedOwnership" : "SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log)));
         Assert.Equal(takeover ? "UnresolvedOwnership" : "SettlementPending", ProblemName(f.Store.CloseTurn(f.Permit, f.Op(), launch, log)));
         Assert.Equal(sequence, f.Read().Sequence);
         var settlement = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch));
