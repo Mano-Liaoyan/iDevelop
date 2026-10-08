@@ -218,6 +218,20 @@ public sealed class GitRepositoryTests
         Assert.Null(GitTree.Snapshot(f.Folder));
     }
 
+    [UnixFact]
+    public void Git_tree_snapshot_records_a_skip_worktree_symlink_whose_target_is_missing()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        File.CreateSymbolicLink(f.PathOf("link"), "missing");
+        f.Commit("link");
+        f.Git("update-index", "--skip-worktree", "link");
+        File.Delete(f.PathOf("link"));
+        File.CreateSymbolicLink(f.PathOf("link"), "elsewhere");
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Equal("120000 blob f98eb10ae82b19af44956c0891e3cc36187fa092\tlink\n", f.Git("ls-tree", snapshot!, "link"));
+    }
+
     [Theory]
     [InlineData("--assume-unchanged", "unchanged")]
     [InlineData("--skip-worktree", "unchanged")]
@@ -770,6 +784,39 @@ public sealed class GitRepositoryTests
         {
             Kill(id);
         }
+    }
+
+    [UnixFact]
+    public void A_Git_that_exits_without_reading_its_input_keeps_its_error()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'fatal: boom' >&2\nexit 128\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "fatal: boom\nBroken pipe"), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_that_Git_never_read_input_for_says_it_timed_out()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_keeps_what_Git_wrote_once_a_process_outside_its_tree_lets_go_of_the_pipes()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'waiting for the lock' >&2\n(sleep 2 &)\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        Assert.Equal((-1, "waiting for the lock\nGit timed out."), (result.ExitCode, result.Stderr));
     }
 
     [UnixFact]

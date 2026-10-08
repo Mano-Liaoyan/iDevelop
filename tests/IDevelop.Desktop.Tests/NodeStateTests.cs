@@ -89,10 +89,10 @@ public sealed class NodeStateTests
     }
 
     [Fact]
-    public void A_review_whose_subject_has_no_recorded_change_says_how_to_record_one()
+    public void A_review_whose_subject_has_no_readable_change_says_how_to_record_one()
     {
         Assert.Equal(
-            "iDevelop has no record of what \"Build\" changed. Run it again in a Git project with every file checked out, not a sparse checkout, then review it.",
+            "iDevelop could not record or read what \"Build\" changed. Run it again in a Git project, then review it. If the project is a sparse checkout, check out every file first.",
             RunText.Describe(new StartProblem.NoChange("Build")));
     }
 
