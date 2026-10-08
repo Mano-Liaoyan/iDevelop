@@ -215,6 +215,7 @@ public sealed class PublicationOwnershipTests
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("Ref refs/heads/idp/93f23689/task/ca55ceea is symbolic to refs/heads/foreign.", blocked.Block.Detail);
+        Assert.Equal(new BlockScope.Refs(["refs/heads/idp/93f23689/task/ca55ceea"]), blocked.Block.Scope);
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", Ref(f, "refs/heads/foreign"));
         Assert.Equal("refs/heads/foreign\n", f.Git.Git("symbolic-ref", sibling.Execution.Location.Owner.Branch));
         Assert.Equal("A captured\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));

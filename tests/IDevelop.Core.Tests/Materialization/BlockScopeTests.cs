@@ -84,6 +84,131 @@ public sealed class BlockScopeTests
     }
 
     [LinuxOrWindowsFact]
+    public async Task A_symbolic_pin_blocks_its_ref_until_its_own_preservation_rewrites_it()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await DoneWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var first = f.Op();
+        var record = f.Read();
+        var pin = RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[T], attempt, first, 1);
+        var symbolic = Assert.IsType<Preservation.Blocked>(await f.Materializer(probe: step =>
+        {
+            if (step == "git.preserve-observe-1.before") f.Git.Git("symbolic-ref", pin, "refs/heads/foreign");
+        }).Preserve(f.Lease(T), first, attempt));
+        Assert.Equal($"UncertainOwnership: Ref {pin} is symbolic to refs/heads/foreign.", symbolic.Block.Problem + ": " + symbolic.Block.Detail);
+        Assert.Equal(new BlockScope.Refs([pin]), symbolic.Block.Scope);
+        var block = Assert.Single(f.Read().Blocks).Key;
+        var second = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), second, attempt));
+        var preview = RestoreTests.Preview(f, ready, second);
+        Assert.Empty(preview.Repairs);
+        Assert.Empty(preview.Rechecks);
+        Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), attempt, second, f.Op(), preview.Identity));
+        Assert.False(f.Read().Blocks[block].Resolved);
+        var publication = f.Op();
+        Assert.Equal(symbolic.Block.Detail, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), publication, attempt)).Block.Detail);
+        Assert.Empty(f.Read().Results);
+        f.Git.Git("symbolic-ref", "--delete", pin);
+        var rerun = Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), first, attempt));
+        Assert.True(f.Read().Blocks[block].Resolved);
+        Assert.Equal(rerun.Commit.Hex, f.Git.Git("rev-parse", pin).Trim());
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), publication, attempt)).Result.Report);
+    }
+
+    [LinuxOrWindowsFact]
+    public async Task A_rewritten_pin_resolves_its_block_even_when_the_rerun_diverges()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await DoneWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var first = f.Op();
+        var record = f.Read();
+        var pin = RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[T], attempt, first, 1);
+        var fired = false;
+        Assert.IsType<Preservation.Blocked>(await f.Materializer(probe: step =>
+        {
+            if (step != "git.pin.before" || fired) return;
+            fired = true;
+            f.Git.Git("update-ref", pin, f.A.Hex);
+        }).Preserve(f.Lease(T), first, attempt));
+        var block = Assert.Single(f.Read().Blocks).Key;
+        var unread = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, unread, new RunEvent.Blocked(
+            new(first, T, attempt, MaterializationProblem.InputUnavailable, ready.Execution.Inputs, [], "Stored evidence was unreadable.")
+            { Scope = new BlockScope.Operation() })).GetType().Name);
+        var diverged = Assert.IsType<Preservation.Blocked>(await f.Materializer(probe: step =>
+        {
+            if (step == "git.preserve-observe-2.before") f.Git.Write("result.txt", "moving\n", ready.Checkout);
+        }).Preserve(f.Lease(T), first, attempt));
+        Assert.Equal("DirtyWorktree: The checkout changed between preservation observations.", diverged.Block.Problem + ": " + diverged.Block.Detail);
+        Assert.True(f.Read().Blocks[block].Resolved);
+        Assert.False(f.Read().Blocks[unread].Resolved);
+        Assert.Equal(f.Read().PreservationDivergences[first].First.Commit.Hex, f.Git.Git("rev-parse", pin).Trim());
+        Assert.Equal(new[] { "DirtyWorktree", "InputUnavailable" }, Open(f).Order());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Publish_reruns_past_its_own_repository_fault_but_not_another_operations(bool own)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await DoneWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var publication = f.Op();
+        var block = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, block, new RunEvent.Blocked(
+            new(own ? publication : f.Op(), T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [],
+                "The run belongs to a different repository common directory.") { Scope = new BlockScope.Repository() })).GetType().Name);
+        var outcome = f.Materializer().Publish(f.Lease(T), publication, attempt);
+        if (own)
+        {
+            Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(outcome).Result.Report);
+            Assert.True(f.Read().Blocks[block].Resolved);
+        }
+        else
+        {
+            Assert.Equal("The run belongs to a different repository common directory.", Assert.IsType<Publication.Blocked>(outcome).Block.Detail);
+            Assert.False(f.Read().Blocks[block].Resolved);
+            Assert.Empty(f.Read().Results);
+        }
+    }
+
+    [LinuxOrWindowsFact]
+    public async Task A_restore_receipt_cannot_resolve_a_pin_block()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        var record = f.Read();
+        var pinned = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, pinned, new RunEvent.Blocked(
+            new(pinned, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "The retention pin changed while it was being updated.")
+            { Scope = new BlockScope.Refs([RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[T], attempt, pinned, 1)]) })).GetType().Name);
+        var preview = RestoreTests.Preview(f, ready, preservation);
+        Assert.Equal(new[] { drift }, preview.Repairs);
+        Assert.Empty(preview.Rechecks);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var plan = OperationIds.Derive(operation, "restore-plan");
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, plan, new RunEvent.Planned(new MaterializationPlan.Restoration(T, attempt, preservation,
+            preview.Current, preview.To, preview.Paths, preview.Repairs, [pinned], confirmation, preview.Identity))).GetType().Name);
+        var sequence = f.Read().Sequence;
+        var forged = new RunEvent.Restored(plan, [drift, pinned]);
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), forged)).Reason.Problem.ToString());
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(new[] { drift }, Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation,
+            confirmation, preview.Identity)).Receipt.Resolved);
+        Assert.False(f.Read().Blocks[pinned].Resolved);
+    }
+
+    [LinuxOrWindowsFact]
     public async Task A_superseding_restore_resolves_the_input_block_of_the_restore_it_replaces()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));

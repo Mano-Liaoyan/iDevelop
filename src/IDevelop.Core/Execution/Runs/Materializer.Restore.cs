@@ -182,8 +182,10 @@ internal sealed partial class Materializer
             .OrderBy(b => record.Receipts[b.Key].Sequence).ToArray();
         var repairs = blocks.Where(b => lockOnly
             ? b.Value.Block.Scope is BlockScope.Checkout { Paths.IsEmpty: true, Branch: false, Head: false, IndexLock: true }
-            : RunReducer.CheckedWithCheckout(b.Value.Block.Scope)).Select(b => b.Key).ToImmutableArray();
-        var rechecks = lockOnly ? [] : blocks.Where(b => b.Value.Block.Scope is BlockScope.Refs named && named.Names.All(name => !Pinned(record, name)))
+            : RunReducer.CheckedWithCheckout(b.Value.Block.Scope) || b.Value.Block.Scope is BlockScope.Unrecorded &&
+                b.Value.Block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership)
+            .Select(b => b.Key).ToImmutableArray();
+        var rechecks = lockOnly ? [] : blocks.Where(b => b.Value.Block.Scope is BlockScope.Refs named && named.Names.All(name => !RunReducer.Pinned(record, name)))
             .Select(b => b.Key).ToImmutableArray();
         var supersedes = RunReducer.UnfinishedRestorations(record, owner).Cast<OperationId?>().SingleOrDefault();
         var preview = new RestorePreview(preservation, current, fold.Components, to, paths, refs.ToImmutable(), current.IndexLock,
@@ -517,21 +519,18 @@ internal sealed partial class Materializer
         var snapshot = record.Receipts.Values.Select(e => e.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
         var before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
             RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength), RunJournal.Options)!;
-        return record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == plan.Task &&
-            (plan.Repairs.Contains(b.Key) || plan.Rechecks.Contains(b.Key) || b.Value.Block.Operation == planId) &&
+        bool? sharedRefsExplained = null;
+        return record.Blocks.Where(b => !b.Value.Resolved && RunReducer.RestoreResolves(record, planId, plan, b.Key, b.Value.Block) &&
             b.Value.Block.Scope switch
             {
-                BlockScope.Refs refs => refs.Names.All(name => !Pinned(record, name) && (name == "refs/stash"
+                BlockScope.Refs refs => refs.Names.All(name => name == "refs/stash"
                     ? Value(repository.ReadRef(name)) == (before.TryGetValue(name, out var old) ? old : (CommitId?)null)
-                    : RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name))))),
-                BlockScope.Operation => b.Value.Block.Operation == planId,
-                var scope => RunReducer.CheckedWithCheckout(scope),
+                    : RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name)))),
+                BlockScope.Unrecorded => sharedRefsExplained ??= UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out _).IsEmpty,
+                _ => true,
             })
             .OrderBy(b => record.Receipts[b.Key].Sequence).Select(b => b.Key).ToImmutableArray();
     }
-
-    // Only the operation that writes a pin rewrites it, so no recheck can vouch for a pin someone else moved.
-    private static bool Pinned(RunRecord record, string name) => name.StartsWith(RunLayout.PinPrefix(record.RunKey!), StringComparison.Ordinal);
 
     private Restoration RestorationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
         Block(permit, operation, step, block) switch

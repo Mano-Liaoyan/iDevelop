@@ -111,11 +111,12 @@ internal sealed partial class Materializer
             return new EvidenceFile(relative, Revision.Hash(bytes), bytes.LongLength);
         })];
 
-    private void ResolveMaintenanceBlocks(CoordinatorPermit permit, OperationId operation, string reason)
+    private void ResolveMaintenanceBlocks(CoordinatorPermit permit, OperationId operation, string reason, Func<BlockScope, bool>? scope = null)
     {
         var workflow = permit.Workflow;
         var run = permit.Run;
-        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == operation)
+        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == operation &&
+            (scope is null || scope(pair.Value.Block.Scope)))
             .OrderBy(pair => pair.Key.Value))
             Journal("maintenance-resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "maintenance-resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, reason)));

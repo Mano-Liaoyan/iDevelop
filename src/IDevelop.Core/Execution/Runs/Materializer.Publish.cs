@@ -45,7 +45,7 @@ internal sealed partial class Materializer
                 ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(accepted);
             }
-            if (PublicationDrift(record, attempt) is { } drift) return new Publication.Blocked(drift);
+            if (PublicationDrift(record, attempt, operation, planId) is { } drift) return new Publication.Blocked(drift);
             if (record.Phase is not (RunPhase.Approved or RunPhase.StopRequested)) return new Publication.Rejected(new(RunProblem.RunStopped));
             step = "settlement";
             VerifyPublicationDisposition(record, captureId, ref evidence);
@@ -65,7 +65,7 @@ internal sealed partial class Materializer
                 ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(concurrent);
             }
-            if (PublicationDrift(record, attempt) is { } concurrentDrift) return new Publication.Blocked(concurrentDrift);
+            if (PublicationDrift(record, attempt, operation, planId) is { } concurrentDrift) return new Publication.Blocked(concurrentDrift);
             step = "settlement";
             VerifyPublicationDisposition(record, captureId, ref evidence);
             frozen = record.Captures[captureId][0];
@@ -267,13 +267,13 @@ internal sealed partial class Materializer
         })];
     }
 
-    // Publish reruns every check whose scope is its own evidence or Git itself, so only drift elsewhere stops it.
-    private static bool IsPublicationDrift(MaterializationBlock block) =>
+    // Publish reruns its own evidence and repository checks, so only drift elsewhere, or another operation's fault there, stops it.
+    private static bool IsPublicationDrift(MaterializationBlock block, OperationId operation, OperationId plan) =>
         block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
-        block.Scope is not (BlockScope.Operation or BlockScope.Repository);
+        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation && block.Operation != plan);
 
-    private static MaterializationBlock? PublicationDrift(RunRecord record, AttemptId attempt) =>
-        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt && IsPublicationDrift(pair.Value.Block))
+    private static MaterializationBlock? PublicationDrift(RunRecord record, AttemptId attempt, OperationId operation, OperationId plan) =>
+        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt && IsPublicationDrift(pair.Value.Block, operation, plan))
             .OrderBy(pair => record.Receipts[pair.Key].Sequence).Select(pair => pair.Value.Block).FirstOrDefault();
 
     private static void RequirePublication(RefPublication outcome, BlockScope scope)
@@ -318,7 +318,7 @@ internal sealed partial class Materializer
         var record = Read(workflow, run);
         var accepted = record.Receipts.Values.Single(entry => entry.Event is RunEvent.ResultAccepted { Result.Origin: ResultOrigin.Executed e } &&
             record.Plans[plan] is MaterializationPlan.Publication publication && e.Attempt == publication.Attempt);
-        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && !IsPublicationDrift(pair.Value.Block) && record.Receipts[pair.Key].Sequence < accepted.Sequence &&
+        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && !IsPublicationDrift(pair.Value.Block, operation, plan) && record.Receipts[pair.Key].Sequence < accepted.Sequence &&
             (pair.Value.Block.Operation == plan || pair.Value.Block.Operation == operation)).OrderBy(pair => pair.Key.Value))
             Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, "Publication verified.")));

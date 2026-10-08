@@ -17,7 +17,10 @@ internal abstract record GitRead<T>
 {
     private GitRead() { }
     internal sealed record Read(T Value) : GitRead<T>;
-    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>;
+    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>
+    {
+        public ImmutableArray<string> Refs { get; init; } = [];
+    }
 }
 
 internal abstract record RepositoryOpen
@@ -162,14 +165,14 @@ internal sealed partial class GitRepository
         var symbolic = Git(ProjectFolder, GitOperation.Metadata, ["symbolic-ref", "--quiet", name]);
         if (symbolic.ExitCode == 0)
             return new GitRead<CommitId?>.Failed(MaterializationProblem.UncertainOwnership,
-                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.");
-        if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic);
+                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.") { Refs = [name] };
+        if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic) with { Refs = [name] };
         var result = Git(ProjectFolder, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", name]);
         return result.ExitCode switch
         {
             0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
             1 => new GitRead<CommitId?>.Read(null),
-            _ => Failure<CommitId?>(result),
+            _ => Failure<CommitId?>(result) with { Refs = [name] },
         };
     }
 
@@ -265,7 +268,7 @@ internal sealed partial class GitRepository
             if (excludedPrefix is not null && fields[0].StartsWith(excludedPrefix, StringComparison.Ordinal)) continue;
             if (fields[2].Length != 0)
                 return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
-                    $"Ref {fields[0]} is symbolic to {fields[2]}.");
+                    $"Ref {fields[0]} is symbolic to {fields[2]}.") { Refs = [fields[0]] };
             refs.Add(fields[0], new(fields[1]));
         }
         return new GitRead<SortedDictionary<string, CommitId>>.Read(refs);

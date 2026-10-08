@@ -218,7 +218,8 @@ internal sealed partial class Materializer
     private static T Value<T>(GitRead<T> read) => read switch
     {
         GitRead<T>.Read success => success.Value,
-        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail, new BlockScope.Repository()),
+        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail,
+            failed.Refs.IsEmpty ? new BlockScope.Repository() : new BlockScope.Refs(failed.Refs)),
         _ => throw new InvalidOperationException(),
     };
 

@@ -357,6 +357,50 @@ public sealed class RestoreTests
     }
 
     [LinuxOrWindowsFact]
+    public async Task A_lock_only_restore_receipt_cannot_resolve_blocks_outside_its_repairs()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var salvage = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), attempt));
+        var indexPath = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        {
+            if (step != "journal.retry-reset-intent.after") return;
+            File.WriteAllText(indexPath + ".lock", "partial\n");
+            throw new Crash();
+        }).ResetForRetry(f.Lease(T), f.Op(), salvage.Receipt.Plan, f.Op()));
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+        var locked = OperationIds.Derive(preservation, "preserve-drift");
+        var whole = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, whole, new RunEvent.Blocked(
+            new(whole, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Checkout identity drift.")
+            { Scope = BlockScope.Checkout.Whole })).GetType().Name);
+        var shared = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, shared, new RunEvent.Blocked(
+            new(shared, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Stash drift.")
+            { Scope = new BlockScope.Refs(["refs/stash"]) })).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(new[] { locked }, preview.Repairs);
+        Assert.Empty(preview.Rechecks);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restored.before") throw new Crash(); })
+            .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        var sequence = f.Read().Sequence;
+        var plan = OperationIds.Derive(operation, "restore-plan");
+        foreach (var outside in new[] { whole, shared })
+            Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
+                new RunEvent.Restored(plan, [locked, outside]))).Reason.Problem.ToString());
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(new[] { locked }, Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation,
+            confirmation, preview.Identity)).Receipt.Resolved);
+        Assert.False(f.Read().Blocks[whole].Resolved);
+        Assert.False(f.Read().Blocks[shared].Resolved);
+    }
+
+    [LinuxOrWindowsFact]
     public async Task A_completed_restore_rerun_after_publication_returns_its_receipt_without_appending()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -553,8 +597,7 @@ public sealed class RestoreTests
             preservation, confirmation, preview.Identity));
         Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
         Assert.Single(f.Read().Results);
-        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Scope is not BlockScope.Unrecorded));
-        Assert.Equal("Legacy block.", Assert.Single(f.Read().Blocks.Values, b => !b.Resolved).Block.Detail);
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
         Assert.False(Directory.Exists(Path.Combine(Path.GetDirectoryName(GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)))!, "idevelop-restore")));
         Assert.Equal(1, Moves(f, operation));
         Assert.Single(f.Read().Restorations);

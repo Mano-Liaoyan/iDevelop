@@ -57,6 +57,8 @@ internal sealed partial class Materializer
                 var title = record.Revisions[writer.Revision].Snapshot.Tasks[task].Title;
                 var pair = await ObservePreservationPair(repository, record, prepared.Location, attempt, operation, "preserve",
                     PreservationMessage(record, task, attempt, operation, title), cancellation);
+                var pins = new[] { 1, 2 }.Select(ordinal => RunLayout.PreservationPin(record.RunKey!, record.TaskKeys[task], attempt, operation, ordinal)).ToArray();
+                ResolveMaintenanceBlocks(permit, operation, "Pins rewritten.", held => held is BlockScope.Refs named && named.Names.All(pins.Contains));
                 if (pair.Scope is { } scope)
                 {
                     step = "preserve-diverged";
