@@ -274,7 +274,92 @@ public sealed class ReviewTests : IDisposable
     }
 
     [Fact]
-    public async Task A_fix_round_that_quitting_interrupted_goes_on_in_the_same_session_when_the_project_opens_again()
+    public async Task A_fix_round_that_quitting_interrupted_waits_for_Continue_fix_and_a_duplicate_choice_runs_it_once()
+    {
+        var runs = await Interrupted();
+        await using (runs)
+        {
+            Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
+            Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
+            Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), await runs.SendAsync(SubjectNode, "Go on.", stopTurn: false));
+            Assert.Equal(new StartResult.Refused(new StartProblem.NoFixChoice("Review add")), runs.ChooseFix(Review, FixChoice.Continue));
+            runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
+            Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
+
+            runs.Follow(Workflow);
+
+            var choice = new StartProblem.FixInterrupted("Add numbers", 1, CanContinue: true);
+            await Until(() => runs.Check(ReviewNode) == choice, "the review asks for the person's choice");
+            await Task.Delay(300);
+            Assert.Equal("2", File.ReadAllText(Path.Combine(_implementer, "count")));
+            Assert.Equal(choice, runs.Check(ReviewNode));
+            Assert.Equal(AttemptStatus.Interrupted, runs.Latest[Subject].Status);
+            var interrupted = runs.Latest[Subject];
+
+            var choices = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() => runs.ChooseFix(Review, FixChoice.Continue))));
+            var started = Assert.IsType<StartResult.Started>(Assert.Single(choices, result => result is StartResult.Started));
+            Assert.Equal(new StartResult.Refused(new StartProblem.NoFixChoice("Review add")), Assert.Single(choices, result => result is StartResult.Refused));
+            Assert.Equal(new StartResult.Refused(new StartProblem.NoFixChoice("Review add")), runs.ChooseFix(Review, FixChoice.Retry));
+
+            await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the review approves");
+            Assert.Equal("3", File.ReadAllText(Path.Combine(_implementer, "count")));
+            Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, 3));
+            Assert.StartsWith("Closing iDevelop interrupted your work on these findings. Go on from where you stopped.", Prompt(_implementer, 3));
+            Assert.Contains("### Finding 1\n\nadd subtracts.", Prompt(_implementer, 3));
+            var fix = runs.Latest[Subject];
+            Assert.Equal(started.Attempt.Id, fix.Id);
+            Assert.Equal((new ReviewLink(Review, runs.Latest[Review].Id, 1, 0), interrupted.Id, AttemptStatus.Succeeded), (fix.Fix, fix.Continues, fix.Status));
+            Assert.Equal(2, runs.Latest[Review].Turns.Count);
+        }
+    }
+
+    [Fact]
+    public async Task Retry_fix_runs_the_interrupted_round_once_in_a_fresh_session()
+    {
+        var runs = await Interrupted();
+        await using (runs)
+        {
+            runs.Follow(Workflow);
+            await Until(() => runs.Check(ReviewNode) is StartProblem.FixInterrupted, "the review asks for the person's choice");
+            var interrupted = runs.Latest[Subject];
+
+            var choices = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() => runs.ChooseFix(Review, FixChoice.Retry))));
+            Assert.Single(choices, result => result is StartResult.Started);
+            Assert.Single(choices, result => result is StartResult.Refused);
+
+            await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the review approves");
+            Assert.Equal("3", File.ReadAllText(Path.Combine(_implementer, "count")));
+            Assert.Equal("thread/start", Method(_implementer, 3));
+            var prompt = Prompt(_implementer, 3);
+            Assert.StartsWith("You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.", prompt);
+            Assert.Contains("## The ticket\n\n# Add numbers", prompt);
+            Assert.Contains("+    return a - b", prompt);
+            var fix = runs.Latest[Subject];
+            Assert.Equal((new ReviewLink(Review, runs.Latest[Review].Id, 1, 0), (AttemptId?)null), (fix.Fix, fix.Continues));
+            Assert.NotEqual(interrupted.Id, fix.Id);
+        }
+    }
+
+    [Fact]
+    public async Task Continue_fix_needs_a_session_that_can_go_on_and_Retry_fix_stays_available()
+    {
+        var runs = await Interrupted();
+        await using (runs)
+        {
+            runs.Follow(Workflow.Must(new WorkflowEdit.SetExecution(Subject,
+                new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "high" })));
+            var choice = new StartProblem.FixInterrupted("Add numbers", 1, CanContinue: false);
+            await Until(() => runs.Check(ReviewNode) == choice, "the review asks for the person's choice");
+
+            Assert.Equal(new StartResult.Refused(choice), runs.ChooseFix(Review, FixChoice.Continue));
+            await Task.Delay(300);
+            Assert.Equal("2", File.ReadAllText(Path.Combine(_implementer, "count")));
+            Assert.Equal(AttemptStatus.Interrupted, runs.Latest[Subject].Status);
+        }
+    }
+
+    /// <summary>Runs the subject and the review's first turn, quits during fix round 1, and opens the project again.</summary>
+    private async Task<ProjectRuns> Interrupted()
     {
         Reviewer(1, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""));
         WriteTurn(_implementer, 2, FakeRule.On().Print(SessionLine(ClientId.Codex, ImplementerSession)).Hang());
@@ -292,19 +377,7 @@ public sealed class ReviewTests : IDisposable
             await Until(() => File.Exists(Path.Combine(_implementer, "2.stdin")), "fix round 1 runs");
         }
 
-        await using var runs = ProjectRuns.Open(_project, clients);
-        Assert.Equal((AttemptStatus.InReview, AttemptStatus.Interrupted), (runs.Latest[Review].Status, runs.Latest[Subject].Status));
-        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
-        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview("Review add"))), await runs.SendAsync(SubjectNode, "Go on.", stopTurn: false));
-        runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(TestNodes.Implement(TaskId.New(), "Unrelated"), new CanvasPoint(0, 0))));
-        Assert.Equal(new StartProblem.UnderReview("Review add"), runs.Check(SubjectNode));
-
-        runs.Follow(Workflow);
-
-        await Until(() => runs.Latest[Review].Status == AttemptStatus.Succeeded, "the review approves");
-        Assert.Equal(("thread/resume", ImplementerSession), Thread(_implementer, 3));
-        Assert.Equal((1, AttemptStatus.Succeeded), (runs.Latest[Subject].Fix!.Round, runs.Latest[Subject].Status));
-        Assert.Equal(2, runs.Latest[Review].Turns.Count);
+        return ProjectRuns.Open(_project, clients);
     }
 
     [Fact]
@@ -571,6 +644,12 @@ public sealed class ReviewTests : IDisposable
     {
         using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, $"{turn}.args.thread.json")));
         return (json.RootElement.GetProperty("method").GetString(), json.RootElement.GetProperty("params").GetProperty("threadId").GetString());
+    }
+
+    private static string? Method(string folder, int turn)
+    {
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, $"{turn}.args.thread.json")));
+        return json.RootElement.GetProperty("method").GetString();
     }
 
     private static string[] Arguments(string folder, int turn) => JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(folder, $"{turn}.args")))!;
