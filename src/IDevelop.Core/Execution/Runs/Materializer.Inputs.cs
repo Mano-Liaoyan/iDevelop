@@ -66,7 +66,7 @@ internal sealed partial class Materializer
 
     private static EvidenceFile Snapshot(RunStorage storage, OperationId operation, GitRepository repository, RunRecord record)
     {
-        var refs = Value(repository.RefSnapshot("refs/stash", $"refs/heads/idp/{record.RunKey}/", $"refs/idp/{record.RunKey}/"));
+        var refs = SharedRefSnapshot(repository, record);
         return storage.WriteEvidence(operation, "shared-refs.json", Encoding.UTF8.GetBytes(RunJournal.Canonical(refs)));
     }
 }

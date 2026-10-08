@@ -25,7 +25,7 @@ public sealed class PlatformTests
         f.Git.Write("lf.txt", "one\ntwo\n", ready.Checkout);
         f.Git.Write("crlf.txt", "one\ntwo\n", ready.Checkout);
         File.WriteAllBytes(Path.Combine(ready.Checkout, "data.bin"), [13, 10, 0, 13]);
-        f.Close(ready);
+        await f.Close(ready);
         var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Result;
         var commit = Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex;
         Assert.Equal(new byte[] { 111, 110, 101, 10, 116, 119, 111, 10 }, Blob(f.Git, commit, "lf.txt"));
@@ -94,7 +94,7 @@ public sealed class PlatformTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var operation = f.Op();
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
-        if (action == "publish") f.Close(ready);
+        if (action == "publish") await f.Close(ready);
         var moved = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "s");
         f.ReleaseControl();
         Directory.Move(f.Git.Folder, moved);
@@ -103,7 +103,7 @@ public sealed class PlatformTests
         var store = RunStore.Open(moved);
         using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, f.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
-        var materializer = Execution.Materializer.Open(moved, store, null, new QuiescentBoundary(), new Clock(), f.Git.Environment);
+        var materializer = Execution.Materializer.Open(moved, store, null, new Clock(), f.Git.Environment);
         if (action == "prepare")
             Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, operation, new AttemptCause.Initial())).Block.Problem.ToString());
         else

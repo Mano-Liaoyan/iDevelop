@@ -17,11 +17,11 @@ public sealed class OutboxTests
         var result = await f.Publish(T, f.A, artifact: true);
         Assert.Equal("B ready.\n", result.Report);
         var artifact = Assert.Single(result.Artifacts);
-        Assert.Equal("results/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/payload", artifact.StoredPath);
+        Assert.Equal("results/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/payload", artifact.StoredPath);
         Assert.Equal("134f4812acb8aa0b274fd71f834f9d36a21ab174e3fbab2f7956eac4b0a469c7", artifact.Content.Sha256);
         Assert.Equal(3, artifact.ByteLength);
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-        const string folder = ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/";
+        const string folder = ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/";
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout, folder + "report.md")));
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout, folder + "artifacts/payload")));
         var writer = Path.Combine(f.Git.Folder, ".worktrees", f.Read().RunKey!, f.Read().TaskKeys[T]);
@@ -56,7 +56,7 @@ public sealed class OutboxTests
         File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
         Directory.CreateDirectory(Path.Combine(outbox, "directory"));
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name, path } } }));
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -80,7 +80,7 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), manifest);
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -98,7 +98,7 @@ public sealed class OutboxTests
             if (directory) Directory.CreateSymbolicLink(Path.Combine(outbox, "via"), target);
             else File.CreateSymbolicLink(Path.Combine(outbox, "payload.bin"), Path.Combine(target, "payload.bin"));
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name = "payload", path } } }));
-            f.Close(ready);
+            await f.Close(ready, assertMatched: false);
             CheckRejected(f, ready);
             Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
         }
@@ -125,7 +125,7 @@ public sealed class OutboxTests
         try
         {
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"via/payload.bin\"}]}");
-            f.Close(ready);
+            await f.Close(ready, assertMatched: false);
             CheckRejected(f, ready);
             Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
         }
@@ -144,7 +144,7 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         Assert.Equal(0, Mkfifo(Path.Combine(outbox, "payload.bin"), 0x180));
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -169,7 +169,7 @@ public sealed class OutboxTests
         File.WriteAllBytes(path, [1, 2, 3]);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("manifest.json", blocked.Block.Detail);
+        Assert.Contains("results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload", blocked.Block.Detail);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
         Assert.Empty(f.Read().Results);
     }
@@ -216,6 +216,8 @@ public sealed class OutboxTests
 
     private static void CheckRejected(PreparationFixture f, Preparation.Ready ready)
     {
+        Assert.Equal(MaterializationProblem.InputUnavailable, Assert.IsType<CaptureDisposition.Failed>(
+            f.Read().Dispositions[f.Read().Settlements[ready.Execution.Launch]].Disposition).Problem);
         var block = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("InputUnavailable", block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", block.Detail);

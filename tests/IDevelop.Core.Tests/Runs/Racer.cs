@@ -11,6 +11,8 @@ internal sealed class Racer : IDisposable
 
     private readonly Process _process;
 
+    public int ExitCode => _process.ExitCode;
+
     public Racer(params string[] args)
     {
         Assert.True(File.Exists(Dll), Dll);

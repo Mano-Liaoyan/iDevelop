@@ -67,6 +67,9 @@ internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan 
 
 internal sealed partial class GitRepository
 {
+    /// <summary>How long a timed-out call waits for Git to stop and for its pipes to close.</summary>
+    private static readonly TimeSpan Settle = TimeSpan.FromSeconds(2);
+
     private readonly GitLimits _limits;
     private readonly IReadOnlyDictionary<string, string> _environment;
 
@@ -232,7 +235,7 @@ internal sealed partial class GitRepository
 
     public GitRead<byte[]> Status(string checkout)
     {
-        var index = VisibleIndex(checkout);
+        var index = VisibleIndex(checkout, _environment, _limits);
         if (index is GitRead<byte[]>.Failed) return index;
         var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
@@ -246,7 +249,9 @@ internal sealed partial class GitRepository
     public GitRead<ImmutableArray<string>> TreeFiles(CommitId commit) =>
         ReadPaths(Git(ProjectFolder, GitOperation.Metadata, ["ls-tree", "-r", "--name-only", "-z", commit.Hex]));
 
-    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns)
+    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns) => RefSnapshot(patterns, null);
+
+    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(string[] patterns, string? excludedPrefix)
     {
         var result = Git(ProjectFolder, GitOperation.Metadata, ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", .. patterns]);
         if (result.ExitCode != 0)
@@ -257,6 +262,7 @@ internal sealed partial class GitRepository
         foreach (var line in result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = line.Split('\0');
+            if (excludedPrefix is not null && fields[0].StartsWith(excludedPrefix, StringComparison.Ordinal)) continue;
             if (fields[2].Length != 0)
                 return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
                     $"Ref {fields[0]} is symbolic to {fields[2]}.");
@@ -306,70 +312,113 @@ internal sealed partial class GitRepository
 
     public GitRead<string> IndexPath(string checkout) => ReadText(Git(checkout, GitOperation.Metadata, ["rev-parse", "--path-format=absolute", "--git-path", "index"]), trim: true);
 
-    /// <summary>Null identifies an absent index, distinct from the digest of an existing empty file.</summary>
-    public GitRead<Digest?> IndexDigest(string checkout)
+    public GitRead<ImmutableArray<string>> DiffTreePaths(TreeId first, TreeId second)
+    {
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["diff-tree", "-r", "--name-only", "-z", first.Hex, second.Hex]);
+        return result.ExitCode == 0
+            ? new GitRead<ImmutableArray<string>>.Read([.. NulFields(result).Order(StringComparer.Ordinal)])
+            : Failure<ImmutableArray<string>>(result);
+    }
+
+    public GitRead<Digest?> IndexDigest(string checkout) => IndexBytes(checkout) switch
+    {
+        GitRead<byte[]?>.Read read => new GitRead<Digest?>.Read(read.Value is { } bytes ? Revision.Hash(bytes) : null),
+        GitRead<byte[]?>.Failed failed => new GitRead<Digest?>.Failed(failed.Problem, failed.Detail),
+        _ => throw new InvalidOperationException(),
+    };
+
+    public GitRead<byte[]?> IndexBytes(string checkout)
     {
         var index = IndexPath(checkout);
-        if (index is not GitRead<string>.Read path)
-        {
-            return ConvertFailure<string, Digest?>(index);
-        }
+        if (index is not GitRead<string>.Read path) return ConvertFailure<string, byte[]?>(index);
         try
         {
-            if (!File.Exists(path.Value)) return new GitRead<Digest?>.Read(null);
+            if (!File.Exists(path.Value)) return new GitRead<byte[]?>.Read(null);
             var staged = Git(checkout, GitOperation.Metadata, ["ls-files", "--stage", "-v", "-z"]);
-            return staged.ExitCode == 0 ? new GitRead<Digest?>.Read(Revision.Hash(staged.Stdout)) : Failure<Digest?>(staged);
+            return staged.ExitCode == 0 ? new GitRead<byte[]?>.Read(staged.Stdout) : Failure<byte[]?>(staged);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<Digest?>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<byte[]?>.Failed(MaterializationProblem.GitFailed, error.Message);
         }
     }
 
     public GitRead<GitCapture> Capture(string checkout, params string[] excludedPaths)
     {
-        var visible = VisibleIndex(checkout);
+        var before = IndexDigest(checkout);
+        if (before is not GitRead<Digest?>.Read initial) return ConvertFailure<Digest?, GitCapture>(before);
+        var visible = VisibleIndex(checkout, _environment, _limits);
         if (visible is GitRead<byte[]>.Failed) return ConvertFailure<byte[], GitCapture>(visible);
-        var index = IndexPath(checkout);
-        if (index is not GitRead<string>.Read path)
+        var snapshot = WriteTree(checkout, [".idp", ".worktrees", .. excludedPaths], _environment, _limits);
+        if (snapshot is not GitRead<TreeId>.Read tree) return ConvertFailure<TreeId, GitCapture>(snapshot);
+        var after = IndexDigest(checkout);
+        return after is GitRead<Digest?>.Read final
+            ? new GitRead<GitCapture>.Read(new(tree.Value, initial.Value, final.Value))
+            : ConvertFailure<Digest?, GitCapture>(after);
+    }
+
+    /// <summary>
+    /// <see cref="GitTree"/>'s snapshot. Unlike capture, it takes the work tree's content under assume-unchanged and
+    /// skip-worktree entries. It refuses a skip-worktree file missing from the work tree, as a sparse checkout leaves it,
+    /// because the rebuilt index would record that file as deleted.
+    /// </summary>
+    internal static GitRead<TreeId> Snapshot(string folder, IEnumerable<string> excludedPaths,
+        IReadOnlyDictionary<string, string> environment, GitLimits limits)
+    {
+        var listed = Run(["ls-files", "-v", "-z", "--", .. Pathspec(excludedPaths)], folder, GitOperation.Worktree, limits, environment);
+        if (listed.ExitCode != 0) return Failure<TreeId>(listed);
+        foreach (var path in NulFields(listed).Where(entry => char.ToUpperInvariant(entry[0]) == 'S').Select(entry => entry[2..]))
         {
-            return ConvertFailure<string, GitCapture>(index);
+            var full = Path.Combine(folder, path);
+            if (!Path.Exists(full))
+                return new GitRead<TreeId>.Failed(MaterializationProblem.DirtyWorktree, $"The index marks {path} skip-worktree, and the work tree has no such file.");
         }
+        return WriteTree(folder, excludedPaths, environment, limits);
+    }
+
+    private static string[] Pathspec(IEnumerable<string> excludedPaths) =>
+        [".", .. excludedPaths.Distinct(StringComparer.Ordinal).Select(exclusion => ":(exclude)" + exclusion)];
+
+    private static GitRead<TreeId> WriteTree(string folder, IEnumerable<string> excludedPaths,
+        IReadOnlyDictionary<string, string> environment, GitLimits limits)
+    {
+        var index = ReadText(Run(["rev-parse", "--path-format=absolute", "--git-path", "index"], folder, GitOperation.Metadata, limits, environment), trim: true);
+        if (index is not GitRead<string>.Read path) return ConvertFailure<string, TreeId>(index);
         var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
         try
         {
-            var digest = IndexDigest(checkout);
-            if (digest is not GitRead<Digest?>.Read read) return ConvertFailure<Digest?, GitCapture>(digest);
-            var before = read.Value;
-            if (before is not null)
-            {
-                File.Copy(path.Value, temporary);
-                File.SetCreationTimeUtc(temporary, File.GetCreationTimeUtc(path.Value));
-                File.SetLastWriteTimeUtc(temporary, File.GetLastWriteTimeUtc(path.Value));
-                File.SetLastAccessTimeUtc(temporary, File.GetLastAccessTimeUtc(path.Value));
-            }
-            var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };
-            var exclusions = new[] { ".idp", ".worktrees" }.Concat(excludedPaths).Distinct(StringComparer.Ordinal);
-            var added = Git(checkout, GitOperation.Worktree, ["add", "--all", "--", ".", .. exclusions.Select(exclusion => ":(exclude)" + exclusion)], environment);
-            if (added.ExitCode != 0)
-            {
-                return Failure<GitCapture>(added);
-            }
-            var tree = Git(checkout, GitOperation.Worktree, ["write-tree"], environment);
-            if (tree.ExitCode != 0) return Failure<GitCapture>(tree);
-            var after = IndexDigest(checkout);
-            return after is GitRead<Digest?>.Read final
-                ? new GitRead<GitCapture>.Read(new(new(tree.Text.Trim()), before, final.Value))
-                : ConvertFailure<Digest?, GitCapture>(after);
+            if (File.Exists(path.Value)) File.Copy(path.Value, temporary);
+            var snapshotEnvironment = new Dictionary<string, string>(environment) { ["GIT_INDEX_FILE"] = temporary };
+            var pathspec = Pathspec(excludedPaths);
+            var entries = Run(["ls-files", "--stage", "-z", "--full-name", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment);
+            if (entries.ExitCode != 0) return Failure<TreeId>(entries);
+            var invalidated = Run(["update-index", "-z", "--index-info"], folder, GitOperation.Worktree, limits, snapshotEnvironment, entries.Stdout);
+            if (invalidated.ExitCode != 0) return Failure<TreeId>(invalidated);
+            var added = Run(["add", "--all", "--", .. pathspec], folder, GitOperation.Worktree, limits, snapshotEnvironment);
+            if (added.ExitCode != 0) return Failure<TreeId>(added);
+            var tree = Run(["write-tree"], folder, GitOperation.Worktree, limits, snapshotEnvironment);
+            return tree.ExitCode == 0 ? new GitRead<TreeId>.Read(new(tree.Text.Trim())) : Failure<TreeId>(tree);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<GitCapture>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
         }
         finally
         {
-            File.Delete(temporary);
-            File.Delete(temporary + ".lock");
+            DeleteTemporary(temporary);
+            DeleteTemporary(temporary + ".lock");
+        }
+    }
+
+    /// <summary>A file that a scanner holds open on Windows stays in the temporary folder rather than failing the call.</summary>
+    private static void DeleteTemporary(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -409,9 +458,12 @@ internal sealed partial class GitRepository
         };
     }
 
+    public GitResult DeleteRef(string name, CommitId expected) =>
+        Git(ProjectFolder, GitOperation.Metadata, ["update-ref", "--no-deref", "-d", name, expected.Hex]);
+
     public IndexAlignment AlignIndex(string checkout, Digest? expected, TreeId target)
     {
-        if (VisibleIndex(checkout) is GitRead<byte[]>.Failed hidden) return new IndexAlignment.Failed(hidden.Detail);
+        if (VisibleIndex(checkout, _environment, _limits) is GitRead<byte[]>.Failed hidden) return new IndexAlignment.Failed(hidden.Detail);
         var digest = IndexDigest(checkout);
         if (digest is GitRead<Digest?>.Failed failure)
         {
@@ -456,8 +508,8 @@ internal sealed partial class GitRepository
         }
         finally
         {
-            File.Delete(temporary);
-            File.Delete(temporary + ".lock");
+            DeleteTemporary(temporary);
+            DeleteTemporary(temporary + ".lock");
         }
     }
 
@@ -565,7 +617,7 @@ internal sealed partial class GitRepository
         return Run(arguments, checkout, operation, _limits, environment, stdin, pinnedGitEnvironment);
     }
 
-    private static GitResult Run(string[] arguments, string workingDirectory, GitOperation operation, GitLimits limits,
+    internal static GitResult Run(string[] arguments, string workingDirectory, GitOperation operation, GitLimits limits,
         IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null,
         IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
     {
@@ -575,14 +627,7 @@ internal sealed partial class GitRepository
             GitOperation.Worktree => limits.Worktree,
             GitOperation.Network => limits.Network,
         };
-        return RunAsync(arguments, workingDirectory, patience, environment, stdin, pinnedGitEnvironment).GetAwaiter().GetResult();
-    }
-
-    private static async Task<GitResult> RunAsync(string[] arguments, string workingDirectory, TimeSpan patience,
-        IReadOnlyDictionary<string, string>? environment = null, byte[]? stdin = null,
-        IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
-    {
-        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
+        var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.sparseCheckout=false", "-c", "core.ignoreStat=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
         {
             WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -607,28 +652,43 @@ internal sealed partial class GitRepository
         start.Environment["GIT_GRAFT_FILE"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
         try
         {
+            var elapsed = Stopwatch.StartNew();
+            TimeSpan Remaining()
+            {
+                var remaining = patience - elapsed.Elapsed;
+                return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            }
             using var process = Process.Start(start)!;
+            using var stop = new CancellationTokenSource();
             using var output = new MemoryStream();
-            using var timeout = new CancellationTokenSource(patience);
-            var stdout = process.StandardOutput.BaseStream.CopyToAsync(output, timeout.Token);
-            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            using var stdoutPipe = process.StandardOutput;
+            using var stderrPipe = process.StandardError;
+            using var stdinPipe = process.StandardInput.BaseStream;
+            var stdout = Task.Run(() => stdoutPipe.BaseStream.CopyToAsync(output, stop.Token));
+            var stderr = Task.Run(() => stderrPipe.ReadToEndAsync(stop.Token));
+            var input = Task.Run(async () =>
+            {
+                if (stdin is not null) await stdinPipe.WriteAsync(stdin, stop.Token).ConfigureAwait(false);
+                stdinPipe.Close();
+            });
+            var pipes = Task.WhenAll(stdout, stderr, input);
             try
             {
-                if (stdin is not null) await process.StandardInput.BaseStream.WriteAsync(stdin, timeout.Token);
-                process.StandardInput.Close();
-                await process.WaitForExitAsync(timeout.Token);
-                await stdout;
-                return new(process.ExitCode, output.ToArray(), await stderr);
+                if (process.WaitForExit(Remaining()) && Task.WaitAll([stdout, stderr, input], Remaining()))
+                    return new(process.ExitCode, output.ToArray(), stderr.Result);
             }
-            catch (Exception error) when (error is OperationCanceledException or IOException)
+            catch (AggregateException error) when (error.GetBaseException() is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
             {
-                if (!process.HasExited) process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync();
-                try { await stdout; } catch (OperationCanceledException) { }
-                string detail;
-                try { detail = await stderr; } catch (OperationCanceledException) { detail = ""; }
-                return new(-1, output.ToArray(), detail + (timeout.IsCancellationRequested ? "Git timed out." : error.Message));
+                if (input.IsFaulted && input.Exception?.GetBaseException() is IOException && stdout.IsCompletedSuccessfully && stderr.IsCompletedSuccessfully)
+                    return new(-1, output.ToArray(), stderr.Result + error.GetBaseException().Message);
+                throw error.GetBaseException();
             }
+            // A process that outlived Git, such as one a hook started, can hold the pipes open, and no tree kill finds it.
+            // On Windows, closing a pipe does not end a read blocked on it, so the reads are canceled first.
+            ProcessCheck.KillTreeQuietly(process);
+            process.WaitForExit(Settle);
+            if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
+            return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
         }
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
@@ -644,9 +704,9 @@ internal sealed partial class GitRepository
         return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : null;
     }
 
-    private GitRead<byte[]> VisibleIndex(string checkout)
+    private static GitRead<byte[]> VisibleIndex(string checkout, IReadOnlyDictionary<string, string> environment, GitLimits limits)
     {
-        var result = Git(checkout, GitOperation.Worktree, ["ls-files", "--stage", "-v", "-z"]);
+        var result = Run(["ls-files", "--stage", "-v", "-z"], checkout, GitOperation.Worktree, limits, environment);
         if (result.ExitCode != 0) return Failure<byte[]>(result);
         foreach (var entry in NulFields(result).Where(entry => char.IsLower(entry[0]) || entry[0] == 'S'))
         {

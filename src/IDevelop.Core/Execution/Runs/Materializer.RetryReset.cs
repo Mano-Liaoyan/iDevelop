@@ -29,12 +29,14 @@ internal sealed partial class Materializer
             attempt = salvage.Attempt;
             var prepared = record.Preparations[new(salvage.Attempt, 1)];
             inputs = prepared.Inputs;
-            step = "retry-quiescence";
-            VerifyQuiescence(salvage.Attempt);
+            if (record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == prepared.Location.Owner))
+                return new RetryReset.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new RetryReset.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
+            if (record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == prepared.Location.Owner))
+                return new RetryReset.Rejected(new(RunProblem.UnresolvedOwnership));
             if (record.Phase != RunPhase.Approved) return new RetryReset.Rejected(new(RunProblem.RunStopped));
             VerifyRepository(record, repository);
             VerifyOwnedCheckout(repository, prepared.Location, record);

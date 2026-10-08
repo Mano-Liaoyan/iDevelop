@@ -16,7 +16,7 @@ public sealed class JoinRecoveryTests
         await Sources(f);
         var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, conflict ? "b.txt" : "e.txt", conflict ? "different\n" : "E\n", "e");
-        f.Close(third);
+        await f.Close(third);
         Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
     }
 

@@ -204,6 +204,45 @@ internal static partial class RunReducer
                         Inputs = record.Inputs.SetItem(claim.Inputs.Id, claim.Inputs)
                     };
                     break;
+                case RunEvent.RootExitObserved observed:
+                    if (!record.Claims.ContainsKey(observed.Launch) || record.Fenced.Contains(observed.Launch) ||
+                        record.RootExits.ContainsKey(observed.Launch) || record.TurnClosures.ContainsKey(observed.Launch) ||
+                        record.Closures.ContainsKey(observed.Launch.Attempt))
+                    {
+                        return Reject(RunProblem.InvalidClaim);
+                    }
+                    record = record with { RootExits = record.RootExits.Add(observed.Launch, observed) };
+                    break;
+                case RunEvent.TurnCaptured captured:
+                    var observation = captured.Observation;
+                    var observations = record.Captures.GetValueOrDefault(observation.Capture, []);
+                    if (!record.RootExits.ContainsKey(observation.Launch) || record.Fenced.Contains(observation.Launch) ||
+                        record.TurnClosures.ContainsKey(observation.Launch) || record.Closures.ContainsKey(observation.Launch.Attempt) ||
+                        record.Dispositions.ContainsKey(observation.Capture) || observation.Ordinal != observations.Count + 1 ||
+                        observation.Ordinal is not (1 or 2) || CaptureForAnotherId(record, observation.Launch, observation.Capture))
+                        return Reject(RunProblem.InvalidClaim);
+                    if (observations.Any(prior => prior.Launch != observation.Launch || prior.Log != observation.Log))
+                        return Reject(RunProblem.EvidenceMismatch);
+                    record = record with { Captures = record.Captures.SetItem(observation.Capture, observations.Add(observation)) };
+                    break;
+                case RunEvent.CaptureDisposed disposed:
+                    var pair = record.Captures.GetValueOrDefault(disposed.Capture, []);
+                    if (!record.RootExits.ContainsKey(disposed.Launch) || record.Fenced.Contains(disposed.Launch) ||
+                        record.TurnClosures.ContainsKey(disposed.Launch) || record.Closures.ContainsKey(disposed.Launch.Attempt) ||
+                        record.Dispositions.ContainsKey(disposed.Capture) || CaptureForAnotherId(record, disposed.Launch, disposed.Capture) ||
+                        disposed.Disposition is CaptureDisposition.Failed && pair.Count > 1 ||
+                        disposed.Disposition is not CaptureDisposition.Failed && pair.Count != 2)
+                        return Reject(RunProblem.InvalidClaim);
+                    if (pair.Any(prior => prior.Launch != disposed.Launch) ||
+                        disposed.Disposition is CaptureDisposition.Matched &&
+                        !CaptureComparison.Matches(pair[0], pair[1], record.RootExits[disposed.Launch]))
+                        return Reject(RunProblem.EvidenceMismatch);
+                    record = record with
+                    {
+                        Captures = record.Captures.SetItem(disposed.Capture, pair),
+                        Dispositions = record.Dispositions.Add(disposed.Capture, disposed)
+                    };
+                    break;
                 case RunEvent.TurnClosed closed:
                     if (record.Schema == 3 && record.Fenced.Contains(closed.Key) || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
                         record.Closures.ContainsKey(closed.Key.Attempt))
@@ -211,9 +250,14 @@ internal static partial class RunReducer
                         return Reject(RunProblem.InvalidClaim);
                     }
 
+                    if (closed.Capture is { } capture && (!record.RootExits.ContainsKey(closed.Key) ||
+                        !record.Dispositions.TryGetValue(capture, out var disposition) || disposition.Launch != closed.Key ||
+                        record.Captures[capture].Any(observed => observed.Log != closed.Evidence)))
+                        return Reject(RunProblem.EvidenceMismatch);
                     record = record with
                     {
-                        TurnClosures = record.TurnClosures.Add(closed.Key, closed.Evidence)
+                        TurnClosures = record.TurnClosures.Add(closed.Key, closed.Evidence),
+                        Settlements = closed.Capture is { } settlementCapture ? record.Settlements.Add(closed.Key, settlementCapture) : record.Settlements
                     };
                     break;
                 case RunEvent.AttemptClosed closed:
@@ -603,7 +647,15 @@ internal static partial class RunValidation
             RunEvent.TurnClaimed claim => !Key(claim.Key) || !Input(claim.Inputs) || !Revision.IsHash(claim.Prompt.Sha256) ?
                 RunProblem.InvalidData : null,
             RunEvent.OwnershipFenced fenced => fenced.Claims.IsDefault || !fenced.Claims.All(Key) ? RunProblem.InvalidData : null,
-            RunEvent.TurnClosed closed => !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
+            RunEvent.RootExitObserved observed => !Key(observed.Launch) || !Revision.IsCommit(observed.Tip.Hex) ||
+                observed.Head is not null && string.IsNullOrWhiteSpace(observed.Head) || !Enum.IsDefined(observed.Ownership) ||
+                observed.Exit is not RootExit.Exited && observed.Exit is not RootExit.NotStarted ||
+                observed.Exit is RootExit.NotStarted notStarted && string.IsNullOrWhiteSpace(notStarted.Detail)
+                ? RunProblem.InvalidData : null,
+            RunEvent.TurnCaptured captured => !Capture(captured.Observation) ? RunProblem.InvalidData : null,
+            RunEvent.CaptureDisposed disposed => disposed.Capture.Value == Guid.Empty || !Key(disposed.Launch) ||
+                !Disposition(disposed.Disposition) ? RunProblem.InvalidData : null,
+            RunEvent.TurnClosed closed => closed.Capture?.Value == Guid.Empty || !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
             RunEvent.AttemptClosed closed => closed.Attempt.Value == Guid.Empty ? RunProblem.InvalidData : End(closed.End),
             RunEvent.ResultAccepted accepted => !Result(accepted.Result) || !Input(accepted.Inputs) ? RunProblem.InvalidData : null,
             RunEvent.Abandoned abandoned => abandoned.Confirmation.Value == Guid.Empty || string.IsNullOrWhiteSpace(abandoned.Reason) ?

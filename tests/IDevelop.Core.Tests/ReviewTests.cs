@@ -468,6 +468,20 @@ public sealed class ReviewTests : IDisposable
     }
 
     [Fact]
+    public async Task A_review_can_start_on_a_subject_that_ran_with_an_assume_unchanged_file()
+    {
+        File.WriteAllText(Path.Combine(_project, "plan.txt"), "plan\n");
+        Git("add", "plan.txt");
+        Git("update-index", "--assume-unchanged", "plan.txt");
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(Workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(SubjectNode));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.Succeeded && runs.Active.IsEmpty, "the subject succeeds");
+
+        Assert.Null(runs.Check(ReviewNode));
+    }
+
+    [Fact]
     public void Each_turn_records_the_project_tree_and_a_folder_outside_Git_records_none()
     {
         var before = GitTree.Snapshot(_project);

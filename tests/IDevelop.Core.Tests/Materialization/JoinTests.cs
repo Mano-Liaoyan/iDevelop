@@ -17,18 +17,22 @@ public sealed class JoinTests
     }
 
     internal static Materializer Open(PreparationFixture f, Action<string>? probe = null) =>
-        MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), f.Git.Environment, probe);
+        MergeJoins.Open(f.Git.Folder, f.Store, new Clock(), f.Git.Environment, probe);
 
     internal static async Task<(OwnedCode B, OwnedCode C)> Sources(PreparationFixture f, string bPath = "b.txt", string bText = "B\n",
         string cPath = "c.txt", string cText = "C\n")
     {
         var b = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(T), f.Op(), new AttemptCause.Initial()));
         var c = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(C), f.Op(), new AttemptCause.Initial()));
+        foreach (var ready in new[] { b, c })
+            Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(ready.Execution.Location.Owner.Task),
+                OperationIds.Derive(new(ready.Execution.Launch.Attempt.Value), "fixture-claim"), ready.Execution.Launch,
+                f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
         OwnCommit(f, b, bPath, bText, "b");
         OwnCommit(f, c, cPath, cText, "c");
-        f.Close(b);
+        await f.Close(b);
+        await f.Close(c);
         var publishedB = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
-        f.Close(c);
         var publishedC = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(c.Execution.Location.Owner.Task), f.Op(), c.Execution.Launch.Attempt));
         return (Assert.IsType<CodeOutput.Produced>(publishedB.Result.Code).Code, Assert.IsType<CodeOutput.Produced>(publishedC.Result.Code).Code);
     }
@@ -122,7 +126,7 @@ public sealed class JoinTests
         await Sources(f);
         var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, "b.txt", "different\n", "e");
-        f.Close(third);
+        await f.Close(third);
         Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
         var operation = f.Op();
         var first = Assert.IsType<Preparation.Blocked>(await Prepare(f, operation));
@@ -130,7 +134,7 @@ public sealed class JoinTests
         Assert.Equal(2, first.Block.Conflict!.Step);
         Assert.Equal(new[] { "b.txt" }, first.Block.Conflict.Paths);
         Assert.Equal(3, first.Block.Conflict.Sources.Length);
-        var later = MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new LaterClock(), f.Git.Environment);
+        var later = MergeJoins.Open(f.Git.Folder, f.Store, new LaterClock(), f.Git.Environment);
         var second = Assert.IsType<Preparation.Blocked>(await later.Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", second.Block.Problem.ToString());
         Assert.Equal(RunJournal.Canonical(first.Block), RunJournal.Canonical(second.Block));
@@ -173,7 +177,7 @@ public sealed class JoinTests
         else await Sources(f);
         var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, "e.txt", "E\n", "e");
-        f.Close(third);
+        await f.Close(third);
         var thirdResult = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
         if (conflict) Assert.Equal("560f86f9c272840d2b9c584f26a76e246dabbef4", Assert.IsType<CodeOutput.Produced>(thirdResult.Result.Code).Code.Commit.Hex);
         var outcome = await Prepare(f, f.Op());
@@ -236,7 +240,7 @@ public sealed class JoinTests
         var second = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(T), f.Op(),
             new AttemptCause.Continue(old.Origin is ResultOrigin.Executed executed ? executed.Attempt : throw new InvalidOperationException(), f.Op())));
         f.Git.Write("b.txt", "B again\n", second.Checkout);
-        f.Close(second, "B again.\n");
+        await f.Close(second, "B again.\n");
         var publish = f.Op();
         Assert.Throws<PublicationTests.Crash>(() => Open(f, point =>
         {

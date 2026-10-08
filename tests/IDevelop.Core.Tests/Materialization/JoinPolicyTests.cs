@@ -17,7 +17,7 @@ public sealed class JoinPolicyTests
     private static Workflow Diamond() => Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U)), T, U), C, U);
 
     private static Materializer Joins(PreparationFixture f, Action<string>? probe = null, IReadOnlyDictionary<string, string>? environment = null) =>
-        MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), environment ?? f.Git.Environment, probe);
+        MergeJoins.Open(f.Git.Folder, f.Store, new Clock(), environment ?? f.Git.Environment, probe);
 
     private static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
         Joins(f, probe).Prepare(f.Lease(U), operation, new AttemptCause.Initial());
@@ -37,7 +37,7 @@ public sealed class JoinPolicyTests
     {
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(task));
         Commit(f, ready.Checkout, edits);
-        f.Close(ready);
+        await f.Close(ready);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
     }
 
@@ -207,7 +207,7 @@ public sealed class JoinPolicyTests
         var b = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Commit(f, b.Checkout, ("x.txt", null), ("y.txt", "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n"));
         Assert.Equal(0, f.Git.Run(b.Checkout, "config", "merge.renames", "false").ExitCode);
-        f.Close(b);
+        await f.Close(b);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         await Write(f, C, ("x.txt", Renamed));
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
@@ -228,7 +228,7 @@ public sealed class JoinPolicyTests
         var old = f.Read().CurrentResults[T];
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)old.Origin).Attempt, f.Op())));
         Commit(f, again.Checkout, ("b.txt", "B again\n"));
-        f.Close(again);
+        await f.Close(again);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
         var fresh = f.Op();
         var current = Assert.IsType<Preparation.Ready>(await Prepare(f, fresh));

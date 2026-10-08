@@ -14,7 +14,7 @@ public sealed class ClaimFreshnessTests
         var workflow = Connect(FixtureWorkflow(Task(T), Task(U).WithField("brief", "Build B")!), T, U);
         using var f = new PreparationFixture(workflow);
         var producer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        var first = Accept(f, producer, "A ready.\n");
+        var first = await Accept(f, producer, "A ready.\n");
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         var input = f.Read().Inputs[ready.Execution.Inputs];
         Assert.Equal(new InputId(Id(104)), input.Id);
@@ -22,7 +22,7 @@ public sealed class ClaimFreshnessTests
         Assert.Contains("Build B", ready.Execution.Prompt);
         var retry = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: new AttemptCause.Retry(producer.Execution.Launch.Attempt, f.Op())));
-        var second = Accept(f, retry, "A2\n", first.Id);
+        var second = await Accept(f, retry, "A2\n", first.Id);
         Assert.Equal("A2\n", f.Read().CurrentResults[T].Report);
         Assert.Equal(first.Id, second.Supersedes);
 
@@ -34,7 +34,7 @@ public sealed class ClaimFreshnessTests
         Assert.Equal(new InputId(Id(104)), f.Read().Preparations[ready.Execution.Launch].Inputs);
 
         using var control = new PreparationFixture(workflow);
-        Accept(control, Assert.IsType<Preparation.Ready>(await control.Prepare(T)), "A ready.\n");
+        await Accept(control, Assert.IsType<Preparation.Ready>(await control.Prepare(T)), "A ready.\n");
         var fresh = Assert.IsType<Preparation.Ready>(await control.Prepare(U));
         Assert.IsType<RunDecision.Granted>(control.Store.Claim(control.Lease(U), control.Op(), fresh.Execution.Launch,
             control.Read().Inputs[fresh.Execution.Inputs], fresh.Execution.PromptHash));
@@ -52,7 +52,7 @@ public sealed class ClaimFreshnessTests
         if (provided)
         {
             producer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-            first = Accept(f, producer, "A ready.\n");
+            first = await Accept(f, producer, "A ready.\n");
         }
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         var input = f.Read().Inputs[ready.Execution.Inputs];
@@ -60,7 +60,7 @@ public sealed class ClaimFreshnessTests
         else Assert.Equal(new ConnectionKey(T, U), Assert.IsType<InputBinding.MissingContext>(Assert.Single(input.Bindings)).Edge);
         var updated = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: provided ? new AttemptCause.Retry(producer!.Execution.Launch.Attempt, f.Op()) : new AttemptCause.Initial()));
-        Accept(f, updated, "A2\n", first?.Id);
+        await Accept(f, updated, "A2\n", first?.Id);
 
         Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(U), f.Op(), ready.Execution.Launch, input, ready.Execution.PromptHash));
         var recorded = f.Read().Inputs[ready.Execution.Inputs];
@@ -121,9 +121,9 @@ public sealed class ClaimFreshnessTests
         Assert.Equal(3, f.Read().Schema);
     }
 
-    private static ResultRecord Accept(PreparationFixture f, Preparation.Ready ready, string report, ResultId? supersedes = null)
+    private static async System.Threading.Tasks.Task<ResultRecord> Accept(PreparationFixture f, Preparation.Ready ready, string report, ResultId? supersedes = null)
     {
-        f.Close(ready, report);
+        await f.Close(ready, report);
         return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit,
             f.Op(), ready.Execution.Launch.Attempt, ready.Execution.Inputs, report, supersedes)).Event).Result;
     }

@@ -2,12 +2,23 @@ namespace IDevelop.Execution;
 
 internal static class RefOwnership
 {
+    private static bool Reads(RunRecord record, RunEvent e) => e switch
+    {
+        RunEvent.GitIntended { Mutation: GitMutation.MoveRef or GitMutation.CreateWorktree } => true,
+        RunEvent.GitObserved observed => record.GitIntents[observed.Mutation].Mutation is GitMutation.MoveRef or GitMutation.CreateWorktree,
+        RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.RootExitObserved or RunEvent.TurnClosed or
+            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained => true,
+        _ => false,
+    };
+
+    public static int Basis(RunRecord record) => record.Receipts.Values.Count(entry => Reads(record, entry.Event));
+
     public static bool Accepts(RunRecord record, GitRepository repository, string name, CommitId? live, RefChange? change = null)
     {
         CommitId? expected = null;
         CommitId? target = null;
         var lease = false;
-        foreach (var entry in record.Receipts.Values.OrderBy(entry => entry.Sequence))
+        foreach (var entry in record.Receipts.Values.Where(entry => Reads(record, entry.Event)).OrderBy(entry => entry.Sequence))
         {
             switch (entry.Event)
             {
@@ -30,9 +41,30 @@ internal static class RefOwnership
                         lease = false;
                     }
                     break;
-                case RunEvent.Prepared prepared when prepared.Execution.Location.Owner.Branch == name &&
+                case RunEvent.Prepared prepared when record.Schema < 3 && prepared.Execution.Location.Owner.Branch == name &&
                     RunReducer.Editable(record, record.Attempts[prepared.Execution.Launch.Attempt]):
                     lease = true;
+                    break;
+                case RunEvent.TurnClaimed claim when record.Schema == 3 &&
+                    record.Preparations[claim.Key].Location.Owner.Branch == name &&
+                    RunReducer.Editable(record, record.Attempts[claim.Key.Attempt]):
+                    lease = true;
+                    break;
+                case RunEvent.RootExitObserved observed when record.Preparations[observed.Launch].Location.Owner.Branch == name:
+                    lease = false;
+                    if (observed.Ownership == TipOwnership.Explained)
+                    {
+                        expected = observed.Tip;
+                        target = null;
+                    }
+                    break;
+                case RunEvent.TurnClosed closed when record.Schema == 3 &&
+                    record.Preparations[closed.Key].Location.Owner.Branch == name:
+                    lease = false;
+                    break;
+                case RunEvent.AttemptClosed closed when record.Schema == 3 && record.Preparations.Values.Any(prepared =>
+                    prepared.Launch.Attempt == closed.Attempt && prepared.Location.Owner.Branch == name):
+                    lease = false;
                     break;
                 case RunEvent.OwnershipFenced fenced when fenced.Claims.Any(key =>
                     record.Preparations[key].Location.Owner.Branch == name):

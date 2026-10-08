@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Execution;
@@ -8,6 +10,24 @@ namespace IDevelop.Core.Tests.Git;
 
 public sealed class GitRepositoryTests
 {
+    [Fact]
+    public void Git_tree_snapshot_completes_on_a_thread_whose_synchronization_context_never_runs_posts()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("a.txt", "S\n");
+        string? tree = null;
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new NonRunningSynchronizationContext());
+            tree = GitTree.Snapshot(f.Folder);
+        }) { IsBackground = true };
+        thread.Start();
+        var joined = thread.Join(TimeSpan.FromSeconds(30));
+        Assert.True(joined, "GitTree.Snapshot did not complete without running synchronization context callbacks.");
+        Assert.Equal("S\n", f.Git("show", tree + ":a.txt"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -39,6 +59,177 @@ public sealed class GitRepositoryTests
         else File.SetLastWriteTimeUtc(file, old);
         var tree = GitTree.Snapshot(f.Folder);
         Assert.Equal("EDITED\n", f.Git("show", tree + ":a.txt"));
+    }
+
+    [Fact]
+    public async Task Capture_rechecks_a_same_second_edit_after_the_writer_index_crosses_a_second_boundary()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var file = f.PathOf("a.txt");
+        var hook = Path.Combine(Path.GetDirectoryName(f.Folder)!, "fsmonitor-hook");
+        Executable.Write(hook, "#!/bin/sh\nprintf 'token\\0'\n");
+        var environment = new Dictionary<string, string>(f.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Run(f.Folder, environment, "config", "core.fsmonitor", hook).ExitCode);
+        var now = DateTimeOffset.UtcNow;
+        await Task.Delay(DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds() + 1).AddMilliseconds(20) - now);
+        f.Write("a.txt", "A\n");
+        var refreshed = f.Run(f.Folder, environment, "status", "--porcelain");
+        Assert.Equal(0, refreshed.ExitCode);
+        Assert.Equal("", refreshed.Text);
+        Assert.Equal(0, f.Run(f.Folder, environment, "update-index", "--fsmonitor-valid", "a.txt").ExitCode);
+        f.Write("a.txt", "B\n");
+        var hidden = f.Run(f.Folder, environment, "status", "--porcelain");
+        Assert.Equal(0, hidden.ExitCode);
+        Assert.Equal("", hidden.Text);
+        var debug = f.Run(f.Folder, environment, "ls-files", "--debug", "a.txt");
+        Assert.Equal(0, debug.ExitCode);
+        Assert.Equal("  size: 2\tflags: 200000", debug.Text.Split('\n').Single(line => line.Contains("flags:", StringComparison.Ordinal)));
+        var mtime = debug.Text.Split('\n').Single(line => line.TrimStart().StartsWith("mtime:", StringComparison.Ordinal));
+        var recordedSecond = long.Parse(mtime.Trim()["mtime:".Length..].Trim().Split(':')[0], CultureInfo.InvariantCulture);
+        Assert.Equal(recordedSecond, new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds());
+        var repository = f.Open();
+        var index = Read(repository.IndexPath(f.Folder));
+        File.SetLastWriteTimeUtc(index, DateTime.UnixEpoch.AddSeconds(recordedSecond + 1));
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        Assert.Equal("B\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        Assert.Equal("B\n", f.Git("show", GitTree.Snapshot(f.Folder) + ":a.txt"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Capture_and_snapshot_recheck_a_same_size_edit_whose_mtime_is_restored_to_an_early_epoch(int second)
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var file = f.PathOf("a.txt");
+        var mtime = DateTime.UnixEpoch.AddSeconds(second);
+        var now = DateTimeOffset.UtcNow;
+        await Task.Delay(DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds() + 1).AddMilliseconds(20) - now);
+        File.SetLastWriteTimeUtc(file, mtime);
+        Assert.Equal(0, f.Run(f.Folder, f.Environment, "update-index", "--refresh").ExitCode);
+        f.Write("a.txt", "B\n");
+        File.SetLastWriteTimeUtc(file, mtime);
+        var hidden = f.Run(f.Folder, f.Environment, "status", "--porcelain");
+        Assert.Equal(0, hidden.ExitCode);
+        Assert.Equal("", hidden.Text);
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Multiple(
+            () => Assert.Equal("B\n", f.Git("show", capture.Tree.Hex + ":a.txt")),
+            () => Assert.Equal("B\n", f.Git("show", snapshot + ":a.txt")));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_include_new_intent_to_add_files_and_omit_excluded_intent_to_add_files()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("new.txt", "N\n");
+        f.Git("add", "-N", "new.txt");
+        f.Write("kept.txt", "K\n");
+        f.Git("add", "-N", "kept.txt");
+        f.Write(".idp/w.json", "{}\n");
+        f.Git("add", "-N", ".idp/w.json");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder, "kept.txt")).Value;
+        Assert.Equal("N\n", f.Git("show", capture.Tree.Hex + ":new.txt"));
+        Assert.Equal("a.txt\nnew.txt\nplan.txt\nroot.txt\n", f.Git("ls-tree", "-r", "--name-only", capture.Tree.Hex));
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Equal("N\n", f.Git("show", snapshot + ":new.txt"));
+        Assert.Equal("K\n", f.Git("show", snapshot + ":kept.txt"));
+        Assert.Equal("a.txt\nkept.txt\nnew.txt\nplan.txt\nroot.txt\n", f.Git("ls-tree", "-r", "--name-only", snapshot!));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_rehash_edits_when_the_repository_ignores_stat_data()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("config", "core.ignoreStat", "true");
+        f.Write("a.txt", "BB\n");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Multiple(
+            () => Assert.Equal("BB\n", f.Git("show", capture.Tree.Hex + ":a.txt")),
+            () => Assert.Equal("BB\n", f.Git("show", snapshot + ":a.txt")));
+    }
+
+    [Fact]
+    public void Git_tree_snapshot_of_a_subfolder_keeps_root_paths()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("sub/a.txt", "sub\n");
+        f.Git("add", "sub/a.txt");
+        f.Write("sub/a.txt", "SUB\n");
+        var snapshot = GitTree.Snapshot(f.PathOf("sub"));
+        Assert.Multiple(
+            () => Assert.Equal("A\n", f.Git("show", snapshot + ":a.txt")),
+            () => Assert.Equal("SUB\n", f.Git("show", snapshot + ":sub/a.txt")));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_refuse_a_sparse_checkout_with_an_out_of_cone_intent_to_add_file()
+    {
+        using var f = new GitFixture();
+        f.Write("in/i.txt", "i\n");
+        f.Write("out/o.txt", "o\n");
+        f.Commit("base");
+        Assert.Equal("o\n", f.Git("show", GitTree.Snapshot(f.Folder) + ":out/o.txt"));
+        f.Git("sparse-checkout", "set", "--cone", "in");
+        f.Write("out/n.txt", "N\n");
+        f.Git("add", "-N", "--sparse", "out/n.txt");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
+        Assert.Multiple(
+            () => Assert.Null(GitTree.Snapshot(f.Folder)),
+            () => Assert.Equal(MaterializationProblem.DirtyWorktree, capture.Problem),
+            () => Assert.Equal("The index hides changes to out/o.txt with assume-unchanged or skip-worktree.", capture.Detail));
+    }
+
+    [Fact]
+    public void Git_tree_snapshot_records_the_work_tree_under_assume_unchanged_and_present_skip_worktree_entries()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--assume-unchanged", "a.txt", "root.txt");
+        f.Git("update-index", "--skip-worktree", "plan.txt");
+        f.Write("a.txt", "BB\n");
+        f.Write("plan.txt", "changed\n");
+        File.Delete(f.PathOf("root.txt"));
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.NotNull(snapshot);
+        Assert.Equal("a.txt\nplan.txt\n", f.Git("ls-tree", "-r", "--name-only", snapshot));
+        Assert.Equal("BB\n", f.Git("show", snapshot + ":a.txt"));
+        Assert.Equal("changed\n", f.Git("show", snapshot + ":plan.txt"));
+    }
+
+    [Fact]
+    public void Git_tree_snapshot_refuses_a_skip_worktree_file_missing_from_the_work_tree()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("update-index", "--skip-worktree", "plan.txt");
+        File.Delete(f.PathOf("plan.txt"));
+        Assert.Null(GitTree.Snapshot(f.Folder));
+    }
+
+    [UnixFact]
+    public void Git_tree_snapshot_records_a_skip_worktree_symlink_whose_target_is_missing()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        File.CreateSymbolicLink(f.PathOf("link"), "missing");
+        f.Commit("link");
+        f.Git("update-index", "--skip-worktree", "link");
+        File.Delete(f.PathOf("link"));
+        File.CreateSymbolicLink(f.PathOf("link"), "elsewhere");
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Equal("120000 blob f98eb10ae82b19af44956c0891e3cc36187fa092\tlink\n", f.Git("ls-tree", snapshot!, "link"));
     }
 
     [Theory]
@@ -547,24 +738,143 @@ public sealed class GitRepositoryTests
     [UnixFact]
     public void Metadata_times_out_while_a_worktree_scan_uses_its_longer_limit()
     {
-        if (OperatingSystem.IsWindows()) return;
         using var f = new GitFixture();
         f.Diamond();
-        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
-        var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
-        var environment = new Dictionary<string, string>(f.Environment)
-        {
-            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
-        };
+        var (bin, environment) = ShimBin(f);
         var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
         var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment, limits)).Repository;
-        var shim = Path.Combine(bin, "git");
-        Executable.Write(shim, "#!/bin/sh\nsleep 3\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+        var sleeper = Path.Combine(bin, "sleeper");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\nif mkdir {Quote(Path.Combine(bin, "slow"))} 2>/dev/null; then sleep 30 & echo $! > {Quote(sleeper)}; wait; fi\nexec {Quote(RealGit)} \"$@\"\n");
         var failed = Assert.IsType<GitRead<CommitId?>.Failed>(repository.ReadRef("refs/heads/main"));
+        var id = int.Parse(File.ReadAllText(sleeper), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.True(Exits(id, TimeSpan.FromSeconds(5)), "The timed-out Git process left its child running.");
+        }
+        finally
+        {
+            Kill(id);
+        }
         Assert.Equal("GitFailed", failed.Problem.ToString());
         Assert.Equal("Git timed out.", failed.Detail);
         f.Write("new.txt", "new\n");
         Assert.Equal("?? new.txt\0", Encoding.UTF8.GetString(Read(repository.Status(f.Folder))));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_returns_and_stops_feeding_a_child_that_outlives_Git_and_keeps_its_output()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        var (bin, environment) = ShimBin(f);
+        var child = Path.Combine(bin, "child");
+        Executable.Write(Path.Combine(bin, "git"), $"#!/bin/sh\n(while echo tick; do sleep 0.1; done) &\necho $! > {Quote(child)}\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        elapsed.Stop();
+        var id = int.Parse(File.ReadAllText(child), CultureInfo.InvariantCulture);
+        try
+        {
+            Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(10), $"The call took {elapsed.Elapsed}.");
+            Assert.True(Exits(id, TimeSpan.FromSeconds(5)), "The child that outlived Git still writes into a pipe that iDevelop keeps open.");
+        }
+        finally
+        {
+            Kill(id);
+        }
+    }
+
+    [UnixFact]
+    public void A_Git_that_exits_without_reading_its_input_keeps_its_error()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'fatal: boom' >&2\nexit 128\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "fatal: boom\nBroken pipe"), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_that_Git_never_read_input_for_says_it_timed_out()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["update-index"], f.Folder, GitOperation.Worktree, limits, environment, new byte[8 << 20]);
+        Assert.Equal((-1, "Git timed out."), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void A_timed_out_call_keeps_what_Git_wrote_once_a_process_outside_its_tree_lets_go_of_the_pipes()
+    {
+        using var f = new GitFixture();
+        var (bin, environment) = ShimBin(f);
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\necho 'waiting for the lock' >&2\n(sleep 2 &)\nexec sleep 60\n");
+        var limits = new GitLimits(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        var result = GitRepository.Run(["status"], f.Folder, GitOperation.Metadata, limits, environment);
+        Assert.Equal((-1, "waiting for the lock\nGit timed out."), (result.ExitCode, result.Stderr));
+    }
+
+    [UnixFact]
+    public void Capture_returns_its_tree_when_the_temporary_index_lock_cannot_be_deleted()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("a.txt", "C\n");
+        var (bin, environment) = ShimBin(f);
+        var lockPath = Path.Combine(bin, "lock");
+        Executable.Write(Path.Combine(bin, "git"),
+            $"#!/bin/sh\n{Quote(RealGit)} \"$@\"\nstatus=$?\ncase \" $* \" in *\" write-tree \"*) mkdir \"$GIT_INDEX_FILE.lock\" && printf %s \"$GIT_INDEX_FILE.lock\" > {Quote(lockPath)};; esac\nexit $status\n");
+        var repository = Assert.IsType<RepositoryOpen.Opened>(GitRepository.Open(f.Folder, environment)).Repository;
+        try
+        {
+            var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+            Assert.Equal("C\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        }
+        finally
+        {
+            if (File.Exists(lockPath)) Directory.Delete(File.ReadAllText(lockPath));
+        }
+    }
+
+    private static string RealGit => CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+
+    private static (string Bin, Dictionary<string, string> Environment) ShimBin(GitFixture f)
+    {
+        var bin = Directory.CreateDirectory(Path.Combine(f.Open().CommonDirectory, "test-bin")).FullName;
+        return (bin, new Dictionary<string, string>(f.Environment)
+        {
+            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+        });
+    }
+
+    private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static bool Exits(int id, TimeSpan patience)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(id);
+            return process.WaitForExit(patience);
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+    }
+
+    private static void Kill(int id)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(id);
+            process.Kill();
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException) { }
     }
 
     [UnixFact]
@@ -588,6 +898,14 @@ public sealed class GitRepositoryTests
             if (writer >= 0) Close(writer);
             await removal.WaitAsync(TimeSpan.FromSeconds(5));
         }
+    }
+
+    private sealed class NonRunningSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+
+        public override void Post(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
+        public override void Send(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
     }
 
     [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]

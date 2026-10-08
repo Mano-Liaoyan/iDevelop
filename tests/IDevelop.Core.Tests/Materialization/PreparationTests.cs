@@ -27,7 +27,7 @@ public sealed class PreparationTests
         Assert.False(File.Exists(f.Git.PathOf("outside/kept.bin")));
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer);
+        await f.Close(writer);
         var publicationOperation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation,
             writer.Execution.Launch.Attempt));
@@ -51,7 +51,7 @@ public sealed class PreparationTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
         var salvageOperation = f.Op();
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
@@ -79,7 +79,7 @@ public sealed class PreparationTests
         Assert.Equal("S outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
         Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed);
+        await f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed, assertMatched: false);
         var index = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout));
         var bytes = File.ReadAllBytes(index);
         var operation = f.Op();
@@ -117,7 +117,7 @@ public sealed class PreparationTests
         Assert.Equal(0, f.Git.Run(writer.Checkout, "update-index", "--no-skip-worktree", "outside/kept.bin").ExitCode);
         Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "-c", "core.sparseCheckout=false",
             "ls-files", "-v", "outside/kept.bin").Text);
-        f.Close(writer);
+        await f.Close(writer);
         var operation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
@@ -168,14 +168,14 @@ public sealed class PreparationTests
             ["GIT_CONFIG_COUNT"] = "1", ["GIT_CONFIG_KEY_0"] = "protocol.file.allow", ["GIT_CONFIG_VALUE_0"] = "always",
         };
         Materializer Materializer(Action<string>? probe = null) => IDevelop.Execution.Materializer.Open(f.Git.Folder, f.Store,
-            null, new QuiescentBoundary(), new Clock(), environment, probe);
+            null, new Clock(), environment, probe);
         var ready = Assert.IsType<Preparation.Ready>(await Materializer().Prepare(f.Lease(T), f.Op(), new AttemptCause.Initial()));
         var checkout = Path.Combine(ready.Checkout, "m");
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
         f.Git.Write("b.txt", "B\n", checkout);
         Assert.Equal(0, f.Git.Run(checkout, "add", "b.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
-        f.Close(ready);
+        await f.Close(ready);
         var operation = f.Op();
         AttemptCause cause = continuation ? new AttemptCause.Continue(ready.Execution.Launch.Attempt, f.Op()) :
             new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op());
@@ -231,7 +231,7 @@ public sealed class PreparationTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Close(ready);
+        await f.Close(ready);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
         f.Git.Write("a.txt", "hidden edit\n", ready.Checkout);
         var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
@@ -261,7 +261,7 @@ public sealed class PreparationTests
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea\n", f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-        var report = ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/report.md";
+        var report = ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/report.md";
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout, report)));
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout, report[..^9], "artifacts/payload")));
         Assert.Equal(1, Count(ready.Execution.Prompt, f.Read().Inputs[ready.Execution.Inputs].Text));
@@ -312,7 +312,7 @@ public sealed class PreparationTests
             new(refused.A, BaseChoice.Head)));
         using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, refused.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
-        var materializer = Execution.Materializer.Open(sub, store, null, new QuiescentBoundary(), new Clock(), refused.Git.Environment);
+        var materializer = Execution.Materializer.Open(sub, store, null, new Clock(), refused.Git.Environment);
         var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, refused.Op(), new AttemptCause.Initial()));
         Assert.Equal("NotRepositoryRoot", blocked.Block.Problem.ToString());
         Assert.Null(refused.Read().RunKey);

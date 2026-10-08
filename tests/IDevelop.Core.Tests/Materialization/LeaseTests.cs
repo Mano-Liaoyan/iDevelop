@@ -99,14 +99,14 @@ public sealed class LeaseTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Close(ready);
+        await f.Close(ready);
         var wrong = f.Lease(U);
         var operation = f.Op();
         Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Publication.Rejected>(
             f.Materializer().Publish(wrong, operation, ready.Execution.Launch.Attempt)).Reason.Problem);
         Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Preparation.Rejected>(await f.Materializer()
             .PrepareTurn(wrong, f.Op(), new(ready.Execution.Launch.Attempt, 2), "Continue.")).Reason.Problem);
-        Assert.Equal(12, f.Read().Sequence);
+        Assert.Equal(17, f.Read().Sequence);
         Assert.Empty(f.Read().Results);
         Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation,
             ready.Execution.Launch.Attempt)).Result.Task);

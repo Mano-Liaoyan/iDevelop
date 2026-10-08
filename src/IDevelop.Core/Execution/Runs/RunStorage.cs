@@ -6,6 +6,8 @@ internal sealed class RunStorage(string project, WorkflowId workflow, RunId run)
 {
     public string Folder { get; } = SafePath(project, $".idp/runs/{workflow}/{run}");
 
+    public static string CapturePath(CaptureId capture, int ordinal, string relative) => $"captures/{capture.Value:D}/{ordinal}/{relative}";
+
     public static string ArtifactPath(ResultId result, string name) => $"results/{result.Value:D}/artifacts/{name}";
 
     public EvidenceFile WriteEvidence(OperationId operation, string name, byte[] bytes)

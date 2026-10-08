@@ -50,7 +50,11 @@ internal abstract record MaterializationPlan
         CommitId Commit, CommitId? Previous, string Ref) : MaterializationPlan;
 
     internal sealed record Publication(AttemptId Attempt, ResultId Result, ResultId? Supersedes, CommitId VerifiedTip,
-        Digest? IndexBefore, CommitRecipe Recipe, CommitId Commit, string Report, ImmutableArray<ArtifactRecord> Artifacts) : MaterializationPlan;
+        Digest? IndexBefore, CommitRecipe Recipe, CommitId Commit, string Report, ImmutableArray<ArtifactRecord> Artifacts) : MaterializationPlan
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CaptureId? Capture { get; init; }
+    }
 
     internal sealed record Salvage(TaskId Task, AttemptId Attempt, CommitId ObservedTip, CommitId? BranchTip, Digest? IndexBefore, CommitRecipe Recipe,
         CommitId Commit, ImmutableArray<EvidenceFile> Untracked, string Ref) : MaterializationPlan;

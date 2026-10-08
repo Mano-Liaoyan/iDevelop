@@ -21,9 +21,9 @@ public sealed class PreparationContractTests
         Assert.Equal(1, ready.Execution.Prompt.Split("B ready.", StringSplitOptions.None).Length - 1);
         Assert.Contains("Code: d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Prompt);
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout,
-            ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/report.md")));
+            ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/report.md")));
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout,
-            ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/report.md")));
+            ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/report.md")));
         var prepared = f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution == ready.Execution);
         var snapshot = File.ReadAllText(Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, prepared.SharedRefs.RelativePath));
         Assert.Contains("refs/idp/93f23689/base", snapshot);

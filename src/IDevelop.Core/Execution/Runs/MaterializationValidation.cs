@@ -10,7 +10,8 @@ internal static partial class RunValidation
         {
             return RunProblem.UnsupportedSchema;
         }
-        if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced)
+        if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced or RunEvent.RootExitObserved or
+            RunEvent.TurnCaptured or RunEvent.CaptureDisposed or RunEvent.TurnClosed { Capture: not null })
         {
             return RunProblem.UnsupportedSchema;
         }

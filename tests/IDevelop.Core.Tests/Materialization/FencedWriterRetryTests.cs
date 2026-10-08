@@ -9,7 +9,7 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class FencedWriterRetryTests
 {
     [Theory]
-    [InlineData(false, "Reset")]
+    [InlineData(false, "Blocked:UncertainOwnership")]
     [InlineData(true, "Blocked:UncertainOwnership")]
     public async System.Threading.Tasks.Task A_fenced_writer_with_its_own_commit_is_retained_but_retry_reset_stays_blocked(bool fence, string expected)
     {

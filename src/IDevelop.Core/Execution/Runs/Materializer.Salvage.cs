@@ -16,6 +16,7 @@ internal sealed partial class Materializer
         var task = lease.Task;
         InputId? inputs = null;
         var step = "salvage-preconditions";
+        ImmutableArray<EvidenceFile> evidence = [];
         try
         {
             var record = Read(workflow, run);
@@ -23,12 +24,12 @@ internal sealed partial class Materializer
             if (LeaseProblem(lease, writer.Task) is { } mismatch) return new Salvage.Rejected(new(mismatch));
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared)) return new Salvage.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
-            step = "salvage-quiescence";
-            VerifyQuiescence(attempt);
+            if (SalvageOwnershipUnresolved(record, attempt)) return new Salvage.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Salvage.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
+            if (SalvageOwnershipUnresolved(record, attempt)) return new Salvage.Rejected(new(RunProblem.UnresolvedOwnership));
             VerifyRepository(record, repository);
             VerifyOwnedCheckout(repository, prepared.Location, record);
             var planId = OperationIds.Derive(operation, "salvage-plan");
@@ -41,7 +42,7 @@ internal sealed partial class Materializer
             }
             var checkout = Checkout(repository, prepared.Location.Owner);
             step = "salvage-index-lock";
-            Mutate("salvage-index-lock", () => File.Delete(Value(repository.IndexPath(checkout)) + ".lock"));
+            VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
             MaterializationPlan.Salvage plan;
             if (existing is MaterializationPlan.Salvage persisted)
             {
@@ -91,10 +92,14 @@ internal sealed partial class Materializer
             return new Salvage.Retained(retained, retained.Commit);
         }
         catch (Refusal refused) { return new Salvage.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }
+
+    private static bool SalvageOwnershipUnresolved(RunRecord record, AttemptId attempt) =>
+        record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == record.Preparations[new(attempt, 1)].Location.Owner &&
+            !record.RootExits.ContainsKey(key) && !record.Fenced.Contains(key));
 
     private static ImmutableArray<EvidenceFile> Untracked(GitRepository repository, string checkout) =>
         [.. Value(repository.UntrackedFiles(checkout)).Where(path => path != ".idp" && !path.StartsWith(".idp/", StringComparison.Ordinal) &&

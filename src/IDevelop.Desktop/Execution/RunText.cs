@@ -208,7 +208,7 @@ public static class RunText
         StartProblem.NoSubject => "Connect the task to review into this review with a dependency first.",
         StartProblem.SubjectNotDone p => $"Run \"{p.Title}\" first. The review starts once it succeeds.",
         StartProblem.NoChange p =>
-            $"iDevelop has no record of what \"{p.Title}\" changed. Run it again in a Git project, then review it.",
+            $"iDevelop could not record or read what \"{p.Title}\" changed. Run it again in a Git project, then review it. If the project is a sparse checkout, check out every file first.",
         StartProblem.InReview p => $"\"{p.Title}\" goes back and forth until both agents agree. Cancel it to stop.",
         StartProblem.UnderReview p => $"\"{p.Review}\" reviews this task and sends it each fix round. Cancel the review to run it yourself.",
         StartProblem.SubjectInReview p => $"\"{p.Review}\" is reviewing \"{p.Subject}\". Run this review once that one ends.",
