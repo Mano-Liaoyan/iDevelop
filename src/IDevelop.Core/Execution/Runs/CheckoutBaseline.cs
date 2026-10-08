@@ -103,9 +103,14 @@ internal static class CheckoutBaseline
                     break;
                 case GitMutation.MoveRef move when move.Change.Ref == owner.Branch &&
                     (plan is MaterializationPlan.Refresh refresh && record.Attempts[refresh.Launch.Attempt].Task == owner.Task ||
-                     plan is MaterializationPlan.Publication publication && record.Attempts[publication.Attempt].Task == owner.Task):
-                    if (observed) Set("branch", move.Change.Target.Hex, plan is MaterializationPlan.Publication published
-                        ? new RestoreTarget.Result(published.Result) : new RestoreTarget.Reset(intent.Plan));
+                     plan is MaterializationPlan.Publication publication && record.Attempts[publication.Attempt].Task == owner.Task ||
+                     plan is MaterializationPlan.Rebase rebasing && rebasing.Task == owner.Task):
+                    if (observed) Set("branch", move.Change.Target.Hex, plan switch
+                    {
+                        MaterializationPlan.Publication published => new RestoreTarget.Result(published.Result),
+                        MaterializationPlan.Rebase rebased => new RestoreTarget.Result(rebased.Result),
+                        _ => new RestoreTarget.Reset(intent.Plan),
+                    });
                     else if (move.Change.Expected is { } expected)
                         components["branch"] = new ComponentBaseline.Pending(expected.Hex, move.Change.Target.Hex, intent.Plan);
                     else components["branch"] = new ComponentBaseline.Unfinished(intent.Plan);
@@ -116,6 +121,13 @@ internal static class CheckoutBaseline
                         components[name] = observed ? new ComponentBaseline.Fixed(tree(reset.Target).Hex, new RestoreTarget.Reset(intent.Plan)) :
                             new ComponentBaseline.Pending(tree(old).Hex, tree(reset.Target).Hex, intent.Plan);
                     if (observed) Set("head", owner.Branch, new RestoreTarget.Reset(intent.Plan));
+                    index = null;
+                    break;
+                case GitMutation.ResetCheckout reset when reset.Task == owner.Task && plan is MaterializationPlan.Rebase rebase:
+                    foreach (var name in new[] { "files", "index" })
+                        components[name] = observed ? new ComponentBaseline.Fixed(tree(reset.Target).Hex, new RestoreTarget.Result(rebase.Result)) :
+                            new ComponentBaseline.Pending(tree(rebase.From).Hex, tree(reset.Target).Hex, intent.Plan);
+                    if (observed) Set("head", owner.Branch, new RestoreTarget.Result(rebase.Result));
                     index = null;
                     break;
                 case GitMutation.AlignIndex align when align.Task == owner.Task && plan is MaterializationPlan.Publication publishing:

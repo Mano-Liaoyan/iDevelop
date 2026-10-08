@@ -169,6 +169,7 @@ internal sealed record ReuseEvidence(LogCheckpoint SourceLog, Digest Definition,
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Executed), "executed")]
 [JsonDerivedType(typeof(Reused), "reused")]
+[JsonDerivedType(typeof(Rebased), "rebased")]
 internal abstract record ResultOrigin
 {
     private ResultOrigin() { }
@@ -176,6 +177,12 @@ internal abstract record ResultOrigin
     internal sealed record Executed(AttemptId Attempt) : ResultOrigin;
 
     internal sealed record Reused(AttemptSource Source, ReuseEvidence Evidence) : ResultOrigin;
+
+    /// <summary>
+    /// A person approved replaying <paramref name="Source"/>'s recorded change onto its updated inputs, as the rebase
+    /// plan <paramref name="Plan"/> recorded. No client ran; the source's provenance stays with the source.
+    /// </summary>
+    internal sealed record Rebased(ResultId Source, OperationId Plan) : ResultOrigin;
 }
 
 internal sealed record ResultRecord(ResultId Id, TaskId Task, RevisionId Revision, InputId Inputs,
