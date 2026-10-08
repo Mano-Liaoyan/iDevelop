@@ -216,9 +216,13 @@ public sealed partial class ProjectRuns
             if (intent is TurnIntent.Next)
             {
                 Probe?.Invoke("runner.turn-requested.before");
+                var resting = evidence!.Record!;
                 owner.Log!.Append(new AttemptEvent.TurnRequested(TimeProvider.GetUtcNow(), prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                 {
-                    Conversation = definition.Conversation, Consumed = [.. evidence!.Record!.Queued.Select(message => message.Id)], Tree = tree,
+                    Conversation = definition.Conversation, Consumed = [.. resting.Queued.Select(message => message.Id)], Tree = tree,
+                    // A reply to a waiting attempt answers its deferred questions, as a standalone reply does.
+                    Replies = resting.Status == AttemptStatus.WaitingForInput
+                        ? [.. resting.DeferredRequestIds.Select(id => new TurnRequestId(resting.Turns.Count, id))] : default,
                 });
                 owner.MarkRequested();
                 Probe?.Invoke("runner.turn-requested.after");
@@ -442,6 +446,15 @@ public sealed partial class ProjectRuns
                     return active;
                 }
                 finally { project._launchGate.Leave(); }
+            }
+        }
+
+        /// <summary>The turn's client run while it runs in this window, for the task's run-owned conversation.</summary>
+        public ActiveRun? Active
+        {
+            get
+            {
+                lock (_gate) return (_state as TurnState.Running)?.Active;
             }
         }
 

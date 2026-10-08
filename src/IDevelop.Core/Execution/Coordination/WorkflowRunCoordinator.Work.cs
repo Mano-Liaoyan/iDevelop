@@ -40,10 +40,14 @@ internal sealed partial class WorkflowRunCoordinator
         return record;
     }
 
-    /// <summary>Starts the first ready task, in task order, while no client root of the run is starting or running.</summary>
+    /// <summary>
+    /// While no client root of the run is starting or running, starts a resting attempt's next turn that has text for its
+    /// agent, or else the first ready task, each in task order.
+    /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
         if (!Slotted.IsEmpty) return;
+        if (Continue(record, view)) return;
         var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task));
         if (next is null) return;
         var task = next.Task;
@@ -196,6 +200,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation) is { } refusal)
                 return new Release.Held(refusal);
         }
+        _runs.Probe?.Invoke("coordinator.release.before");
         return turn.Release();
     }
 
@@ -237,6 +242,8 @@ internal sealed partial class WorkflowRunCoordinator
                 if (state.State == TaskState.Settling && end is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded }) FinishClosed(record, task, attempt);
                 continue;
             }
+            // A resting closure that reached the log but not the journal is finished from the log.
+            if (state.State == TaskState.Settling && FinishClosing(record, task, attempt)) continue;
             // A waiting attempt rests as it is. Only a stop closes it here.
             if (state.State is TaskState.Settling or TaskState.Uncertain && RunProjection.LastLaunch(record, attempt) is { } claimed)
                 ReconcileLaunch(record, task, claimed);
