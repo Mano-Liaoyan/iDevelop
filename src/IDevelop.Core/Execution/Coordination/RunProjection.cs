@@ -17,7 +17,7 @@ internal abstract record TaskHold
     /// <summary>The turn's settlement is unresolved. A transient rejection is retried through reconciliation.</summary>
     internal sealed record Unresolved(UnresolvedReason Reason, RunRejection? Rejection, bool Transient) : TaskHold;
 
-    /// <summary>A start returned a block that the journal does not show unresolved, so it is not attempted again until Resume.</summary>
+    /// <summary>A start returned this block. The task is not started again until the journal shows the block resolved, or until Resume.</summary>
     internal sealed record Blocked(MaterializationBlock Block) : TaskHold;
 
     /// <summary>Whether a retry clears it.</summary>
