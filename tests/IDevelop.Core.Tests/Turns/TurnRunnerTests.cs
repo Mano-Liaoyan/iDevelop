@@ -236,10 +236,10 @@ public sealed class TurnRunnerTests
     {
         await using var f = new TurnFixture();
         await f.Open(f.Waiting());
-        if (abandon) f.Runs.LeaveTimeout = TimeSpan.Zero;
+        f.Runs.LeaveTimeout = abandon ? TimeSpan.Zero : Bound;
         var running = await f.Start();
         await WaitUntilAsync(() => f.Log(running.Address.Launch).Record?.SessionId == "session-1");
-        await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+        await f.Runs.DisposeAsync().AsTask().WaitAsync(abandon ? Bound : Bound / 3);
         var turn = await f.Settled(running);
         Assert.Equal("Interrupted", turn.Attempt.Status.ToString());
         var events = f.Log(turn.Address.Launch).Events;

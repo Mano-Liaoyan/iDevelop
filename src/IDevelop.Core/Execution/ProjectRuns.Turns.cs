@@ -215,7 +215,9 @@ public sealed partial class ProjectRuns
                 return new TurnStart.Settled(await owner.NotStarted("The turn's request could not be read."));
             active = owner.Launch(() =>
             {
+                Probe?.Invoke("runner.launch.open");
                 var process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, ready.Checkout, ProcessLifetime.Workflow);
+                Probe?.Invoke("runner.launch.created");
                 return new ActiveRun(this, 0, plan, process, owner.Log!, new RunOwnership.Workflow(owner), launchEvidence.Record);
             }, run => new(owner.Address, owner.RootExited.Task, owner.Settlement.Task,
                 () => run.StopAsync(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow())),
@@ -811,6 +813,7 @@ public sealed partial class ProjectRuns
                 }
             }
             Lease.Dispose();
+            project.Probe?.Invoke("runner.release.inside");
             project.Forget(this);
             return new Release.Released(receipt);
         }

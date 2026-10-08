@@ -394,6 +394,7 @@ public sealed partial class ProjectRuns
                 if (Workflow is not null)
                 {
                     await FinalizeWorkflowAsync();
+                    _owner.Probe?.Invoke("runner.finalized");
                     _finished.TrySetResult();
                 }
                 else

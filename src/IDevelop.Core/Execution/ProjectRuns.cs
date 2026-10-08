@@ -579,10 +579,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         Task[] standalone = [];
         TaskCompletionSource<Task>? source = null;
         Task leaving;
+        var published = false;
         lock (_gate)
         {
             if (_leaving is null)
             {
+                published = true;
                 _clients.Changed -= OnClientsChanged;
                 if (_owned.Count == 0 && _commands.Count == 0)
                 {
@@ -602,6 +604,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             leaving = _leaving;
         }
 
+        if (published) Probe?.Invoke("project.launches-closed");
         foreach (var owner in owners) owner.Shutdown();
         source?.SetResult(Task.WhenAll(standalone.Concat(owners.Select(owner => owner.Leave()))
             .Concat(commands.Select(command => WaitForCommand(command)))));

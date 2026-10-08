@@ -14,11 +14,10 @@ public sealed class TurnStateTests
     [Theory]
     [InlineData("unpublished")]
     [InlineData("interrupted")]
-    [InlineData("uncertain")]
     public async Task Closing_the_project_keeps_each_lease_until_its_receipt(string row)
     {
         await using var f = new TurnFixture();
-        await f.Open(row == "unpublished" ? null : f.Waiting(hang: row == "uncertain"));
+        await f.Open(row == "unpublished" ? null : f.Waiting());
         var permit = f.Preparation.Permit;
         if (row == "unpublished")
         {
@@ -38,46 +37,164 @@ public sealed class TurnStateTests
             return;
         }
 
-        if (row == "uncertain") f.Runs.StopSeam = _ => false;
         var running = await f.Start();
+        await WaitUntilAsync(() => f.Log(running.Address.Launch).Record?.SessionId == "session-1");
+        await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+        var interrupted = await f.Settled(running);
+        Assert.Equal("Interrupted", interrupted.Attempt.Status.ToString());
+        var busy = permit.TakeTask(T);
+        using var held = (busy as LeaseTake.Taken)?.Lease;
+        Assert.IsType<LeaseTake.Busy>(busy);
+        Assert.Equal("NotSettled", Assert.IsType<Release.Held>(interrupted.Release()).Reason.Problem.ToString());
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(permit, f.Preparation.Op(),
+            interrupted.Address.Launch.Attempt, TerminalAttemptOutcome.Interrupted, interrupted.Log));
+        var ended = Assert.IsType<TurnDisposition.Ended>(Assert.IsType<Release.Released>(interrupted.Release()).Receipt);
+        Assert.Equal("Interrupted", Assert.IsType<AttemptEnd.Logged>(ended.End).Outcome.ToString());
+        Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
+        Assert.Equal(1, f.Launches);
+    }
+
+    [Theory]
+    [InlineData("before")]
+    [InlineData("during")]
+    public async Task A_project_reopened_after_an_uncertain_close_reconciles_the_turn(string row)
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        f.Runs.StopSeam = _ => false;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
+        using var process = Process.GetProcessById(launched.ProcessId);
+        try
+        {
+            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+            if (row == "before")
+            {
+                Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+                await running.Settlement.WaitAsync(Bound);
+                Assert.IsType<LeaseTake.Busy>(f.Preparation.Permit.TakeTask(T));
+            }
+            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+            var closed = Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound)).Turn;
+            Assert.Equal("Uncertain", closed.Reason.ToString());
+            f.Preparation.ReleaseControl();
+            await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+            var permit = f.Preparation.Permit;
+            var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+            Assert.Equal("Uncertain", found.Reason.ToString());
+            Assert.Equal(ProcessMatch.Same, found.Root);
+            Assert.True(found.Lease.Held);
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+            var exited = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+            Assert.Equal("Uncertain", exited.Reason.ToString());
+            Assert.Equal(ProcessMatch.Gone, exited.Root);
+            Assert.Equal("UnresolvedOwnership", Assert.IsType<Release.Held>(closed.Release()).Reason.Problem.ToString());
+            Assert.Contains(launch, f.Preparation.Read().Fenced);
+            Assert.Empty(f.Preparation.Read().RootExits);
+            Assert.Equal(1, f.Launches);
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+        }
+    }
+
+    [Fact]
+    public async Task A_launch_that_read_open_creates_its_process_before_shutdown_is_published()
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting());
+        using var barrier = new ProbeBarrier("runner.launch.open");
+        var created = 0;
+        var createdAtPublication = -1;
+        var published = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runs.Probe = point =>
+        {
+            if (point == "runner.launch.created") Interlocked.Increment(ref created);
+            if (point == "project.launches-closed")
+            {
+                Volatile.Write(ref createdAtPublication, Volatile.Read(ref created));
+                published.TrySetResult();
+            }
+            barrier.Probe(point);
+        };
+        var command = f.Runs.StartTurn(f.Preparation.Permit, f.First());
+        await barrier.Reached.Task.WaitAsync(Bound);
+        var closing = System.Threading.Tasks.Task.Run(() => f.Runs.DisposeAsync());
+        await System.Threading.Tasks.Task.WhenAny(published.Task, closing).WaitAsync(Bound);
+        var returned = closing.IsCompleted;
+        barrier.Dispose();
+        var running = Assert.IsType<TurnStart.Started>(await command.WaitAsync(Bound)).Turn;
+        await (await closing.WaitAsync(Bound)).AsTask().WaitAsync(Bound);
+        await published.Task.WaitAsync(Bound);
+        Assert.Equal(1, Volatile.Read(ref createdAtPublication));
+        Assert.True(returned, "DisposeAsync blocked its caller while a launch created its process.");
+        Assert.Equal("Interrupted", (await f.Settled(running)).Attempt.Status.ToString());
+        Assert.Equal(1, f.Launches);
+    }
+
+    [Fact]
+    public async Task A_reconcile_during_release_takes_no_lease_it_cannot_free()
+    {
+        await using var f = new TurnFixture();
+        await f.Open();
+        var turn = await f.Settled(await f.Start());
+        var result = f.Publish(turn);
+        var permit = f.Preparation.Permit;
+        Task<Reconciliation>? during = null;
+        f.Runs.Probe = point =>
+        {
+            if (point != "runner.release.inside") return;
+            during = f.Runs.Reconcile(permit, f.Preparation.Op(), turn.Address.Launch);
+            try { during.Wait(Bound); }
+            catch (AggregateException) { }
+        };
+        Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
+        f.Runs.Probe = null;
+        Assert.Equal("TaskBusy", Assert.IsType<Reconciliation.Refused>(await during!.WaitAsync(Bound)).Reason.Problem.ToString());
+        var reconciled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(
+            await f.Runs.Reconcile(permit, f.Preparation.Op(), turn.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
+        Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(reconciled.Release()).Receipt).Result);
+        Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
+        Assert.Equal(1, f.Launches);
+    }
+
+    [Fact]
+    public async Task A_settled_turn_never_becomes_faulted()
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        var stops = 0;
+        f.Runs.StopSeam = _ => Interlocked.Increment(ref stops) == 1 ? throw new InvalidOperationException("Stop bug.") : false;
+        var finalized = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runs.Probe = point => { if (point == "runner.finalized") finalized.TrySetResult(); };
+        var intent = f.First();
+        var running = await f.Start(intent);
         var launched = Assert.Single(f.Log(running.Address.Launch).Events.OfType<AttemptEvent.Launched>());
         using var process = Process.GetProcessById(launched.ProcessId);
         try
         {
             await WaitUntilAsync(() => f.Log(running.Address.Launch).Record?.SessionId == "session-1");
-            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
-            if (row == "interrupted")
-            {
-                var turn = await f.Settled(running);
-                Assert.Equal("Interrupted", turn.Attempt.Status.ToString());
-                var take = permit.TakeTask(T);
-                using var unexpected = (take as LeaseTake.Taken)?.Lease;
-                Assert.IsType<LeaseTake.Busy>(take);
-                Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
-                Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(permit, f.Preparation.Op(),
-                    turn.Address.Launch.Attempt, TerminalAttemptOutcome.Interrupted, turn.Log));
-                var ended = Assert.IsType<TurnDisposition.Ended>(Assert.IsType<Release.Released>(turn.Release()).Receipt);
-                Assert.Equal("Interrupted", Assert.IsType<AttemptEnd.Logged>(ended.End).Outcome.ToString());
-                Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
-            }
-            else
-            {
-                var turn = Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound)).Turn;
-                Assert.Equal("Uncertain", turn.Reason.ToString());
-                var take = permit.TakeTask(T);
-                using var unexpected = (take as LeaseTake.Taken)?.Lease;
-                Assert.IsType<LeaseTake.Busy>(take);
-                Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
-            }
+            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+            var outcome = await running.Settlement.WaitAsync(Bound);
+            Assert.Equal("Uncertain", Assert.IsType<TurnSettlement.Unresolved>(outcome).Turn.Reason.ToString());
+            await finalized.Task.WaitAsync(Bound);
+            var existing = Assert.IsType<TurnStart.Existing>(await f.Runs.StartTurn(f.Preparation.Permit, intent).WaitAsync(Bound));
+            Assert.Same(outcome, existing.Settlement);
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => running.RootExited);
+            Assert.Equal("The client did not exit after it was stopped.", error.Message);
+            Assert.Empty(f.Preparation.Read().RootExits);
             Assert.Equal(1, f.Launches);
         }
         finally
         {
-            if (row == "uncertain")
-            {
-                if (!process.HasExited) process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync().WaitAsync(Bound);
-            }
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
         }
     }
 
