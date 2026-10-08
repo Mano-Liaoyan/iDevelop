@@ -204,6 +204,15 @@ internal static partial class RunReducer
                         Inputs = record.Inputs.SetItem(claim.Inputs.Id, claim.Inputs)
                     };
                     break;
+                case RunEvent.RootExitObserved observed:
+                    if (!record.Claims.ContainsKey(observed.Launch) || record.Fenced.Contains(observed.Launch) ||
+                        record.RootExits.ContainsKey(observed.Launch) || record.TurnClosures.ContainsKey(observed.Launch) ||
+                        record.Closures.ContainsKey(observed.Launch.Attempt))
+                    {
+                        return Reject(RunProblem.InvalidClaim);
+                    }
+                    record = record with { RootExits = record.RootExits.Add(observed.Launch, observed) };
+                    break;
                 case RunEvent.TurnClosed closed:
                     if (record.Schema == 3 && record.Fenced.Contains(closed.Key) || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
                         record.Closures.ContainsKey(closed.Key.Attempt))
@@ -603,6 +612,11 @@ internal static partial class RunValidation
             RunEvent.TurnClaimed claim => !Key(claim.Key) || !Input(claim.Inputs) || !Revision.IsHash(claim.Prompt.Sha256) ?
                 RunProblem.InvalidData : null,
             RunEvent.OwnershipFenced fenced => fenced.Claims.IsDefault || !fenced.Claims.All(Key) ? RunProblem.InvalidData : null,
+            RunEvent.RootExitObserved observed => !Key(observed.Launch) || !Revision.IsCommit(observed.Tip.Hex) ||
+                observed.Head is not null && string.IsNullOrWhiteSpace(observed.Head) || !Enum.IsDefined(observed.Ownership) ||
+                observed.Exit is not RootExit.Exited && observed.Exit is not RootExit.NotStarted ||
+                observed.Exit is RootExit.NotStarted notStarted && string.IsNullOrWhiteSpace(notStarted.Detail)
+                ? RunProblem.InvalidData : null,
             RunEvent.TurnClosed closed => !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
             RunEvent.AttemptClosed closed => closed.Attempt.Value == Guid.Empty ? RunProblem.InvalidData : End(closed.End),
             RunEvent.ResultAccepted accepted => !Result(accepted.Result) || !Input(accepted.Inputs) ? RunProblem.InvalidData : null,

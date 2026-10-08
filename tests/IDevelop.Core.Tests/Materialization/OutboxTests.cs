@@ -17,11 +17,11 @@ public sealed class OutboxTests
         var result = await f.Publish(T, f.A, artifact: true);
         Assert.Equal("B ready.\n", result.Report);
         var artifact = Assert.Single(result.Artifacts);
-        Assert.Equal("results/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/payload", artifact.StoredPath);
+        Assert.Equal("results/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/payload", artifact.StoredPath);
         Assert.Equal("134f4812acb8aa0b274fd71f834f9d36a21ab174e3fbab2f7956eac4b0a469c7", artifact.Content.Sha256);
         Assert.Equal(3, artifact.ByteLength);
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-        const string folder = ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/";
+        const string folder = ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/";
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout, folder + "report.md")));
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout, folder + "artifacts/payload")));
         var writer = Path.Combine(f.Git.Folder, ".worktrees", f.Read().RunKey!, f.Read().TaskKeys[T]);

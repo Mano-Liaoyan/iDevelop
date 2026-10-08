@@ -24,8 +24,8 @@ public sealed class PreparationBoundaryTests
         var operation = f.Op();
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(U, operation));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b", blocked.Block.Detail);
-        Assert.Contains("results/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/artifacts/payload", blocked.Block.Detail);
+        Assert.Contains("4afb8e68-c5ea-8261-a205-38609bc0c482", blocked.Block.Detail);
+        Assert.Contains("results/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/payload", blocked.Block.Detail);
         Assert.Equal(operation, Assert.Single(f.Read().Blocks).Value.Block.Operation);
         Assert.Single(f.Read().Attempts);
         Assert.Equal(0, f.Read().Preparations.Values.Count(p => f.Read().Attempts[p.Launch.Attempt].Task == U));
@@ -107,6 +107,7 @@ public sealed class PreparationBoundaryTests
         var next = new LaunchKey(first.Launch.Attempt, 2);
         Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), f.Op(),
             next, " Continue.\n")).Reason.Problem.ToString());
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), first.Launch, new RootExit.Exited(0)));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), first.Launch, Checkpoint(folder)));
         f.Git.Write("left.txt", "ongoing\n", ready.Checkout);
         f.Git.Write("a.txt", "edited\n", ready.Checkout);

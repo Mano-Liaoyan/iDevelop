@@ -17,7 +17,7 @@ internal static class RunJournal
     internal static readonly JsonSerializerOptions Options = CreateOptions();
 
     private static readonly HashSet<string> RunEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
-        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced"];
+        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved"];
 
     private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
         "prepared", "blocked", "salvageRetained", "blockResolved"];

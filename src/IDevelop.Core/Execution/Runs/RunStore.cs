@@ -260,7 +260,7 @@ internal sealed class RunStore
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
                 MaterializationPlan.RetryReset or MaterializationPlan.Refresh } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
-                RunEvent.SalvageRetained or RunEvent.BlockResolved))
+                RunEvent.SalvageRetained or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced))
             {
                 return Refuse(RunProblem.InvalidData);
             }

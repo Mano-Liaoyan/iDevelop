@@ -46,6 +46,7 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, new RootExit.Exited(0)));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
     }
 
@@ -63,6 +64,7 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
             log.Append(new AttemptEvent.Concluded(At, null));
         }
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch, new RootExit.Exited(0)));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
         return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             attempt.Id, ready.Execution.Inputs, "Approved.\n")).Event).Result;
@@ -264,7 +266,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("approved\n", File.ReadAllText(Path.Combine(ready.Checkout, "plan.txt")));
-        Assert.Equal("refs/idp/93f23689/resalvage/c67f2fc3/00000000-0000-0000-0000-000000000109/5eac0e80-aa34-80b9-84f4-4396494e384e",
+        Assert.Equal("refs/idp/93f23689/resalvage/c67f2fc3/00000000-0000-0000-0000-000000000109/3e518864-e0d7-82d3-9b24-f6c4cb9835c6",
             f.Git.Git("for-each-ref", "--contains", "76e13b8982291f82ffbee6a1302464dedddae3f5", "--format=%(refname)").Trim());
         Assert.Equal("A\n", f.Git.Git("show", "76e13b8982291f82ffbee6a1302464dedddae3f5:a.txt"));
         var refresh = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());

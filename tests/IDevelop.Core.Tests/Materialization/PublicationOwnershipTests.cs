@@ -107,7 +107,7 @@ public sealed class PublicationOwnershipTests
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("The writer branch tip 81ddb7c330112c7f16700ed002803a04b0bce693 does not contain the attempt base adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 81ddb7c330112c7f16700ed002803a04b0bce693.", blocked.Block.Detail);
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Empty(f.Read().Results);
     }
@@ -130,21 +130,22 @@ public sealed class PublicationOwnershipTests
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("The writer branch tip 81ddb7c330112c7f16700ed002803a04b0bce693 does not contain the attempt base adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102: unexplained shared ref refs/heads/idp/93f23689/task/90d5b0a2, adfe40b30c176fb407933286f51d15ea9b54cdc3 to 81ddb7c330112c7f16700ed002803a04b0bce693.", blocked.Block.Detail);
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", Ref(f, writer.Execution.Location.Owner.Branch));
         Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "--format=%(objectname)", retained.Receipt.Ref));
         Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
         Assert.Null(Ref(f, RunLayout.ResultRef(f.Read().RunKey!, f.Read().TaskKeys[T], writer.Execution.Launch.Attempt)));
-        Assert.Equal(blocked, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
+            f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt)).Block));
         var salvageOperation = f.Op();
         var recovered = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         Assert.Equal(recovered, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         var resetOperation = f.Op();
         var confirmation = f.Op();
-        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, recovered.Receipt.Plan, confirmation));
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", reset.Target.Hex);
+        var reset = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, recovered.Receipt.Plan, confirmation));
+        Assert.Equal(MaterializationProblem.UncertainOwnership, reset.Block.Problem);
         Assert.Equal(reset, f.Materializer().ResetForRetry(f.Lease(T), resetOperation, recovered.Receipt.Plan, confirmation));
-        Assert.Equal("A\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
+        Assert.False(File.Exists(Path.Combine(writer.Checkout, "a.txt")));
         Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
     }
 
@@ -415,12 +416,12 @@ public sealed class PublicationOwnershipTests
         f.Git.Write("c.txt", "C\n", sibling.Checkout);
         Assert.Equal(0, f.Git.Run(sibling.Checkout, "add", "c.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(sibling.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "c").ExitCode);
-        var first = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
-        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(first.Result.Code).Code.Commit.Hex);
+        var first = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
+        Assert.Equal(MaterializationProblem.UncertainOwnership, first.Block.Problem);
         f.Close(sibling, "C ready.\n");
         var second = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("e954b83b974db2a85981aa86b3a2eabee42d7803", Assert.IsType<CodeOutput.Produced>(second.Result.Code).Code.Commit.Hex);
-        Assert.Equal(2, f.Read().Results.Count);
+        Assert.Equal(C, Assert.Single(f.Read().Results).Task);
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(writer.Checkout, "b.txt")));
         Assert.Equal("C\n", File.ReadAllText(Path.Combine(sibling.Checkout, "c.txt")));
     }

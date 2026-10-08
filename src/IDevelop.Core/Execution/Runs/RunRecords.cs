@@ -107,6 +107,20 @@ internal abstract record AmendmentOrigin
 
 internal enum TerminalAttemptOutcome { Succeeded, Failed, Cancelled, Interrupted }
 
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Exited), "exited")]
+[JsonDerivedType(typeof(NotStarted), "notStarted")]
+internal abstract record RootExit
+{
+    private RootExit() { }
+
+    internal sealed record Exited(int Code) : RootExit;
+
+    internal sealed record NotStarted(string Detail) : RootExit;
+}
+
+internal enum TipOwnership { Explained, Unexplained }
+
 internal enum RecoveryOutcome { NotStarted, Stopped }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
@@ -168,6 +182,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
+[JsonDerivedType(typeof(RootExitObserved), "rootExitObserved")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -195,6 +210,9 @@ internal abstract record RunEvent
     internal sealed record Reserved(RunAttempt Attempt, InputRecord Inputs) : RunEvent;
 
     internal sealed record TurnClaimed(LaunchKey Key, InputRecord Inputs, Digest Prompt) : RunEvent;
+
+    internal sealed record RootExitObserved(LaunchKey Launch, RootExit Exit, DateTimeOffset At, CommitId Tip, string? Head,
+        TipOwnership Ownership) : RunEvent;
 
     internal sealed record TurnClosed(LaunchKey Key, LogCheckpoint Evidence) : RunEvent;
 
@@ -318,6 +336,9 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
 
     public ImmutableDictionary<LaunchKey, RunEvent.TurnClaimed> Claims { get; internal init; } = ImmutableDictionary<LaunchKey,
         RunEvent.TurnClaimed>.Empty;
+
+    public ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved> RootExits { get; internal init; } =
+        ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved>.Empty;
 
     public ImmutableHashSet<LaunchKey> Fenced { get; internal init; } = ImmutableHashSet<LaunchKey>.Empty;
 

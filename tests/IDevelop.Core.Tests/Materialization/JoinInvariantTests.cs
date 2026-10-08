@@ -145,6 +145,7 @@ public sealed class JoinInvariantTests
             log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, new RootExit.Exited(0)));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
     }
 

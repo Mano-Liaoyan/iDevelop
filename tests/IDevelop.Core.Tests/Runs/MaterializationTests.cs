@@ -369,6 +369,9 @@ public sealed class MaterializationTests
     private static void Close(RunFixtures f, RunEvent.Reserved reservation, string report = "Checked.")
     {
         f.Claim(reservation);
+        var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
+            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch, TipOwnership.Explained)));
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), reservation.Attempt.Id,
             TerminalAttemptOutcome.Succeeded, f.WriteLog(reservation, report: report)));
     }

@@ -261,7 +261,7 @@ public sealed class PreparationTests
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea\n", f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-        var report = ".idp/inputs/00000000-0000-0000-0000-000000000103/0a07c9c1-332b-8f5f-a0fb-3d93fb49f99b/report.md";
+        var report = ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/report.md";
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout, report)));
         Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(ready.Checkout, report[..^9], "artifacts/payload")));
         Assert.Equal(1, Count(ready.Execution.Prompt, f.Read().Inputs[ready.Execution.Inputs].Text));

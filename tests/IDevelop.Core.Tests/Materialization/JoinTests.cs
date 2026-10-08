@@ -27,8 +27,8 @@ public sealed class JoinTests
         OwnCommit(f, b, bPath, bText, "b");
         OwnCommit(f, c, cPath, cText, "c");
         f.Close(b);
-        var publishedB = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         f.Close(c);
+        var publishedB = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         var publishedC = Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(c.Execution.Location.Owner.Task), f.Op(), c.Execution.Launch.Attempt));
         return (Assert.IsType<CodeOutput.Produced>(publishedB.Result.Code).Code, Assert.IsType<CodeOutput.Produced>(publishedC.Result.Code).Code);
     }

@@ -83,6 +83,8 @@ internal sealed class PreparationFixture : IDisposable
         var attempt = Read().Attempts[execution.Launch.Attempt];
         var input = Read().Inputs[execution.Inputs];
         Assert.IsType<RunDecision.Granted>(Store.Claim(Lease(attempt.Task), Op(), execution.Launch, input, execution.PromptHash));
+        Assert.IsType<RootObservation.Observed>(Materializer().ObserveRootExit(Lease(attempt.Task), Op(), execution.Launch,
+            new RootExit.Exited(outcome == TerminalAttemptOutcome.Failed ? 1 : 0)));
         var definition = Read().Revision.Snapshot.Tasks[attempt.Task];
         var folder = Store.AttemptFolder(W, RunId, attempt.Task, attempt.Id);
         using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
