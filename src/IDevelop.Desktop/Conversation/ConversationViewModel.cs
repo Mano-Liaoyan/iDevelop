@@ -628,7 +628,9 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     {
         var continues = attempt.Continues is { } earlier && _attempts.Select(item => item.Id).ToList().IndexOf(earlier) is var index and >= 0 ? $", continues {index + 1}" : "";
         var latest = attempt.Id == _snapshot.Latest?.Id ? " (current)" : "";
-        return $"Attempt {number}{latest} · {attempt.Status.Describe()} · {Clients.Name(attempt.Settings.Client)}{continues}";
+        // A workflow run's attempt names its run. A standalone attempt keeps the plain label.
+        var owner = attempt.Label == AttemptSummary.StandaloneLabel ? "" : $" · {attempt.Label}";
+        return $"Attempt {number}{latest}{owner} · {attempt.Status.Describe()} · {Clients.Name(attempt.Settings.Client)}{continues}";
     }
 
     private void NotifyCommands()

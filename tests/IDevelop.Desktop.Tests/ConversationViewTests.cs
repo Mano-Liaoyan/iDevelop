@@ -207,6 +207,25 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_reply_that_the_window_controlling_the_run_must_send_stays_in_the_composer()
+    {
+        _session.Attempts = [new AttemptSummary(A, null, T0, AttemptStatus.Succeeded, CodexHigh),
+            new AttemptSummary(B, null, T0.AddMinutes(1), AttemptStatus.WaitingForInput, CodexHigh) { Label = "Run 1" }];
+        _session.Snapshot = Snapshot(Record(B), Actions());
+        _session.Send = _ => new SendResult.Refused(new SendProblem.RunUnavailable(WorkflowRunCoordinator.ElsewhereMessage));
+        var model = Open();
+        Assert.Equal(["Attempt 1 · Succeeded · Codex", "Attempt 2 (current) · Run 1 · Waiting for you · Codex"], model.Attempts.Select(choice => choice.Label));
+        model.Draft = "Use the fixture";
+
+        model.SendCommand.Execute(null);
+        Settle(model);
+
+        Assert.Equal("Use the fixture", model.Draft);
+        Assert.Equal("This run is controlled by another iDevelop window.", model.Notice);
+        Assert.Equal(new TurnKey(B, 1), Assert.Single(_session.Calls.OfType<FakeConversationSession.Call.Send>()).Expected);
+    }
+
+    [AvaloniaFact]
     public void An_earlier_attempt_reads_its_own_history_and_its_composer_points_back_to_the_current_conversation()
     {
         var latest = Record(C);

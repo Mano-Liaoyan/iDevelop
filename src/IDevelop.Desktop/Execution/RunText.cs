@@ -249,6 +249,7 @@ public static class RunText
         SendProblem.Ending p => $"\"{p.Title}\" is finishing. Send your message again to continue it.",
         SendProblem.CannotStart p => Describe(p.Problem),
         SendProblem.NotReviewing p => $"Guidance reaches \"{p.Title}\" only while its review goes on.",
+        SendProblem.RunUnavailable p => p.Reason,
         _ => throw new UnreachableException(),
     };
 
