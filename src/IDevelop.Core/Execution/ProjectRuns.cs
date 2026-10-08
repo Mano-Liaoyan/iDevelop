@@ -573,17 +573,39 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     public ValueTask DisposeAsync()
     {
+        TurnOwner[] owners = [];
+        Task leaving;
         lock (_gate)
         {
             if (_leaving is null)
             {
                 _clients.Changed -= OnClientsChanged;
-                _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+                if (_owned.Count == 0 && _commands.Count == 0)
+                {
+                    _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
+                }
+                else
+                {
+                    owners = [.. _owned.Values];
+                    _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout))
+                        .Concat(owners.Select(owner => owner.LeaveAsync()))
+                        .Concat(_commands.Values.Select(command => WaitForCommand(command.Task))));
+                }
                 NotifyConversations(null);
             }
 
-            return new ValueTask(_leaving);
+            leaving = _leaving;
         }
+
+        // Leaving waits for an owner's root observation, which runs Git, so it happens outside the gate.
+        foreach (var owner in owners) owner.Leave();
+        return new ValueTask(leaving);
+    }
+
+    private async Task WaitForCommand(Task command)
+    {
+        try { await command.WaitAsync(LeaveTimeout, TimeProvider).ConfigureAwait(false); }
+        catch (Exception) { }
     }
 
     private async Task LeaveAsync(ActiveRun run, TimeSpan timeout)
@@ -694,6 +716,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private LockTake TakeLock(TaskId task)
     {
+        if (WorkflowOwner(task) is { } ownedHere) return new LockTake.HeldElsewhere(ownedHere);
         StandaloneLease? held;
         try
         {
@@ -1016,6 +1039,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         {
             return new SendProblem.ClosedOwner();
         }
+
+        if (WorkflowOwner(task.Id) is { } owned) return new SendProblem.CannotStart(owned);
 
         if ((expected is not null || !_workflows.IsEmpty) && Resolve(task.Id) is null)
         {

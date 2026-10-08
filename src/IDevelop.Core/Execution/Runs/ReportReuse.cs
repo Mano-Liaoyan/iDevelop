@@ -16,12 +16,21 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
-    public static AttemptEvidence Read(string folder, LogCheckpoint? expected = null)
+    public static AttemptEvidence Read(string folder, LogCheckpoint? expected = null) => ReadCore(folder, expected, false);
+
+    public static AttemptEvidence ReadPrefix(string folder, LogCheckpoint expected) => ReadCore(folder, expected, true);
+
+    private static AttemptEvidence ReadCore(string folder, LogCheckpoint? expected, bool prefix)
     {
         AttemptEvidence Reject(RunProblem problem) => new([], null, null, new(problem));
         try
         {
             var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
+            if (prefix && expected is { } limit)
+            {
+                if (limit.ByteLength < 0 || limit.ByteLength > bytes.LongLength) return Reject(RunProblem.EvidenceMismatch);
+                bytes = bytes[..checked((int)limit.ByteLength)];
+            }
             var checkpoint = new LogCheckpoint(bytes.LongLength, Revision.Hash(bytes));
             if (expected is not null && (!RunValidation.Checkpoint(expected) || expected != checkpoint))
             {
