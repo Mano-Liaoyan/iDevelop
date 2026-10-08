@@ -315,6 +315,41 @@ public sealed class BlockScopeTests
         Assert.Equal(command == "restore", f.Read().Blocks[stash].Resolved);
     }
 
+    [LinuxOrWindowsTheory]
+    [InlineData("restore")]
+    [InlineData("baseline")]
+    public async Task A_main_index_fault_survives_a_checkout_receipt_and_clears_when_its_preparation_reruns(string command)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        if (command == "restore") await f.Close(ready);
+        else await RecoveryBaselineTests.CloseInterrupted(f, ready);
+        var previous = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, previous));
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        var index = Path.Combine(f.Git.Folder, ".git", "index");
+        var intact = File.ReadAllBytes(index);
+        File.WriteAllText(index, "corrupt");
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var cause = new AttemptCause.Continue(previous, confirmation);
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, operation, cause));
+        Assert.Equal(MaterializationProblem.GitFailed, blocked.Block.Problem);
+        var fault = f.Read().Blocks.Single(b => b.Value.Block.Operation == operation).Key;
+        var resolved = command == "restore"
+            ? Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), previous, preservation, f.Op(),
+                RestoreTests.Preview(f, ready, preservation).Identity)).Receipt.Resolved
+            : Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation,
+                preservation)).Receipt.Resolved;
+        Assert.Equal(new[] { drift }, resolved);
+        Assert.False(f.Read().Blocks[fault].Resolved);
+        File.WriteAllBytes(index, intact);
+        Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation, cause));
+        Assert.True(f.Read().Blocks[fault].Resolved);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
