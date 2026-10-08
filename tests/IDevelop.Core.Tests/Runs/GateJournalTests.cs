@@ -237,6 +237,15 @@ public sealed class GateJournalTests
         }));
         Assert.Equal(RunProblem.StaleInput, Refusal(f, superseded, Requested(superseded, G, sequence: 2,
             bindings: [new InputBinding.Provided(new(T, G), ConnectionKind.Dependency, t.Id)])));
+
+        // A superseded request that was never answered still owns its result id.
+        var open = await Request(f);
+        f.Complete(f.Reserve(T, new AttemptCause.Retry(RunProjection.LatestAttempts(f.Read())[T], f.Op())), report: "T third.\n",
+            supersedes: f.Read().CurrentResults[T].Id);
+        var later = f.Read();
+        var third = Requested(later, G, sequence: 3);
+        Accepts(f, later, third);
+        Assert.Equal(RunProblem.StartConflict, Refusal(f, later, third with { Request = third.Request with { Result = open.Result } }));
     }
 
     [Fact]
