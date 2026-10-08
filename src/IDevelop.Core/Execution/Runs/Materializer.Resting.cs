@@ -24,12 +24,12 @@ internal sealed partial class Materializer
             if (LeaseProblem(lease, owner.Task) is { } mismatch) return new RestingCheck.Rejected(new(mismatch));
             if (!record.Preparations.TryGetValue(new(attempt, 1), out var prepared)) return new RestingCheck.Rejected(new(RunProblem.InvalidClaim));
             inputs = prepared.Inputs;
-            if (RunReducer.AttemptDrift(record, id => id == attempt) is { } existing)
+            if (RunReducer.AttemptDrift(record, id => id == attempt, operation) is { } existing)
                 return cancelling ? new RestingCheck.Matched() : new RestingCheck.Drifted(existing.Value.Block);
             VerifyRepository(record, repository);
             if (VerifyOwnBaseline(repository, record, prepared.Location, attempt, refusePending: !cancelling) is { } pending)
                 return new RestingCheck.Rejected(pending);
-            ResolveMaintenanceBlocks(permit, operation, "Rechecked.", scope => scope is BlockScope.Operation);
+            ResolveClosureFaults(permit, operation, attempt);
             return new RestingCheck.Matched();
         }
         catch (Refusal refused) { return new RestingCheck.Rejected(refused.Reason); }
@@ -42,11 +42,24 @@ internal sealed partial class Materializer
         catch (Exception error) when (error is MaterializationFailure or IOException or UnauthorizedAccessException)
         { return new RestingCheck.Matched(); }
 
-        RestingCheck RestingBlock(MaterializationBlock block) => Block(permit, operation, "close-recheck", block) switch
+        RestingCheck RestingBlock(MaterializationBlock block) => Block(permit, operation, RunReducer.ClosureCheck, block) switch
         {
             Preparation.Blocked blocked => new RestingCheck.Drifted(blocked.Block),
             Preparation.Rejected rejected => new RestingCheck.Rejected(rejected.Reason),
             _ => throw new InvalidOperationException(),
         };
+    }
+
+    /// <summary>
+    /// A successful baseline check of the attempt verified what its earlier failed closure checks could not, under whichever
+    /// operation they ran, so it resolves their faults.
+    /// </summary>
+    private void ResolveClosureFaults(CoordinatorPermit permit, OperationId operation, AttemptId attempt)
+    {
+        var record = Read(permit.Workflow, permit.Run);
+        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt &&
+            RunReducer.ClosureFault(pair.Key, pair.Value.Block)).OrderBy(pair => record.Receipts[pair.Key].Sequence))
+            Journal("recheck-resolve", () => _store.Record(permit, OperationIds.Derive(operation, "recheck-resolve-" + pair.Key.Value.ToString("D")),
+                new RunEvent.BlockResolved(pair.Key, "Rechecked.")));
     }
 }

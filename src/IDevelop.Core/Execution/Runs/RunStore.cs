@@ -548,8 +548,11 @@ internal sealed class RunStore
     }
 
     public RunDecision AcceptReport(CoordinatorPermit permit, OperationId operation, AttemptId attempt, InputId inputs,
-        string report, ResultId? supersedes = null) =>
-        Transact(permit, operation, Fingerprint("acceptReport", new
+        string report, ResultId? supersedes = null)
+    {
+        // Git runs before the journal lock. A commit's tree never changes, so the trees read here still hold inside it.
+        var trees = BaseTrees(permit, attempt);
+        return Transact(permit, operation, Fingerprint("acceptReport", new
         {
             attempt,
             inputs,
@@ -609,7 +612,7 @@ internal sealed class RunStore
 
             var final = new LaunchKey(attempt, read.Record.Turns.Count);
             if (record.Schema == 3 && (record.RootExits.ContainsKey(final) || read.Events.Any(e => e is AttemptEvent.Launched)) &&
-                !UnchangedCode(record, final))
+                !UnchangedCode(record, final, trees))
             {
                 return Refuse(RunProblem.OutcomeMismatch);
             }
@@ -620,14 +623,26 @@ internal sealed class RunStore
                 Code = record.Schema >= 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
             }, capture));
         });
+    }
+
+    /// <summary>The tree of each attempt base the attempt's launches recorded, read from Git without the journal lock.</summary>
+    private ImmutableDictionary<CommitId, TreeId> BaseTrees(CoordinatorPermit permit, AttemptId attempt)
+    {
+        if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded loaded) return ImmutableDictionary<CommitId, TreeId>.Empty;
+        var trees = ImmutableDictionary.CreateBuilder<CommitId, TreeId>();
+        foreach (var commit in loaded.Record.Preparations.Values.Where(prepared => prepared.Launch.Attempt == attempt)
+            .Select(prepared => prepared.Location.AttemptBase).Distinct())
+            if (GitTree.TreeOf(_project, commit.Hex) is { } tree) trees[commit] = new TreeId(tree);
+        return trees.ToImmutable();
+    }
 
     /// <summary>
     /// A read-only or review result whose client ran needs the final launch's matched capture, with its tip, files and index
     /// all at that launch's attempt base. A refresh moves the base, and the index catches a change staged without touching
     /// the files. Only a journal whose launches never ran a client or observed a root, as hand-built store tests write, keeps
-    /// the log check alone.
+    /// the log check alone. A base whose tree was not read before the transaction refuses.
     /// </summary>
-    private bool UnchangedCode(RunRecord record, LaunchKey launch)
+    private static bool UnchangedCode(RunRecord record, LaunchKey launch, ImmutableDictionary<CommitId, TreeId> trees)
     {
         if (!record.Preparations.TryGetValue(launch, out var prepared) || !record.Settlements.TryGetValue(launch, out var capture) ||
             record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
@@ -637,12 +652,11 @@ internal sealed class RunStore
         }
 
         var commit = prepared.Location.AttemptBase;
-        if (GitTree.TreeOf(_project, commit.Hex) is not { } hex)
+        if (!trees.TryGetValue(commit, out var tree))
         {
             return false;
         }
 
-        var tree = new TreeId(hex);
         return observations.All(observation => observation.Tip == commit && observation.Recipe.Tree == tree && observation.IndexTree == tree);
     }
 
