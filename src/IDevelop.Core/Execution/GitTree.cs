@@ -30,10 +30,16 @@ internal static class GitTree
             if (File.Exists(index))
             {
                 File.Copy(index, temporary);
-                File.SetLastWriteTimeUtc(temporary, DateTime.UnixEpoch.AddSeconds(1));
             }
 
-            return Git(folder, temporary, "add", "--all", "--", ".", ":(exclude).idp") is null
+            string[] pathspec = [".", ":(exclude).idp"];
+            var entries = GitBytes(folder, temporary, null, ["ls-files", "--stage", "-z", "--", .. pathspec]);
+            if (entries is null || GitBytes(folder, temporary, entries, "update-index", "-z", "--index-info") is null)
+            {
+                return null;
+            }
+
+            return Git(folder, temporary, ["add", "--all", "--", .. pathspec]) is null
                 ? null
                 : Git(folder, temporary, "write-tree")?.Trim();
         }
@@ -82,6 +88,12 @@ internal static class GitTree
 
     private static string? Git(string folder, string? indexFile, params string[] arguments)
     {
+        var bytes = GitBytes(folder, indexFile, null, arguments);
+        return bytes is null ? null : Encoding.UTF8.GetString(bytes);
+    }
+
+    private static byte[]? GitBytes(string folder, string? indexFile, byte[]? stdin, params string[] arguments)
+    {
         var start = new ProcessStartInfo("git", ["-c", "advice.graftFileDeprecated=false", "-c", "core.commitGraph=false", "-c", "core.fsmonitor=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true", .. arguments])
         {
             WorkingDirectory = folder,
@@ -108,16 +120,25 @@ internal static class GitTree
                 return null;
             }
 
-            git.StandardInput.Close();
-            var output = git.StandardOutput.ReadToEndAsync();
+            using var bytes = new MemoryStream();
+            var output = git.StandardOutput.BaseStream.CopyToAsync(bytes);
             _ = git.StandardError.ReadToEndAsync();
+            var input = WriteInput();
             if (!git.WaitForExit(Patience))
             {
                 git.Kill(entireProcessTree: true);
                 return null;
             }
 
-            return git.ExitCode == 0 ? output.Result : null;
+            input.GetAwaiter().GetResult();
+            output.GetAwaiter().GetResult();
+            return git.ExitCode == 0 ? bytes.ToArray() : null;
+
+            async Task WriteInput()
+            {
+                if (stdin is not null) await git.StandardInput.BaseStream.WriteAsync(stdin);
+                git.StandardInput.Close();
+            }
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {

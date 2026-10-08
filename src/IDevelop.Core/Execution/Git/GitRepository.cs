@@ -358,13 +358,15 @@ internal sealed partial class GitRepository
             if (before is not null)
             {
                 File.Copy(path.Value, temporary);
-                File.SetCreationTimeUtc(temporary, File.GetCreationTimeUtc(path.Value));
-                File.SetLastWriteTimeUtc(temporary, DateTime.UnixEpoch.AddSeconds(1));
-                File.SetLastAccessTimeUtc(temporary, File.GetLastAccessTimeUtc(path.Value));
             }
             var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };
             var exclusions = new[] { ".idp", ".worktrees" }.Concat(excludedPaths).Distinct(StringComparer.Ordinal);
-            var added = Git(checkout, GitOperation.Worktree, ["add", "--all", "--", ".", .. exclusions.Select(exclusion => ":(exclude)" + exclusion)], environment);
+            string[] pathspec = [".", .. exclusions.Select(exclusion => ":(exclude)" + exclusion)];
+            var entries = Git(checkout, GitOperation.Worktree, ["ls-files", "--stage", "-z", "--", .. pathspec], environment);
+            if (entries.ExitCode != 0) return Failure<GitCapture>(entries);
+            var invalidated = Git(checkout, GitOperation.Worktree, ["update-index", "-z", "--index-info"], environment, entries.Stdout);
+            if (invalidated.ExitCode != 0) return Failure<GitCapture>(invalidated);
+            var added = Git(checkout, GitOperation.Worktree, ["add", "--all", "--", .. pathspec], environment);
             if (added.ExitCode != 0)
             {
                 return Failure<GitCapture>(added);
