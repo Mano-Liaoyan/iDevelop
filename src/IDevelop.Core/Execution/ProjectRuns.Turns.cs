@@ -173,7 +173,7 @@ public sealed partial class ProjectRuns
                             prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                         {
                             RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
-                            Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues,
+                            Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues, Planning = RunPlanning.Handles(record, attempt),
                         }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }
