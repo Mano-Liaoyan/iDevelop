@@ -568,23 +568,22 @@ public sealed class TurnStateTests
         var other = PreparationFixture.Writer(C) with { Execution = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" } };
         await using var f = new TurnFixture(configure: workflow => Edit(workflow, TestNodes.Place(other, new(0, 0))));
         await f.Open(f.Waiting());
-        var clock = new HeldClock();
-        f.Runs.TimeProvider = clock;
         var running = await f.Start(new TurnIntent.First(f.Preparation.Op(), C, new AttemptCause.Initial()));
         var otherFolder = f.Preparation.Store.AttemptFolder(W, f.Preparation.RunId, C, running.Address.Launch.Attempt);
         await WaitUntilAsync(() => AttemptEvidence.Read(otherFolder).Record?.SessionId == "session-1");
         using var barrier = new ProbeBarrier("runner.launch.before");
-        f.Runs.Probe = barrier.Probe;
+        using var published = new ProbeBarrier("project.launches-closed");
+        f.Runs.Probe = point =>
+        {
+            barrier.Probe(point);
+            published.Probe(point);
+        };
         var command = f.Runs.StartTurn(f.Preparation.Permit, f.First());
         await barrier.Reached.Task.WaitAsync(Bound);
-        var disposal = System.Threading.Tasks.Task.Run(() =>
-        {
-            clock.HoldOn(Environment.CurrentManagedThreadId);
-            return f.Runs.DisposeAsync().AsTask();
-        });
+        var disposal = f.Runs.DisposeAsync().AsTask();
         try
         {
-            await clock.Held.Task.WaitAsync(Bound);
+            await published.Reached.Task.WaitAsync(Bound);
             barrier.Dispose();
             var start = Assert.IsType<TurnStart.Settled>(await command.WaitAsync(Bound));
             var turn = Assert.IsType<TurnSettlement.Settled>(start.Settlement).Turn;
@@ -597,8 +596,7 @@ public sealed class TurnStateTests
         finally
         {
             barrier.Dispose();
-            clock.Release();
-            File.WriteAllText(Path.Combine(f.Evidence, "gate"), "");
+            published.Dispose();
             await disposal.WaitAsync(Bound);
         }
         Assert.Equal("Interrupted", (await f.Settled(running)).Attempt.Status.ToString());
@@ -776,21 +774,6 @@ public sealed class TurnStateTests
         }
         finally { held?.Dispose(); }
         await SuccessfulControl();
-    }
-
-    private sealed class HeldClock : TimeProvider
-    {
-        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _thread;
-        public readonly TaskCompletionSource Held = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public void HoldOn(int thread) => Volatile.Write(ref _thread, thread);
-        public void Release() => _released.TrySetResult();
-        public override DateTimeOffset GetUtcNow()
-        {
-            if (Volatile.Read(ref _thread) == Environment.CurrentManagedThreadId && Held.TrySetResult())
-                Assert.True(_released.Task.Wait(Bound), "The held clock was not released.");
-            return TimeProvider.System.GetUtcNow();
-        }
     }
 
     private sealed class TornStream(Stream inner) : Stream
