@@ -214,7 +214,7 @@ U1 can proceed while W1 and execution design develop in separate worktrees. C1 a
 
 ## Verification skill plan
 
-Extend the project-owned `skills/verify-idevelop` feature map rather than create seven overlapping launch-and-cleanup skills. Keep one setup, isolation, evidence, and cleanup protocol. Generate installed copies through `node scripts/pstack.mjs setup`, never by editing `.agents/skills/verify-idevelop` directly.
+Extend the project-owned `.claude/skills/verify-idevelop` feature map rather than create seven overlapping launch-and-cleanup skills. Keep one setup, isolation, evidence, and cleanup protocol. Generate installed copies through `node scripts/pstack.mjs setup`, never by editing `.agents/skills/verify-idevelop` directly.
 
 The future guides below are proposed artifacts. They do not exist because this planning round does not implement controls or fixtures.
 

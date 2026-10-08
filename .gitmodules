@@ -1,4 +1,0 @@
-[submodule "pstack"]
-	path = .pstack/upstream
-	url = https://github.com/cursor/plugins.git
-	branch = main
