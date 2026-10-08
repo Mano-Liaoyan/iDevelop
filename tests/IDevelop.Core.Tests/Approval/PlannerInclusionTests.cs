@@ -161,6 +161,7 @@ public sealed class PlannerInclusionTests
         var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow,
             new(f.Preflight(), BaseChoice.Head, new(Guid.NewGuid())) { Include = [new(X, reusable.Source, 2)] }).WaitAsync(Bound));
         Assert.Equal((ApprovalProblem.InclusionRefused, "ReuseUnverifiable"), (refused.Problem, refused.Detail));
+        Assert.Single(Intents(f.Project));
     }
 
     [Fact]

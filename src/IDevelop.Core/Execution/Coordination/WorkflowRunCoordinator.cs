@@ -108,7 +108,6 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     public Task<RunCommand> Amend(RunAddress address, RunAmendment amendment, CancellationToken wait = default) => Command(address, _ =>
     {
-        if (amendment.Confirmation.Value == Guid.Empty) return new RunCommand.Refused(new(RunProblem.ConfirmationRequired));
         var decision = _store.AmendFromProposal(_permit!, RunOperations.Amend(amendment.Confirmation), amendment.Previous, amendment.Proposal,
             amendment.Chosen.ToHashSet(), amendment.Confirmation, amendment.Fallback);
         return decision is RunDecision.Rejected rejected ? new RunCommand.Refused(rejected.Reason) : Accepted;

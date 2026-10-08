@@ -842,8 +842,8 @@ internal sealed partial class RunStore
                 return new Mutation.Existing(recorded);
             }
 
-            return record.Revision.Id != previous ? Refuse(RunProblem.RevisionConflict)
-                : new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
+            // The reducer refuses an amendment of a revision that is no longer current.
+            return new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
         });
 
     public RunDecision Stop(CoordinatorPermit permit, OperationId operation) =>

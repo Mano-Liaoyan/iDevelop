@@ -21,6 +21,7 @@ public sealed class PlannerInclusionValidationTests
     private static readonly Guid Plan = Id(700);
     private static readonly TaskId Added = Proposal.Mint(Plan, "new-1");
     private static readonly TaskId Next = Proposal.Mint(Plan, "new-2");
+    private static readonly TaskId Slot = new(Id(705));
 
     private const string First = """
         A first cut.
@@ -35,6 +36,7 @@ public sealed class PlannerInclusionValidationTests
 
         ```idevelop
         {"status": "proposal",
+         "fill": [{"slot": "slot-1", "title": "S", "fields": {"brief": "Build S."}}],
          "add": [{"id": "new-1", "type": "type-1", "title": "N1", "fields": {"brief": "Build N1."}},
                  {"id": "new-2", "type": "type-1", "title": "N2", "fields": {"brief": "Build N2."}},
                  {"id": "new-3", "type": "type-2", "title": "N3", "fields": {"instructions": "Build N3."}}],
@@ -49,11 +51,14 @@ public sealed class PlannerInclusionValidationTests
             Title = "Plan", Execution = new(ClientId.Codex) { Model = "m1", Reasoning = "high" }, Conversation = ConversationMode.Chat,
         }.WithField("brief", brief)!;
 
-    /// <summary>The planner after the person accepted its second proposal but the built-in Implement N3.</summary>
+    /// <summary>
+    /// The planner with the empty task S the person drew after it, after the person accepted the planner's second
+    /// proposal but the built-in Implement N3.
+    /// </summary>
     private static Workflow Accepted(TaskDefinition? planner = null)
     {
         var workflow = FixtureWorkflow(planner ?? PlannerTask());
-        foreach (var (id, name, x) in new[] { (Added, "N1", 320), (Next, "N2", 640) })
+        foreach (var (id, name, x) in new[] { (Slot, "S", 0), (Added, "N1", 320), (Next, "N2", 640) })
         {
             workflow = Edit(workflow, new WorkflowEdit.PlaceNode(id, Step, new(x, 0))
             {
@@ -61,7 +66,7 @@ public sealed class PlannerInclusionValidationTests
                 Settings = new(workflow.Tasks[T].Execution, ConversationMode.Autonomous),
             });
         }
-        return Connect(Connect(workflow, T, Added), Added, Next);
+        return Connect(Connect(Connect(workflow, T, Slot), T, Added), Added, Next);
     }
 
     /// <summary>
@@ -87,7 +92,7 @@ public sealed class PlannerInclusionValidationTests
             StandaloneCapture = change == "uncaptured" ? null : JsonSerializer.SerializeToElement(
                 new StandaloneCapture(definition, change == "inputs" ? "Declared" : ""), RunJournal.Options),
             Conversation = ConversationMode.Chat,
-            Planning = change == "unplanned" ? null : new PlanningHandles(Plan, [], [Step.Key, BuiltInBlueprints.Implement.Key]),
+            Planning = change == "unplanned" ? null : new PlanningHandles(Plan, [Slot], [Step.Key, BuiltInBlueprints.Implement.Key]),
             Tree = tree,
             ReadOnly = change != "writer",
             Continues = change == "continued" ? new(new(Id(89)), "session-1") : null,
@@ -213,6 +218,7 @@ public sealed class PlannerInclusionValidationTests
     [InlineData("connection", false)]
     [InlineData("subset", true)]
     [InlineData("edited", true)]
+    [InlineData("refilled", true)]
     [InlineData("unknownType", false)]
     public void The_approved_workflow_must_hold_what_the_person_accepted_and_give_the_planner_no_input(string change, bool includable)
     {
@@ -222,8 +228,9 @@ public sealed class PlannerInclusionValidationTests
             "input" => Connect(Edit(workflow, TestNodes.Place(Task(U), new(0, 200))), U, T, ConnectionKind.Context),
             "connection" => Edit(workflow, new WorkflowEdit.Delete([], [new(T, Added)])),
             "subset" => Edit(workflow, new WorkflowEdit.Delete([Next], [])),
-            "unknownType" => Edit(workflow, new WorkflowEdit.Delete([Added, Next], [])),
+            "unknownType" => Edit(workflow, new WorkflowEdit.Delete([Slot, Added, Next], [])),
             "edited" => Edit(workflow, new WorkflowEdit.SetField(Added, "brief", "Build N1 with care.")),
+            "refilled" => Edit(workflow, new WorkflowEdit.SetField(Slot, "brief", "Build S with care.")),
             _ => workflow,
         };
         using var f = new RunFixtures(workflow);
