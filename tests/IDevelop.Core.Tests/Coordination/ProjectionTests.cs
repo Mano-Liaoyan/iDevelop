@@ -132,6 +132,48 @@ public sealed class ProjectionTests
     }
 
     [Fact]
+    public void A_stale_result_is_not_done()
+    {
+        using var f = new RunFixtures(Connect(FixtureWorkflow(Task(), Task(U), Task(C) with { Conversation = ConversationMode.Chat }), T, U));
+        f.Approve();
+        var chat = f.Reserve(C);
+        f.Claim(chat);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), new(chat.Attempt.Id, 1), f.WriteLog(chat)));
+        var first = f.Reserve(T);
+        var old = f.Complete(first, report: "T ready.\n");
+        f.Complete(f.Reserve(U), report: "U ready.\n");
+        Assert.Equal(RunStatus.Waiting, View(f).Status);
+        f.Complete(f.Reserve(T, new AttemptCause.Retry(first.Attempt.Id, f.Op())), report: "T again.\n", supersedes: old.Id);
+        var stale = View(f);
+        Assert.Equal(TaskState.Done, stale.Tasks[T].State);
+        Assert.Equal(TaskState.Stale, stale.Tasks[U].State);
+        Assert.Equal(f.Read().CurrentResults[U].Id, stale.Tasks[U].Result);
+        Assert.Equal(RunStatus.NeedsAttention, stale.Status);
+    }
+
+    [Fact]
+    public void A_newer_attempt_outranks_an_older_result()
+    {
+        using var f = new RunFixtures(Connect(FixtureWorkflow(Task(), Task(U)), T, U));
+        f.Approve();
+        var first = f.Reserve(T);
+        var old = f.Complete(first, report: "T ready.\n");
+        var retry = f.Reserve(T, new AttemptCause.Retry(first.Attempt.Id, f.Op()));
+        var reserved = View(f);
+        Assert.Equal((TaskState.Ready, retry.Attempt.Id, old.Id), (reserved.Tasks[T].State, reserved.Tasks[T].Attempt, reserved.Tasks[T].Result));
+        Assert.Equal(TaskState.Pending, reserved.Tasks[U].State);
+
+        f.Claim(retry);
+        var claimed = View(f);
+        Assert.Equal(TaskState.Uncertain, claimed.Tasks[T].State);
+        Assert.Equal([T], claimed.Tasks[U].HeldBy.ToArray());
+
+        var checkpoint = f.WriteLog(retry, TerminalAttemptOutcome.Failed);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), retry.Attempt.Id, TerminalAttemptOutcome.Failed, checkpoint));
+        Assert.Equal(TaskState.Failed, View(f).Tasks[T].State);
+    }
+
+    [Fact]
     public void This_window_s_holds_and_work_come_before_the_journal()
     {
         using var f = new RunFixtures(Graph());

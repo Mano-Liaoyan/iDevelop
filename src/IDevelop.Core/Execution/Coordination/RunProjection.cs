@@ -97,11 +97,20 @@ internal static class RunProjection
             return new(task, unresolved.Transient ? TaskState.Settling : TaskState.Uncertain)
             { Attempt = attempt, Unresolved = unresolved.Reason, Refusal = unresolved.Rejection };
         }
-        var block = Blocks(record, task, attempt, result).FirstOrDefault();
-        if (result is not null)
+        // An attempt reserved after the current result was accepted, such as a retry or a fix, decides the task's state.
+        var current = result is not null && !Replaced(record, result, attempt) ? result : null;
+        var block = Blocks(record, task, attempt, current).FirstOrDefault();
+        if (current is not null)
         {
-            return new(task, block is null ? TaskState.Done : TaskState.Blocked) { Attempt = attempt, Result = result.Id, Block = block };
+            var state = block is not null ? TaskState.Blocked : record.StaleResults.Contains(current.Id) ? TaskState.Stale : TaskState.Done;
+            return new(task, state) { Attempt = attempt, Result = current.Id, Block = block };
         }
+        return Attempted(record, task, attempt, log, hold, block) is { } view ? view with { Result = result?.Id } : null;
+    }
+
+    private static TaskView? Attempted(RunRecord record, TaskId task, AttemptId? attempt, Func<RunAttempt, AttemptRecord?> log, TaskHold? hold,
+        MaterializationBlock? block)
+    {
         switch (hold)
         {
             case TaskHold.Blocked blocked: return new(task, TaskState.Blocked) { Attempt = attempt, Block = blocked.Block };
@@ -122,6 +131,15 @@ internal static class RunProjection
         return Rests(resting) ? new(task, TaskState.Waiting) { Attempt = id, Status = resting!.Status } : new(task, TaskState.Settling) { Attempt = id };
     }
 
+    /// <summary>Whether <paramref name="attempt"/> was reserved after <paramref name="result"/> was accepted, without publishing it.</summary>
+    private static bool Replaced(RunRecord record, ResultRecord result, AttemptId? attempt)
+    {
+        if (attempt is not { } id || result.Origin is ResultOrigin.Executed executed && executed.Attempt == id) return false;
+        long Sequence(Func<RunEvent, bool> match) => record.Receipts.Values.Where(entry => match(entry.Event)).Select(entry => entry.Sequence).DefaultIfEmpty(0).Max();
+        return Sequence(e => e is RunEvent.Reserved reserved && reserved.Attempt.Id == id) >
+            Sequence(e => e is RunEvent.ResultAccepted accepted && accepted.Result.Id == result.Id);
+    }
+
     private static RunStatus Status(RunPhase phase, bool controlled, bool resumed, ImmutableSortedDictionary<TaskId, TaskView> tasks,
         IReadOnlyDictionary<TaskId, TaskHold> holds)
     {
@@ -140,7 +158,8 @@ internal static class RunProjection
             holds.Values.Any(hold => hold.Retried) || states.All(state => state == TaskState.Done))
             return RunStatus.Running;
         if (states.Contains(TaskState.Waiting) &&
-            !states.Any(state => state is TaskState.Failed or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or TaskState.Unsupported or TaskState.SentBack))
+            !states.Any(state => state is TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or
+                TaskState.Unsupported or TaskState.SentBack))
             return RunStatus.Waiting;
         return RunStatus.NeedsAttention;
     }

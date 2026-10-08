@@ -20,7 +20,7 @@ internal sealed partial class WorkflowRunCoordinator
             case RunPhase.Approved when _resumed:
                 Reconcile(record, view);
                 RequestGates(record, view);
-                Dispatch(view);
+                Dispatch(record, view);
                 record = Complete(record, view);
                 break;
             case RunPhase.StopRequested:
@@ -41,17 +41,30 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>Starts the first ready task, in task order, while no client root of the run is starting or running.</summary>
-    private void Dispatch(RunView view)
+    private void Dispatch(RunRecord record, RunView view)
     {
         if (!Slotted.IsEmpty) return;
         var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task));
         if (next is null) return;
         var task = next.Task;
-        var operation = RunOperations.Initial(Address.Run, task);
+        // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
+        var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
+        var operation = RunOperations.First(Address.Run, task, cause);
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, new AttemptCause.Initial())),
-            start => Started(task, start), error => Faulted(task, error));
+        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause)),
+            start => Started(task, start), error =>
+            {
+                _live.Remove(task);
+                _problem = error.Message;
+                HoldStart(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
+            });
+    }
+
+    /// <summary>A refused or blocked start holds its task only while the run goes on. Once it stops, the stop closes the attempt.</summary>
+    private void HoldStart(TaskId task, TaskHold hold)
+    {
+        if (!_stopping) Hold(task, hold);
     }
 
     private void Started(TaskId task, TurnStart start)
@@ -76,12 +89,12 @@ internal sealed partial class WorkflowRunCoordinator
                 break;
             case TurnStart.Blocked blocked:
                 _live.Remove(task);
-                Hold(task, new TaskHold.Blocked(blocked.Block));
+                HoldStart(task, new TaskHold.Blocked(blocked.Block));
                 break;
             case TurnStart.Refused refused:
                 _live.Remove(task);
                 if (refused.Reason.Problem != RunProblem.RunStopped)
-                    Hold(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem)));
+                    HoldStart(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem)));
                 break;
         }
     }

@@ -15,13 +15,27 @@ internal static class RunOperations
     public static OperationId Initial(RunId run, TaskId task) => OperationIds.Derive(Root(run), "initial/" + task.Value.ToString("D"));
 
     /// <summary>
-    /// The operation that started <paramref name="launch"/>. The coordinator starts only initial turns; a later turn's
-    /// operation is the one a continuation must use, so every window derives the same one.
+    /// The first turn of an attempt of <paramref name="task"/> with <paramref name="cause"/>. A retry or a continuation
+    /// derives from the person's confirmation, and a review fix from its review, round, and reviewer attempt, so whoever
+    /// reserves such an attempt and every later window resume it under the same operation.
     /// </summary>
-    public static OperationId Turn(RunRecord record, LaunchKey launch) =>
-        launch.Turn == 1 && record.Attempts[launch.Attempt].Cause is AttemptCause.Initial
-            ? Initial(record.Id, record.Attempts[launch.Attempt].Task)
-            : OperationIds.Derive(Root(record.Id), $"turn/{launch.Attempt.Value:D}/{launch.Turn}");
+    public static OperationId First(RunId run, TaskId task, AttemptCause cause) => cause switch
+    {
+        AttemptCause.Initial => Initial(run, task),
+        AttemptCause.Retry retry => OperationIds.Derive(retry.Confirmation, $"retry/{retry.Previous.Value:D}"),
+        AttemptCause.Continue continued => OperationIds.Derive(continued.Confirmation, $"continue/{continued.Previous.Value:D}"),
+        AttemptCause.ReviewFix fix => OperationIds.Derive(Root(run),
+            $"fix/{fix.Link.Review.Value:D}/{fix.Link.Attempt.Value:D}/{fix.Link.Round}"),
+        _ => throw new InvalidOperationException(),
+    };
+
+    /// <summary>
+    /// The operation that started <paramref name="launch"/>: its attempt's <see cref="First"/> for turn 1, and for a later
+    /// turn the one a continuation must use, so every window derives the same one.
+    /// </summary>
+    public static OperationId Turn(RunRecord record, LaunchKey launch) => launch.Turn == 1
+        ? First(record.Id, record.Attempts[launch.Attempt].Task, record.Attempts[launch.Attempt].Cause)
+        : OperationIds.Derive(Root(record.Id), $"turn/{launch.Attempt.Value:D}/{launch.Turn}");
 
     public static OperationId CloseAttempt(OperationId turn) => OperationIds.Derive(turn, "coordinator/close-attempt");
 

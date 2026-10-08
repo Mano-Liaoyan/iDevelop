@@ -56,6 +56,9 @@ internal enum TaskState
     /// <summary>It has a current accepted result.</summary>
     Done,
 
+    /// <summary>Its current result was built from a result that has since been superseded. It does not hand on.</summary>
+    Stale,
+
     /// <summary>Its attempt ended without a result: failed, cancelled, interrupted, or closed by recovery.</summary>
     Failed,
 
