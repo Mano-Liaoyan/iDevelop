@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <!-- A deadlocked test aborts its host after 5 minutes, names the hung test, and leaves a mini dump instead of hanging the run. -->
+    <VSTestBlameHang>true</VSTestBlameHang>
+    <VSTestBlameHangTimeout>5m</VSTestBlameHangTimeout>
+    <VSTestBlameHangDumpType>mini</VSTestBlameHangDumpType>
+  </PropertyGroup>
+</Project>
