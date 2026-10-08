@@ -19,7 +19,7 @@ public sealed partial class ProjectRuns
     internal Func<ChildProcess, bool>? StopSeam { get; set; }
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
-    private Materializer TurnMaterializer(RunStore store) => Materializer.Open(_projectFolder, store, null,
+    private Materializer TurnMaterializer(RunStore store) => MergeJoins.Open(_projectFolder, store,
         MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point));
 
     internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default)
