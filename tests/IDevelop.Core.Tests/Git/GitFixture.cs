@@ -6,13 +6,15 @@ namespace IDevelop.Core.Tests.Git;
 
 internal sealed class GitFixture : IDisposable
 {
+    private static readonly Lazy<(GitFixture Repository, CommitId Commit)> DiamondTemplate =
+        new(CreateDiamondTemplate, LazyThreadSafetyMode.ExecutionAndPublication);
     private readonly TempFolder _temp = new();
 
     public GitFixture(bool initialize = true)
     {
         Folder = _temp.Create("r");
         var config = Path.Combine(_temp.Create("config"), "empty");
-        File.WriteAllBytes(config, []);
+        File.WriteAllText(config, "[maintenance]\n\tauto = false\n");
         Environment = new Dictionary<string, string>
         {
             ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = config,
@@ -40,6 +42,40 @@ internal sealed class GitFixture : IDisposable
     }
 
     public CommitId Diamond()
+    {
+        var template = DiamondTemplate.Value;
+        var gitDirectory = PathOf(".git");
+        Directory.Delete(gitDirectory, recursive: true);
+        CopyDirectory(template.Repository.PathOf(".git"), gitDirectory);
+        Write("root.txt", "root\n");
+        Write("plan.txt", "approved\n");
+        Write("a.txt", "A\n");
+        Git("update-index", "--refresh", "-q");
+        return template.Commit;
+    }
+
+    private static (GitFixture Repository, CommitId Commit) CreateDiamondTemplate()
+    {
+        var repository = new GitFixture();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { repository.Dispose(); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        };
+        return (repository, repository.BuildDiamond());
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.EnumerateFiles(source))
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+        foreach (var directory in Directory.EnumerateDirectories(source))
+            CopyDirectory(directory, Path.Combine(target, Path.GetFileName(directory)));
+    }
+
+    private CommitId BuildDiamond()
     {
         Write("root.txt", "root\n");
         Assert.Equal("7c64b20d5be53b5c1a291863ef191aa28f6f4d51", Commit("root").Hex);
