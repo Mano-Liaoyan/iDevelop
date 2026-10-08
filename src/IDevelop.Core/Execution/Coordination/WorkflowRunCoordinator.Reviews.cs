@@ -173,7 +173,7 @@ internal sealed partial class WorkflowRunCoordinator
                 intent = _reviewIntents.GetOrAdd(operation, new TurnIntent.Next(operation, next, turn.Prompt) { Report = turn.Report });
             }
             return _runs.StartTurn(_permit!, intent);
-        }, start => Started(task, start), error => StartFaulted(task, error));
+        }, start => Started(task, start, record.Revision.Id), error => StartFaulted(task, error));
     }
 
     /// <summary>A new attempt of the subject for the review's latest round, as <see cref="AttemptCause.ReviewFix"/>.</summary>
@@ -189,7 +189,7 @@ internal sealed partial class WorkflowRunCoordinator
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
             var operation = RunOperations.First(Address.Run, subject, cause);
             return _runs.StartTurn(_permit!, _reviewIntents.GetOrAdd(operation, new TurnIntent.First(operation, subject, cause, fix.Prompt)));
-        }, start => Started(subject, start), error => StartFaulted(subject, error));
+        }, start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
     /// <summary>Resumes a reserved fix of the review with its own cause and operation, and its prompt rebuilt from them.</summary>
@@ -201,7 +201,7 @@ internal sealed partial class WorkflowRunCoordinator
         _runs.Probe?.Invoke("coordinator.fix");
         Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
                 RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project))),
-            start => Started(subject, start), error => StartFaulted(subject, error));
+            start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
     private void StartFaulted(TaskId task, Exception error)
