@@ -161,4 +161,40 @@ public sealed class CapturePinTests
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(record.RunKey!))));
         Assert.Equal("writer\n", f.Git.Git("show", candidate.Hex + ":result.txt"));
     }
+
+    [Fact]
+    public async Task An_abandoned_run_releases_pins_only_after_its_attempts_close_its_blocks_resolve_and_its_salvage_is_retained()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        var log = f.ObserveAndLog(writer);
+        Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(
+            f.Lease(T), f.Op(), writer.Execution.Launch, log)).Disposition);
+        var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
+        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
+        Assert.Equal(RunPhase.Abandoned, f.Read().Phase);
+        Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
+        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
+            TerminalAttemptOutcome.Succeeded, log));
+        var blocked = f.Op();
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, blocked, new RunEvent.Blocked(new(blocked, T,
+            writer.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable, writer.Execution.Inputs, [], "Input became unavailable."))));
+        Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(blocked, "Rechecked.")));
+        var salvage = f.Op();
+        Assert.Throws<PublicationTests.Crash>(() => f.Materializer(probe: point =>
+        {
+            if (point == "journal.salvage-plan.after") throw new PublicationTests.Crash();
+        }).Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
+        Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
+        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
+        var operation = f.Op();
+        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        Assert.Equal(0, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+    }
 }

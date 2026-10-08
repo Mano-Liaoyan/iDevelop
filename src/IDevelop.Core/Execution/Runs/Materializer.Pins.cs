@@ -22,7 +22,11 @@ internal sealed partial class Materializer
         try
         {
             var record = Read(permit.Workflow, permit.Run);
-            if (!record.Receipts.Values.Any(entry => entry.Event is RunEvent.Settled))
+            var recoveredAbandonment = record.Phase == RunPhase.Abandoned &&
+                record.Attempts.Keys.All(record.Closures.ContainsKey) &&
+                record.Plans.Where(pair => pair.Value is MaterializationPlan.Salvage).All(pair => record.Salvages.ContainsKey(pair.Key)) &&
+                record.Blocks.Values.All(block => block.Resolved);
+            if (!record.Receipts.Values.Any(entry => entry.Event is RunEvent.Settled) && !recoveredAbandonment)
                 return new PinRelease.Rejected(new(RunProblem.NotSettled));
             if (record.RunKey is null) return new PinRelease.Released(0);
             var repository = OpenRepository();

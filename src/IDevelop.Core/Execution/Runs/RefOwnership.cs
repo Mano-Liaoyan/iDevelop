@@ -2,12 +2,12 @@ namespace IDevelop.Execution;
 
 internal static class RefOwnership
 {
-    public static bool Accepts(RunRecord record, GitRepository repository, string name, CommitId? live, RefChange? change = null, long? sequence = null)
+    public static bool Accepts(RunRecord record, GitRepository repository, string name, CommitId? live, RefChange? change = null)
     {
         CommitId? expected = null;
         CommitId? target = null;
         var lease = false;
-        foreach (var entry in record.Receipts.Values.Where(entry => sequence is null || entry.Sequence <= sequence).OrderBy(entry => entry.Sequence))
+        foreach (var entry in record.Receipts.Values.OrderBy(entry => entry.Sequence))
         {
             switch (entry.Event)
             {

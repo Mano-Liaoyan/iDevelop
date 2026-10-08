@@ -124,6 +124,8 @@ internal sealed partial class Materializer
                     VerifyCheckout(repository, prepared.Location, keepChanges: true, Read(workflow, run));
                     return repository.AlignIndex(checkout, plan.IndexBefore, plan.Recipe.Tree);
                 });
+                if (aligned is IndexAlignment.Unexpected or IndexAlignment.Failed)
+                    VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
                 if (aligned is IndexAlignment.Unexpected)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed before publication alignment.");
                 if (aligned is IndexAlignment.Failed failed)
@@ -151,6 +153,9 @@ internal sealed partial class Materializer
                 if (PublicationObserved(current, planId, move)) return;
                 var compareIndex = !current.GitIntents.Values.Any(intent => intent.Plan == planId && intent.Mutation is GitMutation.AlignIndex);
                 VerifyPublicationBaseline(repository, checkout, plan.Recipe.Tree, plan.IndexBefore, compareIndex, permit, operation, ref evidence);
+                if (PublicationObserved(current, planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree)) &&
+                    (repository.ReadIndexTree(checkout) is not GitRead<TreeId>.Read index || index.Value != plan.Recipe.Tree))
+                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
             }
         }
         catch (Refusal refused) { return new Publication.Rejected(refused.Reason); }

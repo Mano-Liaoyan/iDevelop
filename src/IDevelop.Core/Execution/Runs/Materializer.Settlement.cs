@@ -49,9 +49,18 @@ internal sealed partial class Materializer
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
             var ownership = RefOwnership.Accepts(record, repository, location.Owner.Branch, tip)
                 ? TipOwnership.Explained : TipOwnership.Unexplained;
-            Pin(repository, RunLayout.RootPin(record.RunKey!, record.TaskKeys[location.Owner.Task], launch), tip);
+            var pin = RunLayout.RootPin(record.RunKey!, record.TaskKeys[location.Owner.Task], launch);
+            Pin(repository, pin, tip);
             var observation = new RunEvent.RootExitObserved(launch, exit, _clock.GetUtcNow(), tip, head, ownership);
-            var decision = Journal("root-exit", () => _store.Record(permit, OperationIds.Derive(operation, "root-exit"), observation));
+            RunDecision decision;
+            try { decision = Journal("root-exit", () => _store.Record(permit, OperationIds.Derive(operation, "root-exit"), observation)); }
+            catch (Refusal)
+            {
+                if (Read(permit.Workflow, permit.Run).RootExits.ContainsKey(launch)) throw;
+                var deleted = Mutate("release-root-pin", () => repository.DeleteRef(pin, tip));
+                if (deleted.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, deleted.Stderr);
+                throw;
+            }
             return new RootObservation.Observed((RunEvent.RootExitObserved)DecisionEvent(decision));
         }
         catch (Refusal refused) { detail = refused.Reason.Problem.ToString(); }
@@ -185,7 +194,7 @@ internal sealed partial class Materializer
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(operation, "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
-        var unexplained = UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out var sharedRefs);
+        var unexplained = UnexplainedPublicationRefs(record, repository, prepared, operation, ref evidence, out _, out _, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
         var refs = new EvidenceFile(RunStorage.CapturePath(id, ordinal, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
         RunStorage.Publish(storage.Folder, refs.RelativePath, refBytes, refs.Content, refs.ByteLength);

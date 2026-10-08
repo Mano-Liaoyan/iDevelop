@@ -943,4 +943,39 @@ public sealed class SalvageTests
         Assert.Equal("modified\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
     }
+
+    [Fact]
+    public async Task Changed_index_lock_bytes_after_recheck_are_retained_as_salvage_drift_evidence()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        await f.Close(writer);
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout)) + ".lock";
+        var operation = f.Op();
+        File.WriteAllText(lockPath, "first\n");
+        var first = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, first.Problem);
+        Assert.Equal("first\n", LockEvidence(first));
+        var key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked.")));
+        File.WriteAllText(lockPath, "second\n");
+        var second = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, second.Problem);
+        Assert.Equal("second\n", LockEvidence(second));
+        Assert.Equal(new[] { (MaterializationProblem.DirtyWorktree, true), (MaterializationProblem.DirtyWorktree, false) },
+            f.Read().Blocks.OrderBy(pair => f.Read().Receipts[pair.Key].Sequence).Select(pair => (pair.Value.Block.Problem, pair.Value.Resolved)));
+        File.Delete(lockPath);
+        key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked second lock.")));
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal("done\n", f.Git.Git("show", retained.Commit.Hex + ":result.txt"));
+
+        string LockEvidence(MaterializationBlock block)
+        {
+            var file = Assert.Single(block.Evidence);
+            return System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
+                file.RelativePath, file.Content, file.ByteLength));
+        }
+    }
 }

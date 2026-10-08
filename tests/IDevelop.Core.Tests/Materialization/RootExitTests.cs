@@ -239,4 +239,61 @@ public sealed class RootExitTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
         Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n", f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
     }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_late_refused_root_observation_leaves_no_pin_after_settlement_and_release()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        await f.Close(sibling);
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, writer);
+        var attempt = f.Read().Attempts[writer.Execution.Launch.Attempt];
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, attempt.Id);
+        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
+            At, attempt.Id, T, "B", Task().Execution!, writer.Execution.Prompt, "codex", [])
+        { RunBinding = new(W, f.RunId, attempt.Revision, writer.Execution.Inputs), Conversation = IDevelop.Workflows.ConversationMode.Autonomous }))
+        {
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.SessionStarted("fixture")));
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.Failed("Failed.")));
+            log.Append(new AttemptEvent.Exited(At, 1, ""));
+        }
+        var checkpoint = Checkpoint(folder);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), writer.Execution.Launch, checkpoint));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Failed, checkpoint));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed));
+        var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
+        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RootObservation.Rejected>(f.Materializer().ObserveRootExit(
+            f.Lease(T), f.Op(), writer.Execution.Launch, new RootExit.Exited(1))).Reason.Problem);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var open = Assert.IsType<Preparation.Ready>(await control.Prepare(T));
+        Claim(control, open);
+        Assert.Equal(TipOwnership.Explained, Assert.IsType<RootObservation.Observed>(control.Materializer().ObserveRootExit(
+            control.Lease(T), control.Op(), open.Execution.Launch, new RootExit.Exited(0))).Observation.Ownership);
+        Assert.Equal(new[] { "refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root" },
+            GitFixture.Read(control.Git.Open().RefSnapshot(RunLayout.PinPrefix(control.Read().RunKey!))).Keys);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_root_observation_refused_because_another_operation_recorded_it_keeps_the_pin()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        var tip = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))!.Value;
+        var head = GitFixture.Read(f.Git.Open().SymbolicHead(ready.Checkout));
+        var outcome = f.Materializer(probe: point =>
+        {
+            if (point != "journal.root-exit.before" || f.Read().RootExits.ContainsKey(launch)) return;
+            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(launch, new RootExit.Exited(0),
+                At, tip, head, TipOwnership.Explained)));
+        }).ObserveRootExit(f.Lease(T), f.Op(), launch, new RootExit.Exited(0));
+        Assert.Equal(launch, Assert.IsType<RootObservation.Fenced>(outcome).Launch);
+        Assert.Equal(new[] { (RunLayout.RootPin(f.Read().RunKey!, f.Read().TaskKeys[T], launch), tip) },
+            GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))).Select(pair => (pair.Key, pair.Value)));
+    }
 }

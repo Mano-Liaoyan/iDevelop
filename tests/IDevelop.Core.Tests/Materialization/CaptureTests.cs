@@ -718,4 +718,148 @@ public sealed class CaptureTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(observation)));
 
     private sealed class CaptureCrash : Exception;
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_sibling_lease_ending_before_or_inside_capture_does_not_explain_a_later_foreign_commit()
+    {
+        foreach (var when in new[] { "inside", "before" })
+        foreach (var foreign in new[] { true, false })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+            var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+            RootExitTests.Claim(f, sibling);
+            var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            f.Git.Write("result.txt", "done\n", writer.Checkout);
+            var log = f.ObserveAndLog(writer);
+            void EndLease()
+            {
+                Assert.Equal(TipOwnership.Explained, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+                    f.Lease(U), f.Op(), sibling.Execution.Launch, new RootExit.Exited(0))).Observation.Ownership);
+                if (!foreign) return;
+                f.Git.Write("foreign.txt", "foreign\n", sibling.Checkout);
+                Assert.Equal(0, f.Git.Run(sibling.Checkout, "add", "foreign.txt").ExitCode);
+                Assert.Equal(0, f.Git.Run(sibling.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "foreign").ExitCode);
+            }
+            if (when == "before") EndLease();
+            var fired = false;
+            var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+            {
+                if (when != "inside" || point != "git.capture-1.before" || fired) return;
+                fired = true;
+                EndLease();
+            }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+            var observations = f.Read().Captures[settled.Capture];
+            Assert.Equal(2, observations.Count);
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
+                TerminalAttemptOutcome.Succeeded, log));
+            if (foreign)
+            {
+                Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, observations[0].UnexplainedRefs);
+                var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
+                Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                    f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem);
+                Assert.Empty(f.Read().Results);
+            }
+            else
+            {
+                Assert.Empty(observations[0].UnexplainedRefs);
+                Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+                Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+                    writer.Execution.Launch.Attempt)).Result.Task);
+                Assert.Single(f.Read().Results);
+            }
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_foreign_rewind_to_a_siblings_obsolete_journaled_tip_diverges()
+    {
+        foreach (var rewind in new[] { true, false })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+            var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+            f.Git.Write("u.txt", "U\n", sibling.Checkout);
+            await f.Close(sibling);
+            var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            f.Git.Write("result.txt", "done\n", writer.Checkout);
+            var log = f.ObserveAndLog(writer);
+            var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+            {
+                if (point != "git.capture-2.before") return;
+                Assert.Equal(U, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(),
+                    sibling.Execution.Launch.Attempt)).Result.Task);
+                if (rewind)
+                    Assert.Equal(0, f.Git.Run(f.Git.Folder, "update-ref", "refs/heads/idp/93f23689/task/c67f2fc3",
+                        "adfe40b30c176fb407933286f51d15ea9b54cdc3").ExitCode);
+            }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
+                TerminalAttemptOutcome.Succeeded, log));
+            if (rewind)
+            {
+                var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
+                Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
+                Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, f.Read().Captures[settled.Capture][1].UnexplainedRefs);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                    f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem);
+                Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
+            }
+            else
+            {
+                Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+                Assert.Empty(f.Read().Captures[settled.Capture][1].UnexplainedRefs);
+                Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+                    writer.Execution.Launch.Attempt)).Result.Task);
+                Assert.Equal(1, f.Read().Results.Count(result => result.Task == T));
+            }
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Shared_ref_snapshots_retry_once_or_fail_after_three_journal_changes_with_evidence()
+    {
+        foreach (var changing in new[] { true, false })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+            var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+            var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            var log = f.ObserveAndLog(writer);
+            var snapshots = 0;
+            var firstSnapshots = 0;
+            var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+            {
+                if (point == "journal.capture-1.after") firstSnapshots = snapshots;
+                if (point != "refs.snapshot.after") return;
+                snapshots++;
+                if (!changing && snapshots != 1) return;
+                var operation = f.Op();
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(new(
+                    operation, U, sibling.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable,
+                    sibling.Execution.Inputs, [], "Sibling input became unavailable."))));
+            }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+            if (changing)
+            {
+                var failed = Assert.IsType<CaptureDisposition.Failed>(settled.Disposition);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, failed.Problem);
+                Assert.Equal("The journal changed during every shared-ref snapshot.", failed.Detail);
+                Assert.Equal(3, snapshots);
+                Assert.Empty(f.Read().Captures.GetValueOrDefault(settled.Capture, []));
+                Assert.Equal(2, failed.Evidence.Length);
+                var after = Assert.Single(failed.Evidence, file => file.RelativePath.EndsWith("/refs-after.json", StringComparison.Ordinal));
+                var storage = new RunStorage(f.Git.Folder, W, f.RunId);
+                var refs = System.Text.Json.JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
+                    RunStorage.Read(storage.Folder, after.RelativePath, after.Content, after.ByteLength), RunJournal.Options)!;
+                Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", refs["refs/heads/idp/93f23689/task/c67f2fc3"].Hex);
+            }
+            else
+            {
+                Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+                Assert.Equal(2, firstSnapshots);
+                Assert.Equal(3, snapshots);
+                Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+            }
+        }
+    }
 }

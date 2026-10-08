@@ -920,4 +920,102 @@ public sealed class PublicationTests
     }
 
     internal sealed class Crash : Exception;
+
+    [Fact]
+    public async Task Changed_index_lock_bytes_after_recheck_remain_drift_until_the_second_block_is_rechecked()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        await f.Close(writer);
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout)) + ".lock";
+        File.WriteAllText(lockPath, "first\n");
+        var operation = f.Op();
+        Publication Run() => f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt);
+        var first = Assert.IsType<Publication.Blocked>(Run()).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, first.Problem);
+        Assert.Equal("first\n", LockEvidence(first));
+        var key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked.")));
+        File.WriteAllText(lockPath, "second\n");
+        var second = Assert.IsType<Publication.Blocked>(Run()).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, second.Problem);
+        Assert.Equal("second\n", LockEvidence(second));
+        File.Delete(lockPath);
+        var third = Assert.IsType<Publication.Blocked>(Run()).Block;
+        Assert.Equal(second with { Evidence = [] }, third with { Evidence = [] });
+        Assert.Equal(second.Evidence.Select(file => (file.RelativePath, file.Content.Sha256)), third.Evidence.Select(file => (file.RelativePath, file.Content.Sha256)));
+        Assert.Equal(new[] { (MaterializationProblem.DirtyWorktree, true), (MaterializationProblem.DirtyWorktree, false) },
+            f.Read().Blocks.OrderBy(pair => f.Read().Receipts[pair.Key].Sequence).Select(pair => (pair.Value.Block.Problem, pair.Value.Resolved)));
+        Assert.Empty(f.Read().Results);
+        key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked second lock.")));
+        Assert.Equal(T, Assert.IsType<Publication.Accepted>(Run()).Result.Task);
+        Assert.Single(f.Read().Results);
+
+        string LockEvidence(MaterializationBlock block)
+        {
+            var file = Assert.Single(block.Evidence);
+            return System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
+                file.RelativePath, file.Content, file.ByteLength));
+        }
+    }
+
+    [Fact]
+    public async Task An_index_lock_appearing_at_alignment_blocks_as_drift_with_bytes_until_recheck()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        await f.Close(writer);
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout)) + ".lock";
+        var operation = f.Op();
+        var block = Assert.IsType<Publication.Blocked>(f.Materializer(probe: point =>
+        {
+            if (point == "git.align-index.before") File.WriteAllText(lockPath, "agent\n");
+        }).Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, block.Problem);
+        var file = Assert.Single(block.Evidence);
+        Assert.Equal("agent\n", System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
+            file.RelativePath, file.Content, file.ByteLength)));
+        File.Delete(lockPath);
+        var repeated = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        Assert.Equal(block with { Evidence = [] }, repeated with { Evidence = [] });
+        Assert.Equal(block.Evidence.Select(file => (file.RelativePath, file.Content.Sha256)), repeated.Evidence.Select(file => (file.RelativePath, file.Content.Sha256)));
+        var state = Assert.Single(f.Read().Blocks);
+        Assert.Equal((MaterializationProblem.DirtyWorktree, false), (state.Value.Block.Problem, state.Value.Resolved));
+        Assert.Empty(f.Read().Results);
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(state.Key, "Rechecked.")));
+        Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Result.Task);
+        Assert.Single(f.Read().Results);
+    }
+
+    [Fact]
+    public async Task A_staged_only_change_after_alignment_blocks_before_the_result_ref_moves()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        await f.Close(writer);
+        var operation = f.Op();
+        var block = Assert.IsType<Publication.Blocked>(f.Materializer(probe: point =>
+        {
+            if (point != "journal.index-observed.after") return;
+            f.Git.Write("staged.txt", "staged\n", writer.Checkout);
+            Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "staged.txt").ExitCode);
+            File.Delete(Path.Combine(writer.Checkout, "staged.txt"));
+        }).Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, block.Problem);
+        const string reference = "refs/idp/93f23689/result/90d5b0a2/00000000-0000-0000-0000-000000000102";
+        Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(reference)));
+        Assert.Equal("Writer files or index changed after the turn-end capture.", block.Detail);
+        Assert.Empty(f.Read().Results);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "HEAD", "--", "staged.txt").ExitCode);
+        var key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked.")));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(T, accepted.Result.Task);
+        Assert.Equal("e07fb83f0b331a370aed095309ed5ded0e916a16", GitFixture.Read(f.Git.Open().ReadRef(reference))?.Hex);
+        Assert.Single(f.Read().Results);
+    }
 }
