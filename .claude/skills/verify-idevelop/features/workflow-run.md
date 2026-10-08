@@ -12,6 +12,7 @@ A user runs the shown workflow from `Run Workflow` beside `Generate`, without se
 - `run-conversation` opens a run task's conversation from its card's attention glyph or `Open conversation`, and a reply goes through the run.
 - `run-gate` shows an Approval node's request in the inspector's `Approval` section, with `Approve` and `Send back`.
 - `run-stop` records `Stop Workflow`, stops the running task, and starts no other.
+- `run-conversation-strip` repeats the run's status, `Resume`, and `Stop Workflow` in the conversation view while it covers the canvas.
 - `run-retained` keeps a run going while another project is shown, with `ProjectRunning`, `WorkflowRunning`, `ProjectWaiting`, and `WorkflowWaiting`.
 - `run-leave` asks before closing the window during an active run, and `Stop and leave` records the stop.
 
