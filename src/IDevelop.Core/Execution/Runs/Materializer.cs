@@ -218,8 +218,13 @@ internal sealed partial class Materializer
     private static T Value<T>(GitRead<T> read) => read switch
     {
         GitRead<T>.Read success => success.Value,
-        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail,
-            failed.Refs.IsEmpty ? new BlockScope.Repository() : new BlockScope.Refs(failed.Refs)),
+        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail, failed switch
+        {
+            { Refs.IsEmpty: false } => new BlockScope.Refs(failed.Refs),
+            // Only a task checkout's index that hides entries fails as DirtyWorktree, and Restore and baselines refuse one.
+            { Problem: MaterializationProblem.DirtyWorktree } => new BlockScope.Repository(),
+            _ => new BlockScope.Operation(),
+        }),
         _ => throw new InvalidOperationException(),
     };
 

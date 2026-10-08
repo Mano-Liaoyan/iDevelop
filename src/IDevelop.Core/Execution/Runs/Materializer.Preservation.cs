@@ -233,7 +233,7 @@ internal sealed partial class Materializer
         {
             GitAncestry.Yes => [head.Value],
             GitAncestry.No => [head.Value, branch.Value],
-            GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Repository()),
+            GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Operation()),
             _ => throw new InvalidOperationException(),
         };
     }

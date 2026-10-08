@@ -173,7 +173,7 @@ internal sealed partial class Materializer
             case GitAncestry.No:
                 throw Fault(MaterializationProblem.UncertainOwnership, $"The writer branch tip {tip.Hex} does not contain the attempt base {attemptBase.Hex}.", new BlockScope.Checkout([], Branch: true));
             case GitAncestry.Failed failed:
-                throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Repository());
+                throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Operation());
         }
     }
 
