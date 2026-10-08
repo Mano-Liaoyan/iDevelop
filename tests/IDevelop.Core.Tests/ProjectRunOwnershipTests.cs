@@ -28,7 +28,7 @@ public sealed class ProjectRunOwnershipTests : IDisposable
     {
         var task = Task(T, model: "gpt-6-sol") with { Conversation = ConversationMode.Chat };
         var unrelated = Task(U, model: "gpt-6-sol");
-        using var f = new RunFixtures(FixtureWorkflow(task, unrelated));
+        using var f = new RunFixtures(Edit(FixtureWorkflow(task), new WorkflowEdit.Rename("Delivery")));
         f.Approve();
         var reserved = f.Reserve();
         f.Claim(reserved);
@@ -39,10 +39,10 @@ public sealed class ProjectRunOwnershipTests : IDisposable
         var sequence = f.Read().Sequence;
         await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());
 
-        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned()), runs.Start(task));
-        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.RunOwned())),
+        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned("Delivery")), runs.Start(task));
+        Assert.Equal(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.RunOwned("Delivery"))),
             await runs.SendAsync(task, "Continue.", stopTurn: false));
-        Assert.Equal(new TerminalResult.Refused(new TerminalProblem.Blocked(new StartProblem.RunOwned())),
+        Assert.Equal(new TerminalResult.Refused(new TerminalProblem.Blocked(new StartProblem.RunOwned("Delivery"))),
             runs.OpenInTerminal(T));
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", T.ToString())));
         Assert.Empty(runs.Active);
@@ -61,7 +61,7 @@ public sealed class ProjectRunOwnershipTests : IDisposable
     {
         var task = Task(T, model: "gpt-6-sol");
         var unrelated = Task(U, model: "gpt-6-sol");
-        using var f = new RunFixtures(FixtureWorkflow(task, unrelated));
+        using var f = new RunFixtures(Edit(FixtureWorkflow(task), new WorkflowEdit.Rename("Delivery")));
         f.Approve();
         var release = Path.Combine(f.Project, "release");
         await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());
@@ -73,13 +73,59 @@ public sealed class ProjectRunOwnershipTests : IDisposable
             await racer.Exit();
         }
 
-        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned()), runs.Start(task));
+        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned("Delivery")), runs.Start(task));
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", T.ToString())));
         Assert.False(File.Exists(_processEvidence));
         Assert.Equal(3, f.Read().Sequence);
         var control = await StartAndSettle(runs, unrelated);
         Assert.Equal((U, AttemptStatus.Succeeded, "Done."), (control.Task, control.Status, control.Result));
         Assert.Equal(Folders.AsCurrentFolder(f.Project), File.ReadAllText(_processEvidence));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", U.ToString())));
+        Assert.Equal(3, f.Read().Sequence);
+    }
+
+    [Fact]
+    public async AsyncTask An_approved_task_without_a_plan_or_reservation_refuses_standalone_start()
+    {
+        var task = Task(T, model: "gpt-6-sol");
+        var unrelated = Task(U, model: "gpt-6-sol");
+        using var f = new RunFixtures(Edit(FixtureWorkflow(task), new WorkflowEdit.Rename("Delivery")));
+        f.Approve();
+        await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());
+
+        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned("Delivery")), runs.Start(task));
+        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", T.ToString())));
+        Assert.False(File.Exists(_processEvidence));
+        Assert.Equal(1, f.Read().Sequence);
+        var control = await StartAndSettle(runs, unrelated);
+        Assert.Equal((U, AttemptStatus.Succeeded, "Done."), (control.Task, control.Status, control.Result));
+        Assert.Equal(Folders.AsCurrentFolder(f.Project), File.ReadAllText(_processEvidence));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", U.ToString())));
+        Assert.Equal(1, f.Read().Sequence);
+    }
+
+    [Fact]
+    public async AsyncTask An_abandoned_attempt_with_an_unresolved_claim_still_owns_its_task()
+    {
+        var task = Task(T, model: "gpt-6-sol");
+        var unrelated = Task(U, model: "gpt-6-sol");
+        using var f = new RunFixtures(Edit(FixtureWorkflow(task), new WorkflowEdit.Rename("Delivery")));
+        f.Approve();
+        f.Claim(f.Reserve());
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
+        f.ReleaseControl();
+        var sequence = f.Read().Sequence;
+        await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());
+
+        Assert.Equal(new StartResult.Refused(new StartProblem.RunOwned("Delivery")), runs.Start(task));
+        Assert.Empty(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", T.ToString())));
+        Assert.False(File.Exists(_processEvidence));
+        Assert.Equal(sequence, f.Read().Sequence);
+        var control = await StartAndSettle(runs, unrelated);
+        Assert.Equal((U, AttemptStatus.Succeeded, "Done."), (control.Task, control.Status, control.Result));
+        Assert.Equal(Folders.AsCurrentFolder(f.Project), File.ReadAllText(_processEvidence));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", U.ToString())));
+        Assert.Equal(sequence, f.Read().Sequence);
     }
 
     [Fact]
@@ -120,12 +166,32 @@ public sealed class ProjectRunOwnershipTests : IDisposable
         Assert.Equal(Folders.AsCurrentFolder(f.Project), File.ReadAllText(_processEvidence));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"schema\":3")]
+    public async AsyncTask A_journal_without_a_complete_entry_does_not_block_a_standalone_start(string contents)
+    {
+        var task = Task(T, model: "gpt-6-sol");
+        using var f = new RunFixtures(FixtureWorkflow(Task(U, model: "gpt-6-sol")));
+        f.Approve();
+        var journal = f.Journal(new(Id(20)), OtherRun);
+        File.WriteAllText(journal, contents);
+        var bytes = File.ReadAllBytes(journal);
+        await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());
+
+        var started = await StartAndSettle(runs, task);
+        Assert.Equal((T, AttemptStatus.Succeeded, "Done."), (started.Task, started.Status, started.Result));
+        Assert.Equal(Folders.AsCurrentFolder(f.Project), File.ReadAllText(_processEvidence));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(f.Project, ".idp", "attempts", T.ToString())));
+        Assert.Equal(bytes, File.ReadAllBytes(journal));
+        Assert.Equal(1, f.Read().Sequence);
+    }
+
     [Fact]
     public async AsyncTask An_unreadable_journal_refuses_with_its_storage_problem_and_releases_the_standalone_lock()
     {
         var task = Task(T, model: "gpt-6-sol");
         using var f = new RunFixtures(FixtureWorkflow(task));
-        f.Approve();
         var journal = f.Journal(new(Id(20)), OtherRun);
         File.WriteAllText(journal, "broken\n");
         await using var runs = ProjectRuns.Open(f.Project, await _fakes.DiscoverAsync());

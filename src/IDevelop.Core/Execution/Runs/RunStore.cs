@@ -45,21 +45,24 @@ internal sealed class RunStore
         }
     }
 
-    public TaskRunOwnership TaskOwnership(TaskId task)
+    public TaskRunOwnership TaskOwnership(StandaloneLease held)
     {
-        var owned = false;
+        var task = held.Task;
+        string? owner = null;
         try
         {
             if (!Directory.Exists(_runs)) return new TaskRunOwnership.Free();
-            foreach (var workflowFolder in Directory.EnumerateDirectories(_runs))
-            foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder))
+            foreach (var workflowFolder in Directory.EnumerateDirectories(_runs).Order(StringComparer.Ordinal))
+            foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder).Order(StringComparer.Ordinal))
             foreach (var journal in Directory.EnumerateFiles(runFolder, "events.jsonl"))
             {
+                if (new FileInfo(journal).Length == 0) continue;
                 var relative = Path.GetRelativePath(_project, journal);
                 if (!Guid.TryParse(Path.GetFileName(workflowFolder), out var workflow) ||
                     !Guid.TryParse(Path.GetFileName(runFolder), out var run))
                     return new TaskRunOwnership.Unreadable($"{relative}: invalid run identity.");
                 var read = ReadJournal(new(workflow), new(run), journal);
+                if (read is RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: null }) continue;
                 var record = read switch
                 {
                     RunRead.Loaded loaded => loaded.Record,
@@ -68,15 +71,19 @@ internal sealed class RunStore
                 };
                 if (record is null)
                     return new TaskRunOwnership.Unreadable($"{relative}: {((RunRead.Rejected)read).Reason.Problem}.");
-                owned |= record.Phase != RunPhase.Abandoned &&
-                    record.Attempts.Values.Any(attempt => attempt.Task == task && !record.Closures.ContainsKey(attempt.Id));
+                if (owner is null &&
+                    ((record.Phase is RunPhase.Approved or RunPhase.StopRequested && record.Revision.Snapshot.Tasks.ContainsKey(task)) ||
+                     (record.Phase != RunPhase.Abandoned &&
+                      record.Attempts.Values.Any(attempt => attempt.Task == task && !record.Closures.ContainsKey(attempt.Id))) ||
+                     record.UnresolvedClaims.Any(claim => record.Attempts[claim.Attempt].Task == task)))
+                    owner = record.Revision.Snapshot.DisplayName;
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             return new TaskRunOwnership.Unreadable(error.Message);
         }
-        return owned ? new TaskRunOwnership.Owned() : new TaskRunOwnership.Free();
+        return owner is { } name ? new TaskRunOwnership.Owned(name) : new TaskRunOwnership.Free();
     }
 
     internal string Project => _project;

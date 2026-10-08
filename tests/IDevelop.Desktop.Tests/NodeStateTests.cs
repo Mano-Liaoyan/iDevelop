@@ -81,7 +81,7 @@ public sealed class NodeStateTests
         [
             new StartProblem.Waiting("Design"), new StartProblem.RunsInWorkflow(), new StartProblem.SubjectNotDone("Build"),
             new StartProblem.InReview("Review"), new StartProblem.UnderReview("Review"), new StartProblem.ClientChecking(ClientId.Codex),
-            new StartProblem.AlreadyRunning(TestTasks.Design, "Design"), new StartProblem.RunInAnotherWindow(), new StartProblem.RunOwned(),
+            new StartProblem.AlreadyRunning(TestTasks.Design, "Design"), new StartProblem.RunInAnotherWindow(), new StartProblem.RunOwned("Delivery"),
         ];
 
         Assert.All(setup, problem => Assert.True(NodeStates.IsSetup(problem), problem.ToString()));
@@ -91,10 +91,10 @@ public sealed class NodeStateTests
     [Fact]
     public void A_run_owned_task_has_the_same_plain_reason_for_start_send_and_terminal_handoff()
     {
-        var problem = new StartProblem.RunOwned();
-        Assert.Equal("A workflow run owns this task.", RunText.Describe(problem));
-        Assert.Equal("A workflow run owns this task.", RunText.Describe(new SendProblem.CannotStart(problem)));
-        Assert.Equal("A workflow run owns this task.", RunText.Describe(new TerminalProblem.Blocked(problem)));
+        var problem = new StartProblem.RunOwned("Delivery");
+        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(problem));
+        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(new SendProblem.CannotStart(problem)));
+        Assert.Equal("A run of the \"Delivery\" workflow owns this task.", RunText.Describe(new TerminalProblem.Blocked(problem)));
     }
 
     [Fact]

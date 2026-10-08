@@ -712,11 +712,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
         }
 
-        switch (RunStore.Open(_projectFolder).TaskOwnership(task))
+        switch (RunStore.Open(_projectFolder).TaskOwnership(held))
         {
-            case TaskRunOwnership.Owned:
+            case TaskRunOwnership.Owned owned:
                 held.Dispose();
-                return new LockTake.HeldElsewhere(new StartProblem.RunOwned());
+                return new LockTake.HeldElsewhere(new StartProblem.RunOwned(owned.Workflow));
             case TaskRunOwnership.Unreadable unreadable:
                 held.Dispose();
                 return new LockTake.Failed(new StartProblem.CannotRecord(
