@@ -130,7 +130,7 @@ public sealed class RestoreTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "--", "a.txt").ExitCode);
         Assert.Equal("A\nsmudged\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
-        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        f.Git.Write("a.txt", "late\nsmudged\n", ready.Checkout);
         Assert.Equal(" M a.txt\n", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
         var preservation = f.Op();
         Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
