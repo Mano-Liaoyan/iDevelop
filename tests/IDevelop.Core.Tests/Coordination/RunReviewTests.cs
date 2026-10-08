@@ -36,6 +36,24 @@ public sealed class RunReviewTests
         Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous), Reviewer(R), RunConversationFixture.Agent(B, ConversationMode.Autonomous)],
             (A, R), (R, B));
 
+    /// <summary>The approval node, as <c>X</c>.</summary>
+    private static readonly TaskId G = X;
+
+    /// <summary><c>A → Review → Approval → B</c>: the agreed code and artifacts go through a person's approval.</summary>
+    internal static Workflow Gated() =>
+        Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous), Reviewer(R), new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" },
+            RunConversationFixture.Agent(B, ConversationMode.Autonomous)], (A, R), (R, G), (G, B));
+
+    private static int Requests(RunConversationFixture f) => f.Read().Receipts.Values.Count(entry => entry.Event is RunEvent.GateRequested);
+
+    /// <summary>Approves the approval node's open request once it waits.</summary>
+    private static async Task Approved(RunConversationFixture f)
+    {
+        var waiting = await f.Until(view => view.Tasks[G].Gate is { Status: GateStatus.Waiting });
+        var gate = waiting.Tasks[G].Gate!;
+        Assert.IsType<GateReply.Recorded>(await f.Coordinator.Approve(f.Address, new(gate.Request.Id, gate.Request.Inputs), new(Guid.NewGuid())).WaitAsync(Bound));
+    }
+
     internal static string Verdict(string json) => $"I read the change.\n\n```idevelop\n{json}\n```";
 
     internal static string Answers(string answers) => $"I answered each finding.\n\n```idevelop\n{{\"status\": \"answers\", \"answers\": {answers}}}\n```";
@@ -75,7 +93,7 @@ public sealed class RunReviewTests
     [Fact]
     public async Task A_three_round_review_fixes_twice_and_hands_on_once_after_agreement()
     {
-        await using var f = new RunConversationFixture(Reviewed());
+        await using var f = new RunConversationFixture(Gated());
         Routed(f).Answer(A,
                 Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
                 Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""), gate: "fix-1"),
@@ -90,15 +108,20 @@ public sealed class RunReviewTests
         var review = f.Attempt(R);
         Assert.Equal((TaskState.Waiting, AttemptStatus.InReview), (f.View.Tasks[R].State, f.View.Tasks[R].Status));
         using (var session = f.Session(R))
+        {
+            Assert.True(session.Snapshot.Actions.Send.Enabled, session.Snapshot.Actions.Send.Reason);
             Assert.IsType<SendResult.Guided>(await session.SendAsync(new TurnKey(review, 1), "Keep add on one line.", false, default).WaitAsync(Bound));
+        }
         Assert.Equal(1, f.Lines(R, "guidanceAdded"));
         f.Open("fix-1");
 
         await f.Until(view => view.Tasks[R].State == TaskState.Running && f.Log(R).Record!.Turns.Count == 3);
         await TurnFixture.WaitUntilAsync(() => f.Launches(R) == 3);
-        Assert.Equal(0, f.Launches(B));
+        Assert.Equal((0, 0, TaskState.Pending), (Requests(f), f.Launches(B), f.View.Tasks[G].State));
         f.Open("agree");
+        await Approved(f);
         var done = await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(1, Requests(f));
 
         Assert.Equal((3, 3, 1), (f.Launches(R), f.Launches(A), f.Launches(B)));
         var record = f.Read();
@@ -127,9 +150,10 @@ public sealed class RunReviewTests
         Assert.Equal((AttemptStatus.Succeeded, 3, A), (log.Status, log.Turns.Count, log.Subject));
         Assert.Equal([FindingState.Resolved, FindingState.Resolved], ReviewLedger.Fold(log).Findings.Select(finding => finding.State));
         var agreed = record.CurrentResults[R];
+        var reviewed = Assert.IsType<CodeSelection.Single>(record.Inputs[record.CurrentResults[G].Inputs].Code);
+        Assert.Equal((R, A), (reviewed.Source.Task, Assert.Single(reviewed.Source.Owners)));
         var code = Assert.IsType<CodeSelection.Single>(record.Inputs[record.CurrentResults[B].Inputs].Code);
-        Assert.Equal(R, code.Source.Task);
-        Assert.Equal(A, Assert.Single(code.Source.Owners));
+        Assert.Equal((G, A), (code.Source.Task, Assert.Single(code.Source.Owners)));
         Assert.Equal(new CodeOutput.Forwarded(agreed.Inputs), agreed.Code);
         Assert.Equal("a + b # sum\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
         long Sequence(Func<RunEvent, bool> match) => record.Receipts.Values.Single(entry => match(entry.Event)).Sequence;
@@ -141,12 +165,13 @@ public sealed class RunReviewTests
     [Fact]
     public async Task Agreement_forwards_the_reviewed_code_and_artifacts_without_making_the_reviewer_their_owner()
     {
-        await using var f = new RunConversationFixture(Reviewed());
+        await using var f = new RunConversationFixture(Gated());
         Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a + b\n", "A ready.\n", artifact: ("payload", Payload)))
             .Answer(R, Reads(f, 1, Approve))
             .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
         await f.Open();
         await f.Resume();
+        await Approved(f);
         await f.UntilStatus(RunStatus.Completed);
 
         var record = f.Read();
@@ -162,13 +187,17 @@ public sealed class RunReviewTests
         Assert.Equal(Payload, storage.ReadArtifact(agreed.Id, forwarded));
         Assert.Equal(Payload, storage.ReadArtifact(produced.Id, original));
 
+        var request = record.Inputs[record.CurrentResults[G].Inputs];
+        Assert.Equal(agreed.Id, Assert.Single(request.Files, file => file.RelativePath.EndsWith("/artifacts/payload", StringComparison.Ordinal)).Source);
+        var approved = record.CurrentResults[G];
+        Assert.Equal(Payload, storage.ReadArtifact(approved.Id, Assert.Single(approved.Artifacts)));
         var inputs = record.Inputs[record.CurrentResults[B].Inputs];
         var delivered = Assert.Single(inputs.Files, file => file.RelativePath.EndsWith("/artifacts/payload", StringComparison.Ordinal));
-        Assert.Equal(agreed.Id, delivered.Source);
+        Assert.Equal(approved.Id, delivered.Source);
         Assert.Equal(Payload, File.ReadAllBytes(Path.Combine(f.Checkout(B), delivered.RelativePath)));
         Assert.Contains($"- payload: {delivered.RelativePath} (3 bytes, SHA-256 {Revision.Hash(Payload).Sha256})", f.Prompt(B, 1));
         var code = Assert.IsType<CodeSelection.Single>(inputs.Code);
-        Assert.Equal((R, A), (code.Source.Task, Assert.Single(code.Source.Owners)));
+        Assert.Equal((G, A), (code.Source.Task, Assert.Single(code.Source.Owners)));
         Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
         Assert.Equal(Assert.IsType<CodeOutput.Produced>(produced.Code).Code.Commit, code.Source.Commit);
     }
@@ -420,8 +449,10 @@ public sealed class RunReviewTests
         Assert.DoesNotContain(f.Read().Results, result => result.Task == R);
     }
 
-    [Fact]
-    public async Task A_reserved_fix_round_whose_start_failed_resumes_once_with_its_recorded_cause()
+    [Theory]
+    [InlineData("runner.lookup")]
+    [InlineData("runner.claim.before")]
+    public async Task A_fix_round_whose_start_failed_starts_once_as_first_asked_while_new_guidance_waits_for_the_next_step(string point)
     {
         await using var f = new RunConversationFixture(Reviewed());
         Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
@@ -431,11 +462,16 @@ public sealed class RunReviewTests
         await f.Open();
         var fixing = false;
         var thrown = 0;
-        f.Runs.Probe = point =>
+        f.Runs.Probe = probe =>
         {
-            if (point == "coordinator.fix") fixing = true;
-            else if (point == "runner.claim.before" && fixing && Interlocked.CompareExchange(ref thrown, 1, 0) == 0)
-                throw new IOException("The claim could not be written.");
+            if (probe == "coordinator.fix") fixing = true;
+            else if (probe == point && fixing && Interlocked.CompareExchange(ref thrown, 1, 0) == 0)
+            {
+                // The person writes to the review while the fix round's first start fails, before the start is tried again.
+                Assert.IsType<SendResult.Guided>(f.Coordinator.Send(f.Address, R, new TurnKey(f.Attempt(R), 1), "Keep add on one line.", false)
+                    .WaitAsync(Bound).GetAwaiter().GetResult());
+                throw new IOException("The journal could not be written.");
+            }
         };
         await f.Resume();
         await f.UntilStatus(RunStatus.Completed);
@@ -443,9 +479,38 @@ public sealed class RunReviewTests
         var record = f.Read();
         Assert.Equal(1, thrown);
         var fix = Assert.Single(record.Attempts.Values, attempt => attempt.Cause is AttemptCause.ReviewFix);
+        Assert.Equal(0, Assert.IsType<AttemptCause.ReviewFix>(fix.Cause).Link.Guidance);
         Assert.Equal(1, record.Claims.Keys.Count(key => key.Attempt == fix.Id));
         Assert.Equal((2, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
         Assert.Equal("session-1", f.Resumed(A, 2));
         Assert.StartsWith("Fix the findings.\n\n### Finding 1", f.Prompt(A, 2));
+        Assert.DoesNotContain("Keep add on one line.", f.Prompt(A, 2));
+        Assert.Contains("## Guidance from the person\n\nKeep add on one line.", f.Prompt(R, 2));
+    }
+
+    [Fact]
+    public async Task Continuing_review_work_waits_behind_ready_tasks_and_an_accepted_fix_makes_other_consumers_stale()
+    {
+        var workflow = Runs.RunFixtures.Connect(Reviewed().Must(TestNodes.Place(RunConversationFixture.Agent(D, ConversationMode.Autonomous), new CanvasPoint(0, 300))), A, D);
+        await using var f = new RunConversationFixture(workflow);
+        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"))
+            .Answer(D, Writes(f, D, 1, "d.txt", "D\n", "D ready.\n"));
+        await f.Open();
+        await f.Resume();
+        var stuck = await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[B].State == TaskState.Done);
+
+        var record = f.Read();
+        long Claim(TaskId task, int turn = 1, int? round = null) => record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claimed &&
+            claimed.Key.Turn == turn && record.Attempts[claimed.Key.Attempt].Task == task &&
+            (round is null ? record.Attempts[claimed.Key.Attempt].Cause is not AttemptCause.ReviewFix : record.ReviewOf(claimed.Key.Attempt)?.Round == round)).Sequence;
+        // Once A is done, the review's first turn and D are both ready, in task order; the fix round then waits for D.
+        Assert.True(Claim(R) < Claim(D));
+        Assert.True(Claim(D) < Claim(A, round: 1));
+        Assert.True(Claim(A, round: 1) < Claim(R, turn: 2));
+        Assert.Equal((TaskState.Stale, TaskState.Done, TaskState.Done), (stuck.Tasks[D].State, stuck.Tasks[R].State, stuck.Tasks[A].State));
+        Assert.Equal((2, 2, 1, 1), (f.Launches(A), f.Launches(R), f.Launches(B), f.Launches(D)));
     }
 }
