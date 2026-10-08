@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
@@ -238,6 +239,162 @@ public sealed class BlockScopeTests
         Assert.Equal("ReplacementConflict", rerun.Reason.Problem.ToString());
         Assert.Empty(Open(f));
         Assert.Equal("Accepted", f.Materializer().Publish(f.Lease(T), f.Op(), attempt).GetType().Name);
+    }
+
+    [UnixTheory]
+    [InlineData(1, 9)]
+    [InlineData(2, 11)]
+    public async Task A_superseding_restore_resolves_the_operation_faults_of_every_restore_it_replaces(int replaced, int pins)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        var expected = new List<OperationId>();
+        var superseded = new List<(OperationId Operation, OperationId Preservation, OperationId Confirmation, Digest Preview)>();
+        OperationId? last = null;
+        for (var i = 0; i < replaced; i++)
+        {
+            f.Git.Write("a.txt", $"late {i}\n", ready.Checkout);
+            var preservation = f.Op();
+            Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, attempt));
+            expected.Add(OperationIds.Derive(preservation, "preserve-drift"));
+            var preview = RestoreTests.Preview(f, ready, preservation);
+            Assert.Equal(last, preview.Supersedes);
+            var operation = f.Op();
+            var confirmation = f.Op();
+            var failed = Assert.IsType<Restoration.Blocked>(f.FailingGit("cat-file --filters")
+                .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+            Assert.Equal("GitFailed: fatal: injected failure\n", failed.Block.Problem + ": " + failed.Block.Detail);
+            Assert.Equal(new BlockScope.Operation(), failed.Block.Scope);
+            last = OperationIds.Derive(operation, "restore-plan");
+            Assert.IsType<MaterializationPlan.Restoration>(f.Read().Plans[last.Value]);
+            expected.Add(f.Read().Blocks.Single(b => b.Value.Block.Operation == last).Key);
+            superseded.Add((operation, preservation, confirmation, preview.Identity));
+        }
+        var final = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), final, attempt));
+        expected.Add(OperationIds.Derive(final, "preserve-drift"));
+        var next = RestoreTests.Preview(f, ready, final);
+        Assert.Equal(last, next.Supersedes);
+        var receipt = Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), attempt, final, f.Op(), next.Identity)).Receipt;
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        foreach (var old in superseded)
+            Assert.Equal("ReplacementConflict", Assert.IsType<Restoration.Rejected>(f.Materializer().Restore(f.Lease(T), old.Operation, attempt,
+                old.Preservation, old.Confirmation, old.Preview)).Reason.Problem.ToString());
+        Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
+        Assert.Equal(pins, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))));
+        Assert.Equal(expected, receipt.Resolved);
+        Assert.Empty(Open(f));
+    }
+
+    [UnixFact]
+    public async Task A_restore_receipt_replays_with_the_fault_of_the_restore_it_supersedes_but_not_a_foreign_one()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var first = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), first, attempt));
+        var replaced = f.Op();
+        Assert.IsType<Restoration.Blocked>(f.FailingGit("cat-file --filters")
+            .Restore(f.Lease(T), replaced, attempt, first, f.Op(), RestoreTests.Preview(f, ready, first).Identity));
+        var fault = f.Read().Blocks.Single(b => b.Value.Block.Operation == OperationIds.Derive(replaced, "restore-plan")).Key;
+        var foreign = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, foreign, new RunEvent.Blocked(
+            new(foreign, T, attempt, MaterializationProblem.GitFailed, ready.Execution.Inputs, [], "fatal: injected failure\n")
+            { Scope = new BlockScope.Operation() })).GetType().Name);
+        var second = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), second, attempt));
+        var preview = RestoreTests.Preview(f, ready, second);
+        Assert.Equal(OperationIds.Derive(replaced, "restore-plan"), preview.Supersedes);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var plan = OperationIds.Derive(operation, "restore-plan");
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, plan, new RunEvent.Planned(new MaterializationPlan.Restoration(T, attempt, second,
+            preview.Current, preview.To, preview.Paths, [.. preview.Repairs, foreign], preview.Rechecks, confirmation, preview.Identity)
+            { Supersedes = preview.Supersedes })).GetType().Name);
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restored.before") throw new Crash(); })
+            .Restore(f.Lease(T), operation, attempt, second, confirmation, preview.Identity));
+        var sequence = f.Read().Sequence;
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
+            new RunEvent.Restored(plan, [fault, foreign]))).Reason.Problem.ToString());
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, f.Op(), new RunEvent.Restored(plan, [fault])).GetType().Name);
+        Assert.True(f.Read().Blocks[fault].Resolved);
+        Assert.False(f.Read().Blocks[foreign].Resolved);
+    }
+
+    [UnixFact]
+    public async Task A_preservation_retries_past_its_own_ancestry_failure()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))!.Value;
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "-q", "--detach").ExitCode);
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "commit", "-qam", "Late.").ExitCode);
+        var head = f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text.Trim();
+        var operation = f.Op();
+        var failed = Assert.IsType<Preservation.Blocked>(await f.FailingGit($"merge-base --is-ancestor {branch.Hex} {head}")
+            .Preserve(f.Lease(T), operation, attempt));
+        Assert.Equal("GitFailed: fatal: injected failure\n", failed.Block.Problem + ": " + failed.Block.Detail);
+        Assert.Equal(new BlockScope.Operation(), failed.Block.Scope);
+        var fault = f.Read().Blocks.Single(b => b.Value.Block.Problem == MaterializationProblem.GitFailed).Key;
+        var preserved = Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), operation, attempt));
+        Assert.Equal(new[] { head }, GitFixture.Read(f.Git.Open().ReadCommit(preserved.Commit)).Parents.Select(p => p.Hex));
+        Assert.True(f.Read().Blocks[fault].Resolved);
+    }
+
+    [UnixFact]
+    public async Task Publish_retries_past_its_own_ancestry_failure()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await DoneWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var tip = f.Read().RootExits[ready.Execution.Launch].Tip;
+        var operation = f.Op();
+        var failed = Assert.IsType<Publication.Blocked>(f.FailingGit($"merge-base --is-ancestor {ready.Execution.Location.AttemptBase.Hex} {tip.Hex}")
+            .Publish(f.Lease(T), operation, attempt));
+        Assert.Equal("GitFailed: fatal: injected failure\n", failed.Block.Problem + ": " + failed.Block.Detail);
+        Assert.Equal(new BlockScope.Operation(), failed.Block.Scope);
+        var fault = Assert.Single(f.Read().Blocks).Key;
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, attempt)).Result.Report);
+        Assert.True(f.Read().Blocks[fault].Resolved);
+    }
+
+    [UnixFact]
+    public async Task A_baseline_operation_that_adopts_another_operations_receipt_resolves_its_own_fault()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await RecoveryBaselineTests.CloseInterrupted(f, ready);
+        var previous = ready.Execution.Launch.Attempt;
+        f.Git.Write("keep.txt", "keep\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, previous));
+        var failed = f.Op();
+        var confirmation = f.Op();
+        var refused = Assert.IsType<RecoveryBaselining.Blocked>(f.FailingGit("cat-file commit")
+            .RecordRecoveryBaseline(f.Lease(T), failed, previous, confirmation, preservation));
+        Assert.Equal("GitFailed: fatal: injected failure\n", refused.Block.Problem + ": " + refused.Block.Detail);
+        Assert.Equal(new BlockScope.Operation(), refused.Block.Scope);
+        var fault = f.Read().Blocks.Single(b => b.Value.Block.Operation == failed).Key;
+        var stash = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, stash, new RunEvent.Blocked(
+            new(failed, T, previous, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Stash drift.")
+            { Scope = new BlockScope.Refs(["refs/stash"]) })).GetType().Name);
+        var recorded = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation, preservation));
+        Assert.False(f.Read().Blocks[fault].Resolved);
+        var adopted = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), failed, previous, confirmation, preservation));
+        Assert.Equal(recorded.Receipt, adopted.Receipt);
+        Assert.True(f.Read().Blocks[fault].Resolved);
+        Assert.Equal(new[] { "UncertainOwnership" }, Open(f));
     }
 
     [LinuxOrWindowsFact]
