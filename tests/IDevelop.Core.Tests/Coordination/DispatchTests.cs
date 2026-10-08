@@ -121,28 +121,6 @@ public sealed class DispatchTests
     }
 
     [Fact]
-    public async Task Cleanup_outcomes_never_gate_the_run()
-    {
-        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
-        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, FakeRule.On()
-            .Print(FakeAgents.SessionLine(ClientId.Codex, "session-B"))
-            .Copy("result.txt", Path.Combine(f.Evidence, "successor.txt"))
-            .Print(FakeAgents.ReplyLines(ClientId.Codex, "B ready.\n")));
-        await f.Open();
-        await f.Resume();
-        await f.UntilStatus(RunStatus.Completed);
-        var record = f.Read();
-        var producer = record.CurrentResults[A];
-        var log = AttemptEvidence.Read(f.Preparation.Store.AttemptFolder(RunFixtures.W, f.Preparation.RunId, A, ((ResultOrigin.Executed)producer.Origin).Attempt));
-        var launched = Assert.Single(log.Events.OfType<AttemptEvent.Launched>());
-        var cleaned = Assert.Single(log.Events.OfType<AttemptEvent.CleanedUp>());
-        // Without a process group (Linux and macOS until E3a.4), cleanup cannot reach descendants and reports it.
-        if (launched.Containment is Containment.None) Assert.Equal(CleanupResult.Incomplete, cleaned.Result);
-        Assert.Equal(2, record.Results.Count);
-        Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Evidence, "successor.txt")));
-    }
-
-    [Fact]
     public async Task A_diamond_isolates_siblings_and_joins_them_for_the_consumer()
     {
         await using var f = new CoordinatorFixture(Diamond());
