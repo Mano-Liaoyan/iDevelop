@@ -202,6 +202,16 @@ internal sealed partial class WorkflowRunCoordinator
             complete(Refused(RunProblem.ConfirmationRequired));
             return;
         }
+        AttemptCause Cause(AttemptId fix) => choice == FixChoice.Continue ? new AttemptCause.Continue(fix, confirmation) : new AttemptCause.Retry(fix, confirmation);
+        // A choice already reserved the round's replacement: the same choice converges on it, any other is refused.
+        var latest = RunProjection.LatestAttempts(record);
+        if (record.Revision.Snapshot.SubjectOf(task) is { } owner && latest.GetValueOrDefault(task) is { } reviewer &&
+            latest.GetValueOrDefault(owner) is { } newest && RunReducer.Previous(record.Attempts[newest].Cause) is { } replaced &&
+            record.ReviewOf(newest)?.Attempt == reviewer)
+        {
+            complete(RunReducer.Same(record.Attempts[newest].Cause, Cause(replaced)) ? new FixReply.Reserved(newest) : Refused(RunProblem.ReplacementConflict));
+            return;
+        }
         if (Reviewing(record, Project(record).Tasks.GetValueOrDefault(task)) is not { } review)
         {
             complete(Refused(_live.ContainsKey(task) ? RunProblem.TaskBusy : RunProblem.InvalidClaim));
@@ -211,15 +221,6 @@ internal sealed partial class WorkflowRunCoordinator
         if (_live.ContainsKey(subject))
         {
             complete(Refused(RunProblem.TaskBusy));
-            return;
-        }
-        AttemptCause Cause(AttemptId fix) => choice == FixChoice.Continue ? new AttemptCause.Continue(fix, confirmation) : new AttemptCause.Retry(fix, confirmation);
-        // A choice already reserved its replacement: the same one converges on it, any other is refused.
-        if (RunProjection.LatestAttempts(record).GetValueOrDefault(subject) is { } newest && RunReducer.Previous(record.Attempts[newest].Cause) is { } replaced &&
-            record.ReviewOf(newest)?.Attempt == review.Attempt)
-        {
-            complete(RunReducer.Same(record.Attempts[newest].Cause, Cause(replaced)) && record.Preparations.ContainsKey(new(newest, 1))
-                ? new FixReply.Reserved(newest) : Refused(RunProblem.ReplacementConflict));
             return;
         }
         if (RunReviews.Recovery(record, review.Log, Log) is not { } recovery)

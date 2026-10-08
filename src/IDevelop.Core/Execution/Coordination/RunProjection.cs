@@ -42,6 +42,13 @@ internal static class RunProjection
             if (Started(record, task, latest.TryGetValue(task, out var attempt) ? attempt : null, results.GetValueOrDefault(task), log, live, holds) is { } view)
                 progress.Add(task, view);
         }
+        foreach (var (task, view) in progress.ToArray())
+        {
+            // A review whose fix round was interrupted names it, so the person can choose how it goes on.
+            if (view is { State: TaskState.Waiting, Status: AttemptStatus.InReview, Attempt: { } review } &&
+                log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer)
+                progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log) };
+        }
         var plan = Schedule.Of(snapshot, progress, view => view.State == TaskState.Done);
         var tasks = ImmutableSortedDictionary.CreateBuilder<TaskId, TaskView>();
         foreach (var (task, view) in progress) tasks[task] = view;

@@ -194,4 +194,183 @@ public sealed class RunReviewTests
         Assert.Equal(("PAYLOAD", Revision.Hash([88])), (Assert.Single(f.Read().CurrentResults[X].Artifacts).Name, f.Read().CurrentResults[X].Artifacts[0].Content));
         Assert.DoesNotContain(f.Read().Attempts.Values, attempt => attempt.Task == R);
     }
+
+    /// <summary>A fix round that writes <c>keep.txt</c> and then works until the window closes.</summary>
+    private static FakeRule Interrupting(RunConversationFixture f, string keep = "keep\n", bool session = true)
+    {
+        var rule = FakeRule.On().RecordArguments(Path.Combine(f.Evidence, "A-2.args"));
+        if (session) rule = rule.Print(FakeAgents.SessionLine(ClientId.Codex, "session-1"));
+        return rule.Write("keep.txt", keep).Write(Path.Combine(f.Evidence, "fix-1-wrote"), "yes").WaitForFile(f.Gate("never"));
+    }
+
+    /// <summary>Runs A and the review's first turn, closes the window while fix round 1 works, and opens it again with the run resumed.</summary>
+    private static async Task<FixRecovery> Interrupt(RunConversationFixture f)
+    {
+        await f.Open();
+        await f.Resume();
+        await TurnFixture.WaitUntilAsync(() => File.Exists(Path.Combine(f.Evidence, "fix-1-wrote")));
+        await f.Reopen();
+        // The choice shows once the interrupted fix is closed, which the closing window did; the run waits for Resume.
+        Assert.Equal(RunStatus.Paused, (await f.Until(view => view.Tasks[R].Fix is not null)).Status);
+        await f.Resume();
+        var waiting = await f.Until(view => view.Resumed && view.Tasks[R].Fix is not null);
+        Assert.Equal((TaskState.Waiting, TaskState.Failed), (waiting.Tasks[R].State, waiting.Tasks[A].State));
+        Assert.Equal(TerminalAttemptOutcome.Interrupted, Assert.IsType<AttemptEnd.Logged>(f.Read().Closures[waiting.Tasks[R].Fix!.Fix]).Outcome);
+        Assert.Equal(RunStatus.NeedsAttention, waiting.Status);
+        return waiting.Tasks[R].Fix!;
+    }
+
+    private static int Count(RunConversationFixture f, Func<AttemptCause, bool> cause) => f.Read().Attempts.Values.Count(attempt => cause(attempt.Cause));
+
+    [Fact]
+    public async Task An_interrupted_fix_waits_for_Continue_fix_and_a_duplicate_choice_reserves_one_attempt_in_its_session()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Interrupting(f),
+                FakeRule.On().RecordArguments(Path.Combine(f.Evidence, "A-3.args")).Print(FakeAgents.SessionLine(ClientId.Codex, "session-1"))
+                    .Copy("keep.txt", Path.Combine(f.Evidence, "continued.keep.txt")).Write("calc.txt", "a + b\n")
+                    .Print(FakeAgents.ReplyLines(ClientId.Codex, Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""))))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        var recovery = await Interrupt(f);
+        Assert.Equal((1, (string?)null), (recovery.Round, recovery.ContinueUnavailable));
+        await f.Decided();
+        Assert.Equal((2, 1, 0), (f.Launches(A), f.Launches(R), Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry)));
+
+        var confirmation = new OperationId(Guid.NewGuid());
+        var first = Assert.IsType<FixReply.Reserved>(await f.Coordinator.ContinueFix(f.Address, R, confirmation).WaitAsync(Bound));
+        Assert.Equal(first, await f.Coordinator.ContinueFix(f.Address, R, confirmation).WaitAsync(Bound));
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        Assert.Equal(1, Count(f, cause => cause is AttemptCause.Continue));
+        Assert.Equal(0, Count(f, cause => cause is AttemptCause.Retry));
+        var continued = record.Attempts[first.Attempt];
+        Assert.Equal(new AttemptCause.Continue(recovery.Fix, confirmation), continued.Cause);
+        Assert.Equal(new ReviewLink(R, f.Attempt(R), 1, 0), record.ReviewOf(continued.Id));
+        Assert.Equal((3, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
+        Assert.Equal("session-1", f.Resumed(A, 3));
+        Assert.StartsWith("Closing iDevelop interrupted your work on these findings. Go on from where you stopped.\n\nFix the findings.", f.Prompt(A, 3));
+        var baseline = Assert.Single(record.Baselines.Values).Baseline;
+        Assert.Equal((recovery.Fix, confirmation, "session-1"), (baseline.Previous, baseline.Confirmation, baseline.Session));
+        var preserved = record.Preservations[OperationIds.Derive(baseline.Preservation, "preserve-plan")];
+        Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{preserved.Commit.Hex}:keep.txt"));
+        Assert.Equal("keep\n", File.ReadAllText(Path.Combine(f.Evidence, "continued.keep.txt")));
+        Assert.Equal(continued.Id, Assert.IsType<ResultOrigin.Executed>(record.CurrentResults[A].Origin).Attempt);
+        Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
+    }
+
+    [Fact]
+    public async Task Continue_fix_over_a_changing_checkout_blocks_and_starts_nothing()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Interrupting(f, "first\n"))
+            .Answer(R, Reads(f, 1, Changes1));
+        await Interrupt(f);
+        var keep = Path.Combine(f.Checkout(A), "keep.txt");
+        f.Runs.Probe = point =>
+        {
+            if (point == "git.preserve-observe-1.after") File.WriteAllText(keep, "second\n");
+        };
+
+        var blocked = Assert.IsType<FixReply.Blocked>(await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+
+        Assert.Equal(MaterializationProblem.DirtyWorktree, blocked.Block.Problem);
+        var divergence = Assert.Single(f.Read().PreservationDivergences.Values);
+        Assert.Equal("first\n", f.Preparation.Git.Git("show", $"{divergence.First.Commit.Hex}:keep.txt"));
+        Assert.Equal("second\n", f.Preparation.Git.Git("show", $"{divergence.Second.Commit.Hex}:keep.txt"));
+        Assert.Empty(f.Read().Baselines);
+        await f.Decided();
+        Assert.Equal((2, 0), (f.Launches(A), Count(f, cause => cause is AttemptCause.Continue)));
+        Assert.Equal("second\n", File.ReadAllText(keep));
+    }
+
+    [Fact]
+    public async Task Retry_fix_salvages_the_interrupted_work_and_a_duplicate_choice_reserves_one_attempt_in_a_fresh_session()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Interrupting(f),
+                Writes(f, A, 3, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""), session: "session-2"))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        var recovery = await Interrupt(f);
+        await f.Decided();
+        Assert.Equal(2, f.Launches(A));
+
+        var confirmation = new OperationId(Guid.NewGuid());
+        var first = Assert.IsType<FixReply.Reserved>(await f.Coordinator.RetryFix(f.Address, R, confirmation).WaitAsync(Bound));
+        Assert.Equal(first, await f.Coordinator.RetryFix(f.Address, R, confirmation).WaitAsync(Bound));
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        Assert.Equal((1, 0), (Count(f, cause => cause is AttemptCause.Retry), Count(f, cause => cause is AttemptCause.Continue)));
+        Assert.Equal(new AttemptCause.Retry(recovery.Fix, confirmation), record.Attempts[first.Attempt].Cause);
+        Assert.Equal(new ReviewLink(R, f.Attempt(R), 1, 0), record.ReviewOf(first.Attempt));
+        Assert.Equal((3, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
+        Assert.Null(f.Resumed(A, 3));
+        Assert.Equal("session-2", AttemptEvidence.Read(f.AttemptFolder(A, first.Attempt)).Record!.SessionId);
+        var prompt = f.Prompt(A, 3);
+        Assert.StartsWith("You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.", prompt);
+        Assert.Contains("+a - b", prompt);
+        var salvage = Assert.Single(record.Salvages.Values);
+        Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{salvage.Commit.Hex}:keep.txt"));
+        var fixedCommit = Assert.IsType<CodeOutput.Produced>(record.CurrentResults[A].Code).Code.Commit.Hex;
+        Assert.NotEqual(0, f.Preparation.Git.Run(f.Preparation.Git.Folder, "cat-file", "-e", $"{fixedCommit}:keep.txt").ExitCode);
+        Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
+    }
+
+    [Fact]
+    public async Task Continue_fix_needs_a_session_that_can_go_on_and_Retry_fix_stays_available()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                FakeRule.On().Write("calc.txt", "a - b\n").Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.\n")),
+                Interrupting(f, session: false),
+                Writes(f, A, 3, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""), session: "session-2"))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        var recovery = await Interrupt(f);
+        Assert.Equal(RunReviews.NoFixSession, recovery.ContinueUnavailable);
+        Assert.StartsWith("Your earlier session could not continue, so this one starts fresh.", f.Prompt(A, 2));
+
+        Assert.Equal(RunProblem.SessionUnavailable, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue));
+        Assert.IsType<FixReply.Reserved>(await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(3, f.Launches(A));
+    }
+
+    [Fact]
+    public async Task Only_the_controlling_window_chooses_how_an_interrupted_fix_goes_on()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Interrupting(f)).Answer(R, Reads(f, 1, Changes1));
+        await Interrupt(f);
+        var (runs, coordinator) = await f.SecondWindow();
+        await using (runs)
+        {
+            Assert.Equal(new FixReply.Unavailable(WorkflowRunCoordinator.ElsewhereMessage),
+                await coordinator.ContinueFix(coordinator.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+            Assert.Equal(new FixReply.Unavailable(WorkflowRunCoordinator.ElsewhereMessage),
+                await coordinator.RetryFix(coordinator.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+        }
+        Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<FixReply.Refused>(await f.Coordinator.RetryFix(f.Address with { Run = new(Guid.NewGuid()) }, R,
+            new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<FixReply.Refused>(await f.Coordinator.RetryFix(f.Address, B,
+            new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<FixReply.Refused>(await f.Coordinator.RetryFix(f.Address, R,
+            default).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry));
+    }
 }

@@ -131,26 +131,27 @@ internal static class RunReviews
     public static string FixPrompt(RunRecord record, AttemptRecord review, AttemptId attempt, Func<RunAttempt, AttemptRecord?> log, string project) =>
         FixPrompt(record, review, Previous(record, attempt), record.Attempts[attempt].Cause,
             record.ReviewOf(attempt) ?? throw new ArgumentException("The attempt fixes no review round.", nameof(attempt)),
-            FixSession(record, attempt, log) is not null, log, project);
+            record.Attempts[attempt].Cause is AttemptCause.ReviewFix && FixSession(record, attempt, log) is not null, log, project);
 
     /// <summary>The prompt of the person's Continue fix or Retry fix of <paramref name="fix"/>, before its attempt is reserved.</summary>
     public static string ReplacementPrompt(RunRecord record, AttemptRecord review, AttemptId fix, AttemptCause cause,
         Func<RunAttempt, AttemptRecord?> log, string project) =>
         FixPrompt(record, review, fix, cause, record.ReviewOf(fix) ?? throw new ArgumentException("The attempt fixes no review round.", nameof(fix)),
-            cause is AttemptCause.Continue, log, project);
+            false, log, project);
 
     private static string FixPrompt(RunRecord record, AttemptRecord review, AttemptId? latest, AttemptCause cause, ReviewLink link, bool resumes,
         Func<RunAttempt, AttemptRecord?> log, string project)
     {
         var context = Context(record, review.Id, log, project, latest);
-        var choice = cause switch
+        // A round's fix resumes the session it can; the person's Continue fix always resumes, and Retry fix never does.
+        var (choice, resumed) = cause switch
         {
-            AttemptCause.ReviewFix => (FixChoice?)null,
-            AttemptCause.Continue => FixChoice.Continue,
-            AttemptCause.Retry => FixChoice.Retry,
+            AttemptCause.ReviewFix => ((FixChoice?)null, resumes),
+            AttemptCause.Continue => (FixChoice.Continue, true),
+            AttemptCause.Retry => (FixChoice.Retry, false),
             _ => throw new ArgumentException("The attempt fixes no review round.", nameof(cause)),
         };
-        return ReviewWork.Instance.Round(context, review, link.Guidance, resumes, choice).Prompt;
+        return ReviewWork.Instance.Round(context, review, link.Guidance, resumed, choice).Prompt;
     }
 
     /// <summary>The interrupted fix round that waits for the person's choice, or null.</summary>
