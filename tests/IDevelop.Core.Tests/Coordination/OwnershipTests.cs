@@ -39,6 +39,59 @@ public sealed class OwnershipTests
     }
 
     [Fact]
+    public async Task A_read_only_window_takes_control_once_the_owner_closes()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        var (runs, second) = await f.SecondWindow();
+        await using (runs)
+        {
+            Assert.False(second.Controlled);
+            await f.Close();
+            var taken = Assert.IsType<RunOpen.Opened>(runs.OpenRun(f.Address.Workflow, f.Address.Run)).Coordinator;
+            Assert.True(taken.Controlled);
+            Assert.NotSame(second, taken);
+            Assert.Same(taken, Assert.IsType<RunOpen.Opened>(runs.OpenRun(f.Address.Workflow, f.Address.Run)).Coordinator);
+            Assert.IsType<RunCommand.Accepted>(await taken.Resume(taken.Address).WaitAsync(Bound));
+            await taken.Until(view => view.Status == RunStatus.Completed).WaitAsync(Bound);
+        }
+        Assert.Equal(1, f.Launches(A));
+    }
+
+    [Fact]
+    public async Task Concurrent_opens_in_one_window_share_its_controlling_coordinator()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        f.Install();
+        await using var runs = f.OpenRuns(await f.Fakes.DiscoverAsync());
+        using var start = new Barrier(8);
+        var opens = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        {
+            start.SignalAndWait();
+            return Assert.IsType<RunOpen.Opened>(runs.OpenRun(Runs.RunFixtures.W, f.Preparation.RunId)).Coordinator;
+        })));
+        Assert.Single(opens.Distinct());
+        Assert.True(opens[0].Controlled);
+    }
+
+    [Fact]
+    public async Task A_cancelled_wait_leaves_no_waiter()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        await f.Open();
+        using var cancel = new CancellationTokenSource();
+        var wait = f.Coordinator.Until(view => view.Status == RunStatus.Completed, cancel.Token);
+        Assert.Equal(1, f.Coordinator.Waiting);
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+        Assert.Equal(0, f.Coordinator.Waiting);
+        await f.Decided();
+        Assert.Equal(0, f.Coordinator.Waiting);
+    }
+
+    [Fact]
     public async Task Commands_name_their_run()
     {
         await using var f = new CoordinatorFixture(Chain());
