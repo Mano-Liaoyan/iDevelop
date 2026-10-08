@@ -57,11 +57,13 @@ public sealed class TurnStateTests
     [Theory]
     [InlineData("before")]
     [InlineData("during")]
+    [InlineData("after")]
     public async Task A_project_reopened_after_an_uncertain_close_reconciles_the_turn(string row)
     {
         await using var f = new TurnFixture();
         await f.Open(f.Waiting(hang: true));
         f.Runs.StopSeam = _ => false;
+        if (row == "after") f.Runs.LeaveTimeout = TimeSpan.Zero;
         var running = await f.Start();
         var launch = running.Address.Launch;
         var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
@@ -78,7 +80,7 @@ public sealed class TurnStateTests
             await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
             var closed = Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound)).Turn;
             Assert.Equal("Uncertain", closed.Reason.ToString());
-            if (row == "during") f.Preparation.ReleaseControl();
+            if (row != "before") f.Preparation.ReleaseControl();
             await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
             var permit = f.Preparation.Permit;
             var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
@@ -109,6 +111,7 @@ public sealed class TurnStateTests
     {
         await using var f = new TurnFixture();
         await f.Open();
+        f.Runs.LeaveTimeout = TimeSpan.Zero;
         FileStream? held = null;
         var observing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var closing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
