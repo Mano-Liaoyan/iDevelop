@@ -387,6 +387,80 @@ public sealed class RunConversationTests
         Assert.Equal(WorkflowRunCoordinator.EndedMessage, session.Snapshot.Actions.Send.Reason);
     }
 
+    /// <summary>
+    /// A resting closure whose log line was written but whose journal closure was refused: the run finishes it from the log,
+    /// in the same window once the journal takes writes again, or in the next window.
+    /// </summary>
+    [Theory]
+    [InlineData("cancel", false)]
+    [InlineData("cancel", true)]
+    [InlineData("cancel-reply", false)]
+    [InlineData("cancel-reply", true)]
+    [InlineData("mark-done", false)]
+    [InlineData("mark-done", true)]
+    [InlineData("stop", false)]
+    [InlineData("stop", true)]
+    public async Task A_closure_the_journal_refused_after_its_log_line_is_finished_from_the_log(string end, bool reopen)
+    {
+        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Chat),
+            RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)]));
+        f.Answer(A, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Write("a.txt", "A\n")
+                .Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.\n")), f.Says(A, 2, "Done.")).Route("Use the fixture", A)
+            .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("x")));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[X].State == TaskState.Running);
+        using (var session = f.Session(A))
+        {
+            if (end == "cancel-reply") Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
+            var refusals = 0;
+            f.Runs.Probe = point =>
+            {
+                if (point == "runner.close.attempt.before" && (reopen || Interlocked.Increment(ref refusals) == 1))
+                    throw new IOException("The journal refused the closure.");
+            };
+            var turn = session.Snapshot.Current!.Value;
+            switch (end)
+            {
+                case "mark-done":
+                    Assert.Equal((CommandOutcome.Applied, "The task was marked done."), await Outcome(session.MarkDoneAsync(turn, default)));
+                    break;
+                case "stop":
+                    Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));
+                    break;
+                default:
+                    Assert.Equal((CommandOutcome.Applied, "The cancellation was recorded."), await Outcome(session.CancelAsync(turn, default)));
+                    break;
+            }
+            var line = end == "mark-done" ? "markedDone" : "cancelRequested";
+            await TurnFixture.WaitUntilAsync(() => f.Lines(A, line) == 1);
+            if (reopen)
+            {
+                // While the journal keeps refusing it, the pending closure is retried after the run's delay, not at once.
+                var held = await f.Until(view => view.Tasks[A] is { State: TaskState.Refused, Refusal.Problem: RunProblem.StorageUnavailable });
+                Assert.Equal(end == "stop" ? RunStatus.Stopping : RunStatus.Running, held.Status);
+                Assert.False(f.Read().Closures.ContainsKey(f.Attempt(A)));
+                f.Open("x");
+            }
+        }
+        if (reopen)
+        {
+            await f.Reopen();
+            if (end != "stop") await f.Resume();
+        }
+        else if (end != "stop") f.Open("x");
+
+        var settled = await f.Until(view => view.Tasks[A].State is TaskState.Done or TaskState.Failed &&
+            view.Tasks[X].State is TaskState.Done or TaskState.Failed && view.Status is RunStatus.Completed or RunStatus.NeedsAttention or RunStatus.Stopped);
+        var closure = Assert.IsType<AttemptEnd.Logged>(f.Read().Closures[f.Attempt(A)]);
+        Assert.Equal(end == "mark-done" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Cancelled, closure.Outcome);
+        Assert.Equal((1, 0), (f.Lines(A, end == "mark-done" ? "markedDone" : "cancelRequested"), f.Lines(A, "turnRequested")));
+        Assert.Equal(end == "mark-done" ? TaskState.Done : TaskState.Failed, settled.Tasks[A].State);
+        if (end == "mark-done") Assert.Equal("A\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(f.Read().CurrentResults[A].Code).Code.Commit.Hex + ":a.txt"));
+        if (end == "stop") Assert.Equal(RunStatus.Stopped, settled.Status);
+        if (end == "cancel-reply") Assert.Equal(1, f.Lines(A, "messageQueued"));
+    }
+
     [Fact]
     public async Task Cancel_stops_a_running_turn_and_its_dependents_wait()
     {
@@ -453,6 +527,83 @@ public sealed class RunConversationTests
         await f.Resume();
         await f.UntilWaiting(A, 2);
         Assert.Equal(("Use the fixture", 2, 1), (f.Prompt(A, 2), f.Launches(A), f.Lines(A, "messageQueued")));
+    }
+
+    [Fact]
+    public async Task A_continuation_waits_for_the_release_this_decision_takes_up_again()
+    {
+        await using var f = new RunConversationFixture(Chat(A));
+        f.Answer(A, f.Says(A, 1, "First.", gate: f.Gate("first")), f.Says(A, 2, "Added.")).Route("Also add tests", A);
+        var releases = 0;
+        var continued = 0;
+        var heldRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await f.Open();
+        f.Runs.Probe = point =>
+        {
+            if (point == "coordinator.continue") Interlocked.Increment(ref continued);
+            if (point != "coordinator.release.before") return;
+            switch (Interlocked.Increment(ref releases))
+            {
+                case 1: throw new IOException("The release could not read the journal.");
+                case 2:
+                    heldRelease.TrySetResult();
+                    letGo.Task.WaitAsync(Bound).GetAwaiter().GetResult();
+                    break;
+            }
+        };
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Running);
+        using var session = f.Session(A);
+        await TurnFixture.WaitUntilAsync(() => session.Snapshot.Latest?.SessionId == "session-1");
+        Assert.IsType<SendResult.Queued>(await Send(session, "Also add tests"));
+        f.Open("first");
+
+        // The held release keeps the turn's lease. Its retry takes the release up again, and the next turn waits for it.
+        await heldRelease.Task.WaitAsync(Bound);
+        await f.Decided();
+        Assert.Equal((0, 1, TaskState.Settling), (Volatile.Read(ref continued), f.Launches(A), f.View.Tasks[A].State));
+        letGo.TrySetResult();
+        await f.UntilWaiting(A, 2);
+        Assert.Equal((1, 2, "Also add tests"), (Volatile.Read(ref continued), f.Launches(A), f.Prompt(A, 2)));
+    }
+
+    [Fact]
+    public async Task History_reads_a_run_journal_again_only_after_it_grew()
+    {
+        await using var f = new RunConversationFixture(Chat(A));
+        f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done.")).Route("Use the fixture", A);
+        await f.Open();
+        await f.Resume();
+        await f.UntilWaiting(A, 1);
+        var journals = 0;
+        f.Runs.Probe = point => { if (point == "history.journal.read") Interlocked.Increment(ref journals); };
+        using var session = f.Runs.OpenConversation(A);
+        Assert.Equal(["Run 1"], (await session.ListAttemptsAsync(default)).Select(attempt => attempt.Label));
+        Assert.Equal(["Run 1"], (await session.ListAttemptsAsync(default)).Select(attempt => attempt.Label));
+        Assert.Equal(1, Volatile.Read(ref journals));
+        using (var run = f.Session(A)) Assert.IsType<SendResult.Queued>(await Send(run, "Use the fixture"));
+        await f.UntilWaiting(A, 2);
+        Assert.Equal(AttemptStatus.WaitingForInput, Assert.Single(await session.ListAttemptsAsync(default)).Status);
+        Assert.Equal(2, Volatile.Read(ref journals));
+    }
+
+    [Fact]
+    public async Task A_snapshot_of_a_turn_running_here_reads_no_log()
+    {
+        await using var f = new RunConversationFixture(Chat(A));
+        f.Answer(A, f.Says(A, 1, "Never.", gate: f.Gate("never")));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Running);
+        using var session = f.Session(A);
+        await TurnFixture.WaitUntilAsync(() => session.Snapshot.Latest?.SessionId == "session-1");
+        var reads = 0;
+        f.Runs.Probe = point => { if (point == "history.attempt.read") Interlocked.Increment(ref reads); };
+        for (var i = 0; i < 5; i++) Assert.Equal((AttemptStatus.Running, "session-1"), (session.Snapshot.Latest!.Status, session.Snapshot.Latest.SessionId));
+        Assert.Equal(0, Volatile.Read(ref reads));
+        Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(f.Attempt(A), new HistoryQuery.Latest(), 50, default));
+        Assert.Equal(1, Volatile.Read(ref reads));
     }
 
     [Fact]

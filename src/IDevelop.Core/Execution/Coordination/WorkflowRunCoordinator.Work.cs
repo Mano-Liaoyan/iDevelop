@@ -193,6 +193,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation) is { } refusal)
                 return new Release.Held(refusal);
         }
+        _runs.Probe?.Invoke("coordinator.release.before");
         return turn.Release();
     }
 
@@ -233,6 +234,8 @@ internal sealed partial class WorkflowRunCoordinator
                 if (state.State == TaskState.Settling && end is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded }) FinishClosed(record, task, attempt);
                 continue;
             }
+            // A resting closure that reached the log but not the journal is finished from the log.
+            if (state.State == TaskState.Settling && FinishClosing(record, task, attempt)) continue;
             // A waiting attempt rests as it is. Only a stop closes it here.
             if (state.State is TaskState.Settling or TaskState.Uncertain && RunProjection.LastLaunch(record, attempt) is { } claimed)
                 ReconcileLaunch(record, task, claimed);
