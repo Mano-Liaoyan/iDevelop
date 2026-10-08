@@ -83,7 +83,12 @@ internal sealed partial class GitRepository
         return new[] { folder, Path.Combine(folder, "merges") }.FirstOrDefault(component => IsLink(new DirectoryInfo(component)));
     }
 
-    public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource)
+    /// <summary>
+    /// The merged tree of <paramref name="ours"/> and <paramref name="theirs"/> in an isolated scratch Git directory. Git finds
+    /// their merge base unless <paramref name="mergeBase"/> names it, which replays the change from it to
+    /// <paramref name="theirs"/> onto <paramref name="ours"/>.
+    /// </summary>
+    public TreeMerge MergeTrees(CommitId ours, CommitId theirs, CommitId attributeSource, CommitId? mergeBase = null)
     {
         if (MergeScratchLink() is { } link)
             return new TreeMerge.Failed($"The merge scratch folder {link} is a link.");
@@ -107,7 +112,8 @@ internal sealed partial class GitRepository
             };
             var result = Git(ProjectFolder, GitOperation.Worktree,
                 [.. MergeSettings.SelectMany(setting => new[] { "-c", setting.Key + "=" + setting.Value }),
-                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages", ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
+                    "--attr-source=" + attributeSource.Hex, "merge-tree", "--write-tree", "-z", "--messages",
+                    .. mergeBase is { } replayed ? new[] { "--merge-base=" + replayed.Hex } : [], ours.Hex, theirs.Hex], pinnedGitEnvironment: environment);
             if (result.ExitCode is not (0 or 1) || !ParseMerge(result.Stdout, out var tree, out var stages, out var messages))
                 return new TreeMerge.Failed(result.Stderr.Length == 0 ? "Git returned malformed merge-tree output." : result.Stderr);
             return result.ExitCode switch
