@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -12,18 +13,26 @@ namespace IDevelop.Core.Tests.Turns;
 public sealed class TurnJobTests
 {
     [UnixFact]
-    public Task Workflow_cleanup_is_recorded_and_never_gates_acceptance() => CleanupAcceptance("Incomplete", "No process group contains this turn's descendants.", "killTree");
+    public Task Workflow_group_cleanup_is_recorded_and_never_gates_acceptance() => CleanupAcceptance("Completed", null, ["terminateGroup"]);
+
+    [UnixFact]
+    public Task Cleanup_failure_is_diagnostic_when_the_group_launcher_is_unavailable() =>
+        CleanupAcceptance("Incomplete", "No process group contains this turn's descendants. The process group launcher is switched off.", ["killTree"], "launcher");
+
+    [UnixFact]
+    public Task Cleanup_failure_is_diagnostic_when_the_group_refuses_signals() =>
+        CleanupAcceptance("Incomplete", "Process group {0} still had processes after cleanup.", ["terminateGroup", "killGroup"], "signal");
 
     [WindowsFact]
-    public Task Workflow_job_cleanup_is_recorded_and_never_gates_acceptance() => CleanupAcceptance("Completed", null, "terminateJob");
+    public Task Workflow_job_cleanup_is_recorded_and_never_gates_acceptance() => CleanupAcceptance("Completed", null, ["terminateJob"]);
 
     [WindowsFact]
-    public Task Cleanup_failure_is_diagnostic_when_termination_fails() => CleanupAcceptance("Incomplete", "Win32 error 5", "terminateJob", "termination");
+    public Task Cleanup_failure_is_diagnostic_when_termination_fails() => CleanupAcceptance("Incomplete", "Win32 error 5", ["terminateJob"], "termination");
 
     [WindowsFact]
-    public Task Cleanup_failure_is_diagnostic_when_the_job_is_missing() => CleanupAcceptance("Incomplete", "The client could not join a job object.", "killTree", "assignment");
+    public Task Cleanup_failure_is_diagnostic_when_the_job_is_missing() => CleanupAcceptance("Incomplete", "The client could not join a job object.", ["killTree"], "assignment");
 
-    private static async Task CleanupAcceptance(string result, string? detail, string action, string? failure = null)
+    private static async Task CleanupAcceptance(string result, string? detail, string[] actions, string? failure = null)
     {
         var consumer = PreparationFixture.Writer(U) with { Execution = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" } };
         await using var f = new TurnFixture(configure: workflow => Connect(Edit(workflow, TestNodes.Place(consumer, new(0, 0))), T, U));
@@ -36,6 +45,7 @@ public sealed class TurnJobTests
         using var barrier = new ProbeBarrier("runner.cleanup.inside");
         f.Runs.Probe = barrier.Probe;
         if (failure == "assignment") ProcessJob.AssignmentFailure = true;
+        if (failure == "launcher") ProcessGroup.LaunchFailure = true;
         try
         {
             var running = await f.Start();
@@ -43,6 +53,7 @@ public sealed class TurnJobTests
             await barrier.Reached.Task.WaitAsync(Bound);
             await running.RootExited.WaitAsync(Bound);
             if (failure == "termination") ProcessJob.TerminationFailure = 5;
+            if (failure == "signal") ProcessGroup.SignalFailure = 1;
             barrier.Dispose();
             turn = await f.Settled(running);
             if (result == "Completed" || failure == "termination")
@@ -56,20 +67,22 @@ public sealed class TurnJobTests
         {
             ProcessJob.AssignmentFailure = false;
             ProcessJob.TerminationFailure = null;
+            ProcessGroup.LaunchFailure = false;
+            ProcessGroup.SignalFailure = null;
             barrier.Dispose();
         }
         var cleanup = Assert.IsType<AttemptEvent.CleanedUp>(turn.Cleanup);
+        var launched = Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Launched>());
         Assert.Equal(result, cleanup.Result.ToString());
-        Assert.Equal(detail, cleanup.Detail);
-        Assert.Equal(new[] { action }, cleanup.Steps.Select(step => step.Action));
+        Assert.Equal(detail is null ? null : string.Format(CultureInfo.InvariantCulture, detail, launched.ProcessId), cleanup.Detail);
+        Assert.Equal(actions, cleanup.Steps.Select(step => step.Action));
         if (failure == "termination") Assert.Equal("Win32 error 5", Assert.Single(cleanup.Steps).Failure);
+        if (failure == "signal") Assert.All(cleanup.Steps, step => Assert.Equal("Operation not permitted", step.Failure));
         if (result == "Completed") Assert.Null(Assert.Single(cleanup.Steps).Failure);
         Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-        var launched = Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Launched>());
-        if (failure == "assignment")
-            Assert.Equal("The client could not join a job object.", Assert.IsType<Containment.None>(launched.Containment).Reason);
+        if (failure is "assignment" or "launcher") Assert.Equal(detail, Assert.IsType<Containment.None>(launched.Containment).Reason);
         else if (OperatingSystem.IsWindows()) Assert.IsType<Containment.Job>(launched.Containment);
-        else Assert.Equal("No process group contains this turn's descendants.", Assert.IsType<Containment.None>(launched.Containment).Reason);
+        else Assert.Equal(new Containment.Group(launched.ProcessId), launched.Containment);
         var events = f.Log(turn.Address.Launch).Events;
         Assert.IsType<AttemptEvent.CleanedUp>(events[^2]);
         Assert.IsType<AttemptEvent.Exited>(events[^1]);
