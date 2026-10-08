@@ -645,4 +645,34 @@ public sealed class RunReviewTests
         Assert.Equal(2, f.Launches(A));
         Assert.DoesNotContain(f.Read().Claims.Keys, key => key.Attempt == reserved.Attempt);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_fix_result_keeps_the_artifacts_it_does_not_declare_again(bool redeclared)
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n", artifact: ("payload", Payload)),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""),
+                    artifact: redeclared ? ("PAYLOAD", [88]) : null))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        var expected = redeclared ? ("PAYLOAD", new byte[] { 88 }) : ("payload", Payload);
+        Assert.Contains("Your earlier result's artifacts stay with your new result unless you declare one with the same name: payload.", f.Prompt(A, 2));
+        var initial = record.Results.First(result => result.Task == A);
+        var fixedResult = record.CurrentResults[A];
+        Assert.Equal(initial.Id, fixedResult.Supersedes);
+        var kept = Assert.Single(fixedResult.Artifacts);
+        Assert.Equal((expected.Item1, Revision.Hash(expected.Item2), RunStorage.ArtifactPath(fixedResult.Id, expected.Item1)), (kept.Name, kept.Content, kept.StoredPath));
+        var storage = new RunStorage(f.Preparation.Git.Folder, Runs.RunFixtures.W, f.Preparation.RunId);
+        Assert.Equal(expected.Item2, storage.ReadArtifact(fixedResult.Id, kept));
+        var delivered = Assert.Single(record.Inputs[record.CurrentResults[B].Inputs].Files, file => file.RelativePath.Contains("/artifacts/", StringComparison.Ordinal));
+        Assert.Equal(expected.Item2, File.ReadAllBytes(Path.Combine(f.Checkout(B), delivered.RelativePath)));
+    }
 }

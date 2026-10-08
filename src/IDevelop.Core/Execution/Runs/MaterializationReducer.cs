@@ -396,7 +396,8 @@ internal static partial class RunReducer
                     if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||
                         !Same(publication.Recipe, first.Recipe) || publication.Commit != first.Candidate || publication.Report != first.Report ||
                         !Same(publication.Artifacts, first.Artifacts.Select(artifact => artifact with
-                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()))
+                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()
+                            .AddRange(CarriedArtifacts(record, publisher.Id, first.Artifacts, publication.Result))))
                         return RunProblem.EvidenceMismatch;
                 }
                 else if (publication.Capture is not null) return RunProblem.InvalidData;
