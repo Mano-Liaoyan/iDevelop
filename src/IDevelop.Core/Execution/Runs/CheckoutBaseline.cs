@@ -57,6 +57,17 @@ internal static class CheckoutBaseline
                     Set("index", first.IndexTree?.Hex, source);
                     index = first.Index;
                     break;
+                case RunEvent.RecoveryBaselined { Baseline: var baseline } when
+                    record.Preparations[new(baseline.Previous, 1)].Location.Owner == owner:
+                    var preserved = ((MaterializationPlan.Preservation)record.Plans[
+                        OperationIds.Derive(baseline.Preservation, "preserve-plan")]).Preserved;
+                    var recovery = new RestoreTarget.Recovery(baseline.Previous, baseline.Confirmation);
+                    Set("branch", preserved.Branch?.Hex, recovery);
+                    Set("head", preserved.SymbolicHead, recovery);
+                    Set("files", preserved.Files.Hex, recovery);
+                    Set("index", preserved.IndexTree?.Hex, recovery);
+                    index = preserved.Index;
+                    break;
                 case RunEvent.GitIntended intended:
                     Apply(entry.Operation, intended, false);
                     break;

@@ -28,7 +28,7 @@ internal static partial class RunReducer
                     MaterializationPlan.Preservation preservation => move.Change.Ref == preservation.Ref && move.Change.Target == preservation.Commit,
                     _ => false,
                 }),
-            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored => true,
+            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined => true,
             RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured or RunEvent.CaptureDisposed => record.Phase == RunPhase.Abandoned,
             _ => false,
         };
@@ -145,6 +145,19 @@ internal static partial class RunReducer
                     return Reject(RunProblem.InvalidData);
                 }
                 return (record with { Salvages = record.Salvages.Add(retained.Plan, retained) }, null);
+            case RunEvent.RecoveryBaselined baselined:
+                var baseline = baselined.Baseline;
+                var preservationId = OperationIds.Derive(baseline.Preservation, "preserve-plan");
+                if (record.Schema != 3 || !record.Closures.TryGetValue(baseline.Previous, out var previousEnd) ||
+                    previousEnd is AttemptEnd.Recovered { Outcome: RecoveryOutcome.NotStarted } ||
+                    record.Baselines.ContainsKey((baseline.Previous, baseline.Confirmation)) || string.IsNullOrEmpty(baseline.Session) ||
+                    !record.Preservations.ContainsKey(preservationId) ||
+                    record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation recoveryPreservation ||
+                    !record.Preparations.TryGetValue(new(baseline.Previous, 1), out var previousPreparation) ||
+                    !record.Preparations.TryGetValue(new(recoveryPreservation.Attempt, 1), out var preservedPreparation) ||
+                    preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null)
+                    return Reject(RunProblem.InvalidData);
+                return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined) }, null);
             case RunEvent.Restored restored:
                 if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration ||
                     record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan))

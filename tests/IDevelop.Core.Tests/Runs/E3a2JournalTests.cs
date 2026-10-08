@@ -9,6 +9,36 @@ namespace IDevelop.Core.Tests.Runs;
 
 public sealed class E3a2JournalTests
 {
+    [Fact]
+    public async System.Threading.Tasks.Task E3a2_interrupted_continue_replays()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var bytes = File.ReadAllBytes(Fixture.Path("e3a2-interrupted-continue/events.jsonl"));
+        File.WriteAllBytes(Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl"), bytes);
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, ready.Execution.Launch.Attempt);
+        Directory.CreateDirectory(folder);
+        File.Copy(Fixture.Path("e3a2-interrupted-continue/attempt-events.jsonl"), Path.Combine(folder, "events.jsonl"), overwrite: true);
+        Assert.Equal(20L, f.Read().Sequence);
+        Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(RunJournal.Decode(bytes).Entries.Select(RunJournal.Encode))));
+        Assert.IsType<AttemptCause.Continue>(Assert.Single(f.Read().Attempts.Values, a => a.Id != ready.Execution.Launch.Attempt).Cause);
+        Assert.Empty(f.Read().Baselines);
+        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var fresh = Assert.IsType<Preparation.Ready>(await control.Prepare(T));
+        await RecoveryBaselineTests.CloseInterrupted(control, fresh);
+        var confirmation = control.Op();
+        Assert.Equal("RecoveryEvidenceInsufficient", Assert.IsType<RunDecision.Rejected>(control.Store.Plan(control.Lease(T), control.Op(),
+            control.Read().Revision.Id, new AttemptCause.Continue(fresh.Execution.Launch.Attempt, confirmation))).Reason.Problem.ToString());
+        Assert.Equal(0, control.Read().Plans.Values.OfType<MaterializationPlan.Preparation>().Count(p => p.Cause is AttemptCause.Continue));
+        var preservation = control.Op();
+        Assert.IsType<Preservation.Preserved>(await control.Materializer().Preserve(control.Lease(T), preservation, fresh.Execution.Launch.Attempt));
+        Assert.IsType<RecoveryBaselining.Recorded>(control.Materializer().RecordRecoveryBaseline(control.Lease(T), control.Op(),
+            fresh.Execution.Launch.Attempt, confirmation, preservation));
+        Assert.IsType<RunDecision.Recorded>(control.Store.Plan(control.Lease(T), control.Op(), control.Read().Revision.Id,
+            new AttemptCause.Continue(fresh.Execution.Launch.Attempt, confirmation)));
+        Assert.Equal(1, control.Read().Plans.Values.OfType<MaterializationPlan.Preparation>().Count(p => p.Cause is AttemptCause.Continue));
+    }
+
     [Theory]
     [InlineData("e3a2-orphaned-turn", 14L)]
     [InlineData("e3a2-orphaned-attempt", 13L)]

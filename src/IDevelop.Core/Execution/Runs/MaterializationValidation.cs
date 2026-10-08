@@ -12,7 +12,7 @@ internal static partial class RunValidation
         }
         if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced or RunEvent.RootExitObserved or
             RunEvent.TurnCaptured or RunEvent.CaptureDisposed or RunEvent.Preserved or RunEvent.PreservationDiverged or
-            RunEvent.Restored or RunEvent.GitIntended { Mutation: GitMutation.RestoreRef or GitMutation.RestoreFiles or GitMutation.RemoveIndexLock } or
+            RunEvent.Restored or RunEvent.RecoveryBaselined or RunEvent.GitIntended { Mutation: GitMutation.RestoreRef or GitMutation.RestoreFiles or GitMutation.RemoveIndexLock } or
             RunEvent.Planned { Plan: MaterializationPlan.Preservation or MaterializationPlan.Restoration } or RunEvent.TurnClosed { Capture: not null })
         {
             return RunProblem.UnsupportedSchema;
@@ -58,6 +58,8 @@ internal static partial class RunValidation
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
             (block.Conflict is null || Conflict(block.Conflict)) && (block.Scope is null || Scope(block.Scope)),
         RunEvent.SalvageRetained retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
+        RunEvent.RecoveryBaselined { Baseline: var baseline } => baseline.Previous.Value != Guid.Empty &&
+            baseline.Confirmation.Value != Guid.Empty && baseline.Preservation.Value != Guid.Empty && !string.IsNullOrEmpty(baseline.Session),
         RunEvent.Restored restored => restored.Plan.Value != Guid.Empty,
         RunEvent.Preserved retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
         RunEvent.PreservationDiverged diverged => diverged.Operation.Value != Guid.Empty &&

@@ -103,15 +103,8 @@ internal sealed partial class Materializer
         var lockOnly = unfinished is not null && current.IndexLock is not null;
         if (unfinished is not null && !lockOnly)
         {
-            var kind = record.Plans[unfinished.Owner] switch
-            {
-                MaterializationPlan.RetryReset => "Retry reset",
-                MaterializationPlan.Refresh => "Refresh",
-                MaterializationPlan.Publication => "Publication",
-                _ => "Preparation",
-            };
             throw Fault(MaterializationProblem.UncertainOwnership,
-                $"{kind} {unfinished.Owner.Value:D} has an unfinished Git step on this checkout. Run it again, or salvage and retry.", new([], [], false));
+                UnfinishedStepDetail(record, unfinished.Owner), new([], [], false));
         }
         string? Target(string name)
         {

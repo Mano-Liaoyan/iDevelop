@@ -1,5 +1,15 @@
 namespace IDevelop.Execution;
 
+internal sealed record RecoveryBaseline(AttemptId Previous, OperationId Confirmation, string Session, OperationId Preservation);
+
+internal abstract record RecoveryBaselining
+{
+    private RecoveryBaselining() { }
+    internal sealed record Recorded(RunEvent.RecoveryBaselined Receipt) : RecoveryBaselining;
+    internal sealed record Blocked(MaterializationBlock Block) : RecoveryBaselining;
+    internal sealed record Rejected(RunRejection Reason) : RecoveryBaselining;
+}
+
 internal abstract record Salvage
 {
     private Salvage() { }

@@ -74,6 +74,7 @@ internal sealed partial class Materializer
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
+                VerifyRecoveryBaseline(repository, record, completed.Execution.Location, cause);
                 VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
                 VerifyDelivery(record, completed.Execution, repository);
                 RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
@@ -123,6 +124,7 @@ internal sealed partial class Materializer
             step = "worktree";
             EnsureCheckout(permit, operation, planId, repository, location, record);
             step = "checkout";
+            VerifyRecoveryBaseline(repository, Read(workflow, run), location, cause);
             VerifyCheckout(repository, location, cause is AttemptCause.Continue, Read(workflow, run));
             step = "delivery";
             Deliver(record, input, repository, owner, storage);

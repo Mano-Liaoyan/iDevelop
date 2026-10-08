@@ -211,6 +211,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
 [JsonDerivedType(typeof(Preserved), "preserved")]
 [JsonDerivedType(typeof(Restored), "restored")]
+[JsonDerivedType(typeof(RecoveryBaselined), "recoveryBaselined")]
 [JsonDerivedType(typeof(PreservationDiverged), "preservationDiverged")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
@@ -236,6 +237,8 @@ internal abstract record RunEvent
     internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 
     internal sealed record Restored(OperationId Plan) : RunEvent;
+
+    internal sealed record RecoveryBaselined(RecoveryBaseline Baseline) : RunEvent;
 
     internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 
@@ -292,7 +295,7 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending,
+    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending, SessionUnavailable,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -363,6 +366,9 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<LaunchKey, PreparedExecution> Preparations { get; internal init; } = ImmutableDictionary<LaunchKey, PreparedExecution>.Empty;
 
     public ImmutableDictionary<OperationId, MaterializationBlockState> Blocks { get; internal init; } = ImmutableDictionary<OperationId, MaterializationBlockState>.Empty;
+
+    public ImmutableDictionary<(AttemptId Previous, OperationId Confirmation), RunEvent.RecoveryBaselined> Baselines { get; internal init; } =
+        ImmutableDictionary<(AttemptId, OperationId), RunEvent.RecoveryBaselined>.Empty;
 
     public ImmutableDictionary<OperationId, RunEvent.Restored> Restorations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Restored>.Empty;
 

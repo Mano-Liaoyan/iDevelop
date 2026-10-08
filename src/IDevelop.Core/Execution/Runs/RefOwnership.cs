@@ -7,7 +7,7 @@ internal static class RefOwnership
         RunEvent.GitIntended { Mutation: GitMutation.MoveRef or GitMutation.CreateWorktree or GitMutation.RestoreRef } => true,
         RunEvent.GitObserved observed => record.GitIntents[observed.Mutation].Mutation is GitMutation.MoveRef or GitMutation.CreateWorktree or GitMutation.RestoreRef,
         RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.RootExitObserved or RunEvent.TurnClosed or
-            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained => true,
+            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained or RunEvent.RecoveryBaselined => true,
         _ => false,
     };
 
@@ -73,6 +73,13 @@ internal static class RefOwnership
                     break;
                 case RunEvent.OwnershipFenced fenced when fenced.Claims.Any(key =>
                     record.Preparations[key].Location.Owner.Branch == name):
+                    lease = false;
+                    break;
+                case RunEvent.RecoveryBaselined { Baseline: var baseline } when
+                    record.Preparations[new(baseline.Previous, 1)].Location.Owner.Branch == name:
+                    expected = ((MaterializationPlan.Preservation)record.Plans[
+                        OperationIds.Derive(baseline.Preservation, "preserve-plan")]).Preserved.Branch;
+                    target = null;
                     lease = false;
                     break;
                 case RunEvent.SalvageRetained retained:
