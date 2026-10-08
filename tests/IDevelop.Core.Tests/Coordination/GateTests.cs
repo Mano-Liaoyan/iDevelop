@@ -114,8 +114,9 @@ public sealed class GateTests
         Assert.Equal("Needs attention", stuck.Label);
         var repeat = Assert.IsType<GateReply.Recorded>(await f.Coordinator.SendBack(f.Address, Response(gate), "Add tests.", Op()));
         Assert.Equal((true, sent.Receipt.Sequence), (repeat.Repeat, repeat.Receipt.Sequence));
-        Assert.Equal(new GateReply.Stale(gate.Gate.Request), await f.Coordinator.Approve(f.Address, Response(gate), Op()));
-        Assert.Equal(new GateReply.Stale(gate.Gate.Request), await f.Coordinator.SendBack(f.Address, Response(gate), "Other.", Op()));
+        // A sent-back request waits for nothing, so a stale answer offers no request to answer instead.
+        Assert.Equal(new GateReply.Stale(null), await f.Coordinator.Approve(f.Address, Response(gate), Op()));
+        Assert.Equal(new GateReply.Stale(null), await f.Coordinator.SendBack(f.Address, Response(gate), "Other.", Op()));
         await f.Coordinator.Resume(f.Address);
         Assert.Equal(RunStatus.NeedsAttention, (await f.Decided()).Status);
         Assert.Equal([1, 0, 1], new[] { f.Launches(A), f.Launches(B), f.TotalLaunches });
@@ -269,6 +270,30 @@ public sealed class GateTests
         Assert.Empty(f.Read().Gates);
         Assert.Equal(TaskState.Ready, stopped.Tasks[G].State);
         Assert.Equal(1, f.Launches(A));
+    }
+
+    [Fact]
+    public async Task A_request_that_loses_a_race_with_new_context_is_made_again_with_it()
+    {
+        await using var f = new CoordinatorFixture(RunFixtures.Connect(Graph([Agent(A), Gate(), Agent(X, readOnly: true)], (A, G)), X, G, ConnectionKind.Context));
+        var go = Path.Combine(f.Evidence, "x-go");
+        f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(X, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-X"))
+            .WaitForFile(go).Print(FakeAgents.ReplyLines(ClientId.Codex, "X ready.\n")));
+        await f.Open();
+        using (var held = new Turns.TurnFixture.ProbeBarrier("journal.gate-request.before"))
+        {
+            // The request reads its inputs without X's context, and X's result lands before the request is recorded.
+            f.Runs.Probe = held.Probe;
+            await f.Resume();
+            await held.Reached.Task.WaitAsync(Bound);
+            File.WriteAllText(go, "go");
+            await f.Until(view => view.Tasks[X].State == TaskState.Done);
+        }
+        var waiting = await Waiting(f);
+        Assert.Equal(RunStatus.Waiting, waiting.Status);
+        var inputs = f.Read().Inputs[waiting.Tasks[G].Gate!.Request.Inputs];
+        Assert.Equal(f.Result(X).Id, Assert.IsType<InputBinding.Provided>(Assert.Single(inputs.Bindings, binding => binding is InputBinding.Provided { Edge.From: var from } && from == X)).Result);
+        Assert.Single(f.Read().Gates);
     }
 
     [Fact]

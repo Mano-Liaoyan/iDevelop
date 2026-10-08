@@ -27,7 +27,7 @@ internal sealed partial class WorkflowRunCoordinator
             reply = _store.AnswerGate(_permit!, command, response.Request, response.Inputs, answer) switch
             {
                 RunDecision.Rejected { Reason: { Problem: RunProblem.StaleInput, Task: { } task } } =>
-                    new GateReply.Stale(Read() is { } record ? RunReducer.LiveGate(record, task)?.Request : null),
+                    new GateReply.Stale(Read() is { } record && RunReducer.LiveGate(record, task) is { Decision: null } open ? open.Request : null),
                 RunDecision.Rejected rejected => new GateReply.Refused(rejected.Reason),
                 RunDecision.Existing existing => Receipt(existing.Record, response.Request, repeat: true),
                 RunDecision.Created created => Receipt(created.Record, response.Request, repeat: false),
@@ -60,7 +60,7 @@ internal sealed partial class WorkflowRunCoordinator
                 continue;
             _live[task] = new(LiveStage.Settling);
             // A blocked request shows through its recorded block. A refused one holds the node as a refused start does, so
-            // not once the run is stopping.
+            // not once the run is stopping. One whose inputs moved holds nothing, so the next decision reads them again.
             Background(() => _materializer().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).AsTask(), prepared =>
             {
                 _live.Remove(task);

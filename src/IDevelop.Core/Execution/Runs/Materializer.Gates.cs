@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -11,6 +12,9 @@ internal abstract record GatePreparation
     internal sealed record Blocked(MaterializationBlock Block) : GatePreparation;
 
     internal sealed record Rejected(RunRejection Reason) : GatePreparation;
+
+    /// <summary>The inputs changed after the request read them, so nothing was recorded and the next request reads them again.</summary>
+    internal sealed record Moved(RunRejection Reason) : GatePreparation;
 }
 
 internal sealed partial class Materializer
@@ -28,6 +32,7 @@ internal sealed partial class Materializer
         var run = permit.Run;
         var operation = root;
         var step = "gate";
+        (RevisionId Revision, ImmutableArray<InputBinding> Bindings)? read = null;
         GitRepository? repository = null;
         IDisposable? held = null;
         try
@@ -37,6 +42,7 @@ internal sealed partial class Materializer
             var capture = RunStore.Inputs(record, task, revision, default);
             if (capture.Rejection is { } rejection) return new GatePreparation.Rejected(rejection);
             var bindings = capture.Inputs!.Bindings;
+            read = (revision, bindings);
             operation = OperationIds.Derive(root, Revision.Hash(RunJournal.Canonical(new { revision, bindings })).Sha256);
             var id = new InputId(OperationIds.Derive(operation, "inputs").Value);
             var gate = new GateId(OperationIds.Derive(operation, "gate").Value);
@@ -70,12 +76,25 @@ internal sealed partial class Materializer
             var decision = Journal("gate-request", () => _store.RequestGate(permit, OperationIds.Derive(operation, "request"), gate, material, result));
             return new GatePreparation.Requested(((RunEvent.GateRequested)DecisionEvent(decision)).Request);
         }
-        catch (Refusal refused) { return new GatePreparation.Rejected(refused.Reason); }
+        catch (Refusal refused)
+        {
+            // A result that lands after the read, such as new context, refuses the request. Only then is it worth another read.
+            return InputsMoved(workflow, run, task, read) ? new GatePreparation.Moved(refused.Reason) : new GatePreparation.Rejected(refused.Reason);
+        }
         catch (MaterializationFailure failed)
         { return GateBlock(permit, operation, step, new(operation, task, null, failed.Problem, null, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return GateBlock(permit, operation, step, new(operation, task, null, MaterializationProblem.InputUnavailable, null, [], error.Message) { Scope = new BlockScope.Operation() }); }
         finally { held?.Dispose(); }
+    }
+
+    /// <summary>Whether the node's revision or input bindings now differ from those a refused request read.</summary>
+    private bool InputsMoved(WorkflowId workflow, RunId run, TaskId task, (RevisionId Revision, ImmutableArray<InputBinding> Bindings)? read)
+    {
+        if (read is not { } before || _store.Read(workflow, run) is not RunRead.Loaded loaded) return false;
+        var record = loaded.Record;
+        if (record.Revision.Id != before.Revision) return true;
+        return RunStore.Inputs(record, task, record.Revision.Id, default).Inputs is not { } now || !RunReducer.Same(now.Bindings, before.Bindings);
     }
 
     /// <summary>Copies each forwarded artifact's verified bytes from its producing result to the approval's.</summary>

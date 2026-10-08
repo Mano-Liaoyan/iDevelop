@@ -30,7 +30,8 @@ internal abstract record GateReply
 
     /// <summary>
     /// The request was answered otherwise, replaced, or its inputs were superseded. Nothing was recorded.
-    /// <paramref name="Current"/> is the request the node waits on now, when it has one yet.
+    /// <paramref name="Current"/> is the open request the node waits on now, if it has one yet. A sent-back request waits
+    /// for nothing, so it is never <paramref name="Current"/>.
     /// </summary>
     internal sealed record Stale(GateRequest? Current) : GateReply;
 

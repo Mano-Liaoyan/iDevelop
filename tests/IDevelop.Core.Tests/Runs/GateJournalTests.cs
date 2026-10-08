@@ -171,6 +171,61 @@ public sealed class GateJournalTests
     }
 
     [Fact]
+    public async Task A_request_whose_inputs_move_on_the_way_says_so_and_the_next_one_takes_them()
+    {
+        using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Task(), Gate(), Task(C)), T, G), C, G, ConnectionKind.Context));
+        f.Approve();
+        f.Complete(f.Reserve(T), report: "T ready.\n");
+        var moved = false;
+        var materializer = Materializer.Open(f.Project, f.Store, null, TimeProvider.System, null, step =>
+        {
+            // The context producer finishes after the request read its inputs and before it is recorded.
+            if (step != "journal.gate-request.before" || moved) return;
+            moved = true;
+            f.Complete(f.Reserve(C), report: "C ready.\n");
+        });
+        Assert.IsType<GatePreparation.Moved>(await materializer.RequestGate(f.Permit, RunOperations.Gate(Run, G), G));
+        Assert.Empty(f.Read().Gates);
+
+        var request = Assert.IsType<GatePreparation.Requested>(await materializer.RequestGate(f.Permit, RunOperations.Gate(Run, G), G)).Request;
+        Assert.Equal(f.Read().CurrentResults[C].Id, Assert.IsType<InputBinding.Provided>(f.Read().Inputs[request.Inputs].Bindings[1]).Result);
+    }
+
+    [Fact]
+    public async Task A_request_whose_revision_moves_on_the_way_says_so()
+    {
+        using var f = new RunFixtures(Graph());
+        f.Approve();
+        f.Complete(f.Reserve(T), report: "T ready.\n");
+        var amended = false;
+        var materializer = Materializer.Open(f.Project, f.Store, null, TimeProvider.System, null, step =>
+        {
+            if (step != "journal.gate-request.before" || amended) return;
+            amended = true;
+            var changed = Revision.Capture(Edit(f.Workflow, new WorkflowEdit.SetField(G, "checklist", "Check the tests.")));
+            Assert.IsType<RunDecision.Recorded>(f.Store.Amend(f.Permit, f.Op(), f.Read().Revision.Id, changed, new AmendmentOrigin.Person(), f.Op()));
+        });
+        var moved = Assert.IsType<GatePreparation.Moved>(await materializer.RequestGate(f.Permit, RunOperations.Gate(Run, G), G));
+        Assert.Equal(RunProblem.RevisionConflict, moved.Reason.Problem);
+        Assert.Equal(f.Read().Revision.Id, Assert.IsType<GatePreparation.Requested>(await materializer.RequestGate(f.Permit, RunOperations.Gate(Run, G), G)).Request.Revision);
+    }
+
+    [Fact]
+    public async Task A_request_refused_on_unchanged_inputs_stays_refused()
+    {
+        using var f = new RunFixtures(Graph());
+        f.Approve();
+        f.Complete(f.Reserve(T), report: "T ready.\n");
+        var materializer = Materializer.Open(f.Project, f.Store, null, TimeProvider.System, null, step =>
+        {
+            if (step == "journal.gate-request.before" && f.Read().Phase == RunPhase.Approved)
+                Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
+        });
+        var refused = Assert.IsType<GatePreparation.Rejected>(await materializer.RequestGate(f.Permit, RunOperations.Gate(Run, G), G));
+        Assert.Equal(RunProblem.RunStopped, refused.Reason.Problem);
+    }
+
+    [Fact]
     public async Task A_stopped_run_takes_no_request_and_no_answer()
     {
         using var f = new RunFixtures(Graph());
