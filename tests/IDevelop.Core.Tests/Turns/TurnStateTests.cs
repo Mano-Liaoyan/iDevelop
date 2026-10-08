@@ -150,6 +150,135 @@ public sealed class TurnStateTests
         finally { held?.Dispose(); }
     }
 
+    [Theory]
+    [InlineData("before")]
+    [InlineData("after")]
+    public async Task A_faulted_turn_is_reconciled_by_the_next_window(string row)
+    {
+        await using var f = new TurnFixture();
+        await f.Open(row == "before" ? null : f.Waiting());
+        var observations = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point == "journal.root-exit.before" && Interlocked.Increment(ref observations) == 1)
+                throw new InvalidOperationException("Observation bug.");
+        };
+        if (row == "after") f.Runs.LeaveTimeout = TimeSpan.Zero;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        if (row == "before") await Assert.ThrowsAsync<InvalidOperationException>(() => running.Settlement.WaitAsync(Bound));
+        else await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+        await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+        var fault = await Assert.ThrowsAsync<InvalidOperationException>(() => running.Settlement.WaitAsync(Bound));
+        Assert.Equal("Observation bug.", fault.Message);
+        await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+        var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+            await reopened.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+        Assert.Equal("Uncertain", found.Reason.ToString());
+        Assert.Equal(ProcessMatch.Gone, found.Root);
+        Assert.True(found.Lease.Held);
+        Assert.Contains(launch, f.Preparation.Read().Fenced);
+        Assert.Empty(f.Preparation.Read().RootExits);
+        Assert.Equal(1, f.Launches);
+    }
+
+    [Theory]
+    [InlineData("retried")]
+    [InlineData("busy")]
+    public async Task A_close_fence_the_journal_refuses_is_retried_then_finished_by_the_next_window(string row)
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        f.Runs.StopSeam = _ => false;
+        var permit = f.Preparation.Permit;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
+        using var process = Process.GetProcessById(launched.ProcessId);
+        FileStream? held = null;
+        try
+        {
+            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+            var closed = Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound)).Turn;
+            Assert.Equal("Uncertain", closed.Reason.ToString());
+            held = f.LockJournal();
+            if (row == "retried")
+            {
+                f.Runs.ShutdownTime = TimeSpan.FromSeconds(5);
+                f.Runs.Probe = point => { if (point == "journal.close-fence.retry") held?.Dispose(); };
+            }
+            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+            held.Dispose();
+            var take = permit.TakeTask(T);
+            using (var lease = (take as LeaseTake.Taken)?.Lease)
+            {
+                if (row == "retried")
+                {
+                    Assert.Contains(launch, f.Preparation.Read().Fenced);
+                    Assert.IsType<LeaseTake.Taken>(take);
+                    return;
+                }
+                Assert.DoesNotContain(launch, f.Preparation.Read().Fenced);
+                Assert.IsType<LeaseTake.Busy>(take);
+            }
+            await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+            var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+            Assert.Equal("Uncertain", found.Reason.ToString());
+            Assert.Equal(ProcessMatch.Same, found.Root);
+            Assert.True(found.Lease.Held);
+            Assert.Contains(launch, f.Preparation.Read().Fenced);
+            Assert.Equal("UnresolvedOwnership", Assert.IsType<Release.Held>(closed.Release()).Reason.Problem.ToString());
+            Assert.Empty(f.Preparation.Read().RootExits);
+            Assert.Equal(1, f.Launches);
+        }
+        finally
+        {
+            held?.Dispose();
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+        }
+    }
+
+    [Fact]
+    public async Task A_lease_whose_permit_was_lost_stays_held_until_a_fence_is_recorded()
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        f.Runs.StopSeam = _ => false;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
+        using var process = Process.GetProcessById(launched.ProcessId);
+        try
+        {
+            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+            var closed = Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound)).Turn;
+            f.Preparation.ReleaseControl();
+            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+            Assert.DoesNotContain(launch, f.Preparation.Read().Fenced);
+            using (var standalone = StandaloneLease.TryTake(f.Preparation.Git.Folder, T))
+                Assert.Null(standalone);
+            var permit = f.Preparation.Permit;
+            Assert.Contains(launch, f.Preparation.Read().Fenced);
+            await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+            var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+            Assert.Equal("Uncertain", found.Reason.ToString());
+            Assert.Equal(ProcessMatch.Same, found.Root);
+            Assert.True(found.Lease.Held);
+            Assert.Equal("UnresolvedOwnership", Assert.IsType<Release.Held>(closed.Release()).Reason.Problem.ToString());
+            Assert.Equal(1, f.Launches);
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+        }
+    }
+
     [Fact]
     public async Task A_launch_that_read_open_creates_its_process_before_shutdown_is_published()
     {
