@@ -48,6 +48,9 @@ internal static class RunOperations
 
     public static OperationId Completed(RunId run) => OperationIds.Derive(Root(run), "settle/completed");
 
+    /// <summary>The amendment the person's acceptance of a proposal records.</summary>
+    public static OperationId Amend(OperationId confirmation) => OperationIds.Derive(confirmation, "amend");
+
     public static OperationId ReleasePins(RunId run) => OperationIds.Derive(Root(run), "release-pins");
 
     /// <summary>The operation of the run's recorded stop, which every stop step derives from, whichever command recorded it.</summary>
