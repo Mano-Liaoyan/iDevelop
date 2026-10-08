@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.Execution;
+using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -57,6 +58,9 @@ public sealed class WorkflowRunReviewTests
         second.Click(second.Header(second.Node("D")));
         Assert.False(second.InView<Button>("ReviewUpdatedInputs").IsEffectivelyEnabled);
 
+        // Another step holds the repository's lock for a moment, so the first preview is refused as busy and tried again.
+        var held = new FileStream(Path.Combine(f.Project, ".git", "idevelop", "mutation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(1500)).ContinueWith(_ => held.Dispose());
         shell.Click(shell.InView<Button>("ReviewUpdatedInputs"));
         shell.WaitUntil(() => shell.Has<Button>("ApproveRebase") && shell.Find<Button>("ApproveRebase").IsEffectivelyVisible, "the rebase is previewed",
             () => $"Notice: {(shell.Has<TextBlock>("RebaseNotice") ? shell.Text("RebaseNotice") : null)}");
@@ -125,6 +129,49 @@ public sealed class WorkflowRunReviewTests
         Assert.Single(f.Record().Attempts.Values, attempt => attempt.Cause is AttemptCause.Continue);
         Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
         Assert.False(shell.Has<Button>("ContinueFix") && shell.Find<Button>("ContinueFix").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_standalone_interrupted_fix_offers_no_choice_once_a_workflow_run_owns_its_review()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Review(R, "Review", 405), Dependency(A, R));
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), Interrupting(f), f.Says("A again.", gate: "run-a"))
+            .Answer("Review", f.Says(Verdict(Changes), "session-r")).Route("A reviewer read your change", "A");
+        // The review's fix round runs on its own, outside any workflow run, until closing the project interrupts it.
+        var workflow = WorkflowDocument.OpenProject(f.Project).Single().Current;
+        var standalone = ProjectRuns.Open(f.Project, f.Clients());
+        f.Configure(standalone);
+        standalone.Follow(workflow);
+        Assert.IsType<StartResult.Started>(standalone.Start(workflow.Tasks[A]));
+        Until(() => standalone.Latest.GetValueOrDefault(A) is { Status: AttemptStatus.Succeeded } && standalone.Active.IsEmpty, "A succeeds on its own");
+        Assert.IsType<StartResult.Started>(standalone.Start(workflow.Tasks[R]));
+        Until(() => File.Exists(Path.Combine(f.Evidence, "fix-wrote")), "the fix round writes its file");
+        var leaving = standalone.DisposeAsync().AsTask();
+        Until(() => leaving.IsCompleted, "the standalone runs stop");
+
+        var shell = f.Window();
+        shell.Click(shell.Header(shell.Node("Review")));
+        shell.WaitUntil(() => shell.Has<Button>("ContinueFix") && shell.Find<Button>("ContinueFix").IsEffectivelyVisible, "the review offers its own choice");
+
+        shell.StartRun();
+        shell.WaitForCard("A", "Running");
+        shell.Click(shell.Header(shell.Node("Review")));
+
+        Assert.Equal("Waits for \"A\"", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.False(shell.Find<Button>("ContinueFix").IsEffectivelyVisible);
+        Assert.False(shell.Find<Button>("RetryFix").IsEffectivelyVisible);
+        shell.Click(shell.Find<Button>("StopWorkflow"));
+        shell.WaitForStatus("Stopped");
+    }
+
+    private static void Until(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting until {what}.");
+            Thread.Sleep(20);
+        }
     }
 
     [AvaloniaFact]

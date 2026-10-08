@@ -61,6 +61,10 @@ public sealed class WorkflowRunRecoveryTests
 
         shell.WaitUntil(() => Shows(shell, "RecoveryCaptures"), "the section reads the evidence");
         Assert.Equal("result.txt", shell.Text("RecoveryPaths"));
+        var second = f.Window();
+        second.WaitUntil(() => second.WorkflowRun is not null, "the second window shows the run");
+        second.Click(second.Header(second.Node("A")));
+        Assert.False(second.InView<Button>("PreserveCheckout").IsEffectivelyEnabled);
         Assert.Equal("The client exited with code 0.", shell.Text("RecoveryTurnEnd"));
         Assert.Equal("2 captures. They match.", shell.Text("RecoveryCaptures"));
         Assert.Equal("Completed.", shell.Text("RecoveryCleanup"));
