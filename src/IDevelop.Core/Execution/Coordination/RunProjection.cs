@@ -46,7 +46,7 @@ internal static class RunProjection
         var tasks = ImmutableSortedDictionary.CreateBuilder<TaskId, TaskView>();
         foreach (var (task, view) in progress) tasks[task] = view;
         foreach (var task in plan.Ready)
-            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent ? TaskState.Ready : TaskState.Unsupported);
+            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Review ? TaskState.Ready : TaskState.Unsupported);
         foreach (var (task, holders) in plan.Blocked) tasks[task] = new(task, TaskState.Pending) { HeldBy = [.. holders.Keys] };
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);

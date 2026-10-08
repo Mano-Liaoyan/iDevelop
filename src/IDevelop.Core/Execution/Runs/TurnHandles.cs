@@ -9,7 +9,11 @@ internal abstract record TurnIntent
 {
     private TurnIntent() { }
     internal sealed record First(OperationId Operation, TaskId Task, AttemptCause Cause, string? BasePrompt = null) : TurnIntent;
-    internal sealed record Next(OperationId Operation, LaunchKey Launch, string Prompt) : TurnIntent;
+    internal sealed record Next(OperationId Operation, LaunchKey Launch, string Prompt) : TurnIntent
+    {
+        /// <summary>A reviewer's turn after a fix round: what the fix reported, which its turn request records.</summary>
+        public FixReport? Report { get; init; }
+    }
 }
 
 internal abstract record TurnStart

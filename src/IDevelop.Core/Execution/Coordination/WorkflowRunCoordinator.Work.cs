@@ -40,22 +40,29 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// While no client root of the run is starting or running, starts a resting attempt's next turn that has text for its
-    /// agent, or else the first ready task, each in task order.
+    /// Concludes the reviews that agreed or failed. Then, while no client root of the run is starting or running, starts a
+    /// resting attempt's next turn that has text for its agent, or else the first ready task, or else a review's next
+    /// reviewer turn or fix round, each in task order.
     /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
+        ConcludeReviews(record, view);
         if (!Slotted.IsEmpty) return;
         if (Continue(record, view)) return;
-        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready);
-        if (next is null) return;
+        // A reserved fix of a review round resumes from its review, which knows its prompt.
+        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task) && !FixesReview(record, task));
+        if (next is null)
+        {
+            AdvanceReviews(record, view);
+            return;
+        }
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
         var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
         var operation = RunOperations.First(Address.Run, task, cause);
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause)),
+        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
             start => Started(task, start), error =>
             {
                 _live.Remove(task);

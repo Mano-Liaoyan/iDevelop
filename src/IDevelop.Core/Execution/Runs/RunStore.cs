@@ -552,6 +552,9 @@ internal sealed class RunStore
     {
         // Git runs before the journal lock. A commit's tree never changes, so the trees read here still hold inside it.
         var trees = BaseTrees(permit, attempt);
+        // A review hands on its inputs' artifacts under its own result, whose id derives from this acceptance. Their
+        // bytes are stored before the journal lock, so the accepted result never names an artifact that is not there.
+        if (ForwardedArtifacts(permit, operation, attempt, inputs) is { } refusal) return new RunDecision.Rejected(refusal);
         return Transact(permit, operation, Fingerprint("acceptReport", new
         {
             attempt,
@@ -617,12 +620,51 @@ internal sealed class RunStore
                 return Refuse(RunProblem.OutcomeMismatch);
             }
 
-            return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), owner.Task, owner.Revision, inputs,
+            var reviews = record.Schema == 3 && record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is WorkSpec.Review;
+            var id = reviews ? ArtifactForwarding.ReviewResult(operation) : new ResultId(_ids());
+            var (artifacts, collision) = reviews ? ArtifactForwarding.Artifacts(record, capture.Bindings, id) : ([], null);
+            if (collision is not null)
+            {
+                return Refuse(RunProblem.InputConflict);
+            }
+
+            return new Mutation.Append(new RunEvent.ResultAccepted(new(id, owner.Task, owner.Revision, inputs,
                             new ResultOrigin.Executed(attempt), report, supersedes)
             {
                 Code = record.Schema >= 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
+                Artifacts = artifacts,
             }, capture));
         });
+    }
+
+    /// <summary>
+    /// Stores the artifacts a schema-3 review's result forwards, before the journal lock. Null when there is nothing to
+    /// store or every copy is in place.
+    /// </summary>
+    private RunRejection? ForwardedArtifacts(CoordinatorPermit permit, OperationId operation, AttemptId attempt, InputId inputs)
+    {
+        if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded { Record: var record } || record.Schema != 3 ||
+            !record.Attempts.TryGetValue(attempt, out var owner) ||
+            record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Review ||
+            !record.Inputs.TryGetValue(inputs, out var capture) || record.Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == attempt))
+        {
+            return null;
+        }
+
+        if (ArtifactForwarding.Collision(record, capture.Bindings) is not null)
+        {
+            return new(RunProblem.InputConflict);
+        }
+
+        try
+        {
+            ArtifactForwarding.Store(record, capture.Bindings, ArtifactForwarding.ReviewResult(operation), new RunStorage(_project, permit.Workflow, permit.Run));
+            return null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new(RunProblem.StorageUnavailable);
+        }
     }
 
     /// <summary>The tree of each attempt base the attempt's launches recorded, read from Git without the journal lock.</summary>

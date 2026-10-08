@@ -488,7 +488,11 @@ internal static partial class RunReducer
         else
         {
             CodeOutput? code = accepted.Inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(accepted.Inputs.Id) : null;
-            if (!Same(result.Code, code) || result.Artifacts.Length != 0 || task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
+            // Only a schema-3 review forwards artifacts: exactly its inputs' dependency artifacts, stored under its own result.
+            var artifacts = record.Schema == 3 && task.Blueprint.Work is WorkSpec.Review && result.Origin is ResultOrigin.Executed
+                ? ArtifactForwarding.Artifacts(record, accepted.Inputs.Bindings, result.Id) : ([], null);
+            if (!Same(result.Code, code) || artifacts.Collision is not null || !Same(result.Artifacts, artifacts.Artifacts) ||
+                task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
             {
                 return RunProblem.InputConflict;
             }

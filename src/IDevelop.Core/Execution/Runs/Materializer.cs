@@ -102,6 +102,7 @@ internal sealed partial class Materializer
             step = "artifacts";
             var storage = new RunStorage(_project, workflow, run);
             VerifyArtifacts(record, plan, storage);
+            VerifyForwarding(record, plan.Task, plan.Revision, plan.Bindings);
             JoinRecord? join = null;
             if (plan.Sources.Select(source => source.Commit).Distinct().Count() >= 2)
             {

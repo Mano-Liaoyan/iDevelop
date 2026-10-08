@@ -61,7 +61,8 @@ public sealed partial class ProjectRuns
                     _ => WorkflowRunCoordinator.EndedMessage,
                 };
                 var running = state?.State == TaskState.Running && latest is { Status: AttemptStatus.Running, BetweenTurns: false, Stopping: false };
-                var resting = state?.State == TaskState.Waiting && latest is { BetweenTurns: true, Status: AttemptStatus.WaitingForInput or AttemptStatus.Running };
+                var resting = state?.State == TaskState.Waiting && latest is
+                    { BetweenTurns: true, Status: AttemptStatus.WaitingForInput or AttemptStatus.Running or AttemptStatus.InReview };
                 var send = unavailable ?? state?.State switch
                 {
                     TaskState.Running when latest?.SessionId is null => "The client has not reported its session yet.",
