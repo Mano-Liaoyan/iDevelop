@@ -193,6 +193,7 @@ public sealed class RebaseTests
         if (file == "b.txt") File.WriteAllText(Path.Combine(Checkout(f, U), file), "B\n");
         else File.Delete(Path.Combine(Checkout(f, U), file));
         Assert.Equal(blocked, Assert.IsType<Rebasing.Blocked>(Rebaser(f).Rebase(f.Lease(U), f.Op(), preview.Identity)).Block);
+        Assert.Equal(blocked.Problem, Assert.IsType<RebasePreviewRead.Refused>(Rebaser(f).PreviewRebase(f.Lease(U))).Problem);
         Assert.Equal(CodeOf(stale), Tip(f, Branch(f, U)));
     }
 
@@ -278,27 +279,58 @@ public sealed class RebaseTests
 
         if (change == "edit") File.WriteAllText(Path.Combine(checkout, "b.txt"), "B\n");
         else f.Git.Git("-C", checkout, "symbolic-ref", "HEAD", branch);
+        // A crash after the rebased result is recorded leaves the blocks to the repeat, which resolves them.
+        Assert.Throws<InvalidOperationException>(() => Rebaser(f, probe: reached =>
+        {
+            if (reached == "journal.rebase-accepted.after") throw new InvalidOperationException("Crashed.");
+        }).Rebase(f.Lease(U), approval, preview.Identity));
+        Assert.Contains(f.Read().Blocks.Values, block => !block.Resolved);
         Assert.IsType<Rebasing.Rebased>(Rebaser(f).Rebase(f.Lease(U), approval, preview.Identity));
         Assert.Equal(["new\n", "B\n"], new[] { Text(f, U, "a.txt"), Text(f, U, "b.txt") });
         Assert.Equal("", f.Git.Git("-C", checkout, "status", "--porcelain"));
         Assert.DoesNotContain(f.Read().Blocks.Values, block => !block.Resolved);
     }
 
-    [Fact]
-    public async Task An_ignored_file_where_the_candidate_adds_one_blocks_before_the_branch_moves()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_ignored_file_where_the_candidate_adds_one_blocks_the_move_that_would_overwrite_it(bool afterBranch)
     {
         using var f = new PreparationFixture(Chain());
         await Write(f, T, ("a.txt", "old\n"));
         var stale = await Write(f, U, ("b.txt", "B\n"));
         await Update(f, T, ("n.txt", "N\n"));
+        var preview = Preview(f, U);
+        var approval = f.Op();
+        if (afterBranch)
+            Assert.Throws<InvalidOperationException>(() => Rebaser(f, probe: reached =>
+            {
+                if (reached == "journal.rebase-branch-observed.after") throw new InvalidOperationException("Crashed.");
+            }).Rebase(f.Lease(U), approval, preview.Identity));
         File.AppendAllText(Path.Combine(f.Git.Folder, ".git", "info", "exclude"), "n.txt\n");
         File.WriteAllText(Path.Combine(Checkout(f, U), "n.txt"), "mine\n");
-        var preview = Preview(f, U);
-        var blocked = Assert.IsType<Rebasing.Blocked>(Rebaser(f).Rebase(f.Lease(U), f.Op(), preview.Identity)).Block;
+        var blocked = Assert.IsType<Rebasing.Blocked>(Rebaser(f).Rebase(f.Lease(U), approval, preview.Identity)).Block;
         Assert.Equal(MaterializationProblem.DirtyWorktree, blocked.Problem);
         Assert.Equal(["n.txt"], Assert.IsType<BlockScope.Checkout>(blocked.Scope).Paths.ToArray());
-        Assert.Equal(CodeOf(stale), Tip(f, Branch(f, U)));
+        Assert.Equal(afterBranch ? Assert.IsType<RebaseCandidate.Clean>(preview.Candidate).Commit : CodeOf(stale), Tip(f, Branch(f, U)));
         Assert.Equal("mine\n", Text(f, U, "n.txt"));
+    }
+
+    [UnixFact]
+    public async Task A_failed_reset_blocks_and_the_repeated_approval_finishes_it()
+    {
+        using var f = new PreparationFixture(Chain());
+        await Write(f, T, ("a.txt", "old\n"));
+        await Write(f, U, ("b.txt", "B\n"));
+        await Update(f, T, ("a.txt", "new\n"));
+        var preview = Preview(f, U);
+        var approval = f.Op();
+        var blocked = Assert.IsType<Rebasing.Blocked>(f.FailingGit("reset").Rebase(f.Lease(U), approval, preview.Identity)).Block;
+        Assert.Equal(MaterializationProblem.GitFailed, blocked.Problem);
+        Assert.Equal("old\n", Text(f, U, "a.txt"));
+        Assert.IsType<Rebasing.Rebased>(Rebaser(f).Rebase(f.Lease(U), approval, preview.Identity));
+        Assert.Equal("new\n", Text(f, U, "a.txt"));
+        Assert.DoesNotContain(f.Read().Blocks.Values, block => !block.Resolved);
     }
 
     [Fact]
@@ -387,6 +419,7 @@ public sealed class RebaseTests
             // A journaled rebase holds the run open until it finishes.
             Assert.Equal(RunProblem.UnfinishedPublication, Assert.IsType<RunDecision.Rejected>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped)).Reason.Problem);
             Assert.Equal(RunProblem.ReplacementConflict, Problem(Rebaser(f).Rebase(f.Lease(U), f.Op(), preview.Identity)));
+            Assert.Equal(RunProblem.OperationConflict, Problem(Rebaser(f).Rebase(f.Lease(U), approval, new(new string('0', 64)))));
             var plan = record.Plans.Single(pair => pair.Value is MaterializationPlan.Rebase).Key;
             if (record.GitIntents.Any(pair => pair.Value.Plan == plan && !record.GitObservations.ContainsKey(pair.Key) &&
                 (pair.Value.Mutation is GitMutation.ResetCheckout || pair.Value.Mutation is GitMutation.MoveRef move && move.Change.Ref == Branch(f, U))))
@@ -425,11 +458,53 @@ public sealed class RebaseTests
         Assert.NotEqual(CodeOf(stale), Tip(f, Branch(f, U)));
     }
 
-    [UnixFact]
-    public async Task Rebasing_needs_git_243_like_a_join()
+    [Fact]
+    public async Task Updated_inputs_that_conflict_with_each_other_leave_nothing_to_rebase()
     {
-        using var f = new PreparationFixture(Chain());
+        using var f = new PreparationFixture(Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U)), T, U), C, U));
         await Write(f, T, ("a.txt", "old\n"));
+        await Write(f, C, ("c.txt", "C\n"));
+        var stale = await Write(f, U, ("b.txt", "B\n"));
+        await Update(f, T, ("c.txt", "T\n"));
+        var preview = Preview(f, U);
+        var conflict = Assert.IsType<RebaseCandidate.Conflicted>(preview.Candidate);
+        Assert.Equal(["c.txt"], conflict.Paths.ToArray());
+        Assert.Equal("The updated inputs conflict with each other in c.txt.", conflict.Detail);
+        Assert.Null(preview.NewBase);
+        Assert.Equal(RunProblem.InputConflict, Problem(Rebaser(f).Rebase(f.Lease(U), f.Op(), preview.Identity)));
+        Assert.Equal(CodeOf(stale), Tip(f, Branch(f, U)));
+    }
+
+    [UnixFact]
+    public async Task A_report_only_update_rebases_without_a_merge_even_on_git_242()
+    {
+        var reader = Turns.TurnFixture.Agent(T, readOnly: true);
+        using var f = new PreparationFixture(Connect(FixtureWorkflow(reader, Writer(U)), T, U));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready, "T ready.\n");
+        var first = Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), ready.Execution.Launch.Attempt, ready.Execution.Inputs, "T ready.\n"));
+        var stale = await Write(f, U, ("b.txt", "B\n"));
+        var retry = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op())));
+        await f.Close(retry, "T again.\n");
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), retry.Execution.Launch.Attempt, retry.Execution.Inputs, "T again.\n",
+            ((RunEvent.ResultAccepted)first.Event).Result.Id));
+        var old = Rebaser(f, environment: GitVersion(f, "git version 2.42.0"));
+        var preview = Preview(f, U, old);
+        Assert.Equal(preview.OldBase, preview.NewBase);
+        Assert.Empty(Assert.IsType<RebaseCandidate.Clean>(preview.Candidate).Updates);
+        var rebased = Assert.IsType<Rebasing.Rebased>(old.Rebase(f.Lease(U), f.Op(), preview.Identity)).Result;
+        Assert.Equal(GitFixture.Read(f.Git.Open().ReadCommit(CodeOf(stale))).Tree, GitFixture.Read(f.Git.Open().ReadCommit(CodeOf(rebased))).Tree);
+        Assert.Equal("B\n", Text(f, U, "b.txt"));
+    }
+
+    [UnixTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Rebasing_needs_git_243_like_a_join(bool join)
+    {
+        using var f = new PreparationFixture(join ? Connect(Connect(FixtureWorkflow(Writer(T), Writer(C), Writer(U)), T, U), C, U) : Chain());
+        await Write(f, T, ("a.txt", "old\n"));
+        if (join) await Write(f, C, ("c.txt", "C\n"));
         await Write(f, U, ("b.txt", "B\n"));
         await Update(f, T, ("a.txt", "new\n"));
         var old = Rebaser(f, environment: GitVersion(f, "git version 2.42.0"));
