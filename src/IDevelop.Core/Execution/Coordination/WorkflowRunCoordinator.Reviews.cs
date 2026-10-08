@@ -39,6 +39,36 @@ internal sealed partial class WorkflowRunCoordinator
             ? turn.Prompt : throw new InvalidOperationException("The review has no task to review.");
     }
 
+    internal const string ReviewEndedReason = "The review ended before this fix round started.";
+
+    /// <summary>
+    /// A fix whose review has ended goes no further, as when the person cancelled the review: its running turn is cancelled,
+    /// a fix that rests closes cancelled, and a reserved fix that never started closes as not started.
+    /// </summary>
+    private void EndFixes(RunRecord record, RunView view)
+    {
+        foreach (var (task, state) in view.Tasks)
+        {
+            if (state.Attempt is not { } fix || record.Closures.ContainsKey(fix) || record.ReviewOf(fix) is not { } link ||
+                !record.Closures.ContainsKey(link.Attempt) || _holds.ContainsKey(task))
+                continue;
+            var ended = OperationIds.Derive(RunOperations.Root(Address.Run), $"review-ended/{link.Attempt.Value:D}");
+            switch (_live.GetValueOrDefault(task))
+            {
+                case { Stage: LiveStage.Running, Turn: { } turn, Cancelled: false } live when turn.Address.Launch.Attempt == fix:
+                    _live[task] = live with { Cancelled = true };
+                    Background(() => turn.CancelAsync(), _ => { }, _ => { });
+                    break;
+                case null when state.State == TaskState.Waiting:
+                    CloseWaiting(task, fix, ended);
+                    break;
+                case null when !record.Claims.Keys.Any(key => key.Attempt == fix):
+                    CloseUnclaimed(task, fix, ended, ReviewEndedReason);
+                    break;
+            }
+        }
+    }
+
     /// <summary>Concludes every resting review whose step finishes or fails it. A conclusion takes no client slot.</summary>
     private void ConcludeReviews(RunRecord record, RunView view)
     {

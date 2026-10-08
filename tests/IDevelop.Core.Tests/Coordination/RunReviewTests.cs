@@ -373,4 +373,79 @@ public sealed class RunReviewTests
             default).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry));
     }
+
+    [Fact]
+    public async Task Cancelling_a_review_during_a_fix_round_cancels_the_fix_too()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Interrupting(f)).Answer(R, Reads(f, 1, Changes1));
+        await f.Open();
+        await f.Resume();
+        await TurnFixture.WaitUntilAsync(() => File.Exists(Path.Combine(f.Evidence, "fix-1-wrote")));
+        var fix = f.Attempt(A);
+
+        using (var session = f.Session(R))
+            Assert.Equal(CommandOutcome.Applied, (await session.CancelAsync(new TurnKey(f.Attempt(R), 1), default).WaitAsync(Bound)).Outcome);
+        var stuck = await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[A].State == TaskState.Failed);
+
+        var record = f.Read();
+        Assert.Equal(TerminalAttemptOutcome.Cancelled, Assert.IsType<AttemptEnd.Logged>(record.Closures[f.Attempt(R)]).Outcome);
+        Assert.Equal(TerminalAttemptOutcome.Cancelled, Assert.IsType<AttemptEnd.Logged>(record.Closures[fix]).Outcome);
+        Assert.Equal((TaskState.Failed, TaskState.Pending), (stuck.Tasks[R].State, stuck.Tasks[B].State));
+        Assert.Equal((2, 1, 0), (f.Launches(A), f.Launches(R), f.Launches(B)));
+        Assert.Equal(fix, f.Attempt(A));
+    }
+
+    [Fact]
+    public async Task A_verdict_is_asked_for_once_more_and_a_fix_round_that_fails_fails_the_review()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1"))
+                    .Print("""{"method":"turn/completed","params":{"turn":{"id":"turn-1","status":"failed","error":{"message":"The fix broke."}}}}"""))
+            .Answer(R, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-r")).Print(FakeAgents.ReplyLines(ClientId.Codex, "Looks fine to me.")),
+                Reads(f, 2, Changes1));
+        await f.Open();
+        await f.Resume();
+        var failed = await f.Until(view => view.Tasks[R].State == TaskState.Failed);
+
+        Assert.StartsWith("iDevelop could not read the verdict at the end of your last message.", f.Prompt(R, 2));
+        Assert.Equal(("session-r", 2, 2), (f.Resumed(R, 2), f.Launches(R), f.Launches(A)));
+        var log = f.Log(R).Record!;
+        Assert.Equal(AttemptStatus.Failed, log.Status);
+        Assert.Equal("\"A\" did not finish fix round 1. It ended Failed. The fix broke.", log.Detail);
+        Assert.Equal(TerminalAttemptOutcome.Failed, Assert.IsType<AttemptEnd.Logged>(f.Read().Closures[f.Attempt(R)]).Outcome);
+        Assert.Equal((TaskState.Failed, TaskState.Pending, 0), (failed.Tasks[A].State, failed.Tasks[B].State, f.Launches(B)));
+        Assert.DoesNotContain(f.Read().Results, result => result.Task == R);
+    }
+
+    [Fact]
+    public async Task A_reserved_fix_round_whose_start_failed_resumes_once_with_its_recorded_cause()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        var fixing = false;
+        var thrown = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point == "coordinator.fix") fixing = true;
+            else if (point == "runner.claim.before" && fixing && Interlocked.CompareExchange(ref thrown, 1, 0) == 0)
+                throw new IOException("The claim could not be written.");
+        };
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        Assert.Equal(1, thrown);
+        var fix = Assert.Single(record.Attempts.Values, attempt => attempt.Cause is AttemptCause.ReviewFix);
+        Assert.Equal(1, record.Claims.Keys.Count(key => key.Attempt == fix.Id));
+        Assert.Equal((2, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
+        Assert.Equal("session-1", f.Resumed(A, 2));
+        Assert.StartsWith("Fix the findings.\n\n### Finding 1", f.Prompt(A, 2));
+    }
 }

@@ -46,6 +46,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
+        EndFixes(record, view);
         ConcludeReviews(record, view);
         if (!Slotted.IsEmpty) return;
         if (Continue(record, view)) return;
@@ -332,7 +333,7 @@ internal sealed partial class WorkflowRunCoordinator
         }, error => Faulted(task, error));
     }
 
-    private void CloseUnclaimed(TaskId task, AttemptId attempt, OperationId stop)
+    private void CloseUnclaimed(TaskId task, AttemptId attempt, OperationId stop, string reason = StoppedReason)
     {
         _live[task] = new(LiveStage.Settling);
         Offload(() =>
@@ -340,7 +341,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RunRejection(RunProblem.TaskBusy);
             using (taken.Lease)
             {
-                return _store.Recover(taken.Lease, RunOperations.NotStarted(stop, attempt), attempt, RecoveryOutcome.NotStarted, stop, StoppedReason)
+                return _store.Recover(taken.Lease, RunOperations.NotStarted(stop, attempt), attempt, RecoveryOutcome.NotStarted, stop, reason)
                     is RunDecision.Rejected rejected ? rejected.Reason : null;
             }
         }, refusal =>
