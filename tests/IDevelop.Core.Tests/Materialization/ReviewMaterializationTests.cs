@@ -30,7 +30,7 @@ public sealed class ReviewMaterializationTests
         return (review, fix, result, repaired);
     }
 
-    private static async Task CloseReviewTurn(PreparationFixture f, Preparation.Ready ready)
+    internal static async Task CloseReviewTurn(PreparationFixture f, Preparation.Ready ready)
     {
         var execution = ready.Execution;
         var attempt = f.Read().Attempts[execution.Launch.Attempt];

@@ -15,6 +15,336 @@ public sealed class RestoreTests
         OperationId Confirmation, RestorePreview Preview, string IndexPath, string ScratchRoot);
 
     [Fact]
+    public async Task A_restore_receipt_crash_resolves_every_covered_block_on_rerun()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        Assert.Equal("Blocked", f.Materializer().Publish(f.Lease(T), f.Op(), attempt).GetType().Name);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restored.after") throw new Crash(); })
+            .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        var receipt = f.Read().Restorations[OperationIds.Derive(operation, "restore-plan")];
+        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var restored = f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
+        Assert.Equal("Restored", restored.GetType().Name);
+        Assert.Equal(receipt, Assert.IsType<Restoration.Restored>(restored).Receipt);
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
+    public async Task Restore_applies_the_repository_clean_and_smudge_filter()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "filter.mark.clean", "grep -v '^smudged$' || true").ExitCode);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "filter.mark.smudge", "cat && echo smudged").ExitCode);
+        File.WriteAllText(Path.Combine(f.Git.Open().CommonDirectory, "info", "attributes"), "*.txt filter=mark\n");
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        Assert.Equal(" M a.txt\n", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(new[] { "a.txt" }, preview.Paths.Select(p => p.Path));
+        var restored = f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity);
+        Assert.Equal("Restored", restored.GetType().Name);
+        Assert.Equal("A\nsmudged\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
+    }
+
+    [Fact]
+    public async Task Conflicting_stages_after_publication_refuse_restore_without_removing_the_file()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+        var entries = new System.Text.StringBuilder();
+        var contents = new[] { "base\n", "ours\n", "theirs\n" };
+        for (var stage = 1; stage <= 3; stage++)
+        {
+            var blob = await f.Git.RunWithInput(ready.Checkout, contents[stage - 1], "hash-object", "-w", "--stdin");
+            Assert.Equal(0, blob.ExitCode);
+            entries.Append($"100644 {blob.Text.Trim()} {stage}\tc.txt\n");
+        }
+        Assert.Equal(0, (await f.Git.RunWithInput(ready.Checkout, entries.ToString(), "update-index", "--index-info")).ExitCode);
+        f.Git.Write("c.txt", "conflicted\n", ready.Checkout);
+        Assert.Equal(3, f.Git.Run(ready.Checkout, "ls-files", "-u").Text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = f.Materializer().PreviewRestore(f.Lease(T), attempt, preservation);
+        if (preview is RestorePreviewRead.Previewed succeeded)
+            f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), succeeded.Preview.Identity);
+        Assert.True(File.Exists(Path.Combine(ready.Checkout, "c.txt")));
+        Assert.Equal("conflicted\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
+        Assert.Equal(3, f.Git.Run(ready.Checkout, "ls-files", "-u").Text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        Assert.Equal("Refused", preview.GetType().Name);
+        var refused = Assert.IsType<RestorePreviewRead.Refused>(preview);
+        Assert.Equal("DirtyWorktree", refused.Problem.ToString());
+        Assert.Equal("Restore needs a plain index. The index has unresolved stages.", refused.Detail);
+        Assert.Equal(new[] { "c.txt" }, refused.Scope!.Paths);
+    }
+
+    [Theory]
+    [InlineData("before")]
+    [InlineData("journal.restore-plan.after")]
+    public async Task An_unresolved_claim_before_or_during_restore_prevents_every_move(string point)
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "drifted\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(new[] { "a.txt" }, preview.Paths.Select(p => p.Path));
+        if (point == "before") RootExitTests.Claim(f, ready);
+        var operation = f.Op();
+        var restored = f.Materializer(probe: step =>
+        {
+            if (step == point) RootExitTests.Claim(f, ready);
+        }).Restore(f.Lease(T), operation, attempt, preservation, f.Op(), preview.Identity);
+        Assert.Equal("Rejected", restored.GetType().Name);
+        Assert.Equal("UnresolvedOwnership", Assert.IsType<Restoration.Rejected>(restored).Reason.Problem.ToString());
+        Assert.Equal(new[] { ready.Execution.Launch }, f.Read().UnresolvedClaims);
+        Assert.Equal(0, Moves(f, operation));
+        Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("Observed", f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), ready.Execution.Launch, new RootExit.Exited(1)).GetType().Name);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        f.Git.Write("a.txt", "later\n", ready.Checkout);
+        var fresh = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), fresh, attempt)).GetType().Name);
+        var control = f.Op();
+        Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), control, attempt, fresh, f.Op(), Preview(f, ready, fresh).Identity).GetType().Name);
+        Assert.Equal(1, Moves(f, control));
+        Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+    }
+
+    [Theory]
+    [InlineData("none")]
+    [InlineData("journal.restore-head-intent.after")]
+    [InlineData("git.restore-head.after")]
+    [InlineData("journal.restore-head-observed.before")]
+    public async Task Detached_head_restore_converges_after_a_crash(string point)
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        var branch = ready.Execution.Location.Owner.Branch;
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "-q", "--detach").ExitCode);
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(new[] { "HEAD" }, preview.Refs);
+        Assert.Equal(1, f.Read().Blocks.Values.Count(block => !block.Resolved));
+        var operation = f.Op();
+        var confirmation = f.Op();
+        if (point != "none")
+            Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
+                .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        var outcome = f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
+        Assert.Equal("Restored", outcome.GetType().Name);
+        Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2\n", f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD").Text);
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(branch))?.Hex);
+        Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
+        Assert.Equal(2, Moves(f, operation));
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
+    public async Task A_lock_only_restore_leaves_unfinished_retry_path_drift_open()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await SalvageTests.FailedWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "drifted\n", ready.Checkout);
+        var early = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), early, attempt)).GetType().Name);
+        var drift = OperationIds.Derive(early, "preserve-drift");
+        Assert.Equal(new[] { "a.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
+        var salvage = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), attempt));
+        var indexPath = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
+        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        {
+            if (step != "journal.retry-reset-intent.after") return;
+            File.WriteAllText(indexPath + ".lock", "partial\n");
+            throw new Crash();
+        }).ResetForRetry(f.Lease(T), f.Op(), salvage.Receipt.Plan, f.Op()));
+        Assert.Equal("partial\n", File.ReadAllText(indexPath + ".lock"));
+        Assert.False(f.Read().Blocks[drift].Resolved);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity).GetType().Name);
+        Assert.False(File.Exists(indexPath + ".lock"));
+        Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal(1, f.Read().Blocks.Count(block => block.Key == drift && !block.Value.Resolved));
+        Assert.Equal(new[] { "a.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
+    }
+
+    [Fact]
+    public async Task A_completed_restore_rerun_after_publication_returns_its_receipt_without_appending()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready, "done\n");
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("result.txt", "late\n", ready.Checkout);
+        var publication = f.Op();
+        Assert.Equal("Blocked", f.Materializer().Publish(f.Lease(T), publication, attempt).GetType().Name);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var restored = Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        var accepted = f.Materializer().Publish(f.Lease(T), publication, attempt);
+        Assert.Equal("Accepted", accepted.GetType().Name);
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(accepted).Result.Report);
+        var sequence = f.Read().Sequence;
+        var again = f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
+        Assert.Equal("Restored", again.GetType().Name);
+        Assert.Equal(restored, again);
+        Assert.Equal(sequence, f.Read().Sequence);
+    }
+
+    [Fact]
+    public async Task A_restore_rerun_resolves_its_own_block_and_enables_publication()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready, "done\n");
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("result.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restore-plan.after") throw new Crash(); })
+            .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        f.Git.Write("extra.txt", "extra\n", ready.Checkout);
+        Assert.Equal("Blocked", f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity).GetType().Name);
+        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        File.Delete(Path.Combine(ready.Checkout, "extra.txt"));
+        Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity).GetType().Name);
+        Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
+    public async Task Restore_after_a_registration_refusal_enables_publication()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready, "done\n");
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("result.txt", "late\n", ready.Checkout);
+        var reason = f.Git.Run(f.Git.Folder, "worktree", "list", "--porcelain").Text.Split('\n')
+            .Single(line => line.StartsWith("locked ", StringComparison.Ordinal))["locked ".Length..];
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
+        var failed = Assert.IsType<Preservation.Blocked>(await f.Materializer().Preserve(f.Lease(T), f.Op(), attempt));
+        Assert.Equal("UncertainOwnership", failed.Block.Problem.ToString());
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        Assert.Equal("Blocked", f.Materializer().Publish(f.Lease(T), f.Op(), attempt).GetType().Name);
+        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity).GetType().Name);
+        Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
+    public async Task Restore_applies_the_repository_line_ending_conversion()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "config", "core.autocrlf", "true").ExitCode);
+        File.WriteAllText(Path.Combine(ready.Checkout, "a.txt"), "late\r\n");
+        Assert.Equal(" M a.txt\n", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal(new[] { "a.txt" }, preview.Paths.Select(p => p.Path));
+        var outcome = f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity);
+        Assert.Equal("Restored", outcome.GetType().Name);
+        Assert.Equal("A\r\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
+    }
+
+    [Fact]
+    public async Task Restore_after_a_skip_worktree_refusal_enables_publication()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready, "done\n");
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("result.txt", "late\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", "--skip-worktree", "root.txt").ExitCode);
+        var refused = Assert.IsType<Preservation.Blocked>(await f.Materializer().Preserve(f.Lease(T), f.Op(), attempt));
+        Assert.Equal("DirtyWorktree", refused.Block.Problem.ToString());
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", "--no-skip-worktree", "root.txt").ExitCode);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        Assert.Equal("Blocked", f.Materializer().Publish(f.Lease(T), f.Op(), attempt).GetType().Name);
+        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var preview = Preview(f, ready, preservation);
+        Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity).GetType().Name);
+        Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Accepted", published.GetType().Name);
+        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
     public async Task Preserve_and_restore_an_accepted_baseline()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));

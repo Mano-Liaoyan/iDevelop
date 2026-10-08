@@ -8,6 +8,109 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class RecoveryBaselineTests
 {
     [Fact]
+    public async Task An_unfinished_retry_reset_blocks_recording_a_recovery_baseline()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await CloseInterrupted(f, ready);
+        var previous = ready.Execution.Launch.Attempt;
+        var salvage = await f.Materializer().Salvage(f.Lease(T), f.Op(), previous);
+        Assert.Equal("Retained", salvage.GetType().Name);
+        var retained = Assert.IsType<Salvage.Retained>(salvage);
+        var reset = f.Op();
+        var resetConfirmation = f.Op();
+        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        {
+            if (step == "journal.retry-reset-intent.after") throw new Crash();
+        }).ResetForRetry(f.Lease(T), reset, retained.Receipt.Plan, resetConfirmation));
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, previous)).GetType().Name);
+        var baseline = f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, f.Op(), preservation);
+        Assert.Equal("Blocked", baseline.GetType().Name);
+        var blocked = Assert.IsType<RecoveryBaselining.Blocked>(baseline);
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("Retry reset " + OperationIds.Derive(reset, "retry-plan").Value.ToString("D") +
+            " has an unfinished Git step on this checkout. Run it again, or salvage and retry.", blocked.Block.Detail);
+        Assert.Empty(f.Read().Baselines);
+        Assert.Equal("Reset", f.Materializer().ResetForRetry(f.Lease(T), reset, retained.Receipt.Plan, resetConfirmation).GetType().Name);
+        var fresh = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), fresh, previous)).GetType().Name);
+        var control = f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, f.Op(), fresh);
+        Assert.Equal("Recorded", control.GetType().Name);
+        Assert.Equal("session-1", Assert.IsType<RecoveryBaselining.Recorded>(control).Receipt.Baseline.Session);
+        Assert.Single(f.Read().Baselines);
+    }
+
+    [Theory]
+    [InlineData("Failed", "planned")]
+    [InlineData("Cancelled", "planned")]
+    [InlineData("Succeeded", "planned")]
+    [InlineData("Failed", "reserved")]
+    [InlineData("Cancelled", "reserved")]
+    [InlineData("Succeeded", "reserved")]
+    public async Task Continue_of_a_review_fix_needs_a_baseline_unless_it_succeeded(string terminal, string entry)
+    {
+        var outcome = Enum.Parse<TerminalAttemptOutcome>(terminal);
+        var reviewer = new IDevelop.Workflows.TaskDefinition(U, new IDevelop.Workflows.Blueprint(new("example.review", 1), "Review",
+            new IDevelop.Workflows.WorkSpec.Review(IDevelop.Workflows.PromptTemplate.Parse("Review"), IDevelop.Workflows.PromptTemplate.Parse("Fix")),
+            [], new(Task().Execution, IDevelop.Workflows.ConversationMode.Autonomous))) { Title = "Review" };
+        using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), reviewer), T, U));
+        await f.Publish(T, f.A);
+        var review = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: "Review the changes."));
+        await ReviewMaterializationTests.CloseReviewTurn(f, review);
+        var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
+            cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
+        StartLog(f, fix);
+        var previous = fix.Execution.Launch.Attempt;
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, previous);
+        using (var log = AttemptLog.Open(folder))
+        {
+            if (outcome == TerminalAttemptOutcome.Cancelled) log.Append(new AttemptEvent.CancelRequested(At));
+            log.Append(new AttemptEvent.Agent(At, outcome == TerminalAttemptOutcome.Failed
+                ? new AgentEvent.Failed("Failed.") : new AgentEvent.Succeeded("Fixed.\n")));
+            log.Append(new AttemptEvent.Exited(At, outcome == TerminalAttemptOutcome.Failed ? 1 : 0, ""));
+        }
+        Assert.Equal("Observed", f.Materializer().ObserveRootExit(f.Lease(T), f.Op(), fix.Execution.Launch,
+            new RootExit.Exited(outcome == TerminalAttemptOutcome.Failed ? 1 : 0)).GetType().Name);
+        var checkpoint = Checkpoint(folder);
+        Assert.Equal("Closed", (await f.Materializer().Settle(f.Lease(T), f.Op(), fix.Execution.Launch, checkpoint)).GetType().Name);
+        Assert.Equal("Recorded", f.Store.CloseAttempt(f.Permit, f.Op(), previous, outcome, checkpoint).GetType().Name);
+        Assert.Equal(terminal, Assert.IsType<AttemptEnd.Logged>(f.Read().Closures[previous]).Outcome.ToString());
+        Assert.Equal(new ReviewLink(U, review.Execution.Launch.Attempt, 1, 0), f.Read().ReviewOf(previous));
+        Assert.Empty(f.Read().Baselines);
+        var cause = new AttemptCause.Continue(previous, f.Op());
+        var sequence = f.Read().Sequence;
+        RunDecision decision;
+        if (entry == "planned") decision = f.Store.Plan(f.Lease(T), f.Op(), f.Read().Revision.Id, cause);
+        else
+        {
+            var original = f.Read().Plans.Values.OfType<MaterializationPlan.Preparation>().Single(p => p.Attempt == previous);
+            var plan = original with { Attempt = new(f.Op().Value), Inputs = new(f.Op().Value), Cause = cause };
+            var operation = f.Op();
+            var historical = new RunEntry(3, sequence + 1, operation, Revision.Hash("historical preparation"), At, new RunEvent.Planned(plan));
+            File.AppendAllText(Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "events.jsonl"), RunJournal.Encode(historical));
+            Assert.Equal(sequence + 1, f.Read().Sequence);
+            sequence++;
+            decision = f.Store.Reserve(f.Lease(T), f.Op(), operation);
+        }
+        if (outcome == TerminalAttemptOutcome.Succeeded)
+        {
+            Assert.Equal(entry == "planned" ? "Recorded" : "Created", decision.GetType().Name);
+            Assert.Equal(sequence + 1, f.Read().Sequence);
+            Assert.Equal(1, entry == "planned"
+                ? f.Read().Plans.Values.OfType<MaterializationPlan.Preparation>().Count(p => p.Cause is AttemptCause.Continue)
+                : f.Read().Attempts.Values.Count(a => a.Cause is AttemptCause.Continue));
+        }
+        else
+        {
+            Assert.Equal("Rejected", decision.GetType().Name);
+            Assert.Equal("RecoveryEvidenceInsufficient", Assert.IsType<RunDecision.Rejected>(decision).Reason.Problem.ToString());
+            Assert.Equal(sequence, f.Read().Sequence);
+            Assert.Equal(0, f.Read().Attempts.Values.Count(a => a.Cause is AttemptCause.Continue));
+        }
+    }
+
+    [Fact]
     public async Task Interrupted_fix_continue_keeps_the_commit_made_before_the_crash()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -262,16 +365,23 @@ public sealed class RecoveryBaselineTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await CloseInterrupted(f, ready);
+        f.Git.Write("keep.txt", "keep\n", ready.Checkout);
         var previous = ready.Execution.Launch.Attempt;
         var preservation = f.Op();
         var confirmation = f.Op();
         Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, previous));
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        Assert.False(f.Read().Blocks[drift].Resolved);
+        Assert.Equal(new[] { "keep.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
         var operation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
         var recorded = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer()
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.Equal("Recorded", recorded.GetType().Name);
         Assert.Equal("session-1", recorded.Receipt.Baseline.Session);
+        Assert.True(f.Read().Blocks[drift].Resolved);
+        Assert.Equal("keep\n", File.ReadAllText(Path.Combine(ready.Checkout, "keep.txt")));
         Assert.Equal(1, f.Read().Receipts.Values.Count(e => e.Event is RunEvent.RecoveryBaselined));
         var continuedOperation = f.Op();
         var cause = new AttemptCause.Continue(previous, confirmation);

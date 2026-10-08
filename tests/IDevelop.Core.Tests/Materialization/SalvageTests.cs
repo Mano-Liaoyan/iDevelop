@@ -16,6 +16,38 @@ public sealed class SalvageTests
     private const string Target = "adfe40b30c176fb407933286f51d15ea9b54cdc3";
 
     [Fact]
+    public async Task Salvage_retains_staged_and_working_bytes_after_retry_pin_release_and_gc()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "staged\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a.txt").ExitCode);
+        f.Git.Write("a.txt", "working\n", ready.Checkout);
+        var staged = await f.Git.RunWithInput(ready.Checkout, "staged\n", "hash-object", "--stdin");
+        var working = await f.Git.RunWithInput(ready.Checkout, "working\n", "hash-object", "--stdin");
+        Assert.Equal(0, staged.ExitCode);
+        Assert.Equal(0, working.ExitCode);
+        var salvage = await f.Materializer().Salvage(f.Lease(T), f.Op(), attempt);
+        Assert.Equal("Retained", salvage.GetType().Name);
+        var retained = Assert.IsType<Salvage.Retained>(salvage);
+        Assert.Equal("Reset", f.Materializer().ResetForRetry(f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op()).GetType().Name);
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("Recorded", f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed).GetType().Name);
+        var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
+        Assert.Equal(2, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count(pair => pair.Key.Contains("/preserve/", StringComparison.Ordinal)));
+        Assert.Equal("Released", f.Materializer().ReleasePins(f.Permit, f.Op()).GetType().Name);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
+        var reachable = f.Git.Git("rev-list", "--objects", retained.Receipt.Ref).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Split(' ')[0]).ToArray();
+        Assert.Contains(working.Text.Trim(), reachable);
+        Assert.Equal("working\n", f.Git.Git("cat-file", "-p", working.Text.Trim()));
+        Assert.Contains(staged.Text.Trim(), reachable);
+        Assert.Equal("staged\n", f.Git.Git("cat-file", "-p", staged.Text.Trim()));
+    }
+
+    [Fact]
     public async Task Salvage_captures_edits_hidden_by_a_writer_fsmonitor_hook()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)), configureBase: git =>

@@ -13,6 +13,31 @@ public sealed class PreservationTests
     private const string CleanCommit = "3ccf3357ae3c273f9aa79b45e263663f02975c76";
     private sealed class Crash : Exception;
 
+    [Fact]
+    public async Task A_settled_runs_pending_preservation_survives_pin_release_and_gc()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        Assert.Equal("Recorded", f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed).GetType().Name);
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var operation = f.Op();
+        var attempt = ready.Execution.Launch.Attempt;
+        await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
+        {
+            if (step == "journal.preserve-plan.after") throw new Crash();
+        }).Preserve(f.Lease(T), operation, attempt));
+        Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Preservation>());
+        Assert.Empty(f.Read().Preservations);
+        Assert.Equal("Released", f.Materializer().ReleasePins(f.Permit, f.Op()).GetType().Name);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
+        var outcome = await f.Materializer().Preserve(f.Lease(T), operation, attempt);
+        Assert.Equal("Preserved", outcome.GetType().Name);
+        var preserved = Assert.IsType<Preservation.Preserved>(outcome);
+        Assert.Equal("late\n", f.Git.Git("show", preserved.Commit.Hex + ":a.txt"));
+        Assert.Single(f.Read().Preservations);
+    }
+
     [Theory]
     [InlineData("salvage")]
     [InlineData("preserve")]
