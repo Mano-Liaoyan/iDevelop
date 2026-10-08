@@ -191,7 +191,7 @@ internal sealed partial class Materializer
             var number = 1;
             while (record.Receipts.TryGetValue(id, out var receipt))
             {
-                if (receipt.Event is RunEvent.Blocked prior && RunReducer.Same(prior.Block, block))
+                if (receipt.Event is RunEvent.Blocked prior && !record.Blocks[id].Resolved && RunReducer.Same(prior.Block, block))
                     return new Preparation.Blocked(prior.Block);
                 id = OperationIds.Derive(operation, step + "-blocked-" + number++);
             }

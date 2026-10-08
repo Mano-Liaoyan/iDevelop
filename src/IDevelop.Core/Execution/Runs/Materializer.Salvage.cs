@@ -16,6 +16,7 @@ internal sealed partial class Materializer
         var task = lease.Task;
         InputId? inputs = null;
         var step = "salvage-preconditions";
+        ImmutableArray<EvidenceFile> evidence = [];
         try
         {
             var record = Read(workflow, run);
@@ -41,14 +42,7 @@ internal sealed partial class Materializer
             }
             var checkout = Checkout(repository, prepared.Location.Owner);
             step = "salvage-index-lock";
-            var indexLock = Value(repository.IndexPath(checkout)) + ".lock";
-            if (File.Exists(indexLock))
-            {
-                var storage = new RunStorage(_project, workflow, run);
-                var evidence = storage.WriteEvidence(OperationIds.Derive(operation, "index-lock"), "index.lock", File.ReadAllBytes(indexLock));
-                return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.DirtyWorktree,
-                    inputs, [evidence], "An index.lock exists in the writer checkout; it is retained and was not removed."));
-            }
+            VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
             MaterializationPlan.Salvage plan;
             if (existing is MaterializationPlan.Salvage persisted)
             {
@@ -98,9 +92,9 @@ internal sealed partial class Materializer
             return new Salvage.Retained(retained, retained.Commit);
         }
         catch (Refusal refused) { return new Salvage.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }
 
     private static bool SalvageOwnershipUnresolved(RunRecord record, AttemptId attempt) =>
