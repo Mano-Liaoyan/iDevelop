@@ -12,19 +12,6 @@ internal readonly record struct WorkflowRef(string Folder, WorkflowId Workflow)
     public bool Is(string folder, WorkflowId workflow) => ProjectFolders.Comparer.Equals(Folder, folder) && Workflow == workflow;
 }
 
-/// <summary>How the window names a project folder and tells two names of one folder apart.</summary>
-internal static class ProjectFolders
-{
-    /// <summary>Windows and macOS file systems ignore case by default, and Linux ones do not.</summary>
-    public static readonly StringComparer Comparer =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-
-    public static string Identity(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
-
-    /// <summary>The folder's own name, or the whole path for a drive's root.</summary>
-    public static string Name(string folder) => Path.GetFileName(folder) is { Length: > 0 } name ? name : folder;
-}
-
 /// <summary>
 /// The projects a window had open, which it opens again at the next start, in the per-user session file beside the theme
 /// preference: <c>{"projects":[folder...],"selected":{"folder":...,"workflow":...},"expanded":[{"folder":...,"workflow":...}]}</c>.

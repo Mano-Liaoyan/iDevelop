@@ -605,7 +605,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             leaving = _leaving;
         }
 
-        source?.SetResult(LeaveTurns(launches, owners, standalone, commands));
+        source?.SetResult(Task.Run(() => LeaveTurns(launches, owners, standalone, commands)));
         return new ValueTask(leaving);
     }
 

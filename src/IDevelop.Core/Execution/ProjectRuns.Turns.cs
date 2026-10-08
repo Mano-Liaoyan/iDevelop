@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using IDevelop.Nodes;
+using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -8,7 +9,7 @@ public sealed partial class ProjectRuns
 {
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, OperationId Operation), TurnCommand> _commands = [];
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, LaunchKey Launch), TurnOwner> _owned = [];
-    private static readonly Dictionary<(string Project, TaskId Task), TurnOwner> Unfenced = [];
+    private static readonly Dictionary<(string Project, TaskId Task), TurnOwner> Unfenced = new(new ProjectTask());
 
     internal Action<string>? Probe { get; set; }
     internal Func<Stream, Stream>? RequestStream { get; set; }
@@ -335,6 +336,15 @@ public sealed partial class ProjectRuns
     }
 
     private sealed record TurnCommand(TurnIntent Intent, Task<TurnStart> Task);
+
+    private sealed class ProjectTask : IEqualityComparer<(string Project, TaskId Task)>
+    {
+        public bool Equals((string Project, TaskId Task) x, (string Project, TaskId Task) y) =>
+            ProjectFolders.Comparer.Equals(ProjectFolders.Identity(x.Project), ProjectFolders.Identity(y.Project)) && x.Task == y.Task;
+
+        public int GetHashCode((string Project, TaskId Task) key) =>
+            HashCode.Combine(ProjectFolders.Comparer.GetHashCode(ProjectFolders.Identity(key.Project)), key.Task);
+    }
 
     private abstract record RunOwnership
     {
