@@ -341,7 +341,45 @@ public sealed partial class ProjectRuns
         public sealed record Retrying(Task<TurnSettlement> Retry, LogCheckpoint? Checkpoint, RootObservation? Root) : TurnState;
         public sealed record Faulted(Exception Error) : TurnState;
         public sealed record Released(TurnDisposition Receipt, TurnSettlement Outcome) : TurnState;
+        public sealed record HandedOff(TurnSettlement Outcome) : TurnState;
         public sealed record Adopted : TurnState;
+    }
+
+    private sealed class LaunchGate
+    {
+        private readonly Lock _gate = new();
+        private int _inside;
+        private TaskCompletionSource? _closed;
+
+        public bool TryEnter()
+        {
+            lock (_gate)
+            {
+                if (_closed is not null) return false;
+                _inside++;
+                return true;
+            }
+        }
+
+        public void Leave()
+        {
+            TaskCompletionSource? drained;
+            lock (_gate) drained = --_inside == 0 ? _closed : null;
+            drained?.TrySetResult();
+        }
+
+        public Task Close()
+        {
+            lock (_gate)
+            {
+                if (_closed is null)
+                {
+                    _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    if (_inside == 0) _closed.TrySetResult();
+                }
+                return _closed.Task;
+            }
+        }
     }
 
     private sealed class TurnOwner(ProjectRuns project, RunStore store, Materializer materializer, RunLease lease,
@@ -358,6 +396,7 @@ public sealed partial class ProjectRuns
         public readonly PreparedExecution Preparation = preparation;
         public readonly OperationId SettleOperation = OperationIds.Derive(operation, "settle");
         private readonly OperationId _rootOperation = OperationIds.Derive(operation, "root");
+        private readonly OperationId _closeOperation = OperationIds.Derive(operation, "close");
         public readonly TaskCompletionSource RootExited = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource<RootObservation> _root = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<TurnSettlement> Settlement = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -368,18 +407,15 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                switch (_state)
+                if (_state is not TurnState.Claimed || !project._launchGate.TryEnter()) return null;
+                try
                 {
-                    case TurnState.Claimed when !project.Closing:
-                        var active = create();
-                        _running = handle(active);
-                        _state = new TurnState.Running(active);
-                        return active;
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
-                        return null;
-                    default: throw new UnreachableException();
+                    var active = create();
+                    _running = handle(active);
+                    _state = new TurnState.Running(active);
+                    return active;
                 }
+                finally { project._launchGate.Leave(); }
             }
         }
 
@@ -387,13 +423,7 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                _state = _state switch
-                {
-                    TurnState.Claimed { Requested: false } => new TurnState.Claimed(true),
-                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted => _state,
-                    _ => throw new UnreachableException(),
-                };
+                if (_state is TurnState.Claimed { Requested: false }) _state = new TurnState.Claimed(true);
             }
         }
 
@@ -405,9 +435,8 @@ public sealed partial class ProjectRuns
                 {
                     TurnState.Settled settled => settled.Outcome,
                     TurnState.Released released => released.Outcome,
-                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted => null,
-                    _ => throw new UnreachableException(),
+                    TurnState.HandedOff handedOff => handedOff.Outcome,
+                    _ => null,
                 });
             }
         }
@@ -427,48 +456,20 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                switch (_state)
-                {
-                    case TurnState.Running running:
-                        _ = running.Active.StopAsync(new AttemptEvent.InterruptRequested(project.TimeProvider.GetUtcNow(), LeaveReason));
-                        break;
-                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
-                        break;
-                    default: throw new UnreachableException();
-                }
+                if (_state is TurnState.Running running)
+                    _ = running.Active.StopAsync(new AttemptEvent.InterruptRequested(project.TimeProvider.GetUtcNow(), LeaveReason));
             }
         }
 
         public async Task Leave()
         {
             Task pending;
-            lock (_gate)
-            {
-                pending = _state switch
-                {
-                    TurnState.Retrying retrying => retrying.Retry,
-                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Settled or TurnState.Faulted or TurnState.Released or TurnState.Adopted => Settlement.Task,
-                    _ => throw new UnreachableException(),
-                };
-            }
+            lock (_gate) pending = _state is TurnState.Retrying retrying ? retrying.Retry : Settlement.Task;
             await Task.WhenAny(pending, Task.Delay(project.LeaveTimeout, project.TimeProvider));
-            ActiveRun? active = null;
-            lock (_gate)
-            {
-                switch (_state)
-                {
-                    case TurnState.Running running:
-                        active = running.Active;
-                        break;
-                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
-                        break;
-                    default: throw new UnreachableException();
-                }
-            }
+            ActiveRun? active;
+            lock (_gate) active = (_state as TurnState.Running)?.Active;
             active?.Abandon(new(project.TimeProvider.GetUtcNow(), LeaveReason));
+            HandOff();
         }
 
         public bool RootAbandoned
@@ -477,13 +478,8 @@ public sealed partial class ProjectRuns
             {
                 lock (_gate)
                 {
-                    return _state switch
-                    {
-                        TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Adopted => false,
-                        TurnState.Finalizing or TurnState.Settled or TurnState.Retrying or
-                            TurnState.Faulted or TurnState.Released => !_root.Task.IsCompleted,
-                        _ => throw new UnreachableException(),
-                    };
+                    return _state is not (TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Adopted) &&
+                        !_root.Task.IsCompleted;
                 }
             }
         }
@@ -492,16 +488,8 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                switch (_state)
-                {
-                    case TurnState.Running:
-                        _state = new TurnState.Observing();
-                        break;
-                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
-                        return false;
-                    default: throw new UnreachableException();
-                }
+                if (_state is not TurnState.Running) return false;
+                _state = new TurnState.Observing();
             }
             Observe(exit);
             return true;
@@ -520,13 +508,7 @@ public sealed partial class ProjectRuns
             }
             lock (_gate)
             {
-                _state = _state switch
-                {
-                    TurnState.Observing => new TurnState.Finalizing(root),
-                    TurnState.Claimed or TurnState.Running or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted => throw new UnreachableException(),
-                    _ => throw new UnreachableException(),
-                };
+                _state = _state is TurnState.Observing ? new TurnState.Finalizing(root) : throw new UnreachableException();
             }
             _root.TrySetResult(root);
             switch (root)
@@ -547,26 +529,19 @@ public sealed partial class ProjectRuns
             if (await Task.WhenAny(_root.Task, Task.Delay(project.ShutdownTime, project.TimeProvider)) == _root.Task)
                 return await _root.Task;
             TurnSettlement? outcome = null;
+            var handOff = false;
             lock (_gate)
             {
-                switch (_state)
+                if (_state is TurnState.Running)
                 {
-                    case TurnState.Running:
-                        outcome = Unresolved(UnresolvedReason.Uncertain);
-                        _state = new TurnState.Settled(outcome, null, null);
-                        break;
-                    case TurnState.Observing or TurnState.Finalizing or TurnState.Faulted:
-                        break;
-                    case TurnState.Settled or TurnState.Retrying or TurnState.Released:
-                        if (!_root.Task.IsCompleted) return null;
-                        break;
-                    case TurnState.Claimed or TurnState.Adopted:
-                        throw new UnreachableException();
-                    default: throw new UnreachableException();
+                    outcome = Unresolved(UnresolvedReason.Uncertain);
+                    _state = new TurnState.Settled(outcome, null, null);
+                    handOff = project.Closing;
                 }
             }
             if (outcome is null) return await _root.Task;
             RootExited.TrySetException(new InvalidOperationException("The client did not exit after it was stopped."));
+            if (handOff) HandOff();
             Settlement.TrySetResult(outcome);
             return null;
         }
@@ -576,17 +551,12 @@ public sealed partial class ProjectRuns
 
         public TurnSettlement Complete(TurnSettlement outcome, LogCheckpoint? checkpoint, RootObservation? root)
         {
+            bool handOff;
             lock (_gate)
             {
-                switch (_state)
-                {
-                    case TurnState.Released released: return released.Outcome;
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
-                        _state = new TurnState.Settled(outcome, checkpoint, root);
-                        break;
-                    default: throw new UnreachableException();
-                }
+                if (_state is not (TurnState.Finalizing or TurnState.Retrying)) throw new UnreachableException();
+                _state = new TurnState.Settled(outcome, checkpoint, root);
+                handOff = outcome is TurnSettlement.Unresolved && project.Closing;
             }
             switch (outcome)
             {
@@ -598,6 +568,7 @@ public sealed partial class ProjectRuns
                     break;
                 default: throw new UnreachableException();
             }
+            if (handOff) HandOff();
             Settlement.TrySetResult(outcome);
             return outcome;
         }
@@ -606,15 +577,8 @@ public sealed partial class ProjectRuns
         {
             lock (_gate)
             {
-                switch (_state)
-                {
-                    case TurnState.Released: return;
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
-                        _state = new TurnState.Faulted(error);
-                        break;
-                    default: throw new UnreachableException();
-                }
+                if (_state is not (TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Retrying)) return;
+                _state = new TurnState.Faulted(error);
             }
             _root.TrySetException(error);
             RootExited.TrySetException(error);
@@ -633,9 +597,6 @@ public sealed partial class ProjectRuns
                         _state = new TurnState.Observing();
                         break;
                     case TurnState.Faulted faulted: throw faulted.Error;
-                    case TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
-                        TurnState.Retrying or TurnState.Released or TurnState.Adopted:
-                        throw new UnreachableException();
                     default: throw new UnreachableException();
                 }
             }
@@ -723,9 +684,8 @@ public sealed partial class ProjectRuns
                         root = null;
                         break;
                     case TurnState.Retrying retrying: return retrying.Retry;
-                    case TurnState.Released: return null;
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing: return Settlement.Task;
-                    default: throw new UnreachableException();
+                    case TurnState.Released or TurnState.HandedOff: return null;
+                    default: return Settlement.Task;
                 }
                 start = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 retry = start.Task.Unwrap();
@@ -789,11 +749,9 @@ public sealed partial class ProjectRuns
                 switch (_state)
                 {
                     case TurnState.Released released: return new Release.Released(released.Receipt);
+                    case TurnState.HandedOff: return new Release.Held(new(RunProblem.UnresolvedOwnership));
                     case TurnState.Settled: break;
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
-                        return new Release.Held(new(RunProblem.NotSettled));
-                    default: throw new UnreachableException();
+                    default: return new Release.Held(new(RunProblem.NotSettled));
                 }
             }
             var receipt = TurnReceipts.Receipt(Store, Address);
@@ -806,16 +764,33 @@ public sealed partial class ProjectRuns
                         _state = new TurnState.Released(receipt, settled.Outcome);
                         break;
                     case TurnState.Released released: return new Release.Released(released.Receipt);
-                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
-                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
-                        return new Release.Held(new(RunProblem.NotSettled));
-                    default: throw new UnreachableException();
+                    case TurnState.HandedOff: return new Release.Held(new(RunProblem.UnresolvedOwnership));
+                    default: return new Release.Held(new(RunProblem.NotSettled));
                 }
             }
-            Lease.Dispose();
-            project.Probe?.Invoke("runner.release.inside");
             project.Forget(this);
+            project.Probe?.Invoke("runner.release.inside");
+            Lease.Dispose();
             return new Release.Released(receipt);
+        }
+
+        private void HandOff()
+        {
+            lock (_gate)
+            {
+                if (_state is not TurnState.Settled { Outcome: TurnSettlement.Unresolved }) return;
+            }
+            bool fenced;
+            try { fenced = Materializer.FenceLaunch(Lease, _closeOperation, Address.Launch); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { fenced = false; }
+            if (!fenced) return;
+            lock (_gate)
+            {
+                if (_state is not TurnState.Settled { Outcome: TurnSettlement.Unresolved } settled) return;
+                _state = new TurnState.HandedOff(settled.Outcome);
+            }
+            project.Forget(this);
+            Lease.Dispose();
         }
     }
 }

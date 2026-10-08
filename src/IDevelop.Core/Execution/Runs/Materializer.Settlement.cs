@@ -102,6 +102,21 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new RootObservation.Rejected(refused.Reason); }
     }
 
+    public bool FenceLaunch(RunLease lease, OperationId operation, LaunchKey launch)
+    {
+        using var authority = lease.Use();
+        if (authority is null) return !lease.Permit.Held;
+        var permit = lease.Permit;
+        try
+        {
+            if (Read(permit.Workflow, permit.Run).Fenced.Contains(launch)) return true;
+            Journal("close-fence", () => _store.Record(permit, OperationIds.Derive(operation, "close-fence"),
+                new RunEvent.OwnershipFenced([launch])));
+            return true;
+        }
+        catch (Refusal) { return false; }
+    }
+
     public ValueTask<Settlement> Settle(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint log,
         CancellationToken cancellation = default) => SettleCore(lease, operation, launch, log, false, cancellation);
 

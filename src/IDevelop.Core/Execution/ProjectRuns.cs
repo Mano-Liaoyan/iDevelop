@@ -31,6 +31,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;
+    private readonly LaunchGate _launchGate = new();
     internal bool Closing => Volatile.Read(ref _leaving) is not null;
     private ImmutableDictionary<WorkflowId, Workflow> _workflows = ImmutableDictionary<WorkflowId, Workflow>.Empty;
 
@@ -578,14 +579,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         Task<TurnStart>[] commands = [];
         Task[] standalone = [];
         TaskCompletionSource<Task>? source = null;
+        var launches = Task.CompletedTask;
         Task leaving;
-        var published = false;
         lock (_gate)
         {
             if (_leaving is null)
             {
-                published = true;
                 _clients.Changed -= OnClientsChanged;
+                launches = _launchGate.Close();
                 if (_owned.Count == 0 && _commands.Count == 0)
                 {
                     _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout)));
@@ -604,11 +605,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             leaving = _leaving;
         }
 
-        if (published) Probe?.Invoke("project.launches-closed");
-        foreach (var owner in owners) owner.Shutdown();
-        source?.SetResult(Task.WhenAll(standalone.Concat(owners.Select(owner => owner.Leave()))
-            .Concat(commands.Select(command => WaitForCommand(command)))));
+        source?.SetResult(LeaveTurns(launches, owners, standalone, commands));
         return new ValueTask(leaving);
+    }
+
+    private async Task LeaveTurns(Task launches, TurnOwner[] owners, Task[] standalone, Task<TurnStart>[] commands)
+    {
+        await launches.ConfigureAwait(false);
+        Probe?.Invoke("project.launches-closed");
+        foreach (var owner in owners) owner.Shutdown();
+        await Task.WhenAll(standalone.Concat(owners.Select(owner => owner.Leave()))
+            .Concat(commands.Select(command => WaitForCommand(command)))).ConfigureAwait(false);
     }
 
     private async Task WaitForCommand(Task command)
