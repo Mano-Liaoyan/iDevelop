@@ -104,6 +104,7 @@ public sealed partial class WorkflowCanvasViewModel
     {
         Sheet?.Detach();
         Sheet = null;
+        _runWorkflow?.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -147,7 +148,11 @@ public sealed partial class WorkflowCanvasViewModel
         };
     }
 
-    private void OpenSheet() => Sheet ??= new GenerateWorkflowViewModel(this);
+    private void OpenSheet()
+    {
+        Sheet ??= new GenerateWorkflowViewModel(this);
+        _runWorkflow?.NotifyCanExecuteChanged();
+    }
 
     private void OnGeneratedChanged(object? sender, PropertyChangedEventArgs e)
     {

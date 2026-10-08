@@ -70,7 +70,8 @@
                        AutomationProperties.AutomationId="CardStatus" />
           </Panel>
         </StackPanel>
-        <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs. -->
+        <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs, or,
+             for an approval, selects it so the inspector shows its request. -->
         <Panel Grid.Column="2" VerticalAlignment="Center">
           <!-- The state styles hide the glyph of some states, so the attention switch sits on a panel around it. -->
           <Panel IsVisible="{Binding !HasAttention}">
@@ -79,11 +80,11 @@
                       AutomationProperties.AutomationId="CardStateGlyph" />
           </Panel>
           <Button Classes="attention" IsVisible="{Binding HasAttention}"
-                  Command="{Binding OpenConversationCommand}"
+                  Command="{Binding AttendCommand}"
                   ToolTip.Tip="{Binding AttentionLabel}"
                   AutomationProperties.AutomationId="CardAttention"
                   AutomationProperties.Name="{Binding AttentionLabel}"
-                  AutomationProperties.HelpText="Opens the conversation">
+                  AutomationProperties.HelpText="{Binding AttendHelp}">
             <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
                       theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
           </Button>

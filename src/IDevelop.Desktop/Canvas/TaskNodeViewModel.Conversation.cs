@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows.Input;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 
 namespace IDevelop.Desktop.Canvas;
@@ -12,7 +13,7 @@ public sealed partial class TaskNodeViewModel
     private RelayCommand _openConversation = null!;
 
     /// <summary>The oldest open question, a wait for the person, or a failure. Opening the conversation leaves it.</summary>
-    public Attention? Attention => HasAgent ? Attention.Of(_attempt) : null;
+    public Attention? Attention => RunTask is { } run ? WorkflowRunText.Needs(run, TitleOf) : HasAgent ? Attention.Of(_attempt) : null;
 
     public bool HasAttention => Attention is not null;
 
@@ -20,6 +21,11 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>Opens the task's conversation, at its open question when it has one.</summary>
     public ICommand OpenConversationCommand => _openConversation;
+
+    /// <summary>What the card's attention glyph does: it opens an agent's conversation, or selects an approval, whose request the inspector shows.</summary>
+    public ICommand AttendCommand => HasAgent ? _openConversation : SelectCommand;
+
+    public string AttendHelp => HasAgent ? "Opens the conversation" : "Shows the approval request";
 
     internal ConversationState ConversationState
     {
@@ -42,7 +48,7 @@ public sealed partial class TaskNodeViewModel
             () => HasAgent);
         PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(LastAttempt))
+            if (e.PropertyName is nameof(LastAttempt) or nameof(RunTask))
             {
                 OnPropertyChanged(nameof(Attention));
                 OnPropertyChanged(nameof(HasAttention));

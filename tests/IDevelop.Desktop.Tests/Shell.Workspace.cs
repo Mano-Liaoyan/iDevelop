@@ -29,6 +29,9 @@ internal sealed partial class Shell
     public bool WorkflowShows(string project, string workflow, string automationId) =>
         ById<Control>(WorkflowItem(project, workflow).Item, automationId).Single().IsEffectivelyVisible;
 
+    public bool ProjectShows(string project, string automationId) =>
+        ById<Control>(ProjectItem(project), automationId).First().IsEffectivelyVisible;
+
     /// <summary>Expands the shown workflow's row, so its tasks are listed as before workflows had rows of their own.</summary>
     public void ShowTasks()
     {
