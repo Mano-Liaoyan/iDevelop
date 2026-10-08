@@ -4,7 +4,8 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// Run Workflow's preflight and its approval. <see cref="Inspect"/> only reads.
+/// Run Workflow's preflight and its approval. <see cref="Inspect"/> records nothing; its snapshot of the work tree leaves
+/// only unreferenced loose objects in Git's object database.
 /// </summary>
 internal sealed class RunApprovals
 {
@@ -196,12 +197,13 @@ internal sealed class RunApprovals
     private static RunApproval? InclusionProblem(RunPreflight shown, RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions)
     {
         if (inclusions.Select(inclusion => inclusion.Task).Distinct().Count() != inclusions.Length)
-            return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "A task is included twice.");
+            return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "A task is included twice.") { Current = live };
         foreach (var inclusion in inclusions)
         {
             if (Offers(live, choice, inclusion) is null) continue;
             if (Offers(shown, choice, inclusion) is null) return new RunApproval.Changed(live);
-            return new RunApproval.Refused(ApprovalProblem.InclusionRefused, (Offers(live, choice, inclusion) ?? RunProblem.ReuseUnverifiable).ToString());
+            return new RunApproval.Refused(ApprovalProblem.InclusionRefused, (Offers(live, choice, inclusion) ?? RunProblem.ReuseUnverifiable).ToString())
+            { Current = live };
         }
         return null;
     }
@@ -227,7 +229,7 @@ internal sealed class RunApprovals
         {
             if (live.Planners.FirstOrDefault(planner => planner.Task == inclusion.Task) is not { Status: AttemptStatus.WaitingForInput }) continue;
             if (_finish?.Invoke(inclusion.Task, new(inclusion.Source, inclusion.Turn)) is { } problem)
-                return new RunApproval.Refused(ApprovalProblem.InclusionRefused, problem.GetType().Name);
+                return new RunApproval.Refused(ApprovalProblem.InclusionRefused, problem.GetType().Name) { Current = live };
             finished = true;
         }
         if (finished) _probe?.Invoke("approval.finished.after");
@@ -242,6 +244,8 @@ internal sealed class RunApprovals
     /// </summary>
     public RunApproval Approve(Workflow current, RunConfirmation confirmation)
     {
+        if (confirmation.Command.Value == Guid.Empty)
+            return new RunApproval.Refused(ApprovalProblem.ConfirmationRequired, "A confirmation needs its own command ID.");
         var live = Inspect(current);
         var choice = confirmation.Choice;
         var intents = new ApprovalIntents(_project, live.Workflow);
@@ -251,12 +255,14 @@ internal sealed class RunApprovals
             if (held is null) return new RunApproval.Refused(ApprovalProblem.ApprovalBusy, "Another confirmation of this workflow is still running.");
             _probe?.Invoke("approval.locked");
             var all = intents.All();
+            var repository = GitRepository.Open(_project, _environment) is RepositoryOpen.Opened opened ? opened.Repository : null;
+            if (repository is not null) ReleasePins(repository, all);
             var own = all.FirstOrDefault(intent => intent.Confirmations.Contains(confirmation.Command));
             if (own is not null && Approved(live.Workflow, own.Run) is { } ownRun)
                 return new RunApproval.Approved(own.Run, ownRun.Base, true);
             if (!Current(confirmation.Preview, live, choice)) return new RunApproval.Changed(live);
-            if (!live.Gaps.IsEmpty || !live.Choices.Contains(choice))
-                return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "The preview has gaps or does not offer this base.");
+            if (!live.Gaps.IsEmpty || !live.Choices.Contains(choice) || repository is null)
+                return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "The preview has gaps or does not offer this base.") { Current = live };
             ImmutableArray<ReportInclusion> inclusions = [.. confirmation.Include.OrderBy(inclusion => inclusion.Task)];
             if (InclusionProblem(confirmation.Preview, live, choice, inclusions) is { } refusal) return refusal;
             if (Active(live.Workflow) is { } active)
@@ -269,7 +275,7 @@ internal sealed class RunApprovals
             var pending = all.Where(intent => Approved(live.Workflow, intent.Run) is null).ToArray();
             var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, choice, inclusions)) ??
                 pending.FirstOrDefault(intent => intent.Matches(live, choice, inclusions));
-            foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run);
+            foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run, repository);
             var chosen = adopted is null
                 ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
                     [confirmation.Command], live.Revision, choice, live.Base!.Head, choice == BaseChoice.Snapshot ? live.Base.WorkTree : null,
@@ -281,12 +287,15 @@ internal sealed class RunApprovals
             var codeBase = new RunBase(chosen.Head, BaseChoice.Head);
             if (choice == BaseChoice.Snapshot)
             {
-                if (GitRepository.Open(_project, _environment) is not RepositoryOpen.Opened opened ||
-                    opened.Repository.CreateCommit(chosen.SnapshotRecipe()) is not GitRead<CommitId>.Read commit)
+                if (repository.CreateCommit(chosen.SnapshotRecipe()) is not GitRead<CommitId>.Read commit)
                     return new RunApproval.Refused(ApprovalProblem.GitFailed, "Git could not record the snapshot of the uncommitted work.");
                 codeBase = new RunBase(commit.Value, BaseChoice.Snapshot);
                 _probe?.Invoke("approval.snapshot.after");
             }
+            // Keep the base before the journal names it, so garbage collection cannot remove it before its first preparation.
+            if (!ApprovalPin.Hold(repository, chosen.Run, codeBase.Commit))
+                return new RunApproval.Refused(ApprovalProblem.GitFailed, $"Git could not keep the run base under {ApprovalPin.Name(chosen.Run)}.");
+            _probe?.Invoke("approval.pinned.after");
             var decision = _store.Approve(live.Workflow, chosen.Run, chosen.Operation, chosen.Revision, codeBase, chosen.Inclusions,
                 chosen.Confirmations[0]);
             _probe?.Invoke("approval.approved.after");
@@ -296,7 +305,7 @@ internal sealed class RunApprovals
                 RunDecision.Existing existing => new RunApproval.Approved(chosen.Run, existing.Record.Base, true),
                 RunDecision.Rejected { Reason.Problem: RunProblem.RunBusy } when Active(live.Workflow) is { } other => new RunApproval.Busy(other.Id),
                 RunDecision.Rejected { Reason.Task: not null } inclusion when !chosen.Inclusions.IsEmpty =>
-                    new RunApproval.Refused(ApprovalProblem.InclusionRefused, inclusion.Reason.Problem.ToString()),
+                    new RunApproval.Refused(ApprovalProblem.InclusionRefused, inclusion.Reason.Problem.ToString()) { Current = live },
                 RunDecision.Rejected rejected => new RunApproval.Refused(ApprovalProblem.StorageUnavailable, rejected.Reason.Problem.ToString()),
                 _ => throw new InvalidOperationException(),
             };
@@ -304,6 +313,16 @@ internal sealed class RunApprovals
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             return new RunApproval.Refused(ApprovalProblem.StorageUnavailable, error.Message);
+        }
+    }
+
+    /// <summary>Removes the pin of each approved run whose own base ref now holds its base.</summary>
+    private void ReleasePins(GitRepository repository, ImmutableArray<ApprovalIntent> all)
+    {
+        foreach (var intent in all)
+        {
+            if (Approved(intent.Revision.Snapshot.Id, intent.Run) is { RunKey: { } key } record)
+                ApprovalPin.Release(repository, intent.Run, record.Base.Commit, RunLayout.ApprovedBase(key));
         }
     }
 

@@ -52,6 +52,8 @@ public sealed class PreflightTests
     {
         var refused = Assert.IsType<WorkflowStart.Refused>(await (window ?? f.Runs).StartWorkflow(f.Workflow, new(preview, choice, Command(1))).WaitAsync(Bound));
         Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
+        Assert.Equal(preview.Revision.Id, refused.Current!.Revision.Id);
+        Assert.Equal(preview.Gaps.Length, refused.Current.Gaps.Length);
         Assert.Empty(f.ApprovedRuns());
         Assert.Empty(ChangedContentTests.Intents(f.Project));
         Assert.Equal(0, f.TotalLaunches);
@@ -87,6 +89,23 @@ public sealed class PreflightTests
         Assert.Equal<PreflightGap>([new PreflightGap.Join(D, "Joins need Git 2.43 or later. Installed: git version 2.42.0.")], preview.Gaps);
         f.Workflow = Graph([Agent(A), Agent(B)], (A, B));
         Assert.Empty(f.Preflight().Gaps);
+    }
+
+    [UnixFact]
+    public async Task A_gap_that_appears_after_the_preview_refuses_with_the_refreshed_preview()
+    {
+        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D)], (A, B), (A, C), (B, D), (C, D)));
+        await f.Open();
+        var preview = f.Preflight();
+        Assert.Empty(preview.Gaps);
+        f.Runs.GitEnvironment = GitVersion(f, "git version 2.42.0");
+
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(3))).WaitAsync(Bound));
+
+        Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
+        Assert.Equal<PreflightGap>([new PreflightGap.Join(D, "Joins need Git 2.43 or later. Installed: git version 2.42.0.")], refused.Current!.Gaps);
+        Assert.Empty(f.ApprovedRuns());
+        Assert.Equal(0, f.TotalLaunches);
     }
 
     [UnixFact]

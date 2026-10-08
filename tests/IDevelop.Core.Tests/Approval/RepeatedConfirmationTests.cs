@@ -77,4 +77,18 @@ public sealed class RepeatedConfirmationTests
         Assert.Equal([run], f.ApprovedRuns());
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }
+
+    [Fact]
+    public async Task A_confirmation_without_an_id_is_refused()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await f.Open();
+
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), BaseChoice.Head, default)).WaitAsync(Bound));
+
+        Assert.Equal(ApprovalProblem.ConfirmationRequired, refused.Problem);
+        Assert.Empty(f.ApprovedRuns());
+        Assert.Empty(ChangedContentTests.Intents(f.Project));
+        Assert.Equal(0, f.TotalLaunches);
+    }
 }
