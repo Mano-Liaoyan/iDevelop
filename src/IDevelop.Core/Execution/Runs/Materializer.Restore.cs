@@ -43,21 +43,16 @@ internal sealed partial class Materializer
         GitRepository repository, RunRecord record, ExecutionLocation location, AttemptId attempt, MaterializationPlan.Preservation plan,
         Action<byte[]>? retainLock = null)
     {
-        try
-        {
-            return ReadPreservationCheckout(repository, record, location, attempt, (name, bytes) =>
-            {
-                if (name == "index.lock") retainLock?.Invoke(bytes);
-                return new(name == "index" ? plan.Preserved.Index?.RelativePath ?? "index" : name == "index.lock"
-                    ? plan.Preserved.IndexLock?.Bytes.RelativePath ?? "index.lock" : plan.Outbox.FirstOrDefault(a => "outbox/" + a.Name == name)?.StoredPath ?? name,
-                    Revision.Hash(bytes), bytes.LongLength);
-            });
-        }
-        catch (MaterializationFailure failed) when (failed.Message.StartsWith("The index hides changes to ", StringComparison.Ordinal))
-        {
+        if (!Value(repository.PlainIndex(Checkout(repository, location.Owner))))
             throw Fault(MaterializationProblem.DirtyWorktree,
                 "Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", new([], [], false));
-        }
+        return ReadPreservationCheckout(repository, record, location, attempt, (name, bytes) =>
+        {
+            if (name == "index.lock") retainLock?.Invoke(bytes);
+            return new(name == "index" ? plan.Preserved.Index?.RelativePath ?? "index" : name == "index.lock"
+                ? plan.Preserved.IndexLock?.Bytes.RelativePath ?? "index.lock" : plan.Outbox.FirstOrDefault(a => "outbox/" + a.Name == name)?.StoredPath ?? name,
+                Revision.Hash(bytes), bytes.LongLength);
+        });
     }
 
     private static string? ComponentValue(CheckoutState state, string component) => component switch
@@ -142,7 +137,7 @@ internal sealed partial class Materializer
             to = to with { Untracked = [.. Value(repository.TreeEntries(to.Files)).Where(e => !indexPaths.Contains(e.Path) && e.Mode == "100644")
                 .OrderBy(e => e.Path, StringComparer.Ordinal).Select(e =>
                 {
-                    var bytes = Value(repository.BlobBytes(e.Object));
+                    var bytes = Value(repository.WorkingTreeBlobBytes(Checkout(repository, owner), e.Path, e.Object));
                     return new EvidenceFile(e.Path, Revision.Hash(bytes), bytes.LongLength);
                 })] };
         }
@@ -162,15 +157,21 @@ internal sealed partial class Materializer
                 }
             }
             if (current.Index is null) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs an index. The index is absent.", new([], [], false));
+        }
+        if (!lockOnly)
+        {
             if (!stages.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs a plain index. The index has unresolved stages.", new([.. stages.Select(s => s.Path).Distinct().Order(StringComparer.Ordinal)], [], false));
             if (!Value(repository.PlainIndex(Checkout(repository, owner))))
                 throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", new([], [], false));
         }
         if (!paths.IsEmpty)
         {
-            var checkoutVolume = FileIdentities.VolumeOf(Checkout(repository, owner));
-            var gitVolume = FileIdentities.VolumeOf(Path.GetDirectoryName(Value(repository.IndexPath(Checkout(repository, owner))))!);
-            if (checkoutVolume is not null && gitVolume is not null && checkoutVolume != gitVolume)
+            var checkoutVolume = _volumes(Checkout(repository, owner));
+            var gitVolume = _volumes(Path.GetDirectoryName(Value(repository.IndexPath(Checkout(repository, owner))))!);
+            if (checkoutVolume is null || gitVolume is null)
+                throw Fault(MaterializationProblem.DirtyWorktree,
+                    "iDevelop cannot confirm that the checkout and its Git folder share a file system on this system, so Restore will not replace files. Change them outside iDevelop, then preserve again.", new([.. paths.Select(p => p.Path)], [], false));
+            if (checkoutVolume != gitVolume)
                 throw Fault(MaterializationProblem.DirtyWorktree,
                     "The checkout and its Git folder are on different file systems, so Restore cannot replace files atomically.", new([.. paths.Select(p => p.Path)], [], false));
         }
@@ -213,11 +214,10 @@ internal sealed partial class Materializer
             if (aKind is not ("absent" or "a file") || bKind is not ("absent" or "a file"))
                 throw Fault(MaterializationProblem.DirtyWorktree,
                     $"Restore changes only regular, non-executable files. {path} is {aKind} now and {bKind} in the baseline. Change it outside iDevelop, then preserve again.", new([path], [], false));
-            paths.Add(new(path, Content(a), Content(b)));
+            paths.Add(new(path, a?.Object, b?.Object));
         }
         return paths.ToImmutable();
 
-        Digest? Content(StageEntry? entry) => entry is null ? null : Revision.Hash(Value(repository.BlobBytes(entry.Object)));
         static string Kind(Dictionary<string, StageEntry> entries, string path, StageEntry? entry) =>
             entries.Keys.Any(p => p.StartsWith(path + "/", StringComparison.Ordinal)) ? "a folder" : entry?.Mode switch
             {
@@ -342,16 +342,15 @@ internal sealed partial class Materializer
                     step = "restore-files";
                     Recheck();
                     var intended = Intent(step, files);
-                    var entries = Value(repository.TreeEntries(plan.To.Files)).ToDictionary(e => e.Path, StringComparer.Ordinal);
                     var allAdopted = true;
                     foreach (var path in plan.Paths)
                     {
-                        Recheck();
+                        RecheckRecord();
                         var adopted = Mutate("restore-file-" + path.Path, () =>
                         {
-                            Recheck();
+                            RecheckRecord();
                             var destination = RunStorage.SafePath(checkout, path.Path);
-                            var content = LiveContent(destination);
+                            var content = LiveContent(repository, checkout, path.Path);
                             if (content == path.To) return true;
                             if (content != path.From) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([path.Path], [], false));
                             if (path.To is null) File.Delete(destination);
@@ -359,12 +358,13 @@ internal sealed partial class Materializer
                             {
                                 Directory.CreateDirectory(scratch);
                                 var temporary = Path.Combine(scratch, Revision.Hash(path.Path).Sha256);
-                                var bytes = Value(repository.BlobBytes(entries[path.Path].Object));
-                                if (Revision.Hash(bytes) != path.To) throw Fault(MaterializationProblem.InputUnavailable, "The restore blob differs from its preview.", new([path.Path], [], false));
+                                var bytes = Value(repository.WorkingTreeBlobBytes(checkout, path.Path, path.To));
                                 File.WriteAllBytes(temporary, bytes);
+                                if (Value(repository.WorkingFileBlob(checkout, path.Path, temporary)) != path.To)
+                                    throw Fault(MaterializationProblem.InputUnavailable, "The restore blob differs from its preview.", new([path.Path], [], false));
                                 _probe?.Invoke("restore.file." + path.Path + ".written");
-                                Recheck();
-                                if (LiveContent(destination) != path.From)
+                                RecheckRecord();
+                                if (LiveContent(repository, checkout, path.Path) != path.From)
                                     throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([path.Path], [], false));
                                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                                 File.Move(temporary, destination, overwrite: true);
@@ -427,12 +427,17 @@ internal sealed partial class Materializer
             }
             void Observed(string label, OperationId intent, bool adopted, string? value) =>
                 Journal(label + "-observed", () => _store.Record(permit, OperationIds.Derive(operation, label + "-observed"), new RunEvent.GitObserved(intent, new(adopted, value))));
-            void Recheck()
+            RunRecord RecheckRecord()
             {
                 var liveRecord = Read(permit.Workflow, permit.Run);
                 if (RunReducer.RestorationSuperseded(liveRecord, planId)) throw new Refusal(new(RunProblem.ReplacementConflict));
                 if (liveRecord.UnresolvedClaims.Any(k => liveRecord.Preparations[k].Location.Owner == prepared.Location.Owner))
                     throw new Refusal(new(RunProblem.UnresolvedOwnership));
+                return liveRecord;
+            }
+            void Recheck()
+            {
+                var liveRecord = RecheckRecord();
                 var live = ObserveRestore(repository, liveRecord, prepared.Location, attempt, preserved, RetainLock).State;
                 VerifyRestoreInventory(repository, liveRecord, planId, prepared.Location.Owner, plan, live);
                 VerifyIgnoredObstructions(repository, checkout, [.. plan.Paths.Select(p => p.Path)]);
@@ -445,11 +450,12 @@ internal sealed partial class Materializer
         { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }
 
-    private static Digest? LiveContent(string path)
+    private static string? LiveContent(GitRepository repository, string checkout, string relativePath)
     {
+        var path = RunStorage.SafePath(checkout, relativePath);
         if (!File.Exists(path) && !Directory.Exists(path)) return null;
         RegularFile.Verify(path);
-        return Revision.Hash(File.ReadAllBytes(path));
+        return Value(repository.WorkingFileBlob(checkout, relativePath, path));
     }
 
     private static void VerifyRestoreInventory(GitRepository repository, RunRecord record, OperationId planId, WorktreeOwner owner,

@@ -369,8 +369,10 @@ internal static partial class RunReducer
                 return publication.Recipe.Parents.Length == 1 && publication.Recipe.Parents[0] == publication.VerifiedTip ? null : RunProblem.InvalidData;
             case MaterializationPlan.Salvage salvage:
                 return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&
-                    salvage.Recipe.Parents.Length is 1 or 2 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
-                    (salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents[1] == salvage.BranchTip) ? null : RunProblem.InvalidData;
+                    salvage.Recipe.Parents.Length is >= 1 and <= 4 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
+                    (salvage.Preserved is { } preserved ? salvage.Recipe.Tree == preserved.Files :
+                        salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents.Length == 2 && salvage.Recipe.Parents[1] == salvage.BranchTip)
+                    ? null : RunProblem.InvalidData;
             case MaterializationPlan.Preservation preservation:
                 if (!record.Attempts.TryGetValue(preservation.Attempt, out var preservedAttempt) || preservedAttempt.Task != preservation.Task ||
                     !record.Preparations.ContainsKey(new(preservation.Attempt, 1)) || preservation.Recipe.Tree != preservation.Preserved.Files ||

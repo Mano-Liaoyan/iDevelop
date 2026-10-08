@@ -12,7 +12,7 @@ public sealed class SalvageTests
 {
     private static readonly OperationId Operation = new(Id(2000));
     private static readonly OperationId ResetOperation = new(Id(2001));
-    private const string Commit = "0dbf5cbc9310ef3abbc28073142652917c69dc2f";
+    private const string Commit = "8d9b46f696d0fac188d61ba44f41170aa73a4037";
     private const string Target = "adfe40b30c176fb407933286f51d15ea9b54cdc3";
 
     [Fact]
@@ -45,6 +45,68 @@ public sealed class SalvageTests
         Assert.Equal("working\n", f.Git.Git("cat-file", "-p", working.Text.Trim()));
         Assert.Contains(staged.Text.Trim(), reachable);
         Assert.Equal("staged\n", f.Git.Git("cat-file", "-p", staged.Text.Trim()));
+    }
+
+    [Fact]
+    public async Task Salvage_retains_conflict_stage_bytes_after_retry_pin_release_and_gc()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        var entries = new System.Text.StringBuilder();
+        var contents = new[] { "base\n", "ours\n", "theirs\n" };
+        for (var stage = 1; stage <= 3; stage++)
+        {
+            var blob = await f.Git.RunWithInput(ready.Checkout, contents[stage - 1], "hash-object", "-w", "--stdin");
+            Assert.Equal(0, blob.ExitCode);
+            entries.Append($"100644 {blob.Text.Trim()} {stage}\tc.txt\n");
+        }
+        Assert.Equal(0, (await f.Git.RunWithInput(ready.Checkout, entries.ToString(), "update-index", "--index-info")).ExitCode);
+        f.Git.Write("c.txt", "conflicted\n", ready.Checkout);
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), attempt));
+        Assert.Equal("conflicted\n", f.Git.Git("show", retained.Commit.Hex + ":c.txt"));
+        Assert.Equal(3, GitFixture.Read(f.Git.Open().UnmergedEntries(ready.Checkout)).Length);
+        Assert.Equal("Reset", f.Materializer().ResetForRetry(f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op()).GetType().Name);
+        Assert.False(File.Exists(Path.Combine(ready.Checkout, "c.txt")));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal("Recorded", f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed).GetType().Name);
+        Assert.Equal("Released", f.Materializer().ReleasePins(f.Permit, f.Op()).GetType().Name);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!))));
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
+        Assert.Equal("base\n", f.Git.Git("show", retained.Receipt.Ref + "^3:stages/1/c.txt"));
+        Assert.Equal("ours\n", f.Git.Git("show", retained.Receipt.Ref + "^3:stages/2/c.txt"));
+        Assert.Equal("theirs\n", f.Git.Git("show", retained.Receipt.Ref + "^3:stages/3/c.txt"));
+        Assert.Equal("conflicted\n", f.Git.Git("show", retained.Receipt.Ref + ":c.txt"));
+    }
+
+    [Fact]
+    public async Task A_settled_runs_pending_salvage_survives_pin_release_and_gc()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await FailedWriter(f);
+        var attempt = ready.Execution.Launch.Attempt;
+        Assert.Equal("Recorded", f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed).GetType().Name);
+        f.Git.Write("a.txt", "staged\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a.txt").ExitCode);
+        f.Git.Write("a.txt", "working\n", ready.Checkout);
+        var operation = f.Op();
+        await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: point =>
+        {
+            if (point == "journal.salvage-plan.after") throw new Crash();
+        }).Salvage(f.Lease(T), operation, attempt));
+        Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Salvage>());
+        Assert.Empty(f.Read().Salvages);
+        var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
+        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Equal(2, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), operation, attempt));
+        Assert.Equal("working\n", f.Git.Git("show", retained.Commit.Hex + ":a.txt"));
+        Assert.Equal("staged\n", f.Git.Git("show", retained.Commit.Hex + "^2:a.txt"));
+        Assert.Equal(2, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
+        Assert.Equal("staged\n", f.Git.Git("show", retained.Commit.Hex + "^2:a.txt"));
     }
 
     [Fact]
@@ -142,7 +204,7 @@ public sealed class SalvageTests
             var blocked = Assert.IsType<RetryReset.Blocked>(materializer.ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, confirmation));
             block = blocked.Block;
             Assert.Equal(blocked, materializer.ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, confirmation));
-            Assert.Equal("fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b", Ref(f, retained.Receipt.Ref));
+            Assert.Equal("c5ed5153c79628f2455f2f494b44ce9c1f187f48", Ref(f, retained.Receipt.Ref));
         }
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", block.Detail);
@@ -281,8 +343,8 @@ public sealed class SalvageTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await DivergedWriter(f, detached);
         var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
-        Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
-            new[] { "81ddb7c330112c7f16700ed002803a04b0bce693" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
+        Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "953564c01ecca8c9989241913a8bfa8ed56cca33" } :
+            new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "953564c01ecca8c9989241913a8bfa8ed56cca33" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("approved\n", f.Git.Git("show", retained.Commit.Hex + ":plan.txt"));
         if (!detached)
@@ -325,7 +387,7 @@ public sealed class SalvageTests
         f.Git.Write("new.txt", "changed\n", ready.Checkout);
         var second = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal(Commit, GitFixture.Read(f.Git.Open().ReadRef(first.Receipt.Ref))?.Hex);
-        Assert.Equal("1df94d83e2d8a4355dd2a2024eca4475c2b11b64", second.Commit.Hex);
+        Assert.Equal("2bc72beb13cd542c7d54abcc70b47b4e7cebf8ca", second.Commit.Hex);
         Assert.Contains("/resalvage/", second.Receipt.Ref);
         Assert.Equal("unfinished\n", f.Git.Git("show", Commit + ":new.txt"));
         Assert.Equal("changed\n", f.Git.Git("show", second.Commit.Hex + ":new.txt"));
@@ -400,9 +462,10 @@ public sealed class SalvageTests
             using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
             var ready = detached ? await DivergedWriter(f, true) : await FailedWriter(f, ownCommit);
             var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
-            if (!detached) Assert.Equal(ownCommit ? "fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b" : Commit, retained.Commit.Hex);
-            Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" } :
-                new[] { ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : Target },
+            if (!detached) Assert.Equal(ownCommit ? "c5ed5153c79628f2455f2f494b44ce9c1f187f48" : Commit, retained.Commit.Hex);
+            Assert.Equal(detached ? new[] { "81ddb7c330112c7f16700ed002803a04b0bce693", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "953564c01ecca8c9989241913a8bfa8ed56cca33" } :
+                new[] { ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : Target,
+                    ownCommit ? "acecf1c98b2ea4a8939e7500d7060264511112f6" : "8e7317565e09c301a3028c86c54967303c95e122" },
                 GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
             var confirmation = f.Op();
             Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
@@ -596,7 +659,7 @@ public sealed class SalvageTests
         f.Git.Write("a.txt", "modified\n", checkout);
         f.Git.Write("new.txt", "unfinished\n", checkout);
         var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), Operation, A1));
-        Assert.Equal("627595566cb613dbc7757977f238ad71adad6983", retained.Commit.Hex);
+        Assert.Equal("0b51f5b82c0a2b33498252eaa62319f66fe1787c", retained.Commit.Hex);
         Assert.Equal(phase, f.Read().Phase.ToString());
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal(result.Id, Assert.Single(f.Read().Results).Id);
@@ -783,12 +846,12 @@ public sealed class SalvageTests
         var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("3292b7a2adf71a45a545bbfb04cefc7d663bbe93", branchCommit);
-        Assert.Equal(mode == "rewound" ? "76e7826be3fb35d52157bac1d88e8f6a188758e6" : "33893cedcad25a1a43d30ed215d4813b66e66853", retained.Commit.Hex);
+        Assert.Equal(mode == "rewound" ? "da8cec6c65e1c1e035b59a312c084a7540b9855f" : "0cbdf902bba0fa21d0e17bdc9f2210db9e4693f2", retained.Commit.Hex);
         var plan = Assert.IsType<MaterializationPlan.Salvage>(f.Read().Plans[retained.Receipt.Plan]);
         Assert.Equal(mode == "rewound" ? "adfe40b30c176fb407933286f51d15ea9b54cdc3" : "3292b7a2adf71a45a545bbfb04cefc7d663bbe93", plan.BranchTip?.Hex);
         var parents = GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex);
-        Assert.Equal(mode == "rewound" ? new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3" } :
-            new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3", "3292b7a2adf71a45a545bbfb04cefc7d663bbe93" }, parents);
+        Assert.Equal(mode == "rewound" ? new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3", "a9bbe59a6b02892062128c0b4abb4794d3c86dfb" } :
+            new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3", "3292b7a2adf71a45a545bbfb04cefc7d663bbe93", "a9bbe59a6b02892062128c0b4abb4794d3c86dfb" }, parents);
         Assert.Equal(mode != "rewound", Reachable(f, branchCommit));
         Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op()));
         Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2\n", f.Git.Run(ready.Checkout, "symbolic-ref", "HEAD").Text);
@@ -886,7 +949,7 @@ public sealed class SalvageTests
         f.Git.Git("update-ref", plan.Ref, plan.Commit.Hex);
         var blocked = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("Publication ref refs/idp/93f23689/salvage/90d5b0a2/00000000-0000-0000-0000-000000000102 has unexpected value 0dbf5cbc9310ef3abbc28073142652917c69dc2f.", blocked.Block.Detail);
+        Assert.Equal("Publication ref refs/idp/93f23689/salvage/90d5b0a2/00000000-0000-0000-0000-000000000102 has unexpected value " + plan.Commit.Hex + ".", blocked.Block.Detail);
         Assert.Equal(0, f.Read().Receipts.Values.Count(entry => entry.Event is RunEvent.SalvageRetained));
     }
 
@@ -949,10 +1012,10 @@ public sealed class SalvageTests
         var ready = await FailedWriter(f);
         var first = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var second = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
-        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", first.Commit.Hex);
-        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", second.Commit.Hex);
+        Assert.Equal("8d9b46f696d0fac188d61ba44f41170aa73a4037", first.Commit.Hex);
+        Assert.Equal("79edc0fd360ab58110ca8b6d68a08219ed5db2be", second.Commit.Hex);
         Assert.Equal("refs/idp/93f23689/resalvage/90d5b0a2/00000000-0000-0000-0000-000000000102/00000000-0000-0000-0000-000000001006", second.Receipt.Ref);
-        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", Ref(f, first.Receipt.Ref));
+        Assert.Equal("8d9b46f696d0fac188d61ba44f41170aa73a4037", Ref(f, first.Receipt.Ref));
         Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
         Assert.Equal(2, f.Read().Salvages.Count);
     }
@@ -965,9 +1028,9 @@ public sealed class SalvageTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, "checkout", "--detach", "HEAD").ExitCode);
         f.Git.Git("update-ref", "-d", ready.Execution.Location.Owner.Branch);
         var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("fafba3f02353ba47a6c4d4f4a26a9dd16ecf023b", retained.Commit.Hex);
+        Assert.Equal("c5ed5153c79628f2455f2f494b44ce9c1f187f48", retained.Commit.Hex);
         Assert.Null(Assert.IsType<MaterializationPlan.Salvage>(f.Read().Plans[retained.Receipt.Plan]).BranchTip);
-        Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
+        Assert.Equal(new[] { "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67", "acecf1c98b2ea4a8939e7500d7060264511112f6" }, GitFixture.Read(f.Git.Open().ReadCommit(retained.Commit)).Parents.Select(parent => parent.Hex));
         var reset = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         Assert.Equal(MaterializationProblem.UncertainOwnership, reset.Block.Problem);
         Assert.Null(Ref(f, ready.Execution.Location.Owner.Branch));

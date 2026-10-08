@@ -32,12 +32,22 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             VerifyRepository(record, repository);
             var pins = Value(repository.RefSnapshot(RunLayout.PinPrefix(record.RunKey)));
-            foreach (var (name, tip) in pins)
+            var retained = record.Plans.Where(pair => pair.Value is MaterializationPlan.Preservation && !record.Preservations.ContainsKey(pair.Key) ||
+                pair.Value is MaterializationPlan.Salvage && !record.Salvages.ContainsKey(pair.Key)).Select(pair => pair.Value switch
+                {
+                    MaterializationPlan.Preservation plan => (plan.Task, plan.Attempt),
+                    MaterializationPlan.Salvage plan => (plan.Task, plan.Attempt),
+                    _ => throw new InvalidOperationException(),
+                }).Distinct().Select(pair => $"{RunLayout.PinPrefix(record.RunKey)}{record.TaskKeys[pair.Task]}/{pair.Attempt.Value:D}/preserve/")
+                .ToArray();
+            var count = 0;
+            foreach (var (name, tip) in pins.Where(pair => !retained.Any(prefix => pair.Key.StartsWith(prefix, StringComparison.Ordinal))))
             {
                 var deleted = Mutate("release-pin", () => repository.DeleteRef(name, tip));
                 if (deleted.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, deleted.Stderr);
+                count++;
             }
-            return new PinRelease.Released(pins.Count);
+            return new PinRelease.Released(count);
         }
         catch (Refusal refused) { return new PinRelease.Rejected(refused.Reason); }
         catch (MaterializationFailure failed) { return new PinRelease.Failed(failed.Problem, failed.Message); }

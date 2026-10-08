@@ -1,5 +1,6 @@
 using IDevelop.Core.Tests.Git;
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
@@ -435,7 +436,7 @@ public sealed class RecoveryBaselineTests
         Assert.Equal(1, f.Read().Attempts.Values.Count(a => a.Cause is AttemptCause.Continue));
     }
 
-    [Fact]
+    [LinuxOrWindowsFact]
     public async Task A_preserved_lock_requires_restore_before_a_baseline()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -453,15 +454,37 @@ public sealed class RecoveryBaselineTests
         Assert.Equal("Remove index.lock with Restore first.", blocked.Block.Detail);
         Assert.Equal("lock\n", File.ReadAllText(lockPath));
         Assert.Empty(f.Read().Baselines);
-        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
-        {
-            var preview = Assert.IsType<RestorePreviewRead.Previewed>(f.Materializer().PreviewRestore(f.Lease(T), previous, preservation)).Preview;
-            Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), previous, preservation, f.Op(), preview.Identity));
-        }
-        else File.Delete(lockPath);
+        var preview = Assert.IsType<RestorePreviewRead.Previewed>(f.Materializer().PreviewRestore(f.Lease(T), previous, preservation)).Preview;
+        Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), f.Op(), previous, preservation, f.Op(), preview.Identity));
         var fresh = f.Op();
         Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), fresh, previous));
         Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation, fresh));
+        Assert.Single(f.Read().Baselines);
+    }
+
+    [OtherPlatformFact]
+    public async Task A_preserved_lock_without_platform_identity_requires_external_removal_before_a_baseline()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await CloseInterrupted(f, ready);
+        var previous = ready.Execution.Launch.Attempt;
+        var confirmation = f.Op();
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
+        File.WriteAllText(lockPath, "lock\n");
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, previous)).GetType().Name);
+        var blocked = Assert.IsType<RecoveryBaselining.Blocked>(f.Materializer()
+            .RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation, preservation));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("iDevelop cannot read this file's identity on this system, so Restore cannot remove index.lock. Remove it outside iDevelop, then preserve again.", blocked.Block.Detail);
+        Assert.True(blocked.Block.Scope!.IndexLock);
+        Assert.Equal("lock\n", File.ReadAllText(lockPath));
+        Assert.Empty(f.Read().Baselines);
+        File.Delete(lockPath);
+        var repaired = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), repaired, previous)).GetType().Name);
+        Assert.Equal("Recorded", f.Materializer().RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation, repaired).GetType().Name);
         Assert.Single(f.Read().Baselines);
     }
 

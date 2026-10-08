@@ -10,17 +10,19 @@ internal sealed partial class Materializer
     private readonly IJoinComposer _joins;
     private readonly RefPublisher _refs;
     private readonly TimeProvider _clock;
+    private readonly Func<string, ulong?> _volumes;
     private readonly IReadOnlyDictionary<string, string> _environment;
     private readonly Action<string>? _probe;
 
     private Materializer(string project, RunStore store, IJoinComposer joins, TimeProvider clock,
-        IReadOnlyDictionary<string, string> environment, Action<string>? probe)
+        IReadOnlyDictionary<string, string> environment, Action<string>? probe, Func<string, ulong?> volumes)
     {
         _project = Path.GetFullPath(project);
         _store = store;
         _refs = new(store, probe);
         _joins = joins;
         _clock = clock;
+        _volumes = volumes;
         _environment = environment;
         _probe = probe;
     }
@@ -29,8 +31,8 @@ internal sealed partial class Materializer
         Open(projectFolder, store, joins, TimeProvider.System, null, null);
 
     internal static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins,
-        TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null) =>
-        new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe);
+        TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null, Func<string, ulong?>? volumes = null) =>
+        new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe, volumes ?? FileIdentities.VolumeOf);
 
     public async ValueTask<Preparation> Prepare(RunLease lease, OperationId operation, AttemptCause cause,
         string? basePrompt = null, CancellationToken cancellation = default)

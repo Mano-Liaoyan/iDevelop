@@ -43,8 +43,10 @@ internal sealed partial class Materializer
             if (mutation is null) return new RecoveryBaselining.Rejected(new(RunProblem.JournalBusy));
             record = Read(permit.Workflow, permit.Run);
             if (record.Baselines.TryGetValue((previous, confirmation), out receipt)) return new RecoveryBaselining.Recorded(receipt);
-            if (plan.Preserved.IndexLock is not null)
-                throw Fault(MaterializationProblem.DirtyWorktree, "Remove index.lock with Restore first.", new([], [], true));
+            if (plan.Preserved.IndexLock is { } indexLock)
+                throw Fault(MaterializationProblem.DirtyWorktree, indexLock.Identity is null
+                    ? "iDevelop cannot read this file's identity on this system, so Restore cannot remove index.lock. Remove it outside iDevelop, then preserve again."
+                    : "Remove index.lock with Restore first.", new([], [], true));
             var fold = CheckoutBaseline.Fold(record, prepared.Location.Owner, commit => Value(repository.ReadCommit(commit)).Tree);
             var unfinished = fold.Components.Values.Select(component => component switch
             {

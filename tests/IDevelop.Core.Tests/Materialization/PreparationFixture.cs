@@ -24,8 +24,8 @@ internal sealed class PreparationFixture : IDisposable
         Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A, BaseChoice.Head)));
     }
 
-    public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null) =>
-        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), Git.Environment, probe);
+    public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null, Func<string, ulong?>? volumes = null) =>
+        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), Git.Environment, probe, volumes);
     public CoordinatorPermit Permit => _permit ??= Assert.IsType<ControlTake.Owned>(RunStore.Open(Git.Folder).TakeControl(W, RunId)).Permit;
 
     public RunLease Lease(TaskId task)

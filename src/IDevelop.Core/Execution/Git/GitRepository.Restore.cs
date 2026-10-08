@@ -23,11 +23,23 @@ internal sealed partial class GitRepository
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
     }
 
+    public GitRead<string> WorkingFileBlob(string checkout, string relativePath, string file)
+    {
+        var result = Git(checkout, GitOperation.Worktree, ["hash-object", "--path=" + relativePath, "--", file]);
+        return result.ExitCode == 0 ? new GitRead<string>.Read(result.Text.Trim()) : Failure<string>(result);
+    }
+
+    public GitRead<byte[]> WorkingTreeBlobBytes(string checkout, string relativePath, string objectId)
+    {
+        var result = Git(checkout, GitOperation.Worktree, ["cat-file", "--filters", "--path=" + relativePath, objectId]);
+        return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
+    }
+
     public GitRead<bool> PlainIndex(string checkout)
     {
         var entries = Git(checkout, GitOperation.Metadata, ["ls-files", "-v", "-z"]);
         if (entries.ExitCode != 0) return Failure<bool>(entries);
-        if (NulFields(entries).Any(entry => entry[0] != 'H')) return new GitRead<bool>.Read(false);
+        if (NulFields(entries).Any(entry => entry[0] is not ('H' or 'M'))) return new GitRead<bool>.Read(false);
         var config = Git(checkout, GitOperation.Metadata, ["config", "--type=bool", "--show-scope", "--get-regexp", "^(core\\.sparsecheckout|core\\.sparsecheckoutcone|index\\.sparse)$"]);
         if (config.ExitCode is not (0 or 1)) return Failure<bool>(config);
         return new GitRead<bool>.Read(!config.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Any(line =>

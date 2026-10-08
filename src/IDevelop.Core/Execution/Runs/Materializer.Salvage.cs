@@ -68,7 +68,7 @@ internal sealed partial class Materializer
                 var state = pair.First.State;
                 var tip = state.Head!.Value;
                 var branchTip = state.Branch;
-                var recipe = new CommitRecipe(state.Files, PreservationParents(repository, branchTip, tip),
+                var recipe = new CommitRecipe(state.Files, pair.First.Recipe.Parents,
                     $"Salvage {title}\n\nIDP-Run: {run.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\n",
                     "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>",
                     DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds()));

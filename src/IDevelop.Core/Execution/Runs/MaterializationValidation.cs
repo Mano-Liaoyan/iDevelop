@@ -112,7 +112,7 @@ internal static partial class RunValidation
         _ => false,
     };
 
-    private static bool RestorePath(PathRestore path) => Path(path.Path) && Hash(path.From) && Hash(path.To);
+    private static bool RestorePath(PathRestore path) => Path(path.Path) && (path.From is null || Revision.IsCommit(path.From)) && (path.To is null || Revision.IsCommit(path.To));
 
     private static bool Code(CodeSelection code) => code switch
     {

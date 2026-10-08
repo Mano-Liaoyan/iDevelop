@@ -148,7 +148,7 @@ internal static class CheckoutBaseline
     }
 }
 
-internal sealed record PathRestore(string Path, Digest? From, Digest? To);
+internal sealed record PathRestore(string Path, string? From, string? To);
 
 internal sealed record RestorePreview(OperationId Preservation, CheckoutState Current,
     ImmutableDictionary<string, ComponentBaseline> Baseline, CheckoutState To, ImmutableArray<PathRestore> Paths,

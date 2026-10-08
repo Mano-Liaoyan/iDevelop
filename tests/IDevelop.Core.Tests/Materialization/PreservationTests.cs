@@ -71,13 +71,19 @@ public sealed class PreservationTests
         }).Preserve(f.Lease(T), operation, attempt));
         Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Preservation>());
         Assert.Empty(f.Read().Preservations);
-        Assert.Equal("Released", f.Materializer().ReleasePins(f.Permit, f.Op()).GetType().Name);
+        var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
+        Assert.Equal(2, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count(p => p.Key.Contains("/preserve/", StringComparison.Ordinal)));
+        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Equal(2, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now", "gc", "--prune=now").ExitCode);
         var outcome = await f.Materializer().Preserve(f.Lease(T), operation, attempt);
         Assert.Equal("Preserved", outcome.GetType().Name);
         var preserved = Assert.IsType<Preservation.Preserved>(outcome);
         Assert.Equal("late\n", f.Git.Git("show", preserved.Commit.Hex + ":a.txt"));
         Assert.Single(f.Read().Preservations);
+        Assert.Equal(2, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
+        Assert.Equal("late\n", f.Git.Git("show", preserved.Commit.Hex + ":a.txt"));
     }
 
     [Theory]
@@ -262,13 +268,14 @@ public sealed class PreservationTests
         Assert.Equal(3, GitFixture.Read(f.Git.Open().UnmergedEntries(ready.Checkout)).Length);
         Assert.Equal("conflicted\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
         Assert.Equal(0, f.Git.Run(ready.Checkout, "read-tree", f.A.Hex).ExitCode);
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) File.Delete(Path.Combine(ready.Checkout, "c.txt"));
         var controlPreservation = f.Op();
         Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), controlPreservation, ready.Execution.Launch.Attempt));
         var controlPreview = RestoreTests.Preview(f, ready, controlPreservation);
         var controlOperation = f.Op();
         Assert.IsType<Restoration.Restored>(f.Materializer().Restore(f.Lease(T), controlOperation,
             ready.Execution.Launch.Attempt, controlPreservation, f.Op(), controlPreview.Identity));
-        Assert.Equal(1, RestoreTests.Moves(f, controlOperation));
+        Assert.Equal(OperatingSystem.IsLinux() || OperatingSystem.IsWindows() ? 1 : 0, RestoreTests.Moves(f, controlOperation));
         Assert.False(File.Exists(Path.Combine(ready.Checkout, "c.txt")));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
