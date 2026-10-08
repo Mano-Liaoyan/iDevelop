@@ -235,7 +235,7 @@ The [workspace and execution plan](handoffs/2026-10-06-workspace-execution-plan.
 
 The proposed UI keeps PlanWeave's canvas and neutral surfaces, Apple's existing color tokens, and Fluent icons. Godot supplies the inspector's property hierarchy and editing patterns. The conversation takes the interaction quality of an agent chat application without replacing iDevelop's canvas with a chat-only interface. Controls on a card, in the inspector, and in Conversation must use the same task and attempt state.
 
-Verification extends the existing `skills/verify-idevelop` feature map. This round specifies coverage only. Runnable recipes need actual controls and deterministic fixtures from the later implementation slices. No imaginary automation selectors or passing runtime claims belong in the plan.
+Verification extends the existing `.claude/skills/verify-idevelop` feature map. This round specifies coverage only. Runnable recipes need actual controls and deterministic fixtures from the later implementation slices. No imaginary automation selectors or passing runtime claims belong in the plan.
 
 ## Dependency licensing preference
 

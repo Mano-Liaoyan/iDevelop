@@ -1,8 +1,4 @@
-.agents/skills/
-.claude/skills
-.cursor/skills
 .claude/settings.local.json
-.pstack/local/
 .worktrees/
 .verify/
 node_modules/
