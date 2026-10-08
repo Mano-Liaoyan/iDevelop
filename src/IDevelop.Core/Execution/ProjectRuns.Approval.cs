@@ -7,7 +7,10 @@ public sealed partial class ProjectRuns
     private RunApprovals Approvals => new(_projectFolder, TurnStore, GitEnvironment, _clients.Current, Latest, MaterializerClock ?? TimeProvider,
         point => Probe?.Invoke(point));
 
-    /// <summary>What Run Workflow shows for <paramref name="workflow"/> before anything runs. It changes nothing.</summary>
+    /// <summary>
+    /// What Run Workflow shows for <paramref name="workflow"/> before anything runs. It records nothing; computing the work
+    /// tree's tree leaves only unreferenced loose objects in Git's object database, as <see cref="RunPreflight"/> says.
+    /// </summary>
     internal RunPreflight Preflight(Workflow workflow) => Approvals.Inspect(workflow);
 
     /// <summary>
@@ -21,7 +24,7 @@ public sealed partial class ProjectRuns
         switch (approval)
         {
             case RunApproval.Changed changed: return new WorkflowStart.Changed(changed.Current);
-            case RunApproval.Refused refused: return new WorkflowStart.Refused(refused.Problem, refused.Detail);
+            case RunApproval.Refused refused: return new WorkflowStart.Refused(refused.Problem, refused.Detail) { Current = refused.Current };
             case RunApproval.Busy busy: return new WorkflowStart.Busy(busy.Active);
         }
         var approved = (RunApproval.Approved)approval;

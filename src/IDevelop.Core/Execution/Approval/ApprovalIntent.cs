@@ -31,6 +31,34 @@ internal sealed record ApprovalIntent(int Schema, RunId Run, OperationId Operati
         Identity, Identity, Recorded);
 }
 
+/// <summary>
+/// The ref that keeps an approved run's base commit, <c>refs/idp/approvals/&lt;run-id&gt;</c>, from its approval until the
+/// run's own <c>refs/idp/&lt;run&gt;/base</c> holds it. A snapshot commit is referenced by nothing else, and the base ref
+/// is written only at the run's first preparation. <c>approvals</c> is never a run key, because run keys are hexadecimal,
+/// and no ownership snapshot reads it.
+/// </summary>
+internal static class ApprovalPin
+{
+    public static string Name(RunId run) => $"refs/idp/approvals/{run}";
+
+    /// <summary>Creates the pin from absent, or finds it already there. False when it names another commit or Git fails.</summary>
+    public static bool Hold(GitRepository repository, RunId run, CommitId commit) =>
+        repository.MoveRef(new(Name(run), null, commit)) is RefMove.Moved or RefMove.AlreadyAtTarget;
+
+    /// <summary>
+    /// Removes the pin once <paramref name="baseRef"/> holds <paramref name="commit"/>, or, without a base ref, for a run
+    /// that was never approved. Best effort: a pin left behind only keeps a commit, and the next preparation or
+    /// confirmation of the workflow removes it.
+    /// </summary>
+    public static void Release(GitRepository repository, RunId run, CommitId? commit = null, string? baseRef = null)
+    {
+        if (repository.ReadRef(Name(run)) is not GitRead<CommitId?>.Read { Value: { } pinned }) return;
+        if (baseRef is not null && (pinned != commit || repository.ReadRef(baseRef) is not GitRead<CommitId?>.Read { Value: { } held } || held != pinned))
+            return;
+        repository.DeleteRef(Name(run), pinned);
+    }
+}
+
 /// <summary>The approval intents of one workflow's runs, and the lock that orders its confirmations.</summary>
 internal sealed class ApprovalIntents
 {
@@ -99,9 +127,13 @@ internal sealed class ApprovalIntents
         AtomicFile.Replace(Path.Combine(folder, FileName), JsonSerializer.SerializeToUtf8Bytes(intent, Options));
     }
 
-    /// <summary>Removes an intent whose run was never approved, and its folder once nothing else is in it.</summary>
-    public void Remove(RunId run)
+    /// <summary>
+    /// Removes an intent whose run was never approved: first its pin, then the intent, then its folder once nothing else
+    /// is in it. A crash in between leaves a pending intent without a pin, which a later confirmation pins again or removes.
+    /// </summary>
+    public void Remove(RunId run, GitRepository? repository)
     {
+        if (repository is not null) ApprovalPin.Release(repository, run);
         var folder = Path.Combine(_folder, run.ToString());
         File.Delete(Path.Combine(folder, FileName));
         if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);

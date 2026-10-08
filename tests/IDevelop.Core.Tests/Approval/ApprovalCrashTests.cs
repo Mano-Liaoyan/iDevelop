@@ -38,9 +38,11 @@ public sealed class ApprovalCrashTests
     [InlineData("approval.locked", "Snapshot")]
     [InlineData("approval.intent.after", "Snapshot")]
     [InlineData("approval.snapshot.after", "Snapshot")]
+    [InlineData("approval.pinned.after", "Snapshot")]
     [InlineData("approval.approved.after", "Snapshot")]
     [InlineData("approval.opened.after", "Snapshot")]
     [InlineData("approval.intent.after", "Head")]
+    [InlineData("approval.pinned.after", "Head")]
     [InlineData("approval.approved.after", "Head")]
     [InlineData("approval.opened.after", "Head")]
     public async Task A_crash_at_each_durable_step_then_a_restart_and_a_repeated_confirmation_start_one_run(string point, string chosen)
@@ -75,6 +77,66 @@ public sealed class ApprovalCrashTests
         Assert.Equal(index, f.Index());
         Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", "HEAD"));
         Assert.Equal(["draft\n", "notes\n"], new[] { "plan.txt", "notes.txt" }.Select(f.Text));
+        Assert.Equal(record.Base.Commit.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(record.RunKey!)));
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
+    }
+
+    [Fact]
+    public async Task An_approved_snapshot_base_survives_garbage_collection_before_its_first_preparation()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        Uncommitted(f);
+        await Crash(f, BaseChoice.Snapshot, "approval.approved.after");
+        var run = Assert.Single(f.ApprovedRuns());
+        var snapshot = f.Read(run).Base.Commit;
+        f.GitText("gc", "-q", "--prune=now");
+        await f.Open();
+
+        var started = await Start(f, f.Preflight(), BaseChoice.Snapshot, AfterRestart);
+
+        Assert.True(started.Existing);
+        await Completed(started.Coordinator);
+        Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
+        Assert.Equal("notes\n", f.ResultFile(run, A, "notes.txt"));
+        Assert.Equal(snapshot.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(f.Read(run).RunKey!)));
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
+    }
+
+    [Fact]
+    public async Task A_confirmation_that_finds_the_run_busy_keeps_the_pin_of_a_base_not_yet_prepared()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        Uncommitted(f);
+        await Crash(f, BaseChoice.Snapshot, "approval.approved.after");
+        var run = Assert.Single(f.ApprovedRuns());
+        await f.Open();
+        f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
+        Assert.Equal(run, Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), BaseChoice.Snapshot, AfterRestart))
+            .WaitAsync(Bound)).Active);
+        f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X"));
+        f.GitText("gc", "-q", "--prune=now");
+
+        var started = await Start(f, f.Preflight(), BaseChoice.Snapshot, First);
+
+        Assert.True(started.Existing);
+        await Completed(started.Coordinator);
+        Assert.Equal("notes\n", f.ResultFile(run, A, "notes.txt"));
+    }
+
+    [Fact]
+    public async Task A_pin_left_once_the_base_ref_holds_the_base_goes_at_the_next_confirmation()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await f.Open();
+        var started = await Start(f, f.Preflight(), BaseChoice.Head, First);
+        await Completed(started.Coordinator);
+        var run = started.Coordinator.Address.Run;
+        f.GitText("update-ref", $"refs/idp/approvals/{run}", Head.Hex);
+
+        Assert.True((await Start(f, f.Preflight(), BaseChoice.Head, First)).Existing);
+
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
+        Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(f.Read(run).RunKey!)));
     }
 
     [Theory]
@@ -86,8 +148,9 @@ public sealed class ApprovalCrashTests
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         Uncommitted(f);
-        await Crash(f, BaseChoice.Snapshot, "approval.snapshot.after");
+        await Crash(f, BaseChoice.Snapshot, "approval.pinned.after");
         var stale = Intent(f)!;
+        Assert.Equal($"refs/idp/approvals/{stale.Run}\n", f.GitText("for-each-ref", "--format=%(refname)", "refs/idp/approvals/"));
         var choice = change == "base" ? BaseChoice.Head : BaseChoice.Snapshot;
         if (change == "file") f.Git.Write("notes.txt", "notes again\n");
         if (change == "title") f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
@@ -105,6 +168,7 @@ public sealed class ApprovalCrashTests
         Assert.NotEqual(stale.Run, run);
         Assert.Equal(run, Intent(f)!.Run);
         Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", W.ToString(), stale.Run.ToString())));
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
         Assert.Equal(choice, f.Read(run).Base.Choice);
         Assert.Equal(change == "file" ? "notes again\n" : change == "base" ? null : "notes\n", f.ResultFile(run, A, "notes.txt"));
         Assert.Equal(change == "title" ? "X checks" : "X", f.Read(run).Revision.Snapshot.Tasks[X].Title);

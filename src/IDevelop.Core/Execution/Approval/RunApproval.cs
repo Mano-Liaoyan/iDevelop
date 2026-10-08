@@ -11,6 +11,9 @@ internal enum ApprovalProblem
     /// <summary>The preview has gaps, or offers no such base.</summary>
     NotConfirmable,
 
+    /// <summary>The confirmation carries no command ID, so a repeat could not be told from a new confirmation.</summary>
+    ConfirmationRequired,
+
     /// <summary>The run journals or the approval intent could not be read or written. Nothing was approved.</summary>
     StorageUnavailable,
 
@@ -31,7 +34,11 @@ internal abstract record RunApproval
     /// <summary>The preview no longer shows what would be approved. Nothing was approved; <paramref name="Current"/> replaces it.</summary>
     internal sealed record Changed(RunPreflight Current) : RunApproval;
 
-    internal sealed record Refused(ApprovalProblem Problem, string Detail) : RunApproval;
+    internal sealed record Refused(ApprovalProblem Problem, string Detail) : RunApproval
+    {
+        /// <summary>The preflight as it is now, when one was built, so the person sees the gap that refused it.</summary>
+        public RunPreflight? Current { get; init; }
+    }
 
     /// <summary>Another run of the workflow, of different content, is still active. Nothing was approved.</summary>
     internal sealed record Busy(RunId Active) : RunApproval;
@@ -49,7 +56,11 @@ internal abstract record WorkflowStart
 
     internal sealed record Changed(RunPreflight Current) : WorkflowStart;
 
-    internal sealed record Refused(ApprovalProblem Problem, string Detail) : WorkflowStart;
+    internal sealed record Refused(ApprovalProblem Problem, string Detail) : WorkflowStart
+    {
+        /// <summary>The preflight as it is now, when one was built, so the person sees the gap that refused it.</summary>
+        public RunPreflight? Current { get; init; }
+    }
 
     internal sealed record Busy(RunId Active) : WorkflowStart;
 

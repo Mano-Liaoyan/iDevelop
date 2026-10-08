@@ -6,7 +6,10 @@ namespace IDevelop.Execution;
 /// <summary>
 /// What Run Workflow shows before anything runs: the execution snapshot it would approve, each task's effective agent
 /// settings and inputs, the configuration gaps, the run base it can start from, and how tasks are isolated. Building it
-/// writes no file, ref, or journal. Computing the work tree's snapshot writes only Git objects that nothing references.
+/// records nothing: no ref, no journal or intent, no file in the project, and the person's index stays as it was. Its one
+/// write is Git's: building the work tree's tree runs <c>git add --all</c> and <c>git write-tree</c> on a temporary copy of
+/// the index in the system's temporary folder, which it deletes, and that stores the blobs of uncommitted files and the
+/// trees as loose objects that nothing references, which Git's garbage collection removes.
 /// </summary>
 internal sealed record RunPreflight(string Project, ApprovedRevision Revision, PreflightGit Git, PreflightBase? Base,
     ImmutableArray<PreflightTask> Tasks, RunId? Active)
