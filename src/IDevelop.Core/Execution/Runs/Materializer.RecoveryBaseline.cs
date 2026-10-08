@@ -22,7 +22,7 @@ internal sealed partial class Materializer
             if (!record.Closures.TryGetValue(previous, out var end)) return new RecoveryBaselining.Rejected(new(RunProblem.UnclosedAttempts));
             if (end is AttemptEnd.Recovered { Outcome: RecoveryOutcome.NotStarted })
                 return new RecoveryBaselining.Rejected(new(RunProblem.OutcomeMismatch));
-            if (record.Baselines.TryGetValue((previous, confirmation), out var receipt)) return new RecoveryBaselining.Recorded(receipt);
+            if (record.Baselines.TryGetValue((previous, confirmation), out var receipt)) return AdoptBaseline(permit, operation, receipt);
             var revision = RunReducer.Slot(record, attempt.Task, new AttemptCause.Continue(previous, confirmation))?.Revision ?? record.Revision.Id;
             var log = AttemptEvidence.Read(_store.AttemptFolder(permit.Workflow, permit.Run, attempt.Task, previous)).Record;
             if (log?.SessionId is not { Length: > 0 } session ||
@@ -42,7 +42,7 @@ internal sealed partial class Materializer
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new RecoveryBaselining.Rejected(new(RunProblem.JournalBusy));
             record = Read(permit.Workflow, permit.Run);
-            if (record.Baselines.TryGetValue((previous, confirmation), out receipt)) return new RecoveryBaselining.Recorded(receipt);
+            if (record.Baselines.TryGetValue((previous, confirmation), out receipt)) return AdoptBaseline(permit, operation, receipt);
             if (plan.Preserved.IndexLock is { } indexLock)
                 throw Fault(MaterializationProblem.DirtyWorktree, indexLock.Identity is null
                     ? "iDevelop cannot read this file's identity on this system, so Restore cannot remove index.lock. Remove it outside iDevelop, then preserve again."
@@ -90,6 +90,13 @@ internal sealed partial class Materializer
         if (CheckoutDifference(repository, plan.Preserved, current) is { } difference)
             throw Fault(difference is { Branch: false, Head: false } ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership,
                 PreservationChanged, difference);
+    }
+
+    // The receipt may be another operation's. Returning it is this operation's success, so its own faults close with it.
+    private RecoveryBaselining.Recorded AdoptBaseline(CoordinatorPermit permit, OperationId operation, RunEvent.RecoveryBaselined receipt)
+    {
+        ResolveMaintenanceBlocks(permit, operation, "Baselined.", scope => scope is BlockScope.Operation);
+        return new(receipt);
     }
 
     private RecoveryBaselining RecoveryBaselineBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>

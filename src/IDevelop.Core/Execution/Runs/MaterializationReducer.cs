@@ -193,13 +193,21 @@ internal static partial class RunReducer
     // A restore resolves what its plan repaired or rechecked and its own faults. No recheck vouches for a pin, which only its writer rewrites.
     internal static bool RestoreResolves(RunRecord record, OperationId planId, MaterializationPlan.Restoration plan, OperationId id,
         MaterializationBlock block) =>
-        block.Task == plan.Task && (plan.Repairs.Contains(id) || plan.Rechecks.Contains(id) || block.Operation == planId) && block.Scope switch
+        block.Task == plan.Task && (plan.Repairs.Contains(id) || plan.Rechecks.Contains(id) || OwnOrSuperseded(record, planId, block.Operation)) && block.Scope switch
         {
             BlockScope.Refs refs => refs.Names.All(name => !Pinned(record, name)),
-            BlockScope.Operation => block.Operation == planId,
+            BlockScope.Operation => OwnOrSuperseded(record, planId, block.Operation),
             BlockScope.Unrecorded => plan.Repairs.Contains(id),
             var scope => CheckedWithCheckout(scope),
         };
+
+    // A superseded restore never reruns, so the restore that replaces it, directly or along a chain, answers for its faults.
+    private static bool OwnOrSuperseded(RunRecord record, OperationId planId, OperationId owner)
+    {
+        for (OperationId? plan = planId; plan is { } id; plan = (record.Plans.GetValueOrDefault(id) as MaterializationPlan.Restoration)?.Supersedes)
+            if (id == owner) return true;
+        return false;
+    }
 
     internal static bool Pinned(RunRecord record, string name) => name.StartsWith(RunLayout.PinPrefix(record.RunKey!), StringComparison.Ordinal);
 
