@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -153,7 +154,11 @@ public sealed class ReviewNodeTests : IDisposable
         };
         var reopened = new ProjectViewModel(project, runs, WorkflowDocument.OpenProject(project), (owner, document) =>
         {
-            Assert.True(launched.Wait(TimeSpan.FromSeconds(60)), "the resumed fix round launches");
+            // The interrupted fix round waits for the person's choice, which comes before the canvas here.
+            Until(() => runs.Check(workflow.Tasks[TestTasks.Review]) is StartProblem.FixInterrupted { CanContinue: true }, "the review asks how its fix goes on");
+            Assert.False(launched.IsSet);
+            Assert.IsType<StartResult.Started>(runs.ChooseFix(TestTasks.Review, FixChoice.Continue));
+            Assert.True(launched.Wait(TimeSpan.FromSeconds(60)), "the continued fix round launches");
             return new WorkflowCanvasViewModel(owner, document, clients, _ => { }, _ => Task.CompletedTask);
         });
         Dispatcher.UIThread.RunJobs();
