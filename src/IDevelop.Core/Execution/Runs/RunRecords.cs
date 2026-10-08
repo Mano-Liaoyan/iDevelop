@@ -105,6 +105,9 @@ internal abstract record AmendmentOrigin
     internal sealed record Planner(AttemptId Attempt, int Turn) : AmendmentOrigin;
 }
 
+/// <summary>What the person chose from a proposal: its items, in id order, and the agent a new task takes when its type has none.</summary>
+internal sealed record AmendmentChoice(ImmutableArray<TaskId> Chosen, ExecutionSettings? Fallback);
+
 internal enum TerminalAttemptOutcome { Succeeded, Failed, Cancelled, Interrupted }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
@@ -295,7 +298,12 @@ internal abstract record RunEvent
         public ImmutableArray<IncludedResult>? Included { get; init; }
     }
 
-    internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent;
+    internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent
+    {
+        /// <summary>For a planner's amendment, the items the person chose and the agent new tasks took. Null in older journals.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public AmendmentChoice? Choice { get; init; }
+    }
 
     internal sealed record Reserved(RunAttempt Attempt, InputRecord Inputs) : RunEvent;
 

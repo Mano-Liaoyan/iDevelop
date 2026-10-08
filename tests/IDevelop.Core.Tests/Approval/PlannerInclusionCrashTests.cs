@@ -20,36 +20,44 @@ public sealed class PlannerInclusionCrashTests
     private static readonly OperationId First = new(Guid.Parse("00000000-0000-0000-0000-0000000d0101"));
     private static readonly OperationId AfterRestart = new(Guid.Parse("00000000-0000-0000-0000-0000000d0102"));
 
-    private static async Task Crash(ApprovalFixture f, string point)
+    private static async Task Crash(ApprovalFixture f, string point, BaseChoice choice = BaseChoice.Head)
     {
         f.Install();
         var file = Path.Combine(f.Evidence, "workflow.json");
         File.WriteAllBytes(file, WorkflowFile.Serialize(f.Workflow));
-        using var racer = new Racer(f.Git.Environment, "approve-crash", f.Project, file, f.Fakes.Folder, First.Value.ToString("D"), "Head", point, "include");
+        using var racer = new Racer(f.Git.Environment, "approve-crash", f.Project, file, f.Fakes.Folder, First.Value.ToString("D"), choice.ToString(), point, "include");
         Assert.Equal("Previewed", await racer.Line());
         Assert.Equal(point, await racer.Line());
         await racer.Exit();
         Assert.Equal(73, racer.ExitCode);
     }
 
-    private static async Task<WorkflowStart.Started> Include(ApprovalFixture f, RunPreflight preview, OperationId command) =>
-        Assert.IsType<WorkflowStart.Started>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, command, Assert.Single(preview.Planners)))
-            .WaitAsync(Bound));
+    private static async Task<WorkflowStart.Started> Include(ApprovalFixture f, RunPreflight preview, OperationId command, BaseChoice choice) =>
+        Assert.IsType<WorkflowStart.Started>(await f.Runs.StartWorkflow(f.Workflow,
+            Including(preview, command, Assert.Single(preview.Planners)) with { Choice = choice }).WaitAsync(Bound));
 
     [Theory]
-    [InlineData("approval.locked")]
-    [InlineData("approval.intent.after")]
-    [InlineData("approval.finished.after")]
-    [InlineData("approval.approved.after")]
-    [InlineData("approval.opened.after")]
-    public async Task A_crash_at_each_step_then_a_repeated_confirmation_includes_the_planner_once(string point)
+    [InlineData("approval.locked", "Head")]
+    [InlineData("approval.intent.after", "Head")]
+    [InlineData("approval.finished.after", "Head")]
+    [InlineData("approval.pinned.after", "Head")]
+    [InlineData("approval.approved.after", "Head")]
+    [InlineData("approval.opened.after", "Head")]
+    [InlineData("approval.finished.after", "Snapshot")]
+    [InlineData("approval.snapshot.after", "Snapshot")]
+    [InlineData("approval.pinned.after", "Snapshot")]
+    [InlineData("approval.approved.after", "Snapshot")]
+    public async Task A_crash_at_each_step_then_a_repeated_confirmation_includes_the_planner_once(string point, string chosen)
     {
+        var choice = Enum.Parse<BaseChoice>(chosen);
         await using var f = Fixture();
+        // On a snapshot base, the planner read the uncommitted work that the snapshot keeps.
+        if (choice == BaseChoice.Snapshot) f.Git.Write("notes.txt", "notes\n");
         await f.Open();
         var waiting = await PlanTwoTurns(f);
         await f.Close();
 
-        await Crash(f, point);
+        await Crash(f, point, choice);
 
         var intents = Intents(f.Project);
         var intended = intents is [var path] ? JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), RunJournal.Options) : null;
@@ -62,7 +70,7 @@ public sealed class PlannerInclusionCrashTests
         Assert.Equal(point is "approval.locked" or "approval.intent.after" ? AttemptStatus.WaitingForInput : AttemptStatus.Succeeded,
             f.Runs.Latest[X].Status);
         var preview = f.Preflight();
-        var starts = await Task.WhenAll(Include(f, preview, AfterRestart), Include(f, preview, First));
+        var starts = await Task.WhenAll(Include(f, preview, AfterRestart, choice), Include(f, preview, First, choice));
 
         var run = Assert.Single(f.ApprovedRuns());
         Assert.All(starts, start => Assert.Equal(run, start.Coordinator.Address.Run));
@@ -74,6 +82,8 @@ public sealed class PlannerInclusionCrashTests
         Assert.Equal([1, 1], new[] { f.Launches("N1"), f.Launches("N2") });
         Assert.Equal(2, f.TotalLaunches - f.Launches("N1") - f.Launches("N2"));
         Assert.Equal((waiting.Id, AttemptStatus.Succeeded, 2), (f.Runs.Latest[X].Id, f.Runs.Latest[X].Status, f.Runs.Latest[X].Turns.Count));
+        Assert.Equal(choice, record.Base.Choice);
+        Assert.Equal(choice == BaseChoice.Snapshot ? "notes\n" : null, f.ResultFile(run, Added(f, "N1"), "notes.txt"));
     }
 
     [Fact]

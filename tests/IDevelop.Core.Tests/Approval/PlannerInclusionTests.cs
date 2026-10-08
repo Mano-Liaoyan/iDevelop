@@ -165,6 +165,29 @@ public sealed class PlannerInclusionTests
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task A_planner_that_read_uncommitted_work_is_included_on_the_snapshot_base()
+    {
+        await using var f = Fixture();
+        f.Git.Write("notes.txt", "notes\n");
+        await f.Open();
+        var waiting = await PlanTwoTurns(f);
+        var preview = f.Preflight();
+        var planner = Assert.Single(preview.Planners);
+        Assert.Equal<BaseChoice>([BaseChoice.Snapshot], planner.Bases);
+
+        var started = Assert.IsType<WorkflowStart.Started>(await f.Runs.StartWorkflow(f.Workflow,
+            Including(preview, Confirm, planner) with { Choice = BaseChoice.Snapshot }).WaitAsync(Bound));
+        await Completed(started.Coordinator);
+
+        var record = f.Read(started.Coordinator.Address.Run);
+        Assert.Equal(BaseChoice.Snapshot, record.Base.Choice);
+        Assert.Equal((X, waiting.Result), (record.CurrentResults[X].Task, record.CurrentResults[X].Report));
+        Assert.IsType<ResultOrigin.Included>(record.CurrentResults[X].Origin);
+        Assert.Equal("notes\n", f.ResultFile(record.Id, Added(f, "N1"), "notes.txt"));
+        Assert.Equal(2, f.TotalLaunches - f.Launches("N1") - f.Launches("N2"));
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task A_reply_after_the_preview_makes_the_preview_stale_and_finishes_nothing()
     {
         await using var f = Fixture();

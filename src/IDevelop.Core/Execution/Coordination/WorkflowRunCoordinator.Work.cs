@@ -50,10 +50,11 @@ internal sealed partial class WorkflowRunCoordinator
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
         var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
         var operation = RunOperations.First(Address.Run, task, cause);
+        var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
         Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause)),
-            start => Started(task, start), error =>
+            start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);
                 _problem = error.Message;
@@ -67,7 +68,11 @@ internal sealed partial class WorkflowRunCoordinator
         if (!_stopping) Hold(task, hold);
     }
 
-    private void Started(TaskId task, TurnStart start)
+    /// <param name="dispatched">
+    /// The run's revision when the start was dispatched. A start an amendment refused since, with
+    /// <see cref="RunProblem.RevisionConflict"/>, is tried again, because its next preparation plans at the amended revision.
+    /// </param>
+    private void Started(TaskId task, TurnStart start, RevisionId? dispatched = null)
     {
         switch (start)
         {
@@ -94,7 +99,8 @@ internal sealed partial class WorkflowRunCoordinator
             case TurnStart.Refused refused:
                 _live.Remove(task);
                 if (refused.Reason.Problem != RunProblem.RunStopped)
-                    HoldStart(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem)));
+                    HoldStart(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem) ||
+                        refused.Reason.Problem == RunProblem.RevisionConflict && dispatched is { } before && Record()?.Revision.Id != before));
                 break;
         }
     }

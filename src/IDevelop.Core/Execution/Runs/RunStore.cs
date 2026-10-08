@@ -837,24 +837,32 @@ internal sealed partial class RunStore
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
-            // A reserved task counts as started, so the proposal neither fills it nor, through the reducer, gives it an input.
-            bool Started(TaskId id) => record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
+            var origin = new AmendmentOrigin.Planner(planner.Id, proposal.Turn);
+            var choice = new AmendmentChoice([.. chosen.Order()], fallback);
+            // The same acceptance again, under another confirmation, finds the amendment it recorded, whatever started since.
+            if (record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>().FirstOrDefault(amended =>
+                amended.Previous == previous && RunReducer.Same<AmendmentOrigin>(amended.Origin, origin) && amended.Choice is { } recorded &&
+                recorded.Chosen.SequenceEqual(choice.Chosen) && recorded.Fallback == choice.Fallback) is { } repeated)
+            {
+                return new Mutation.Existing(repeated);
+            }
+
+            // A task counts as started once its start's plan is recorded, which keeps the revision that start uses. The
+            // proposal neither fills such a task nor gives it an input; the reducer checks the same for attempts and results.
+            bool Started(TaskId id) => record.Plans.Values.Any(plan => plan is MaterializationPlan.Preparation preparation && preparation.Task == id) ||
+                record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
             if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback)) is not EditResult.Applied applied)
             {
                 return Refuse(RunProblem.InvalidData);
             }
 
-            var origin = new AmendmentOrigin.Planner(planner.Id, proposal.Turn);
-            var candidate = Revision.Capture(applied.Workflow);
-            // The same acceptance again, under another confirmation, finds the amendment it recorded.
-            if (record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>().FirstOrDefault(amended =>
-                amended.Previous == previous && amended.Revision.Id == candidate.Id && RunReducer.Same<AmendmentOrigin>(amended.Origin, origin)) is { } recorded)
+            if (basis.Snapshot.Tasks.Keys.Where(Started).Any(task => !RunReducer.SameTask(basis.Snapshot, applied.Workflow, task)))
             {
-                return new Mutation.Existing(recorded);
+                return Refuse(RunProblem.StartedTaskChanged);
             }
 
             // The reducer refuses an amendment of a revision that is no longer current.
-            return new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
+            return new Mutation.Append(new RunEvent.Amended(previous, Revision.Capture(applied.Workflow), origin, confirmation) { Choice = choice });
         });
 
     public RunDecision Stop(CoordinatorPermit permit, OperationId operation) =>

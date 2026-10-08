@@ -549,7 +549,7 @@ internal static partial class RunReducer
         return null;
     }
 
-    private static bool SameTask(Workflow original, Workflow current, TaskId task) =>
+    internal static bool SameTask(Workflow original, Workflow current, TaskId task) =>
         original.Tasks.TryGetValue(task, out var definition) && current.Tasks.TryGetValue(task, out var replacement) &&
         Revision.CanonicalTask(definition) == Revision.CanonicalTask(replacement) &&
         original.Connections.Where(edge => edge.Key.To == task).SequenceEqual(current.Connections.Where(edge => edge.Key.To == task));

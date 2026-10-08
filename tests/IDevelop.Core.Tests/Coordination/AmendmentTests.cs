@@ -56,14 +56,18 @@ public sealed class AmendmentTests
     }
 
     /// <summary>Blocks the second preparation, B's, after its reservation and before its preparation is recorded.</summary>
-    private static (TaskCompletionSource Reached, TaskCompletionSource Release) HoldSecondPreparation(CoordinatorFixture f)
+    private static (TaskCompletionSource Reached, TaskCompletionSource Release) HoldSecondPreparation(CoordinatorFixture f) =>
+        HoldSecond(f, "journal.prepared.before");
+
+    /// <summary>Blocks the second preparation at its step <paramref name="step"/>; the first is the planner's.</summary>
+    internal static (TaskCompletionSource Reached, TaskCompletionSource Release) HoldSecond(CoordinatorFixture f, string step)
     {
         var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var preparations = 0;
         f.Runs.Probe = point =>
         {
-            if (point != "journal.prepared.before" || Interlocked.Increment(ref preparations) != 2) return;
+            if (point != step || Interlocked.Increment(ref preparations) != 2) return;
             reached.TrySetResult();
             release.Task.WaitAsync(Bound).GetAwaiter().GetResult();
         };
