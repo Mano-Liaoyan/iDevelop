@@ -27,6 +27,7 @@ public sealed partial class ProjectRuns
             _owner = owner;
             _run = run;
             Task = task;
+            _shown = Shown(run.View);
             owner.ConversationChanged += OnChanged;
             run.Changed += OnRunChanged;
         }
@@ -207,9 +208,7 @@ public sealed partial class ProjectRuns
         /// <summary>Raises <see cref="Changed"/> when the run's decision changed what this task's conversation shows.</summary>
         private void OnRunChanged(object? sender, EventArgs e)
         {
-            var view = _run.View;
-            var state = view.Tasks.GetValueOrDefault(Task);
-            object shown = (view.Phase, view.Controlled, state?.State, state?.Attempt, state?.Status);
+            var shown = Shown(_run.View);
             lock (_gate)
             {
                 if (Equals(shown, _shown))
@@ -221,6 +220,13 @@ public sealed partial class ProjectRuns
             }
 
             Raise(Interlocked.Increment(ref _owner._revision));
+        }
+
+        /// <summary>What of the run's view this task's conversation shows.</summary>
+        private object Shown(RunView view)
+        {
+            var state = view.Tasks.GetValueOrDefault(Task);
+            return (view.Phase, view.Controlled, state?.State, state?.Attempt, state?.Status);
         }
 
         private void Raise(long revision) => ThreadPool.QueueUserWorkItem(_ =>
