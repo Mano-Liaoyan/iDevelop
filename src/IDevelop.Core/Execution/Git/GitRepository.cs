@@ -67,7 +67,7 @@ internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan 
 
 internal sealed partial class GitRepository
 {
-    /// <summary>How long a timed-out call waits for Git to stop and for each step of closing its pipes.</summary>
+    /// <summary>How long a timed-out call waits for Git to stop and for its pipes to close.</summary>
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(2);
 
     private readonly GitLimits _limits;
