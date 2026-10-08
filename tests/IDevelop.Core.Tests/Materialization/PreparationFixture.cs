@@ -9,7 +9,7 @@ namespace IDevelop.Core.Tests.Materialization;
 
 internal sealed class PreparationFixture : IDisposable
 {
-    public readonly GitFixture Git = new();
+    public readonly GitFixture Git;
     public readonly RunStore Store;
     public readonly RunId RunId;
     private int _id = 100;
@@ -17,8 +17,10 @@ internal sealed class PreparationFixture : IDisposable
     private CoordinatorPermit? _permit;
     private readonly Dictionary<TaskId, RunLease> _leases = [];
     public readonly CommitId A;
-    public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null, Func<GitFixture, CommitId>? configureBase = null)
+    public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null, Func<GitFixture, CommitId>? configureBase = null,
+        string? folder = null)
     {
+        Git = new(folder: folder);
         A = Git.Diamond();
         RunId = run ?? Run;
         Store = RunStore.Open(Git.Folder, new Clock(), () => Id(++_id));

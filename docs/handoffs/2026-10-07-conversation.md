@@ -115,7 +115,7 @@ The [workspace session](2026-10-07-workspace-sessions.md) owns conversation view
 - `src/IDevelop.Desktop/Conversation/` holds `MarkdownView`, `ConversationLinkRouter`, the view, its view model, and attention.
 - `Directory.Packages.props` pins Markdig 1.4.0, and `THIRD-PARTY-NOTICES.md` carries its license.
 - `docs/agent-clients.md` gains the C1 protocols section.
-- `skills/verify-idevelop/features/conversation-view.md` is the Windows recipe for the view.
+- `.claude/skills/verify-idevelop/features/conversation-view.md` is the Windows recipe for the view.
 - `tests/Shared/Fixtures/c1/` holds client streams from D0's logs, with paths, accounts, and IDs removed.
 
 ## Commands and observed results
