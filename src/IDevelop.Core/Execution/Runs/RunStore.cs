@@ -496,7 +496,7 @@ internal sealed class RunStore
                 }
 
                 var settling = record.Schema == 3 && record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
-                if (settling && (outcome is null || RunReducer.HasUndisposedSettlement(record, attempt)))
+                if (settling && (outcome is null || !TurnsCannotClose(record, owner)))
                     return Refuse(RunProblem.SettlementPending);
 
                 var read = AttemptEvidence.Read(AttemptFolder(workflow, run, owner.Task, owner.Id));
@@ -522,6 +522,25 @@ internal sealed class RunStore
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             return new RunDecision.Rejected(new(RunProblem.StorageUnavailable));
+        }
+    }
+
+    private bool TurnsCannotClose(RunRecord record, RunAttempt owner) =>
+        record.Claims.Keys.Where(launch => launch.Attempt == owner.Id && record.Settling(launch)).All(launch =>
+            record.Dispositions.Values.FirstOrDefault(disposed => disposed.Launch == launch) is { } disposed &&
+            (disposed.Disposition is CaptureDisposition.Failed ||
+                record.Captures.GetValueOrDefault(disposed.Capture, []) is [var first, ..] && LogMovedPast(record, owner, first.Log)));
+
+    private bool LogMovedPast(RunRecord record, RunAttempt owner, LogCheckpoint frozen)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(AttemptFolder(record.Workflow, record.Id, owner.Task, owner.Id), "events.jsonl"));
+            return bytes.LongLength > frozen.ByteLength && Revision.Hash(bytes.AsSpan(0, (int)frozen.ByteLength)) == frozen.Content;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
