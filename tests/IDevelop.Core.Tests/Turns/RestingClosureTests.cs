@@ -209,6 +209,74 @@ public sealed class RestingClosureTests
     }
 
     [Fact]
+    public async Task A_failed_check_clears_when_the_same_operation_succeeds()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var attempt = (await Waiting(f)).Address.Launch.Attempt;
+        var branch = f.Preparation.Read().Preparations[new(attempt, 1)].Location.Owner.Branch;
+        var tip = f.Preparation.Git.Git("rev-parse", branch).Trim();
+        f.Preparation.Git.Git("branch", "foreign", tip);
+        f.Preparation.Git.Git("symbolic-ref", branch, "refs/heads/foreign");
+        var operation = f.Preparation.Op();
+        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Block;
+        Assert.Equal("UncertainOwnership", blocked.Problem.ToString());
+        Assert.Equal(new BlockScope.Operation(), blocked.Scope);
+        Assert.Equal(0, Closures(f, attempt));
+        f.Preparation.Git.Git("update-ref", "--no-deref", branch, tip);
+        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Attempt;
+        Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
+        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
+        Assert.Equal(1, Closures(f, attempt));
+    }
+
+    [Theory]
+    [InlineData("MarkDone")]
+    [InlineData("Conclude")]
+    public async Task An_earlier_drift_block_holds_mark_done_and_conclusion(string end)
+    {
+        await using var f = new TurnFixture(end == "MarkDone" ? ConversationMode.Chat : ConversationMode.Autonomous);
+        await f.Open();
+        var attempt = end == "MarkDone" ? (await Waiting(f)).Address.Launch.Attempt : await InReview(f, T);
+        RestingEnd closing = end == "MarkDone" ? new RestingEnd.MarkDone() : new RestingEnd.Conclude(null);
+        var file = Path.Combine(f.Checkout, "root.txt");
+        var original = File.ReadAllText(file);
+        File.WriteAllText(file, "late\n");
+        var first = Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, closing)).Block;
+        Assert.Equal(new BlockScope.Checkout(["root.txt"]), first.Scope);
+        // Reverting the file outside iDevelop is no recorded recheck, so the block still holds the closure.
+        File.WriteAllText(file, original);
+        Assert.Equal(first, Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, closing)).Block);
+        Assert.Equal(0, Closures(f, attempt));
+        Assert.Single(f.Preparation.Read().Blocks);
+    }
+
+    [Theory]
+    [InlineData("MarkDone")]
+    [InlineData("Cancel")]
+    public async Task An_unfinished_git_step_stops_mark_done_but_not_cancel(string end)
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var attempt = (await Waiting(f)).Address.Launch.Attempt;
+        var record = f.Preparation.Read();
+        var prepared = record.Preparations[new(attempt, 1)];
+        var plan = record.Plans.Single(pair => pair.Value is MaterializationPlan.Preparation preparation && preparation.Attempt == attempt).Key;
+        // A worktree step that never recorded its observation, as a crash in another preparation of this checkout leaves.
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, f.Preparation.Op(), new RunEvent.GitIntended(plan,
+            new GitMutation.CreateWorktree(prepared.Location.Owner, prepared.Location.AttemptBase, true))));
+        var result = await Close(f, f.Preparation.Op(), attempt, end == "MarkDone" ? new RestingEnd.MarkDone() : new RestingEnd.Cancel());
+        if (end == "MarkDone")
+        {
+            Assert.Equal("UnresolvedOwnership", Assert.IsType<RestingClose.Refused>(result).Reason.Problem.ToString());
+            Assert.Equal(0, Closures(f, attempt));
+            Assert.Equal(0, Lines(f, T, attempt, "markedDone"));
+        }
+        else Assert.Equal("Cancelled", Assert.IsType<AttemptEnd.Logged>(Assert.IsType<RestingClose.Closed>(result).Attempt.End).Outcome.ToString());
+        Assert.Empty(f.Preparation.Read().Blocks);
+    }
+
+    [Fact]
     public async Task A_resting_closure_binds_its_operation_by_content()
     {
         await using var f = new TurnFixture(ConversationMode.Chat, configure: WithU);
@@ -294,6 +362,8 @@ public sealed class RestingClosureTests
         Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
         var preservation = f.Preparation.Op();
         Assert.IsType<Preservation.Preserved>(await f.Preparation.Materializer().Preserve(turn.Lease, preservation, turn.Address.Launch.Attempt));
+        // Preserve records the drift it found as a block on the attempt, so the preservation must answer before that block.
+        Assert.Contains(f.Preparation.Read().Blocks.Values, state => !state.Resolved && state.Block.Attempt == turn.Address.Launch.Attempt);
         var receipt = Assert.IsType<TurnDisposition.Preserved>(Assert.IsType<Release.Released>(turn.Release()).Receipt);
         Assert.Equal(OperationIds.Derive(preservation, "preserve-plan"), receipt.Plan);
         Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();

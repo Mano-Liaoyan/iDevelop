@@ -28,8 +28,10 @@ internal static partial class RunReducer
     internal static bool ProducerUnsettled(RunRecord record, ImmutableArray<TaskId> producers) =>
         record.UnresolvedClaims.Any(key => producers.Contains(record.Attempts[key.Attempt].Task));
 
+    // An operation-scoped fault names only its operation's own step, which that operation's next success resolves. It is no
+    // drift, so it never holds a claim or a closure that Restore could not release.
     internal static bool IsDrift(MaterializationBlock block) =>
-        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership;
+        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership && block.Scope is not BlockScope.Operation;
 
     /// <summary>The oldest unresolved drift block on a producer's publishing attempt.</summary>
     internal static KeyValuePair<OperationId, MaterializationBlockState>? ProducerDrift(RunRecord record, ImmutableArray<TaskId> producers)
