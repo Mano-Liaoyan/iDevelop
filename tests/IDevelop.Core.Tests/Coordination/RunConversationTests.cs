@@ -467,6 +467,8 @@ public sealed class RunConversationTests
         var changes = 0;
         session.Changed += _ => Interlocked.Increment(ref changes);
         await f.Decided();
+        await f.Decided();
+        await Task.Delay(300);
         Assert.Equal(0, Volatile.Read(ref changes));
 
         Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, f.Preparation.Op()).WaitAsync(Bound));

@@ -152,8 +152,9 @@ internal sealed partial class WorkflowRunCoordinator
         foreach (var state in view.Tasks.Values)
         {
             var task = state.Task;
-            // A task this window works on projects as starting, running, or settling, never as waiting.
-            if (Resting(record, state) is not { } resting ||
+            // The view was projected before this decision's reconciliation, which may have taken up a waiting task's
+            // held release since; work this window has on a task always goes first.
+            if (_live.ContainsKey(task) || Resting(record, state) is not { } resting ||
                 Continuation(record, resting) is not { } prompt)
                 continue;
             var next = resting.Next;
