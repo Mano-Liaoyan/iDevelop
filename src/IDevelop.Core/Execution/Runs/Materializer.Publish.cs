@@ -74,7 +74,6 @@ internal sealed partial class Materializer
             if (existing.Value is MaterializationPlan.Publication persisted)
             {
                 plan = persisted;
-                if (plan.Capture != frozen.Capture) return new Publication.Rejected(new(RunProblem.OperationConflict));
                 CopyPublicationArtifacts(workflow, run, frozen, plan.Result);
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);

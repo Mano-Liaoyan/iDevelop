@@ -9,6 +9,124 @@ namespace IDevelop.Core.Tests.Materialization;
 
 public sealed class PublicationTests
 {
+    [Fact]
+    public async Task A_staged_only_change_blocks_before_publication_moves_and_restored_index_bytes_publish()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready);
+        var repository = f.Git.Open();
+        var indexPath = GitFixture.Read(repository.IndexPath(ready.Checkout));
+        var index = File.ReadAllBytes(indexPath);
+        var branch = GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch));
+        var moves = f.Read().GitIntents.Count;
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "result.txt").ExitCode);
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("Writer files or index changed after the turn-end capture.", blocked.Block.Detail);
+        Assert.Equal(0, f.Read().GitIntents.Count - moves);
+        Assert.Equal(branch, GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch)));
+        Assert.Empty(f.Read().Results);
+        Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
+        File.WriteAllBytes(indexPath, index);
+        Recheck(f, Assert.Single(f.Read().Blocks).Key);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Equal(3, f.Read().GitIntents.Count - moves);
+        Assert.Single(f.Read().Results);
+    }
+
+    [Fact]
+    public async Task Publication_plans_must_name_the_settled_capture_and_valid_persisted_plans_resume()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready);
+        var record = f.Read();
+        var capture = record.Settlements[ready.Execution.Launch];
+        var first = record.Captures[capture][0];
+        var operation = f.Op();
+        var result = new ResultId(OperationIds.Derive(operation, "result").Value);
+        var plan = new MaterializationPlan.Publication(ready.Execution.Launch.Attempt, result, null,
+            record.RootExits[ready.Execution.Launch].Tip, first.Index?.Content, first.Recipe, first.Candidate, first.Report!, [])
+        { Capture = capture };
+        Assert.Equal("OutcomeMismatch", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
+            new RunEvent.Planned(plan with { Capture = new(Id(9900)) }))).Reason.Problem.ToString());
+        Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Publication>());
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, OperationIds.Derive(operation, "plan"), new RunEvent.Planned(plan)));
+        Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Publication>());
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Single(f.Read().Results);
+    }
+
+    [Fact]
+    public async Task Publication_rejects_a_capture_report_mismatch_before_copying_result_artifacts()
+    {
+        using var source = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var sourceReady = Assert.IsType<Preparation.Ready>(await source.Prepare(T));
+        source.Git.Write("result.txt", "done\n", sourceReady.Checkout);
+        var outbox = Path.Combine(sourceReady.Checkout, sourceReady.Execution.OutboxPath);
+        File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
+        File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
+        await source.Close(sourceReady);
+        var pair = Assert.Single(source.Read().Captures).Value;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        var log = f.ObserveAndLog(ready);
+        var storage = new RunStorage(f.Git.Folder, W, f.RunId);
+        foreach (var observation in pair)
+        {
+            Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(
+                observation with { Launch = ready.Execution.Launch, Log = log, Report = "Different report.\n" })));
+            var artifact = Assert.Single(observation.Artifacts);
+            RunStorage.Publish(storage.Folder, artifact.StoredPath, [67, 0, 127], artifact.Content, artifact.ByteLength);
+        }
+        var capture = pair[0].Capture;
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(
+            capture, ready.Execution.Launch, new CaptureDisposition.Matched())));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), ready.Execution.Launch, log, capture));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
+        var operation = f.Op();
+        var result = new ResultId(OperationIds.Derive(operation, "result").Value);
+        var destination = RunStorage.SafePath(storage.Folder, RunStorage.ArtifactPath(result, "payload"));
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(
+            f.Lease(T), operation, ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
+        Assert.False(File.Exists(destination));
+        Assert.Empty(f.Read().Results);
+        var accepted = Assert.IsType<Publication.Accepted>(source.Materializer().Publish(source.Lease(T), source.Op(), sourceReady.Execution.Launch.Attempt));
+        var sourceStorage = new RunStorage(source.Git.Folder, W, source.RunId);
+        Assert.Equal(new byte[] { 67, 0, 127 }, sourceStorage.ReadArtifact(accepted.Result.Id, Assert.Single(accepted.Result.Artifacts)));
+        Assert.Equal("B ready.\n", accepted.Result.Report);
+        Assert.Single(source.Read().Results);
+    }
+
+    [Fact]
+    public async Task Publication_rechecks_attempt_base_ancestry_when_the_root_tip_becomes_shallow()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = await ChangedWriter(f);
+        var shallow = Path.Combine(f.Git.Open().CommonDirectory, "shallow");
+        File.WriteAllText(shallow, "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n");
+        var moves = f.Read().GitIntents.Count;
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The writer branch tip 2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67 does not contain the attempt base adfe40b30c176fb407933286f51d15ea9b54cdc3.", blocked.Block.Detail);
+        Assert.Equal(0, f.Read().GitIntents.Count - moves);
+        Assert.Empty(f.Read().Results);
+        File.Delete(shallow);
+        Recheck(f, Assert.Single(f.Read().Blocks).Key);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("new\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":new.txt"));
+        Assert.Equal(3, f.Read().GitIntents.Count - moves);
+        Assert.Single(f.Read().Results);
+    }
+
     private static readonly OperationId Operation = new(Id(2000));
 
     [Theory]

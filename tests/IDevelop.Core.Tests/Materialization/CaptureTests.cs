@@ -10,6 +10,173 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class CaptureTests
 {
     [Fact]
+    public async System.Threading.Tasks.Task Matched_dispositions_refuse_unexplained_refs_and_accept_explained_observations()
+    {
+        var template = await ObservationTemplates();
+        foreach (var unexplained in new[] { true, false })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            var log = f.ObserveAndLog(ready);
+            var first = template.First with { Launch = ready.Execution.Launch, Log = log,
+                UnexplainedRefs = unexplained ? ["refs/stash"] : [] };
+            RecordObservation(f, first);
+            RecordObservation(f, template.Second with { Launch = first.Launch, Log = first.Log, UnexplainedRefs = first.UnexplainedRefs });
+            var outcome = f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(first.Capture,
+                first.Launch, new CaptureDisposition.Matched()));
+            if (unexplained)
+            {
+                Assert.Equal("EvidenceMismatch", Assert.IsType<RunDecision.Rejected>(outcome).Reason.Problem.ToString());
+                Assert.Empty(f.Read().Dispositions);
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(
+                    first.Capture, first.Launch, new CaptureDisposition.Diverged(MaterializationProblem.UncertainOwnership,
+                        [], ["refs/stash"], "Unexplained stash."))));
+                Assert.Equal("UncertainOwnership", Assert.IsType<CaptureDisposition.Diverged>(
+                    f.Read().Dispositions[first.Capture].Disposition).Problem.ToString());
+            }
+            else
+            {
+                Assert.IsType<RunDecision.Recorded>(outcome);
+                Assert.IsType<CaptureDisposition.Matched>(Assert.Single(f.Read().Dispositions).Value.Disposition);
+            }
+            Assert.Equal(2, f.Read().Captures[first.Capture].Count);
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Capture_ordinals_must_start_at_one_and_advance_once()
+    {
+        var template = await ObservationTemplates();
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var log = f.ObserveAndLog(ready);
+        var first = template.First with { Launch = ready.Execution.Launch, Log = log };
+        var second = template.Second with { Launch = first.Launch, Log = first.Log };
+        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
+            new RunEvent.TurnCaptured(second))).Reason.Problem.ToString());
+        Assert.Empty(f.Read().Captures);
+        RecordObservation(f, first);
+        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
+            new RunEvent.TurnCaptured(first))).Reason.Problem.ToString());
+        Assert.Equal(new[] { 1 }, f.Read().Captures[first.Capture].Select(o => o.Ordinal));
+        RecordObservation(f, second);
+        Assert.Equal(new[] { 1, 2 }, f.Read().Captures[first.Capture].Select(o => o.Ordinal));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_diverged_disposition_requires_two_observations_while_a_failure_can_keep_one()
+    {
+        var template = await ObservationTemplates();
+        foreach (var failed in new[] { false, true })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            var log = f.ObserveAndLog(ready);
+            var first = template.First with { Launch = ready.Execution.Launch, Log = log };
+            RecordObservation(f, first);
+            var diverged = new RunEvent.CaptureDisposed(first.Capture, first.Launch,
+                new CaptureDisposition.Diverged(MaterializationProblem.DirtyWorktree, ["result.txt"], [], "Changed files."));
+            Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), diverged)).Reason.Problem.ToString());
+            Assert.Empty(f.Read().Dispositions);
+            if (failed)
+            {
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), diverged with
+                { Disposition = new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable, "Missing evidence.", []) }));
+                Assert.Equal("InputUnavailable", Assert.IsType<CaptureDisposition.Failed>(
+                    Assert.Single(f.Read().Dispositions).Value.Disposition).Problem.ToString());
+                Assert.Single(f.Read().Captures[first.Capture]);
+            }
+            else
+            {
+                RecordObservation(f, template.Second with { Launch = first.Launch, Log = first.Log, UnexplainedRefs = first.UnexplainedRefs });
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), diverged));
+                Assert.Equal("DirtyWorktree", Assert.IsType<CaptureDisposition.Diverged>(
+                    Assert.Single(f.Read().Dispositions).Value.Disposition).Problem.ToString());
+                Assert.Equal(2, f.Read().Captures[first.Capture].Count);
+            }
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task A_turn_closed_without_a_capture_refuses_later_capture_events()
+    {
+        var template = await ObservationTemplates();
+        foreach (var closed in new[] { true, false })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            var log = f.ObserveAndLog(ready);
+            var first = template.First with { Launch = ready.Execution.Launch, Log = log };
+            if (closed) Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), first.Launch, log));
+            var outcome = f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(first));
+            if (closed)
+            {
+                Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(outcome).Reason.Problem.ToString());
+                Assert.Empty(f.Read().Captures);
+                Assert.Single(f.Read().TurnClosures);
+            }
+            else
+            {
+                Assert.IsType<RunDecision.Recorded>(outcome);
+                Assert.Single(Assert.Single(f.Read().Captures).Value);
+                Assert.Equal("B ready.\n", Assert.Single(Assert.Single(f.Read().Captures).Value).Report);
+            }
+        }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Settlement_replaces_stale_unjournaled_capture_bytes_and_removes_extra_files()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        WriteArtifact(ready, [67, 0, 127]);
+        var log = f.ObserveAndLog(ready);
+        var operation = f.Op();
+        var capture = new CaptureId(OperationIds.Derive(operation, "capture").Value);
+        var storage = new RunStorage(f.Git.Folder, W, f.RunId);
+        var folder = RunStorage.SafePath(storage.Folder, $"captures/{capture.Value:D}/1");
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "index"), [88]);
+        File.WriteAllText(Path.Combine(folder, "extra.txt"), "stale\n");
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation,
+            ready.Execution.Launch, log));
+        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        Assert.Equal(2, f.Read().Captures[capture].Count);
+        Assert.False(File.Exists(Path.Combine(folder, "extra.txt")));
+        Assert.Equal("B ready.\n", f.Read().Captures[capture][0].Report);
+        var artifact = Assert.Single(f.Read().Captures[capture][0].Artifacts);
+        Assert.Equal(new byte[] { 67, 0, 127 }, RunStorage.Read(storage.Folder, artifact.StoredPath,
+            artifact.Content, artifact.ByteLength));
+        Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(folder, "artifacts", "payload")));
+        Assert.Equal(closed, await f.Materializer().Settle(f.Lease(T), operation, ready.Execution.Launch, log));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Captures_record_the_live_rewound_tip_instead_of_the_root_tip()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var log = f.ObserveAndLog(ready);
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+        {
+            if (point == "journal.capture-1.after")
+                Assert.Equal(0, f.Git.Run(ready.Checkout, "reset", "--hard", "81ddb7c330112c7f16700ed002803a04b0bce693").ExitCode);
+        }).Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        var pair = f.Read().Captures[closed.Capture];
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", pair[0].Tip!.Value.Hex);
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", pair[1].Tip!.Value.Hex);
+        Assert.Equal("UncertainOwnership", Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition).Problem.ToString());
+        Assert.Equal(new[] { "refs/heads/idp/93f23689/task/90d5b0a2" }, Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition).Refs);
+        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var valid = Assert.IsType<Preparation.Ready>(await control.Prepare(T));
+        var checkpoint = control.ObserveAndLog(valid);
+        var matched = Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
+        Assert.IsType<CaptureDisposition.Matched>(matched.Disposition);
+        Assert.Equal(new[] { "adfe40b30c176fb407933286f51d15ea9b54cdc3", "adfe40b30c176fb407933286f51d15ea9b54cdc3" },
+            control.Read().Captures[matched.Capture].Select(o => o.Tip!.Value.Hex));
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task The_second_observation_starts_exactly_250_ms_after_the_first()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -255,7 +422,7 @@ public sealed class CaptureTests
     }
 
     [Fact]
-    public void Schema_one_and_two_refuse_capture_events_and_linkage_while_the_legacy_fixture_replays_to_27()
+    public async System.Threading.Tasks.Task Schema_one_and_two_refuse_capture_events_and_linkage_while_the_legacy_fixture_replays_to_27()
     {
         using var f = new RunFixtures();
         var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
@@ -264,10 +431,10 @@ public sealed class CaptureTests
         var capture = new CaptureId(Id(600));
         var launch = new LaunchKey(A1, 1);
         var log = new LogCheckpoint(10, Prompt);
-        var observation = new CaptureObservation(capture, 1, launch, log, At, At,
-            new(new(Base.Hex), [Base], "capture", "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", At),
-            Base, Base, "refs/heads/idp/task", null, null, [],
-            new(RunStorage.CapturePath(capture, 1, "refs.json"), Prompt, 10), []);
+        var observation = (await ObservationTemplates()).First;
+        observation = observation with { Capture = capture, Launch = launch, Log = log,
+            Index = observation.Index! with { RelativePath = RunStorage.CapturePath(capture, 1, "index") },
+            SharedRefs = observation.SharedRefs with { RelativePath = RunStorage.CapturePath(capture, 1, "refs.json") } };
         RunEvent[] events = [new RunEvent.TurnCaptured(observation),
             new RunEvent.CaptureDisposed(capture, launch, new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable, "Missing.", [])),
             new RunEvent.TurnClosed(launch, log) { Capture = capture }];
@@ -535,6 +702,20 @@ public sealed class CaptureTests
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         await VerifyUnreadableLogAfterMatch();
     }
+
+    private static async System.Threading.Tasks.Task<(CaptureObservation First, CaptureObservation Second)> ObservationTemplates()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        var log = f.ObserveAndLog(ready);
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        var pair = f.Read().Captures[closed.Capture];
+        return (pair[0], pair[1]);
+    }
+
+    private static void RecordObservation(PreparationFixture f, CaptureObservation observation) =>
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(observation)));
 
     private sealed class CaptureCrash : Exception;
 }

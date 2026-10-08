@@ -11,6 +11,40 @@ namespace IDevelop.Core.Tests.Materialization;
 [Collection(ProcessCollection.Name)]
 public sealed class TurnEndOwnershipTests
 {
+    [Fact]
+    public async Task Closing_a_turn_without_root_observation_ends_its_ancestry_permission()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var writer = await PrepareAndClaim(f, T);
+        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        f.Git.Write("u.txt", "U\n", sibling.Checkout);
+        await f.Close(sibling);
+        var attempt = f.Read().Attempts[writer.Execution.Launch.Attempt];
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, attempt.Id);
+        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
+            At, attempt.Id, T, "B", Task().Execution!, writer.Execution.Prompt, "codex", [])
+        { RunBinding = new(W, f.RunId, attempt.Revision, writer.Execution.Inputs), Conversation = ConversationMode.Autonomous }))
+        {
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.SessionStarted("fixture")));
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Done.\n")));
+            log.Append(new AttemptEvent.Exited(At, 0, ""));
+        }
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), writer.Execution.Launch, Checkpoint(folder)));
+        var foreign = CommitFile(f, writer, "foreign.txt", "foreign\n");
+        var operation = f.Op();
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(U), operation, sibling.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Empty(f.Read().Results);
+        Assert.Equal(0, f.Read().RootExits.Count(root => root.Key == writer.Execution.Launch));
+        Assert.Equal("Explained", f.Read().RootExits[sibling.Execution.Launch].Ownership.ToString());
+        Assert.Equal("foreign\n", f.Git.Git("show", foreign.Hex + ":foreign.txt"));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "adfe40b30c176fb407933286f51d15ea9b54cdc3").ExitCode);
+        Recheck(f, sibling.Execution.Launch.Attempt);
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), operation, sibling.Execution.Launch.Attempt));
+        Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
+        Assert.Single(f.Read().Results);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
