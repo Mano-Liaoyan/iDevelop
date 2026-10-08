@@ -152,14 +152,15 @@ internal sealed class ProcessGroup : IDisposable
                 return;
             }
 
-            if (SignalFailure is null)
-            {
-                _ = Kill(-Id, Sigkill);
-            }
-
+            // The tree first, while the root lives: once it exits, its children belong to init and no tree reaches them.
             if (_root is not null)
             {
                 ProcessCheck.KillTreeQuietly(_root);
+            }
+
+            if (SignalFailure is null)
+            {
+                _ = Kill(-Id, Sigkill);
             }
         }
     }

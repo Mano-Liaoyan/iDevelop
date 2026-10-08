@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.TestSupport.Processes;
@@ -171,6 +172,23 @@ public sealed class ProcessGroupTests : IDisposable
     }
 
     [UnixFact]
+    public async Task Stopping_a_workflow_tree_also_stops_a_child_that_left_the_group_while_its_parent_lives()
+    {
+        var pidFile = Path.Combine(_evidence, "escaped.pid");
+        using var fakes = new FakeClients(_temp.Create("fakes"));
+        fakes.Install("client", FakeRule.On().SpawnEscapedWriter(pidFile, Path.Combine(_evidence, "gate"), "late.txt", "late\n").Hang());
+        using var child = ChildProcess.Start(fakes.Resolver.Resolve("client")!, [], _folder, ProcessLifetime.Workflow);
+        _spawned.Add(child.Identity.Id);
+        var escaped = await _spawned.PidAsync(pidFile).WaitAsync(Patience);
+        Assert.NotEqual(child.Identity.Id, GroupOf(escaped));
+
+        child.StopTree();
+
+        AssertGone(escaped);
+        Assert.Equal(137, await child.WaitForExitAsync().WaitAsync(Patience));
+    }
+
+    [UnixFact]
     public async Task Workflow_cleanup_waits_the_grace_on_its_clock_before_it_kills_a_descendant_that_ignores_SIGTERM()
     {
         var pidFile = Path.Combine(_evidence, "stubborn.pid");
@@ -180,9 +198,10 @@ public sealed class ProcessGroupTests : IDisposable
         var stubborn = await _spawned.PidAsync(pidFile).WaitAsync(Patience);
         Assert.Equal(0, await child.WaitForExitAsync().WaitAsync(Patience));
 
-        var cleanup = child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None);
+        // A grace longer than the wait below shows that only the clock ends it.
+        var cleanup = child.CleanUpAsync(TimeSpan.FromMinutes(2), _clock, CancellationToken.None);
         await WaitUntilAsync(() => File.Exists(terminated));
-        _clock.Advance(TimeSpan.FromMilliseconds(1900));
+        _clock.Advance(TimeSpan.FromSeconds(119));
         await Task.Delay(200);
         Assert.False(cleanup.IsCompleted);
         using (var survivor = Process.GetProcessById(stubborn))
@@ -190,11 +209,11 @@ public sealed class ProcessGroupTests : IDisposable
             Assert.False(survivor.HasExited);
         }
 
-        _clock.Advance(TimeSpan.FromMilliseconds(100));
-        var result = await cleanup.WaitAsync(Patience);
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        var result = await cleanup.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal((CleanupResult.Completed, null), (result.Result, result.Detail));
-        Assert.Equal([new CleanupStep(T0, "terminateGroup", null), new CleanupStep(T0.AddSeconds(2), "killGroup", null)], result.Steps.ToArray());
+        Assert.Equal([new CleanupStep(T0, "terminateGroup", null), new CleanupStep(T0.AddMinutes(2), "killGroup", null)], result.Steps.ToArray());
         AssertGone(stubborn);
     }
 
@@ -322,6 +341,15 @@ public sealed class ProcessGroupTests : IDisposable
         var path = process.StandardOutput.ReadToEnd().TrimEnd('\n');
         process.WaitForExit();
         return path;
+    }
+
+    private static int GroupOf(int id)
+    {
+        using var process = Process.Start(new ProcessStartInfo("/bin/sh", ["-c", "ps -o pgid= -p \"$1\" | tr -d ' '", "sh", id.ToString(CultureInfo.InvariantCulture)])
+            { RedirectStandardOutput = true })!;
+        var group = process.StandardOutput.ReadToEnd().Trim();
+        process.WaitForExit();
+        return int.Parse(group, CultureInfo.InvariantCulture);
     }
 
     private static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
