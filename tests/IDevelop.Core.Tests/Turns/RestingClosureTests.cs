@@ -208,8 +208,11 @@ public sealed class RestingClosureTests
         Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
     }
 
-    [Fact]
-    public async Task A_failed_check_clears_when_the_same_operation_succeeds()
+    [Theory]
+    [InlineData("same")]
+    [InlineData("later")]
+    [InlineData("turn")]
+    public async Task A_failed_check_clears_when_a_later_check_succeeds(string row)
     {
         await using var f = new TurnFixture(ConversationMode.Chat);
         await f.Open();
@@ -224,10 +227,24 @@ public sealed class RestingClosureTests
         Assert.Equal(new BlockScope.Operation(), blocked.Scope);
         Assert.Equal(0, Closures(f, attempt));
         f.Preparation.Git.Git("update-ref", "--no-deref", branch, tip);
-        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Attempt;
+        if (row == "turn")
+        {
+            // A later turn's own-baseline recheck verifies what the failed closure check could not.
+            FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Resuming(f.Client, "session-1")
+                .Print(FakeAgents.SessionLine(f.Client, "session-1")).Print(FakeAgents.ReplyLines(f.Client, "More?")));
+            var next = await f.Settled(await f.Start(new TurnIntent.Next(f.Preparation.Op(), new(attempt, 2), "Use the fixture")));
+            Assert.Equal("WaitingForInput", next.Attempt.Status.ToString());
+            Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
+            Assert.Equal(2, f.Launches);
+            return;
+        }
+        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, row == "same" ? operation : f.Preparation.Op(), attempt,
+            new RestingEnd.MarkDone())).Attempt;
         Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
         Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
         Assert.Equal(1, Closures(f, attempt));
+        Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(closed.Lease, f.Preparation.Op(), attempt));
+        Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
     }
 
     [Theory]
@@ -249,6 +266,21 @@ public sealed class RestingClosureTests
         Assert.Equal(first, Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, closing)).Block);
         Assert.Equal(0, Closures(f, attempt));
         Assert.Single(f.Preparation.Read().Blocks);
+    }
+
+    [Fact]
+    public async Task Another_operations_fault_holds_mark_done_as_it_would_hold_publication()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var attempt = (await Waiting(f)).Address.Launch.Attempt;
+        var other = f.Preparation.Op();
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, other, new RunEvent.Blocked(
+            new(other, T, attempt, MaterializationProblem.UncertainOwnership, null, [], "Another step failed.") { Scope = new BlockScope.Operation() })));
+        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Block;
+        Assert.Equal(other, blocked.Operation);
+        Assert.Equal(0, Closures(f, attempt));
+        Assert.Equal(0, Lines(f, T, attempt, "markedDone"));
     }
 
     [Theory]

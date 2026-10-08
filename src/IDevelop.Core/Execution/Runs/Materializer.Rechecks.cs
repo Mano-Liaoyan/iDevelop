@@ -15,13 +15,14 @@ internal sealed partial class Materializer
     private ClaimCheck? OwnBaselineHold(CoordinatorPermit permit, OperationId operation, GitRepository repository, RunRecord record,
         PreparedExecution prepared, RunAttempt attempt)
     {
-        if (RunReducer.AttemptDrift(record, id => id == attempt.Id) is { } existing) return new ClaimCheck.Blocked(existing.Value.Block);
+        if (RunReducer.AttemptDrift(record, id => id == attempt.Id, operation) is { } existing) return new ClaimCheck.Blocked(existing.Value.Block);
         try
         {
             if (attempt.Cause is AttemptCause.Continue continued && record.Baselines.ContainsKey((continued.Previous, continued.Confirmation)))
                 VerifyRecoveryBaseline(repository, record, prepared.Location, attempt.Cause);
             else if (VerifyOwnBaseline(repository, record, prepared.Location, attempt.Id, refusePending: true) is { } problem)
                 return new ClaimCheck.Rejected(problem);
+            ResolveClosureFaults(permit, operation, attempt.Id);
             return null;
         }
         catch (MaterializationFailure failed) when (IsCheckoutDrift(failed))

@@ -28,10 +28,27 @@ internal static partial class RunReducer
     internal static bool ProducerUnsettled(RunRecord record, ImmutableArray<TaskId> producers) =>
         record.UnresolvedClaims.Any(key => producers.Contains(record.Attempts[key.Attempt].Task));
 
-    // An operation-scoped fault names only its operation's own step, which that operation's next success resolves. It is no
-    // drift, so it never holds a claim or a closure that Restore could not release.
-    internal static bool IsDrift(MaterializationBlock block) =>
-        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership && block.Scope is not BlockScope.Operation;
+    /// <summary>The step whose blocks a resting closure's baseline check records.</summary>
+    internal const string ClosureCheck = "close-recheck";
+
+    /// <summary>
+    /// Publish's view of drift: a dirty or unowned checkout, except an operation's own operation- or repository-scoped
+    /// fault, which that operation reruns. A failed closure check is no drift either, because the next successful baseline
+    /// check of its attempt verifies what it could not and resolves it.
+    /// </summary>
+    internal static bool IsDrift(OperationId id, MaterializationBlock block, OperationId? operation = null) =>
+        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
+        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation) && !ClosureFault(id, block);
+
+    /// <summary>An operation-scoped fault that a resting closure's baseline check recorded under its own operation.</summary>
+    internal static bool ClosureFault(OperationId id, MaterializationBlock block)
+    {
+        if (block.Scope is not BlockScope.Operation) return false;
+        if (id == OperationIds.Derive(block.Operation, ClosureCheck + "-blocked")) return true;
+        for (var number = 1; number <= 64; number++)
+            if (id == OperationIds.Derive(block.Operation, ClosureCheck + "-blocked-" + number)) return true;
+        return false;
+    }
 
     /// <summary>The oldest unresolved drift block on a producer's publishing attempt.</summary>
     internal static KeyValuePair<OperationId, MaterializationBlockState>? ProducerDrift(RunRecord record, ImmutableArray<TaskId> producers)
@@ -40,9 +57,11 @@ internal static partial class RunReducer
         return AttemptDrift(record, attempts.Contains);
     }
 
-    /// <summary>The oldest unresolved drift block on an attempt that <paramref name="attempt"/> selects.</summary>
-    internal static KeyValuePair<OperationId, MaterializationBlockState>? AttemptDrift(RunRecord record, Func<AttemptId, bool> attempt) =>
-        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt is { } owner && attempt(owner) && IsDrift(pair.Value.Block))
+    /// <summary>The oldest unresolved drift block, as <paramref name="operation"/> sees it, on an attempt that <paramref name="attempt"/> selects.</summary>
+    internal static KeyValuePair<OperationId, MaterializationBlockState>? AttemptDrift(RunRecord record, Func<AttemptId, bool> attempt,
+        OperationId? operation = null) =>
+        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt is { } owner && attempt(owner) &&
+                IsDrift(pair.Key, pair.Value.Block, operation))
             .OrderBy(pair => record.Receipts[pair.Key].Sequence)
             .Select(pair => (KeyValuePair<OperationId, MaterializationBlockState>?)pair).FirstOrDefault();
 
