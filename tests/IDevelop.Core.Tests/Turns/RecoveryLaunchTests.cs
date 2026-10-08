@@ -107,6 +107,25 @@ public sealed class RecoveryLaunchTests
     }
 
     [Fact]
+    public async Task Continue_without_a_session_never_launches()
+    {
+        await using var f = new TurnFixture();
+        await f.Open(FakeAgents.Fresh(f.Client).Exit(1));
+        var failed = await f.Settled(await f.Start());
+        Assert.Equal("Failed", failed.Attempt.Status.ToString());
+        Assert.Null(failed.Attempt.SessionId);
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
+            failed.Address.Launch.Attempt, TerminalAttemptOutcome.Failed, failed.Log));
+        Assert.IsType<Release.Released>(failed.Release());
+        var launches = f.Launches;
+        var refused = Assert.IsType<TurnStart.Refused>(await f.Runs.StartTurn(f.Preparation.Permit, new TurnIntent.First(f.Preparation.Op(), T,
+            new AttemptCause.Continue(failed.Address.Launch.Attempt, f.Preparation.Op()))).WaitAsync(Bound));
+        Assert.Equal("SessionUnavailable", refused.Reason.Problem.ToString());
+        Assert.Equal(launches, f.Launches);
+        Assert.Single(f.Preparation.Read().Claims);
+    }
+
+    [Fact]
     public async Task Retry_starts_a_fresh_session()
     {
         await using var f = new TurnFixture();
