@@ -21,9 +21,13 @@ internal sealed record ApprovalIntent(int Schema, RunId Run, OperationId Operati
 {
     private const string Identity = "iDevelop <idevelop@localhost>";
 
-    /// <summary>Whether the intent approves what <paramref name="live"/> shows with <paramref name="choice"/>.</summary>
-    public bool Matches(RunPreflight live, BaseChoice choice) => live.Base is { } found && Revision.Id == live.Revision.Id &&
-        Choice == choice && Head == found.Head && (choice == BaseChoice.Head || Snapshot == found.WorkTree);
+    /// <summary>The reports the confirmation included, by task. A waiting planner among them is marked done before the approval.</summary>
+    public ImmutableArray<ReportInclusion> Inclusions { get; init; } = [];
+
+    /// <summary>Whether the intent approves what <paramref name="live"/> shows with <paramref name="choice"/> and <paramref name="inclusions"/>.</summary>
+    public bool Matches(RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions) => live.Base is { } found &&
+        Revision.Id == live.Revision.Id && Choice == choice && Head == found.Head && (choice == BaseChoice.Head || Snapshot == found.WorkTree) &&
+        Inclusions.SequenceEqual(inclusions);
 
     /// <summary>The snapshot commit: the confirmed tree over HEAD, by iDevelop, at the intent's time.</summary>
     public CommitRecipe SnapshotRecipe() => new(Snapshot ?? throw new InvalidOperationException("The intent has no snapshot."), [Head],

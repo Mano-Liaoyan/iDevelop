@@ -1,10 +1,17 @@
+using System.Collections.Immutable;
+
 namespace IDevelop.Execution;
 
 /// <summary>
 /// The person's confirmation of <paramref name="Preview"/> with the base they chose. <paramref name="Command"/> identifies
 /// the confirmation: repeating it returns the run it approved.
 /// </summary>
-internal sealed record RunConfirmation(RunPreflight Preview, BaseChoice Choice, OperationId Command);
+internal sealed record RunConfirmation(RunPreflight Preview, BaseChoice Choice, OperationId Command)
+{
+    /// <summary>The reports the preview offered that the person includes: planners from <see cref="RunPreflight.Planners"/>
+    /// and other reports from <see cref="RunPreflight.Reusable"/>, at most one per task.</summary>
+    public ImmutableArray<ReportInclusion> Include { get; init; } = [];
+}
 
 internal enum ApprovalProblem
 {
@@ -19,6 +26,13 @@ internal enum ApprovalProblem
 
     /// <summary>Git failed while building the snapshot.</summary>
     GitFailed,
+
+    /// <summary>
+    /// A report the person included cannot be: the preview did not offer it on this base, or its validation failed at
+    /// approval. Nothing was approved. The detail names the <see cref="RunProblem"/>. Running the planner again takes a
+    /// confirmation without it.
+    /// </summary>
+    InclusionRefused,
 }
 
 internal abstract record RunApproval

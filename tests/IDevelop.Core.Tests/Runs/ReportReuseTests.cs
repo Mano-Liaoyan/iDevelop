@@ -224,7 +224,7 @@ public sealed class ReportReuseTests
         }
     }
 
-    private static CommitId Repository(string folder)
+    internal static CommitId Repository(string folder)
     {
         Git(folder, "init", "--quiet");
         Directory.CreateDirectory(Path.Combine(folder, "src"));
@@ -232,7 +232,7 @@ public sealed class ReportReuseTests
         return Commit(folder);
     }
 
-    private static CommitId Commit(string folder)
+    internal static CommitId Commit(string folder)
     {
         Git(folder, "add", "--all");
         Git(folder, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet",
@@ -240,7 +240,7 @@ public sealed class ReportReuseTests
         return new(Git(folder, "rev-parse", "HEAD").Trim());
     }
 
-    private static string Tree(string folder, CommitId commit) => Git(folder, "rev-parse", commit.Hex + "^{tree}").Trim();
+    internal static string Tree(string folder, CommitId commit) => Git(folder, "rev-parse", commit.Hex + "^{tree}").Trim();
 
     private static string Git(string folder, params string[] arguments)
     {

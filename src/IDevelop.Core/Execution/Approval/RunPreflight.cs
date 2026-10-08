@@ -25,6 +25,12 @@ internal sealed record RunPreflight(string Project, ApprovedRevision Revision, P
     public ImmutableArray<PreflightReport> Reusable { get; init; } = [];
 
     /// <summary>
+    /// Each root planner that ran on its own, with the bases where the run could include its report instead of running it
+    /// again. Listing one includes nothing: the person includes it, and the confirmation finishes it if it still waits.
+    /// </summary>
+    public ImmutableArray<PreflightPlanner> Planners { get; init; } = [];
+
+    /// <summary>
     /// The bases the person can choose: HEAD when the project has a commit, and a snapshot of the uncommitted work when the
     /// work tree differs from HEAD outside iDevelop's data and nothing is unmerged.
     /// </summary>
@@ -74,6 +80,21 @@ internal sealed record PreflightReport(TaskId Task, AttemptId Source, string Rep
         Bases.SequenceEqual(other.Bases);
 
     public override int GetHashCode() => HashCode.Combine(Task, Source, Report);
+}
+
+/// <summary>
+/// A root planner's newest standalone attempt, as of its final turn <paramref name="Turn"/>. <paramref name="Status"/> is
+/// <see cref="AttemptStatus.WaitingForInput"/> for a Chat planner that a confirmation including it marks done.
+/// </summary>
+/// <param name="Report">The report the run would include, the final turn's text.</param>
+/// <param name="Bases">The bases on which the run can include it. Empty with <paramref name="Problem"/> when it cannot.</param>
+internal sealed record PreflightPlanner(TaskId Task, AttemptId Source, int Turn, AttemptStatus Status, string? Report,
+    ImmutableArray<BaseChoice> Bases, RunProblem? Problem)
+{
+    public bool Equals(PreflightPlanner? other) => other is not null && Task == other.Task && Source == other.Source && Turn == other.Turn &&
+        Status == other.Status && Report == other.Report && Bases.SequenceEqual(other.Bases) && Problem == other.Problem;
+
+    public override int GetHashCode() => HashCode.Combine(Task, Source, Turn);
 }
 
 internal abstract record PreflightGap

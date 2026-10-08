@@ -166,9 +166,21 @@ internal abstract record AttemptEnd
 
 internal sealed record ReuseEvidence(LogCheckpoint SourceLog, Digest Definition, Digest Inputs, Digest CodeTree, OperationId Confirmation);
 
+/// <summary>
+/// What a run checked before including a standalone planner's report: the log as it was read, its final proposal turn,
+/// the approved task, the digest of the proposal and of the part of it the approved workflow holds, the code it read, and
+/// the person's confirmation.
+/// </summary>
+internal sealed record InclusionEvidence(LogCheckpoint SourceLog, int Turn, Digest Definition, Digest Selection, Digest CodeTree,
+    OperationId Confirmation);
+
+/// <summary>A report the person includes in a run at confirmation: <paramref name="Source"/>'s report, as of its turn <paramref name="Turn"/>.</summary>
+internal sealed record ReportInclusion(TaskId Task, AttemptId Source, int Turn);
+
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Executed), "executed")]
 [JsonDerivedType(typeof(Reused), "reused")]
+[JsonDerivedType(typeof(Included), "included")]
 internal abstract record ResultOrigin
 {
     private ResultOrigin() { }
@@ -176,7 +188,13 @@ internal abstract record ResultOrigin
     internal sealed record Executed(AttemptId Attempt) : ResultOrigin;
 
     internal sealed record Reused(AttemptSource Source, ReuseEvidence Evidence) : ResultOrigin;
+
+    /// <summary>A standalone planner's report, included at approval. No code, ownership, or session comes with it.</summary>
+    internal sealed record Included(AttemptSource.Standalone Source, InclusionEvidence Evidence) : ResultOrigin;
 }
+
+/// <summary>A result the approval itself records, with its empty inputs.</summary>
+internal sealed record IncludedResult(ResultRecord Result, InputRecord Inputs);
 
 internal sealed record ResultRecord(ResultId Id, TaskId Task, RevisionId Revision, InputId Inputs,
     ResultOrigin Origin, string Report, ResultId? Supersedes)
@@ -257,7 +275,12 @@ internal abstract record RunEvent
 
     internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
 
-    internal sealed record Approved(RunId Run, ApprovedRevision Revision, RunBase Base) : RunEvent;
+    internal sealed record Approved(RunId Run, ApprovedRevision Revision, RunBase Base) : RunEvent
+    {
+        /// <summary>The reports the person included at confirmation, accepted with the approval. Null when none was.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ImmutableArray<IncludedResult>? Included { get; init; }
+    }
 
     internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent;
 

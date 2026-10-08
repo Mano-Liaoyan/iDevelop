@@ -53,6 +53,15 @@ internal static partial class RunReducer
             }
 
             record = new(run, workflow, approved.Base, approved.Revision) { Schema = entry.Schema };
+            foreach (var included in approved.Included ?? [])
+            {
+                if (IncludedProblem(record, included) is { } problem) return Reject(problem, included.Result.Task);
+                record = record with
+                {
+                    Results = record.Results.Add(included.Result),
+                    Inputs = record.Inputs.Add(included.Inputs.Id, included.Inputs)
+                };
+            }
         }
         else
         {
@@ -440,6 +449,35 @@ internal static partial class RunReducer
         });
     }
 
+    /// <summary>
+    /// Why a report the approval includes does not fit the new run: it must be a read-only root's, from a standalone attempt
+    /// of that task, of the approved definition, with empty inputs on the run's base and no code or artifacts. A planner's
+    /// is <see cref="ResultOrigin.Included"/> and any other's <see cref="ResultOrigin.Reused"/>.
+    /// </summary>
+    private static RunProblem? IncludedProblem(RunRecord record, IncludedResult included)
+    {
+        var (result, inputs) = (included.Result, included.Inputs);
+        var snapshot = record.Revision.Snapshot;
+        if (!snapshot.Tasks.TryGetValue(result.Task, out var task) || snapshot.Connections.Keys.Any(edge => edge.To == result.Task))
+            return RunProblem.ReuseUnverifiable;
+        if (record.Results.Any(other => other.Id == result.Id || other.Task == result.Task) || record.Inputs.ContainsKey(inputs.Id))
+            return RunProblem.StartConflict;
+        if (result.Revision != record.Revision.Id || result.Inputs != inputs.Id || inputs.Task != result.Task || inputs.Revision != result.Revision ||
+            !inputs.Bindings.IsEmpty || inputs.Text != "" || !inputs.Files.IsEmpty || inputs.Review is not null ||
+            inputs.Code != new CodeSelection.Root(record.Base.Commit) || result.Supersedes is not null || result.Code is not null ||
+            !result.Artifacts.IsEmpty)
+            return RunProblem.InputConflict;
+        var definition = Revision.Hash(Revision.CanonicalTask(task));
+        return (task.Blueprint.Work, result.Origin) switch
+        {
+            (WorkSpec.Agent { Access: AgentAccess.ReadOnly, Proposes: true }, ResultOrigin.Included planner) when
+                planner.Source.Task == result.Task && planner.Evidence.Definition == definition => null,
+            (WorkSpec.Agent { Access: AgentAccess.ReadOnly, Proposes: false }, ResultOrigin.Reused { Source: AttemptSource.Standalone source } reused) when
+                source.Task == result.Task && reused.Evidence.Definition == definition && reused.Evidence.Inputs == Revision.Hash("") => null,
+            _ => RunProblem.ReuseUnverifiable,
+        };
+    }
+
     internal static RunProblem? AmendmentProblem(RunRecord record, Workflow candidate)
     {
         foreach (var task in record.Revision.Snapshot.Tasks.Values)
@@ -523,7 +561,7 @@ internal static partial class RunReducer
 
     internal static RunProblem? ReservationProblem(RunRecord record, TaskId task, AttemptCause cause)
     {
-        if (cause is AttemptCause.Initial && record.Results.Any(result => result.Task == task && result.Origin is ResultOrigin.Reused))
+        if (cause is AttemptCause.Initial && record.Results.Any(result => result.Task == task && result.Origin is ResultOrigin.Reused or ResultOrigin.Included))
         {
             return RunProblem.StartConflict;
         }
@@ -641,8 +679,9 @@ internal static partial class RunValidation
         }
         return entry.Event switch
         {
-            RunEvent.Approved approved => approved.Run.Value == Guid.Empty || !Base(approved.Base) ? RunProblem.InvalidData :
-                Snapshot(approved.Revision),
+            RunEvent.Approved approved => approved.Run.Value == Guid.Empty || !Base(approved.Base) ||
+                approved.Included is { } included && (included.IsDefaultOrEmpty || !included.All(item => Result(item.Result) && Input(item.Inputs)))
+                ? RunProblem.InvalidData : Snapshot(approved.Revision),
             RunEvent.Amended amended => !Revision.IsHash(amended.Previous.Sha256) || amended.Confirmation.Value == Guid.Empty ||
                 amended.Origin is AmendmentOrigin.Planner planner && (planner.Attempt.Value == Guid.Empty || planner.Turn < 1)
                 ? RunProblem.ConfirmationRequired : Snapshot(amended.Revision),
@@ -737,6 +776,10 @@ internal static partial class RunValidation
                         source.Task.Value != Guid.Empty && source.Attempt.Value != Guid.Empty,
                     _ => false,
                 }),
+            ResultOrigin.Included included => Checkpoint(included.Evidence.SourceLog) && included.Evidence.Turn > 0 &&
+                Revision.IsHash(included.Evidence.Definition.Sha256) && Revision.IsHash(included.Evidence.Selection.Sha256) &&
+                Revision.IsHash(included.Evidence.CodeTree.Sha256) && included.Evidence.Confirmation.Value != Guid.Empty &&
+                included.Source.Task.Value != Guid.Empty && included.Source.Attempt.Value != Guid.Empty,
             _ => false,
         });
 }

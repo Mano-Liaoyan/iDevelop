@@ -17,14 +17,17 @@ internal sealed class RunApprovals
     private readonly TimeProvider _clock;
     private readonly Action<string>? _probe;
     private readonly IReadOnlyDictionary<TaskId, AttemptRecord> _latest;
+    private readonly Func<TaskId, TurnKey, StartProblem?>? _finish;
 
     /// <param name="latest">The newest standalone attempt of each task, whose report the preview may list as reusable.</param>
+    /// <param name="finish">Marks a waiting standalone attempt done at its turn, or says why it cannot.</param>
     public RunApprovals(string project, RunStore store, IReadOnlyDictionary<string, string>? environment,
         IReadOnlyDictionary<ClientId, ClientStatus> clients, IReadOnlyDictionary<TaskId, AttemptRecord> latest, TimeProvider clock,
-        Action<string>? probe = null)
+        Action<string>? probe = null, Func<TaskId, TurnKey, StartProblem?>? finish = null)
     {
         _probe = probe;
         _latest = latest;
+        _finish = finish;
         _project = Path.GetFullPath(project);
         _store = store;
         _environment = environment ?? new Dictionary<string, string>();
@@ -66,7 +69,11 @@ internal sealed class RunApprovals
         try { active = Active(workflow.Id)?.Id; }
         catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
         var preview = new RunPreflight(_project, revision, git, found, tasks, active) { Gaps = gaps.ToImmutable() };
-        return found is null ? preview : preview with { Reusable = Reusable(workflow, found, RunPreflight.Offered(found)) };
+        return found is null ? preview : preview with
+        {
+            Reusable = Reusable(workflow, found, RunPreflight.Offered(found)),
+            Planners = Planners(workflow, found, RunPreflight.Offered(found)),
+        };
     }
 
     /// <summary>Why the task could not start as configured, as a single start would say, or null.</summary>
@@ -153,6 +160,81 @@ internal sealed class RunApprovals
     }
 
     /// <summary>
+    /// Each read-only root planner's newest standalone attempt, with the bases on which the run could include its report.
+    /// A planner that waits for the person counts as finished, which a confirmation including it makes it.
+    /// </summary>
+    private ImmutableArray<PreflightPlanner> Planners(Workflow workflow, PreflightBase found, ImmutableArray<BaseChoice> choices)
+    {
+        var planners = ImmutableArray.CreateBuilder<PreflightPlanner>();
+        foreach (var task in workflow.Tasks.Values.OrderBy(task => task.Id))
+        {
+            if (task.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly, Proposes: true } ||
+                workflow.Connections.Keys.Any(edge => edge.To == task.Id) || _latest.GetValueOrDefault(task.Id) is not { } attempt) continue;
+            var source = new AttemptSource.Standalone(task.Id, attempt.Id);
+            var bases = ImmutableArray.CreateBuilder<BaseChoice>();
+            RunProblem? problem = null;
+            foreach (var choice in choices)
+            {
+                var commit = choice == BaseChoice.Head ? found.Head : new CommitId(found.WorkTree.Hex);
+                var check = ReportReuse.ValidatePlanner(_project, workflow, task.Id, source, attempt.Turns.Count, commit, PreviewConfirmation, waiting: true);
+                if (check.Rejection is { } rejection) problem ??= rejection.Problem;
+                else bases.Add(choice);
+            }
+            planners.Add(new(task.Id, attempt.Id, attempt.Turns.Count, attempt.Status, attempt.Turns[^1].FinalText, bases.ToImmutable(),
+                bases.Count == 0 ? problem : null));
+        }
+        return planners.ToImmutable();
+    }
+
+    private static readonly OperationId PreviewConfirmation = new(Guid.Parse("00000000-0000-0000-0000-00000000aaaa"));
+
+    /// <summary>
+    /// Why <paramref name="inclusions"/> cannot be approved with <paramref name="choice"/>: one task twice, or a report
+    /// <paramref name="live"/> does not offer on that base. A report that the confirmed preview offered and the live one
+    /// does not makes the preview stale instead.
+    /// </summary>
+    private static RunApproval? InclusionProblem(RunPreflight shown, RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions)
+    {
+        if (inclusions.Select(inclusion => inclusion.Task).Distinct().Count() != inclusions.Length)
+            return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "A task is included twice.");
+        foreach (var inclusion in inclusions)
+        {
+            if (Offers(live, choice, inclusion) is null) continue;
+            if (Offers(shown, choice, inclusion) is null) return new RunApproval.Changed(live);
+            return new RunApproval.Refused(ApprovalProblem.InclusionRefused, (Offers(live, choice, inclusion) ?? RunProblem.ReuseUnverifiable).ToString());
+        }
+        return null;
+    }
+
+    /// <summary>Null when <paramref name="preview"/> offers <paramref name="inclusion"/> on <paramref name="choice"/>, else why not.</summary>
+    private static RunProblem? Offers(RunPreflight preview, BaseChoice choice, ReportInclusion inclusion)
+    {
+        if (preview.Planners.FirstOrDefault(planner => planner.Task == inclusion.Task) is { } planner)
+            return planner.Source == inclusion.Source && planner.Turn == inclusion.Turn && planner.Bases.Contains(choice) ? null
+                : planner.Problem ?? RunProblem.ReuseUnverifiable;
+        return preview.Reusable.Any(report => report.Task == inclusion.Task && report.Source == inclusion.Source && inclusion.Turn == 1 &&
+            report.Bases.Contains(choice)) ? null : RunProblem.ReuseUnverifiable;
+    }
+
+    /// <summary>
+    /// Marks each included planner that waits for the person done at the turn the person saw. One that no longer waits
+    /// there is left as it is, and the approval's validation decides.
+    /// </summary>
+    private RunApproval? Finish(RunPreflight live, ImmutableArray<ReportInclusion> inclusions)
+    {
+        var finished = false;
+        foreach (var inclusion in inclusions)
+        {
+            if (live.Planners.FirstOrDefault(planner => planner.Task == inclusion.Task) is not { Status: AttemptStatus.WaitingForInput }) continue;
+            if (_finish?.Invoke(inclusion.Task, new(inclusion.Source, inclusion.Turn)) is { } problem)
+                return new RunApproval.Refused(ApprovalProblem.InclusionRefused, problem.GetType().Name);
+            finished = true;
+        }
+        if (finished) _probe?.Invoke("approval.finished.after");
+        return null;
+    }
+
+    /// <summary>
     /// Approves exactly one run for <paramref name="confirmation"/>, against <paramref name="current"/>, the workflow as the
     /// document holds it now. Under the workflow's approval lock it records an <see cref="ApprovalIntent"/> before the
     /// snapshot commit and the journal, so a confirmation repeated after a crash, or a new one of the same content,
@@ -175,24 +257,27 @@ internal sealed class RunApprovals
             if (!Current(confirmation.Preview, live, choice)) return new RunApproval.Changed(live);
             if (!live.Gaps.IsEmpty || !live.Choices.Contains(choice))
                 return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "The preview has gaps or does not offer this base.");
+            ImmutableArray<ReportInclusion> inclusions = [.. confirmation.Include.OrderBy(inclusion => inclusion.Task)];
+            if (InclusionProblem(confirmation.Preview, live, choice, inclusions) is { } refusal) return refusal;
             if (Active(live.Workflow) is { } active)
             {
-                if (all.FirstOrDefault(intent => intent.Run == active.Id) is not { } approving || !approving.Matches(live, choice))
+                if (all.FirstOrDefault(intent => intent.Run == active.Id) is not { } approving || !approving.Matches(live, choice, inclusions))
                     return new RunApproval.Busy(active.Id);
                 intents.Write(Confirmed(approving, confirmation.Command));
                 return new RunApproval.Approved(active.Id, active.Base, true);
             }
             var pending = all.Where(intent => Approved(live.Workflow, intent.Run) is null).ToArray();
-            var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, choice)) ??
-                pending.FirstOrDefault(intent => intent.Matches(live, choice));
+            var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, choice, inclusions)) ??
+                pending.FirstOrDefault(intent => intent.Matches(live, choice, inclusions));
             foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run);
             var chosen = adopted is null
                 ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
                     [confirmation.Command], live.Revision, choice, live.Base!.Head, choice == BaseChoice.Snapshot ? live.Base.WorkTree : null,
-                    DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds()))
+                    DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds())) { Inclusions = inclusions }
                 : Confirmed(adopted, confirmation.Command);
             intents.Write(chosen);
             _probe?.Invoke("approval.intent.after");
+            if (Finish(live, chosen.Inclusions) is { } unfinished) return unfinished;
             var codeBase = new RunBase(chosen.Head, BaseChoice.Head);
             if (choice == BaseChoice.Snapshot)
             {
@@ -202,13 +287,16 @@ internal sealed class RunApprovals
                 codeBase = new RunBase(commit.Value, BaseChoice.Snapshot);
                 _probe?.Invoke("approval.snapshot.after");
             }
-            var decision = _store.Approve(live.Workflow, chosen.Run, chosen.Operation, chosen.Revision, codeBase);
+            var decision = _store.Approve(live.Workflow, chosen.Run, chosen.Operation, chosen.Revision, codeBase, chosen.Inclusions,
+                chosen.Confirmations[0]);
             _probe?.Invoke("approval.approved.after");
             return decision switch
             {
                 RunDecision.Created created => new RunApproval.Approved(chosen.Run, created.Record.Base, false),
                 RunDecision.Existing existing => new RunApproval.Approved(chosen.Run, existing.Record.Base, true),
                 RunDecision.Rejected { Reason.Problem: RunProblem.RunBusy } when Active(live.Workflow) is { } other => new RunApproval.Busy(other.Id),
+                RunDecision.Rejected { Reason.Task: not null } inclusion when !chosen.Inclusions.IsEmpty =>
+                    new RunApproval.Refused(ApprovalProblem.InclusionRefused, inclusion.Reason.Problem.ToString()),
                 RunDecision.Rejected rejected => new RunApproval.Refused(ApprovalProblem.StorageUnavailable, rejected.Reason.Problem.ToString()),
                 _ => throw new InvalidOperationException(),
             };
