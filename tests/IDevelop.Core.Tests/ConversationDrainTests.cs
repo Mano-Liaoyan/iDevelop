@@ -9,7 +9,7 @@ using static IDevelop.TestSupport.FakeAgents;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
+[Collection(EnvironmentCollection.Name)]
 public sealed class ConversationDrainTests : IDisposable
 {
     private const string Session = "session-1";

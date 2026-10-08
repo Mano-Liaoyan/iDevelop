@@ -5,7 +5,6 @@ using static IDevelop.Core.Tests.Runs.RunFixtures;
 
 namespace IDevelop.Core.Tests.Runs;
 
-[Collection(ProcessCollection.Name)]
 public sealed class AuthorityTests
 {
     [Theory]

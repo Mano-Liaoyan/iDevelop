@@ -11,7 +11,6 @@ using static IDevelop.Workflows.WorkflowEdit;
 namespace IDevelop.Core.Tests;
 
 /// <summary>Planners propose graph edits through scripted replies of the fake agent, and the person accepts them.</summary>
-[Collection(ProcessCollection.Name)]
 public sealed class PlanningTests : IDisposable
 {
     private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";

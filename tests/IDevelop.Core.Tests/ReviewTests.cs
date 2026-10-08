@@ -12,7 +12,6 @@ namespace IDevelop.Core.Tests;
 /// The review loop through scripted replies: a Codex implementer and a Claude Code reviewer behind on-disk shims, in a
 /// Git project, so each turn's tree snapshot is real.
 /// </summary>
-[Collection(ProcessCollection.Name)]
 public sealed class ReviewTests : IDisposable
 {
     private const string ImplementerSession = "019a9d2e-1111-7000-8000-000000000001";

@@ -8,7 +8,6 @@ using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class SalvageTests
 {
     private static readonly OperationId Operation = new(Id(2000));
@@ -26,8 +25,7 @@ public sealed class SalvageTests
         });
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var hook = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "fsmonitor-hook");
-        File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(hook, "#!/bin/sh\nprintf 'token\\0'\n");
         var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "config", "core.fsmonitor", hook).ExitCode);
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);

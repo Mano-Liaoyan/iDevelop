@@ -6,7 +6,6 @@ using static IDevelop.TestSupport.FakeAgents;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
 public sealed class ProtocolDrainTests : IDisposable
 {
     private const string Session = "session-1";

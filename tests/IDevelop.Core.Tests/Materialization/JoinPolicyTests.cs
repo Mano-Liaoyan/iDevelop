@@ -9,7 +9,6 @@ using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class JoinPolicyTests
 {
     private const string JoinRef = "refs/heads/idp/93f23689/join/c67f2fc3";
@@ -255,8 +254,7 @@ public sealed class JoinPolicyTests
         var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
         var bin = Directory.CreateDirectory(Path.Combine(f.Git.Open().CommonDirectory, "test-bin")).FullName;
         var shim = Path.Combine(bin, "git");
-        File.WriteAllText(shim, "#!/bin/sh\nmerge=0\nfor arg do\n[ \"$arg\" = merge-tree ] && merge=1\ndone\n'" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\nstatus=$?\n[ \"$merge\" = 1 ] && printf 'another Git build\\n' >&2\nexit $status\n");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(shim, "#!/bin/sh\nmerge=0\nfor arg do\n[ \"$arg\" = merge-tree ] && merge=1\ndone\n'" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\nstatus=$?\n[ \"$merge\" = 1 ] && printf 'another Git build\\n' >&2\nexit $status\n");
         var environment = new Dictionary<string, string>(f.Git.Environment) { ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH") };
         var second = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", second.Block.Problem.ToString());
@@ -271,8 +269,7 @@ public sealed class JoinPolicyTests
         var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
         var bin = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "test-bin")).FullName;
         var shim = Path.Combine(bin, "git");
-        File.WriteAllText(shim, "#!/bin/sh\n" + script + "\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(shim, "#!/bin/sh\n" + script + "\nexec '" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
         return new Dictionary<string, string>(f.Git.Environment)
         {
             ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
@@ -353,8 +350,7 @@ public sealed class JoinPolicyTests
         var marker = Path.Combine(folder, "driver-ran");
         var script = Path.Combine(folder, "driver.sh");
         Assert.DoesNotContain("'", script);
-        File.WriteAllText(script, "#!/bin/sh\ntouch \"" + marker + "\"\ngit update-ref refs/heads/driver-wrote " + f.Read().Base.Commit.Hex + "\nexit 0\n");
-        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        Executable.Write(script, "#!/bin/sh\ntouch \"" + marker + "\"\ngit update-ref refs/heads/driver-wrote " + f.Read().Base.Commit.Hex + "\nexit 0\n");
         var command = "\"" + script + "\"";
         var environment = new Dictionary<string, string>(f.Git.Environment);
         switch (variable)

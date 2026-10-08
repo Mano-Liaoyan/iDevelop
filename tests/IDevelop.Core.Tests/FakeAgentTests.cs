@@ -4,7 +4,6 @@ using static IDevelop.TestSupport.FakeRule;
 
 namespace IDevelop.Core.Tests;
 
-[Collection(ProcessCollection.Name)]
 public sealed class FakeAgentTests : IDisposable
 {
     private readonly TempFolder _temp = new();

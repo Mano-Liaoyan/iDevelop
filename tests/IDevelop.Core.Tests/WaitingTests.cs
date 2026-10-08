@@ -11,7 +11,6 @@ using static IDevelop.TestSupport.FakeAgents;
 namespace IDevelop.Core.Tests;
 
 /// <summary>A node's conversation mode decides when it waits for the person, with the fake agent behind on-disk shims.</summary>
-[Collection(ProcessCollection.Name)]
 public sealed class WaitingTests : IDisposable
 {
     private const string Session = "01a108d7-464d-77a3-8908-a36f38ce6c14";

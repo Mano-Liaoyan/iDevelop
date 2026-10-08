@@ -7,7 +7,6 @@ using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class JoinRecoveryTests
 {
     private const string JoinRef = "refs/heads/idp/93f23689/join/c67f2fc3";
