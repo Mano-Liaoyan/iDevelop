@@ -107,13 +107,28 @@ internal sealed partial class RunStore
             : new ControlTake.Owned(permit, fenced);
     }
 
-    public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase) =>
-        Transact(workflow, run, operation, Fingerprint("approve", new
-        {
-            revision = Revision.Canonical(revision.Snapshot),
-            revision.Id,
-            codeBase
-        }), (record, all) =>
+    /// <summary>
+    /// Approves the run. Each of <paramref name="include"/> is accepted with the approval, after its validator checks it
+    /// against the approved revision and base: a planner's through <see cref="ReportReuse.ValidatePlanner"/>, any other
+    /// report through E1's <see cref="ReportReuse.Validate"/>. One that fails approves nothing.
+    /// </summary>
+    public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase,
+        ImmutableArray<ReportInclusion> include = default, OperationId confirmation = default) =>
+        Transact(workflow, run, operation, include.IsDefaultOrEmpty
+            ? Fingerprint("approve", new
+            {
+                revision = Revision.Canonical(revision.Snapshot),
+                revision.Id,
+                codeBase
+            })
+            : Fingerprint("approve", new
+            {
+                revision = Revision.Canonical(revision.Snapshot),
+                revision.Id,
+                codeBase,
+                include,
+                confirmation
+            }), (record, all) =>
         {
             if (record is not null)
             {
@@ -125,8 +140,44 @@ internal sealed partial class RunStore
                 return new Mutation.Rejected(new(RunProblem.RunBusy));
             }
 
-            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
+            if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
+            // Both validators refuse an inclusion without the person's confirmation.
+            if (include.Select(inclusion => inclusion.Task).Distinct().Count() != include.Length) return Refuse(RunProblem.InputConflict);
+            var included = ImmutableArray.CreateBuilder<IncludedResult>();
+            foreach (var inclusion in include)
+            {
+                if (Include(revision, codeBase, inclusion, confirmation) is not { } accepted)
+                    return new Mutation.Rejected(new(RunProblem.ReuseUnverifiable, Task: inclusion.Task));
+                if (accepted.Rejection is { } rejection) return new Mutation.Rejected(rejection);
+                included.Add(accepted.Result!);
+            }
+            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Included = included.ToImmutable() });
         });
+
+    /// <summary>The result an approval records for <paramref name="inclusion"/>, or why it cannot. Null for an unknown task.</summary>
+    private (IncludedResult? Result, RunRejection? Rejection)? Include(ApprovedRevision revision, RunBase codeBase, ReportInclusion inclusion,
+        OperationId confirmation)
+    {
+        if (!revision.Snapshot.Tasks.TryGetValue(inclusion.Task, out var definition)) return null;
+        var source = new AttemptSource.Standalone(inclusion.Task, inclusion.Source);
+        string report;
+        ResultOrigin origin;
+        if (definition.Blueprint.Work is WorkSpec.Agent { Proposes: true })
+        {
+            var planner = ReportReuse.ValidatePlanner(_project, revision.Snapshot, inclusion.Task, source, inclusion.Turn, codeBase.Commit, confirmation);
+            if (planner.Rejection is { } refused) return (null, refused);
+            (report, origin) = (planner.Report!, new ResultOrigin.Included(source, planner.Evidence!));
+        }
+        else
+        {
+            if (inclusion.Turn != 1) return null;
+            var reuse = ReportReuse.Validate(_project, definition, source, codeBase.Commit, confirmation);
+            if (reuse.Rejection is { } refused) return (null, refused with { Task = inclusion.Task });
+            (report, origin) = (reuse.Report!, new ResultOrigin.Reused(source, reuse.Evidence!));
+        }
+        var inputs = new InputRecord(new(_ids()), inclusion.Task, revision.Id, [], new CodeSelection.Root(codeBase.Commit), "", [], null);
+        return (new(new(new(_ids()), inclusion.Task, revision.Id, inputs.Id, origin, report, null), inputs), null);
+    }
 
     public RunDecision Plan(RunLease lease, OperationId operation, RevisionId revision, AttemptCause cause) =>
         Transact(lease.Permit, operation, Fingerprint("plan", new { task = lease.Task, revision, cause }), (record, _) =>
@@ -801,7 +852,7 @@ internal sealed partial class RunStore
                 return Missing();
             }
 
-            if (record.Revision.Id != previous)
+            if (!record.Revisions.TryGetValue(previous, out var basis))
             {
                 return Refuse(RunProblem.RevisionConflict);
             }
@@ -822,17 +873,38 @@ internal sealed partial class RunStore
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
-            if (Proposal.Read(read.Record, key => record.Revision.Snapshot.Blueprints.GetValueOrDefault(key)) is not ProposalRead.Ready ready ||
+            if (Proposal.Read(read.Record, key => RunPlanning.Find(basis.Snapshot, key)) is not ProposalRead.Ready ready ||
                 RunJournal.Canonical(ready.Proposal) != RunJournal.Canonical(proposal))
             {
                 return Refuse(RunProblem.EvidenceMismatch);
             }
 
-            bool Started(TaskId id) => record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
-            return record.Revision.Snapshot.Apply(proposal.Accept(record.Revision.Snapshot, chosen, Started, fallback)) is EditResult.Applied applied
-                ? new Mutation.Append(new RunEvent.Amended(previous, Revision.Capture(applied.Workflow),
-                    new AmendmentOrigin.Planner(planner.Id, proposal.Turn), confirmation))
-                : Refuse(RunProblem.InvalidData);
+            var origin = new AmendmentOrigin.Planner(planner.Id, proposal.Turn);
+            var choice = new AmendmentChoice([.. chosen.Order()], fallback);
+            // The same acceptance again, under another confirmation, finds the amendment it recorded, whatever started since.
+            if (record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>().FirstOrDefault(amended =>
+                amended.Previous == previous && RunReducer.Same<AmendmentOrigin>(amended.Origin, origin) && amended.Choice is { } recorded &&
+                recorded.Chosen.SequenceEqual(choice.Chosen) && recorded.Fallback == choice.Fallback) is { } repeated)
+            {
+                return new Mutation.Existing(repeated);
+            }
+
+            // A task counts as started once its start's plan is recorded, which keeps the revision that start uses. The
+            // proposal neither fills such a task nor gives it an input; the reducer checks the same for attempts and results.
+            bool Started(TaskId id) => record.Plans.Values.Any(plan => plan is MaterializationPlan.Preparation preparation && preparation.Task == id) ||
+                record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
+            if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback)) is not EditResult.Applied applied)
+            {
+                return Refuse(RunProblem.InvalidData);
+            }
+
+            if (basis.Snapshot.Tasks.Keys.Where(Started).Any(task => !RunReducer.SameTask(basis.Snapshot, applied.Workflow, task)))
+            {
+                return Refuse(RunProblem.StartedTaskChanged);
+            }
+
+            // The reducer refuses an amendment of a revision that is no longer current.
+            return new Mutation.Append(new RunEvent.Amended(previous, Revision.Capture(applied.Workflow), origin, confirmation) { Choice = choice });
         });
 
     public RunDecision Stop(CoordinatorPermit permit, OperationId operation) =>

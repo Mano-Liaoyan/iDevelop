@@ -26,7 +26,7 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
 
     private static readonly Dictionary<TaskId, string> Names = new() { [A] = "A", [B] = "B", [C] = "C", [D] = "D", [X] = "X" };
     private readonly TempFolder _temp = new();
-    private readonly Dictionary<TaskId, FakeRule[]> _turns = [];
+    private readonly Dictionary<string, FakeRule[]> _turns = [];
 
     public CoordinatorFixture(Workflow workflow, CommitId? runBase = null)
     {
@@ -76,17 +76,26 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
         .Print(FakeAgents.ReplyLines(ClientId.Codex, $"{Name(task)} ready.\n"));
 
     /// <summary>The turns <paramref name="task"/> answers, in launch order.</summary>
-    public CoordinatorFixture Answer(TaskId task, params FakeRule[] turns)
+    public CoordinatorFixture Answer(TaskId task, params FakeRule[] turns) => Answer(Name(task), turns);
+
+    /// <summary>The turns of the task whose prompt starts with <c>"Build &lt;name&gt;."</c>, in launch order.</summary>
+    public CoordinatorFixture Answer(string name, params FakeRule[] turns)
     {
-        _turns[task] = turns;
+        _turns[name] = turns;
         return this;
     }
 
-    public string Folder(TaskId task) => Path.Combine(Evidence, Name(task));
+    public string Folder(TaskId task) => Folder(Name(task));
 
-    public int Launches(TaskId task) => File.Exists(Path.Combine(Folder(task), "count")) ? int.Parse(File.ReadAllText(Path.Combine(Folder(task), "count"))) : 0;
+    public string Folder(string name) => Path.Combine(Evidence, name);
 
-    public string Prompt(TaskId task, int launch = 1) => File.ReadAllText(Path.Combine(Folder(task), $"{launch}.stdin"));
+    public int Launches(TaskId task) => Launches(Name(task));
+
+    public int Launches(string name) => File.Exists(Path.Combine(Folder(name), "count")) ? int.Parse(File.ReadAllText(Path.Combine(Folder(name), "count"))) : 0;
+
+    public string Prompt(TaskId task, int launch = 1) => Prompt(Name(task), launch);
+
+    public string Prompt(string name, int launch = 1) => File.ReadAllText(Path.Combine(Folder(name), $"{launch}.stdin"));
 
     public int TotalLaunches => LaunchMarkers.Runs(Fakes.LaunchFolder!, ClientId.Codex);
 
@@ -126,13 +135,13 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
 
     public void Install()
     {
-        foreach (var (task, turns) in _turns)
+        foreach (var (name, turns) in _turns)
         {
-            var folder = Directory.CreateDirectory(Folder(task)).FullName;
+            var folder = Directory.CreateDirectory(Folder(name)).FullName;
             for (var turn = 0; turn < turns.Length; turn++) File.WriteAllText(Path.Combine(folder, $"{turn + 1}.json"), turns[turn].StepsJson());
         }
         FakeAgents.Install(Fakes, ClientId.Codex, FakeAgents.Fresh(ClientId.Codex)
-            .Choose([.. _turns.Keys.Select(task => ($"Build {Name(task)}.", FakeRule.On().Scripted(Folder(task))))]));
+            .Choose([.. _turns.Keys.Select(name => ($"Build {name}.", FakeRule.On().Scripted(Folder(name))))]));
     }
 
     public ProjectRuns OpenRuns(ClientDirectory clients)

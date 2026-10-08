@@ -180,7 +180,7 @@ public sealed partial class ProjectRuns
                             prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                         {
                             RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
-                            Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues,
+                            Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues, Planning = RunPlanning.Handles(record, attempt),
                             // A reviewer's attempt names its subject, so it rests in review between its turns.
                             Subject = definition.Blueprint.Work is WorkSpec.Review ? record.Revisions[attempt.Revision].Snapshot.SubjectOf(task) : null,
                         }, RequestStream);

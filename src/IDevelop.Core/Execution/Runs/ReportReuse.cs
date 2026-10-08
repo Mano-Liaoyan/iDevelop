@@ -140,6 +140,9 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
 
 internal sealed record ReusableReport(string? Report, ReuseEvidence? Evidence, RunRejection? Rejection);
 
+/// <summary>A planner's report that a run may include, with what it checked, or why it may not.</summary>
+internal sealed record PlannerReport(string? Report, InclusionEvidence? Evidence, RunRejection? Rejection);
+
 internal enum TreeComparison { ContentMatch, ReuseUnverifiable }
 
 internal static class ReportReuse
@@ -201,6 +204,97 @@ internal static class ReportReuse
 
         return new(record.Result, new(read.Checkpoint!, Revision.Hash(Revision.CanonicalTask(task)), Revision.Hash(""),
             comparison.Content!.Value, confirmation), null);
+    }
+
+    /// <summary>
+    /// Checks a standalone planner's attempt for inclusion in a run approved as <paramref name="approved"/> on
+    /// <paramref name="codeBase"/>: a fresh, read-only root planner of the approved definition and settings, whose final
+    /// turn <paramref name="turn"/> ended with a readable proposal, which ended in strict success without a terminal
+    /// handoff, a reconciliation, or unsent text, and whose every turn started and ended on the base's content. The approved
+    /// workflow must already hold the part of the proposal the person accepted, so accepting that part again changes nothing.
+    /// </summary>
+    /// <param name="waiting">
+    /// Also accepts an attempt that waits for the person after <paramref name="turn"/>, which a confirmation finishes
+    /// through Mark done. Its evidence then describes the waiting log, so only a preview uses it.
+    /// </param>
+    public static PlannerReport ValidatePlanner(string project, Workflow approved, TaskId taskId, AttemptSource.Standalone source, int turn,
+        CommitId codeBase, OperationId confirmation, bool waiting = false)
+    {
+        PlannerReport Refuse() => new(null, null, new(RunProblem.ReuseUnverifiable, Task: taskId));
+        if (confirmation.Value == Guid.Empty) return new(null, null, new(RunProblem.ConfirmationRequired, Task: taskId));
+        if (!approved.Tasks.TryGetValue(taskId, out var task) ||
+            task.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly, Proposes: true } ||
+            approved.Connections.Keys.Any(edge => edge.To == task.Id))
+        {
+            return Refuse();
+        }
+
+        var read = AttemptEvidence.Read(AttemptLog.FolderOf(DataFolder.Attempts(project), source.Task, source.Attempt));
+        if (read.Rejection is not null || read.Record is not { Continues: null, Terminal: null, ReadOnly: true } record ||
+            record.Id != source.Attempt || record.Task != task.Id || record.Turns.Count != turn || !record.Queued.IsEmpty)
+        {
+            return Refuse();
+        }
+
+        // A waiting planner counts only for a preview, whose confirmation marks it done before the approval checks it again.
+        if (!(record.Status == AttemptStatus.Succeeded && AttemptEvidence.Matches(read, TerminalAttemptOutcome.Succeeded) ||
+              waiting && record is { Status: AttemptStatus.WaitingForInput, BetweenTurns: true }))
+        {
+            return Refuse();
+        }
+
+        var request = (AttemptEvent.Requested)read.Events[0];
+        StandaloneCapture? capture;
+        try
+        {
+            capture = request.StandaloneCapture?.Deserialize<StandaloneCapture>(RunJournal.Options);
+        }
+        catch (Exception error) when (error is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or
+            ProjectException or BlueprintException or FormatException)
+        {
+            return Refuse();
+        }
+
+        // The prompt goes on to list the slots and types as the workflow then had them, which the approved workflow no longer shows.
+        if (capture is not { Inputs: "" } || request.RunBinding is not null ||
+            Revision.CanonicalTask(capture.Definition) != Revision.CanonicalTask(task) || request.Settings != task.Execution ||
+            !request.Prompt.StartsWith(AgentWork.Ticket(task) + "\n\n", StringComparison.Ordinal))
+        {
+            return Refuse();
+        }
+
+        var receiving = GitTree.ContentOutsideData(project, codeBase.Hex);
+        if (receiving is null || record.Turns.Any(each => each.StartTree is not { } before || each.EndTree is not { } after ||
+            GitTree.ContentOutsideData(project, before) != receiving || GitTree.ContentOutsideData(project, after) != receiving))
+        {
+            return Refuse();
+        }
+
+        if (Proposal.Read(record, key => approved.Blueprints.GetValueOrDefault(key) ?? BuiltInBlueprints.Find(key)) is not ProposalRead.Ready
+            { Proposal: var proposal } || proposal.Turn != turn || Accepted(approved, proposal) is not { } accepted)
+        {
+            return Refuse();
+        }
+
+        var selection = Revision.Hash(RunJournal.Canonical(new { proposal, accepted = accepted.Order().ToArray() }));
+        return new(record.Turns[^1].FinalText, new(read.Checkpoint!, turn, Revision.Hash(Revision.CanonicalTask(task)), selection,
+            Revision.Hash(receiving), confirmation), null);
+    }
+
+    /// <summary>
+    /// The items of <paramref name="proposal"/> that <paramref name="workflow"/> holds: each node it added, and each fill
+    /// whose title and fields are in place. Null when accepting them again would still change the workflow, as when a
+    /// connection among them is missing.
+    /// </summary>
+    internal static ImmutableHashSet<TaskId>? Accepted(Workflow workflow, Proposal proposal)
+    {
+        var accepted = proposal.Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id)
+            .Concat(proposal.Fills.Where(fill => workflow.Tasks.TryGetValue(fill.Slot, out var slot) &&
+                (fill.Title is null || slot.Title == fill.Title) && fill.Fields.All(field => slot.Field(field.Key) == field.Value))
+                .Select(fill => fill.Slot))
+            .ToImmutableHashSet();
+        return workflow.Apply(proposal.Accept(workflow, accepted, _ => false)) is EditResult.Applied applied &&
+            Revision.Canonical(applied.Workflow) == Revision.Canonical(workflow) ? accepted : null;
     }
 
     internal static string Prompt(TaskDefinition task, string inputs) => AgentWork.Prompt(new NodeContext(task, inputs));

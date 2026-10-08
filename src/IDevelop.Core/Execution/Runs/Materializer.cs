@@ -66,7 +66,7 @@ internal sealed partial class Materializer
                 if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
                 if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
-                        original.Id, basePrompt) != completed.Execution.Prompt)
+                        original.Id, basePrompt, RunPlanning.Context(record, original)) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
                 attempt = original.Id;
                 inputs = completed.Execution.Inputs;
@@ -138,7 +138,7 @@ internal sealed partial class Materializer
             if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(Checkout(repository, owner), outbox));
             VerifyOutbox(repository, Checkout(repository, owner), outbox);
             step = "prompt";
-            var prompt = Prompt(definition, input, plan.Attempt, basePrompt);
+            var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]));
             var execution = new PreparedExecution(new(plan.Attempt, 1), input.Id, location, prompt, Revision.Hash(prompt), outbox);
             step = "shared-refs";
             var refs = Snapshot(storage, operation, repository, record);
@@ -248,12 +248,14 @@ internal sealed partial class Materializer
     private static string Checkout(GitRepository repository, WorktreeOwner owner) =>
         Path.GetFullPath(Path.Combine(repository.ProjectFolder, owner.RelativePath));
 
-    private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt)
+    /// <param name="planning">What a planner's first prompt lists, from <see cref="RunPlanning.Context"/>.</param>
+    private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
+        PlanningContext? planning = null)
     {
         if (basePrompt is null && definition.Blueprint.Work is not WorkSpec.Agent)
             throw new Refusal(new(RunProblem.InvalidData));
         var template = (definition.Blueprint.Work as WorkSpec.Agent)?.Template;
-        var prompt = basePrompt ?? AgentWork.Prompt(new NodeContext(definition, input.Text));
+        var prompt = basePrompt ?? AgentWork.Prompt(new NodeContext(definition, input.Text) { Planning = planning });
         if ((basePrompt is not null || template is not null && !template.Text.Contains("{{inputs}}", StringComparison.Ordinal)) && input.Text.Length != 0)
             prompt += "\n\n" + input.Text;
         if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })

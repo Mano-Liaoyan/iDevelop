@@ -5,7 +5,7 @@ namespace IDevelop.Execution;
 public sealed partial class ProjectRuns
 {
     private RunApprovals Approvals => new(_projectFolder, TurnStore, GitEnvironment, _clients.Current, Latest, MaterializerClock ?? TimeProvider,
-        point => Probe?.Invoke(point));
+        point => Probe?.Invoke(point), (task, turn) => MarkDoneCore(task, turn).Problem);
 
     /// <summary>
     /// What Run Workflow shows for <paramref name="workflow"/> before anything runs. It records nothing; computing the work

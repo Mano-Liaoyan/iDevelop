@@ -6,7 +6,10 @@ namespace IDevelop.RunRacer;
 /// <summary>Confirms a preview of a workflow and exits at one durable step of the approval, as a crash ends it.</summary>
 internal static class ApprovalRacer
 {
-    /// <param name="args">The mode, the project, the workflow file, the fake clients' folder, the confirmation, the base, and the crash point.</param>
+    /// <param name="args">
+    /// The mode, the project, the workflow file, the fake clients' folder, the confirmation, the base, the crash point, and
+    /// optionally <c>include</c>, which includes every planner the preview offers on the base.
+    /// </param>
     public static int Crash(string[] args)
     {
         var project = args[1];
@@ -25,7 +28,13 @@ internal static class ApprovalRacer
         var preview = runs.Preflight(workflow);
         Console.WriteLine("Previewed");
         Console.Out.Flush();
-        var confirmation = new RunConfirmation(preview, Enum.Parse<BaseChoice>(args[5]), new OperationId(Guid.Parse(args[4])));
+        var choice = Enum.Parse<BaseChoice>(args[5]);
+        var confirmation = new RunConfirmation(preview, choice, new OperationId(Guid.Parse(args[4])))
+        {
+            Include = args.Length > 7 && args[7] == "include"
+                ? [.. preview.Planners.Where(planner => planner.Bases.Contains(choice)).Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))]
+                : [],
+        };
         Console.WriteLine(runs.StartWorkflow(workflow, confirmation).GetAwaiter().GetResult());
         runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
         return 6;

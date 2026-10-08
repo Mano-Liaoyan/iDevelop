@@ -19,7 +19,7 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     public static readonly CommitId Head = new("adfe40b30c176fb407933286f51d15ea9b54cdc3");
 
     private readonly TempFolder _temp = new();
-    private readonly Dictionary<TaskId, FakeRule[]> _turns = [];
+    private readonly Dictionary<string, FakeRule[]> _turns = [];
     private readonly List<ProjectRuns> _windows = [];
 
     public ApprovalFixture(Workflow workflow)
@@ -38,9 +38,21 @@ internal sealed class ApprovalFixture : IAsyncDisposable
     public string Project => Git.Folder;
     public ProjectRuns Runs { get; private set; } = null!;
 
-    public ApprovalFixture Answer(TaskId task, params FakeRule[] turns)
+    /// <summary>Rules installed before the routed turns, such as a turn that resumes a session with the person's reply.</summary>
+    public List<FakeRule> Rules { get; } = [];
+
+    public ApprovalFixture WithRule(FakeRule rule)
     {
-        _turns[task] = turns;
+        Rules.Add(rule);
+        return this;
+    }
+
+    public ApprovalFixture Answer(TaskId task, params FakeRule[] turns) => Answer(Name(task), turns);
+
+    /// <summary>The turns of the task whose prompt starts with <c>"Build &lt;name&gt;."</c>, in launch order.</summary>
+    public ApprovalFixture Answer(string name, params FakeRule[] turns)
+    {
+        _turns[name] = turns;
         return this;
     }
 
@@ -52,13 +64,13 @@ internal sealed class ApprovalFixture : IAsyncDisposable
 
     public void Install()
     {
-        foreach (var (task, turns) in _turns)
+        foreach (var (name, turns) in _turns)
         {
-            var folder = Directory.CreateDirectory(Folder(task)).FullName;
+            var folder = Directory.CreateDirectory(Folder(name)).FullName;
             for (var turn = 0; turn < turns.Length; turn++) File.WriteAllText(Path.Combine(folder, $"{turn + 1}.json"), turns[turn].StepsJson());
         }
-        FakeAgents.Install(Fakes, ClientId.Codex, FakeAgents.Fresh(ClientId.Codex)
-            .Choose([.. _turns.Keys.Select(task => ($"Build {Name(task)}.", FakeRule.On().Scripted(Folder(task))))]));
+        FakeAgents.Install(Fakes, ClientId.Codex, [.. Rules, FakeAgents.Fresh(ClientId.Codex)
+            .Choose([.. _turns.Keys.Select(name => ($"Build {name}.", FakeRule.On().Scripted(Folder(name))))])]);
     }
 
     /// <summary>Opens the project in another window, which the fixture closes at the end.</summary>
@@ -74,6 +86,13 @@ internal sealed class ApprovalFixture : IAsyncDisposable
         return runs;
     }
 
+    /// <summary>Closes the window, as quitting the app does. <see cref="Open"/> opens a new one.</summary>
+    public async Task Close()
+    {
+        await Runs.DisposeAsync();
+        _windows.Remove(Runs);
+    }
+
     /// <summary>Closes the window and opens the project again, as a restart does.</summary>
     public async Task Reopen()
     {
@@ -84,9 +103,13 @@ internal sealed class ApprovalFixture : IAsyncDisposable
 
     public RunPreflight Preflight() => Runs.Preflight(Workflow);
 
-    public string Folder(TaskId task) => Path.Combine(Evidence, Name(task));
+    public string Folder(TaskId task) => Folder(Name(task));
 
-    public int Launches(TaskId task) => File.Exists(Path.Combine(Folder(task), "count")) ? int.Parse(File.ReadAllText(Path.Combine(Folder(task), "count"))) : 0;
+    public string Folder(string name) => Path.Combine(Evidence, name);
+
+    public int Launches(TaskId task) => Launches(Name(task));
+
+    public int Launches(string name) => File.Exists(Path.Combine(Folder(name), "count")) ? int.Parse(File.ReadAllText(Path.Combine(Folder(name), "count"))) : 0;
 
     public int TotalLaunches => LaunchMarkers.Runs(Fakes.LaunchFolder!, ClientId.Codex);
 
