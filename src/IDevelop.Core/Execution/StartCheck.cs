@@ -75,6 +75,9 @@ public abstract record StartProblem
     /// <summary>Another window holds this task's run but has not recorded its attempt yet.</summary>
     public sealed record RunInAnotherWindow : StartProblem;
 
+    /// <summary>A workflow run owns the task, so only that run starts its turns.</summary>
+    public sealed record RunOwned(string Workflow) : StartProblem;
+
     /// <summary>The attempt could not be recorded, so nothing was launched. The reason is for the user.</summary>
     public sealed record CannotRecord(string Reason) : StartProblem;
 }

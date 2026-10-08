@@ -168,7 +168,7 @@ public sealed class OutboxTests
         var path = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, [1, 2, 3]);
-        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, ready.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Contains("manifest.json", blocked.Block.Detail);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
@@ -184,10 +184,10 @@ public sealed class OutboxTests
         Assert.Throws<PublicationTests.Crash>(() => f.Materializer(probe: step =>
         {
             if (step == "journal.plan.after") throw new PublicationTests.Crash();
-        }).Publish(W, f.RunId, operation, ready.Execution.Launch.Attempt));
+        }).Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         File.WriteAllBytes(Path.Combine(ready.Checkout, ready.Execution.OutboxPath, "payload.bin"), [1, 2, 3]);
         File.WriteAllText(Path.Combine(ready.Checkout, ready.Execution.OutboxPath, "manifest.json"), "{broken");
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, operation, ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
         Assert.Equal("f7d21fe0-9370-801e-a122-38820dfbc203", result.Id.Value.ToString("D"));
         Assert.Equal(new byte[] { 67, 0, 127 }, new RunStorage(f.Git.Folder, W, f.RunId).ReadArtifact(result.Id, result.Artifacts.Single()));
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex);
@@ -203,21 +203,21 @@ public sealed class OutboxTests
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(probe: step =>
         {
             if (step == "journal.plan.after") File.WriteAllBytes(path, [1, 2, 3]);
-        }).Publish(W, f.RunId, operation, ready.Execution.Launch.Attempt));
+        }).Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", blocked.Block.Detail);
         Assert.Contains("results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload", blocked.Block.Detail);
         Assert.Empty(f.Read().Results);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
         File.WriteAllBytes(path, [67, 0, 127]);
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, operation, ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex);
         Assert.True(Assert.Single(f.Read().Blocks).Value.Resolved);
     }
 
     private static void CheckRejected(PreparationFixture f, Preparation.Ready ready)
     {
-        var block = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt)).Block;
+        var block = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("InputUnavailable", block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", block.Detail);
         Assert.Contains(".idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json", block.Detail);

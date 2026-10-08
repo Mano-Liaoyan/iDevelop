@@ -6,7 +6,11 @@ internal static partial class RunValidation
 {
     private static RunProblem? SchemaProblem(RunEntry entry)
     {
-        if (entry.Schema is not (1 or 2))
+        if (entry.Schema is not (1 or 2 or 3))
+        {
+            return RunProblem.UnsupportedSchema;
+        }
+        if (entry.Schema < 3 && entry.Event is RunEvent.OwnershipFenced)
         {
             return RunProblem.UnsupportedSchema;
         }

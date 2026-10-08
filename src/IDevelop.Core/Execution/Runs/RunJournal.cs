@@ -16,8 +16,8 @@ internal static class RunJournal
 {
     internal static readonly JsonSerializerOptions Options = CreateOptions();
 
-    private static readonly HashSet<string> LegacyEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
-        "resultAccepted", "stopRequested", "settled", "abandoned"];
+    private static readonly HashSet<string> RunEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
+        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced"];
 
     private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
         "prepared", "blocked", "salvageRetained", "blockResolved"];
@@ -45,7 +45,7 @@ internal static class RunJournal
                 var line = utf8.GetString(jsonl.Slice(offset, length));
                 using var document = JsonDocument.Parse(line, new JsonDocumentOptions { AllowDuplicateProperties = false });
                 var root = document.RootElement;
-                if (root.GetProperty("schema").GetInt32() is not (1 or 2))
+                if (root.GetProperty("schema").GetInt32() is not (1 or 2 or 3))
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedSchema, sequence));
                 }
@@ -54,7 +54,7 @@ internal static class RunJournal
                     return new(entries.ToImmutable(), new(RunProblem.SequenceGap, sequence));
                 }
                 var eventType = root.GetProperty("event").GetProperty("type").GetString() ?? "";
-                if (!LegacyEvents.Contains(eventType) && (root.GetProperty("schema").GetInt32() == 1 || !MaterializationEvents.Contains(eventType)))
+                if (!RunEvents.Contains(eventType) && (root.GetProperty("schema").GetInt32() == 1 || !MaterializationEvents.Contains(eventType)))
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedEvent, sequence));
                 }

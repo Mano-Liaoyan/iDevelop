@@ -21,7 +21,7 @@ public sealed class JoinPolicyTests
         MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), new Clock(), environment ?? f.Git.Environment, probe);
 
     private static ValueTask<Preparation> Prepare(PreparationFixture f, OperationId operation, Action<string>? probe = null) =>
-        Joins(f, probe).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial());
+        Joins(f, probe).Prepare(f.Lease(U), operation, new AttemptCause.Initial());
 
     private static void Commit(PreparationFixture f, string checkout, params (string Path, string? Text)[] edits)
     {
@@ -39,7 +39,7 @@ public sealed class JoinPolicyTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(task));
         Commit(f, ready.Checkout, edits);
         f.Close(ready);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
     }
 
     private static CommitId Settings(GitFixture git)
@@ -143,7 +143,7 @@ public sealed class JoinPolicyTests
         Assert.Equal("2a6facb70b2b7d4a23d103ddf1701e457bda8368", evidence.AttributeSource.Hex);
         var operation = f.Op();
         var invalid = blocked.Block with { Operation = operation, Conflict = evidence with { AttributeSource = new("not-a-commit") } };
-        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, operation, new RunEvent.Blocked(invalid))).Reason.Problem.ToString());
+        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(invalid))).Reason.Problem.ToString());
     }
 
     [Theory]
@@ -165,7 +165,7 @@ public sealed class JoinPolicyTests
         var environment = new Dictionary<string, string>(f.Git.Environment) { ["HOME"] = home, ["XDG_CONFIG_HOME"] = xdg };
         environment.Remove("GIT_CONFIG_GLOBAL");
         var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment)
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", blocked.Block.Problem.ToString());
         Assert.Equal(new[] { "settings.txt" }, blocked.Block.Conflict!.Paths);
         var tree = Encoding.UTF8.GetString(Evidence(f, blocked.Block.Conflict.Stdout)).Split('\0')[0];
@@ -209,7 +209,7 @@ public sealed class JoinPolicyTests
         Commit(f, b.Checkout, ("x.txt", null), ("y.txt", "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n"));
         Assert.Equal(0, f.Git.Run(b.Checkout, "config", "merge.renames", "false").ExitCode);
         f.Close(b);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), b.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         await Write(f, C, ("x.txt", Renamed));
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
         Assert.Equal(Renamed, File.ReadAllText(Path.Combine(ready.Checkout, "y.txt")));
@@ -230,7 +230,7 @@ public sealed class JoinPolicyTests
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)old.Origin).Attempt, f.Op())));
         Commit(f, again.Checkout, ("b.txt", "B again\n"));
         f.Close(again);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), again.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
         var fresh = f.Op();
         var current = Assert.IsType<Preparation.Ready>(await Prepare(f, fresh));
         var retry = await Prepare(f, stale);
@@ -258,7 +258,7 @@ public sealed class JoinPolicyTests
         File.WriteAllText(shim, "#!/bin/sh\nmerge=0\nfor arg do\n[ \"$arg\" = merge-tree ] && merge=1\ndone\n'" + realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\nstatus=$?\n[ \"$merge\" = 1 ] && printf 'another Git build\\n' >&2\nexit $status\n");
         File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var environment = new Dictionary<string, string>(f.Git.Environment) { ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH") };
-        var second = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+        var second = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal("FanInConflict", second.Block.Problem.ToString());
         Assert.Equal("another Git build\n", Encoding.UTF8.GetString(Evidence(f, second.Block.Conflict!.Stderr)));
         Assert.Equal(Evidence(f, first.Block.Conflict!.Stdout), Evidence(f, second.Block.Conflict.Stdout));
@@ -300,7 +300,7 @@ public sealed class JoinPolicyTests
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U)), T, U));
         await Write(f, T, ("b.txt", "B\n"));
         var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: GitVersion(f, "git version 2.39.5 (Apple Git-154)"))
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
     }
 
@@ -310,7 +310,7 @@ public sealed class JoinPolicyTests
         using var f = new PreparationFixture(Diamond());
         await CleanSources(f);
         var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: GitVersion(f, "git version 2.39.5 (Apple Git-154)"))
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal(MaterializationProblem.GitVersionUnsupported, blocked.Block.Problem);
         Assert.Equal("Joins need Git 2.43 or later. Installed: git version 2.39.5 (Apple Git-154).", blocked.Block.Detail);
         Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
@@ -324,13 +324,13 @@ public sealed class JoinPolicyTests
         await Write(f, T, ("x.txt", Renamed));
         await Write(f, C, ("x.txt", "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nchanged 10\n"));
         var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: GitVersion(f, "git version 2.42.0"))
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal(MaterializationProblem.GitVersionUnsupported, blocked.Block.Problem);
         Assert.Equal("Joins need Git 2.43 or later. Installed: git version 2.42.0.", blocked.Block.Detail);
         Assert.Null(GitFixture.Read(f.Git.Open().ReadRef(JoinRef)));
         Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Join>());
         var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: GitVersion(f, "git version 2.43.0"))
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal("changed 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nchanged 10\n", File.ReadAllText(Path.Combine(ready.Checkout, "x.txt")));
     }
 
@@ -379,7 +379,7 @@ public sealed class JoinPolicyTests
                 break;
         }
         var blocked = Assert.IsType<Preparation.Blocked>(await Joins(f, environment: environment)
-            .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+            .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
         Assert.Equal(MaterializationProblem.FanInConflict, blocked.Block.Problem);
         Assert.Equal(new[] { "settings.txt" }, blocked.Block.Conflict!.Paths);
         Assert.False(File.Exists(marker));
@@ -464,26 +464,37 @@ public sealed class JoinPolicyTests
         {
             var operation = f.Op();
             var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: environment)
-                .Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+                .Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
             Assert.Equal("ONE\n2\n3\n4\n5\n6\n7\nEIGHT\n", File.ReadAllText(Path.Combine(ready.Checkout, "m.txt")));
             Assert.Equal("95b1feceb5015d66a187cd67ef90bc60e434deb7", f.Git.Git("rev-parse", ready.Execution.Location.AttemptBase.Hex + "^{tree}").Trim());
             Assert.False(File.Exists(exit));
             Assert.Empty(Directory.GetFileSystemEntries(merges));
-            var other = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+            var other = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
             Assert.Equal("ONE\n2\n3\n4\n5\n6\n7\nEIGHT\n", File.ReadAllText(Path.Combine(other.Checkout, "m.txt")));
             var refs = f.Git.Git("for-each-ref");
             var execution = Path.Combine(f.Git.Folder, ".idp");
-            var files = Directory.GetFiles(execution, "*", SearchOption.AllDirectories)
-                .ToDictionary(path => Path.GetRelativePath(execution, path), File.ReadAllBytes, StringComparer.Ordinal);
+            var paths = Directory.GetFiles(execution, "*", SearchOption.AllDirectories);
+            var locks = paths.Where(path => Path.GetFileName(path) is "run.lock" or "control.lock").ToArray();
+            Assert.Equal(new[]
+            {
+                "attempts/00000000-0000-0000-0000-000000000002/run.lock",
+                "attempts/00000000-0000-0000-0000-000000000003/run.lock",
+                "attempts/00000000-0000-0000-0000-000000000004/run.lock",
+                "attempts/00000000-0000-0000-0000-000000000005/run.lock",
+                "runs/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000010/control.lock",
+            }, locks.Select(path => Path.GetRelativePath(execution, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+            foreach (var path in locks) Assert.Equal(0, new FileInfo(path).Length);
+            var files = paths.Except(locks).ToDictionary(path => Path.GetRelativePath(execution, path), File.ReadAllBytes, StringComparer.Ordinal);
             File.WriteAllText(Path.Combine(state, "release"), "");
             await WaitForOrphan();
             Assert.Equal("0\n", File.ReadAllText(exit));
             Assert.Equal("95b1feceb5015d66a187cd67ef90bc60e434deb7", File.ReadAllText(Path.Combine(state, "orphan.out")).Split('\0')[0]);
             Assert.Equal("", File.ReadAllText(Path.Combine(state, "orphan.err")));
             Assert.Equal(refs, f.Git.Git("for-each-ref"));
-            Assert.Equal(files.Keys.Order(StringComparer.Ordinal), Directory.GetFiles(execution, "*", SearchOption.AllDirectories)
+            Assert.Equal(paths.Select(path => Path.GetRelativePath(execution, path)).Order(StringComparer.Ordinal), Directory.GetFiles(execution, "*", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(execution, path)).Order(StringComparer.Ordinal));
             foreach (var (path, bytes) in files) Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(execution, path)));
+            foreach (var path in locks) Assert.Equal(0, new FileInfo(path).Length);
             Assert.Empty(Directory.GetFileSystemEntries(merges));
             Assert.Equal(0, f.Git.Run(f.Git.Folder, "fsck", "--strict", "--no-dangling").ExitCode);
             Assert.Equal(ready, await Prepare(f, operation));
@@ -515,12 +526,12 @@ public sealed class JoinPolicyTests
         try
         {
             var ready = Assert.IsType<Preparation.Ready>(await Joins(f, environment: environment)
-                .Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial()));
+                .Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial()));
             CleanContent(ready);
             var leftover = Assert.Single(Directory.GetDirectories(merges));
             Assert.StartsWith(System.Environment.ProcessId + "-", Path.GetFileName(leftover));
             File.SetUnixFileMode(Path.Combine(leftover, "held"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            var restarted = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+            var restarted = Assert.IsType<Preparation.Ready>(await Joins(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
             CleanContent(restarted);
             Assert.Equal(new[] { leftover }, Directory.GetFileSystemEntries(merges));
             Assert.Equal(new[] { "held" }, Directory.GetFileSystemEntries(leftover).Select(Path.GetFileName));
@@ -615,7 +626,7 @@ public sealed class JoinPolicyTests
         var listing = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "merge-dirs");
         var environment = GitShim(f, "for arg do\n[ \"$arg\" = merge-tree ] && printf '%s\\n' \"$GIT_DIR\" >> '" + listing + "'\ndone");
         var temporary = Directory.GetDirectories(Path.GetTempPath(), "idevelop-merge-*");
-        var outcome = await Joins(f, environment: environment).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial());
+        var outcome = await Joins(f, environment: environment).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial());
         if (conflict)
         {
             var blocked = Assert.IsType<Preparation.Blocked>(outcome);

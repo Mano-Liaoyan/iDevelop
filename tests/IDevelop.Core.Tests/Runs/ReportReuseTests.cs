@@ -36,7 +36,7 @@ public sealed class ReportReuseTests
         Assert.Equal((started.Attempt.Id, AttemptStatus.Succeeded, "DONE"), (attempt.Id, attempt.Status, attempt.Result));
         f.Approve(commit);
 
-        Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(W, Run, f.Op(), T,
+        Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(f.Permit, f.Op(), T,
             new AttemptSource.Standalone(T, started.Attempt.Id), f.Op()));
 
         var result = f.Read().CurrentResults[T];
@@ -53,8 +53,8 @@ public sealed class ReportReuseTests
         WriteStandalone(f.Project, commit);
         var source = new AttemptSource.Standalone(T, new(Id(90)));
         var confirmation = f.Op();
-        var first = Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(W, Run, f.Op(), T, source, confirmation));
-        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().ReuseReport(W, Run, f.Op(), T, source, confirmation));
+        var first = Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(f.Permit, f.Op(), T, source, confirmation));
+        var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().ReuseReport(f.Permit, f.Op(), T, source, confirmation));
         Assert.Equal(new ResultId(Id(102)), Assert.IsType<RunEvent.ResultAccepted>(first.Event).Result.Id);
         Assert.Equal(new ResultId(Id(102)), Assert.IsType<RunEvent.ResultAccepted>(repeated.Event).Result.Id);
         var record = f.Read();
@@ -63,7 +63,7 @@ public sealed class ReportReuseTests
         Assert.Equal(source, Assert.IsType<ResultOrigin.Reused>(record.CurrentResults[T].Origin).Source);
         Assert.Equal(2, record.Sequence);
         Assert.Equal("*.tmp\nattempts/\nruns/\n", File.ReadAllText(Path.Combine(f.Project, ".idp", ".gitignore")));
-        Assert.Equal(RunProblem.StartConflict, Problem(f.Store.Reserve(W, Run, f.Op(), T, new(V1), new AttemptCause.Initial())));
+        Assert.Equal(RunProblem.StartConflict, Problem(f.Store.Reserve(f.Lease(T), f.Op(), new(V1), new AttemptCause.Initial())));
     }
 
     [Theory]
@@ -92,8 +92,7 @@ public sealed class ReportReuseTests
             receivingCommit = new(new string('9', 40));
         }
         f.Approve(receivingCommit);
-        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.ReuseReport(W, Run, f.Op(), T,
-            new(T, new(Id(90))), f.Op())));
+        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op())));
         Assert.Equal(V1, f.Read().Revision.Id.Sha256);
         Assert.Equal(1, f.Read().Sequence);
     }
@@ -116,7 +115,7 @@ public sealed class ReportReuseTests
             different).Comparison);
         f.Approve(different);
         WriteStandalone(f.Project, first);
-        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), f.Op())));
+        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op())));
     }
 
     [Fact]
@@ -128,8 +127,8 @@ public sealed class ReportReuseTests
         WriteStandalone(f.Project, commit);
         var path = Path.Combine(AttemptLog.FolderOf(DataFolder.Attempts(f.Project), T, new(Id(90))), "events.jsonl");
         var before = File.ReadAllBytes(path);
-        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), default)));
-        Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), f.Op()));
+        Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), default)));
+        Assert.IsType<RunDecision.Created>(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op()));
         Assert.Equal(before, File.ReadAllBytes(path));
         Assert.Equal("Checked.", f.Read().CurrentResults[T].Report);
     }
@@ -146,7 +145,7 @@ public sealed class ReportReuseTests
         Directory.CreateDirectory(copied);
         File.Copy(original, Path.Combine(copied, "events.jsonl"));
         Assert.Equal(RunProblem.ReuseUnverifiable,
-            Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(91))), f.Op())));
+            Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(91))), f.Op())));
     }
 
     [Fact]
@@ -158,7 +157,7 @@ public sealed class ReportReuseTests
         WriteStandalone(f.Project, commit);
         ChangeRequest(f.Project, request => request["task"] = "00000000-0000-0000-0000-000000000003");
         Assert.Equal(RunProblem.ReuseUnverifiable,
-            Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), f.Op())));
+            Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op())));
     }
 
     [Fact]
@@ -171,7 +170,7 @@ public sealed class ReportReuseTests
         var later = Commit(f.Project);
         f.Approve(later);
         Assert.Equal(RunProblem.ReuseUnverifiable,
-            Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), f.Op())));
+            Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op())));
         Assert.Equal(later, f.Read().Base.Commit);
     }
 
@@ -188,7 +187,7 @@ public sealed class ReportReuseTests
         Assert.Equal(AttemptStatus.Succeeded, record?.Status);
         Assert.Equal("Checked.", record?.Result);
         Assert.Equal(RunProblem.ReuseUnverifiable,
-            Problem(f.Store.ReuseReport(W, Run, f.Op(), T, new(T, new(Id(90))), f.Op())));
+            Problem(f.Store.ReuseReport(f.Permit, f.Op(), T, new(T, new(Id(90))), f.Op())));
     }
 
     private static string StandalonePath(string project) =>

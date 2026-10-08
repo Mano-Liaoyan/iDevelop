@@ -1,5 +1,4 @@
 using IDevelop.Nodes;
-using IDevelop.Projects;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -35,9 +34,16 @@ internal sealed partial class Materializer
         TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null) =>
         new(projectFolder, store, joins ?? new UnavailableJoins(), boundary, clock, environment ?? new Dictionary<string, string>(), probe);
 
-    public async ValueTask<Preparation> Prepare(WorkflowId workflow, RunId run, OperationId operation, TaskId task, AttemptCause cause,
+    public async ValueTask<Preparation> Prepare(RunLease lease, OperationId operation, AttemptCause cause,
         string? basePrompt = null, CancellationToken cancellation = default)
     {
+        using var authority = lease.Use();
+        if (authority is null) return new Preparation.Rejected(new(RunProblem.TaskBusy));
+        if (LeaseProblem(lease) is { } problem) return new Preparation.Rejected(new(problem));
+        var permit = lease.Permit;
+        var workflow = permit.Workflow;
+        var run = permit.Run;
+        var task = lease.Task;
         var step = "open";
         AttemptId? attempt = null;
         InputId? inputs = null;
@@ -57,7 +63,8 @@ internal sealed partial class Materializer
             if (preparedReceipt?.Event is RunEvent.Prepared completed)
             {
                 var original = record.Attempts[completed.Execution.Launch.Attempt];
-                if (original.Task != task || !RunReducer.Same(original.Cause, cause) ||
+                if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
+                if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
                         original.Id, basePrompt) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
@@ -69,7 +76,6 @@ internal sealed partial class Materializer
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
-                using var taskLock = TakeTaskLock(task);
                 VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
                 VerifyDelivery(record, completed.Execution, repository);
                 RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
@@ -77,10 +83,14 @@ internal sealed partial class Materializer
                 return new Preparation.Ready(completed.Execution, Checkout(repository, completed.Execution.Location.Owner));
             }
             step = "layout";
-            record = AllocateLayout(workflow, run, operation, task, repository, record);
+            record = AllocateLayout(permit, operation, task, repository, record);
             step = "plan";
-            var planned = Journal("plan", () => _store.Plan(workflow, run, OperationIds.Derive(operation, "plan"), task,
-                record.Revision.Id, cause));
+            var planOperation = OperationIds.Derive(operation, "plan");
+            var revision = record.Receipts.GetValueOrDefault(planOperation)?.Event is
+                RunEvent.Planned { Plan: MaterializationPlan.Preparation originalPlan }
+                ? originalPlan.Revision
+                : RunReducer.Slot(record, task, cause)?.Revision ?? record.Revision.Id;
+            var planned = Journal("plan", () => _store.Plan(lease, planOperation, revision, cause));
             record = DecisionRecord(planned);
             var planEvent = DecisionEvent(planned);
             var plan = (MaterializationPlan.Preparation)((RunEvent.Planned)planEvent).Plan;
@@ -94,16 +104,16 @@ internal sealed partial class Materializer
             {
                 step = "join";
                 var joinRef = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[task]);
-                var outcome = await _joins.Compose(new(workflow, OperationIds.Derive(operation, "join"), run, task, plan.Inputs,
+                var outcome = await _joins.Compose(new(permit, OperationIds.Derive(operation, "join"), task, plan.Inputs,
                     plan.Sources, Value(repository.ReadRef(joinRef))), cancellation);
                 if (outcome is JoinOutcome.Blocked blocked)
-                    return Block(workflow, run, operation, step, blocked.Block with { Operation = operation });
+                    return Block(permit, operation, step, blocked.Block with { Operation = operation });
                 join = ((JoinOutcome.Ready)outcome).Join;
                 VerifyJoin(Read(workflow, run), repository, task, plan.Inputs, plan.Sources, join);
             }
             cancellation.ThrowIfCancellationRequested();
             step = "reserve";
-            record = DecisionRecord(Journal("reserve", () => _store.Reserve(workflow, run,
+            record = DecisionRecord(Journal("reserve", () => _store.Reserve(lease,
                 OperationIds.Derive(operation, "reserve"), planId, join)));
             attempt = plan.Attempt;
             var owner = new WorktreeOwner(task, RunLayout.TaskCheckout(record.RunKey!, record.TaskKeys[task]),
@@ -112,10 +122,8 @@ internal sealed partial class Materializer
             var start = RunReducer.AttemptBase(record, record.Attempts[plan.Attempt], input) ??
                 throw new Refusal(new(RunProblem.InputConflict));
             var location = new ExecutionLocation(owner, start);
-            step = "task-lock";
-            using var locked = TakeTaskLock(task);
             step = "worktree";
-            EnsureCheckout(workflow, run, operation, planId, repository, location, record);
+            EnsureCheckout(permit, operation, planId, repository, location, record);
             step = "checkout";
             VerifyCheckout(repository, location, cause is AttemptCause.Continue, Read(workflow, run));
             step = "delivery";
@@ -132,13 +140,13 @@ internal sealed partial class Materializer
             step = "prepared";
             // A sibling result may supersede an input while Git and file delivery run.
             if (RunReducer.InputProblem(Read(workflow, run), input, true) is { } stale) return new Preparation.Rejected(stale);
-            Journal("prepared", () => _store.Record(workflow, run, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
             return new Preparation.Ready(execution, Checkout(repository, owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
-        catch (MaterializationFailure failed) { return Block(workflow, run, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
+        catch (MaterializationFailure failed) { return Block(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return Block(workflow, run, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return Block(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
     }
 
     private GitRepository OpenRepository() => GitRepository.Open(_project, _environment) switch
@@ -174,8 +182,10 @@ internal sealed partial class Materializer
 
     private void Mutate(string step, Action action) => Mutate(step, () => { action(); return true; });
 
-    private Preparation Block(WorkflowId workflow, RunId run, OperationId operation, string step, MaterializationBlock block)
+    private Preparation Block(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var id = OperationIds.Derive(operation, step + "-blocked");
         try
         {
@@ -187,14 +197,18 @@ internal sealed partial class Materializer
                     return new Preparation.Blocked(prior.Block);
                 id = OperationIds.Derive(operation, step + "-blocked-" + number++);
             }
-            Journal(step + "-blocked", () => _store.Record(workflow, run, id, new RunEvent.Blocked(block)));
+            Journal(step + "-blocked", () => _store.Record(permit, id, new RunEvent.Blocked(block)));
             return new Preparation.Blocked(block);
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
     }
 
-    private RunLock TakeTaskLock(TaskId task) => RunLock.TryTake(DataFolder.Attempts(_project), task) ??
-        throw Fault(MaterializationProblem.LiveWriter, "The task checkout is owned by a live writer.");
+    private RunProblem? LeaseProblem(RunLease lease, TaskId? task = null)
+    {
+        if (!lease.Held) return RunProblem.TaskBusy;
+        if (!SamePath(lease.Project, _project) || task is { } owner && lease.Task != owner) return RunProblem.IdentityMismatch;
+        return null;
+    }
 
     private static T Value<T>(GitRead<T> read) => read switch
     {

@@ -1,14 +1,13 @@
 using IDevelop.Execution;
-using IDevelop.Workflows;
 
 namespace IDevelop.Core.Tests.Runs;
 
 internal static class RunStoreExtensions
 {
-    public static RunDecision Reserve(this RunStore store, WorkflowId workflow, RunId run, OperationId operation, TaskId task,
+    public static RunDecision Reserve(this RunStore store, RunLease lease, OperationId operation,
         RevisionId revision, AttemptCause cause)
     {
-        var decision = store.Plan(workflow, run, operation, task, revision, cause);
+        var decision = store.Plan(lease, operation, revision, cause);
         if (decision is RunDecision.Rejected)
         {
             return decision;
@@ -27,6 +26,6 @@ internal static class RunStoreExtensions
         };
         var preparation = ((RunEvent.Planned)planned).Plan;
         var plan = record.Plans.Single(pair => RunReducer.Same(pair.Value, preparation)).Key;
-        return store.Reserve(workflow, run, OperationIds.Derive(operation, "reserve"), plan);
+        return store.Reserve(lease, OperationIds.Derive(operation, "reserve"), plan);
     }
 }

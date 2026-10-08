@@ -25,7 +25,7 @@ internal static partial class RunReducer
     public static RunRead Apply(WorkflowId workflow, RunId run, RunRecord? record, RunEntry entry)
     {
         RunRead Reject(RunProblem problem, TaskId? task = null) => new RunRead.Rejected(new(problem, entry.Sequence, task), record);
-        if (entry.Schema is not (1 or 2) || record is not null && entry.Schema != record.Schema)
+        if (entry.Schema is not (1 or 2 or 3) || record is not null && entry.Schema != record.Schema)
         {
             return Reject(RunProblem.UnsupportedSchema);
         }
@@ -103,7 +103,9 @@ internal static partial class RunReducer
                     break;
                 case RunEvent.Reserved reserved:
                     var attempt = reserved.Attempt;
-                    if (ReservationTaskProblem(record, attempt.Task, attempt.Revision) is { } taskProblem)
+                    if (ReservationTaskProblem(record, attempt.Task, attempt.Revision,
+                        recorded: record.Schema >= 2 && record.Plans.Values.OfType<MaterializationPlan.Preparation>()
+                            .Any(plan => plan.Attempt == attempt.Id)) is { } taskProblem)
                     {
                         return Reject(taskProblem.Problem, taskProblem.Task);
                     }
@@ -129,7 +131,7 @@ internal static partial class RunReducer
                         return Reject(input.Problem, input.Task);
                     }
 
-                    if (record.Schema == 2 && ReservedProblem(record, reserved) is { } materialInput)
+                    if (record.Schema >= 2 && ReservedProblem(record, reserved) is { } materialInput)
                     {
                         return Reject(materialInput);
                     }
@@ -177,7 +179,20 @@ internal static partial class RunReducer
                         return Reject(turnInput.Problem, turnInput.Task);
                     }
 
-                    if (record.Schema == 2 && (!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
+                    if (record.Schema == 3 && claim.Key.Turn == 1)
+                    {
+                        var currentResults = record.CurrentResults;
+                        var stale = record.StaleResults;
+                        foreach (var binding in claim.Inputs.Bindings.OfType<InputBinding.Provided>().Where(binding => binding.Kind == ConnectionKind.Dependency))
+                        {
+                            if (stale.Contains(binding.Result) || !currentResults.TryGetValue(binding.Edge.From, out var dependency) || dependency.Id != binding.Result)
+                            {
+                                return Reject(RunProblem.StaleInput, binding.Edge.From);
+                            }
+                        }
+                    }
+
+                    if (record.Schema >= 2 && (!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
                         prepared.Inputs != claim.Inputs.Id || prepared.PromptHash != claim.Prompt))
                     {
                         return Reject(RunProblem.InvalidClaim);
@@ -190,7 +205,7 @@ internal static partial class RunReducer
                     };
                     break;
                 case RunEvent.TurnClosed closed:
-                    if (!record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
+                    if (record.Schema == 3 && record.Fenced.Contains(closed.Key) || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
                         record.Closures.ContainsKey(closed.Key.Attempt))
                     {
                         return Reject(RunProblem.InvalidClaim);
@@ -300,7 +315,7 @@ internal static partial class RunReducer
                         default:
                             return Reject(RunProblem.UnsupportedResult);
                     }
-                    if (record.Schema == 2 && ResultCodeProblem(record, accepted, resultTask) is { } codeProblem)
+                    if (record.Schema >= 2 && ResultCodeProblem(record, accepted, resultTask) is { } codeProblem)
                     {
                         return Reject(codeProblem);
                     }
@@ -309,6 +324,14 @@ internal static partial class RunReducer
                         Results = record.Results.Add(result),
                         Inputs = record.Inputs.SetItem(accepted.Inputs.Id, accepted.Inputs)
                     };
+                    break;
+                case RunEvent.OwnershipFenced fenced:
+                    if (fenced.Claims.IsEmpty || fenced.Claims.Distinct().Count() != fenced.Claims.Length ||
+                        fenced.Claims.Any(key => !record.UnresolvedClaims.Contains(key) || record.Fenced.Contains(key)))
+                    {
+                        return Reject(RunProblem.InvalidClaim);
+                    }
+                    record = record with { Fenced = record.Fenced.Union(fenced.Claims) };
                     break;
                 case RunEvent.StopRequested:
                     if (record.Phase != RunPhase.Approved)
@@ -387,9 +410,7 @@ internal static partial class RunReducer
 
             if (record.Attempts.Values.Any(attempt => attempt.Task == task.Id) || record.Results.Any(result => result.Task == task.Id))
             {
-                if (Revision.CanonicalTask(task) != Revision.CanonicalTask(replacement) ||
-                    !record.Revision.Snapshot.Connections.Where(edge =>
-                        edge.Key.To == task.Id).SequenceEqual(candidate.Connections.Where(edge => edge.Key.To == task.Id)))
+                if (!SameTask(record.Revision.Snapshot, candidate, task.Id))
                 {
                     return RunProblem.StartedTaskChanged;
                 }
@@ -397,6 +418,11 @@ internal static partial class RunReducer
         }
         return null;
     }
+
+    private static bool SameTask(Workflow original, Workflow current, TaskId task) =>
+        original.Tasks.TryGetValue(task, out var definition) && current.Tasks.TryGetValue(task, out var replacement) &&
+        Revision.CanonicalTask(definition) == Revision.CanonicalTask(replacement) &&
+        original.Connections.Where(edge => edge.Key.To == task).SequenceEqual(current.Connections.Where(edge => edge.Key.To == task));
 
     internal static RunAttempt? Slot(RunRecord record, TaskId task, AttemptCause cause) => record.Attempts.Values.FirstOrDefault(attempt => MatchesSlot(attempt, task, cause));
 
@@ -418,19 +444,20 @@ internal static partial class RunReducer
         _ => null,
     };
 
-    internal static RunRejection? ReservationTaskProblem(RunRecord record, TaskId task, RevisionId revision)
+    internal static RunRejection? ReservationTaskProblem(RunRecord record, TaskId task, RevisionId revision, bool recorded = false)
     {
         if (record.Phase != RunPhase.Approved)
         {
             return new(RunProblem.RunStopped);
         }
 
-        if (revision != record.Revision.Id)
+        if (revision != record.Revision.Id && (!recorded || !record.Revisions.TryGetValue(revision, out var original) ||
+            !SameTask(original.Snapshot, record.Revision.Snapshot, task)))
         {
             return new(RunProblem.RevisionConflict);
         }
 
-        if (!record.Revision.Snapshot.Tasks.TryGetValue(task, out var definition))
+        if (!record.Revisions[revision].Snapshot.Tasks.TryGetValue(task, out var definition))
         {
             return new(RunProblem.IdentityMismatch);
         }
@@ -575,6 +602,7 @@ internal static partial class RunValidation
             RunEvent.Reserved reserved => !Attempt(reserved.Attempt) || !Input(reserved.Inputs) ? RunProblem.InvalidData : null,
             RunEvent.TurnClaimed claim => !Key(claim.Key) || !Input(claim.Inputs) || !Revision.IsHash(claim.Prompt.Sha256) ?
                 RunProblem.InvalidData : null,
+            RunEvent.OwnershipFenced fenced => fenced.Claims.IsDefault || !fenced.Claims.All(Key) ? RunProblem.InvalidData : null,
             RunEvent.TurnClosed closed => !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
             RunEvent.AttemptClosed closed => closed.Attempt.Value == Guid.Empty ? RunProblem.InvalidData : End(closed.End),
             RunEvent.ResultAccepted accepted => !Result(accepted.Result) || !Input(accepted.Inputs) ? RunProblem.InvalidData : null,

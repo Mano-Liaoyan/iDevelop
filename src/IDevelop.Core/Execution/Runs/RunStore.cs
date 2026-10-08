@@ -45,6 +45,69 @@ internal sealed class RunStore
         }
     }
 
+    public TaskRunOwnership TaskOwnership(StandaloneLease held)
+    {
+        var task = held.Task;
+        string? owner = null;
+        try
+        {
+            if (!Directory.Exists(_runs)) return new TaskRunOwnership.Free();
+            foreach (var workflowFolder in Directory.EnumerateDirectories(_runs).Order(StringComparer.Ordinal))
+            foreach (var runFolder in Directory.EnumerateDirectories(workflowFolder).Order(StringComparer.Ordinal))
+            foreach (var journal in Directory.EnumerateFiles(runFolder, "events.jsonl"))
+            {
+                if (new FileInfo(journal).Length == 0) continue;
+                var relative = Path.GetRelativePath(_project, journal);
+                if (!Guid.TryParse(Path.GetFileName(workflowFolder), out var workflow) ||
+                    !Guid.TryParse(Path.GetFileName(runFolder), out var run))
+                    return new TaskRunOwnership.Unreadable($"{relative}: invalid run identity.");
+                var read = ReadJournal(new(workflow), new(run), journal);
+                if (read is RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: null }) continue;
+                var record = read switch
+                {
+                    RunRead.Loaded loaded => loaded.Record,
+                    RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: { } prefix } => prefix,
+                    _ => null,
+                };
+                if (record is null)
+                    return new TaskRunOwnership.Unreadable($"{relative}: {((RunRead.Rejected)read).Reason.Problem}.");
+                if (owner is null &&
+                    ((record.Phase is RunPhase.Approved or RunPhase.StopRequested && record.Revision.Snapshot.Tasks.ContainsKey(task)) ||
+                     (record.Phase != RunPhase.Abandoned &&
+                      record.Attempts.Values.Any(attempt => attempt.Task == task && !record.Closures.ContainsKey(attempt.Id))) ||
+                     record.UnresolvedClaims.Any(claim => record.Attempts[claim.Attempt].Task == task)))
+                    owner = record.Revision.Snapshot.DisplayName;
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new TaskRunOwnership.Unreadable(error.Message);
+        }
+        return owner is { } name ? new TaskRunOwnership.Owned(name) : new TaskRunOwnership.Free();
+    }
+
+    internal string Project => _project;
+
+    public ControlTake TakeControl(WorkflowId workflow, RunId run) => CoordinatorPermit.Acquire(this, workflow, run);
+
+    internal ControlTake Fence(CoordinatorPermit permit)
+    {
+        ImmutableArray<LaunchKey> fenced = [];
+        var decision = Transact(permit, new OperationId(_ids()),
+            Fingerprint("takeControl", new { permit.Workflow, permit.Run }), (record, _) =>
+            {
+                if (record is null) return Missing();
+                fenced = record.UnresolvedClaims;
+                ImmutableArray<LaunchKey> claims = [.. fenced.Where(key => !record.Fenced.Contains(key))];
+                return claims.IsEmpty
+                    ? new Mutation.Existing(record.Receipts.Values.Single(entry => entry.Sequence == record.Sequence).Event)
+                    : new Mutation.Append(new RunEvent.OwnershipFenced(claims));
+            });
+        return decision is RunDecision.Rejected refusal
+            ? new ControlTake.Rejected(refusal.Reason)
+            : new ControlTake.Owned(permit, fenced);
+    }
+
     public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase) =>
         Transact(workflow, run, operation, Fingerprint("approve", new
         {
@@ -66,16 +129,13 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
         });
 
-    public RunDecision Plan(WorkflowId workflow, RunId run, OperationId operation, TaskId task, RevisionId revision, AttemptCause cause) =>
-        Transact(workflow, run, operation, Fingerprint("plan", new { task, revision, cause }), (record, _) =>
+    public RunDecision Plan(RunLease lease, OperationId operation, RevisionId revision, AttemptCause cause) =>
+        Transact(lease.Permit, operation, Fingerprint("plan", new { task = lease.Task, revision, cause }), (record, _) =>
         {
+            var task = lease.Task;
             if (record is null)
             {
                 return Missing();
-            }
-            if (record.Schema != 2)
-            {
-                return Refuse(RunProblem.UnsupportedSchema);
             }
             if (record.Phase != RunPhase.Approved)
             {
@@ -126,10 +186,10 @@ internal sealed class RunStore
             }
             var inputs = new InputId(_ids());
             return new Mutation.Append(new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) }));
-        });
+        }, validate: record => LeaseProblem(record, lease));
 
-    public RunDecision Refresh(WorkflowId workflow, RunId run, OperationId operation, LaunchKey launch, JoinRecord? join = null) =>
-        Transact(workflow, run, operation, Fingerprint("refresh", new { launch, join }), (record, _) =>
+    public RunDecision Refresh(RunLease lease, OperationId operation, LaunchKey launch, JoinRecord? join = null) =>
+        Transact(lease.Permit, operation, Fingerprint("refresh", new { launch, join }), (record, _) =>
         {
             if (record is null) return Missing();
             if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
@@ -142,18 +202,14 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Planned(new MaterializationPlan.Refresh(launch,
                 join is not null && record.Plans.GetValueOrDefault(join.Operation) is MaterializationPlan.Join joined ? joined.Inputs : new(_ids()), bindings,
                 InputMaterial.Sources(record, bindings), InputMaterial.Review(record.Revisions[attempt.Revision].Snapshot, attempt.Task, bindings), join)));
-        });
+        }, validate: record => AttemptLeaseProblem(record, lease, launch.Attempt));
 
-    public RunDecision Reserve(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, JoinRecord? join = null) =>
-        Transact(workflow, run, operation, Fingerprint("reserve", new { plan, join }), (record, _) =>
+    public RunDecision Reserve(RunLease lease, OperationId operation, OperationId plan, JoinRecord? join = null) =>
+        Transact(lease.Permit, operation, Fingerprint("reserve", new { plan, join }), (record, _) =>
         {
             if (record is null)
             {
                 return Missing();
-            }
-            if (record.Schema != 2)
-            {
-                return Refuse(RunProblem.UnsupportedSchema);
             }
             if (record.Phase != RunPhase.Approved)
             {
@@ -177,20 +233,26 @@ internal sealed class RunStore
                 var reserved = Reservation(record, existing.Id);
                 return RunReducer.SameInput(reserved.Inputs, inputs) ? new Mutation.Existing(reserved) : Refuse(RunProblem.InputConflict);
             }
+            if (RunReducer.ReservationTaskProblem(record, preparation.Task, preparation.Revision, recorded: true) is { } taskProblem)
+            {
+                return new Mutation.Rejected(taskProblem);
+            }
             if (RunReducer.InputProblem(record, inputs, true) is { } inputProblem)
             {
                 return new Mutation.Rejected(inputProblem);
             }
-            if (RunReducer.PlanProblem(record, preparation) is { } planProblem)
+            if (RunReducer.PlanProblem(record, preparation, recorded: true) is { } planProblem)
             {
                 return Refuse(planProblem);
             }
             return new Mutation.Append(new RunEvent.Reserved(new(preparation.Attempt, preparation.Task, preparation.Revision,
                 preparation.Inputs, preparation.Cause), inputs));
-        });
+        }, validate: record => LeaseProblem(record, lease) ??
+            (record.Plans.GetValueOrDefault(plan) is MaterializationPlan.Preparation preparation && preparation.Task != lease.Task
+                ? RunProblem.IdentityMismatch : null));
 
-    public RunDecision Record(WorkflowId workflow, RunId run, OperationId operation, RunEvent e) =>
-        Transact(workflow, run, operation, Fingerprint("record", e), (record, _) =>
+    public RunDecision Record(CoordinatorPermit permit, OperationId operation, RunEvent e) =>
+        Transact(permit, operation, Fingerprint("record", e), (record, _) =>
         {
             if (record is null)
             {
@@ -214,8 +276,8 @@ internal sealed class RunStore
             return new Mutation.Append(e);
         });
 
-    public RunDecision AcceptPublication(WorkflowId workflow, RunId run, OperationId operation, OperationId publication) =>
-        Transact(workflow, run, operation, Fingerprint("acceptPublication", new { publication }), (record, _) =>
+    public RunDecision AcceptPublication(CoordinatorPermit permit, OperationId operation, OperationId publication) =>
+        Transact(permit, operation, Fingerprint("acceptPublication", new { publication }), (record, _) =>
         {
             if (record is null)
             {
@@ -245,8 +307,11 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.ResultAccepted(result, record.Inputs[result.Inputs]));
         });
 
-    public RunDecision Claim(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, InputRecord inputs, Digest prompt) =>
-        Transact(workflow, run, operation, Fingerprint("claim", new
+    public RunDecision Claim(RunLease lease, OperationId operation, LaunchKey key, InputRecord inputs, Digest prompt)
+    {
+        var workflow = lease.Permit.Workflow;
+        var run = lease.Permit.Run;
+        return Transact(lease.Permit, operation, Fingerprint("claim", new
         {
             key,
             inputs,
@@ -280,10 +345,11 @@ internal sealed class RunStore
             }
 
             return new Mutation.Append(new RunEvent.TurnClaimed(key, inputs, prompt), Grant: true);
-        });
+        }, validate: record => AttemptLeaseProblem(record, lease, key.Attempt));
+    }
 
-    public RunDecision CloseTurn(WorkflowId workflow, RunId run, OperationId operation, LaunchKey key, LogCheckpoint evidence) =>
-        Transact(workflow, run, operation, Fingerprint("closeTurn", new
+    public RunDecision CloseTurn(CoordinatorPermit permit, OperationId operation, LaunchKey key, LogCheckpoint evidence) =>
+        Transact(permit, operation, Fingerprint("closeTurn", new
         {
             key,
             evidence
@@ -293,6 +359,8 @@ internal sealed class RunStore
             {
                 return Missing();
             }
+
+            if (record.Fenced.Contains(key)) return Refuse(RunProblem.UnresolvedOwnership);
 
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
@@ -324,9 +392,9 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.TurnClosed(key, evidence));
         });
 
-    public RunDecision CloseAttempt(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
+    public RunDecision CloseAttempt(CoordinatorPermit permit, OperationId operation, AttemptId attempt,
         TerminalAttemptOutcome outcome, LogCheckpoint evidence) =>
-        Transact(workflow, run, operation, Fingerprint("closeAttempt", new
+        Transact(permit, operation, Fingerprint("closeAttempt", new
         {
             attempt,
             outcome,
@@ -337,6 +405,9 @@ internal sealed class RunStore
             {
                 return Missing();
             }
+
+            if (record.UnresolvedClaims.Any(key => key.Attempt == attempt && record.Fenced.Contains(key)))
+                return Refuse(RunProblem.UnresolvedOwnership);
 
             var end = new AttemptEnd.Logged(outcome, evidence);
             if (record.Closures.TryGetValue(attempt, out var existing))
@@ -383,12 +454,30 @@ internal sealed class RunStore
         })]);
     }
 
-    public RunDecision Recover(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
-        RecoveryOutcome? outcome = null, OperationId? confirmation = null, string? reason = null)
+    public RunDecision Recover(RunLease lease, OperationId operation, AttemptId attempt,
+        RecoveryOutcome? outcome = null, OperationId? confirmation = null, string? reason = null) =>
+        RecoverCore(lease.Permit.Workflow, lease.Permit.Run, operation, attempt, outcome, confirmation, reason,
+            record => AttemptLeaseProblem(record, lease, attempt));
+
+    public RunDecision Recover(LegacyRun run, StandaloneLease lease, OperationId operation, AttemptId attempt,
+        RecoveryOutcome? outcome = null, OperationId? confirmation = null, string? reason = null) =>
+        RecoverCore(run.Workflow, run.Run, operation, attempt, outcome, confirmation, reason,
+            record => LegacyProblem(record) ?? StandaloneProblem(record, lease, attempt));
+
+    private RunDecision RecoverCore(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
+        RecoveryOutcome? outcome, OperationId? confirmation, string? reason, Func<RunRecord, RunProblem?> validate)
     {
-        RunLock? held = null;
+        if (workflow.Value == Guid.Empty || run.Value == Guid.Empty || operation.Value == Guid.Empty)
+        {
+            return new RunDecision.Rejected(new(RunProblem.InvalidData));
+        }
         try
         {
+            var read = Read(workflow, run);
+            if (read is RunRead.Rejected rejected) return new RunDecision.Rejected(rejected.Reason);
+            var current = ((RunRead.Loaded)read).Record;
+            if (validate(current) is { } problem)
+                return new RunDecision.Rejected(new(problem));
             return Transact(workflow, run, operation, Fingerprint("recover", new
             {
                 attempt,
@@ -412,12 +501,6 @@ internal sealed class RunStore
                     return new Mutation.Existing(new RunEvent.AttemptClosed(attempt, existing));
                 }
 
-                held = RunLock.TryTake(DataFolder.Attempts(_project), owner.Task);
-                if (held is null)
-                {
-                    return Refuse(RunProblem.TaskBusy);
-                }
-
                 var read = AttemptEvidence.Read(AttemptFolder(workflow, run, owner.Task, owner.Id));
                 if (read.Rejection is null && read.Checkpoint is { } checkpoint && OwnedEvidence(record, owner, checkpoint).Rejection is null &&
                     AttemptEvidence.Terminal(read) is { } terminal && AttemptEvidence.Matches(read, terminal))
@@ -436,17 +519,17 @@ internal sealed class RunStore
                 }
 
                 return new Mutation.Append(new RunEvent.AttemptClosed(attempt, new AttemptEnd.Recovered(outcome.Value, confirmation.Value, reason)));
-            });
+            }, validate: validate);
         }
-        finally
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            held?.Dispose();
+            return new RunDecision.Rejected(new(RunProblem.StorageUnavailable));
         }
     }
 
-    public RunDecision AcceptReport(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt, InputId inputs,
+    public RunDecision AcceptReport(CoordinatorPermit permit, OperationId operation, AttemptId attempt, InputId inputs,
         string report, ResultId? supersedes = null) =>
-        Transact(workflow, run, operation, Fingerprint("acceptReport", new
+        Transact(permit, operation, Fingerprint("acceptReport", new
         {
             attempt,
             inputs,
@@ -507,13 +590,13 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), owner.Task, owner.Revision, inputs,
                             new ResultOrigin.Executed(attempt), report, supersedes)
             {
-                Code = record.Schema == 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
+                Code = record.Schema >= 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
             }, capture));
         });
 
-    public RunDecision ReuseReport(WorkflowId workflow, RunId run, OperationId operation, TaskId task, AttemptSource.Standalone source,
+    public RunDecision ReuseReport(CoordinatorPermit permit, OperationId operation, TaskId task, AttemptSource.Standalone source,
         OperationId confirmation) =>
-        Transact(workflow, run, operation, Fingerprint("reuseReport", new
+        Transact(permit, operation, Fingerprint("reuseReport", new
         {
             task,
             source,
@@ -559,9 +642,9 @@ internal sealed class RunStore
                 new ResultOrigin.Reused(source, reuse.Evidence!), reuse.Report!, null), inputs));
         });
 
-    public RunDecision Amend(WorkflowId workflow, RunId run, OperationId operation, RevisionId previous, ApprovedRevision candidate,
+    public RunDecision Amend(CoordinatorPermit permit, OperationId operation, RevisionId previous, ApprovedRevision candidate,
         AmendmentOrigin origin, OperationId confirmation) =>
-        Transact(workflow, run, operation, Fingerprint("amend", new
+        Transact(permit, operation, Fingerprint("amend", new
         {
             previous,
             candidate.Id,
@@ -583,9 +666,9 @@ internal sealed class RunStore
             return new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
         });
 
-    public RunDecision AmendFromProposal(WorkflowId workflow, RunId run, OperationId operation, RevisionId previous, Proposal proposal,
+    public RunDecision AmendFromProposal(CoordinatorPermit permit, OperationId operation, RevisionId previous, Proposal proposal,
         IReadOnlySet<TaskId> chosen, OperationId confirmation, ExecutionSettings? fallback = null) =>
-        Transact(workflow, run, operation, Fingerprint("amendProposal", new
+        Transact(permit, operation, Fingerprint("amendProposal", new
         {
             previous,
             proposal,
@@ -633,21 +716,21 @@ internal sealed class RunStore
                 : Refuse(RunProblem.InvalidData);
         });
 
-    public RunDecision Stop(WorkflowId workflow, RunId run, OperationId operation) =>
-        Transact(workflow, run, operation, Fingerprint("stop", new
+    public RunDecision Stop(CoordinatorPermit permit, OperationId operation) =>
+        Transact(permit, operation, Fingerprint("stop", new
         {
         }), (record, _) => record is null ? Missing() :
             record.Phase == RunPhase.StopRequested ? new Mutation.Existing(new RunEvent.StopRequested()) :
                 new Mutation.Append(new RunEvent.StopRequested()));
 
-    public RunDecision Settle(WorkflowId workflow, RunId run, OperationId operation, RunOutcome outcome) =>
-        Transact(workflow, run, operation, Fingerprint("settle", new
+    public RunDecision Settle(CoordinatorPermit permit, OperationId operation, RunOutcome outcome) =>
+        Transact(permit, operation, Fingerprint("settle", new
         {
             outcome
         }), (_, _) => new Mutation.Append(new RunEvent.Settled(outcome)));
 
-    public RunDecision Abandon(WorkflowId workflow, RunId run, OperationId operation, OperationId confirmation, string reason) =>
-        Transact(workflow, run, operation, Fingerprint("abandon", new
+    public RunDecision Abandon(CoordinatorPermit permit, OperationId operation, OperationId confirmation, string reason) =>
+        Transact(permit, operation, Fingerprint("abandon", new
         {
             confirmation,
             reason
@@ -720,7 +803,7 @@ internal sealed class RunStore
                     AttemptEvent.TurnRequested turn => turn.Prompt,
                     _ => "",
                 }).ToArray();
-        if (record.Schema == 2 && prompts.Where((prompt, index) =>
+        if (record.Schema >= 2 && prompts.Where((prompt, index) =>
             !record.Preparations.TryGetValue(new(attempt.Id, index + 1), out var prepared) || prepared.Prompt != prompt).Any())
         {
             return read with { Rejection = new(RunProblem.EvidenceMismatch) };
@@ -737,8 +820,63 @@ internal sealed class RunStore
         return read;
     }
 
+    private RunProblem? PermitProblem(RunRecord record, CoordinatorPermit permit)
+    {
+        if (record.Schema != 3) return RunProblem.UnsupportedSchema;
+        if (!permit.Held) return RunProblem.TaskBusy;
+        if (!SameProject(permit.Project) || permit.Workflow != record.Workflow || permit.Run != record.Id)
+            return RunProblem.IdentityMismatch;
+        return null;
+    }
+
+    private bool SameProject(string project) => string.Equals(project, _project,
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private RunProblem? LeaseProblem(RunRecord record, RunLease lease)
+    {
+        if (PermitProblem(record, lease.Permit) is { } problem) return problem;
+        if (!lease.Held) return RunProblem.TaskBusy;
+        return SameProject(lease.Project) ? null : RunProblem.IdentityMismatch;
+    }
+
+    private RunProblem? AttemptLeaseProblem(RunRecord record, RunLease lease, AttemptId attempt)
+    {
+        if (LeaseProblem(record, lease) is { } problem) return problem;
+        if (!record.Attempts.TryGetValue(attempt, out var owner)) return RunProblem.UnknownAttempt;
+        return owner.Task != lease.Task ? RunProblem.IdentityMismatch : null;
+    }
+
+    private static RunProblem? LegacyProblem(RunRecord record) => record.Schema is 1 or 2 ? null : RunProblem.UnsupportedSchema;
+
+    private RunProblem? StandaloneProblem(RunRecord record, StandaloneLease lease, AttemptId attempt)
+    {
+        if (!lease.Held) return RunProblem.TaskBusy;
+        if (!SameProject(lease.Project)) return RunProblem.IdentityMismatch;
+        if (!record.Attempts.TryGetValue(attempt, out var owner)) return RunProblem.UnknownAttempt;
+        return owner.Task != lease.Task ? RunProblem.IdentityMismatch : null;
+    }
+
+    private RunDecision Transact(CoordinatorPermit permit, OperationId operation, Digest fingerprint,
+        Func<RunRecord?, ImmutableArray<RunRecord>, Mutation> decide, Func<RunRecord, RunProblem?>? validate = null) =>
+        Transact(permit.Workflow, permit.Run, operation, fingerprint, decide,
+            validate: record => PermitProblem(record, permit) ?? validate?.Invoke(record));
+
+    public RunDecision Stop(LegacyRun run, OperationId operation) =>
+        Transact(run.Workflow, run.Run, operation, Fingerprint("stop", new { }),
+            (record, _) => record is null ? Missing() : record.Phase == RunPhase.StopRequested
+                ? new Mutation.Existing(new RunEvent.StopRequested()) : new Mutation.Append(new RunEvent.StopRequested()),
+            validate: LegacyProblem);
+
+    public RunDecision Settle(LegacyRun run, OperationId operation, RunOutcome outcome) =>
+        Transact(run.Workflow, run.Run, operation, Fingerprint("settle", new { outcome }),
+            (_, _) => new Mutation.Append(new RunEvent.Settled(outcome)), validate: LegacyProblem);
+
+    public RunDecision Abandon(LegacyRun run, OperationId operation, OperationId confirmation, string reason) =>
+        Transact(run.Workflow, run.Run, operation, Fingerprint("abandon", new { confirmation, reason }),
+            (_, _) => new Mutation.Append(new RunEvent.Abandoned(confirmation, reason)), validate: LegacyProblem);
+
     private RunDecision Transact(WorkflowId workflow, RunId run, OperationId operation, Digest fingerprint,
-        Func<RunRecord?, ImmutableArray<RunRecord>, Mutation> decide)
+        Func<RunRecord?, ImmutableArray<RunRecord>, Mutation> decide, Func<RunRecord, RunProblem?>? validate = null)
     {
         if (workflow.Value == Guid.Empty || run.Value == Guid.Empty || operation.Value == Guid.Empty)
         {
@@ -788,6 +926,8 @@ internal sealed class RunStore
             }
 
             var record = all.FirstOrDefault(record => record.Workflow == workflow && record.Id == run);
+            if (record is not null && validate?.Invoke(record) is { } invalid)
+                return new RunDecision.Rejected(new(invalid));
             if (record?.Receipts.TryGetValue(operation, out var receipt) == true)
             {
                 return receipt.Command == fingerprint ? new RunDecision.Existing(record, receipt.Event) :
@@ -805,7 +945,7 @@ internal sealed class RunStore
             }
 
             var append = (Mutation.Append)mutation;
-            var entry = new RunEntry(record?.Schema ?? 2, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
+            var entry = new RunEntry(record?.Schema ?? 3, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
             var reduced = RunReducer.Apply(workflow, run, record, entry);
             if (reduced is RunRead.Rejected refused)
             {
@@ -850,14 +990,15 @@ internal sealed class RunStore
         return null;
     }
 
-    private RunRead ReadJournal(WorkflowId workflow, RunId run)
+    private RunRead ReadJournal(WorkflowId workflow, RunId run, string? path = null)
     {
-        if (!File.Exists(Journal(workflow, run)) || new FileInfo(Journal(workflow, run)).Length == 0)
+        path ??= Journal(workflow, run);
+        if (!File.Exists(path) || new FileInfo(path).Length == 0)
         {
             return new RunRead.Rejected(new(RunProblem.NotApproved));
         }
 
-        var journal = RunJournal.Decode(File.ReadAllBytes(Journal(workflow, run)));
+        var journal = RunJournal.Decode(File.ReadAllBytes(path));
         var read = RunReducer.Replay(workflow, run, journal.Entries);
         if (journal.Entries.Length != 0 && read is RunRead.Rejected)
         {

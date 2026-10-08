@@ -30,11 +30,12 @@ public sealed class PreparationTests
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
         f.Close(writer);
         var publicationOperation = f.Op();
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, publicationOperation, writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation,
+            writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
         Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
-        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, publicationOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(accepted, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation, writer.Execution.Launch.Attempt));
         Assert.Equal("", f.Git.Run(writer.Checkout, "status", "--porcelain").Text);
         Assert.Equal(patterns, File.ReadAllBytes(f.Git.PathOf(".git/info/sparse-checkout")));
         Assert.Equal("S outside/kept.bin\n", f.Git.Git("ls-files", "-v", "outside/kept.bin"));
@@ -53,15 +54,15 @@ public sealed class PreparationTests
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
         f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
         var salvageOperation = f.Op();
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
         Assert.Equal("edited\n", f.Git.Git("show", retained.Commit.Hex + ":a/inside.txt"));
-        Assert.Equal(retained, f.Materializer().Salvage(W, f.RunId, salvageOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(retained, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         var resetOperation = f.Op();
         var confirmation = f.Op();
-        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(W, f.RunId, resetOperation, retained.Receipt.Plan, confirmation));
+        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, retained.Receipt.Plan, confirmation));
         Assert.Equal(writer.Execution.Location.AttemptBase, reset.Target);
-        Assert.Equal(reset, f.Materializer().ResetForRetry(W, f.RunId, resetOperation, retained.Receipt.Plan, confirmation));
+        Assert.Equal(reset, f.Materializer().ResetForRetry(f.Lease(T), resetOperation, retained.Receipt.Plan, confirmation));
         Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", retained.Commit.Hex, "--format=%(objectname)", retained.Receipt.Ref));
         Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 },
             File.ReadAllBytes(Path.Combine(writer.Checkout, "outside/kept.bin")));
@@ -86,15 +87,15 @@ public sealed class PreparationTests
         MaterializationBlock block;
         if (mode == "publish")
         {
-            var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
             block = blocked.Block;
-            Assert.Equal(blocked, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            Assert.Equal(blocked, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         }
         else
         {
-            var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            var blocked = Assert.IsType<Salvage.Blocked>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
             block = blocked.Block;
-            Assert.Equal(blocked, f.Materializer().Salvage(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+            Assert.Equal(blocked, f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         }
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The index hides changes to outside/kept.bin with assume-unchanged or skip-worktree.", block.Detail);
@@ -111,18 +112,27 @@ public sealed class PreparationTests
     {
         using var f = CheckoutFixture();
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        NextSecond(20);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "sparse-checkout", "set", "a").ExitCode);
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
-        var writerEnvironment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
-        Assert.Equal(" M outside/kept.bin\n", f.Git.Run(writer.Checkout, writerEnvironment, "status", "--porcelain").Text);
-        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "update-index", "--no-skip-worktree", "outside/kept.bin").ExitCode);
+        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "-c", "core.sparseCheckout=false",
+            "ls-files", "-v", "outside/kept.bin").Text);
         f.Close(writer);
         var operation = f.Op();
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
         Assert.Equal("writer edit\n", File.ReadAllText(Path.Combine(writer.Checkout, "outside/kept.bin")));
-        Assert.Equal(accepted, f.Materializer().Publish(W, f.RunId, operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(accepted, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+    }
+
+    private static void NextSecond(int afterMs)
+    {
+        var now = DateTime.UtcNow;
+        var target = new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc)
+            .AddSeconds(1).AddMilliseconds(afterMs);
+        while (DateTime.UtcNow < target) Thread.Sleep(1);
     }
 
     private static PreparationFixture CheckoutFixture(string? layout = null) => new(FixtureWorkflow(Writer(T)), configureBase: git =>
@@ -160,7 +170,7 @@ public sealed class PreparationTests
         };
         Materializer Materializer(Action<string>? probe = null) => IDevelop.Execution.Materializer.Open(f.Git.Folder, f.Store,
             null, new QuiescentBoundary(), new Clock(), environment, probe);
-        var ready = Assert.IsType<Preparation.Ready>(await Materializer().Prepare(W, f.RunId, f.Op(), T, new AttemptCause.Initial()));
+        var ready = Assert.IsType<Preparation.Ready>(await Materializer().Prepare(f.Lease(T), f.Op(), new AttemptCause.Initial()));
         var checkout = Path.Combine(ready.Checkout, "m");
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
         f.Git.Write("b.txt", "B\n", checkout);
@@ -172,20 +182,20 @@ public sealed class PreparationTests
             new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op());
         if (point != "none")
             await Assert.ThrowsAsync<Crash>(async () => await Materializer(step => { if (step == point) throw new Crash(); })
-                .Prepare(W, f.RunId, operation, T, cause));
-        var outcome = await Materializer().Prepare(W, f.RunId, operation, T, cause);
+                .Prepare(f.Lease(T), operation, cause));
+        var outcome = await Materializer().Prepare(f.Lease(T), operation, cause);
         if (continuation)
         {
             var continued = Assert.IsType<Preparation.Ready>(outcome);
             Assert.Equal(ready.Execution.Location.Owner, continued.Execution.Location.Owner);
-            Assert.Equal(continued, await Materializer().Prepare(W, f.RunId, operation, T, cause));
+            Assert.Equal(continued, await Materializer().Prepare(f.Lease(T), operation, cause));
         }
         else
         {
             var blocked = Assert.IsType<Preparation.Blocked>(outcome);
             Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
             Assert.Equal("The checkout tip or contents differ from the recorded attempt base.", blocked.Block.Detail);
-            Assert.Equal(blocked, await Materializer().Prepare(W, f.RunId, operation, T, cause));
+            Assert.Equal(blocked, await Materializer().Prepare(f.Lease(T), operation, cause));
         }
         Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(checkout, "b.txt")));
@@ -207,7 +217,7 @@ public sealed class PreparationTests
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer(probe: step =>
         {
             if (step == "git.adopt-worktree.before") f.Git.Git("update-ref", "refs/heads/idp/93f23689/task/90d5b0a2", foreign);
-        }).Prepare(W, f.RunId, operation, T, new AttemptCause.Initial()));
+        }).Prepare(f.Lease(T), operation, new AttemptCause.Initial()));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("Unobserved creation has an unexpected branch tip.", blocked.Block.Detail);
         Assert.Equal(blocked, await f.Prepare(T, operation));
@@ -266,7 +276,7 @@ public sealed class PreparationTests
             Assert.Equal("A\n", File.ReadAllText(Path.Combine(checkout, "a.txt")));
         }
         var steps = new List<string>();
-        var repeated = Assert.IsType<Preparation.Ready>(await f.Materializer(probe: steps.Add).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+        var repeated = Assert.IsType<Preparation.Ready>(await f.Materializer(probe: steps.Add).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         Assert.Equal(ready, repeated);
         Assert.Empty(steps);
         Assert.Single(f.Read().Preparations, pair => f.Read().Attempts[pair.Key.Attempt].Task == U);
@@ -298,7 +308,13 @@ public sealed class PreparationTests
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         using var refused = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var sub = Directory.CreateDirectory(Path.Combine(refused.Git.Folder, "sub")).FullName;
-        var blocked = Assert.IsType<Preparation.Blocked>(await refused.Materializer(project: sub).Prepare(W, refused.RunId, refused.Op(), T, new AttemptCause.Initial()));
+        var store = RunStore.Open(sub);
+        Assert.IsType<RunDecision.Created>(store.Approve(W, refused.RunId, refused.Op(), refused.Read().Revision,
+            new(refused.A, BaseChoice.Head)));
+        using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, refused.RunId)).Permit;
+        using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
+        var materializer = Execution.Materializer.Open(sub, store, null, new QuiescentBoundary(), new Clock(), refused.Git.Environment);
+        var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, refused.Op(), new AttemptCause.Initial()));
         Assert.Equal("NotRepositoryRoot", blocked.Block.Problem.ToString());
         Assert.Null(refused.Read().RunKey);
         Assert.False(Directory.Exists(Path.Combine(refused.Git.Folder, ".worktrees")));
@@ -343,7 +359,7 @@ public sealed class PreparationTests
         using (var baseline = await Fixture())
         {
             var ready = Assert.IsType<Preparation.Ready>(await baseline.Materializer(probe: steps.Add)
-                .Prepare(W, baseline.RunId, baseline.Op(), task, new AttemptCause.Initial()));
+                .Prepare(baseline.Lease(task), baseline.Op(), new AttemptCause.Initial()));
             Assert.Equal(linear ? "d4d26ecdf72779dbc9c5c983025fb51546c8f9ea" : "adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
         }
         Assert.Contains("git.create-worktree.after", steps);
@@ -353,7 +369,7 @@ public sealed class PreparationTests
             using var f = await Fixture();
             var operation = f.Op();
             await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: name => { if (name == step) throw new Crash(); })
-                .Prepare(W, f.RunId, operation, task, new AttemptCause.Initial()));
+                .Prepare(f.Lease(task), operation, new AttemptCause.Initial()));
             var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(task, operation));
             Assert.Equal(linear ? "d4d26ecdf72779dbc9c5c983025fb51546c8f9ea" : "adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -378,7 +394,7 @@ public sealed class PreparationTests
         var baseline = await Occupied();
         using (baseline.Fixture)
             Assert.IsType<Preparation.Ready>(await baseline.Fixture.Materializer(probe: names.Add)
-                .Prepare(W, baseline.Fixture.RunId, baseline.Operation, T, new AttemptCause.Initial()));
+                .Prepare(baseline.Fixture.Lease(T), baseline.Operation, new AttemptCause.Initial()));
         Assert.Contains("git.adopt-worktree.after", names);
         Assert.Contains("journal.adopt-worktree-intent.after", names);
         foreach (var name in names.Distinct())
@@ -386,7 +402,7 @@ public sealed class PreparationTests
             var interrupted = await Occupied();
             using var f = interrupted.Fixture;
             await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == name) throw new Crash(); })
-                .Prepare(W, f.RunId, interrupted.Operation, T, new AttemptCause.Initial()));
+                .Prepare(f.Lease(T), interrupted.Operation, new AttemptCause.Initial()));
             var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, interrupted.Operation));
             Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("mine\n", File.ReadAllText(f.Git.PathOf("saved")));
@@ -401,8 +417,7 @@ public sealed class PreparationTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var original = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(W, f.RunId, f.Op(), original.Execution.Launch.Attempt,
-            RecoveryOutcome.NotStarted, f.Op(), "Did not launch."));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(original.Execution.Location.Owner.Task), f.Op(), original.Execution.Launch.Attempt, RecoveryOutcome.NotStarted, f.Op(), "Did not launch."));
         f.Git.Write("left.txt", "unfinished\n", original.Checkout);
         var retry = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(original.Execution.Launch.Attempt, f.Op())));
         Assert.Equal("DirtyWorktree", retry.Block.Problem.ToString());

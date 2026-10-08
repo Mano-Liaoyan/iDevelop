@@ -27,7 +27,7 @@ public sealed class ReviewMaterializationTests
             cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Repair the finding."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         f.Close(fix, "Repaired.\n");
-        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt)).Result;
+        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
         return (review, fix, result, repaired);
     }
 
@@ -36,7 +36,7 @@ public sealed class ReviewMaterializationTests
         var execution = ready.Execution;
         var attempt = f.Read().Attempts[execution.Launch.Attempt];
         var inputs = f.Read().Inputs[execution.Inputs];
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, f.RunId, f.Op(), execution.Launch, inputs, execution.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, inputs, execution.PromptHash));
         var definition = f.Read().Revision.Snapshot.Tasks[U];
         var folder = f.Store.AttemptFolder(W, f.RunId, U, attempt.Id);
         using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!,
@@ -47,14 +47,14 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, f.RunId, f.Op(), execution.Launch, Checkpoint(folder)));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
     }
 
     private static ResultRecord Agree(PreparationFixture f, Preparation.Ready ready)
     {
         var attempt = f.Read().Attempts[ready.Execution.Launch.Attempt];
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, f.RunId, f.Op(), ready.Execution.Launch,
-            f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
+            ready.Execution.Launch, f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
         var folder = f.Store.AttemptFolder(W, f.RunId, U, attempt.Id);
         using (var log = AttemptLog.Open(folder))
         {
@@ -64,8 +64,8 @@ public sealed class ReviewMaterializationTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
             log.Append(new AttemptEvent.Concluded(At, null));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(W, f.RunId, f.Op(), attempt.Id, TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
-        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(),
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
+        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             attempt.Id, ready.Execution.Inputs, "Approved.\n")).Event).Result;
     }
 
@@ -85,7 +85,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(first.Id, oldInput.Review!.SubjectResult);
         Assert.Equal(First, oldInput.CodeBase.Hex);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(review.Checkout, "a.txt")));
-        var refreshed = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+        var refreshed = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal(Fixed, refreshed.Execution.Location.AttemptBase.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(refreshed.Checkout, "a.txt")));
@@ -115,7 +115,7 @@ public sealed class ReviewMaterializationTests
         f.Git.Write("a.txt", "reviewer edits\n", review.Checkout);
         var before = f.Read();
         var operation = f.Op();
-        var block = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, operation,
+        var block = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), operation,
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("DirtyWorktree", block.Block.Problem.ToString());
         Assert.Equal(before.Inputs.Count, f.Read().Inputs.Count);
@@ -125,7 +125,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(first.Id, f.Read().Inputs[review.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(repaired.Id, f.Read().CurrentResults[T].Id);
         f.Git.Write("a.txt", "A\n", review.Checkout);
-        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation,
+        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), operation,
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
@@ -147,8 +147,8 @@ public sealed class ReviewMaterializationTests
         f.Git.Write("cache.txt", "subject\n", fix.Checkout);
         Assert.Equal(0, f.Git.Run(fix.Checkout, "add", "-f", "cache.txt").ExitCode);
         f.Close(fix, "Repaired.\n");
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt));
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal("Ignored files obstruct the reset target and must be preserved.", blocked.Block.Detail);
@@ -164,18 +164,19 @@ public sealed class ReviewMaterializationTests
         var first = await f.Publish(T, f.A);
         var consumer = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(consumer, "Consumed.\n");
-        var consumed = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(),
+        var consumed = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             consumer.Execution.Launch.Attempt, consumer.Execution.Inputs, "Consumed.\n")).Event).Result;
         var running = Assert.IsType<Preparation.Ready>(await f.Prepare(D));
         var runningInput = f.Read().Inputs[running.Execution.Inputs];
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, f.RunId, f.Op(), running.Execution.Launch, runningInput, running.Execution.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(running.Execution.Location.Owner.Task), f.Op(),
+            running.Execution.Launch, runningInput, running.Execution.PromptHash));
         var reviewer = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: "Review."));
         CloseReviewTurn(f, reviewer);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: new AttemptCause.ReviewFix(new(U, reviewer.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         f.Close(fix, "Repaired.\n");
-        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt)).Result;
+        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
         Assert.Equal(first.Id, repaired.Supersedes);
         Assert.Contains(consumed.Id, f.Read().StaleResults);
         Assert.Equal(first.Id, Assert.Single(f.Read().Claims[running.Execution.Launch].Inputs.Bindings.OfType<InputBinding.Provided>()).Result);
@@ -194,18 +195,18 @@ public sealed class ReviewMaterializationTests
         var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
         var old = f.Read().Inputs[review.Execution.Inputs];
         var stale = new MaterializationPlan.Refresh(key, new(Id(300)), old.Bindings, InputMaterial.Sources(f.Read(), old.Bindings), old.Review);
-        Assert.Equal("StaleInput", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(stale))).Reason.Problem.ToString());
+        Assert.Equal("StaleInput", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(stale))).Reason.Problem.ToString());
         var invalid = stale with { Launch = new(review.Execution.Launch.Attempt, 3) };
-        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Planned(invalid))).Reason.Problem.ToString());
+        Assert.Equal("InvalidClaim", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(invalid))).Reason.Problem.ToString());
         var wrongFix = await f.Prepare(T, cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 2, 0)), prompt: "Fix.");
         Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(wrongFix).Reason.Problem.ToString());
         var operation = f.Op();
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == "journal.refresh-plan.after") throw new Crash(); })
-            .PrepareTurn(W, f.RunId, operation, key, "Review again."));
+            .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         var refreshed = f.Read().Inputs.Values.Single(input => input.Task == U && input.Id != old.Id);
         var candidate = review.Execution with { Launch = key, Inputs = refreshed.Id, Location = review.Execution.Location with { AttemptBase = refreshed.CodeBase } };
-        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(W, f.RunId, f.Op(), new RunEvent.Prepared(candidate, SharedRefs))).Reason.Problem.ToString());
-        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation, key, "Review again."));
+        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(candidate, SharedRefs))).Reason.Problem.ToString());
+        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         Assert.Equal(repaired.Id, f.Read().Inputs[ready.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(first.Id, f.Read().Inputs[old.Id].Review!.SubjectResult);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -218,16 +219,15 @@ public sealed class ReviewMaterializationTests
         await f.Publish(D, f.A, "Independent.\n");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(forwarded, "Forwarded.\n");
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(), forwarded.Execution.Launch.Attempt,
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt,
             forwarded.Execution.Inputs, "Forwarded.\n"));
-        var review = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).Prepare(W, f.RunId, f.Op(), U,
-            new AttemptCause.Initial(), "Review."));
+        var review = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial(), "Review."));
         CloseReviewTurn(f, review);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         f.Close(fix, "Repaired.\n");
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
         return review;
     }
 
@@ -239,7 +239,7 @@ public sealed class ReviewMaterializationTests
     {
         using var f = new PreparationFixture(FanInWorkflow());
         var review = await FixedFanIn(f);
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("JoinRequired", blocked.Block.Problem.ToString());
         Assert.Equal(U, blocked.Block.Task);
@@ -260,7 +260,7 @@ public sealed class ReviewMaterializationTests
         using var f = new PreparationFixture(workflow);
         var review = await FixedFanIn(f);
         var operation = f.Op();
-        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(W, f.RunId, operation,
+        var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), operation,
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -275,7 +275,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", Assert.IsType<CodeSelection.Joined>(input.Code).Join.Commit.Hex);
         Assert.Equal(T, input.Review!.Subject);
         Assert.Equal(1, ready.Execution.Prompt.Split("Repaired.", StringSplitOptions.None).Length - 1);
-        Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation,
+        Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(ready.Execution.Location.Owner.Task), operation,
             ready.Execution.Launch, "Review the fix.")));
         Assert.Equal(new CodeOutput.Forwarded(input.Id), Agree(f, ready).Code);
         var successor = Assert.IsType<Preparation.Ready>(await f.Prepare(new(Id(6))));
@@ -297,7 +297,7 @@ public sealed class ReviewMaterializationTests
     {
         using var f = new PreparationFixture(FanInWorkflow());
         var review = await FixedFanIn(f);
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer(new RefreshComposer(f, mode)).PrepareTurn(W, f.RunId, f.Op(),
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer(new RefreshComposer(f, mode)).PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
@@ -313,7 +313,7 @@ public sealed class ReviewMaterializationTests
         {
             var reviewer = await FixedFanIn(baseline);
             Assert.IsType<Preparation.Ready>(await baseline.Materializer(new RefreshComposer(baseline), steps.Add)
-                .PrepareTurn(W, baseline.RunId, baseline.Op(), new(reviewer.Execution.Launch.Attempt, 2), "Review the fix."));
+                .PrepareTurn(baseline.Lease(reviewer.Execution.Location.Owner.Task), baseline.Op(), new(reviewer.Execution.Launch.Attempt, 2), "Review the fix."));
         }
         Assert.Contains("git.refresh-reset.after", steps);
         Assert.Contains("git.refresh-branch.after", steps);
@@ -326,8 +326,9 @@ public sealed class ReviewMaterializationTests
             var operation = f.Op();
             var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
             await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(new RefreshComposer(f), step => { if (step == point) throw new Crash(); })
-                .PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
-            var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+                .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new RefreshComposer(f)).PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation,
+                key, "Review the fix."));
             Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
             Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
@@ -353,8 +354,8 @@ public sealed class ReviewMaterializationTests
             var plan = new MaterializationPlan.Join(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             if (mode != "receipt")
             {
-                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)));
-                if (new RefPublisher(f.Store).Publish(request.Workflow, request.Run, request.Operation, request.Operation,
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan)));
+                if (new RefPublisher(f.Store).Publish(request.Permit, request.Operation, request.Operation,
                     "join", f.Git.Open(), new(reference, request.ExpectedJoin, commit)) is not RefPublication.Completed)
                     throw new InvalidOperationException("Join publication failed.");
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);
@@ -371,7 +372,7 @@ public sealed class ReviewMaterializationTests
         using (var baseline = new PreparationFixture(Workflow()))
         {
             var (review, _, _, _) = await FixedWriter(baseline);
-            Assert.IsType<Preparation.Ready>(await baseline.Materializer(probe: steps.Add).PrepareTurn(W, baseline.RunId, baseline.Op(),
+            Assert.IsType<Preparation.Ready>(await baseline.Materializer(probe: steps.Add).PrepareTurn(baseline.Lease(review.Execution.Location.Owner.Task), baseline.Op(),
                 new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         }
         Assert.Contains("git.refresh-reset.after", steps);
@@ -385,15 +386,16 @@ public sealed class ReviewMaterializationTests
             var operation = f.Op();
             var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
             await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == point) throw new Crash(); })
-                .PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
-            var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+                .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
             Assert.Equal(Fixed, ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
             Assert.Equal(repaired.Id, f.Read().Inputs[ready.Execution.Inputs].Review!.SubjectResult);
             Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
             Assert.Single(f.Read().Preparations, pair => pair.Key == key);
             Assert.Equal(1, ready.Execution.Prompt.Split("Repaired.", StringSplitOptions.None).Length - 1);
-            Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation, key, "Review the fix.")));
+            Assert.Equal(ready, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation,
+                key, "Review the fix.")));
         }
     }
 
@@ -406,7 +408,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(0, f.Git.Run(review.Checkout, "add", "note.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(review.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "note.txt").ExitCode);
         Assert.Equal("ad71d2166357a1557cf40534643d9bf04099cfe9", f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(),
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("The task branch differs from its journaled state.", blocked.Block.Detail);
@@ -424,10 +426,10 @@ public sealed class ReviewMaterializationTests
         var operation = f.Op();
         var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == point) throw new Crash(); })
-            .PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+            .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
         f.Git.Git("branch", "foreign", "81ddb7c330112c7f16700ed002803a04b0bce693");
         Assert.Equal(0, f.Git.Run(review.Checkout, "symbolic-ref", "HEAD", "refs/heads/foreign").ExitCode);
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+        var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("Registration, common directory, symbolic HEAD and recorded worktree owner do not agree.", blocked.Block.Detail);
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", GitFixture.Read(f.Git.Open().ReadRef("refs/heads/foreign"))?.Hex);

@@ -6,9 +6,15 @@ namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
 {
-    public Publication Publish(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt)
+    public Publication Publish(RunLease lease, OperationId operation, AttemptId attempt)
     {
-        TaskId task = default;
+        using var authority = lease.Use();
+        if (authority is null) return new Publication.Rejected(new(RunProblem.TaskBusy));
+        if (LeaseProblem(lease) is { } problem) return new Publication.Rejected(new(problem));
+        var permit = lease.Permit;
+        var workflow = permit.Workflow;
+        var run = permit.Run;
+        var task = lease.Task;
         InputId? inputs = null;
         var planId = operation;
         var step = "preconditions";
@@ -17,7 +23,7 @@ internal sealed partial class Materializer
         {
             var record = Read(workflow, run);
             if (!record.Attempts.TryGetValue(attempt, out var writer)) return new Publication.Rejected(new(RunProblem.UnknownAttempt));
-            task = writer.Task;
+            if (LeaseProblem(lease, writer.Task) is { } mismatch) return new Publication.Rejected(new(mismatch));
             var definition = record.Revisions[writer.Revision].Snapshot.Tasks[task];
             if (definition.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit })
                 return new Publication.Rejected(new(RunProblem.UnsupportedResult));
@@ -30,14 +36,12 @@ internal sealed partial class Materializer
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
             if (record.Results.FirstOrDefault(result => result.Origin is ResultOrigin.Executed e && e.Attempt == attempt) is { } accepted)
             {
-                ResolvePublicationBlocks(workflow, run, operation, planId);
+                ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(accepted);
             }
             if (record.Phase is not (RunPhase.Approved or RunPhase.StopRequested)) return new Publication.Rejected(new(RunProblem.RunStopped));
             step = "quiescence";
             VerifyQuiescence(attempt);
-            step = "task-lock";
-            using var taskLock = TakeTaskLock(task);
             step = "repository";
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
@@ -47,7 +51,7 @@ internal sealed partial class Materializer
             if (existing.Value is MaterializationPlan.Publication) planId = existing.Key;
             if (record.Results.FirstOrDefault(result => result.Origin is ResultOrigin.Executed e && e.Attempt == attempt) is { } concurrent)
             {
-                ResolvePublicationBlocks(workflow, run, operation, planId);
+                ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(concurrent);
             }
             VerifyRepository(record, repository);
@@ -97,19 +101,19 @@ internal sealed partial class Materializer
                     logged.Record.Result, artifacts);
                 step = "plan";
                 var plannedOperation = OperationIds.Derive(operation, "plan");
-                Journal("plan", () => _store.Record(workflow, run, plannedOperation, new RunEvent.Planned(plan)));
+                Journal("plan", () => _store.Record(permit, plannedOperation, new RunEvent.Planned(plan)));
                 planId = plannedOperation;
             }
             evidence = [];
             step = "branch";
-            RequirePublication(_refs.Publish(workflow, run, operation, planId, "branch", repository,
+            RequirePublication(_refs.Publish(permit, operation, planId, "branch", repository,
                 new(prepared.Location.Owner.Branch, plan.VerifiedTip, plan.Commit)));
             step = "index";
             var indexIntent = OperationIds.Derive(operation, "index-intent");
             record = Read(workflow, run);
             if (!PublicationObserved(record, planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree)))
             {
-                Journal("index-intent", () => _store.Record(workflow, run, indexIntent,
+                Journal("index-intent", () => _store.Record(permit, indexIntent,
                     new RunEvent.GitIntended(planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree))));
                 var aligned = Mutate("align-index", () =>
                 {
@@ -121,27 +125,27 @@ internal sealed partial class Materializer
                 if (aligned is IndexAlignment.Failed failed)
                     throw Fault(Value(repository.Capture(checkout)).Tree != plan.Recipe.Tree ? MaterializationProblem.DirtyWorktree : MaterializationProblem.GitFailed,
                         failed.Detail);
-                Journal("index-observed", () => _store.Record(workflow, run, OperationIds.Derive(operation, "index-observed"),
+                Journal("index-observed", () => _store.Record(permit, OperationIds.Derive(operation, "index-observed"),
                     new RunEvent.GitObserved(indexIntent, new(aligned is IndexAlignment.AlreadyAligned, plan.Recipe.Tree.Hex))));
             }
             step = "result-ref";
-            RequirePublication(_refs.Publish(workflow, run, operation, planId, "result", repository,
+            RequirePublication(_refs.Publish(permit, operation, planId, "result", repository,
                 new(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[task], attempt), null, plan.Commit)));
             step = "verify";
             VerifyPublicationRefs(Read(workflow, run), repository, prepared, operation, workflow, run, ref evidence);
             VerifyPublication(repository, prepared, plan, workflow, run);
             VerifyQuiescence(attempt);
             step = "accepted";
-            var decision = Journal("accepted", () => _store.AcceptPublication(workflow, run, OperationIds.Derive(operation, "accepted"), planId));
+            var decision = Journal("accepted", () => _store.AcceptPublication(permit, OperationIds.Derive(operation, "accepted"), planId));
             var resultRecord = ((RunEvent.ResultAccepted)DecisionEvent(decision)).Result;
-            ResolvePublicationBlocks(workflow, run, operation, planId);
+            ResolvePublicationBlocks(permit, operation, planId);
             return new Publication.Accepted(resultRecord);
         }
         catch (Refusal refused) { return new Publication.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return PublicationBlock(workflow, run, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
+        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
-        { return PublicationBlock(workflow, run, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
+        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
     }
 
     private static void VerifyPublicationParent(GitRepository repository, CommitId attemptBase, CommitId tip)
@@ -194,23 +198,27 @@ internal sealed partial class Materializer
         }
     }
 
-    private void ResolvePublicationBlocks(WorkflowId workflow, RunId run, OperationId operation, OperationId plan)
+    private void ResolvePublicationBlocks(CoordinatorPermit permit, OperationId operation, OperationId plan)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved &&
             (pair.Value.Block.Operation == plan || pair.Value.Block.Operation == operation)).OrderBy(pair => pair.Key.Value))
-            Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(workflow, run,
+            Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, "Publication verified.")));
     }
 
-    private Publication PublicationBlock(WorkflowId workflow, RunId run, OperationId operation, string step, MaterializationBlock block)
+    private Publication PublicationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         try
         {
             var plan = Read(workflow, run).Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == block.Attempt);
             if (plan.Value is MaterializationPlan.Publication) block = block with { Operation = plan.Key };
         }
         catch (Refusal refused) { return new Publication.Rejected(refused.Reason); }
-        return Block(workflow, run, operation, step, block) switch
+        return Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new Publication.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Publication.Rejected(rejected.Reason),

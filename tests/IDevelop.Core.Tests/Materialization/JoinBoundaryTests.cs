@@ -58,7 +58,7 @@ public sealed class JoinBoundaryTests
         using var f = new PreparationFixture(Diamond());
         await Sources(f);
         var composer = new Composer(f, mode);
-        var outcome = await f.Materializer(composer).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial());
+        var outcome = await f.Materializer(composer).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial());
         if (mode == "valid")
         {
             var ready = Assert.IsType<Preparation.Ready>(outcome);
@@ -86,7 +86,7 @@ public sealed class JoinBoundaryTests
         {
             await Sources(baseline);
             Assert.IsType<Preparation.Ready>(await baseline.Materializer(new Composer(baseline, "valid", steps.Add))
-                .Prepare(W, baseline.RunId, baseline.Op(), U, new AttemptCause.Initial()));
+                .Prepare(baseline.Lease(U), baseline.Op(), new AttemptCause.Initial()));
         }
         Assert.Equal(new[] { "journal.join-intent.before", "journal.join-intent.after", "git.join.before", "git.join.after",
             "journal.join-observed.before", "journal.join-observed.after" }, steps);
@@ -98,15 +98,15 @@ public sealed class JoinBoundaryTests
             await Assert.ThrowsAsync<PublicationTests.Crash>(async () => await f.Materializer(new Composer(f, "valid", step =>
             {
                 if (step == point) throw new PublicationTests.Crash();
-            })).Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+            })).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
             var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new Composer(f, "valid"))
-                .Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+                .Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
             Assert.Equal("49bd30d4f9a2fb9f90d3dd0cf443001d9fa4a71b", ready.Execution.Location.AttemptBase.Hex);
             Assert.Equal("B\n", File.ReadAllText(Path.Combine(ready.Checkout, "b.txt")));
             Assert.Equal("C\n", File.ReadAllText(Path.Combine(ready.Checkout, "c.txt")));
             AssertJoinPublication(f);
             Assert.Equal(point is "git.join.after" or "journal.join-observed.before", JoinObservation(f).Adopted);
-            Assert.Equal(ready, await f.Materializer().Prepare(W, f.RunId, operation, U, new AttemptCause.Initial()));
+            Assert.Equal(ready, await f.Materializer().Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
         }
     }
 
@@ -149,9 +149,9 @@ public sealed class JoinBoundaryTests
                 new MaterializationPlan.Join(U, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
             if (mode != "receipt")
             {
-                if (f.Store.Record(request.Workflow, request.Run, request.Operation, new RunEvent.Planned(plan)) is RunDecision.Rejected rejected)
+                if (f.Store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan)) is RunDecision.Rejected rejected)
                     throw new InvalidOperationException(rejected.Reason.ToString());
-                if (new RefPublisher(f.Store, probe).Publish(request.Workflow, request.Run, request.Operation, request.Operation,
+                if (new RefPublisher(f.Store, probe).Publish(request.Permit, request.Operation, request.Operation,
                     "join", repository, new(reference, plan.Previous, commit)) is not RefPublication.Completed)
                     throw new InvalidOperationException("Join publication failed.");
                 if (mode == "ref") f.Git.Git("update-ref", reference, f.A.Hex);

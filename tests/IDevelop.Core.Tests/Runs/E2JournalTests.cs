@@ -11,6 +11,8 @@ public sealed class E2JournalTests
     public void Genuine_E1_history_and_attempt_log_remain_readable_and_byte_identical()
     {
         using var f = new RunFixtures();
+        using var authority = new RunFixtures();
+        authority.Approve();
         var bytes = File.ReadAllBytes(Fixture.Path("e1-run/events.jsonl"));
         File.WriteAllBytes(f.Journal(W, Run), bytes);
         var decoded = RunJournal.Decode(bytes);
@@ -22,17 +24,105 @@ public sealed class E2JournalTests
         Assert.Equal(new CodeSelection.Legacy(Base), input.Code);
         Assert.Equal("Plan ready.", record.Results.Single(result => result.Id == new ResultId(Id(103))).Report);
         Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Plan(W, Run, new OperationId(Id(2001)), U, record.Revision.Id, new AttemptCause.Initial())));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Reserve(W, Run, new OperationId(Id(2002)), new OperationId(Id(1006)))));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Plan(authority.Lease(U), new OperationId(Id(2001)), record.Revision.Id, new AttemptCause.Initial())));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Reserve(authority.Lease(U), new OperationId(Id(2002)), new OperationId(Id(1006)))));
         var folder = f.Store.AttemptFolder(W, Run, U, new(Id(105)));
         Directory.CreateDirectory(folder);
         File.Copy(Fixture.Path("e1-run/attempt-events.jsonl"), Path.Combine(folder, "events.jsonl"));
         var attempt = AttemptLog.ReadAttempt(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, U, new(Id(105)));
         Assert.Equal((AttemptStatus.Succeeded, "Done."), (attempt!.Status, attempt.Result));
         var receipt = record.Receipts[new(Id(1009))];
-        Assert.IsType<RunDecision.Existing>(f.Store.Stop(W, Run, receipt.Operation));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(W, Run, new OperationId(Id(2003)), RunOutcome.Stopped));
+        Assert.IsType<RunDecision.Existing>(f.Store.Stop(new LegacyRun(W, Run), receipt.Operation));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(new LegacyRun(W, Run), new OperationId(Id(2003)), RunOutcome.Stopped));
         Assert.Equal(1, f.Read().Receipts.Values.Single(entry => entry.Sequence == 10).Schema);
+    }
+
+    [Fact]
+    public void Genuine_E2_history_replays_exactly_but_cannot_plan_or_take_control()
+    {
+        using var f = new RunFixtures();
+        using var authority = new RunFixtures();
+        authority.Approve();
+        var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
+        File.WriteAllBytes(f.Journal(W, Run), bytes);
+        var decoded = RunJournal.Decode(bytes);
+        Assert.Null(decoded.Rejection);
+        var record = f.Read();
+        Assert.Equal((2, 27L, 1), (record.Schema, record.Sequence, record.Results.Count));
+        Assert.Equal(new[] { new LaunchKey(new(Id(104)), 1) }, record.UnresolvedClaims);
+        Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Plan(authority.Lease(U), new OperationId(Id(2001)), record.Revision.Id, new AttemptCause.Initial())));
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Reserve(authority.Lease(U), new OperationId(Id(2002)), new OperationId(Id(2001)))));
+        var planned = record.Receipts.Values.First(entry => entry.Event is RunEvent.Planned { Plan: MaterializationPlan.Preparation });
+        var plan = Assert.IsType<MaterializationPlan.Preparation>(((RunEvent.Planned)planned.Event).Plan);
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Plan(authority.Lease(plan.Task), planned.Operation, plan.Revision, plan.Cause)));
+        var reserved = record.Receipts.Values.First(entry => entry.Event is RunEvent.Reserved);
+        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Reserve(authority.Lease(U), reserved.Operation, planned.Operation)));
+        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema),
+            Assert.IsType<ControlTake.Rejected>(f.Store.TakeControl(W, Run)).Reason);
+        Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(f.Journal(W, Run))!, "control.lock")));
+        using var current = new RunFixtures();
+        current.Approve();
+        Assert.Equal(3, current.Read().Schema);
+        var owned = Assert.IsType<ControlTake.Owned>(current.Store.TakeControl(W, Run));
+        using (owned.Permit) Assert.True(owned.Permit.Held);
+    }
+
+    [Fact]
+    public void Schema_two_unresolved_claim_keeps_confirmed_recovery_and_its_original_schema()
+    {
+        using var f = new RunFixtures();
+        File.WriteAllBytes(f.Journal(W, Run), File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl")));
+        Assert.Equal(new[] { new LaunchKey(new(Id(104)), 1) }, f.Read().UnresolvedClaims);
+        using var lease = StandaloneLease.TryTake(f.Project, U)!;
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(new LegacyRun(W, Run), lease, new OperationId(Id(2003)), new(Id(104)), RecoveryOutcome.Stopped, new OperationId(Id(2004)), "Stopped."));
+        Assert.Equal((2, 28L), (recovered.Record.Schema, recovered.Record.Sequence));
+        Assert.Equal(RecoveryOutcome.Stopped,
+            Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[new(Id(104))]).Outcome);
+        Assert.Equal(2, recovered.Record.Receipts.Values.Single(entry => entry.Sequence == 28).Schema);
+        Assert.Empty(f.Read().UnresolvedClaims);
+    }
+
+    [Fact]
+    public void A_released_standalone_lease_cannot_recover_a_legacy_attempt()
+    {
+        using var f = new RunFixtures();
+        var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
+        File.WriteAllBytes(f.Journal(W, Run), bytes);
+        var run = new LegacyRun(W, Run);
+        var operation = new OperationId(Id(2003));
+        var confirmation = new OperationId(Id(2004));
+        var attempt = new AttemptId(Id(104));
+        var released = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, U));
+        released.Dispose();
+
+        Assert.Equal(new RunDecision.Rejected(new(RunProblem.TaskBusy)),
+            f.Store.Recover(run, released, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
+        Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
+        using var held = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, U));
+        var recovered = Assert.IsType<RunDecision.Recorded>(
+            f.Store.Recover(run, held, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
+        Assert.Equal((2, 28L), (recovered.Record.Schema, recovered.Record.Sequence));
+        Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[attempt]).Outcome);
+        Assert.Empty(f.Read().UnresolvedClaims);
+    }
+
+    [Fact]
+    public void Schema_two_ownership_fence_is_refused_at_sequence_28()
+    {
+        using var f = new RunFixtures();
+        var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
+        File.WriteAllBytes(f.Journal(W, Run), bytes);
+        Assert.Equal((2, 27L), (f.Read().Schema, f.Read().Sequence));
+        const string fence = """
+            {"schema":2,"sequence":28,"operation":"00000000-0000-0000-0000-000000009999","command":{"sha256":"e0723a86a5b9408aee9113031785d3d15d9702892f31a46e5fe927c0c8552675"},"at":"2026-10-07T00:00:00+00:00","event":{"type":"ownershipFenced","claims":[{"attempt":"00000000-0000-0000-0000-000000000104","turn":1}]}}
+            """;
+        File.AppendAllText(f.Journal(W, Run), fence + "\n");
+        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 28),
+            Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run)).Reason);
+        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 28),
+            Assert.IsType<ControlTake.Rejected>(f.Store.TakeControl(W, Run)).Reason);
     }
 
     [Fact]
@@ -62,15 +152,24 @@ public sealed class E2JournalTests
         }
     }
 
-    [Fact]
-    public void Mixed_run_schemas_are_refused_on_replay()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Mixed_run_schemas_are_refused_on_replay(int legacySchema)
     {
         using var f = new RunFixtures();
         f.Approve();
         var approved = RunJournal.Decode(File.ReadAllBytes(f.Journal(W, Run))).Entries[0];
-        var stop = new RunEntry(1, 2, f.Op(), Prompt, At, new RunEvent.StopRequested());
+        var stop = new RunEntry(legacySchema, 2, f.Op(), Prompt, At, new RunEvent.StopRequested());
         var read = RunReducer.Replay(W, Run, RunJournal.Decode(RunJournal.Encode(approved) + RunJournal.Encode(stop)).Entries);
         Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 2), Assert.IsType<RunRead.Rejected>(read).Reason);
+        var old = approved with { Schema = legacySchema };
+        var current = stop with { Schema = 3 };
+        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 2),
+            Assert.IsType<RunRead.Rejected>(RunReducer.Replay(W, Run, [old, current])).Reason);
+        var matching = stop with { Schema = 3 };
+        var valid = Assert.IsType<RunRead.Loaded>(RunReducer.Replay(W, Run, [approved, matching])).Record;
+        Assert.Equal((3, 2L, RunPhase.StopRequested), (valid.Schema, valid.Sequence, valid.Phase));
     }
 
     [Fact]
@@ -79,9 +178,9 @@ public sealed class E2JournalTests
         using var f = new RunFixtures();
         var run = new RunId(Guid.Parse("019a9d2e-0000-7000-8000-000000000001"));
         f.Approve(run: run);
-        Assert.Equal(RunProblem.InvalidData, Problem(f.Store.Record(W, run, f.Op(), new RunEvent.LayoutAllocated(
+        Assert.Equal(RunProblem.InvalidData, Problem(f.Store.Record(f.PermitFor(run), f.Op(), new RunEvent.LayoutAllocated(
             new LayoutKey.Run("3940f0a6", f.Project)))));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, run, f.Op(), new RunEvent.LayoutAllocated(new LayoutKey.Run("3940f0a5", f.Project))));
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.PermitFor(run), f.Op(), new RunEvent.LayoutAllocated(new LayoutKey.Run("3940f0a5", f.Project))));
         Assert.Equal("3940f0a5", f.Read(run).RunKey);
     }
 

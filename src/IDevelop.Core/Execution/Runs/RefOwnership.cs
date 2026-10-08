@@ -34,6 +34,10 @@ internal static class RefOwnership
                     RunReducer.Editable(record, record.Attempts[prepared.Execution.Launch.Attempt]):
                     lease = true;
                     break;
+                case RunEvent.OwnershipFenced fenced when fenced.Claims.Any(key =>
+                    record.Preparations[key].Location.Owner.Branch == name):
+                    lease = false;
+                    break;
                 case RunEvent.SalvageRetained retained:
                     var salvage = (MaterializationPlan.Salvage)record.Plans[retained.Plan];
                     if (record.Preparations[new(salvage.Attempt, 1)].Location.Owner.Branch == name &&

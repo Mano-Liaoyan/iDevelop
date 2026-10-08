@@ -92,6 +92,12 @@
       },
       "idevelop.fakeagent": {
         "type": "Project"
+      },
+      "idevelop.runracer": {
+        "type": "Project",
+        "dependencies": {
+          "IDevelop.Core": "[1.0.0, )"
+        }
       }
     }
   }

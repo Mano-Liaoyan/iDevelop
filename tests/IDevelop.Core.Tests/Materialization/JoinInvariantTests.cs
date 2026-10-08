@@ -28,7 +28,8 @@ public sealed class JoinInvariantTests
         }
         f.Close(ready);
         var materializer = clock is null ? Open(f) : MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), clock, f.Git.Environment);
-        return Assert.IsType<CodeOutput.Produced>(Assert.IsType<Publication.Accepted>(materializer.Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt)).Result.Code).Code;
+        return Assert.IsType<CodeOutput.Produced>(Assert.IsType<Publication.Accepted>(materializer.Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
+            ready.Execution.Launch.Attempt)).Result.Code).Code;
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public sealed class JoinInvariantTests
         await Write(f, T, "b.txt", "B\n", "b");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(forwarded, "Forwarded.\n");
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
         await Write(f, D, "e.txt", "E\n", "e");
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
         var plan = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Join>());
@@ -93,10 +94,10 @@ public sealed class JoinInvariantTests
             [new("b350f18e8c7f922d58c54e415a95fb0a4b6fa249"), new("e954b83b974db2a85981aa86b3a2eabee42d7803")],
             "join\n", "E2 <e2@example.test>", "E2 <e2@example.test>", At);
         var joinOperation = OperationIds.Derive(operation, "join");
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(W, f.RunId, joinOperation, new RunEvent.Planned(
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, joinOperation, new RunEvent.Planned(
             new MaterializationPlan.Join(U, preparation.Inputs, preparation.Sources, recipe, f.A, null, JoinRef))));
         var blocked = Assert.IsType<JoinOutcome.Blocked>(await new MergeJoins(f.Git.Folder, f.Store, f.Git.Environment)
-            .Compose(new(W, joinOperation, f.RunId, U, preparation.Inputs, preparation.Sources, null), CancellationToken.None));
+            .Compose(new(f.Permit, joinOperation, U, preparation.Inputs, preparation.Sources, null), CancellationToken.None));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Equal("The recorded join commit does not match its recipe.", blocked.Block.Detail);
         Assert.Null(GitFixture.Read(repository.ReadRef(JoinRef)));
@@ -115,7 +116,7 @@ public sealed class JoinInvariantTests
         Assert.Equal(0, f.Git.Run(b.Checkout, "mv", "d", "renamed").ExitCode);
         Assert.Equal(0, f.Git.Run(b.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "rename").ExitCode);
         f.Close(b);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), b.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         await Write(f, C, "d/added", "added\n", "add");
         var blocked = Assert.IsType<Preparation.Blocked>(await Prepare(f, f.Op()));
         Assert.Equal("FanInConflict", blocked.Block.Problem.ToString());
@@ -134,7 +135,7 @@ public sealed class JoinInvariantTests
         var execution = ready.Execution;
         var attempt = f.Read().Attempts[execution.Launch.Attempt];
         var inputs = f.Read().Inputs[execution.Inputs];
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, f.RunId, f.Op(), execution.Launch, inputs, execution.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(execution.Location.Owner.Task), f.Op(), execution.Launch, inputs, execution.PromptHash));
         var definition = f.Read().Revision.Snapshot.Tasks[U];
         var folder = f.Store.AttemptFolder(W, f.RunId, U, attempt.Id);
         using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!,
@@ -145,7 +146,7 @@ public sealed class JoinInvariantTests
             log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, f.RunId, f.Op(), execution.Launch, Checkpoint(folder)));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), execution.Launch, Checkpoint(folder)));
     }
 
     private static async Task<Preparation.Ready> ReviewedJoin(PreparationFixture f)
@@ -154,13 +155,13 @@ public sealed class JoinInvariantTests
         await Write(f, D, "c.txt", "C\n", "c");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         f.Close(forwarded, "Forwarded.\n");
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(W, f.RunId, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
-        var review = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), U, new AttemptCause.Initial(), "Review."));
+        Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
+        var review = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial(), "Review."));
         CloseReviewTurn(f, review);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         OwnCommit(f, fix, "a.txt", "Fixed\n", "fix");
         f.Close(fix, "Repaired.\n");
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), fix.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
         return review;
     }
 
@@ -170,7 +171,8 @@ public sealed class JoinInvariantTests
         using var f = new PreparationFixture(FanIn());
         var review = await ReviewedJoin(f);
         var first = review.Execution.Location.AttemptBase;
-        var ready = Assert.IsType<Preparation.Ready>(await Open(f).PrepareTurn(W, f.RunId, f.Op(), new(review.Execution.Launch.Attempt, 2), "Review the fix."));
+        var ready = Assert.IsType<Preparation.Ready>(await Open(f).PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
+            new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         var joins = f.Read().Plans.Values.OfType<MaterializationPlan.Join>().ToArray();
         Assert.Equal(2, joins.Length);
         Assert.Equal(first, Assert.Single(joins, plan => plan.Commit == ready.Execution.Location.AttemptBase).Previous);
@@ -188,13 +190,13 @@ public sealed class JoinInvariantTests
         var operation = f.Op();
         var key = new LaunchKey(review.Execution.Launch.Attempt, 2);
         await Assert.ThrowsAsync<Crash>(async () => await Open(f, point => { if (point == "journal.join-plan.after") throw new Crash(); })
-            .PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+            .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
         var current = f.Read().CurrentResults[T];
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)current.Origin).Attempt, f.Op())));
         OwnCommit(f, again, "a.txt", "Fixed again\n", "fix again");
         f.Close(again);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), again.Execution.Launch.Attempt));
-        var blocked = Assert.IsType<Preparation.Blocked>(await Open(f).PrepareTurn(W, f.RunId, operation, key, "Review the fix."));
+        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
+        var blocked = Assert.IsType<Preparation.Blocked>(await Open(f).PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Equal($"Join operation {OperationIds.Derive(operation, "join").Value:D} has different inputs.", blocked.Block.Detail);
         Assert.Equal(review.Execution.Location.AttemptBase.Hex, GitFixture.Read(f.Git.Open().ReadRef(JoinRef))?.Hex);

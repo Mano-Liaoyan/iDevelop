@@ -6,6 +6,7 @@ internal static partial class RunReducer
 {
     internal static bool Permitted(RunRecord record, RunEvent e)
     {
+        if (e is RunEvent.OwnershipFenced) return true;
         if (record.Phase == RunPhase.Approved)
         {
             return true;
@@ -178,12 +179,12 @@ internal static partial class RunReducer
     internal static bool Editable(RunRecord record, RunAttempt attempt) =>
         record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
 
-    internal static RunProblem? PlanProblem(RunRecord record, MaterializationPlan plan)
+    internal static RunProblem? PlanProblem(RunRecord record, MaterializationPlan plan, bool recorded = false)
     {
         switch (plan)
         {
             case MaterializationPlan.Preparation preparation:
-                if (ReservationTaskProblem(record, preparation.Task, preparation.Revision) is { } taskProblem)
+                if (ReservationTaskProblem(record, preparation.Task, preparation.Revision, recorded) is { } taskProblem)
                 {
                     return taskProblem.Problem;
                 }

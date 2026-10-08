@@ -1,5 +1,3 @@
-using IDevelop.Workflows;
-
 namespace IDevelop.Execution;
 
 internal abstract record RefPublication
@@ -12,9 +10,11 @@ internal abstract record RefPublication
 
 internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
 {
-    public RefPublication Publish(WorkflowId workflow, RunId run, OperationId operation, OperationId plan, string step,
+    public RefPublication Publish(CoordinatorPermit permit, OperationId operation, OperationId plan, string step,
         GitRepository repository, RefChange change)
     {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
         var read = store.Read(workflow, run);
         if (read is RunRead.Rejected rejected) return new RefPublication.Rejected(rejected.Reason);
         var record = ((RunRead.Loaded)read).Record;
@@ -47,7 +47,7 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
         RunDecision Journal(string label, OperationId id, RunEvent entry)
         {
             probe?.Invoke("journal." + label + ".before");
-            var decision = store.Record(workflow, run, id, entry);
+            var decision = store.Record(permit, id, entry);
             probe?.Invoke("journal." + label + ".after");
             return decision;
         }

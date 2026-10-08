@@ -52,7 +52,7 @@ public sealed class PreparationBoundaryTests
         {
             steps.Add(name);
             if (name == "journal.prepared.before") throw new Crash();
-        }).Prepare(W, f.RunId, prepare, U, new AttemptCause.Initial()));
+        }).Prepare(f.Lease(U), prepare, new AttemptCause.Initial()));
         var input = f.Read().Inputs.Values.Single(input => input.Task == U);
         var checkout = Path.Combine(f.Git.Folder, ".worktrees", f.Read().RunKey!, f.Read().TaskKeys[U]);
         f.Git.Write(input.Files[0].RelativePath, "mine\n", checkout);
@@ -74,10 +74,13 @@ public sealed class PreparationBoundaryTests
             Assert.Equal("JournalBusy", rejected.Reason.Problem.ToString());
             Assert.Null(f.Read().RunKey);
         }
-        using (var locked = RunLock.TryTake(DataFolder.Attempts(f.Git.Folder), T))
+        f.Release(T);
+        using (var locked = StandaloneLease.TryTake(f.Git.Folder, T))
         {
             Assert.NotNull(locked);
-            Assert.Equal("LiveWriter", Assert.IsType<Preparation.Blocked>(await f.Prepare(T, operation)).Block.Problem.ToString());
+            Assert.IsType<LeaseTake.Busy>(f.Permit.TakeTask(T));
+            Assert.Equal(1, f.Read().Sequence);
+            Assert.Empty(f.Read().Blocks);
         }
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
@@ -91,7 +94,7 @@ public sealed class PreparationBoundaryTests
         var first = ready.Execution;
         var record = f.Read();
         var input = record.Inputs[first.Inputs];
-        Assert.IsType<RunDecision.Granted>(f.Store.Claim(W, f.RunId, f.Op(), first.Launch, input, first.PromptHash));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(first.Location.Owner.Task), f.Op(), first.Launch, input, first.PromptHash));
         var definition = record.Revision.Snapshot.Tasks[T];
         var folder = f.Store.AttemptFolder(W, f.RunId, T, first.Launch.Attempt);
         using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
@@ -103,21 +106,23 @@ public sealed class PreparationBoundaryTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
         var next = new LaunchKey(first.Launch.Attempt, 2);
-        Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(await f.Materializer().PrepareTurn(W, f.RunId, f.Op(), next, " Continue.\n")).Reason.Problem.ToString());
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(W, f.RunId, f.Op(), first.Launch, Checkpoint(folder)));
+        Assert.Equal("InvalidClaim", Assert.IsType<Preparation.Rejected>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), f.Op(),
+            next, " Continue.\n")).Reason.Problem.ToString());
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), first.Launch, Checkpoint(folder)));
         f.Git.Write("left.txt", "ongoing\n", ready.Checkout);
         f.Git.Write("a.txt", "edited\n", ready.Checkout);
         var operation = f.Op();
-        var second = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation, next, " Continue.\n"));
+        var second = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), operation, next, " Continue.\n"));
         Assert.Equal(" Continue.\n", second.Execution.Prompt);
         Assert.Equal(new InputId(Guid.Parse("00000000-0000-0000-0000-000000000101")), second.Execution.Inputs);
         Assert.Equal(first.Location, second.Execution.Location);
         Assert.Equal(ready.Checkout, second.Checkout);
         Assert.Equal("ongoing\n", File.ReadAllText(Path.Combine(second.Checkout, "left.txt")));
         Assert.Equal("edited\n", File.ReadAllText(Path.Combine(second.Checkout, "a.txt")));
-        Assert.Equal(second, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(W, f.RunId, operation, next, " Continue.\n")));
+        Assert.Equal(second, Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), operation, next, " Continue.\n")));
         f.Git.Run(second.Checkout, "checkout", "--detach", "HEAD");
-        Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(W, f.RunId, operation, next, " Continue.\n")).Block.Problem.ToString());
+        Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[next.Attempt].Task), operation,
+            next, " Continue.\n")).Block.Problem.ToString());
         Assert.Equal("edited\n", File.ReadAllText(Path.Combine(second.Checkout, "a.txt")));
     }
 
@@ -130,7 +135,7 @@ public sealed class PreparationBoundaryTests
         var operation = f.Op();
         f.Git.Write(".worktrees/93f23689/90d5b0a2/keep", "mine\n");
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step => { if (step == point) throw new Crash(); })
-            .Prepare(W, f.RunId, operation, T, new AttemptCause.Initial()));
+            .Prepare(f.Lease(T), operation, new AttemptCause.Initial()));
         Assert.Equal("mine\n", File.ReadAllText(f.Git.PathOf(".worktrees/93f23689/90d5b0a2/keep")));
         File.Move(f.Git.PathOf(".worktrees/93f23689/90d5b0a2/keep"), f.Git.PathOf("saved"));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
@@ -157,12 +162,12 @@ public sealed class PreparationBoundaryTests
         });
         if (point == "invalid")
         {
-            var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(W, f.RunId, operation, T, new AttemptCause.Initial()));
+            var blocked = Assert.IsType<Preparation.Blocked>(await materializer.Prepare(f.Lease(T), operation, new AttemptCause.Initial()));
             Assert.Equal("SubmoduleUnavailable", blocked.Block.Problem.ToString());
             Assert.Equal("[broken\n", File.ReadAllText(f.Git.PathOf(".worktrees/93f23689/90d5b0a2/.gitmodules")));
             f.Git.Write(".worktrees/93f23689/90d5b0a2/.gitmodules", "");
         }
-        else await Assert.ThrowsAsync<Crash>(async () => await materializer.Prepare(W, f.RunId, operation, T, new AttemptCause.Initial()));
+        else await Assert.ThrowsAsync<Crash>(async () => await materializer.Prepare(f.Lease(T), operation, new AttemptCause.Initial()));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));

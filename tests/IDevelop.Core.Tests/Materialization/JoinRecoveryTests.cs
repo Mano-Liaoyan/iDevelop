@@ -15,10 +15,10 @@ public sealed class JoinRecoveryTests
     private static async Task ThreeSources(PreparationFixture f, bool conflict)
     {
         await Sources(f);
-        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(W, f.RunId, f.Op(), D, new AttemptCause.Initial()));
+        var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, conflict ? "b.txt" : "e.txt", conflict ? "different\n" : "E\n", "e");
         f.Close(third);
-        Assert.IsType<Publication.Accepted>(Open(f).Publish(W, f.RunId, f.Op(), third.Execution.Launch.Attempt));
+        Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
     }
 
     [Theory]

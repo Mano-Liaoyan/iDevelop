@@ -27,7 +27,7 @@ public sealed class PlatformTests
         f.Git.Write("crlf.txt", "one\ntwo\n", ready.Checkout);
         File.WriteAllBytes(Path.Combine(ready.Checkout, "data.bin"), [13, 10, 0, 13]);
         f.Close(ready);
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Result;
         var commit = Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex;
         Assert.Equal(new byte[] { 111, 110, 101, 10, 116, 119, 111, 10 }, Blob(f.Git, commit, "lf.txt"));
         Assert.Equal(new byte[] { 111, 110, 101, 10, 116, 119, 111, 10 }, Blob(f.Git, commit, "crlf.txt"));
@@ -97,14 +97,18 @@ public sealed class PlatformTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, operation));
         if (action == "publish") f.Close(ready);
         var moved = Path.Combine(Path.GetDirectoryName(f.Git.Folder)!, "s");
+        f.ReleaseControl();
         Directory.Move(f.Git.Folder, moved);
         var before = f.Git.Run(moved, "worktree", "list", "--porcelain");
         Assert.Equal(0, before.ExitCode);
-        var materializer = Execution.Materializer.Open(moved, RunStore.Open(moved), null, new QuiescentBoundary(), new Clock(), f.Git.Environment);
+        var store = RunStore.Open(moved);
+        using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, f.RunId)).Permit;
+        using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
+        var materializer = Execution.Materializer.Open(moved, store, null, new QuiescentBoundary(), new Clock(), f.Git.Environment);
         if (action == "prepare")
-            Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await materializer.Prepare(W, f.RunId, operation, T, new AttemptCause.Initial())).Block.Problem.ToString());
+            Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, operation, new AttemptCause.Initial())).Block.Problem.ToString());
         else
-            Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(materializer.Publish(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+            Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(materializer.Publish(lease, f.Op(), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         var after = f.Git.Run(moved, "worktree", "list", "--porcelain");
         Assert.Equal(0, after.ExitCode);
         Assert.Equal(before.Stdout, after.Stdout);
@@ -127,7 +131,7 @@ public sealed class PlatformTests
         Assert.Equal("fb88360ef5a51929c241ce46428ee8571a45722c\n", f.Git.Run(Path.Combine(ready.Checkout, "m"), "rev-parse", "HEAD").Text);
         f.Git.Write("m/module.txt", "dirty module\n", ready.Checkout);
         f.Git.Write("m/new.txt", "module unfinished\n", ready.Checkout);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(W, f.RunId, f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("dirty module\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/module.txt")));
         Assert.Equal("module unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/new.txt")));
         Assert.Equal("160000 commit fb88360ef5a51929c241ce46428ee8571a45722c\tm\n", f.Git.Git("ls-tree", retained.Commit.Hex, "m"));

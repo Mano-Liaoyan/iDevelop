@@ -628,10 +628,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 continue;
             }
 
-            RunLock? taskLock;
+            StandaloneLease? taskLock;
             try
             {
-                taskLock = RunLock.TryTake(attempts, running.Task);
+                taskLock = StandaloneLease.TryTake(Path.GetDirectoryName(Path.GetDirectoryName(attempts))!, running.Task);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -694,10 +694,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private LockTake TakeLock(TaskId task)
     {
-        RunLock? held;
+        StandaloneLease? held;
         try
         {
-            held = RunLock.TryTake(_attempts, task);
+            held = StandaloneLease.TryTake(_projectFolder, task);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -710,6 +710,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
             NotifyConversations(null);
             return new LockTake.HeldElsewhere(AnotherWindowsRun(task));
+        }
+
+        switch (RunStore.Open(_projectFolder).TaskOwnership(held))
+        {
+            case TaskRunOwnership.Owned owned:
+                held.Dispose();
+                return new LockTake.HeldElsewhere(new StartProblem.RunOwned(owned.Workflow));
+            case TaskRunOwnership.Unreadable unreadable:
+                held.Dispose();
+                return new LockTake.Failed(new StartProblem.CannotRecord(
+                    $"iDevelop could not read this project's workflow runs. {unreadable.Detail}"));
         }
 
         RefreshPublished(ReadAndReconcile(_attempts, held: task));
@@ -768,7 +779,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Starts a new attempt whose first turn resumes the task's latest session with the message. Called under the gate
     /// with the task's lock, which it releases on a refusal.
     /// </summary>
-    private (SendResult Result, ActiveRun? Run) Continue(TaskDefinition task, string message, RunLock held, string? tree)
+    private (SendResult Result, ActiveRun? Run) Continue(TaskDefinition task, string message, StandaloneLease held, string? tree)
     {
         if (ReviewOf(task.Id) is { } review)
         {
@@ -805,7 +816,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// reasoning the attempt started with. Called under the gate with the task's lock, which it releases unless the turn runs.
     /// </summary>
     /// <param name="tree">The project's files before the turn, read outside the gate.</param>
-    private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, RunLock held, string? tree, FixReport? report = null)
+    private (SendResult Result, ActiveRun? Run) Answer(TaskDefinition task, string message, AttemptRecord waiting, StandaloneLease held, string? tree, FixReport? report = null)
     {
         if (!TryContinue(task, waiting, out var from, out var problem))
         {
@@ -936,7 +947,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// released. Called under the gate with the task's lock.
     /// </summary>
     private (StartResult Result, ActiveRun? Run) RecordAndLaunch(
-        TaskDefinition task, LaunchPlan plan, RunLock held, Continuation? continues, string? tree, PlanningHandles? planning = null,
+        TaskDefinition task, LaunchPlan plan, StandaloneLease held, Continuation? continues, string? tree, PlanningHandles? planning = null,
         TaskId? subject = null, ReviewLink? fix = null)
     {
         AttemptLog log;
@@ -1190,7 +1201,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private abstract record LockTake
     {
         /// <summary>The caller holds the lock, and <see cref="Latest"/> is read again and reconciled.</summary>
-        public sealed record Taken(RunLock Lock) : LockTake;
+        public sealed record Taken(StandaloneLease Lock) : LockTake;
 
         /// <summary>Another instance holds the lock, and <see cref="Latest"/> is read again.</summary>
         public sealed record HeldElsewhere(StartProblem Problem) : LockTake;

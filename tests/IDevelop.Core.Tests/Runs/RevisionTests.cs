@@ -39,7 +39,7 @@ public sealed class RevisionTests
         using var fixture = new RunFixtures();
         fixture.Approve();
         var candidate = Revision.Capture(FixtureWorkflow(Task(description: "Later")));
-        var decision = fixture.Store.Amend(W, Run, fixture.Op(), new(V1), candidate, new AmendmentOrigin.Person(), fixture.Op());
+        var decision = fixture.Store.Amend(fixture.Permit, fixture.Op(), new(V1), candidate, new AmendmentOrigin.Person(), fixture.Op());
         Assert.Equal("", Assert.IsType<RunDecision.Recorded>(decision).Record.Revision.Snapshot.Tasks[T].Blueprint.Description);
         Assert.Equal(V1, fixture.Read().Revision.Id.Sha256);
     }
