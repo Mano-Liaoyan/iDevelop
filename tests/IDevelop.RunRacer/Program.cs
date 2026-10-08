@@ -10,6 +10,25 @@ internal static class Program
     private static int Main(string[] args)
     {
         var mode = args[0];
+        if (mode == "git-exit")
+        {
+            // A Git call that iDevelop leaves by exiting: git status runs on another thread, and once the fake git has
+            // started its hook child, this process exits as a crash or a kill would end it.
+            var call = new Thread(() => GitRepository.Run(["status"], args[1], GitOperation.Metadata,
+                new GitLimits(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5)))) { IsBackground = true };
+            call.Start();
+            var limit = Stopwatch.StartNew();
+            while (!File.Exists(args[2]))
+            {
+                if (limit.Elapsed >= TimeSpan.FromSeconds(60)) throw new TimeoutException("The fake git did not start its hook child.");
+                Thread.Sleep(5);
+            }
+
+            Console.WriteLine("exiting");
+            Console.Out.Flush();
+            Environment.Exit(73);
+        }
+
         var project = args[1];
         var workflow = new WorkflowId(Guid.Parse(args[2]));
         var run = new RunId(Guid.Parse(args[3]));

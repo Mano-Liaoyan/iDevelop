@@ -13,7 +13,12 @@ internal sealed class Racer : IDisposable
 
     public int ExitCode => _process.ExitCode;
 
-    public Racer(params string[] args)
+    public Racer(params string[] args) : this(new Dictionary<string, string>(), args)
+    {
+    }
+
+    /// <param name="environment">Variables the racer gets on top of this process's own.</param>
+    public Racer(IReadOnlyDictionary<string, string> environment, params string[] args)
     {
         Assert.True(File.Exists(Dll), Dll);
         var start = new ProcessStartInfo(Dotnet)
@@ -22,6 +27,7 @@ internal sealed class Racer : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+        foreach (var (key, value) in environment) start.Environment[key] = value;
         start.ArgumentList.Add(Dll);
         foreach (var arg in args) start.ArgumentList.Add(arg);
         _process = Process.Start(start)!;

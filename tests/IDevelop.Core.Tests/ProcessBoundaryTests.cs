@@ -35,7 +35,7 @@ public sealed class ProcessBoundaryTests : IDisposable
     }
 
     [UnixFact]
-    public async Task Workflow_cleanup_after_root_exit_reports_unix_containment_as_incomplete()
+    public async Task Workflow_cleanup_after_root_exit_terminates_the_unix_group()
     {
         var pidFile = Path.Combine(_evidence, "child.pid");
         using var child = Start(On().SpawnSleepingChild(pidFile).Exit(0));
@@ -45,13 +45,12 @@ public sealed class ProcessBoundaryTests : IDisposable
         var cleanup = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
 
         Assert.Equal(ProcessLifetime.Workflow, child.Lifetime);
-        Assert.Equal(new Containment.None("No process group contains this turn's descendants."), child.Containment);
-        Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
-        Assert.Equal("No process group contains this turn's descendants.", cleanup.Detail);
-        Assert.Equal(["killTree"], cleanup.Steps.Select(step => step.Action));
-        Assert.Equal(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), Assert.Single(cleanup.Steps).At);
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(sleeper));
-        Assert.Equal(ProcessMatch.Same, ProcessCheck.StopIfSame(sleeper));
+        Assert.Equal(new Containment.Group(child.Identity.Id), child.Containment);
+        Assert.Equal(CleanupResult.Completed, cleanup.Result);
+        Assert.Null(cleanup.Detail);
+        Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateGroup", null)], cleanup.Steps.ToArray());
+        AssertGone(sleeper.Id);
+        Assert.Equal(ProcessMatch.Gone, ProcessCheck.Check(sleeper));
     }
 
     [WindowsFact]
@@ -67,7 +66,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(new Containment.Job(), child.Containment);
         Assert.Equal(CleanupResult.Completed, cleanup.Result);
         Assert.Null(cleanup.Detail);
-        Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", null)], cleanup.Steps);
+        Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", null)], cleanup.Steps.ToArray());
         AssertGone(sleeper.Id);
         Assert.Equal(ProcessMatch.Gone, ProcessCheck.Check(sleeper));
     }
@@ -93,7 +92,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(new Containment.Job(), child.Containment);
         Assert.Equal(CleanupResult.Incomplete, cleanup.Result);
         Assert.Equal("Win32 error 5", cleanup.Detail);
-        Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", "Win32 error 5")], cleanup.Steps);
+        Assert.Equal([new CleanupStep(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), "terminateJob", "Win32 error 5")], cleanup.Steps.ToArray());
         Assert.Equal(ProcessMatch.Same, ProcessCheck.Check(sleeper));
         var control = await child.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
         Assert.Equal(CleanupResult.Completed, control.Result);
@@ -155,7 +154,7 @@ public sealed class ProcessBoundaryTests : IDisposable
         using var control = Start(On().SpawnSleepingChild(controlPid).Hang());
         var controlSleeper = await Sleeper(controlPid);
         var beforeDispose = await control.CleanUpAsync(TimeSpan.FromSeconds(2), _clock, CancellationToken.None).WaitAsync(Patience);
-        Assert.Contains(Assert.Single(beforeDispose.Steps).Action, new[] { "terminateJob", "killTree" });
+        Assert.Contains(Assert.Single(beforeDispose.Steps).Action, new[] { "terminateJob", "terminateGroup" });
         AssertGone(control.Identity.Id);
         AssertGone(controlSleeper.Id);
     }
@@ -205,6 +204,17 @@ public sealed class ProcessBoundaryTests : IDisposable
         Assert.Equal(3, after.Events.Length);
         Assert.IsType<AttemptEvent.CleanedUp>(after.Events[2]);
         Assert.NotEqual(before.Checkpoint, after.Checkpoint);
+    }
+
+    [Fact]
+    public void A_group_containment_is_logged_with_its_ID_and_read_back()
+    {
+        using var log = AttemptLog.Create(_temp.Create("group-log"), BuildRequested(First));
+        log.Append(LaunchedAt1s with { Lifetime = ProcessLifetime.Workflow, Containment = new Containment.Group(4242) });
+
+        Assert.Equal("""{"type":"launched","at":"2026-10-04T05:00:01+00:00","processId":4242,"processStarted":"2026-10-04T05:00:01+00:00","lifetime":"workflow","containment":{"type":"group","id":4242}}""",
+            File.ReadAllLines(Path.Combine(log.Folder, "events.jsonl"))[1]);
+        Assert.Equal(new Containment.Group(4242), Assert.Single(AttemptLog.Read(log.Folder).OfType<AttemptEvent.Launched>()).Containment);
     }
 
     [Fact]

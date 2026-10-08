@@ -6,8 +6,8 @@ namespace IDevelop.Execution;
 
 /// <summary>
 /// A Windows job object that holds one child and every process it starts, including one whose parent has exited, which
-/// Process.Kill(entireProcessTree) cannot find. Closing the job stops them all, unless <see cref="KeepProcessesOnClose"/>
-/// came first, and Windows closes it when iDevelop exits. No process may leave the job, because Git Bash, which Pi runs
+/// Process.Kill(entireProcessTree) cannot find. Closing the job stops them all, unless it was made without kill-on-close or
+/// <see cref="KeepProcessesOnClose"/> came first, and Windows closes it when iDevelop exits. No process may leave the job, because Git Bash, which Pi runs
 /// its commands in, starts each command outside a job that allows it.
 /// </summary>
 internal sealed class ProcessJob : IDisposable
@@ -24,7 +24,9 @@ internal sealed class ProcessJob : IDisposable
     private ProcessJob(nint handle) => _handle = handle;
 
     /// <summary>Null when the process could not join a job, such as one that already exited. Stopping its tree still works.</summary>
-    public static ProcessJob? Assign(Process process)
+    /// <param name="killOnClose">False leaves the processes running when the job closes, even when iDevelop exits or dies,
+    /// so only <see cref="Terminate"/> stops them.</param>
+    public static ProcessJob? Assign(Process process, bool killOnClose = true)
     {
         if (AssignmentFailure)
         {
@@ -37,7 +39,7 @@ internal sealed class ProcessJob : IDisposable
             return null;
         }
 
-        if (SetLimits(handle, KillOnJobClose) && AssignProcessToJobObject(handle, process.SafeHandle))
+        if (SetLimits(handle, killOnClose ? KillOnJobClose : 0) && AssignProcessToJobObject(handle, process.SafeHandle))
         {
             return new ProcessJob(handle);
         }

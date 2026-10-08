@@ -32,6 +32,17 @@ using System.Text.Json;
 //   spawnSleepingChild <file>     start a copy with --sleep-forever that shares the pipes, and write its pid
 //   spawnThroughCmd <file>        Windows only: run a copy through cmd.exe /c that starts a sleeping copy, writes its
 //                                 pid, and exits, so the sleeper shares the pipes and its parent is gone
+//   spawnResponder [<pid file>, <ping>, <pong>]
+//                                 start a copy that holds none of the pipes, waits for <ping>, and writes "pong" to <pong>
+//   spawnEscapedWriter [<pid file>, <gate>, <file>, <text>]
+//                                 Linux and macOS only: start a copy that leaves the process group with setsid, writes
+//                                 its pid, waits for <gate>, and writes the text to the file in the current folder
+//   spawnPartialWriter [<pid file>, <file>, <text>]
+//                                 start a copy that writes the text to the file in the current folder, keeps it open,
+//                                 writes its pid, and hangs, as a writer cut off in the middle of its write
+//   recordSession <file>          Linux and macOS only: write "<pid> <session id> <process group id>"
+//   trapSignals <file>            Linux and macOS only: record SIGTERM, SIGINT, SIGHUP, and SIGQUIT in the file instead
+//                                 of stopping
 //   hang                          wait until killed
 //   write [<file>, <text>]        write the text to the file, relative to the current folder
 //   scripted <folder>             count this call in <folder>/count, copy stdin to <folder>/<n>.stdin, and run the steps in
@@ -46,6 +57,45 @@ if (args is ["--sleep-forever"])
 if (args is ["--spawn-sleeper", var sleeperFile])
 {
     File.WriteAllText(sleeperFile, StartSleeper().Id.ToString());
+    return 0;
+}
+
+if (args is ["--respond", var ping, var pong])
+{
+    if (!WaitFor(ping))
+    {
+        return 97;
+    }
+
+    File.WriteAllText(pong, "pong");
+    return 0;
+}
+
+if (args is ["--escape", var escapedPid, var escapeGate, var lateFile, var lateText])
+{
+    if (NativePipes.NewSession() < 0)
+    {
+        return 95;
+    }
+
+    File.WriteAllText(escapedPid, Environment.ProcessId.ToString());
+    if (!WaitFor(escapeGate))
+    {
+        return 97;
+    }
+
+    File.WriteAllText(lateFile, lateText);
+    return 0;
+}
+
+if (args is ["--write-and-hang", var writerPid, var partialFile, var partialText])
+{
+    var partial = new FileStream(partialFile, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+    partial.Write(new UTF8Encoding(false).GetBytes(partialText));
+    partial.Flush(flushToDisk: true);
+    File.WriteAllText(writerPid, Environment.ProcessId.ToString());
+    Thread.Sleep(Timeout.Infinite);
+    GC.KeepAlive(partial);
     return 0;
 }
 
@@ -82,6 +132,7 @@ JsonElement? matchedLine = null;
 JsonElement? threadRequest = null;
 JsonElement? turnRequest = null;
 List<FileStream> held = [];
+List<PosixSignalRegistration> traps = [];
 if (appServer)
 {
     var initialize = ReadInput();
@@ -270,6 +321,31 @@ int? Run(JsonElement steps)
                 var copy = string.Join(' ', parts.Select(part => $"\"{part}\""));
                 Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("ComSpec")!, $"/s /c \"{copy}\"") { UseShellExecute = false })!.Dispose();
                 break;
+            case "spawnResponder":
+                StartDetached(value[0].GetString()!, "--respond", value[1].GetString()!, value[2].GetString()!);
+                break;
+            case "spawnEscapedWriter":
+                StartDetached(value[0].GetString()!, "--escape", value[0].GetString()!, value[1].GetString()!,
+                    value[2].GetString()!, value[3].GetString()!);
+                break;
+            case "spawnPartialWriter":
+                StartDetached(value[0].GetString()!, "--write-and-hang", value[0].GetString()!, value[1].GetString()!, value[2].GetString()!);
+                break;
+            case "recordSession":
+                File.WriteAllText(value.GetString()!, $"{Environment.ProcessId} {NativePipes.Session()} {NativePipes.Group()}");
+                break;
+            case "trapSignals":
+                var trapFile = value.GetString()!;
+                foreach (var signal in new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP, PosixSignal.SIGQUIT })
+                {
+                    traps.Add(PosixSignalRegistration.Create(signal, context =>
+                    {
+                        File.AppendAllText(trapFile, context.Signal + "\n");
+                        context.Cancel = true;
+                    }));
+                }
+
+                break;
             case "hang":
                 Thread.Sleep(Timeout.Infinite);
                 break;
@@ -363,6 +439,46 @@ static bool Has(JsonElement rule, string[] arguments)
     return Enumerable.Range(0, Math.Max(0, arguments.Length - run.Length + 1)).Any(start => run.SequenceEqual(arguments[start..(start + run.Length)]));
 }
 
+// The copy gets pipes whose other ends close at once, so it holds none of this process's pipes. A copy that writes its own
+// pid file is waited for, so this process exits only once the copy has done what it must do first.
+static void StartDetached(string pidFile, params string[] arguments)
+{
+    var start = new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), .. arguments])
+    {
+        UseShellExecute = false, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+    };
+    using var copy = Process.Start(start)!;
+    copy.StandardInput.Close();
+    copy.StandardOutput.Close();
+    copy.StandardError.Close();
+    if (arguments[0] == "--respond")
+    {
+        File.WriteAllText(pidFile, copy.Id.ToString());
+        return;
+    }
+
+    while (!File.Exists(pidFile) && !copy.HasExited)
+    {
+        Thread.Sleep(10);
+    }
+}
+
+// False when the file's folder is deleted, because the test that owned it has ended.
+static bool WaitFor(string file)
+{
+    while (!File.Exists(file))
+    {
+        if (!Directory.Exists(Path.GetDirectoryName(file)))
+        {
+            return false;
+        }
+
+        Thread.Sleep(20);
+    }
+
+    return true;
+}
+
 static Process StartSleeper() =>
     Process.Start(new ProcessStartInfo(Environment.ProcessPath!, [.. HostArguments(), "--sleep-forever"]) { UseShellExecute = false })!;
 
@@ -412,6 +528,21 @@ internal static class NativePipes
             Marshal.FreeHGlobal(status);
         }
     }
+
+    public static int NewSession() => SetSid();
+
+    public static int Session() => GetSid(0);
+
+    public static int Group() => GetPgid(0);
+
+    [DllImport("libc", EntryPoint = "getsid")]
+    private static extern int GetSid(int process);
+
+    [DllImport("libc", EntryPoint = "getpgid")]
+    private static extern int GetPgid(int process);
+
+    [DllImport("libc", EntryPoint = "setsid")]
+    private static extern int SetSid();
 
     [DllImport("libc", EntryPoint = "close")]
     private static extern int Close(int descriptor);

@@ -10,12 +10,21 @@ internal enum ProcessLifetime { Standalone, Workflow }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Containment.Job), "job")]
+[JsonDerivedType(typeof(Containment.Group), "group")]
 [JsonDerivedType(typeof(Containment.None), "none")]
 internal abstract record Containment
 {
     private Containment() { }
 
     public sealed record Job : Containment;
+
+    /// <summary>The process group a Linux or macOS workflow turn leads. Its ID is the root's process ID.</summary>
+    public sealed record Group(int Id) : Containment
+    {
+        /// <summary>Why the turn could not have a session of its own, or null when it does.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Detail { get; init; }
+    }
 
     public sealed record None(string Reason) : Containment;
 }
@@ -33,22 +42,32 @@ internal sealed class LaunchException(string message, Exception? inner = null) :
 /// A started command with redirected pipes. It knows nothing about any client: runs and probes both use it.
 /// Text crosses the pipes as UTF-8 without a byte order mark on every platform. On Windows the process and everything
 /// it starts share a job, so disposing it, or iDevelop exiting, stops whatever is still running, unless
-/// <see cref="LeaveDescendantsRunning"/> came first.
+/// <see cref="LeaveDescendantsRunning"/> came first. On Linux and macOS a workflow turn leads its own session and process
+/// group, which only <see cref="StopTree"/> and <see cref="CleanUpAsync"/> signal.
 /// </summary>
 internal sealed class ChildProcess : IDisposable
 {
+    private const string NoGroup = "No process group contains this turn's descendants.";
+
+    // Process.Start's own buffer size for redirected pipes.
+    private const int PipeBuffer = 4096;
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     private static readonly TimeSpan OutputGrace = TimeSpan.FromSeconds(5);
 
     private readonly Lock _gate = new();
-    private readonly Process _process;
+    private readonly Process? _process;
     private readonly ProcessJob? _job;
+    private readonly ProcessGroup? _group;
+    private readonly StreamWriter? _groupInput;
+    private readonly StreamReader? _groupOutput;
+    private readonly StreamReader? _groupError;
     private Task _stdout = Task.CompletedTask;
     private Task _stderr = Task.CompletedTask;
     private bool _disposed;
 
-    private ChildProcess(Process process, ProcessLifetime lifetime)
+    private ChildProcess(Process process, ProcessLifetime lifetime, string? noGroup)
     {
         _process = process;
         _job = OperatingSystem.IsWindows() ? ProcessJob.Assign(process) : null;
@@ -56,7 +75,18 @@ internal sealed class ChildProcess : IDisposable
         Lifetime = lifetime;
         Containment = _job is not null ? new Containment.Job() : new Containment.None(OperatingSystem.IsWindows()
             ? "The client could not join a job object."
-            : "No process group contains this turn's descendants.");
+            : noGroup is null ? NoGroup : $"{NoGroup} {noGroup}");
+    }
+
+    private ChildProcess(ProcessGroup group, ProcessLifetime lifetime)
+    {
+        _group = group;
+        _groupInput = new StreamWriter(group.Input, Utf8, PipeBuffer) { AutoFlush = true };
+        _groupOutput = new StreamReader(group.Output, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
+        _groupError = new StreamReader(group.Error, Utf8, detectEncodingFromByteOrderMarks: true, PipeBuffer);
+        Identity = group.Identity;
+        Lifetime = lifetime;
+        Containment = new Containment.Group(group.Id) { Detail = group.SessionDetail };
     }
 
     public ProcessIdentity Identity { get; }
@@ -72,7 +102,7 @@ internal sealed class ChildProcess : IDisposable
         {
             lock (_gate)
             {
-                return _disposed || _process.HasExited;
+                return _disposed || (_group?.HasExited ?? _process!.HasExited);
             }
         }
     }
@@ -120,7 +150,21 @@ internal sealed class ChildProcess : IDisposable
 
         try
         {
-            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."), lifetime);
+            string? noGroup = null;
+            if (lifetime == ProcessLifetime.Workflow && !OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    return new ChildProcess(ProcessGroup.Start(start), lifetime);
+                }
+                catch (NotSupportedException e)
+                {
+                    // Containment serves cleanup only, so the turn runs without a group and its cleanup says why.
+                    noGroup = e.Message;
+                }
+            }
+
+            return new ChildProcess(Process.Start(start) ?? throw new LaunchException($"{command.Path} did not start."), lifetime, noGroup);
         }
         catch (Win32Exception e)
         {
@@ -133,11 +177,11 @@ internal sealed class ChildProcess : IDisposable
     {
         try
         {
-            await _process.StandardInput.WriteAsync(text);
-            await _process.StandardInput.FlushAsync();
+            await Input.WriteAsync(text);
+            await Input.FlushAsync();
             if (close)
             {
-                _process.StandardInput.Close();
+                Input.Close();
             }
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
@@ -151,11 +195,11 @@ internal sealed class ChildProcess : IDisposable
         bounded.CancelAfter(timeout);
         try
         {
-            await _process.StandardInput.WriteAsync(text.AsMemory(), bounded.Token);
-            await _process.StandardInput.FlushAsync(bounded.Token);
+            await Input.WriteAsync(text.AsMemory(), bounded.Token);
+            await Input.FlushAsync(bounded.Token);
             if (close)
             {
-                _process.StandardInput.Close();
+                Input.Close();
             }
 
             return true;
@@ -167,13 +211,18 @@ internal sealed class ChildProcess : IDisposable
     }
 
     /// <summary>Reads stdout in the background, one call per line. Lines can be large, so there is no length cap.</summary>
-    public void ReadStdout(Action<string> onLine) => _stdout = ReadLinesAsync(_process.StandardOutput, onLine);
+    public void ReadStdout(Action<string> onLine) => _stdout = ReadLinesAsync(_groupOutput ?? _process!.StandardOutput, onLine);
 
-    public void ReadStderr(Action<string> onLine) => _stderr = ReadLinesAsync(_process.StandardError, onLine);
+    public void ReadStderr(Action<string> onLine) => _stderr = ReadLinesAsync(_groupError ?? _process!.StandardError, onLine);
 
     public async Task<int> WaitForExitAsync()
     {
-        await _process.WaitForExitAsync();
+        if (_group is not null)
+        {
+            return await _group.Exited;
+        }
+
+        await _process!.WaitForExitAsync();
         return _process.ExitCode;
     }
 
@@ -196,12 +245,23 @@ internal sealed class ChildProcess : IDisposable
                 return;
             }
 
+            if (_group is not null)
+            {
+                _group.Stop();
+                return;
+            }
+
             _job?.Terminate();
-            // The job holds the process only from just after its start, and Linux and macOS have no job.
-            ProcessCheck.KillTreeQuietly(_process);
+            // The job holds the process only from just after its start, and a standalone run on Linux or macOS has neither.
+            ProcessCheck.KillTreeQuietly(_process!);
         }
     }
 
+    /// <summary>
+    /// Stops what the turn left running once its root exited. A job is terminated at once. A group gets SIGTERM, then
+    /// SIGKILL after <paramref name="grace"/> on <paramref name="clock"/>. Without either it stops the root's tree and says
+    /// why the cleanup is incomplete. After <see cref="Dispose"/> it signals nothing.
+    /// </summary>
     public Task<Cleanup> CleanUpAsync(TimeSpan grace, TimeProvider clock, CancellationToken ct)
     {
         lock (_gate)
@@ -209,6 +269,11 @@ internal sealed class ChildProcess : IDisposable
             if (_disposed)
             {
                 return Task.FromResult(new Cleanup(CleanupResult.Incomplete, "The turn's process was already released.", []));
+            }
+
+            if (_group is not null)
+            {
+                return _group.CleanUpAsync(grace, clock, ct);
             }
 
             var at = clock.GetUtcNow();
@@ -221,7 +286,7 @@ internal sealed class ChildProcess : IDisposable
             }
 
             return Task.FromResult(new Cleanup(CleanupResult.Incomplete, ((Containment.None)Containment).Reason,
-                [new CleanupStep(at, "killTree", ProcessCheck.KillTree(_process))]));
+                [new CleanupStep(at, "killTree", ProcessCheck.KillTree(_process!))]));
         }
     }
 
@@ -245,10 +310,13 @@ internal sealed class ChildProcess : IDisposable
             {
                 _disposed = true;
                 _job?.Dispose();
-                _process.Dispose();
+                _group?.Dispose();
+                _process?.Dispose();
             }
         }
     }
+
+    private StreamWriter Input => _groupInput ?? _process!.StandardInput;
 
     private static async Task ReadLinesAsync(StreamReader reader, Action<string> onLine)
     {
