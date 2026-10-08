@@ -375,6 +375,7 @@ public sealed class RunReviewTests
         Assert.Equal(RunProblem.SessionUnavailable, Assert.IsType<FixReply.Refused>(
             await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue));
+        Assert.Empty(f.Read().Preservations);
         Assert.IsType<FixReply.Reserved>(await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal(3, f.Launches(A));
@@ -400,7 +401,12 @@ public sealed class RunReviewTests
             new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<FixReply.Refused>(await f.Coordinator.RetryFix(f.Address, R,
             default).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<FixReply.Refused>(await f.Coordinator.ContinueFix(f.Address, R,
+            default).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry));
+        // A refused choice preserves and salvages nothing.
+        Assert.Empty(f.Read().Preservations);
+        Assert.Empty(f.Read().Salvages);
     }
 
     [Fact]
@@ -489,7 +495,7 @@ public sealed class RunReviewTests
     }
 
     [Fact]
-    public async Task Continuing_review_work_waits_behind_ready_tasks_and_an_accepted_fix_makes_other_consumers_stale()
+    public async Task An_accepted_fix_makes_another_consumer_of_the_subject_stale()
     {
         var workflow = Runs.RunFixtures.Connect(Reviewed().Must(TestNodes.Place(RunConversationFixture.Agent(D, ConversationMode.Autonomous), new CanvasPoint(0, 300))), A, D);
         await using var f = new RunConversationFixture(workflow);
@@ -506,11 +512,47 @@ public sealed class RunReviewTests
         long Claim(TaskId task, int turn = 1, int? round = null) => record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claimed &&
             claimed.Key.Turn == turn && record.Attempts[claimed.Key.Attempt].Task == task &&
             (round is null ? record.Attempts[claimed.Key.Attempt].Cause is not AttemptCause.ReviewFix : record.ReviewOf(claimed.Key.Attempt)?.Round == round)).Sequence;
-        // Once A is done, the review's first turn and D are both ready, in task order; the fix round then waits for D.
+        // Once A is done, the review's first turn and D are both ready, and they start in task order.
         Assert.True(Claim(R) < Claim(D));
-        Assert.True(Claim(D) < Claim(A, round: 1));
         Assert.True(Claim(A, round: 1) < Claim(R, turn: 2));
         Assert.Equal((TaskState.Stale, TaskState.Done, TaskState.Done), (stuck.Tasks[D].State, stuck.Tasks[R].State, stuck.Tasks[A].State));
         Assert.Equal((2, 2, 1, 1), (f.Launches(A), f.Launches(R), f.Launches(B), f.Launches(D)));
+    }
+
+    [Fact]
+    public async Task Continuing_review_work_waits_behind_a_ready_task()
+    {
+        // X waits for the person, and D waits for X, so D becomes ready while the run is paused, beside a chosen fix.
+        var workflow = Runs.RunFixtures.Connect(Reviewed()
+            .Must(TestNodes.Place(RunConversationFixture.Agent(X, ConversationMode.Chat), new CanvasPoint(0, 300)))
+            .Must(TestNodes.Place(RunConversationFixture.Agent(D, ConversationMode.Autonomous), new CanvasPoint(300, 300))), X, D);
+        await using var f = new RunConversationFixture(workflow);
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Interrupting(f),
+                Writes(f, A, 3, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"))
+            .Answer(X, Writes(f, X, 1, "x.txt", "X\n", "X ready.\n", session: "session-x"))
+            .Answer(D, Writes(f, D, 1, "d.txt", "D\n", "D ready.\n"));
+        await f.Open();
+        await f.Resume();
+        await TurnFixture.WaitUntilAsync(() => File.Exists(Path.Combine(f.Evidence, "fix-1-wrote")));
+        await f.Until(view => view.Tasks[X].State == TaskState.Waiting);
+        await f.Reopen();
+        var paused = await f.Until(view => view.Tasks[R].Fix is not null);
+        Assert.Equal((RunStatus.Paused, TaskState.Pending), (paused.Status, paused.Tasks[D].State));
+
+        using (var session = f.Session(X))
+            Assert.Equal(CommandOutcome.Applied, (await session.MarkDoneAsync(session.Snapshot.Current!.Value, default).WaitAsync(Bound)).Outcome);
+        var continued = Assert.IsType<FixReply.Reserved>(await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+        Assert.Equal(TaskState.Ready, (await f.Decided()).Tasks[D].State);
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        var record = f.Read();
+        long Claim(AttemptId attempt) => record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claimed && claimed.Key == new LaunchKey(attempt, 1)).Sequence;
+        Assert.True(Claim(f.Attempt(D)) < Claim(continued.Attempt));
+        Assert.Equal((3, 1), (f.Launches(A), f.Launches(D)));
     }
 }

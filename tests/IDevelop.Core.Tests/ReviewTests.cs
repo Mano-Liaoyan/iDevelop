@@ -358,6 +358,31 @@ public sealed class ReviewTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_fix_round_that_waits_for_the_person_offers_no_fix_choice()
+    {
+        var subject = SubjectNode with { Conversation = ConversationMode.Chat };
+        var workflow = Workflow.Empty(WorkflowId.New())
+            .Must(TestNodes.Place(subject, new CanvasPoint(0, 0)))
+            .Must(TestNodes.Place(ReviewNode, new CanvasPoint(300, 0)))
+            .Must(new WorkflowEdit.Connect(new ConnectionKey(Subject, Review), ConnectionKind.Dependency));
+        Reviewer(1, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""));
+        Implementer(2, Fixed, Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]"""));
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(subject));
+        await Until(() => runs.Latest[Subject].Status == AttemptStatus.WaitingForInput && runs.Active.IsEmpty, "the subject waits");
+        Assert.Null(runs.MarkDone(Subject));
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        await Until(() => runs.Latest[Subject] is { Fix: not null, Status: AttemptStatus.WaitingForInput } && runs.Active.IsEmpty, "fix round 1 waits for the person");
+
+        Assert.Equal(new StartResult.Refused(new StartProblem.NoFixChoice("Review add")), runs.ChooseFix(Review, FixChoice.Continue));
+        Assert.Equal(new StartResult.Refused(new StartProblem.NoFixChoice("Review add")), runs.ChooseFix(Review, FixChoice.Retry));
+        await Task.Delay(300);
+        Assert.Equal("2", File.ReadAllText(Path.Combine(_implementer, "count")));
+        Assert.Equal(AttemptStatus.WaitingForInput, runs.Latest[Subject].Status);
+    }
+
     /// <summary>Runs the subject and the review's first turn, quits during fix round 1, and opens the project again.</summary>
     private async Task<ProjectRuns> Interrupted()
     {
