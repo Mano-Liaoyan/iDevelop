@@ -182,8 +182,10 @@ internal sealed partial class Materializer
         if (current.SymbolicHead != to.SymbolicHead) refs.Add("HEAD");
         var blocks = record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == owner.Task && b.Value.Block.Scope is not null)
             .OrderBy(b => record.Receipts[b.Key].Sequence).ToArray();
-        var repairs = blocks.Where(b => b.Value.Block.Scope!.Refs.All(r => r == owner.Branch || r == "HEAD")).Select(b => b.Key).ToImmutableArray();
-        var rechecks = blocks.Where(b => b.Value.Block.Scope!.Refs.Any(r => r != owner.Branch && r != "HEAD")).Select(b => b.Key).ToImmutableArray();
+        var repairs = blocks.Where(b => lockOnly
+            ? b.Value.Block.Scope is { Paths.IsEmpty: true, Refs.IsEmpty: true, IndexLock: true }
+            : b.Value.Block.Scope!.Refs.All(r => r == owner.Branch || r == "HEAD")).Select(b => b.Key).ToImmutableArray();
+        var rechecks = lockOnly ? [] : blocks.Where(b => b.Value.Block.Scope!.Refs.Any(r => r != owner.Branch && r != "HEAD")).Select(b => b.Key).ToImmutableArray();
         var supersedes = RunReducer.UnfinishedRestorations(record, owner).Cast<OperationId?>().SingleOrDefault();
         var preview = new RestorePreview(preservation, current, fold.Components, to, paths, refs.ToImmutable(), current.IndexLock,
             repairs, rechecks, SharedRefSnapshot(repository, record), supersedes, new Digest(""));
@@ -241,11 +243,14 @@ internal sealed partial class Materializer
             var record = Read(permit.Workflow, permit.Run);
             if (RunReducer.RestorationSuperseded(record, planId)) return new Restoration.Rejected(new(RunProblem.ReplacementConflict));
             var preserved = RestorationPreservation(record, lease, attempt, preservation);
+            var existing = record.Plans.GetValueOrDefault(planId);
+            if (existing is not null && (existing is not MaterializationPlan.Restoration old || old.Attempt != attempt ||
+                old.Preservation != preservation || old.Confirmation != confirmation || old.Preview != preview))
+                return new Restoration.Rejected(new(RunProblem.OperationConflict));
+            if (record.Restorations.TryGetValue(planId, out var receipt)) return new Restoration.Restored(receipt);
             if (preserved.Preserved.Index is { } preservedIndex) evidence = [preservedIndex];
             var prepared = record.Preparations[new(attempt, 1)];
             inputs = prepared.Inputs;
-            if (record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == prepared.Location.Owner))
-                return new Restoration.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
             using var mutation = repository.TakeMutationLock();
             if (mutation is null) return new Restoration.Rejected(new(RunProblem.JournalBusy));
@@ -255,19 +260,6 @@ internal sealed partial class Materializer
                 return new Restoration.Rejected(new(RunProblem.UnresolvedOwnership));
             VerifyRepository(record, repository);
             VerifyOwnedCheckout(repository, prepared.Location, record);
-            var existing = record.Plans.GetValueOrDefault(planId);
-            if (existing is not null && (existing is not MaterializationPlan.Restoration old || old.Attempt != attempt ||
-                old.Preservation != preservation || old.Confirmation != confirmation || old.Preview != preview))
-                return new Restoration.Rejected(new(RunProblem.OperationConflict));
-            if (record.Restorations.TryGetValue(planId, out var receipt))
-            {
-                var completed = (MaterializationPlan.Restoration)existing!;
-                var live = ObserveRestore(repository, record, prepared.Location, attempt, preserved, RetainLock).State;
-                if (CheckoutDifference(repository, prepared.Location.Owner, completed.To, live, completed.To.Index is not null, false) is { } difference)
-                    throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, difference);
-                ResolveRestoreBlocks(permit, planId, repository, prepared, completed);
-                return new Restoration.Restored(receipt);
-            }
             if (Value(repository.ReadRef(preserved.Ref)) != preserved.Commit ||
                 Value(repository.CreateCommit(preserved.Recipe)) != preserved.Commit)
                 throw Fault(MaterializationProblem.UncertainOwnership, "The retained preservation ref or commit differs from its recipe.", new([], [preserved.Ref], false));
@@ -416,10 +408,10 @@ internal sealed partial class Materializer
                 throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, remaining);
             if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
             if (Directory.Exists(scratchRoot) && !Directory.EnumerateFileSystemEntries(scratchRoot).Any()) Directory.Delete(scratchRoot);
+            var resolved = ResolveRestoreBlocks(permit, planId, repository, prepared, plan);
             step = "restored";
             receipt = (RunEvent.Restored)DecisionEvent(Journal(step, () => _store.Record(permit,
-                OperationIds.Derive(operation, "restored"), new RunEvent.Restored(planId))));
-            ResolveRestoreBlocks(permit, planId, repository, prepared, plan);
+                OperationIds.Derive(operation, "restored"), new RunEvent.Restored(planId, resolved))));
             return new Restoration.Restored(receipt);
 
             void RetainLock(byte[] bytes)
@@ -501,28 +493,24 @@ internal sealed partial class Materializer
             record.GitObservations.ContainsKey(i.Key));
     }
 
-    private void ResolveRestoreBlocks(CoordinatorPermit permit, OperationId planId, GitRepository repository, PreparedExecution prepared,
-        MaterializationPlan.Restoration plan)
+    private ImmutableArray<OperationId> ResolveRestoreBlocks(CoordinatorPermit permit, OperationId planId, GitRepository repository,
+        PreparedExecution prepared, MaterializationPlan.Restoration plan)
     {
         var storage = new RunStorage(_project, permit.Workflow, permit.Run);
         var record = Read(permit.Workflow, permit.Run);
         var snapshot = record.Receipts.Values.Select(e => e.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
         var before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
             RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength), RunJournal.Options)!;
-        foreach (var id in plan.Repairs.Concat(plan.Rechecks))
-        {
-            record = Read(permit.Workflow, permit.Run);
-            if (!record.Blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != plan.Task || block.Block.Scope is not { } scope) continue;
-            if (plan.Rechecks.Contains(id) && !scope.Refs.All(name => name == "HEAD" || name == prepared.Location.Owner.Branch ||
+        return record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == plan.Task &&
+            (plan.Repairs.Contains(b.Key) || plan.Rechecks.Contains(b.Key) || b.Value.Block.Operation == planId) &&
+            (b.Value.Block.Scope is not { } scope || scope.Refs.All(name => name == "HEAD" || name == prepared.Location.Owner.Branch ||
                 (name == "refs/stash" ? Value(repository.ReadRef(name)) == (before.TryGetValue(name, out var old) ? old : (CommitId?)null) :
-                    RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name)))))) continue;
-            var label = "restore-resolve-" + id.Value.ToString("D");
-            Journal(label, () => _store.Record(permit, OperationIds.Derive(planId, label), new RunEvent.BlockResolved(id, "Restored to the recorded baseline.")));
-        }
+                    RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name)))))))
+            .OrderBy(b => record.Receipts[b.Key].Sequence).Select(b => b.Key).ToImmutableArray();
     }
 
     private Restoration RestorationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, block) switch
+        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
         {
             Preparation.Blocked blocked => new Restoration.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Restoration.Rejected(rejected.Reason),

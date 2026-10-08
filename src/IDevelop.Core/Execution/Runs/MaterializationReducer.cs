@@ -155,14 +155,16 @@ internal static partial class RunReducer
                     record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation recoveryPreservation ||
                     !record.Preparations.TryGetValue(new(baseline.Previous, 1), out var previousPreparation) ||
                     !record.Preparations.TryGetValue(new(recoveryPreservation.Attempt, 1), out var preservedPreparation) ||
-                    preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null)
+                    preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null ||
+                    ResolveReceiptBlocks(record, baselined.Resolved, recoveryPreservation.Task) is not { } baselineBlocks)
                     return Reject(RunProblem.InvalidData);
-                return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined) }, null);
+                return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined), Blocks = baselineBlocks }, null);
             case RunEvent.Restored restored:
-                if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration ||
-                    record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan))
+                if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration restoration ||
+                    record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan) ||
+                    ResolveReceiptBlocks(record, restored.Resolved, restoration.Task) is not { } restoredBlocks)
                     return Reject(RunProblem.InvalidData);
-                return (record with { Restorations = record.Restorations.Add(restored.Plan, restored) }, null);
+                return (record with { Restorations = record.Restorations.Add(restored.Plan, restored), Blocks = restoredBlocks }, null);
             case RunEvent.Preserved preserved:
                 if (record.Plans.GetValueOrDefault(preserved.Plan) is not MaterializationPlan.Preservation preservation ||
                     preserved.Ref != preservation.Ref || preserved.Commit != preservation.Commit || record.Preservations.ContainsKey(preserved.Plan) ||
@@ -181,6 +183,19 @@ internal static partial class RunReducer
             default:
                 return Reject(RunProblem.UnsupportedEvent);
         }
+    }
+
+    private static ImmutableDictionary<OperationId, MaterializationBlockState>? ResolveReceiptBlocks(RunRecord record,
+        ImmutableArray<OperationId> resolved, TaskId task)
+    {
+        if (resolved.IsDefault) return null;
+        var blocks = record.Blocks;
+        foreach (var id in resolved)
+        {
+            if (!blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != task) return null;
+            blocks = blocks.SetItem(id, block with { Resolved = true });
+        }
+        return blocks;
     }
 
     internal static bool RestorationSuperseded(RunRecord record, OperationId plan) =>

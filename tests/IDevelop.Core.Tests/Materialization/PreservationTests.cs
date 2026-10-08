@@ -13,6 +13,48 @@ public sealed class PreservationTests
     private const string CleanCommit = "3ccf3357ae3c273f9aa79b45e263663f02975c76";
     private sealed class Crash : Exception;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_preservation_success_resolves_its_own_refusal_even_after_a_receipt_crash(bool crash)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var reason = f.Git.Run(f.Git.Folder, "worktree", "list", "--porcelain").Text.Split('\n')
+            .Single(line => line.StartsWith("locked ", StringComparison.Ordinal))["locked ".Length..];
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
+        var refused = Assert.IsType<Preservation.Blocked>(await f.Materializer().Preserve(f.Lease(T), Operation, attempt));
+        Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
+        Assert.Empty(refused.Block.Scope!.Paths);
+        Assert.Empty(refused.Block.Scope.Refs);
+        Assert.False(refused.Block.Scope.IndexLock);
+        var own = Assert.Single(f.Read().Blocks).Key;
+        Assert.False(f.Read().Blocks[own].Resolved);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
+        if (crash)
+        {
+            await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
+            {
+                if (step == "journal.preserved.after") throw new Crash();
+            }).Preserve(f.Lease(T), Operation, attempt));
+            Assert.Single(f.Read().Preservations);
+            Assert.False(f.Read().Blocks[own].Resolved);
+        }
+        var result = Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), Operation, attempt));
+        Assert.Equal("late\n", f.Git.Git("show", result.Commit.Hex + ":a.txt"));
+        Assert.True(f.Read().Blocks[own].Resolved);
+        Assert.Equal("Preserved.", Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
+        var drift = OperationIds.Derive(Operation, "preserve-drift");
+        Assert.False(f.Read().Blocks[drift].Resolved);
+        Assert.Equal(new[] { "a.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
+        var sequence = f.Read().Sequence;
+        Assert.Equal(result, await f.Materializer().Preserve(f.Lease(T), Operation, attempt));
+        Assert.Equal(sequence, f.Read().Sequence);
+    }
+
     [Fact]
     public async Task A_settled_runs_pending_preservation_survives_pin_release_and_gc()
     {

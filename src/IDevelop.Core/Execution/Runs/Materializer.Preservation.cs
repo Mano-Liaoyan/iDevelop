@@ -38,6 +38,7 @@ internal sealed partial class Materializer
             {
                 RecordPreservationDrift(permit, operation, repository, record, prepared.Location.Owner, attempt,
                     ((MaterializationPlan.Preservation)existing!).Preserved, inputs);
+                ResolveMaintenanceBlocks(permit, operation, "Preserved.");
                 return new Preservation.Preserved(receipt, receipt.Commit);
             }
             if (record.PreservationDivergences.TryGetValue(operation, out var divergence))
@@ -71,10 +72,11 @@ internal sealed partial class Materializer
             step = "preserve-ref";
             RequirePublication(_refs.Publish(permit, operation, planId, step, repository, new(plan.Ref, null, plan.Commit)));
             if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
-                throw Fault(MaterializationProblem.UncertainOwnership, "The preservation retention ref changed.");
+                throw Fault(MaterializationProblem.UncertainOwnership, "The preservation retention ref changed.", new([], [plan.Ref], false));
             step = "preserved";
             var preserved = (RunEvent.Preserved)DecisionEvent(Journal(step, () => _store.Record(permit,
                 OperationIds.Derive(operation, "preserved"), new RunEvent.Preserved(planId, plan.Ref, plan.Commit))));
+            ResolveMaintenanceBlocks(permit, operation, "Preserved.");
             return new Preservation.Preserved(preserved, preserved.Commit);
         }
         catch (Refusal refused) { return new Preservation.Rejected(refused.Reason); }
@@ -222,7 +224,7 @@ internal sealed partial class Materializer
 
     private static ImmutableArray<CommitId> PreservationParents(GitRepository repository, CommitId? branch, CommitId? head)
     {
-        if (head is null) throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.");
+        if (head is null) throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.", new([], ["HEAD"], false));
         if (branch is null || branch == head) return [head.Value];
         return repository.IsAncestor(branch.Value, head.Value) switch
         {
@@ -280,7 +282,7 @@ internal sealed partial class Materializer
                 "The branch or HEAD changed between preservation observations.") { Scope = divergence.Scope };
 
     private Preservation PreservationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, block) switch
+        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
         {
             Preparation.Blocked blocked => new Preservation.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Preservation.Rejected(rejected.Reason),

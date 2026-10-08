@@ -58,9 +58,11 @@ internal static partial class RunValidation
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
             (block.Conflict is null || Conflict(block.Conflict)) && (block.Scope is null || Scope(block.Scope)),
         RunEvent.SalvageRetained retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
-        RunEvent.RecoveryBaselined { Baseline: var baseline } => baseline.Previous.Value != Guid.Empty &&
-            baseline.Confirmation.Value != Guid.Empty && baseline.Preservation.Value != Guid.Empty && !string.IsNullOrEmpty(baseline.Session),
-        RunEvent.Restored restored => restored.Plan.Value != Guid.Empty,
+        RunEvent.RecoveryBaselined { Baseline: var baseline, Resolved: var resolved } => baseline.Previous.Value != Guid.Empty &&
+            baseline.Confirmation.Value != Guid.Empty && baseline.Preservation.Value != Guid.Empty && !string.IsNullOrEmpty(baseline.Session) &&
+            !resolved.IsDefault && resolved.All(id => id.Value != Guid.Empty),
+        RunEvent.Restored restored => restored.Plan.Value != Guid.Empty &&
+            !restored.Resolved.IsDefault && restored.Resolved.All(id => id.Value != Guid.Empty),
         RunEvent.Preserved retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
         RunEvent.PreservationDiverged diverged => diverged.Operation.Value != Guid.Empty &&
             Observation(diverged.First, 1) && Observation(diverged.Second, 2) && Scope(diverged.Scope),

@@ -251,6 +251,10 @@ internal sealed partial class Materializer
         return prompt;
     }
 
+    private static MaterializationBlock ScopedCheckoutBlock(MaterializationBlock block) =>
+        block.Scope is null && block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership
+            ? block with { Scope = new([], [], false) } : block;
+
     private static MaterializationFailure Fault(MaterializationProblem problem, string detail, BlockScope? scope = null) => new(problem, detail, scope);
     private sealed class MaterializationFailure(MaterializationProblem problem, string detail, BlockScope? scope = null) : Exception(detail)
     { public MaterializationProblem Problem { get; } = problem; public BlockScope? Scope { get; } = scope; }

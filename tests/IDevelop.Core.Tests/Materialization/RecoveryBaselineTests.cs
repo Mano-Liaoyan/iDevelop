@@ -8,6 +8,47 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class RecoveryBaselineTests
 {
     [Fact]
+    public async Task A_recovery_baseline_success_resolves_its_own_registration_refusal()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await CloseInterrupted(f, ready);
+        var previous = ready.Execution.Launch.Attempt;
+        f.Git.Write("keep.txt", "keep\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, previous)).GetType().Name);
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var reason = f.Git.Run(f.Git.Folder, "worktree", "list", "--porcelain").Text.Split('\n')
+            .Single(line => line.StartsWith("locked ", StringComparison.Ordinal))["locked ".Length..];
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
+        var refused = Assert.IsType<RecoveryBaselining.Blocked>(f.Materializer()
+            .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
+        Assert.Empty(refused.Block.Scope!.Paths);
+        Assert.Empty(refused.Block.Scope.Refs);
+        Assert.False(refused.Block.Scope.IndexLock);
+        var own = f.Read().Blocks.Single(b => b.Value.Block.Operation == operation).Key;
+        Assert.False(f.Read().Blocks[own].Resolved);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
+        Assert.Throws<Crash>(() => f.Materializer(probe: step =>
+        {
+            if (step == "journal.baseline.after") throw new Crash();
+        }).RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.True(f.Read().Blocks[own].Resolved);
+        Assert.True(f.Read().Blocks[drift].Resolved);
+        var sequence = f.Read().Sequence;
+        var result = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer()
+            .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.Equal(new[] { drift, own }, result.Receipt.Resolved);
+        Assert.Equal("session-1", result.Receipt.Baseline.Session);
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(0, f.Read().Receipts.Values.Count(e => e.Event is RunEvent.BlockResolved));
+        Assert.Equal("keep\n", File.ReadAllText(Path.Combine(ready.Checkout, "keep.txt")));
+    }
+
+    [Fact]
     public async Task An_unfinished_retry_reset_blocks_recording_a_recovery_baseline()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -143,8 +184,8 @@ public sealed class RecoveryBaselineTests
         Assert.Equal(1, f.Read().Receipts.Values.Count(e => e.Event is RunEvent.RecoveryBaselined));
         Assert.True(f.Read().Blocks[block.Key].Resolved);
         Assert.False(f.Read().Blocks[unrelated].Resolved);
-        Assert.Equal("Adopted as the recovery baseline after confirmation " + confirmation.Value.ToString("D"),
-            Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
+        Assert.Equal(new[] { block.Key }, first.Receipt.Resolved);
+        Assert.Equal(0, f.Read().Receipts.Values.Count(e => e.Event is RunEvent.BlockResolved));
         var continuedOperation = f.Op();
         var continued = Assert.IsType<Preparation.Ready>(await f.Prepare(T, continuedOperation, cause));
         Assert.Equal(continued, await f.Prepare(T, continuedOperation, cause));
@@ -376,8 +417,12 @@ public sealed class RecoveryBaselineTests
         var operation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.Equal(point == "journal.baseline.after", f.Read().Blocks[drift].Resolved);
+        var sequence = f.Read().Sequence;
         var recorded = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer()
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
+        Assert.Equal(point == "journal.baseline.after" ? sequence : sequence + 1, f.Read().Sequence);
+        Assert.Equal(new[] { drift }, recorded.Receipt.Resolved);
         Assert.Equal("Recorded", recorded.GetType().Name);
         Assert.Equal("session-1", recorded.Receipt.Baseline.Session);
         Assert.True(f.Read().Blocks[drift].Resolved);

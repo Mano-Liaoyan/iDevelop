@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace IDevelop.Execution;
 
 internal sealed partial class Materializer
@@ -58,15 +60,13 @@ internal sealed partial class Materializer
                 throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, difference);
             step = "baseline";
             var baselineId = OperationIds.Derive(operation, "baseline");
-            receipt = (RunEvent.RecoveryBaselined)DecisionEvent(Journal(step, () => _store.Record(permit, baselineId,
-                new RunEvent.RecoveryBaselined(new(previous, confirmation, session, preservation)))));
+            record = Read(permit.Workflow, permit.Run);
             var driftId = OperationIds.Derive(preservation, "preserve-drift");
-            if (record.Blocks.TryGetValue(driftId, out var block) && !block.Resolved)
-            {
-                step = "baseline-resolve-" + driftId.Value.ToString("D");
-                Journal(step, () => _store.Record(permit, OperationIds.Derive(baselineId, step),
-                    new RunEvent.BlockResolved(driftId, $"Adopted as the recovery baseline after confirmation {confirmation.Value:D}")));
-            }
+            var resolved = record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == lease.Task &&
+                (b.Key == driftId || b.Value.Block.Operation == operation))
+                .OrderBy(b => record.Receipts[b.Key].Sequence).Select(b => b.Key).ToImmutableArray();
+            receipt = (RunEvent.RecoveryBaselined)DecisionEvent(Journal(step, () => _store.Record(permit, baselineId,
+                new RunEvent.RecoveryBaselined(new(previous, confirmation, session, preservation), resolved))));
             return new RecoveryBaselining.Recorded(receipt);
         }
         catch (Refusal refused) { return new RecoveryBaselining.Rejected(refused.Reason); }
@@ -92,7 +92,7 @@ internal sealed partial class Materializer
     }
 
     private RecoveryBaselining RecoveryBaselineBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, block) switch
+        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
         {
             Preparation.Blocked blocked => new RecoveryBaselining.Blocked(blocked.Block),
             Preparation.Rejected rejected => new RecoveryBaselining.Rejected(rejected.Reason),

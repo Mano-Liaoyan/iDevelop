@@ -236,9 +236,19 @@ internal abstract record RunEvent
 
     internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 
-    internal sealed record Restored(OperationId Plan) : RunEvent;
+    internal sealed record Restored(OperationId Plan, ImmutableArray<OperationId> Resolved) : RunEvent
+    {
+        public bool Equals(Restored? other) => other is not null && Plan == other.Plan && Resolved.SequenceEqual(other.Resolved);
 
-    internal sealed record RecoveryBaselined(RecoveryBaseline Baseline) : RunEvent;
+        public override int GetHashCode() => HashCode.Combine(Plan, Resolved.Length);
+    }
+
+    internal sealed record RecoveryBaselined(RecoveryBaseline Baseline, ImmutableArray<OperationId> Resolved) : RunEvent
+    {
+        public bool Equals(RecoveryBaselined? other) => other is not null && Baseline == other.Baseline && Resolved.SequenceEqual(other.Resolved);
+
+        public override int GetHashCode() => HashCode.Combine(Baseline, Resolved.Length);
+    }
 
     internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 

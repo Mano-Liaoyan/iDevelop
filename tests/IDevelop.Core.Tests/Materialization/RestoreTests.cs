@@ -15,7 +15,7 @@ public sealed class RestoreTests
         OperationId Confirmation, RestorePreview Preview, string IndexPath, string ScratchRoot);
 
     [Fact]
-    public async Task A_restore_receipt_crash_resolves_every_covered_block_on_rerun()
+    public async Task A_restore_receipt_crash_resolves_every_covered_block_atomically()
     {
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -24,6 +24,7 @@ public sealed class RestoreTests
         var attempt = ready.Execution.Launch.Attempt;
         f.Git.Write("a.txt", "late\n", ready.Checkout);
         Assert.Equal("Blocked", f.Materializer().Publish(f.Lease(T), f.Op(), attempt).GetType().Name);
+        var publicationBlock = Assert.Single(f.Read().Blocks).Key;
         var preservation = f.Op();
         Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
         var preview = Preview(f, ready, preservation);
@@ -33,10 +34,14 @@ public sealed class RestoreTests
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "journal.restored.after") throw new Crash(); })
             .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
         var receipt = f.Read().Restorations[OperationIds.Derive(operation, "restore-plan")];
-        Assert.Equal(2, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        Assert.Equal(new[] { publicationBlock, OperationIds.Derive(preservation, "preserve-drift") }, receipt.Resolved);
+        Assert.Equal(2, receipt.Resolved.Length);
+        Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
+        var sequence = f.Read().Sequence;
         var restored = f.Materializer().Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity);
         Assert.Equal("Restored", restored.GetType().Name);
         Assert.Equal(receipt, Assert.IsType<Restoration.Restored>(restored).Receipt);
+        Assert.Equal(sequence, f.Read().Sequence);
         Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved && b.Block.Task == T));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
@@ -204,9 +209,23 @@ public sealed class RestoreTests
         Assert.False(f.Read().Blocks[drift].Resolved);
         var preservation = f.Op();
         Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var whole = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, whole, new RunEvent.Blocked(
+            new(whole, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Checkout identity drift.")
+            { Scope = new([], [], false) })).GetType().Name);
+        var shared = f.Op();
+        Assert.Equal("Recorded", f.Store.Record(f.Permit, shared, new RunEvent.Blocked(
+            new(shared, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Stash drift.")
+            { Scope = new([], ["refs/stash"], false) })).GetType().Name);
         var preview = Preview(f, ready, preservation);
+        var locked = OperationIds.Derive(preservation, "preserve-drift");
+        Assert.Equal(new[] { locked }, preview.Repairs);
+        Assert.Empty(preview.Rechecks);
         Assert.Equal("Restored", f.Materializer().Restore(f.Lease(T), f.Op(), attempt, preservation, f.Op(), preview.Identity).GetType().Name);
         Assert.False(File.Exists(indexPath + ".lock"));
+        Assert.True(f.Read().Blocks[locked].Resolved);
+        Assert.False(f.Read().Blocks[whole].Resolved);
+        Assert.False(f.Read().Blocks[shared].Resolved);
         Assert.Equal("drifted\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal(1, f.Read().Blocks.Count(block => block.Key == drift && !block.Value.Resolved));
         Assert.Equal(new[] { "a.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
@@ -267,6 +286,42 @@ public sealed class RestoreTests
         var published = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
         Assert.Equal("Accepted", published.GetType().Name);
         Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(published).Result.Report);
+    }
+
+    [Fact]
+    public async Task A_restore_success_resolves_its_own_registration_refusal()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) return;
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        await f.Close(ready);
+        var attempt = ready.Execution.Launch.Attempt;
+        f.Git.Write("a.txt", "late\n", ready.Checkout);
+        var preservation = f.Op();
+        Assert.Equal("Preserved", (await f.Materializer().Preserve(f.Lease(T), preservation, attempt)).GetType().Name);
+        var drift = OperationIds.Derive(preservation, "preserve-drift");
+        var preview = Preview(f, ready, preservation);
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var reason = f.Git.Run(f.Git.Folder, "worktree", "list", "--porcelain").Text.Split('\n')
+            .Single(line => line.StartsWith("locked ", StringComparison.Ordinal))["locked ".Length..];
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
+        var refused = Assert.IsType<Restoration.Blocked>(f.Materializer()
+            .Restore(f.Lease(T), operation, attempt, preservation, confirmation, preview.Identity));
+        Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
+        Assert.Empty(refused.Block.Scope!.Paths);
+        Assert.Empty(refused.Block.Scope.Refs);
+        Assert.False(refused.Block.Scope.IndexLock);
+        var own = f.Read().Blocks.Single(b => b.Value.Block.Operation == OperationIds.Derive(operation, "restore-plan")).Key;
+        Assert.False(f.Read().Blocks[own].Resolved);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
+        var fresh = Preview(f, ready, preservation);
+        var result = Assert.IsType<Restoration.Restored>(f.Materializer()
+            .Restore(f.Lease(T), operation, attempt, preservation, confirmation, fresh.Identity));
+        Assert.Equal(new[] { drift, own }, result.Receipt.Resolved);
+        Assert.True(f.Read().Blocks[own].Resolved);
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
+        Assert.Equal(1, Moves(f, operation));
     }
 
     [Fact]
@@ -1058,7 +1113,7 @@ public sealed class RestoreTests
 
     [Theory]
     [MemberData(nameof(RestoreCrashPoints), DisableDiscoveryEnumeration = true)]
-    public async Task A_late_write_at_every_restore_probe_blocks_all_further_moves(string point)
+    public async Task A_late_write_at_every_restore_probe_blocks_until_the_receipt_is_recorded(string point)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var restore = await RestoreMatrixSetup(f);
@@ -1075,11 +1130,23 @@ public sealed class RestoreTests
         var a = File.ReadAllBytes(Path.Combine(restore.Ready.Checkout, "a.txt"));
         var extraPath = Path.Combine(restore.Ready.Checkout, "extra.txt");
         var extra = File.Exists(extraPath) ? File.ReadAllBytes(extraPath) : null;
-        var blocked = Assert.IsType<Restoration.Blocked>(f.Materializer().Restore(f.Lease(T), restore.Operation, attempt,
-            restore.Preservation, restore.Confirmation, restore.Preview.Identity));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("The checkout changed after it was preserved. Preserve it again.", blocked.Block.Detail);
-        Assert.Contains("root.txt", blocked.Block.Scope!.Paths);
+        var sequence = f.Read().Sequence;
+        var outcome = f.Materializer().Restore(f.Lease(T), restore.Operation, attempt,
+            restore.Preservation, restore.Confirmation, restore.Preview.Identity);
+        if (point == "journal.restored.after")
+        {
+            Assert.Equal("Restored", outcome.GetType().Name);
+            Assert.Equal(4, before);
+            Assert.Equal(sequence, f.Read().Sequence);
+            Assert.Equal(0, f.Read().Blocks.Values.Count(b => !b.Resolved));
+        }
+        else
+        {
+            var blocked = Assert.IsType<Restoration.Blocked>(outcome);
+            Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+            Assert.Equal("The checkout changed after it was preserved. Preserve it again.", blocked.Block.Detail);
+            Assert.Contains("root.txt", blocked.Block.Scope!.Paths);
+        }
         Assert.Equal(before, Moves(f, restore.Operation));
         Assert.Equal("late\n", File.ReadAllText(Path.Combine(restore.Ready.Checkout, "root.txt")));
         Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(restore.Ready.Execution.Location.Owner.Branch)));
