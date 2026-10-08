@@ -13,6 +13,7 @@ internal sealed partial class Shell
     /// <summary>Opens the preflight from the toolbar and waits until it has read the project.</summary>
     public RunPreflightViewModel OpenPreflight()
     {
+        WaitUntil(() => Has<Button>("RunWorkflow"), "the canvas shows Run Workflow");
         Click(Find<Button>("RunWorkflow"));
         WaitUntil(() => Preflight is { IsReady: true }, "the preflight reads the project");
         return Preflight!;
