@@ -94,4 +94,7 @@ internal abstract record PreflightGap
 
     /// <summary>Git could not read the project's submodules.</summary>
     internal sealed record Submodules(string Detail) : PreflightGap;
+
+    /// <summary>A run record of the workflow could not be read, so no run can be approved until it is repaired.</summary>
+    internal sealed record Records(string Detail) : PreflightGap;
 }

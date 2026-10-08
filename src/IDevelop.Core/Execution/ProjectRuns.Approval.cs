@@ -25,7 +25,9 @@ public sealed partial class ProjectRuns
             case RunApproval.Busy busy: return new WorkflowStart.Busy(busy.Active);
         }
         var approved = (RunApproval.Approved)approval;
-        var open = OpenRun(current.Id, approved.Run);
+        RunOpen open;
+        try { open = OpenRun(current.Id, approved.Run); }
+        catch (ObjectDisposedException) { return new WorkflowStart.Unopened(approved.Run, new(RunProblem.RunStopped)); }
         if (open is RunOpen.Rejected rejected) return new WorkflowStart.Unopened(approved.Run, rejected.Reason);
         Probe?.Invoke("approval.opened.after");
         var coordinator = ((RunOpen.Opened)open).Coordinator;

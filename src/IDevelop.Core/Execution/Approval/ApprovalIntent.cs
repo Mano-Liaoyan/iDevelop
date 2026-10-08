@@ -87,7 +87,8 @@ internal sealed class ApprovalIntents
                     !intent.Confirmations.IsDefaultOrEmpty)
                     intents.Add(intent);
             }
-            catch (JsonException) { }
+            catch (Exception error) when (error is JsonException or NotSupportedException or InvalidOperationException or KeyNotFoundException or
+                FormatException or ArgumentException or ProjectException or BlueprintException or OverflowException) { }
         }
         return intents.ToImmutable();
     }

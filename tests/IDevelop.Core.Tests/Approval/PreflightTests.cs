@@ -191,6 +191,39 @@ public sealed class PreflightTests
         Assert.Equal<PreflightReport>([new(X, attempt.Id, "X ready.\n", [BaseChoice.Head])], preview.Reusable);
     }
 
+    [Fact]
+    public async Task A_sparse_checkout_without_one_of_its_files_cannot_be_previewed()
+    {
+        await using var f = new ApprovalFixture(Chain());
+        f.GitText("update-index", "--skip-worktree", "plan.txt");
+        File.Delete(f.Git.PathOf("plan.txt"));
+        await f.Open();
+
+        var preview = f.Preflight();
+
+        Assert.Null(preview.Base);
+        Assert.Equal<PreflightGap>([new PreflightGap.Git(MaterializationProblem.DirtyWorktree,
+            "The index marks plan.txt skip-worktree, and the work tree has no such file.")], preview.Gaps);
+        await AssertRefused(f, preview, BaseChoice.Head);
+    }
+
+    [Fact]
+    public async Task A_damaged_run_record_of_the_workflow_is_a_gap()
+    {
+        await using var f = new ApprovalFixture(Chain());
+        var run = Guid.Parse("00000000-0000-0000-0000-0000000000dd");
+        var folder = Directory.CreateDirectory(Path.Combine(f.Project, ".idp", "runs", f.Workflow.Id.ToString(), run.ToString("D"))).FullName;
+        File.WriteAllText(Path.Combine(folder, "events.jsonl"), "{}\n");
+        await f.Open();
+
+        var preview = f.Preflight();
+
+        Assert.Equal<PreflightGap>([new PreflightGap.Records($"Run {run:D}: InvalidData.")], preview.Gaps);
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(2))).WaitAsync(Bound));
+        Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
+        Assert.Equal(0, f.TotalLaunches);
+    }
+
     private static IReadOnlyDictionary<string, string> GitVersion(ApprovalFixture f, string version)
     {
         var realGit = CommandResolver.Create((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;

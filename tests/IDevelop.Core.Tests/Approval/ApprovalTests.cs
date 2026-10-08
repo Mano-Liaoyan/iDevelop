@@ -85,4 +85,48 @@ public sealed class ApprovalTests
         Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", "refs/heads/main"));
         Assert.Equal(["draft\n", "staged\n", "notes\n", "secret\n"], new[] { "plan.txt", "staged.txt", "notes.txt", "secret.log" }.Select(f.Text));
     }
+
+    [Fact]
+    public async Task Cancelling_the_preview_records_and_starts_nothing()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        Uncommitted(f);
+        var index = f.Index();
+        var refs = f.GitText("for-each-ref");
+        await f.Open();
+
+        var preview = f.Preflight();
+        await f.Reopen();
+
+        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], preview.Choices);
+        Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs")));
+        Assert.Equal(0, f.TotalLaunches);
+        Assert.Equal(index, f.Index());
+        Assert.Equal(refs, f.GitText("for-each-ref"));
+    }
+
+    [Fact]
+    public async Task While_a_run_is_active_a_different_preview_is_busy_and_the_same_content_is_that_run()
+    {
+        await using var f = new ApprovalFixture(Graph([Agent(A, conversation: ConversationMode.Chat), Agent(X, readOnly: true)]));
+        f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(X, Reports(X));
+        await f.Open();
+        var preview = f.Preflight();
+        var first = await Start(f, preview, BaseChoice.Head, Command(3));
+        await first.Coordinator.Until(view => view.Status == RunStatus.Waiting).WaitAsync(Bound);
+        var run = first.Coordinator.Address.Run;
+        f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
+
+        var edited = f.Preflight();
+        var busy = Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(edited, BaseChoice.Head, Command(4))).WaitAsync(Bound));
+
+        Assert.Equal(run, edited.Active);
+        Assert.Equal(run, busy.Active);
+        f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X"));
+        var same = await Start(f, f.Preflight(), BaseChoice.Head, Command(5));
+        Assert.True(same.Existing);
+        Assert.Equal(run, same.Coordinator.Address.Run);
+        Assert.Equal([run], f.ApprovedRuns());
+        Assert.Equal([1, 1], new[] { f.Launches(A), f.Launches(X) });
+    }
 }

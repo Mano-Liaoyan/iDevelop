@@ -1,0 +1,100 @@
+using System.Text.Json;
+using IDevelop.Core.Tests.Runs;
+using IDevelop.Execution;
+using IDevelop.Projects;
+using IDevelop.Workflows;
+using static IDevelop.Core.Tests.Approval.ApprovalFixture;
+using static IDevelop.Core.Tests.Approval.ApprovalTests;
+using static IDevelop.Core.Tests.Approval.ChangedContentTests;
+using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
+using static IDevelop.Core.Tests.Runs.RunFixtures;
+
+namespace IDevelop.Core.Tests.Approval;
+
+/// <summary>A crash at each durable step of an approval, then a restart and a repeated confirmation, give one run (E3d.1).</summary>
+public sealed class ApprovalCrashTests
+{
+    private static readonly OperationId First = new(Guid.Parse("00000000-0000-0000-0000-0000000c0001"));
+    private static readonly OperationId AfterRestart = new(Guid.Parse("00000000-0000-0000-0000-0000000c0002"));
+
+    /// <summary>Confirms the workflow's preview in a racer process, which exits at <paramref name="point"/>.</summary>
+    private static async Task Crash(ApprovalFixture f, BaseChoice choice, string point)
+    {
+        f.Install();
+        var file = Path.Combine(f.Evidence, "workflow.json");
+        File.WriteAllBytes(file, WorkflowFile.Serialize(f.Workflow));
+        using var racer = new Racer(f.Git.Environment, "approve-crash", f.Project, file, f.Fakes.Folder, First.Value.ToString("D"), choice.ToString(), point);
+        Assert.Equal("Previewed", await racer.Line());
+        Assert.Equal(point, await racer.Line());
+        await racer.Exit();
+        Assert.Equal(73, racer.ExitCode);
+        Assert.Equal(0, f.TotalLaunches);
+    }
+
+    private static ApprovalIntent? Intent(ApprovalFixture f) => Intents(f.Project) is [var path]
+        ? JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), RunJournal.Options) : null;
+
+    [Theory]
+    [InlineData("approval.locked", "Snapshot")]
+    [InlineData("approval.intent.after", "Snapshot")]
+    [InlineData("approval.snapshot.after", "Snapshot")]
+    [InlineData("approval.approved.after", "Snapshot")]
+    [InlineData("approval.opened.after", "Snapshot")]
+    [InlineData("approval.intent.after", "Head")]
+    [InlineData("approval.approved.after", "Head")]
+    [InlineData("approval.opened.after", "Head")]
+    public async Task A_crash_at_each_durable_step_then_a_restart_and_a_repeated_confirmation_start_one_run(string point, string chosen)
+    {
+        var choice = Enum.Parse<BaseChoice>(chosen);
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        Uncommitted(f);
+        var index = f.Index();
+        await Crash(f, choice, point);
+        var intended = Intent(f);
+        Assert.Equal(point == "approval.locked", intended is null);
+        Assert.Equal(point is "approval.approved.after" or "approval.opened.after" ? 1 : 0, f.ApprovedRuns().Length);
+
+        await f.Open();
+        var preview = f.Preflight();
+        var starts = await System.Threading.Tasks.Task.WhenAll(Start(f, preview, choice, AfterRestart), Start(f, preview, choice, First));
+
+        var run = Assert.Single(f.ApprovedRuns());
+        Assert.All(starts, start => Assert.Equal(run, start.Coordinator.Address.Run));
+        if (intended is not null) Assert.Equal(intended.Run, run);
+        Assert.Equal(point is "approval.approved.after" or "approval.opened.after" ? 2 : 1, starts.Count(start => start.Existing));
+        await Completed(starts[0].Coordinator);
+        Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
+        var record = f.Read(run);
+        Assert.Equal(choice, record.Base.Choice);
+        Assert.Equal(choice == BaseChoice.Snapshot ? "notes\n" : null, f.ResultFile(run, A, "notes.txt"));
+        if (choice == BaseChoice.Snapshot)
+        {
+            var recorded = Intent(f)!.Recorded.ToUnixTimeSeconds();
+            Assert.Equal($"{preview.Base!.WorkTree.Hex}\n{Head.Hex}\n{recorded}\n", f.GitText("show", "-s", "--format=%T%n%P%n%ct", record.Base.Commit.Hex));
+        }
+        Assert.Equal(index, f.Index());
+        Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", "HEAD"));
+        Assert.Equal(["draft\n", "notes\n"], new[] { "plan.txt", "notes.txt" }.Select(f.Text));
+    }
+
+    [Fact]
+    public async Task A_pending_intent_whose_content_changed_is_replaced_by_the_refreshed_confirmation()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        Uncommitted(f);
+        await Crash(f, BaseChoice.Snapshot, "approval.snapshot.after");
+        var stale = Intent(f)!;
+        f.Git.Write("notes.txt", "notes again\n");
+        await f.Open();
+
+        var started = await Start(f, f.Preflight(), BaseChoice.Snapshot, AfterRestart);
+
+        await Completed(started.Coordinator);
+        var run = Assert.Single(f.ApprovedRuns());
+        Assert.NotEqual(stale.Run, run);
+        Assert.Equal(run, Intent(f)!.Run);
+        Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", W.ToString(), stale.Run.ToString())));
+        Assert.Equal("notes again\n", f.ResultFile(run, A, "notes.txt"));
+        Assert.Equal(1, f.Launches(A));
+    }
+}

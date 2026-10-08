@@ -59,8 +59,13 @@ internal sealed class RunApprovals
             foreach (var task in tasks.Where(task => task.Inputs.Count(input => input.Kind == ConnectionKind.Dependency) > 1))
                 gaps.Add(new PreflightGap.Join(task.Task, $"Joins need Git 2.43 or later. Installed: {repository.Version}."));
         }
-        var found = repository is null ? null : Base(repository, gaps);
-        var preview = new RunPreflight(_project, revision, git, found, tasks, Active(workflow.Id)?.Id) { Gaps = gaps.ToImmutable() };
+        PreflightBase? found = null;
+        try { found = repository is null ? null : Base(repository, gaps); }
+        catch (GitFailure failure) { gaps.Add(new PreflightGap.Git(failure.Problem, failure.Message)); }
+        RunId? active = null;
+        try { active = Active(workflow.Id)?.Id; }
+        catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
+        var preview = new RunPreflight(_project, revision, git, found, tasks, active) { Gaps = gaps.ToImmutable() };
         return found is null ? preview : preview with { Reusable = Reusable(workflow, found, RunPreflight.Offered(found)) };
     }
 
@@ -105,8 +110,11 @@ internal sealed class RunApprovals
     /// <summary>One line of <c>git submodule status</c>: a state character, the commit, the path, and a description.</summary>
     private static PreflightSubmodule Submodule(string line)
     {
-        var fields = line[1..].Split(' ', 3);
-        return new(fields[1], new(fields[0]), line[0] switch
+        var rest = line[1..];
+        var space = rest.IndexOf(' ');
+        var path = rest[(space + 1)..];
+        if (path.EndsWith(')') && path.LastIndexOf(" (", StringComparison.Ordinal) is var description and > 0) path = path[..description];
+        return new(path, new(rest[..space]), line[0] switch
         {
             '-' => SubmoduleState.Uninitialized,
             '+' => SubmoduleState.Changed,
@@ -175,9 +183,9 @@ internal sealed class RunApprovals
                 return new RunApproval.Approved(active.Id, active.Base, true);
             }
             var pending = all.Where(intent => Approved(live.Workflow, intent.Run) is null).ToArray();
-            var adopted = pending.FirstOrDefault(intent => intent == own && intent.Matches(live, choice)) ??
+            var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, choice)) ??
                 pending.FirstOrDefault(intent => intent.Matches(live, choice));
-            foreach (var stale in pending.Where(intent => intent != adopted)) intents.Remove(stale.Run);
+            foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run);
             var chosen = adopted is null
                 ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
                     [confirmation.Command], live.Revision, choice, live.Base!.Head, choice == BaseChoice.Snapshot ? live.Base.WorkTree : null,
@@ -198,8 +206,8 @@ internal sealed class RunApprovals
             _probe?.Invoke("approval.approved.after");
             return decision switch
             {
-                RunDecision.Created => new RunApproval.Approved(chosen.Run, codeBase, false),
-                RunDecision.Existing => new RunApproval.Approved(chosen.Run, codeBase, true),
+                RunDecision.Created created => new RunApproval.Approved(chosen.Run, created.Record.Base, false),
+                RunDecision.Existing existing => new RunApproval.Approved(chosen.Run, existing.Record.Base, true),
                 RunDecision.Rejected { Reason.Problem: RunProblem.RunBusy } when Active(live.Workflow) is { } other => new RunApproval.Busy(other.Id),
                 RunDecision.Rejected rejected => new RunApproval.Refused(ApprovalProblem.StorageUnavailable, rejected.Reason.Problem.ToString()),
                 _ => throw new InvalidOperationException(),
@@ -265,5 +273,11 @@ internal sealed class RunApprovals
 
     private static bool InData(string path) => Excluded.Any(folder => path == folder || path.StartsWith(folder + "/", StringComparison.Ordinal));
 
-    private static T Value<T>(GitRead<T> read) => read is GitRead<T>.Read value ? value.Value : throw new InvalidOperationException(((GitRead<T>.Failed)read).Detail);
+    private static T Value<T>(GitRead<T> read) => read is GitRead<T>.Read value ? value.Value
+        : throw new GitFailure(((GitRead<T>.Failed)read).Problem, ((GitRead<T>.Failed)read).Detail);
+
+    private sealed class GitFailure(MaterializationProblem problem, string detail) : Exception(detail)
+    {
+        public MaterializationProblem Problem { get; } = problem;
+    }
 }
