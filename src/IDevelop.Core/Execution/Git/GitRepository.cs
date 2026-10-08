@@ -385,6 +385,54 @@ internal sealed partial class GitRepository
         }
     }
 
+    public GitRead<TreeId> WriteTree(IEnumerable<StageEntry> entries)
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
+        try
+        {
+            var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };
+            var bytes = Encoding.UTF8.GetBytes(string.Concat(entries.Select(entry =>
+                $"{entry.Mode} {entry.Object} {entry.Stage.ToString(CultureInfo.InvariantCulture)}\t{entry.Path}\0")));
+            var indexed = Git(ProjectFolder, GitOperation.Worktree, ["update-index", "-z", "--index-info"], environment, bytes);
+            if (indexed.ExitCode != 0) return Failure<TreeId>(indexed);
+            var tree = Git(ProjectFolder, GitOperation.Worktree, ["write-tree"], environment);
+            return tree.ExitCode == 0 ? new GitRead<TreeId>.Read(new(tree.Text.Trim())) : Failure<TreeId>(tree);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+        }
+        finally
+        {
+            File.Delete(temporary);
+            File.Delete(temporary + ".lock");
+        }
+    }
+
+    internal static ImmutableArray<StageEntry> ParseIndex(byte[] bytes)
+    {
+        var entries = ImmutableArray.CreateBuilder<StageEntry>();
+        string text;
+        try { text = new UTF8Encoding(false, true).GetString(bytes); }
+        catch (DecoderFallbackException error) { throw new IOException("The recorded index has a non-UTF-8 path.", error); }
+        var offset = 0;
+        while (offset < text.Length)
+        {
+            var end = text.IndexOf('\0', offset);
+            if (end < 0) throw new IOException("The recorded index has an incomplete entry.");
+            var tab = text.IndexOf('\t', offset, end - offset);
+            if (tab < 0) throw new IOException("The recorded index has an invalid entry.");
+            var header = text[offset..tab].Split(' ');
+            if (header.Length != 4 || header[0].Length != 1 || header[1].Length != 6 ||
+                !header[1].All(character => character is >= '0' and <= '7') || !Revision.IsCommit(header[2]) ||
+                !int.TryParse(header[3], NumberStyles.None, CultureInfo.InvariantCulture, out var stage) || stage is < 0 or > 3 || tab + 1 == end)
+                throw new IOException("The recorded index has an invalid entry.");
+            if (stage == 0) entries.Add(new(header[1], header[2], stage, text[(tab + 1)..end]));
+            offset = end + 1;
+        }
+        return entries.ToImmutable();
+    }
+
     public GitRead<CommitId> CreateCommit(CommitRecipe recipe)
     {
         var author = Identity(recipe.Author);

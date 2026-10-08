@@ -163,7 +163,8 @@ internal sealed partial class Materializer
                             repository ??= OpenRepository();
                             record = Read(permit.Workflow, permit.Run);
                             observation = Mutate("capture-" + ordinal, () => ObserveCapture(repository, record,
-                                capture, ordinal, launch, log!, ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
+                                capture, ordinal, launch, log!, ordinal == 1 || !recoveringPair || observations[0].IndexTree is not null,
+                                ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
                         }
                         catch (MaterializationFailure failed)
                         {
@@ -198,7 +199,7 @@ internal sealed partial class Materializer
     }
 
     private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id,
-        int ordinal, LaunchKey launch, LogCheckpoint log, ref ImmutableArray<EvidenceFile> evidence)
+        int ordinal, LaunchKey launch, LogCheckpoint log, bool retainIndex, ref ImmutableArray<EvidenceFile> evidence)
     {
         var started = _clock.GetUtcNow();
         var prepared = record.Preparations[launch];
@@ -215,7 +216,8 @@ internal sealed partial class Materializer
         var head = Value(repository.SymbolicHead(checkout));
         var storage = new RunStorage(_project, record.Workflow, record.Id);
         EvidenceFile? index = null;
-        if (Value(repository.IndexBytes(checkout)) is { } bytes)
+        var indexBytes = Value(repository.IndexBytes(checkout));
+        if (indexBytes is { } bytes)
         {
             var relative = RunStorage.CapturePath(id, ordinal, "index");
             index = new(relative, Revision.Hash(bytes), bytes.LongLength);
@@ -240,10 +242,18 @@ internal sealed partial class Materializer
         var recipe = new CommitRecipe(captured.Tree, [root.Tip],
             $"{definition.Title}\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {launch.Attempt.Value:D}\n",
             "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", DateTimeOffset.FromUnixTimeSeconds(root.At.ToUnixTimeSeconds()));
+        TreeId? indexTree = null;
+        if (index is not null && retainIndex)
+        {
+            indexTree = Value(repository.WriteTree(GitRepository.ParseIndex(indexBytes!)));
+            var indexRecipe = recipe with { Tree = indexTree.Value, Parents = [], Message = "Index of " + recipe.Message };
+            var indexCommit = Value(repository.CreateCommit(indexRecipe));
+            Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, ordinal), indexCommit);
+        }
         var candidate = Value(repository.CreateCommit(recipe));
         Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate);
         return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
-            logged.Record!.Result, artifacts, refs, unexplained);
+            logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
     }
 
     private CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation first, CaptureObservation second)

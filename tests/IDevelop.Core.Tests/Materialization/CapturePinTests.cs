@@ -23,12 +23,17 @@ public sealed class CapturePinTests
         var prefix = RunLayout.PinPrefix(record.RunKey!);
         var taskKey = record.TaskKeys[T];
         var pins = GitFixture.Read(f.Git.Open().RefSnapshot(prefix));
-        Assert.Equal(3, pins.Count);
+        Assert.Equal(5, pins.Count);
         Assert.Equal(root, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/root"]);
         Assert.Equal(observations[0].Candidate, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/capture-1"]);
         Assert.Equal(observations[1].Candidate, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/capture-2"]);
+        foreach (var observation in observations)
+        {
+            var indexCommit = pins[RunLayout.CaptureIndexPin(record.RunKey!, taskKey, writer.Execution.Launch, observation.Ordinal)];
+            Assert.Equal(observation.IndexTree, GitFixture.Read(f.Git.Open().ReadCommit(indexCommit)).Tree);
+        }
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
-        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", writer.Execution.Location.AttemptBase.Hex).ExitCode);
         f.Git.Write("foreign.txt", "foreign\n", writer.Checkout);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "foreign.txt").ExitCode);
@@ -53,11 +58,59 @@ public sealed class CapturePinTests
         Assert.Equal(RunPhase.Failed, Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed)).Record.Phase);
         var sequence = f.Read().Sequence;
         var operation = f.Op();
-        Assert.Equal(6, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+        Assert.Equal(10, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(0, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Equal(sequence, f.Read().Sequence);
         Assert.Equal(retained, GitFixture.Read(f.Git.Open().RefSnapshot($"refs/idp/{record.RunKey}/result/", $"refs/idp/{record.RunKey}/salvage/")));
+    }
+
+    [Fact]
+    public async Task A_capture_retains_the_staged_index_tree()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "staged\n", writer.Checkout);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "result.txt").ExitCode);
+        f.Git.Write("result.txt", "done\n", writer.Checkout);
+        var log = f.ObserveAndLog(writer);
+        var changedIndex = false;
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+        {
+            if (point == "refs.snapshot.after" && !changedIndex)
+            {
+                changedIndex = true;
+                f.Git.Write("result.txt", "other staged\n", writer.Checkout);
+                Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "result.txt").ExitCode);
+                f.Git.Write("result.txt", "done\n", writer.Checkout);
+            }
+            if (point == "git.capture-2.before")
+            {
+                f.Git.Write("result.txt", "staged\n", writer.Checkout);
+                Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "result.txt").ExitCode);
+                f.Git.Write("result.txt", "done\n", writer.Checkout);
+            }
+        }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
+        Assert.True(changedIndex);
+        Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+        var record = f.Read();
+        var observations = record.Captures[settled.Capture];
+        Assert.Equal(new[] { 1, 2 }, observations.Select(observation => observation.Ordinal));
+        var indexTree = Assert.IsType<TreeId>(observations[0].IndexTree);
+        Assert.Equal(indexTree, observations[1].IndexTree);
+        Assert.Equal("staged\n", f.Git.Git("show", indexTree.Hex + ":result.txt"));
+        Assert.Equal("done\n", f.Git.Git("show", observations[0].Recipe.Tree.Hex + ":result.txt"));
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q").ExitCode);
+        Assert.Equal(0, f.Git.Run(f.Git.Folder, "-c", "gc.reflogExpire=now", "-c", "gc.reflogExpireUnreachable=now",
+            "gc", "--prune=now").ExitCode);
+        Assert.Equal("staged\n", f.Git.Git("show", indexTree.Hex + ":result.txt"));
+        Assert.Equal("done\n", f.Git.Git("show", observations[0].Recipe.Tree.Hex + ":result.txt"));
+        var pin = RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch, 1);
+        var commit = GitFixture.Read(f.Git.Open().ReadRef(pin));
+        Assert.NotNull(commit);
+        var retained = GitFixture.Read(f.Git.Open().ReadCommit(commit.Value));
+        Assert.Equal(indexTree, retained.Tree);
+        Assert.Empty(retained.Parents);
     }
 
     [Fact]
@@ -156,8 +209,8 @@ public sealed class CapturePinTests
         }).ReleasePins(f.Permit, f.Op()));
         Assert.Equal(MaterializationProblem.GitFailed, failed.Problem);
         Assert.Equal(other, GitFixture.Read(f.Git.Open().ReadRef(capturePin))!.Value.Hex);
-        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(record.RunKey!))).Count);
-        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(record.RunKey!))).Count);
+        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(record.RunKey!))));
         Assert.Equal("writer\n", f.Git.Git("show", candidate.Hex + ":result.txt"));
     }
@@ -172,11 +225,11 @@ public sealed class CapturePinTests
         Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(
             f.Lease(T), f.Op(), writer.Execution.Launch, log)).Disposition);
         var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
-        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
         Assert.IsType<RunDecision.Recorded>(f.Store.Abandon(f.Permit, f.Op(), f.Op(), "Abandoned."));
         Assert.Equal(RunPhase.Abandoned, f.Read().Phase);
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
-        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, log));
         var blocked = f.Op();
@@ -190,10 +243,10 @@ public sealed class CapturePinTests
             if (point == "journal.salvage-plan.after") throw new PublicationTests.Crash();
         }).Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
-        Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
+        Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
         Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
         var operation = f.Op();
-        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
+        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(0, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, operation)).Count);
     }

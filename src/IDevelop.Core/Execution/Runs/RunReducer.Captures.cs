@@ -26,7 +26,8 @@ internal static partial class RunReducer
 internal static class CaptureComparison
 {
     internal static bool Index(CaptureObservation first, CaptureObservation second) =>
-        first.Index?.Content == second.Index?.Content && first.Index?.ByteLength == second.Index?.ByteLength;
+        first.Index?.Content == second.Index?.Content && first.Index?.ByteLength == second.Index?.ByteLength &&
+        first.IndexTree == second.IndexTree;
 
     internal static bool Artifacts(CaptureObservation first, CaptureObservation second) =>
         first.Artifacts.OrderBy(file => file.Name, StringComparer.Ordinal).Select(file => (file.Name, file.Content, file.ByteLength))
@@ -51,6 +52,7 @@ internal static partial class RunValidation
         (observation.Head is null || !string.IsNullOrWhiteSpace(observation.Head)) &&
         (observation.Index is null || Evidence(observation.Index) &&
             observation.Index.RelativePath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "index")) &&
+        (observation.IndexTree is null || Revision.IsCommit(observation.IndexTree.Value.Hex)) &&
         !observation.Artifacts.IsDefault && observation.Artifacts.All(file => Artifact(file) &&
             file.StoredPath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "artifacts/" + file.Name)) &&
         observation.Artifacts.Select(file => file.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == observation.Artifacts.Length &&

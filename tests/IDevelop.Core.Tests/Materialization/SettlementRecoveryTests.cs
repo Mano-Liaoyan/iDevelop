@@ -26,6 +26,42 @@ public sealed class SettlementRecoveryTests
         Assert.Single(f.Read().TurnClosures);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async AsyncTask Recovery_retains_index_trees_only_when_the_first_observation_has_one(bool retained)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var capture = new CaptureId(f.Op().Value);
+        CaptureObservation? first = null;
+        await Assert.ThrowsAsync<SettlementCrash>(() => f.Materializer(probe: point =>
+        {
+            if (point != "journal.capture-2.before") return;
+            first = Assert.Single(Assert.Single(f.Read().Captures).Value);
+            throw new SettlementCrash();
+        }).Settle(f.Lease(T), new OperationId(capture.Value), ready.Execution.Launch, log).AsTask());
+        var template = Assert.IsType<CaptureObservation>(first);
+        using var recovery = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (other, checkpoint) = await Ready(recovery);
+        var observation = template with { Launch = other.Execution.Launch, Log = checkpoint,
+            IndexTree = retained ? template.IndexTree : null };
+        Assert.NotNull(template.IndexTree);
+        Assert.IsType<RunDecision.Recorded>(recovery.Store.Record(recovery.Permit, recovery.Op(), new RunEvent.TurnCaptured(observation)));
+        var canonical = RunJournal.Canonical(observation);
+        if (!retained) Assert.DoesNotContain("indexTree", canonical);
+        recovery.ReleaseControl();
+        var closed = Assert.IsType<Settlement.Closed>(await recovery.Materializer().RecoverSettlement(recovery.Lease(T), recovery.Op(), other.Execution.Launch));
+        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        var pair = recovery.Read().Captures[closed.Capture];
+        Assert.Equal(2, pair.Count);
+        Assert.True(pair[1].Recovery);
+        Assert.Equal(observation.IndexTree, pair[1].IndexTree);
+        Assert.Equal(canonical, RunJournal.Canonical(pair[0]));
+        var pins = IDevelop.Core.Tests.Git.GitFixture.Read(recovery.Git.Open().RefSnapshot(RunLayout.PinPrefix(recovery.Read().RunKey!)));
+        Assert.Equal(retained, pins.ContainsKey(RunLayout.CaptureIndexPin(recovery.Read().RunKey!, recovery.Read().TaskKeys[T], other.Execution.Launch, 2)));
+    }
+
     [Fact]
     public async AsyncTask A_changed_recovery_capture_keeps_both_observations_and_blocks()
     {
