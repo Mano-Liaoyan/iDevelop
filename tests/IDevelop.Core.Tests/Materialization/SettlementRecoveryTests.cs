@@ -172,7 +172,7 @@ public sealed class SettlementRecoveryTests
         var disposed = Assert.Single(f.Read().Dispositions).Value;
         Assert.Equal("Missing turn-end log evidence.", Assert.IsType<CaptureDisposition.Failed>(disposed.Disposition).Detail);
         Assert.Empty(f.Read().TurnClosures);
-        Assert.Equal("SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint)));
+        Assert.Equal("UnresolvedOwnership", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint)));
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt)));
         Assert.Equal("ConfirmationRequired", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt, RecoveryOutcome.Stopped)));
         var closed = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
@@ -264,16 +264,23 @@ public sealed class SettlementRecoveryTests
         else await Crash(f, ready, checkpointAtExit, f.Op(), point);
         var launch = ready.Execution.Launch;
         var log = Checkpoint(f.Store.AttemptFolder(W, f.RunId, T, launch.Attempt));
+        _ = f.Lease(T);
+        var sequence = f.Read().Sequence;
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt)));
         Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
             RecoveryOutcome.Stopped, f.Op(), "Confirmed.")));
-        Assert.Equal("SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log)));
+        Assert.Equal(takeover ? "UnresolvedOwnership" : "SettlementPending", ProblemName(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log)));
         Assert.Equal(takeover ? "UnresolvedOwnership" : "SettlementPending", ProblemName(f.Store.CloseTurn(f.Permit, f.Op(), launch, log)));
+        Assert.Equal(sequence, f.Read().Sequence);
         var settlement = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch));
         Assert.Single(f.Read().TurnClosures);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
         if (point == "journal.capture-1.before") Assert.IsType<CaptureDisposition.Failed>(settlement.Disposition);
-        else Assert.IsType<CaptureDisposition.Matched>(settlement.Disposition);
+        else
+        {
+            Assert.IsType<CaptureDisposition.Matched>(settlement.Disposition);
+            AssertPublished(f, ready);
+        }
         using var control = new RunFixtures();
         control.Approve();
         var reserved = control.Reserve();
@@ -281,6 +288,113 @@ public sealed class SettlementRecoveryTests
         var checkpoint = control.WriteLog(reserved);
         Assert.IsType<RunDecision.Recorded>(control.Store.CloseTurn(control.Permit, control.Op(), new(A1, 1), checkpoint));
         Assert.IsType<RunDecision.Recorded>(control.Store.CloseAttempt(control.Permit, control.Op(), A1, TerminalAttemptOutcome.Succeeded, checkpoint));
+    }
+
+    [Theory]
+    [InlineData("journal.capture-disposition.before", false)]
+    [InlineData("journal.capture-disposition.before", true)]
+    [InlineData("journal.close-turn.before", false)]
+    [InlineData("journal.close-turn.before", true)]
+    public async AsyncTask A_decided_settlement_whose_log_moved_on_closes_by_confirmed_recovery(string point, bool takeover)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        await Crash(f, ready, log, f.Op(), point);
+        using (var attempt = AttemptLog.Open(f.Store.AttemptFolder(W, f.RunId, T, launch.Attempt)))
+            attempt.Append(new AttemptEvent.HandedToTerminal(At, ready.Checkout, "codex resume fixture"));
+        if (takeover) f.ReleaseControl();
+        Assert.Equal("EvidenceMismatch", Rejection(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch)));
+        Assert.IsType<CaptureDisposition.Matched>(Assert.Single(f.Read().Dispositions).Value.Disposition);
+        var sequence = f.Read().Sequence;
+        Assert.Equal("EvidenceMismatch", Rejection(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch)));
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt)));
+        Assert.Equal("ConfirmationRequired", ProblemName(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt, RecoveryOutcome.Stopped)));
+        Assert.Equal(sequence, f.Read().Sequence);
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
+            RecoveryOutcome.Stopped, f.Op(), "The person stopped the turn after its log moved on."));
+        Assert.Equal("Stopped", Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[launch.Attempt]).Outcome.ToString());
+        Assert.Empty(f.Read().TurnClosures);
+        Assert.Empty(f.Read().UnresolvedClaims);
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(T), f.Op(), launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
+        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (valid, checkpoint) = await Ready(control);
+        await Crash(control, valid, checkpoint, control.Op(), point);
+        if (takeover) control.ReleaseControl();
+        Assert.Equal("SettlementPending", ProblemName(control.Store.Recover(control.Lease(T), control.Op(), valid.Execution.Launch.Attempt)));
+        Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await control.Materializer().RecoverSettlement(
+            control.Lease(T), control.Op(), valid.Execution.Launch)).Disposition);
+        CloseAndPublish(control, valid, checkpoint);
+    }
+
+    [Theory]
+    [InlineData("locked")]
+    [InlineData("rewritten")]
+    public async AsyncTask A_decided_settlement_stays_pending_unless_its_log_reads_as_moved_on(string state)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        await Crash(f, ready, log, f.Op(), "journal.close-turn.before");
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, launch.Attempt);
+        using (var attempt = AttemptLog.Open(folder))
+            attempt.Append(new AttemptEvent.HandedToTerminal(At, ready.Checkout, "codex resume fixture"));
+        var lease = f.Lease(T);
+        var sequence = f.Read().Sequence;
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var path = Path.Combine(folder, "events.jsonl");
+        var moved = File.ReadAllBytes(path);
+        if (state == "rewritten")
+        {
+            var rewritten = moved.ToArray();
+            rewritten[0] = (byte)' ';
+            File.WriteAllBytes(path, rewritten);
+        }
+        using (state == "locked" ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None) : null)
+            Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(lease, operation, launch.Attempt,
+                RecoveryOutcome.Stopped, confirmation, "The person stopped the turn after its log moved on.")));
+        File.WriteAllBytes(path, moved);
+        Assert.Equal(sequence, f.Read().Sequence);
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(lease, operation, launch.Attempt,
+            RecoveryOutcome.Stopped, confirmation, "The person stopped the turn after its log moved on."));
+        Assert.Equal("Stopped", Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[launch.Attempt]).Outcome.ToString());
+        Assert.Equal(sequence + 1, f.Read().Sequence);
+    }
+
+    [Fact]
+    public async AsyncTask The_reducer_refuses_a_capture_less_turn_closure_on_a_fenced_launch()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        await Crash(f, ready, log, f.Op(), "journal.close-turn.before");
+        f.ReleaseControl();
+        _ = f.Lease(T);
+        var record = f.Read();
+        Assert.Equal(new[] { launch }, record.Fenced);
+        var capture = Assert.Single(record.Dispositions).Key;
+        RunRead Apply(RunEvent e) => RunReducer.Apply(W, f.RunId, record, new(3, record.Sequence + 1, f.Op(), Prompt, At, e));
+        Assert.Equal(new RunRejection(RunProblem.InvalidClaim, record.Sequence + 1),
+            Assert.IsType<RunRead.Rejected>(Apply(new RunEvent.TurnClosed(launch, log))).Reason);
+        Assert.Equal(capture, Assert.IsType<RunRead.Loaded>(Apply(new RunEvent.TurnClosed(launch, log) { Capture = capture })).Record.Settlements[launch]);
+    }
+
+    [Fact]
+    public async AsyncTask A_late_close_turn_gets_the_closed_turns_answer()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), launch, log));
+        var sequence = f.Read().Sequence;
+        var repeated = Assert.IsType<RunDecision.Existing>(f.Store.CloseTurn(f.Permit, f.Op(), launch, log, closed.Capture));
+        Assert.Equal(closed.Capture, Assert.IsType<RunEvent.TurnClosed>(repeated.Event).Capture);
+        Assert.Equal("EvidenceMismatch", ProblemName(f.Store.CloseTurn(f.Permit, f.Op(), launch, log)));
+        Assert.Equal(sequence, f.Read().Sequence);
+        CloseAndPublish(f, ready, log);
     }
 
     [Fact]

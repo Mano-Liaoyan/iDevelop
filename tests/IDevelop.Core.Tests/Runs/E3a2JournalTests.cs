@@ -70,8 +70,13 @@ public sealed class E3a2JournalTests
             Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(publication).Reason.Problem.ToString());
             Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
             if (fixture == "e3a2-orphaned-turn")
+            {
                 Assert.Equal("EvidenceMismatch", Assert.IsType<Settlement.Rejected>(await f.Materializer().RecoverSettlement(
                     f.Lease(T), f.Op(), ready.Execution.Launch)).Reason.Problem.ToString());
+                var closure = f.Read().TurnClosures[ready.Execution.Launch];
+                Assert.Null(Assert.IsType<RunEvent.TurnClosed>(Assert.IsType<RunDecision.Existing>(f.Store.CloseTurn(f.Permit, new OperationId(Id(9100)),
+                    ready.Execution.Launch, closure)).Event).Capture);
+            }
         }
         Assert.Equal(sequence, f.Read().Sequence);
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));

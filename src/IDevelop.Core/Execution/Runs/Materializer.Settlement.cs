@@ -121,7 +121,7 @@ internal sealed partial class Materializer
             }
             if (RunReducer.CaptureForAnotherId(record, launch, capture))
                 return new Settlement.Rejected(new(RunProblem.OperationConflict));
-            var root = new OperationId(capture.Value);
+            var captureOperation = new OperationId(capture.Value);
             var observations = record.Captures.GetValueOrDefault(capture, []);
             if (recovery)
                 log = observations.Count != 0 ? observations[0].Log :
@@ -178,7 +178,7 @@ internal sealed partial class Materializer
                         }
                         var number = ordinal;
                         record = DecisionRecord(Journal("capture-" + ordinal, () => _store.Record(permit,
-                            OperationIds.Derive(number == 1 ? operation : root, "capture-" + number),
+                            OperationIds.Derive(number == 1 ? operation : captureOperation, "capture-" + number),
                             new RunEvent.TurnCaptured(observation))));
                         observations = record.Captures.GetValueOrDefault(capture, []);
                     }
@@ -186,13 +186,13 @@ internal sealed partial class Materializer
                 }
                 disposed = new(capture, launch, disposition);
                 var decision = Journal("capture-disposition", () => _store.Record(permit,
-                    OperationIds.Derive(root, "capture-disposition"), disposed));
+                    OperationIds.Derive(captureOperation, "capture-disposition"), disposed));
                 disposed = (RunEvent.CaptureDisposed)DecisionEvent(decision);
             }
             if (disposed.Launch != launch) return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
             if (log is null || missingLog)
                 return new Settlement.Rejected(new(RunProblem.RecoveryEvidenceInsufficient));
-            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(root, "close-turn"), launch, log, capture));
+            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(captureOperation, "close-turn"), launch, log, capture));
             return new Settlement.Closed(capture, disposed.Disposition);
         }
         catch (Refusal refused) { return new Settlement.Rejected(refused.Reason); }
