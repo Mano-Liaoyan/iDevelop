@@ -458,13 +458,18 @@ public sealed class TurnRunnerTests
         using var children = new Processes();
         var pidFile = Path.Combine(f.Evidence, "child.pid");
         await f.Open(f.Success().SpawnSleepingChild(pidFile));
+        // Cleanup stops the child that holds the pipes, through the group or job, so the runner waits just before it.
+        using var barrier = new ProbeBarrier("runner.cleanup.inside");
+        f.Runs.Probe = barrier.Probe;
         var running = await f.Start();
         await children.PidAsync(pidFile).WaitAsync(Bound);
         await running.RootExited.WaitAsync(TimeSpan.FromSeconds(3));
+        await barrier.Reached.Task.WaitAsync(Bound);
         Assert.False(running.Settlement.IsCompleted);
         Assert.Empty(f.Log(running.Address.Launch).Events.OfType<AttemptEvent.Exited>());
         var root = Assert.Single(f.Preparation.Read().RootExits).Value;
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", root.Tip.Hex);
+        barrier.Dispose();
         children.Dispose();
         var turn = await f.Settled(running);
         Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Exited>());
