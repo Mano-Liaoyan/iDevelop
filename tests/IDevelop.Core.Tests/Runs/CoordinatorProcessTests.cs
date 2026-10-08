@@ -351,11 +351,12 @@ public sealed class CoordinatorProcessTests
         f.Prepare(reserved);
         var lease = f.Lease(T);
         var writeLock = Path.Combine(f.Project, ".idp", "runs", "write.lock");
+        var claimClock = new StoppedClock();
         System.Threading.Tasks.Task<RunDecision> claim;
         using (new FileStream(writeLock, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
         {
-            claim = System.Threading.Tasks.Task.Run(() => f.NewStore().Claim(lease, f.Op(), new(A1, 1), reserved.Inputs, Prompt));
-            await System.Threading.Tasks.Task.Delay(250);
+            claim = System.Threading.Tasks.Task.Run(() => f.NewStore(claimClock).Claim(lease, f.Op(), new(A1, 1), reserved.Inputs, Prompt));
+            await System.Threading.Tasks.Task.WhenAny(claimClock.Waiting.Task, claim);
             Assert.False(claim.IsCompleted);
             f.Permit.Dispose();
         }
@@ -367,11 +368,12 @@ public sealed class CoordinatorProcessTests
         var other = g.Reserve();
         g.Claim(other);
         var held = g.Lease(T);
+        var recoverClock = new StoppedClock();
         System.Threading.Tasks.Task<RunDecision> recover;
         using (new FileStream(Path.Combine(g.Project, ".idp", "runs", "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
         {
-            recover = System.Threading.Tasks.Task.Run(() => g.NewStore().Recover(held, g.Op(), A1, RecoveryOutcome.Stopped, g.Op(), "Stopped."));
-            await System.Threading.Tasks.Task.Delay(250);
+            recover = System.Threading.Tasks.Task.Run(() => g.NewStore(recoverClock).Recover(held, g.Op(), A1, RecoveryOutcome.Stopped, g.Op(), "Stopped."));
+            await System.Threading.Tasks.Task.WhenAny(recoverClock.Waiting.Task, recover);
             Assert.False(recover.IsCompleted);
             g.Permit.Dispose();
         }
@@ -384,6 +386,25 @@ public sealed class CoordinatorProcessTests
         Assert.IsType<RunDecision.Recorded>(g.Store.Recover(g.Lease(T), g.Op(), A1,
             RecoveryOutcome.Stopped, g.Op(), "Stopped."));
         Assert.Equal(9, g.Read().Sequence);
+    }
+
+    /// <summary>
+    /// Time never advances, so the journal lock's patience never runs out. The store reads the clock once when it starts
+    /// waiting and again after each failed attempt, so a second read means it is blocked on the lock.
+    /// </summary>
+    private sealed class StoppedClock : TimeProvider
+    {
+        private int _reads;
+
+        public TaskCompletionSource Waiting { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override DateTimeOffset GetUtcNow() => At;
+
+        public override long GetTimestamp()
+        {
+            if (Interlocked.Increment(ref _reads) > 1) Waiting.TrySetResult();
+            return 0;
+        }
     }
 
     [Theory]

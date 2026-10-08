@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Text;
 using IDevelop.Nodes;
 using IDevelop.Projects;
@@ -994,7 +993,7 @@ internal sealed class RunStore
 
     private FileStream? TakeWriteLock()
     {
-        var patience = Stopwatch.StartNew();
+        var start = _clock.GetTimestamp();
         do
         {
             try
@@ -1005,7 +1004,7 @@ internal sealed class RunStore
             {
                 Thread.Sleep(20);
             }
-        } while (patience.Elapsed < TimeSpan.FromSeconds(1));
+        } while (_clock.GetElapsedTime(start) < TimeSpan.FromSeconds(1));
         return null;
     }
 
