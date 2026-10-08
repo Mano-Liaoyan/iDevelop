@@ -85,25 +85,30 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="local:ProjectViewModel">
                   <StackPanel Spacing="4">
-                    <Grid Height="28" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="8,0,0,0">
+                    <Grid Height="28" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="8,0,0,0">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextStrongBrush}" />
                       <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                  FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                  ToolTip.Tip="{Binding Folder}"
                                  AutomationProperties.AutomationId="ProjectName" />
-                      <Ellipse Grid.Column="2" Classes="status running" VerticalAlignment="Center"
+                      <Ellipse Grid.Column="2" Classes="status waiting" VerticalAlignment="Center"
+                               IsVisible="{Binding IsWaiting}"
+                               ToolTip.Tip="A task waits for you"
+                               AutomationProperties.AutomationId="ProjectWaiting"
+                               AutomationProperties.Name="A task waits for you" />
+                      <Ellipse Grid.Column="3" Classes="status running" VerticalAlignment="Center"
                                IsVisible="{Binding IsRunning}"
                                ToolTip.Tip="A task runs"
                                AutomationProperties.AutomationId="ProjectRunning"
                                AutomationProperties.Name="A task runs" />
-                      <Button Grid.Column="3" Classes="icon"
+                      <Button Grid.Column="4" Classes="icon"
                               Click="OnNewWorkflow"
                               ToolTip.Tip="New workflow"
                               AutomationProperties.AutomationId="NewWorkflow"
                               AutomationProperties.Name="{Binding Name, StringFormat='New workflow in {0}'}">
                         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                       </Button>
-                      <Button Grid.Column="4" Classes="icon"
+                      <Button Grid.Column="5" Classes="icon"
                               Click="OnCloseProject"
                               ToolTip.Tip="Close project"
                               AutomationProperties.AutomationId="CloseProject"
@@ -148,7 +153,7 @@
                                       </MenuItem>
                                     </ContextMenu>
                                   </Button.ContextMenu>
-                                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
                                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
                                     <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                AutomationProperties.AutomationId="WorkflowName" />
@@ -157,12 +162,17 @@
                                              ToolTip.Tip="Unsaved changes"
                                              AutomationProperties.AutomationId="WorkflowUnsaved"
                                              AutomationProperties.Name="Unsaved changes" />
-                                    <Ellipse Grid.Column="3" Classes="status running" VerticalAlignment="Center"
+                                    <Ellipse Grid.Column="3" Classes="status waiting" VerticalAlignment="Center"
+                                             IsVisible="{Binding HasWaiting}"
+                                             ToolTip.Tip="{Binding WaitingLabel}"
+                                             AutomationProperties.AutomationId="WorkflowWaiting"
+                                             AutomationProperties.Name="{Binding WaitingLabel}" />
+                                    <Ellipse Grid.Column="4" Classes="status running" VerticalAlignment="Center"
                                              IsVisible="{Binding IsRunning}"
                                              ToolTip.Tip="A task runs"
                                              AutomationProperties.AutomationId="WorkflowRunning"
                                              AutomationProperties.Name="A task runs" />
-                                    <Border Grid.Column="4" Classes="badge">
+                                    <Border Grid.Column="5" Classes="badge">
                                       <TextBlock Text="{Binding Nodes.Count}" AutomationProperties.AutomationId="TaskCount" />
                                     </Border>
                                   </Grid>
@@ -451,6 +461,13 @@
       <ContentControl.DataTemplates>
         <DataTemplate DataType="canvas:GenerateWorkflowViewModel">
           <canvas:GenerateSheet />
+        </DataTemplate>
+      </ContentControl.DataTemplates>
+    </ContentControl>
+    <ContentControl Grid.ColumnSpan="5" ZIndex="2" Content="{Binding Canvas.Preflight}">
+      <ContentControl.DataTemplates>
+        <DataTemplate DataType="execution:RunPreflightViewModel">
+          <execution:RunPreflightSheet />
         </DataTemplate>
       </ContentControl.DataTemplates>
     </ContentControl>

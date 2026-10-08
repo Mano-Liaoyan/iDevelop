@@ -21,6 +21,8 @@ public sealed partial class TaskNodeViewModel
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
         [nameof(Role)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
         [nameof(State)] = [nameof(ShowsCancel)],
+        [nameof(IsRunOwned)] = [nameof(ShowsRunControls), nameof(ShowsCancel), nameof(ShowsAcceptAndFinish)],
+        [nameof(ShowsRunState)] = [nameof(ShowsAcceptAndFinish)],
     };
 
     private RelayCommand _acceptAndFinish = null!;
@@ -87,16 +89,19 @@ public sealed partial class TaskNodeViewModel
     /// Run and the reason it cannot start. While a proposal is open, accepting it is the node's one primary action, so
     /// the Run section keeps only the run's status.
     /// </summary>
-    public bool ShowsRunControls => Role != NodeRole.Proposing;
+    public bool ShowsRunControls => Role != NodeRole.Proposing && !IsRunOwned;
 
-    /// <summary>Cancel shows with Run, and while a proposal is open only during a turn that this window runs.</summary>
-    public bool ShowsCancel => ShowsRunControls || State is NodeState.Running or NodeState.Stopping;
+    /// <summary>
+    /// Cancel shows with Run, and while a proposal is open only during a turn that this window runs. A task that the
+    /// canvas's run owns is cancelled through its conversation or stopped with its run.
+    /// </summary>
+    public bool ShowsCancel => !IsRunOwned && (ShowsRunControls || State is NodeState.Running or NodeState.Stopping);
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the
     /// inspector offers both in one button.
     /// </summary>
-    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && IsWaiting && Proposal is { HasItems: true };
+    public bool ShowsAcceptAndFinish => _task.Conversation == ConversationMode.Chat && StandaloneWaiting && Proposal is { HasItems: true };
 
     /// <summary>Accepts the proposal, and once it is accepted, marks the planner done.</summary>
     public ICommand AcceptAndFinishCommand => _acceptAndFinish;

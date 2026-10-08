@@ -1,0 +1,203 @@
+<!-- Run Workflow's preflight, over a scrim that covers the whole window, as the Generate Workflow sheet does. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:execution="using:IDevelop.Desktop.Execution"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Execution.RunPreflightSheet"
+             x:DataType="execution:RunPreflightViewModel"
+             AutomationProperties.AutomationId="PreflightSheet"
+             AutomationProperties.Name="Run Workflow">
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartCommand}" />
+    <KeyBinding Gesture="Meta+Enter" Command="{Binding StartCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+  </UserControl.KeyBindings>
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.sheetCaption">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    </Style>
+    <Style Selector="TextBlock.note">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="Button.action">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+  </UserControl.Styles>
+
+  <Panel>
+    <Border Background="{DynamicResource ScrimBrush}" />
+    <Border Classes="popover" Width="560" MaxHeight="640" Margin="24" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+            KeyboardNavigation.TabNavigation="Cycle">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,16">
+          <Border Width="24" Height="24" CornerRadius="6" Background="{DynamicResource AccentFillBrush}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="15" Height="15"
+                      Foreground="{DynamicResource OnAccentBrush}" />
+          </Border>
+          <TextBlock Text="Run Workflow" VerticalAlignment="Center"
+                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
+          <TextBlock Text="{Binding WorkflowName}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                     FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
+                     AutomationProperties.AutomationId="PreflightWorkflow" />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,16,0,0">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"
+                IsVisible="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" VerticalAlignment="Top"
+                      Foreground="{DynamicResource StateWarningStrongBrush}" />
+            <TextBlock Grid.Column="1" Text="{Binding Notice}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                       AutomationProperties.AutomationId="PreflightNotice" />
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Classes="action" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="PreflightCancel"
+                    AutomationProperties.Name="Cancel">
+              <TextBlock Text="Cancel" />
+            </Button>
+            <Button Classes="action" Command="{Binding ShowActiveCommand}" IsVisible="{Binding ShowsActive}"
+                    AutomationProperties.AutomationId="PreflightShowActive"
+                    AutomationProperties.Name="Show the active run">
+              <TextBlock Text="Show the active run" />
+            </Button>
+            <Button Classes="primary" Command="{Binding StartCommand}"
+                    ToolTip.Tip="Ctrl+Enter"
+                    AutomationProperties.AutomationId="PreflightStart"
+                    AutomationProperties.Name="Start run">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
+                          Foreground="{DynamicResource OnAccentBrush}" IsVisible="{Binding IsStarting}" />
+                <TextBlock Text="Start run" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </StackPanel>
+
+        <Panel>
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsChecking}" VerticalAlignment="Top"
+                      AutomationProperties.AutomationId="PreflightChecking">
+            <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
+                      Foreground="{DynamicResource AccentStrongBrush}" />
+            <TextBlock Text="Checking the project…" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" />
+          </StackPanel>
+
+          <ScrollViewer IsVisible="{Binding IsReady}" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="16" Margin="0,0,8,0">
+              <StackPanel Spacing="8" IsVisible="{Binding HasGaps}">
+                <TextBlock Classes="sheetCaption" Text="Fix First" />
+                <ItemsControl ItemsSource="{Binding Gaps}" AutomationProperties.AutomationId="PreflightGaps" AutomationProperties.Name="Fix first">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="execution:PreflightGapRow">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" VerticalAlignment="Top" Margin="0,1,0,0"
+                                  Foreground="{DynamicResource StateWarningStrongBrush}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                   AutomationProperties.AutomationId="PreflightGap" />
+                        <Button Grid.Column="2" Classes="ghost" Padding="6,2" VerticalAlignment="Top"
+                                Command="{Binding ShowCommand}" IsVisible="{Binding HasNode}"
+                                AutomationProperties.AutomationId="PreflightShowNode"
+                                AutomationProperties.Name="Show the task">
+                          <TextBlock Text="Show" FontSize="12" Foreground="{DynamicResource AccentStrongBrush}" />
+                        </Button>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sheetCaption" Text="Tasks" />
+                <ItemsControl ItemsSource="{Binding Tasks}" AutomationProperties.AutomationId="PreflightTasks" AutomationProperties.Name="Tasks">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="execution:PreflightTaskRow">
+                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <theme:KindTile Kind="{Binding Kind}" TileSize="24" VerticalAlignment="Top" />
+                        <StackPanel Grid.Column="1" Spacing="1">
+                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" FontSize="13" FontWeight="Medium"
+                                     Foreground="{DynamicResource TextStrongBrush}"
+                                     AutomationProperties.AutomationId="PreflightTask" />
+                          <TextBlock Classes="caption" Text="{Binding Agent}" TextTrimming="CharacterEllipsis"
+                                     AutomationProperties.AutomationId="PreflightAgent" />
+                          <TextBlock Classes="caption" Text="{Binding Inputs}" TextWrapping="Wrap"
+                                     IsVisible="{Binding Inputs, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="PreflightInputs" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel Spacing="8" IsVisible="{Binding HeadLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Classes="sheetCaption" Text="Start From" />
+                <StackPanel Spacing="4" IsVisible="{Binding OffersSnapshot}">
+                  <RadioButton GroupName="PreflightBase" IsChecked="{Binding UseHead}" Content="{Binding HeadLabel}"
+                               AutomationProperties.AutomationId="PreflightHead" />
+                  <RadioButton GroupName="PreflightBase" IsChecked="{Binding UseSnapshot}" Content="{Binding SnapshotLabel}"
+                               AutomationProperties.AutomationId="PreflightSnapshot" />
+                </StackPanel>
+                <TextBlock Text="{Binding HeadLabel}" FontSize="13" Foreground="{DynamicResource TextBrush}" IsVisible="{Binding !OffersSnapshot}"
+                           AutomationProperties.AutomationId="PreflightBase" />
+                <TextBlock Classes="note" Text="{Binding ChangedNote}"
+                           IsVisible="{Binding ChangedNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           AutomationProperties.AutomationId="PreflightChanged" />
+                <TextBlock Classes="note" Text="{Binding IgnoredNote}" AutomationProperties.AutomationId="PreflightIgnored" />
+                <TextBlock Classes="note" Text="{Binding SubmodulesNote}"
+                           IsVisible="{Binding SubmodulesNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           AutomationProperties.AutomationId="PreflightSubmodules" />
+              </StackPanel>
+
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sheetCaption" Text="Isolation" />
+                <TextBlock Classes="note" Text="{Binding WorktreeNote}" AutomationProperties.AutomationId="PreflightIsolation" />
+              </StackPanel>
+
+              <StackPanel Spacing="8" IsVisible="{Binding HasInclusions}">
+                <TextBlock Classes="sheetCaption" Text="Earlier Results" />
+                <ItemsControl ItemsSource="{Binding Inclusions}" AutomationProperties.AutomationId="PreflightInclusions" AutomationProperties.Name="Earlier results">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="10" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="execution:PreflightInclusionRow">
+                      <StackPanel Spacing="4">
+                        <CheckBox IsChecked="{Binding IsIncluded}" IsEnabled="{Binding IsAvailable}" Content="{Binding Label}"
+                                  AutomationProperties.AutomationId="PreflightInclude"
+                                  AutomationProperties.Name="{Binding Label}" />
+                        <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="28,0,0,0"
+                                IsVisible="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                          <TextBlock Text="{Binding Report}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                     AutomationProperties.AutomationId="PreflightIncludedReport" />
+                        </Border>
+                        <TextBlock Classes="note" Text="{Binding Note}" Margin="28,0,0,0"
+                                   IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   AutomationProperties.AutomationId="PreflightIncludeNote" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Panel>
+      </DockPanel>
+    </Border>
+  </Panel>
+</UserControl>

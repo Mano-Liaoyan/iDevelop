@@ -43,9 +43,13 @@ internal sealed partial class Shell
         return shell;
     }
 
-    public static Shell Open(string folder, ClientDirectory? clients = null)
+    public static Shell Open(string folder, ClientDirectory? clients = null) => Open(folder, clients, null);
+
+    /// <param name="configure">Called with each project's runner before the project shows.</param>
+    public static Shell Open(string folder, ClientDirectory? clients, Action<ProjectRuns>? configure)
     {
         var shell = Show(clients);
+        shell.Window.ViewModel.RunsOpened = configure;
         shell.Window.ViewModel.Open(folder);
         shell.Render();
         return shell;

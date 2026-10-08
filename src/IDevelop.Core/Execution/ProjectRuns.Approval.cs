@@ -14,6 +14,16 @@ public sealed partial class ProjectRuns
     internal RunPreflight Preflight(Workflow workflow) => Approvals.Inspect(workflow);
 
     /// <summary>
+    /// The workflow's run that is approved or stopping, which a window shows when it opens the project, or null. A run
+    /// record that cannot be read counts as none here; the preflight names it as a gap.
+    /// </summary>
+    internal RunId? ActiveRunOf(WorkflowId workflow)
+    {
+        try { return Approvals.ActiveRun(workflow); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
     /// Approves the run that <paramref name="confirmation"/> confirms, against <paramref name="current"/>, the workflow as
     /// the document holds it now, then opens it and authorizes its scheduling. Repeating a confirmation, or confirming the
     /// same content again, returns the one run. Cancelling <paramref name="wait"/> does not revoke a recorded approval.

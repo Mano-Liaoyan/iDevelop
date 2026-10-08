@@ -356,8 +356,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
         var own = Runs.Active.Where(run => Project.Owns(this, run.Task)).ToImmutableArray();
         ActiveRun.Show(own);
-        IsRunning = !own.IsEmpty;
-        OnWaitingChanged();
+        _standaloneRunning = !own.IsEmpty;
+        ShowActivity();
         ShowGhosts();
     }
 
@@ -470,6 +470,11 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
         {
             SyncNodes(current);
+            if (Run is not null)
+            {
+                ShowRun();
+            }
+
             OnWaitingChanged();
         }
 

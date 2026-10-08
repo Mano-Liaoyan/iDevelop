@@ -69,15 +69,15 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
-        _run = new RelayCommand(Run, () => !RunsHere);
+        _run = new RelayCommand(Run, () => !RunsHere && !IsRunOwned);
         _cancel = new RelayCommand(
             async () => _canvas.Notice(await _canvas.Runs.CancelAsync(Id) is { } problem ? RunText.Describe(problem) : null),
-            () => IsWaiting || _attempt is { Status: AttemptStatus.InReview } ||
-                _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id));
-        _send = new RelayCommand(() => Send(stopTurn: false), () => !string.IsNullOrWhiteSpace(Draft) && _canvas.Runs.CheckSend(_task) is null);
+            () => !IsRunOwned && (StandaloneWaiting || _attempt is { Status: AttemptStatus.InReview } ||
+                _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id)));
+        _send = new RelayCommand(() => Send(stopTurn: false), () => !IsRunOwned && !string.IsNullOrWhiteSpace(Draft) && _canvas.Runs.CheckSend(_task) is null);
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
-        _openInTerminal = new RelayCommand(OpenInTerminal, () => _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
-        _markDone = new RelayCommand(MarkDone, () => IsWaiting);
+        _openInTerminal = new RelayCommand(OpenInTerminal, () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
+        _markDone = new RelayCommand(MarkDone, () => StandaloneWaiting);
         _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => _problem is StartProblem.FixInterrupted { CanContinue: true });
         _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => _problem is StartProblem.FixInterrupted);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
@@ -88,6 +88,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeActions();
         InitializeInspector();
         InitializeConversation();
+        InitializeRun();
     }
 
     public TaskId Id => _task.Id;
@@ -195,11 +196,14 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     public string ConversationNote => RunText.ConversationNote(_task.Conversation);
 
-    /// <summary>The task's latest attempt waits for the person.</summary>
-    public bool IsWaiting => _attempt is { Status: AttemptStatus.WaitingForInput };
+    /// <summary>The task waits for the person: its latest attempt, or its attempt or approval request in the canvas's run.</summary>
+    public bool IsWaiting => RunTask is { } run ? WaitsInRun(run) : _attempt is { Status: AttemptStatus.WaitingForInput };
 
-    /// <summary>The question or the reason the task waits for the person, or null.</summary>
-    public string? Waiting => _attempt is { Status: AttemptStatus.WaitingForInput, Pending: { } pending } ? RunText.Waiting(pending) : null;
+    /// <summary>The question or the reason the task's own latest attempt waits for the person, or null.</summary>
+    public string? Waiting => StandaloneWaiting && _attempt is { Pending: { } pending } ? RunText.Waiting(pending) : null;
+
+    /// <summary>The task's latest attempt outside a workflow run waits for the person, which its own commands answer.</summary>
+    private bool StandaloneWaiting => RunTask is null && _attempt is { Status: AttemptStatus.WaitingForInput };
 
     /// <summary>Closing iDevelop interrupted the review's fix round, which waits for Continue fix or Retry fix.</summary>
     public bool ShowsFixChoice => _problem is StartProblem.FixInterrupted;
@@ -243,13 +247,17 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         ? IsReview ? RunText.ReviewerNote(settings.Client) : RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
-    public string StatusLabel => RunText.StatusLabel(_attempt, RunsElsewhere);
+    public string StatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : RunText.StatusLabel(_attempt, RunsElsewhere);
 
     /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
-    public string? StartProblem => !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
+    public string? StartProblem => IsRunOwned ? RunOwnedProblem
+        : !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
 
-    /// <summary>Only the inspector shows it, so only the selected task reads the attempts that its last run continues.</summary>
-    public AttemptViewModel? LastAttempt => _attempt is null ? null : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere);
+    /// <summary>
+    /// Only the inspector shows it, so only the selected task reads the attempts that its last run continues. A task that
+    /// the canvas's run owns shows the run's state instead, so its last attempt outside the run stays out of the way.
+    /// </summary>
+    public AttemptViewModel? LastAttempt => _attempt is null || ShowsRunState ? null : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere);
 
     /// <summary>
     /// Enabled unless this window runs the task. A task that cannot start shows why instead of launching, which is also
@@ -563,8 +571,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     private void ShowState()
     {
-        State = NodeStates.Of(_attempt, RunsElsewhere, _problem);
-        Role = NodeStates.RoleOf(_problem, _proposal is { HasItems: true });
+        State = RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).State : NodeStates.Of(_attempt, RunsElsewhere, _problem);
+        Role = NodeStates.RoleOf(RunTask is null ? _problem : null, _proposal is { HasItems: true });
     }
 
     partial void InitializeCard();
@@ -574,6 +582,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeInspector();
 
     partial void InitializeConversation();
+
+    partial void InitializeRun();
 
     private void SetExecution(ExecutionSettings? settings)
     {

@@ -19,6 +19,14 @@ internal sealed partial class WorkflowRunCoordinator
     public Task<GateReply> SendBack(RunAddress address, GateResponse response, string reason, OperationId command, CancellationToken wait = default) =>
         Answer(address, response, new GateAnswer.SendBack(reason), command, wait);
 
+    /// <summary>
+    /// What approving <paramref name="request"/> hands on: each input's report under its task's title, as the approval
+    /// records it. Null when the journal cannot be read or holds no such request. It reads the journal off the loop.
+    /// </summary>
+    public string? GateReport(GateId request) =>
+        Record() is { } record && record.Gates.TryGetValue(request, out var state) && record.Inputs.TryGetValue(state.Request.Inputs, out var inputs)
+            ? GateForwarding.Report(record, inputs) : null;
+
     private async Task<GateReply> Answer(RunAddress address, GateResponse response, GateAnswer answer, OperationId command, CancellationToken wait)
     {
         GateReply? reply = null;

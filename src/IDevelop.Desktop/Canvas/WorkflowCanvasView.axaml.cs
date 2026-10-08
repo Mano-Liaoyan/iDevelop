@@ -62,7 +62,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
-        SizeChanged += (_, e) => RunBar.Margin =
+        SizeChanged += (_, e) => RunBars.Margin =
             e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
     }
 

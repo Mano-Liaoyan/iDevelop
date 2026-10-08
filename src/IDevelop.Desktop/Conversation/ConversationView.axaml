@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:IDevelop.Desktop"
              xmlns:conversation="using:IDevelop.Desktop.Conversation"
+             xmlns:execution="using:IDevelop.Desktop.Execution"
              x:Class="IDevelop.Desktop.Conversation.ConversationView"
              x:DataType="conversation:ConversationViewModel"
              Background="{DynamicResource AppShellBrush}"
@@ -54,6 +55,58 @@
                 AutomationProperties.Name="Close conversation">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
         </Button>
+      </Grid>
+    </Border>
+
+    <!-- While the conversation takes the canvas's place, it repeats the run bar: the run's status, Resume, and Stop Workflow.
+         The dock leaves the canvas and its run bar in view, so it shows nothing here. -->
+    <Border DockPanel.Dock="Top" Classes="limitations"
+            AutomationProperties.AutomationId="ConversationRun"
+            AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Run" Converter="{x:Static ObjectConverters.IsNotNull}" />
+          <Binding Path="!$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="True" />
+        </MultiBinding>
+      </Border.IsVisible>
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10" HorizontalAlignment="Stretch">
+        <Border Classes="pill" VerticalAlignment="Center"
+                Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
+                Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
+                Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
+                Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" />
+            <TextBlock Text="{Binding Run.StatusLabel, FallbackValue=''}" AutomationProperties.AutomationId="ConversationRunStatus" />
+          </StackPanel>
+        </Border>
+        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Run.Progress, FallbackValue=''}" VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="ConversationRunProgress" />
+        <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Run.Activity, FallbackValue=''}" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
+                   AutomationProperties.AutomationId="ConversationRunActivity" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+          <Button Classes="ghost" Height="28"
+                  Command="{Binding Run.ResumeCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
+                  ToolTip.Tip="Start the run's next tasks in this window"
+                  AutomationProperties.AutomationId="ConversationResumeRun"
+                  AutomationProperties.Name="Resume run">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
+              <TextBlock Text="Resume" />
+            </StackPanel>
+          </Button>
+          <Button Classes="ghost" Height="28"
+                  Command="{Binding Run.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
+                  ToolTip.Tip="Start no more tasks and stop the running ones. Finished work stays."
+                  AutomationProperties.AutomationId="ConversationStopWorkflow"
+                  AutomationProperties.Name="Stop Workflow">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+              <TextBlock Text="Stop Workflow" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 

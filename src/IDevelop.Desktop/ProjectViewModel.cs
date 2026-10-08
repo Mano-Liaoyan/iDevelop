@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -47,7 +48,14 @@ public sealed class ProjectViewModel : ObservableObject
     /// <summary>One canvas per workflow, kept until the project closes, in the order the project lists them.</summary>
     public ObservableCollection<WorkflowCanvasViewModel> Workflows { get; } = [];
 
-    public bool IsRunning => !Runs.Active.IsEmpty;
+    /// <summary>A task of the project runs in this window, on its own or in a workflow run.</summary>
+    public bool IsRunning => !Runs.Active.IsEmpty || Workflows.Any(canvas => canvas.Run is { HasActivity: true });
+
+    /// <summary>A task of the project waits for the person: a reply, a question, or an approval.</summary>
+    public bool IsWaiting => Workflows.Any(canvas => canvas.HasWaiting);
+
+    /// <summary>The workflow runs this window controls and that are still active, which closing the project stops first.</summary>
+    internal IEnumerable<WorkflowCanvasViewModel> ActiveWorkflowRuns => Workflows.Where(canvas => canvas.Run is { IsActive: true, IsControlled: true });
 
     internal ProjectRuns Runs { get; }
 
@@ -89,19 +97,72 @@ public sealed class ProjectViewModel : ObservableObject
         Attribute(canvas);
         // A review that rested when the project opened may have started its next run before the canvas listened.
         canvas.ShowAttempts();
+        canvas.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WorkflowCanvasViewModel.IsRunning))
+            {
+                OnPropertyChanged(nameof(IsRunning));
+            }
+            else if (e.PropertyName == nameof(WorkflowCanvasViewModel.HasWaiting))
+            {
+                OnPropertyChanged(nameof(IsWaiting));
+            }
+        };
         Workflows.Add(canvas);
+        ShowActiveRun(canvas);
         return canvas;
     }
 
     /// <summary>
-    /// Closes each workflow's Generate sheet, which listens to the window's client directory until it closes, and stops
-    /// the project's running tasks.
+    /// Shows the workflow's run that is still approved or stopping, as a window that opens the project finds it. Opening it
+    /// launches nothing: a run this window takes control of waits for Resume, and one that another window controls is only
+    /// read until that window lets go.
+    /// </summary>
+    /// <remarks>
+    /// The journal is read and written off the UI thread, and a busy journal or lock is tried again. A run that still cannot
+    /// be opened says why in the window's status line.
+    /// </remarks>
+    private async void ShowActiveRun(WorkflowCanvasViewModel canvas)
+    {
+        var workflow = canvas.Workflow.Id;
+        RunId? run;
+        try
+        {
+            run = await Task.Run(() => Runs.ActiveRunOf(workflow));
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        if (run is not { } active || await WorkflowRunViewModel.OpenAsync(Runs, workflow, active) is not { } open || Runs.Closing)
+        {
+            return;
+        }
+
+        if (open is RunOpen.Opened opened)
+        {
+            canvas.Adopt(opened.Coordinator);
+        }
+        else if (open is RunOpen.Rejected rejected)
+        {
+            canvas.Notice($"Couldn't show the active run of \"{canvas.Name}\". {WorkflowRunText.Problem(rejected.Reason)}");
+        }
+    }
+
+    /// <summary>Records Stop Workflow for each active run this window controls, as Stop and close asks.</summary>
+    internal Task StopWorkflowRunsAsync() => Task.WhenAll(ActiveWorkflowRuns.Select(canvas => canvas.Run!.StopAsync()));
+
+    /// <summary>
+    /// Closes each workflow's Generate sheet, which listens to the window's client directory until it closes, lets go of
+    /// each workflow run, and stops the project's running tasks.
     /// </summary>
     internal ValueTask CloseAsync()
     {
         foreach (var canvas in Workflows)
         {
             canvas.CloseSheet();
+            canvas.DisposeRun();
         }
 
         return Runs.DisposeAsync();

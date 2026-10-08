@@ -29,6 +29,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly RelayCommand _refreshAgents;
     private WorkflowCanvasViewModel? _canvas;
     private ConversationViewModel? _conversation;
+    private WorkflowRunCoordinator? _conversationRoute;
     private bool _conversationDocked;
     private string? _status;
     private bool _refreshingAgents;
@@ -53,6 +54,9 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
+
+    /// <summary>Called with each project's runner before the project shows, so tests can point its Git and its clocks elsewhere.</summary>
+    internal Action<ProjectRuns>? RunsOpened { get; set; }
 
     /// <summary>
     /// Remembered folders that this start could not open. Each stays remembered, so a later start opens it once it is back,
@@ -108,7 +112,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICommand ToggleConversationLayoutCommand { get; }
 
     // The Generate sheet is modal, so a key or a button under its scrim neither saves nor takes an edit back.
-    private WorkflowCanvasViewModel? EditableCanvas => Canvas is { Sheet: null } canvas ? canvas : null;
+    private WorkflowCanvasViewModel? EditableCanvas => Canvas is { Sheet: null, Preflight: null } canvas ? canvas : null;
 
     public string? ProjectName => Canvas?.Project.Name;
 
@@ -136,6 +140,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
     /// <summary>Probes every client again. Each row keeps its last status until its new answer arrives.</summary>
     public ICommand RefreshAgentsCommand => _refreshAgents;
+
+    /// <summary>The workflow runs this window controls and that are still active, in every open project.</summary>
+    internal IEnumerable<WorkflowCanvasViewModel> ActiveWorkflowRuns => Projects.SelectMany(project => project.ActiveWorkflowRuns);
 
     /// <summary>The tasks this window runs in every open project, oldest first within each project.</summary>
     public ImmutableArray<AttemptRecord> ActiveRuns => [.. Projects.SelectMany(project => project.Runs.Active)];
@@ -202,11 +209,9 @@ public sealed class MainWindowViewModel : ObservableObject
             Select(target.Canvas);
         }
 
-        if (Conversation is not { } open || open.Target.Canvas != target.Canvas || open.Target.Task != target.Task)
+        if (Conversation is not { } open || open.Target.Canvas != target.Canvas || open.Target.Task != target.Task || _conversationRoute != Route(target))
         {
-            Conversation?.Dispose();
-            var project = target.Canvas.Project;
-            Conversation = new ConversationViewModel(target, project.ConversationOf(target.Canvas, target.Task), project.Runs.OpenConversation(target.Task), _copy);
+            ShowConversation(target);
         }
 
         if (target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { } node && target.Canvas.SelectedNode != node)
@@ -224,11 +229,42 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         Conversation?.Dispose();
         Conversation = null;
+        _conversationRoute = null;
     }
 
     /// <summary>
-    /// Closes the project without saving. The window shows a neighbour's workflow, or nothing, at once, and the project's
-    /// running tasks then stop, which records them as interrupted. The next start does not reopen it.
+    /// The run whose coordinator the task's conversation goes through: the canvas's run while it shows the task, else null
+    /// for the task's own attempts.
+    /// </summary>
+    private static WorkflowRunCoordinator? Route(ConversationTarget target) =>
+        target.Canvas.Run is { } run && target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { ShowsRunState: true } ? run.Coordinator : null;
+
+    private void ShowConversation(ConversationTarget target)
+    {
+        Conversation?.Dispose();
+        var project = target.Canvas.Project;
+        var route = Route(target);
+        var session = route is null ? project.Runs.OpenConversation(target.Task) : project.Runs.OpenConversation(route, target.Task);
+        _conversationRoute = route;
+        Conversation = new ConversationViewModel(target, project.ConversationOf(target.Canvas, target.Task), session, _copy);
+    }
+
+    /// <summary>
+    /// Opens the shown conversation again through the coordinator its task's run goes through now, such as after another
+    /// window let go of the run and this window took control. Its draft and place stay in the task's conversation state.
+    /// </summary>
+    private void FollowRunRoute(WorkflowCanvasViewModel canvas)
+    {
+        if (Conversation is { } open && open.Target.Canvas == canvas && Route(open.Target) != _conversationRoute)
+        {
+            ShowConversation(open.Target with { Request = null });
+        }
+    }
+
+    /// <summary>
+    /// Closes the project without saving. The window shows a neighbour's workflow, or nothing, at once. Each active workflow
+    /// run that this window controls then records Stop Workflow, and the project's running tasks stop, which records them as
+    /// interrupted. The next start does not reopen it.
     /// </summary>
     public async Task Close(ProjectViewModel project)
     {
@@ -245,6 +281,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         Persist();
+        await project.StopWorkflowRunsAsync();
         await project.CloseAsync();
     }
 
@@ -265,8 +302,15 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>Stops every running task, as closing the window does. The open projects stay remembered for the next start.</summary>
-    public Task Leave() => Task.WhenAll(Projects.Select(project => project.CloseAsync().AsTask()));
+    /// <summary>
+    /// Records Stop Workflow for each active run this window controls, then stops every running task, as closing the window
+    /// does. The open projects stay remembered for the next start.
+    /// </summary>
+    public Task Leave() => Task.WhenAll(Projects.Select(async project =>
+    {
+        await project.StopWorkflowRunsAsync();
+        await project.CloseAsync();
+    }));
 
     /// <summary>
     /// Opens the projects the last session left open, with the workflow rows it left expanded and the workflow it showed,
@@ -371,6 +415,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var runs = ProjectRuns.Open(identity, _clients, new HostQuestions.DeferImmediately());
+        RunsOpened?.Invoke(runs);
         var project = new ProjectViewModel(identity, runs, documents, NewCanvas);
         project.ConversationRequested += OpenConversation;
         Projects.Add(project);
@@ -388,6 +433,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private WorkflowCanvasViewModel NewCanvas(ProjectViewModel project, WorkflowDocument document)
     {
         var canvas = new WorkflowCanvasViewModel(project, document, _clients, notice => Status = notice, _copy, _personalBlueprints);
+        canvas.RunRouteChanged += (_, _) => FollowRunRoute(canvas);
         document.Changed += (_, _) =>
         {
             if (canvas == Canvas)
@@ -406,7 +452,7 @@ public sealed class MainWindowViewModel : ObservableObject
             case nameof(WorkflowCanvasViewModel.IsExpanded):
                 Persist();
                 break;
-            case nameof(WorkflowCanvasViewModel.Sheet) when canvas == Canvas:
+            case nameof(WorkflowCanvasViewModel.Sheet) or nameof(WorkflowCanvasViewModel.Preflight) when canvas == Canvas:
                 OnEditableChanged();
                 break;
             case nameof(WorkflowCanvasViewModel.Name) when canvas == Canvas:
