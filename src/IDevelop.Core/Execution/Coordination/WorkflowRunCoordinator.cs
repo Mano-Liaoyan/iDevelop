@@ -103,16 +103,33 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
     public void Refresh() => Post(() => { });
 
+    /// <summary>The waits of <see cref="Until"/> still registered.</summary>
+    internal int Waiting
+    {
+        get { lock (_viewGate) return _waiters.Count; }
+    }
+
     /// <summary>Completes with the first projection that satisfies <paramref name="condition"/>.</summary>
     internal Task<RunView> Until(Func<RunView, bool> condition, CancellationToken wait = default)
     {
+        var done = new TaskCompletionSource<RunView>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiter = (condition, done);
         lock (_viewGate)
         {
             if (condition(_view)) return Task.FromResult(_view);
-            var done = new TaskCompletionSource<RunView>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _waiters.Add((condition, done));
-            return done.Task.WaitAsync(wait);
+            _waiters.Add(waiter);
         }
+        if (wait.CanBeCanceled)
+        {
+            // A cancelled wait takes its waiter with it.
+            var registration = wait.Register(() =>
+            {
+                lock (_viewGate) _waiters.Remove(waiter);
+                done.TrySetCanceled(wait);
+            });
+            _ = done.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+        }
+        return done.Task;
     }
 
     /// <summary>Stops scheduling at once. Work in flight still finishes, so settled turns can still give up their leases.</summary>
@@ -123,8 +140,9 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Halts, waits up to the project's leave timeout for work in flight, and gives up the permit. The host calls it after
-    /// its turns have left, so their settlements still have the permit's authority.
+    /// Halts, waits up to the project's leave timeout for work in flight, gives up the leases of settled turns whose
+    /// disposition did not release, and gives up the permit. The host calls it after its turns have left, so their
+    /// settlements still have the permit's authority.
     /// </summary>
     internal Task DisposeAsync()
     {
@@ -147,6 +165,10 @@ internal sealed partial class WorkflowRunCoordinator
         }
         _inbox.Writer.TryComplete();
         await _loop.ConfigureAwait(false);
+        // A settled turn whose disposition did not release keeps its lease only while this window can still dispose of
+        // it. Its durable record stays, and the next window reconciles it.
+        foreach (var handle in _handles.Values) handle.Lease.Dispose();
+        _handles.Clear();
         _permit?.Dispose();
     }
 
