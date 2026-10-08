@@ -59,12 +59,13 @@ internal sealed partial class WorkflowRunCoordinator
             if (ready.State != TaskState.Ready || record.Revision.Snapshot.Tasks[task].Blueprint.Work is not WorkSpec.Person)
                 continue;
             _live[task] = new(LiveStage.Settling);
-            // A blocked request shows through its recorded block, and a request refused by the stop leaves nothing to hold.
+            // A blocked request shows through its recorded block. A refused one holds the node as a refused start does, so
+            // not once the run is stopping.
             Background(() => _materializer().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).AsTask(), prepared =>
             {
                 _live.Remove(task);
-                if (prepared is GatePreparation.Rejected { Reason.Problem: not RunProblem.RunStopped } rejected)
-                    Hold(task, new TaskHold.Refused(rejected.Reason, null, Transient(rejected.Reason.Problem)));
+                if (prepared is GatePreparation.Rejected rejected)
+                    HoldStart(task, new TaskHold.Refused(rejected.Reason, null, Transient(rejected.Reason.Problem)));
             }, error => Faulted(task, error));
         }
     }

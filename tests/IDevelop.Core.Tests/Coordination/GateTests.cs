@@ -70,9 +70,9 @@ public sealed class GateTests
         // Paused after the restart, the coordinator decides nothing while X runs once more and its report supersedes the first.
         await f.Reopen();
         var permit = f.Coordinator.Permit!;
-        var previous = RunProjection.LatestAttempts(f.Read())[X];
+        var retry = new AttemptCause.Retry(RunProjection.LatestAttempts(f.Read())[X], Op());
         var start = Assert.IsType<TurnStart.Started>(await f.Runs.StartTurn(permit,
-            new TurnIntent.First(Op(), X, new AttemptCause.Retry(previous, Op()))).WaitAsync(Bound));
+            new TurnIntent.First(RunOperations.First(f.Preparation.RunId, X, retry), X, retry)).WaitAsync(Bound));
         var settled = Assert.IsType<TurnSettlement.Settled>(await start.Turn.Settlement.WaitAsync(Bound)).Turn;
         var attempt = settled.Address.Launch.Attempt;
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(permit, Op(), attempt, TerminalAttemptOutcome.Succeeded, settled.Log));

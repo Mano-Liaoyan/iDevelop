@@ -228,6 +228,13 @@ public sealed class GateJournalTests
         f.Complete(f.Reserve(T, new AttemptCause.Retry(first.Attempt.Id, f.Op())), report: "T again.\n", supersedes: t.Id);
         var superseded = f.Read();
         Accepts(f, superseded, Requested(superseded, G, sequence: 2));
+        var renewed = Requested(superseded, G, sequence: 2);
+        Assert.Equal(RunProblem.StartConflict, Refusal(f, superseded, renewed with { Request = renewed.Request with { Id = request.Id } }));
+        Assert.Equal(RunProblem.StartConflict, Refusal(f, superseded, renewed with { Request = renewed.Request with { Result = request.Result } }));
+        Assert.Equal(RunProblem.StartConflict, Refusal(f, superseded, renewed with
+        {
+            Request = renewed.Request with { Inputs = request.Inputs }, Inputs = renewed.Inputs with { Id = request.Inputs },
+        }));
         Assert.Equal(RunProblem.StaleInput, Refusal(f, superseded, Requested(superseded, G, sequence: 2,
             bindings: [new InputBinding.Provided(new(T, G), ConnectionKind.Dependency, t.Id)])));
     }
