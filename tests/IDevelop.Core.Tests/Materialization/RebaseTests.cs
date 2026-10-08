@@ -198,6 +198,100 @@ public sealed class RebaseTests
     }
 
     [Fact]
+    public async Task A_rebased_result_can_be_retried_while_a_retry_whose_sources_changed_still_refuses()
+    {
+        using var f = new PreparationFixture(Chain());
+        await Write(f, T, ("a.txt", "old\n"));
+        var stale = await Write(f, U, ("b.txt", "B\n"));
+        await Update(f, T, ("a.txt", "new\n"));
+        var original = Assert.IsType<ResultOrigin.Executed>(stale.Origin).Attempt;
+        // Without a rebase, the consumer's sources changed under it, so a retry of its attempt refuses.
+        Assert.Equal(RunProblem.StaleInput, Assert.IsType<Preparation.Rejected>(await Rebaser(f).Prepare(f.Lease(U), f.Op(),
+            new AttemptCause.Retry(original, f.Op()))).Reason.Problem);
+        var rebased = Assert.IsType<Rebasing.Rebased>(Rebaser(f).Rebase(f.Lease(U), f.Op(), Preview(f, U).Identity)).Result;
+        var retry = Assert.IsType<Preparation.Ready>(await Rebaser(f).Prepare(f.Lease(U), f.Op(), new AttemptCause.Retry(original, f.Op())));
+        Assert.Equal(CodeOf(rebased), retry.Execution.Location.AttemptBase);
+        Assert.Equal(["new\n", "B\n"], new[] { File.ReadAllText(Path.Combine(retry.Checkout, "a.txt")), File.ReadAllText(Path.Combine(retry.Checkout, "b.txt")) });
+    }
+
+    [Fact]
+    public async Task A_rebased_subject_takes_its_review_fix()
+    {
+        var reviewer = new TaskDefinition(D, new Blueprint(new("example.review", 1), "Review",
+            new WorkSpec.Review(PromptTemplate.Parse("Review"), PromptTemplate.Parse("Fix")), [], new(Runs.RunFixtures.Task().Execution, ConversationMode.Autonomous)))
+        { Title = "Review" };
+        using var f = new PreparationFixture(Connect(Connect(FixtureWorkflow(Writer(T), Writer(U), reviewer), T, U), U, D));
+        await Write(f, T, ("a.txt", "old\n"));
+        await Write(f, U, ("b.txt", "B\n"));
+        await Update(f, T, ("a.txt", "new\n"));
+        var rebased = Assert.IsType<Rebasing.Rebased>(Rebaser(f).Rebase(f.Lease(U), f.Op(), Preview(f, U).Identity)).Result;
+        var review = Assert.IsType<Preparation.Ready>(await f.Prepare(D, prompt: "Review the changes."));
+        await CloseReview(f, review);
+        var fix = Assert.IsType<Preparation.Ready>(await Rebaser(f).Prepare(f.Lease(U), f.Op(),
+            new AttemptCause.ReviewFix(new(D, review.Execution.Launch.Attempt, 1, 0)), "Fix."));
+        Assert.Equal(CodeOf(rebased), fix.Execution.Location.AttemptBase);
+    }
+
+    /// <summary>Closes a reviewer's first turn with changes requested, as ReviewMaterializationTests does for its reviewer.</summary>
+    private static async Task CloseReview(PreparationFixture f, Preparation.Ready ready)
+    {
+        var execution = ready.Execution;
+        var attempt = f.Read().Attempts[execution.Launch.Attempt];
+        var inputs = f.Read().Inputs[execution.Inputs];
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(D), f.Op(), execution.Launch, inputs, execution.PromptHash));
+        var definition = f.Read().Revision.Snapshot.Tasks[D];
+        var folder = f.Store.AttemptFolder(W, f.RunId, D, attempt.Id);
+        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!,
+            new AttemptEvent.Requested(At, attempt.Id, D, definition.Title, definition.Execution!, execution.Prompt, "codex", [])
+            { RunBinding = new(W, f.RunId, attempt.Revision, inputs.Id), ReadOnly = true, Subject = U, Conversation = definition.Conversation }))
+        {
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.SessionStarted("review")));
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Changes requested.")));
+            log.Append(new AttemptEvent.Exited(At, 0, ""));
+        }
+        Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(D), f.Op(), execution.Launch, new RootExit.Exited(0)));
+        Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(D), f.Op(), execution.Launch, Checkpoint(folder)));
+    }
+
+    [Fact]
+    public async Task A_later_attempt_s_changes_in_the_checkout_refuse_the_rebase_before_anything_is_journaled()
+    {
+        using var f = new PreparationFixture(Chain());
+        await Write(f, T, ("a.txt", "old\n"));
+        var stale = await Write(f, U, ("b.txt", "B\n"));
+        // A retry of U writes junk.txt and fails, so the journal's last baseline for U's checkout is that attempt's files.
+        var retry = Assert.IsType<Preparation.Ready>(await Rebaser(f).Prepare(f.Lease(U), f.Op(),
+            new AttemptCause.Retry(Assert.IsType<ResultOrigin.Executed>(stale.Origin).Attempt, f.Op())));
+        File.WriteAllText(Path.Combine(retry.Checkout, "junk.txt"), "junk\n");
+        await f.Close(retry, outcome: TerminalAttemptOutcome.Failed);
+        await Update(f, T, ("a.txt", "new\n"));
+        Assert.Equal(stale.Id, f.Read().CurrentResults[U].Id);
+        var refused = Assert.IsType<RebasePreviewRead.Rejected>(Rebaser(f).PreviewRebase(f.Lease(U))).Reason;
+        Assert.Equal((RunProblem.StartConflict, U), (refused.Problem, refused.Task!.Value));
+        var sequence = f.Read().Sequence;
+        Assert.Equal(refused, Assert.IsType<Rebasing.Rejected>(Rebaser(f).Rebase(f.Lease(U), f.Op(), new(new string('0', 64)))).Reason);
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(CodeOf(stale), Tip(f, Branch(f, U)));
+        Assert.Equal("junk\n", Text(f, U, "junk.txt"));
+    }
+
+    [Fact]
+    public async Task A_preview_waits_for_the_repository_lock_and_leaves_another_merge_s_scratch_folder()
+    {
+        using var f = new PreparationFixture(Chain());
+        await Write(f, T, ("a.txt", "old\n"));
+        await Write(f, U, ("b.txt", "B\n"));
+        await Update(f, T, ("a.txt", "new\n"));
+        var repository = f.Git.Open();
+        var scratch = Directory.CreateDirectory(Path.Combine(repository.CommonDirectory, "idevelop", "merges", $"{Environment.ProcessId}-{new string('a', 32)}")).FullName;
+        File.WriteAllText(Path.Combine(scratch, "HEAD"), "ref: refs/heads/none\n");
+        using (repository.TakeMutationLock())
+            Assert.Equal(RunProblem.JournalBusy, Assert.IsType<RebasePreviewRead.Rejected>(Rebaser(f).PreviewRebase(f.Lease(U))).Reason.Problem);
+        Assert.True(File.Exists(Path.Combine(scratch, "HEAD")));
+        Assert.IsType<RebasePreviewRead.Previewed>(Rebaser(f).PreviewRebase(f.Lease(U)));
+    }
+
+    [Fact]
     public async Task An_index_lock_in_the_consumer_checkout_refuses_the_preview()
     {
         using var f = new PreparationFixture(Chain());

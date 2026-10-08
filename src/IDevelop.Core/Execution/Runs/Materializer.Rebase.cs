@@ -29,8 +29,11 @@ internal sealed partial class Materializer
         if (LeaseProblem(lease) is { } problem) return new RebasePreviewRead.Rejected(new(problem));
         try
         {
-            var record = Read(lease.Permit.Workflow, lease.Permit.Run);
+            // The preview builds merges and clears stale merge scratch folders, which only the repository lock's holder may do.
             var repository = OpenRepository();
+            using var mutation = repository.TakeMutationLock();
+            if (mutation is null) return new RebasePreviewRead.Rejected(new(RunProblem.JournalBusy));
+            var record = Read(lease.Permit.Workflow, lease.Permit.Run);
             VerifyRepository(record, repository);
             var build = BuildRebase(repository, record, lease.Task);
             if (RunReducer.AttemptDrift(record, id => id == build.Code.Attempt) is { } held)
@@ -220,8 +223,14 @@ internal sealed partial class Materializer
         var fold = CheckoutBaseline.Fold(record, location.Owner, commit => Value(repository.ReadCommit(commit)).Tree);
         if (fold.Components.Values.Any(component => component is not ComponentBaseline.Fixed))
             throw new Refusal(new(RunProblem.UnresolvedOwnership, Task: task));
+        // A later attempt, such as a failed retry, may have left its own files as the checkout's last recorded state. A
+        // rebase replaces only the stale result's clean checkout, so that checkout needs a Retry or a restore first.
+        string? Recorded(string name) => (fold.Components.GetValueOrDefault(name) as ComponentBaseline.Fixed)?.Value;
+        if (Recorded("branch") != code.Commit.Hex || Recorded("head") != location.Owner.Branch ||
+            Recorded("files") != code.Tree.Hex || Recorded("index") != code.Tree.Hex)
+            throw new Refusal(new(RunProblem.StartConflict, Task: task));
         var state = ReadRecoveryCheckout(repository, record, location, code.Attempt);
-        // The fold ends at the result's publication or at its last rebase, so a match is the stale result's clean checkout.
+        // The fold is the stale result's clean checkout, so a match means nothing changed it since.
         if (BaselineDifference(repository, fold.Components, state) is { } difference) throw Fault(DriftProblem(difference), StaleCheckoutChanged, difference);
         if (state.IndexLock is not null)
             throw Fault(MaterializationProblem.DirtyWorktree, "An index lock holds the checkout. Preserve and restore it first.", new BlockScope.Checkout([], IndexLock: true));

@@ -56,9 +56,9 @@ public sealed class StaleInputTests
         Assert.Equal(["a.txt"], Assert.IsType<RebaseCandidate.Clean>(preview.Candidate).Updates.ToArray());
         var approval = f.Coordinator.ApproveRebase(f.Address, B, preview.Identity, f.Preparation.Op());
         // The approval holds the task while it runs, so a second command for it waits for none of its work.
-        Assert.Equal(RunProblem.TaskBusy, Assert.IsType<RunCommand.Refused>(
+        Assert.Equal(RunProblem.TaskBusy, Assert.IsType<Rebasing.Rejected>(
             await f.Coordinator.ApproveRebase(f.Address, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound)).Reason.Problem);
-        Assert.IsType<RunCommand.Accepted>(await approval.WaitAsync(Bound));
+        Assert.IsType<Rebasing.Rebased>(await approval.WaitAsync(Bound));
 
         var done = await f.UntilStatus(RunStatus.Completed);
         Assert.Equal("Completed", done.Label);
@@ -82,17 +82,23 @@ public sealed class StaleInputTests
         {
             Assert.Equal(WorkflowRunCoordinator.ElsewhereMessage,
                 Assert.IsType<RebasePreviewRead.Unavailable>(await second.ReviewUpdatedInputs(second.Address, B).WaitAsync(Bound)).Message);
-            Assert.Equal(WorkflowRunCoordinator.ElsewhereMessage, Assert.IsType<RunCommand.Unavailable>(
+            Assert.Equal(WorkflowRunCoordinator.ElsewhereMessage, Assert.IsType<Rebasing.Unavailable>(
                 await second.ApproveRebase(second.Address, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound)).Message);
         }
         var elsewhere = f.Address with { Run = new(Guid.Parse("00000000-0000-0000-0000-0000000000ee")) };
-        Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<RunCommand.Refused>(
+        Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Rebasing.Rejected>(
             await f.Coordinator.ApproveRebase(elsewhere, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<RebasePreviewRead.Rejected>(
             await f.Coordinator.ReviewUpdatedInputs(elsewhere, B).WaitAsync(Bound)).Reason.Problem);
-        Assert.Equal(RunProblem.EvidenceMismatch, Assert.IsType<RunCommand.Refused>(
+        Assert.Equal(RunProblem.EvidenceMismatch, Assert.IsType<Rebasing.Rejected>(
             await f.Coordinator.ApproveRebase(f.Address, B, new(new string('0', 64)), f.Preparation.Op()).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Equal(stale.Id, f.Result(B).Id);
+        // A block comes back as the block, with its own problem and paths.
+        File.WriteAllText(Path.Combine(f.Checkout(B), "extra.txt"), "extra\n");
+        var blocked = Assert.IsType<Rebasing.Blocked>(await f.Coordinator.ApproveRebase(f.Address, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound)).Block;
+        Assert.Equal(MaterializationProblem.DirtyWorktree, blocked.Problem);
+        Assert.Equal(["extra.txt"], Assert.IsType<BlockScope.Checkout>(blocked.Scope).Paths.ToArray());
         Assert.Equal(stale.Id, f.Result(B).Id);
     }
 
@@ -112,7 +118,7 @@ public sealed class StaleInputTests
             if (point == "journal.rebase-branch-observed.after") crashed = true;
             if (crashed && point is "journal.rebase-branch-observed.after" or "coordinator.rebase.before") throw new InvalidOperationException("Crashed.");
         };
-        Assert.IsType<RunCommand.Refused>(await f.Coordinator.ApproveRebase(f.Address, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound));
+        Assert.IsType<Rebasing.Rejected>(await f.Coordinator.ApproveRebase(f.Address, B, preview.Identity, f.Preparation.Op()).WaitAsync(Bound));
         await f.Reopen();
         var paused = await f.Decided();
         Assert.Equal(RunStatus.Paused, paused.Status);

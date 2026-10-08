@@ -59,4 +59,7 @@ internal abstract record Rebasing
     internal sealed record Blocked(MaterializationBlock Block) : Rebasing;
 
     internal sealed record Rejected(RunRejection Reason) : Rebasing;
+
+    /// <summary>Another window controls the run. Nothing was recorded.</summary>
+    internal sealed record Unavailable(string Message) : Rebasing;
 }

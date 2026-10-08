@@ -21,11 +21,15 @@ internal sealed partial class WorkflowRunCoordinator
     /// Rebases <paramref name="task"/>'s stale result as the person approved the preview <paramref name="preview"/> under
     /// <paramref name="command"/>. A changed preview, a conflict, or a changed checkout refuses or blocks, and nothing moves.
     /// Repeating the command returns its receipt. Cancelling <paramref name="wait"/> does not revoke a recorded approval,
-    /// which Resume finishes.
+    /// which Resume finishes. The outcome names a block with its own problem and scope.
     /// </summary>
-    public Task<RunCommand> ApproveRebase(RunAddress address, TaskId task, Digest preview, OperationId command, CancellationToken wait = default) =>
-        Request(address, task, message => new RunCommand.Unavailable(message), reason => new RunCommand.Refused(reason), mark: true,
-            () => Rebase(task, command, preview), outcome => Rebased(task, outcome), wait);
+    public Task<Rebasing> ApproveRebase(RunAddress address, TaskId task, Digest preview, OperationId command, CancellationToken wait = default) =>
+        Request(address, task, message => new Rebasing.Unavailable(message), reason => new Rebasing.Rejected(reason), mark: true,
+            () => Rebase(task, command, preview), outcome =>
+            {
+                Held(task, outcome);
+                return outcome;
+            }, wait);
 
     /// <summary>
     /// Runs <paramref name="work"/> off the loop for the controlling window and answers with <paramref name="finish"/> of its
@@ -69,21 +73,20 @@ internal sealed partial class WorkflowRunCoordinator
         }
     }
 
-    private RunCommand Rebased(TaskId task, Rebasing outcome)
+    /// <summary>What a rebase's outcome holds: a block until the journal shows it resolved, a transient refusal until its retry.</summary>
+    private void Held(TaskId task, Rebasing outcome)
     {
         switch (outcome)
         {
             case Rebasing.Rebased:
                 _holds.Remove(task);
-                return Accepted;
+                break;
             case Rebasing.Blocked blocked:
                 Hold(task, new TaskHold.Blocked(blocked.Block));
-                return new RunCommand.Refused(new(RunProblem.UnresolvedOwnership, Task: task));
-            case Rebasing.Rejected rejected:
-                if (Transient(rejected.Reason.Problem)) Hold(task, new TaskHold.Refused(rejected.Reason, null, Transient: true));
-                return new RunCommand.Refused(rejected.Reason);
-            default:
-                throw new InvalidOperationException();
+                break;
+            case Rebasing.Rejected rejected when Transient(rejected.Reason.Problem):
+                Hold(task, new TaskHold.Refused(rejected.Reason, null, Transient: true));
+                break;
         }
     }
 
@@ -102,7 +105,7 @@ internal sealed partial class WorkflowRunCoordinator
             Offload(() => Rebase(task, pending.Approval, pending.Preview), outcome =>
             {
                 _live.Remove(task);
-                Rebased(task, outcome);
+                Held(task, outcome);
                 // Any other refusal waits for Resume, which clears this window's holds, rather than repeating at once.
                 if (outcome is Rebasing.Rejected { Reason: var reason } && !Transient(reason.Problem))
                     Hold(task, new TaskHold.Refused(reason, null, Transient: false));

@@ -316,7 +316,7 @@ internal static partial class RunReducer
                     record.Receipts.Values.OrderByDescending(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Reserved>()
                         .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task)?.Attempt.Id : null);
                 if (prior is { } previous && record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(p => p.Attempt == previous) is { } old &&
-                    !Same(old.Sources, preparation.Sources))
+                    !Same(RebasedSources(record, preparation.Task) ?? old.Sources, preparation.Sources))
                 {
                     return RunProblem.StaleInput;
                 }
@@ -435,6 +435,14 @@ internal static partial class RunReducer
                 return RunProblem.InvalidData;
         }
     }
+
+    /// <summary>
+    /// The code sources a task's current rebased result was approved against, or null when its current result is no rebase.
+    /// A rebase replaces the sources its task's next attempt continues from, without an attempt of its own.
+    /// </summary>
+    private static ImmutableArray<CodeSource>? RebasedSources(RunRecord record, TaskId task) =>
+        record.CurrentResults.GetValueOrDefault(task) is { Origin: ResultOrigin.Rebased } rebased
+            ? InputMaterial.Sources(record, record.Inputs[rebased.Inputs].Bindings) : null;
 
     private static RunProblem? ReservedProblem(RunRecord record, RunEvent.Reserved reserved)
     {
