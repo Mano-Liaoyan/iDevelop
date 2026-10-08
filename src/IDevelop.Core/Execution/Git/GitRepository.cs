@@ -359,7 +359,7 @@ internal sealed partial class GitRepository
             {
                 File.Copy(path.Value, temporary);
                 File.SetCreationTimeUtc(temporary, File.GetCreationTimeUtc(path.Value));
-                File.SetLastWriteTimeUtc(temporary, File.GetLastWriteTimeUtc(path.Value));
+                File.SetLastWriteTimeUtc(temporary, DateTime.UnixEpoch.AddSeconds(1));
                 File.SetLastAccessTimeUtc(temporary, File.GetLastAccessTimeUtc(path.Value));
             }
             var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };

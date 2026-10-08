@@ -338,6 +338,68 @@ public sealed class RootExitTests
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task A_mismatching_later_root_observation_fences_the_launch_and_keeps_the_recorded_exit()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        var recorded = Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+            f.Lease(T), f.Op(), launch, new RootExit.Exited(0))).Observation;
+        var fenced = Assert.IsType<RootObservation.Fenced>(f.Materializer().ObserveRootExit(
+            f.Lease(T), f.Op(), launch, new RootExit.Exited(1)));
+        Assert.Equal(launch, fenced.Launch);
+        Assert.Equal("InvalidClaim", fenced.Detail);
+        Assert.Equal(new[] { launch }, f.Read().Fenced);
+        Assert.Equal(new RootExit.Exited(0), f.Read().RootExits[launch].Exit);
+        Assert.Equal(recorded, f.Read().RootExits[launch]);
+        var control = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
+        Claim(f, control);
+        var matching = Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+            f.Lease(U), f.Op(), control.Execution.Launch, new RootExit.Exited(0))).Observation;
+        Commit(f, control);
+        Assert.Equal(matching, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(
+            f.Lease(U), f.Op(), control.Execution.Launch, new RootExit.Exited(0))).Observation);
+        Assert.Equal(new[] { launch }, f.Read().Fenced);
+    }
+
+    [Theory]
+    [InlineData("tip")]
+    [InlineData("head")]
+    [InlineData("ownership")]
+    public async System.Threading.Tasks.Task A_competing_root_observation_with_different_branch_evidence_fences_the_launch(string difference)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Claim(f, ready);
+        var launch = ready.Execution.Launch;
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3\n",
+            f.Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
+        Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693\n",
+            f.Git.Run(ready.Checkout, "rev-parse", "HEAD^").Text);
+        var recorded = new RunEvent.RootExitObserved(launch, new RootExit.Exited(0), At, f.A,
+            "refs/heads/idp/93f23689/task/90d5b0a2", TipOwnership.Explained);
+        recorded = difference switch
+        {
+            "tip" => recorded with { Tip = new("81ddb7c330112c7f16700ed002803a04b0bce693") },
+            "head" => recorded with { Head = null },
+            "ownership" => recorded with { Ownership = TipOwnership.Unexplained },
+            _ => throw new InvalidOperationException(),
+        };
+        var outcome = f.Materializer(probe: point =>
+        {
+            if (point == "journal.root-exit.before")
+                Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), recorded));
+        }).ObserveRootExit(f.Lease(T), f.Op(), launch, new RootExit.Exited(0));
+        var fenced = Assert.IsType<RootObservation.Fenced>(outcome);
+        Assert.Equal(launch, fenced.Launch);
+        Assert.Equal("InvalidClaim", fenced.Detail);
+        Assert.Equal(new[] { launch }, f.Read().Fenced);
+        Assert.Equal(recorded, f.Read().RootExits[launch]);
+        Assert.Equal(new RootExit.Exited(0), f.Read().RootExits[launch].Exit);
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task Concurrent_duplicate_root_observations_converge_without_fencing_in_twenty_rounds()
     {
         for (var round = 0; round < 20; round++)

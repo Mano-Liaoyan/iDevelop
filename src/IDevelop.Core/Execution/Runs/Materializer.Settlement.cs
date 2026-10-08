@@ -38,10 +38,14 @@ internal sealed partial class Materializer
         if (LeaseProblem(lease, record.Attempts[launch.Attempt].Task) is { } mismatch)
             return new RootObservation.Rejected(new(mismatch));
         if (record.Fenced.Contains(launch)) return new RootObservation.Rejected(new(RunProblem.UnresolvedOwnership));
-        if (record.RootExits.TryGetValue(launch, out var existing)) return new RootObservation.Observed(existing);
         string detail;
         try
         {
+            if (record.RootExits.TryGetValue(launch, out var existing))
+            {
+                if (existing.Exit == exit) return new RootObservation.Observed(existing);
+                throw new Refusal(new(RunProblem.InvalidClaim));
+            }
             var repository = OpenRepository();
             var location = record.Preparations[launch].Location;
             var tip = Value(repository.ReadRef(location.Owner.Branch)) ??

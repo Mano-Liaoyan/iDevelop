@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Execution;
@@ -39,6 +40,43 @@ public sealed class GitRepositoryTests
         else File.SetLastWriteTimeUtc(file, old);
         var tree = GitTree.Snapshot(f.Folder);
         Assert.Equal("EDITED\n", f.Git("show", tree + ":a.txt"));
+    }
+
+    [Fact]
+    public async Task Capture_rechecks_a_same_second_edit_after_the_writer_index_crosses_a_second_boundary()
+    {
+        using var f = new GitFixture();
+        f.Write("a.txt", "before\n");
+        f.Commit("base");
+        var file = f.PathOf("a.txt");
+        var hook = Path.Combine(Path.GetDirectoryName(f.Folder)!, "fsmonitor-hook");
+        File.WriteAllText(hook, "#!/bin/sh\nprintf 'token\\0'\n");
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var environment = new Dictionary<string, string>(f.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
+        Assert.Equal(0, f.Run(f.Folder, environment, "config", "core.fsmonitor", hook).ExitCode);
+        var now = DateTimeOffset.UtcNow;
+        await Task.Delay(DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds() + 1).AddMilliseconds(20) - now);
+        f.Write("a.txt", "before\n");
+        var refreshed = f.Run(f.Folder, environment, "status", "--porcelain");
+        Assert.Equal(0, refreshed.ExitCode);
+        Assert.Equal("", refreshed.Text);
+        Assert.Equal(0, f.Run(f.Folder, environment, "update-index", "--fsmonitor-valid", "a.txt").ExitCode);
+        f.Write("a.txt", "EDITED\n");
+        var hidden = f.Run(f.Folder, environment, "status", "--porcelain");
+        Assert.Equal(0, hidden.ExitCode);
+        Assert.Equal("", hidden.Text);
+        var debug = f.Run(f.Folder, environment, "ls-files", "--debug", "a.txt");
+        Assert.Equal(0, debug.ExitCode);
+        Assert.Equal("  size: 7\tflags: 200000", debug.Text.Split('\n').Single(line => line.Contains("flags:", StringComparison.Ordinal)));
+        var mtime = debug.Text.Split('\n').Single(line => line.TrimStart().StartsWith("mtime:", StringComparison.Ordinal));
+        var recordedSecond = long.Parse(mtime.Trim()["mtime:".Length..].Trim().Split(':')[0], CultureInfo.InvariantCulture);
+        Assert.Equal(recordedSecond, new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds());
+        var repository = f.Open();
+        var index = Read(repository.IndexPath(f.Folder));
+        File.SetLastWriteTimeUtc(index, DateTime.UnixEpoch.AddSeconds(recordedSecond + 1));
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        Assert.Equal("EDITED\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        Assert.Equal("EDITED\n", f.Git("show", GitTree.Snapshot(f.Folder) + ":a.txt"));
     }
 
     [Theory]

@@ -29,8 +29,8 @@ internal static class GitTree
         {
             if (File.Exists(index))
             {
-                // A copy keeps the index's file times, so Git hashes only the files that changed.
                 File.Copy(index, temporary);
+                File.SetLastWriteTimeUtc(temporary, DateTime.UnixEpoch.AddSeconds(1));
             }
 
             return Git(folder, temporary, "add", "--all", "--", ".", ":(exclude).idp") is null
