@@ -6,6 +6,7 @@ namespace IDevelop.Execution;
 public sealed partial class ProjectRuns
 {
     private readonly Dictionary<(WorkflowId Workflow, RunId Run), WorkflowRunCoordinator> _coordinators = [];
+    private readonly Lock _opening = new();
 
     /// <summary>How long a coordinator waits before it retries a step refused for a busy lock or journal. Tests shorten it.</summary>
     internal TimeSpan CoordinatorRetry { get; set; } = TimeSpan.FromSeconds(1);
@@ -16,6 +17,12 @@ public sealed partial class ProjectRuns
     /// launches nothing: <see cref="WorkflowRunCoordinator.Resume"/> authorizes scheduling.
     /// </summary>
     internal RunOpen OpenRun(WorkflowId workflow, RunId run)
+    {
+        // Two opens in one window would race for the run's control, and the loser's read-only coordinator could be kept.
+        lock (_opening) return OpenRunCore(workflow, run);
+    }
+
+    private RunOpen OpenRunCore(WorkflowId workflow, RunId run)
     {
         lock (_gate)
         {
