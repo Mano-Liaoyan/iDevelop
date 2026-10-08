@@ -19,6 +19,7 @@ internal sealed partial class WorkflowRunCoordinator
         {
             case RunPhase.Approved when _resumed:
                 Reconcile(record, view);
+                RequestGates(record, view);
                 Dispatch(view);
                 record = Complete(record, view);
                 break;
@@ -43,7 +44,7 @@ internal sealed partial class WorkflowRunCoordinator
     private void Dispatch(RunView view)
     {
         if (!Slotted.IsEmpty) return;
-        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready);
+        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task));
         if (next is null) return;
         var task = next.Task;
         var operation = RunOperations.Initial(Address.Run, task);
