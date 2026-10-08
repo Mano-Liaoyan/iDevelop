@@ -15,7 +15,7 @@ internal static partial class RunReducer
         if (record.Phase == RunPhase.StopRequested)
         {
             return e is not (RunEvent.Reserved or RunEvent.Prepared or RunEvent.TurnClaimed or
-                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset or MaterializationPlan.Refresh });
+                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Rebase });
         }
         return e switch
         {
@@ -62,6 +62,12 @@ internal static partial class RunReducer
             case RunEvent.Planned { Plan: MaterializationPlan.Preparation preparation } when
                 record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(plan => plan.Attempt == preparation.Attempt || plan.Inputs == preparation.Inputs):
                 return Reject(RunProblem.InputConflict);
+            case RunEvent.Planned { Plan: MaterializationPlan.Rebase rebase }:
+                if (RebaseProblem(record, entry.Operation, rebase) is { } rebaseProblem)
+                {
+                    return Reject(rebaseProblem);
+                }
+                return (record with { Plans = record.Plans.Add(entry.Operation, rebase) }, null);
             case RunEvent.Planned planned:
                 if (PlanProblem(record, planned.Plan) is { } planProblem)
                 {
@@ -310,7 +316,7 @@ internal static partial class RunReducer
                     record.Receipts.Values.OrderByDescending(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Reserved>()
                         .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task)?.Attempt.Id : null);
                 if (prior is { } previous && record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(p => p.Attempt == previous) is { } old &&
-                    !Same(old.Sources, preparation.Sources))
+                    !Same(RebasedSources(record, preparation.Task) ?? old.Sources, preparation.Sources))
                 {
                     return RunProblem.StaleInput;
                 }
@@ -431,6 +437,14 @@ internal static partial class RunReducer
         }
     }
 
+    /// <summary>
+    /// The code sources a task's current rebased result was approved against, or null when its current result is no rebase.
+    /// A rebase replaces the sources its task's next attempt continues from, without an attempt of its own.
+    /// </summary>
+    private static ImmutableArray<CodeSource>? RebasedSources(RunRecord record, TaskId task) =>
+        record.CurrentResults.GetValueOrDefault(task) is { Origin: ResultOrigin.Rebased } rebased
+            ? InputMaterial.Sources(record, record.Inputs[rebased.Inputs].Bindings) : null;
+
     private static RunProblem? ReservedProblem(RunRecord record, RunEvent.Reserved reserved)
     {
         var plan = record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(p => p.Attempt == reserved.Attempt.Id);
@@ -462,6 +476,60 @@ internal static partial class RunReducer
         };
     }
 
+    /// <summary>
+    /// A rebase replaces the task's current, stale writer result with a candidate on the current inputs. It needs a closed
+    /// task, fresh inputs that match what they build, a candidate based on their code, and no other unfinished rebase.
+    /// </summary>
+    private static RunProblem? RebaseProblem(RunRecord record, OperationId operation, MaterializationPlan.Rebase plan)
+    {
+        if (record.Schema != 3 || record.RunKey is not { } run || !record.TaskKeys.TryGetValue(plan.Task, out var key) ||
+            plan.Ref != RunLayout.RebaseRef(run, key, plan.Result) || record.Results.Any(result => result.Id == plan.Result) ||
+            plan.Recipe.Parents.Length != 1 || plan.Recipe.Parents[0] != plan.Inputs.CodeBase)
+            return RunProblem.InvalidData;
+        if (record.CurrentResults.GetValueOrDefault(plan.Task) is not { } source || source.Id != plan.Source ||
+            !record.StaleResults.Contains(source.Id))
+            return RunProblem.UnknownResult;
+        // Only a writer's result carries code of its own.
+        if (source.Code is not CodeOutput.Produced { Code: var code } || code.Commit != plan.From)
+            return RunProblem.UnsupportedResult;
+        if (record.Attempts.Values.Any(attempt => attempt.Task == plan.Task && !record.Closures.ContainsKey(attempt.Id)))
+            return RunProblem.UnclosedAttempts;
+        if (record.Plans.Values.OfType<MaterializationPlan.Rebase>().Any(other => other.Task == plan.Task &&
+            !record.Results.Any(result => result.Id == other.Result)))
+            return RunProblem.ReplacementConflict;
+        var inputs = plan.Inputs;
+        if (inputs.Revision != source.Revision)
+            return RunProblem.InputConflict;
+        if (InputProblem(record, inputs, fresh: true) is { } stale) return stale.Problem;
+        var sources = InputMaterial.Sources(record, inputs.Bindings);
+        var join = (inputs.Code as CodeSelection.Joined)?.Join;
+        if ((join is null) != (plan.JoinRecipe is null) || join is not null && (join.Operation != operation || join.Ref != plan.Ref ||
+            plan.JoinRecipe!.Tree != join.Tree || !plan.JoinRecipe.Parents.SequenceEqual(sources.Select(item => item.Commit).Distinct())))
+            return RunProblem.InputConflict;
+        try
+        {
+            var expected = InputMaterial.Build(record, inputs.Id, plan.Task, inputs.Revision, inputs.Bindings, sources,
+                InputMaterial.Review(record.Revisions[inputs.Revision].Snapshot, plan.Task, inputs.Bindings), join);
+            return SameInput(expected, inputs) ? null : RunProblem.InputConflict;
+        }
+        catch (ArgumentException)
+        {
+            return RunProblem.InputConflict;
+        }
+    }
+
+    /// <summary>The rebased result a rebase plan records: the source's report and artifacts, carried forward, and its candidate as the code.</summary>
+    internal static ResultRecord RebaseResult(RunRecord record, OperationId planId, MaterializationPlan.Rebase plan)
+    {
+        var source = record.Results.Single(result => result.Id == plan.Source);
+        var code = ((CodeOutput.Produced)source.Code!).Code;
+        return new(plan.Result, plan.Task, source.Revision, plan.Inputs.Id, new ResultOrigin.Rebased(plan.Source, planId), source.Report, plan.Source)
+        {
+            Code = new CodeOutput.Produced(new(plan.Task, code.Attempt, plan.Inputs.CodeBase, plan.Commit, plan.Recipe.Tree, plan.Ref)),
+            Artifacts = [.. source.Artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(plan.Result, artifact.Name) })],
+        };
+    }
+
     private static bool ObservedMove(RunRecord record, OperationId plan, string reference, CommitId? expected, CommitId target) =>
         record.GitIntents.Any(pair => pair.Value.Plan == plan && pair.Value.Mutation is GitMutation.MoveRef move &&
             move.Change == new RefChange(reference, expected, target) && record.GitObservations.ContainsKey(pair.Key) &&
@@ -470,6 +538,16 @@ internal static partial class RunReducer
     private static RunProblem? ResultCodeProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task)
     {
         var result = accepted.Result;
+        if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } && result.Origin is ResultOrigin.Rebased rebased)
+        {
+            var plan = (MaterializationPlan.Rebase)record.Plans[rebased.Plan];
+            return Same(result, RebaseResult(record, rebased.Plan, plan)) && SameInput(accepted.Inputs, plan.Inputs) &&
+                ObservedMove(record, rebased.Plan, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[plan.Task]), plan.From, plan.Commit) &&
+                ObservedMove(record, rebased.Plan, plan.Ref, null, plan.Commit) &&
+                record.GitIntents.Any(pair => pair.Value.Plan == rebased.Plan && pair.Value.Mutation is GitMutation.ResetCheckout reset &&
+                    reset.Task == plan.Task && reset.Target == plan.Commit && record.GitObservations.ContainsKey(pair.Key))
+                ? null : RunProblem.InputConflict;
+        }
         if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
         {
             if (result.Origin is not ResultOrigin.Executed executed ||

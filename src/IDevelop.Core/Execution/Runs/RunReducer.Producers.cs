@@ -21,9 +21,16 @@ internal static partial class RunReducer
         _ => ImmutableArray<TaskId>.Empty,
     }).Where(task => task != inputs.Task).Distinct().OrderBy(task => task.ToString(), StringComparer.Ordinal)];
 
-    /// <summary>The attempt whose result is the task's current one. A drift block on its checkout names this attempt.</summary>
-    internal static AttemptId? PublishingAttempt(RunRecord record, TaskId task) =>
-        record.CurrentResults.GetValueOrDefault(task)?.Origin is ResultOrigin.Executed executed ? executed.Attempt : null;
+    /// <summary>
+    /// The attempt whose result is the task's current one. A drift block on its checkout names this attempt. A rebased
+    /// result keeps the checkout of the attempt that published the code it replays.
+    /// </summary>
+    internal static AttemptId? PublishingAttempt(RunRecord record, TaskId task) => record.CurrentResults.GetValueOrDefault(task) switch
+    {
+        { Origin: ResultOrigin.Executed executed } => executed.Attempt,
+        { Origin: ResultOrigin.Rebased, Code: CodeOutput.Produced produced } => produced.Code.Attempt,
+        _ => null,
+    };
 
     internal static bool ProducerUnsettled(RunRecord record, ImmutableArray<TaskId> producers) =>
         record.UnresolvedClaims.Any(key => producers.Contains(record.Attempts[key.Attempt].Task));
