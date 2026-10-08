@@ -77,6 +77,7 @@ public sealed partial class ProjectRuns
             SendProblem.ClientChanged => "The task now uses another client. Start a new attempt first.",
             SendProblem.Ending => "The turn is ending. Wait for teardown to finish.",
             SendProblem.NotReviewing => "The review is no longer running.",
+            SendProblem.RunUnavailable unavailable => unavailable.Reason,
             SendProblem.CannotStart cannot => StartReason(cannot.Problem),
             _ => throw new InvalidOperationException("Unknown send problem."),
         };

@@ -54,6 +54,9 @@ public abstract record SendProblem
 
     /// <summary>Guidance reaches a review only while it goes back and forth.</summary>
     public sealed record NotReviewing(string Title) : SendProblem;
+
+    /// <summary>The workflow run that owns the task cannot take the message now. <paramref name="Reason"/> is for the person.</summary>
+    public sealed record RunUnavailable(string Reason) : SendProblem;
 }
 
 public abstract record TerminalResult
