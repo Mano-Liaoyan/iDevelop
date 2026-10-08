@@ -297,6 +297,7 @@ public sealed class PlannerInclusionValidationTests
     [InlineData("source")]
     [InlineData("empty")]
     [InlineData("confirmation")]
+    [InlineData("edge")]
     public void A_journal_whose_approval_includes_a_result_that_does_not_fit_is_rejected(string change)
     {
         using var f = new RunFixtures(Accepted());
@@ -324,6 +325,13 @@ public sealed class PlannerInclusionValidationTests
             _ => [broken],
         };
         var entry = new RunEntry(3, 1, new(Id(98)), Prompt, At, approved with { Included = all });
+        if (change == "edge")
+        {
+            // The planner gets an input in the approved revision; nothing else about the included result changes.
+            var revision = Revision.Capture(Connect(Edit(f.Workflow, TestNodes.Place(Task(U), new(0, 400))), U, T, ConnectionKind.Context));
+            var moved = included with { Result = included.Result with { Revision = revision.Id }, Inputs = included.Inputs with { Revision = revision.Id } };
+            entry = entry with { Event = approved with { Revision = revision, Included = [moved] } };
+        }
 
         var read = Assert.IsType<RunRead.Rejected>(RunReducer.Replay(W, Run, [entry]));
 

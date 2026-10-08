@@ -141,7 +141,7 @@ internal sealed partial class RunStore
             }
 
             if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
-            if (confirmation.Value == Guid.Empty) return Refuse(RunProblem.ConfirmationRequired);
+            // Each validator refuses an inclusion without the person's confirmation.
             if (include.Select(inclusion => inclusion.Task).Distinct().Count() != include.Length) return Refuse(RunProblem.InputConflict);
             var included = ImmutableArray.CreateBuilder<IncludedResult>();
             foreach (var inclusion in include)
