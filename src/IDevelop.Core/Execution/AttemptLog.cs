@@ -39,17 +39,18 @@ internal sealed class AttemptLog : IDisposable
     };
 
     private readonly Lock _gate = new();
-    private readonly FileStream _events;
+    private readonly Stream _events;
     private StreamWriter? _output;
     private StreamWriter? _stderr;
     private bool _closed;
 
-    private AttemptLog(string folder, FileMode mode)
+    private AttemptLog(string folder, FileMode mode, Func<Stream, Stream>? events = null)
     {
         Folder = folder;
         LineCount = mode == FileMode.Append ? File.ReadLines(Path.Combine(folder, EventsFile)).LongCount() : 0;
         // Other windows fold a live log, so readers share it.
-        _events = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
+        var fileStream = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
+        _events = events is null ? fileStream : events(fileStream);
     }
 
     public string Folder { get; }
@@ -63,10 +64,10 @@ internal sealed class AttemptLog : IDisposable
         Path.Combine(TaskFolder(attemptsFolder, task), attempt.ToString());
 
     /// <summary>Creates the attempt's folder and writes <paramref name="requested"/> as its first line.</summary>
-    public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested)
+    public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested, Func<Stream, Stream>? events = null)
     {
         var folder = Directory.CreateDirectory(FolderOf(attemptsFolder, requested.Task, requested.Attempt)).FullName;
-        var log = new AttemptLog(folder, FileMode.CreateNew);
+        var log = new AttemptLog(folder, FileMode.CreateNew, events);
         try
         {
             log.Append(requested);

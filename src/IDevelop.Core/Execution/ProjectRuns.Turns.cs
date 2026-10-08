@@ -9,6 +9,7 @@ public sealed partial class ProjectRuns
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, LaunchKey Launch), TurnOwner> _owned = [];
 
     internal Action<string>? Probe { get; set; }
+    internal Func<Stream, Stream>? RequestStream { get; set; }
     internal IReadOnlyDictionary<string, string>? GitEnvironment { get; set; }
     internal TimeProvider? MaterializerClock { get; set; }
     internal RunStore? Store { get; set; }
@@ -146,7 +147,7 @@ public sealed partial class ProjectRuns
                         {
                             RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
                             Fix = record.ReviewOf(attempt.Id), Tree = tree,
-                        });
+                        }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }
                 Probe?.Invoke("runner.request.after");
