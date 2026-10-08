@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,6 +10,24 @@ namespace IDevelop.Core.Tests.Git;
 
 public sealed class GitRepositoryTests
 {
+    [Fact]
+    public void Git_tree_snapshot_completes_on_a_thread_whose_synchronization_context_never_runs_posts()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("a.txt", "S\n");
+        string? tree = null;
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new NonRunningSynchronizationContext());
+            tree = GitTree.Snapshot(f.Folder);
+        }) { IsBackground = true };
+        thread.Start();
+        var joined = thread.Join(TimeSpan.FromSeconds(30));
+        Assert.True(joined, "GitTree.Snapshot did not complete without running synchronization context callbacks.");
+        Assert.Equal("S\n", f.Git("show", tree + ":a.txt"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -122,6 +141,54 @@ public sealed class GitRepositoryTests
         Assert.Equal("N\n", f.Git("show", snapshot + ":new.txt"));
         Assert.Equal("K\n", f.Git("show", snapshot + ":kept.txt"));
         Assert.Equal("a.txt\nkept.txt\nnew.txt\nplan.txt\nroot.txt\n", f.Git("ls-tree", "-r", "--name-only", snapshot!));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_rehash_edits_when_the_repository_ignores_stat_data()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Git("config", "core.ignoreStat", "true");
+        f.Write("a.txt", "BB\n");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Read>(repository.Capture(f.Folder)).Value;
+        var snapshot = GitTree.Snapshot(f.Folder);
+        Assert.Multiple(
+            () => Assert.Equal("BB\n", f.Git("show", capture.Tree.Hex + ":a.txt")),
+            () => Assert.Equal("BB\n", f.Git("show", snapshot + ":a.txt")));
+    }
+
+    [Fact]
+    public void Git_tree_snapshot_of_a_subfolder_keeps_root_paths()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("sub/a.txt", "sub\n");
+        f.Git("add", "sub/a.txt");
+        f.Write("sub/a.txt", "SUB\n");
+        var snapshot = GitTree.Snapshot(f.PathOf("sub"));
+        Assert.Multiple(
+            () => Assert.Equal("A\n", f.Git("show", snapshot + ":a.txt")),
+            () => Assert.Equal("SUB\n", f.Git("show", snapshot + ":sub/a.txt")));
+    }
+
+    [Fact]
+    public void Capture_and_snapshot_refuse_a_sparse_checkout_with_an_out_of_cone_intent_to_add_file()
+    {
+        using var f = new GitFixture();
+        f.Write("in/i.txt", "i\n");
+        f.Write("out/o.txt", "o\n");
+        f.Commit("base");
+        Assert.Equal("o\n", f.Git("show", GitTree.Snapshot(f.Folder) + ":out/o.txt"));
+        f.Git("sparse-checkout", "set", "--cone", "in");
+        f.Write("out/n.txt", "N\n");
+        f.Git("add", "-N", "--sparse", "out/n.txt");
+        var repository = f.Open();
+        var capture = Assert.IsType<GitRead<GitCapture>.Failed>(repository.Capture(f.Folder));
+        Assert.Multiple(
+            () => Assert.Null(GitTree.Snapshot(f.Folder)),
+            () => Assert.Equal(MaterializationProblem.DirtyWorktree, capture.Problem),
+            () => Assert.Equal("The index hides changes to out/o.txt with assume-unchanged or skip-worktree.", capture.Detail));
     }
 
     [Theory]
@@ -671,6 +738,14 @@ public sealed class GitRepositoryTests
             if (writer >= 0) Close(writer);
             await removal.WaitAsync(TimeSpan.FromSeconds(5));
         }
+    }
+
+    private sealed class NonRunningSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+
+        public override void Post(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
+        public override void Send(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
     }
 
     [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]
