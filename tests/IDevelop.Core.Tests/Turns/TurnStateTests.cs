@@ -187,7 +187,7 @@ public sealed class TurnStateTests
         var permit = f.Preparation.Permit;
         var operation = f.Preparation.Op();
         var launch = turn.Address.Launch;
-        Assert.IsType<TurnSettlement.Settled>(await f.Runs.Reconcile(permit, operation, launch).WaitAsync(Bound));
+        Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(permit, operation, launch).WaitAsync(Bound)).Settlement);
         await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => f.Runs.Reconcile(permit, operation, launch));
         Assert.Equal(1, f.Launches);
@@ -272,7 +272,7 @@ public sealed class TurnStateTests
             Assert.True(activeTime < prompt, $"Active took {activeTime}.");
             held!.Dispose();
             await leaving.AsTask().WaitAsync(Bound);
-            Assert.IsType<TurnSettlement.Settled>(await reconciliation.WaitAsync(Bound));
+            Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await reconciliation.WaitAsync(Bound)).Settlement);
             var turn = await f.Settled(running);
             Assert.Equal(0, Assert.IsType<RootExit.Exited>(turn.Exit.Exit).Code);
             Assert.Single(f.Preparation.Read().RootExits);
@@ -289,8 +289,8 @@ public sealed class TurnStateTests
         var turn = await f.Settled(await f.Start());
         var result = f.Publish(turn);
         Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
-        var reconciled = Assert.IsType<TurnSettlement.Settled>(await f.Runs.Reconcile(f.Preparation.Permit,
-            f.Preparation.Op(), turn.Address.Launch).WaitAsync(Bound)).Turn;
+        var reconciled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit,
+            f.Preparation.Op(), turn.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.NotSame(turn, reconciled);
         Assert.True(reconciled.Lease.Held);
         Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(reconciled.Release()).Receipt).Result);
@@ -318,8 +318,8 @@ public sealed class TurnStateTests
         Assert.Empty(f.Preparation.Read().RootExits);
         Assert.Single(f.Preparation.Read().Claims);
         f.Runs.Probe = null;
-        var reconciled = Assert.IsType<TurnSettlement.Unresolved>(await f.Runs.Reconcile(f.Preparation.Permit,
-            f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Turn;
+        var reconciled = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit,
+            f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.Equal("Uncertain", reconciled.Reason.ToString());
         Assert.Equal(1, f.Launches);
         await SuccessfulControl();

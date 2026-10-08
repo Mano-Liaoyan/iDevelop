@@ -785,6 +785,7 @@ public sealed partial class ProjectRuns
         private void Fail(string detail)
         {
             BeginStopping(RequestCloseReason.TurnEnded);
+            if (_turn.ClientRuns) Deadline();
             _turn.Failure ??= detail;
             Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(detail)));
             StopTree();

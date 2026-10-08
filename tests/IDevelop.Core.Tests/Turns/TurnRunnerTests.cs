@@ -346,7 +346,7 @@ public sealed class TurnRunnerTests
         }
         finally { held?.Dispose(); }
         f.Runs.Probe = null;
-        var settled = Assert.IsType<TurnSettlement.Settled>(await f.Runs.Reconcile(f.Preparation.Permit, f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Turn;
+        var settled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit, f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.IsType<CaptureDisposition.Matched>(settled.Capture.Disposition);
         Assert.Equal(2, Assert.Single(f.Preparation.Read().Captures).Value.Count);
         Assert.Equal(1, f.Launches);
@@ -560,7 +560,7 @@ public sealed class TurnRunnerTests
         Assert.Equal(2, second.Attempt.Turns.Count);
         Assert.IsType<TurnDisposition.Resting>(Assert.IsType<Release.Released>(second.Release()).Receipt);
         await using var other = f.OpenRuns(await f.Fakes.DiscoverAsync());
-        var restored = Assert.IsType<TurnSettlement.Settled>(await other.Reconcile(f.Preparation.Permit, f.Preparation.Op(), first.Address.Launch).WaitAsync(Bound)).Turn;
+        var restored = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await other.Reconcile(f.Preparation.Permit, f.Preparation.Op(), first.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.Equal(first.Log, restored.Log);
         Assert.Equal("WaitingForInput", restored.Attempt.Status.ToString());
         Assert.Single(restored.Attempt.Turns);

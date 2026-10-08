@@ -37,7 +37,13 @@ internal abstract record TurnSettlement
     private TurnSettlement() { }
     internal sealed record Settled(SettledTurn Turn) : TurnSettlement;
     internal sealed record Unresolved(UnresolvedTurn Turn) : TurnSettlement;
-    internal sealed record Refused(RunRejection Reason) : TurnSettlement;
+}
+
+internal abstract record Reconciliation
+{
+    private Reconciliation() { }
+    internal sealed record Found(TurnSettlement Settlement) : Reconciliation;
+    internal sealed record Refused(RunRejection Reason) : Reconciliation;
 }
 
 internal sealed class SettledTurn(Func<Release> release, ExecutionAddress address, PreparedExecution preparation,

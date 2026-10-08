@@ -39,18 +39,17 @@ internal sealed class AttemptLog : IDisposable
     };
 
     private readonly Lock _gate = new();
-    private readonly Stream _events;
+    private readonly FileStream _events;
     private StreamWriter? _output;
     private StreamWriter? _stderr;
     private bool _closed;
 
-    private AttemptLog(string folder, FileMode mode, Func<Stream, Stream>? events = null)
+    private AttemptLog(string folder, FileMode mode)
     {
         Folder = folder;
         LineCount = mode == FileMode.Append ? File.ReadLines(Path.Combine(folder, EventsFile)).LongCount() : 0;
         // Other windows fold a live log, so readers share it.
-        var fileStream = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
-        _events = events is null ? fileStream : events(fileStream);
+        _events = new FileStream(Path.Combine(folder, EventsFile), mode, FileAccess.Write, FileShare.Read);
     }
 
     public string Folder { get; }
@@ -67,17 +66,15 @@ internal sealed class AttemptLog : IDisposable
     public static AttemptLog Create(string attemptsFolder, AttemptEvent.Requested requested, Func<Stream, Stream>? events = null)
     {
         var folder = Directory.CreateDirectory(FolderOf(attemptsFolder, requested.Task, requested.Attempt)).FullName;
-        var log = new AttemptLog(folder, FileMode.CreateNew, events);
-        try
+        var temporary = Path.Combine(folder, EventsFile + ".tmp");
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.Read))
         {
-            log.Append(requested);
-            return log;
+            using var stream = events is null ? file : events(file);
+            stream.Write(Utf8.GetBytes(JsonSerializer.Serialize<AttemptEvent>(requested, Options) + "\n"));
+            stream.Flush();
         }
-        catch
-        {
-            log.Dispose();
-            throw;
-        }
+        File.Move(temporary, Path.Combine(folder, EventsFile), overwrite: false);
+        return Open(folder);
     }
 
     /// <summary>Opens an existing log to append to it, as reconciliation does.</summary>

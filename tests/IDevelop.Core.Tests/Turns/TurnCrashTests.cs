@@ -33,7 +33,7 @@ public sealed class TurnCrashTests
         }
         await using var fresh = f.OpenRuns(await f.Fakes.DiscoverAsync());
         fresh.MaterializerClock = TimeProvider.System;
-        var first = await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound);
+        var first = Assert.IsType<Reconciliation.Found>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement;
         AssertRecovery(f, launch, recovery);
         if (recovery == "Uncertain")
         {
@@ -82,7 +82,7 @@ public sealed class TurnCrashTests
             }
         }
         Assert.Equal(launches, f.Launches);
-        var second = await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound);
+        var second = Assert.IsType<Reconciliation.Found>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement;
         if (recovery is "Uncertain" or "Settling")
             Assert.Equal(recovery == "Uncertain" ? "Uncertain" : "IncompleteEvidence", Assert.IsType<TurnSettlement.Unresolved>(second).Turn.Reason.ToString());
         else
@@ -157,7 +157,7 @@ public sealed class TurnCrashTests
         var operation = f.Preparation.Op();
         await f.Crash(processes, operation, "runner.claim.after", 1, next);
         await using var fresh = f.OpenRuns(await f.Fakes.DiscoverAsync());
-        var turn = Assert.IsType<TurnSettlement.Unresolved>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), next).WaitAsync(Bound)).Turn;
+        var turn = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), next).WaitAsync(Bound)).Settlement).Turn;
         Assert.Equal("Uncertain", turn.Reason.ToString());
         Assert.Null(turn.Root);
         Assert.Equal(1, f.Launches);
@@ -198,7 +198,7 @@ public sealed class TurnCrashTests
         await WaitUntilAsync(() => ProcessCheck.Check(identity).ToString() == root);
         Assert.Equal(root, ProcessCheck.Check(identity).ToString());
         await using var fresh = f.OpenRuns(await f.Fakes.DiscoverAsync());
-        var turn = Assert.IsType<TurnSettlement.Unresolved>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Turn;
+        var turn = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(await fresh.Reconcile(f.Preparation.Permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.Equal("Uncertain", turn.Reason.ToString());
         Assert.Equal(root, turn.Root.ToString());
         Assert.Equal(root, ProcessCheck.Check(identity).ToString());

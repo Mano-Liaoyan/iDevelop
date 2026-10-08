@@ -248,7 +248,7 @@ public sealed partial class ProjectRuns
         }
     }
 
-    internal Task<TurnSettlement> Reconcile(CoordinatorPermit permit, OperationId operation, LaunchKey launch, CancellationToken wait = default)
+    internal Task<Reconciliation> Reconcile(CoordinatorPermit permit, OperationId operation, LaunchKey launch, CancellationToken wait = default)
     {
         TurnOwner? owner;
         lock (_gate)
@@ -256,22 +256,25 @@ public sealed partial class ProjectRuns
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
             owner = _owned.GetValueOrDefault((permit.Workflow, permit.Run, launch));
         }
-        var reconciliation = owner?.Reconcile() ?? Task.Run(() => ReconcileCore(permit, operation, launch));
+        var settlement = owner?.Reconcile();
+        var reconciliation = settlement is null ? Task.Run(() => ReconcileCore(permit, operation, launch)) : Found(settlement);
         return reconciliation.WaitAsync(wait);
+
+        static async Task<Reconciliation> Found(Task<TurnSettlement> pending) => new Reconciliation.Found(await pending);
     }
 
-    private async Task<TurnSettlement> ReconcileCore(CoordinatorPermit permit, OperationId operation, LaunchKey launch)
+    private async Task<Reconciliation> ReconcileCore(CoordinatorPermit permit, OperationId operation, LaunchKey launch)
     {
         var store = TurnStore;
-        if (store.Read(permit.Workflow, permit.Run) is not RunRead.Loaded loaded) return new TurnSettlement.Refused(new(RunProblem.StorageUnavailable));
+        if (store.Read(permit.Workflow, permit.Run) is not RunRead.Loaded loaded) return new Reconciliation.Refused(new(RunProblem.StorageUnavailable));
         var record = loaded.Record;
-        if (!record.Attempts.TryGetValue(launch.Attempt, out var attempt)) return new TurnSettlement.Refused(new(RunProblem.InvalidClaim));
+        if (!record.Attempts.TryGetValue(launch.Attempt, out var attempt)) return new Reconciliation.Refused(new(RunProblem.InvalidClaim));
         var task = attempt.Task;
-        if (permit.TakeTask(task) is not LeaseTake.Taken taken) return new TurnSettlement.Refused(new(RunProblem.TaskBusy));
+        if (permit.TakeTask(task) is not LeaseTake.Taken taken) return new Reconciliation.Refused(new(RunProblem.TaskBusy));
         if (!record.Claims.ContainsKey(launch))
         {
             taken.Lease.Dispose();
-            return new TurnSettlement.Refused(new(RunProblem.InvalidClaim));
+            return new Reconciliation.Refused(new(RunProblem.InvalidClaim));
         }
         var owner = new TurnOwner(this, store, TurnMaterializer(store), taken.Lease,
             new(record.Repository!, permit.Workflow, permit.Run, task, launch), operation, record.Preparations[launch], null,
@@ -285,9 +288,9 @@ public sealed partial class ProjectRuns
         if (closing)
         {
             taken.Lease.Dispose();
-            return new TurnSettlement.Refused(new(RunProblem.RunStopped));
+            return new Reconciliation.Refused(new(RunProblem.RunStopped));
         }
-        return await owner.Reconcile()!;
+        return new Reconciliation.Found(await owner.Reconcile()!);
     }
 
     private void Forget(TurnOwner owner)
@@ -590,9 +593,6 @@ public sealed partial class ProjectRuns
                     break;
                 case TurnSettlement.Unresolved unresolved:
                     RootExited.TrySetException(new InvalidOperationException(unresolved.Turn.Rejection?.Problem.ToString() ?? unresolved.Turn.Reason.ToString()));
-                    break;
-                case TurnSettlement.Refused refused:
-                    RootExited.TrySetException(new InvalidOperationException(refused.Reason.Problem.ToString()));
                     break;
                 default: throw new UnreachableException();
             }
