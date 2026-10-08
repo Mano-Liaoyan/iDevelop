@@ -22,8 +22,11 @@ internal sealed partial class Materializer
             if (LeaseProblem(lease, attempt.Task) is { } mismatch) return new ClaimCheck.Rejected(new(mismatch));
             inputs = prepared.Inputs;
             VerifyRepository(record, repository);
-            VerifyCheckout(repository, prepared.Location, attempt.Cause is AttemptCause.Continue || launch.Turn > 1, record);
+            var keepChanges = attempt.Cause is AttemptCause.Continue || launch.Turn > 1;
+            VerifyCheckout(repository, prepared.Location, keepChanges, record);
             VerifyDelivery(record, prepared, repository);
+            if (keepChanges && OwnBaselineHold(permit, operation, repository, record, prepared, attempt) is { } own) return own;
+            if (launch.Turn == 1 && ProducerRecheck(permit, operation, repository, record, record.Inputs[prepared.Inputs]) is { } held) return held;
             return Journal("claim", () => _store.Claim(lease, OperationIds.Derive(operation, "claim"), launch,
                 record.Inputs[prepared.Inputs], prepared.PromptHash)) switch
             {

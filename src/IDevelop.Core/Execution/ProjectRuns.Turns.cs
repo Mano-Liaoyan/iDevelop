@@ -87,7 +87,7 @@ public sealed partial class ProjectRuns
 
     private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent)
     {
-        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry) })
+        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
         var store = TurnStore;
         var materializer = TurnMaterializer(store);
@@ -135,8 +135,19 @@ public sealed partial class ProjectRuns
             var folder = store.AttemptFolder(permit.Workflow, permit.Run, task, attempt.Id);
             var evidence = intent is TurnIntent.Next ? AttemptEvidence.Read(folder) : null;
             if (evidence is { Rejection: { } invalid }) return new TurnStart.Refused(invalid);
+            var session = evidence?.Record?.SessionId;
+            Continuation? continues = null;
+            if (intent is TurnIntent.First { Cause: AttemptCause.Continue continued })
+            {
+                // A Continue resumes the earlier attempt's session, which its recovery baseline recorded when it has one.
+                var earlier = AttemptEvidence.Read(store.AttemptFolder(permit.Workflow, permit.Run, task, continued.Previous)).Record;
+                session = record.Baselines.GetValueOrDefault((continued.Previous, continued.Confirmation))?.Baseline.Session ?? earlier?.SessionId;
+                if (session is null || earlier?.Requested.Client != definition.Execution?.Client)
+                    return new TurnStart.Refused(new(RunProblem.SessionUnavailable));
+                continues = new(continued.Previous, session);
+            }
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
-                new Resumption(evidence?.Record?.SessionId, prepared.Prompt), questions: _questions);
+                new Resumption(session, prepared.Prompt), questions: _questions);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);
             var plan = ((StartVerdict.Allowed)verdict).Plan;
             plan = plan with { Request = plan.Request with { WorkingFolder = ready.Checkout } };
@@ -161,7 +172,7 @@ public sealed partial class ProjectRuns
                             prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                         {
                             RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
-                            Fix = record.ReviewOf(attempt.Id), Tree = tree,
+                            Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues,
                         }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }

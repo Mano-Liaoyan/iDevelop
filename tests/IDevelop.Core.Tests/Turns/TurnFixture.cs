@@ -27,21 +27,32 @@ internal sealed class TurnFixture : IAsyncDisposable
         ClientId client = ClientId.Codex, string model = "gpt-6-sol", Func<Workflow, Workflow>? configure = null, string? folder = null)
     {
         Client = client;
-        Writer = PreparationFixture.Writer(T) with
-        {
-            Execution = new(client) { Model = model, Reasoning = "high" }, Conversation = conversation,
-        };
-        if (readOnly)
-        {
-            var blueprint = Writer.Blueprint;
-            var work = (WorkSpec.Agent)blueprint.Work;
-            Writer = new(T, new(blueprint.Key, blueprint.Name, work with { Access = AgentAccess.ReadOnly }, blueprint.Fields, blueprint.Defaults))
-            { Title = Writer.Title, Execution = Writer.Execution, Conversation = conversation };
-        }
+        Writer = Agent(T, conversation, readOnly, client, model);
         var workflow = FixtureWorkflow(Writer);
         Preparation = new(configure?.Invoke(workflow) ?? workflow, folder: folder);
         Evidence = _temp.Create("evidence");
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
+    }
+
+    /// <summary>A node like the writer under another id, so a workflow can add producers and consumers around it.</summary>
+    public static TaskDefinition Agent(TaskId id, ConversationMode conversation = ConversationMode.Autonomous, bool readOnly = false,
+        ClientId client = ClientId.Codex, string model = "gpt-6-sol")
+    {
+        var writer = PreparationFixture.Writer(id) with
+        {
+            Execution = new(client) { Model = model, Reasoning = "high" }, Conversation = conversation,
+        };
+        if (!readOnly) return writer;
+        var blueprint = writer.Blueprint;
+        var work = (WorkSpec.Agent)blueprint.Work;
+        return new(id, new(blueprint.Key, blueprint.Name, work with { Access = AgentAccess.ReadOnly }, blueprint.Fields, blueprint.Defaults))
+        { Title = writer.Title, Execution = writer.Execution, Conversation = conversation };
+    }
+
+    public int Claims(TaskId task)
+    {
+        var record = Preparation.Read();
+        return record.Claims.Keys.Count(key => record.Attempts[key.Attempt].Task == task);
     }
 
     public async Task Open(FakeRule? rule = null)
@@ -133,6 +144,13 @@ internal sealed class TurnFixture : IAsyncDisposable
         _ = Preparation.Permit;
         Assert.Equal(point is "runner.prepared" or "runner.request.after" or "journal.close-turn.after" ? [] : new[] { launch }, Preparation.Read().Fenced);
         return launch;
+    }
+
+    /// <summary>Closes this window's project and opens it again, as a restart does.</summary>
+    public async Task Reopen()
+    {
+        await Runs.DisposeAsync();
+        Runs = OpenRuns(await Fakes.DiscoverAsync());
     }
 
     public ResultRecord Publish(SettledTurn turn)
