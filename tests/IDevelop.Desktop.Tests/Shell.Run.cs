@@ -15,7 +15,7 @@ internal sealed partial class Shell
     {
         WaitUntil(() => Has<Button>("RunWorkflow"), "the canvas shows Run Workflow");
         Click(Find<Button>("RunWorkflow"));
-        WaitUntil(() => Preflight is { IsReady: true }, "the preflight reads the project");
+        WaitUntil(() => Preflight is { IsReady: true }, "the preflight reads the project", () => "It is still checking.");
         return Preflight!;
     }
 
@@ -24,7 +24,7 @@ internal sealed partial class Shell
     {
         OpenPreflight();
         Click(Find<Button>("PreflightStart"));
-        WaitUntil(() => Preflight is null && WorkflowRun is not null, "the run starts");
+        WaitUntil(() => Preflight is null && WorkflowRun is not null, "the run starts", () => $"Notice: {Preflight?.Notice}");
         return WorkflowRun!;
     }
 
@@ -35,7 +35,11 @@ internal sealed partial class Shell
     /// <summary>The texts of every element with the id, in visual order.</summary>
     public string[] TextsOf(string automationId) => [.. ById<TextBlock>(Window, automationId).Where(text => text.IsEffectivelyVisible).Select(text => text.Text ?? "")];
 
-    /// <summary>As <see cref="WaitUntil(Func{bool}, string)"/>, and a timeout says what <paramref name="state"/> found then.</summary>
+    /// <summary>
+    /// As <see cref="WaitUntil(Func{bool}, string)"/>, and a timeout says what <paramref name="state"/> found then. The
+    /// condition can turn true in the UI thread's last job, after the last layout, so the window lays out once more before
+    /// the test reads what it shows.
+    /// </summary>
     public void WaitUntil(Func<bool> condition, string what, Func<string> state)
     {
         try
@@ -46,6 +50,8 @@ internal sealed partial class Shell
         {
             throw new Xunit.Sdk.XunitException($"Timed out waiting until {what}. {state()}");
         }
+
+        Render();
     }
 
     public void WaitForStatus(string status) =>

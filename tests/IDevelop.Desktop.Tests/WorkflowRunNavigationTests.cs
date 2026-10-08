@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -26,10 +27,10 @@ public sealed class WorkflowRunNavigationTests
         return f;
     }
 
-    private static WorkflowRunFixture Gated()
+    private static WorkflowRunFixture Gated(string? gate = null)
     {
         var f = new WorkflowRunFixture(Task(A, "A", 105), Approval(G, "Approve", 405), Dependency(A, G));
-        f.Answer("A", f.Says("A ready."));
+        f.Answer("A", f.Says("A ready.", gate: gate));
         return f;
     }
 
@@ -56,6 +57,13 @@ public sealed class WorkflowRunNavigationTests
         var conversation = shell.Window.ViewModel.Conversation!;
         shell.WaitUntil(() => conversation.SelectedAttempt is not null, "the conversation lists its attempts");
         Assert.Contains("· Run 1 ·", conversation.SelectedAttempt!.Label);
+        // The conversation covers the canvas and its run bar, so it repeats the run's status and Stop Workflow.
+        Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
+        Assert.True(shell.Find<Control>("ConversationRun").IsEffectivelyVisible);
+        Assert.Equal(("Waiting", "0 of 2 done", "\"A\" waits for you."),
+            (shell.Text("ConversationRunStatus"), shell.Text("ConversationRunProgress"), shell.Text("ConversationRunActivity")));
+        Assert.True(shell.Find<Button>("ConversationStopWorkflow").IsEffectivelyVisible);
+        Assert.False(shell.Find<Button>("ConversationResumeRun").IsEffectivelyVisible);
         shell.Click(shell.Find<TextBox>("ConversationComposer"));
         shell.Type("Use the fixture");
         shell.WaitUntil(() => shell.Find<Button>("ConversationSend").IsEffectivelyEnabled, "the run takes a reply");
@@ -73,9 +81,15 @@ public sealed class WorkflowRunNavigationTests
     [AvaloniaFact]
     public void An_approval_waits_for_the_person_and_Approve_completes_the_run()
     {
-        using var f = Gated();
+        using var f = Gated("a");
         var shell = f.Window();
         shell.StartRun();
+        shell.WaitForCard("A", "Running");
+        shell.Click(shell.Header(shell.Node("Approve")));
+        Assert.Equal("A run of the \"Workflow\" workflow owns this approval. It asks for your approval once the tasks before it hand on.",
+            shell.Text("RunOwner"));
+        Assert.False(shell.Section("Approval").IsEffectivelyVisible);
+        f.Open("a");
         shell.WaitForCard("Approve", "Waiting for approval");
 
         Assert.Equal("\"Approve\" waits for your approval.", shell.Text("RunActivity"));
@@ -85,8 +99,10 @@ public sealed class WorkflowRunNavigationTests
         Assert.Equal(("Waiting for approval", "1 of this run"), (shell.InView<TextBlock>("RunTaskStatus").Text, shell.Text("GateRequest")));
         Assert.Equal("A run of the \"Workflow\" workflow owns this approval. Answer its request below, or stop the run.", shell.Text("RunOwner"));
         Assert.False(shell.Find<TextBlock>("RunConversationNote").IsEffectivelyVisible);
-        shell.WaitUntil(() => shell.Find<TextBox>("GateReport").Text is { Length: > 0 }, "the panel reads what approving hands on");
-        Assert.Equal("## A (dependency)\n\nA ready.", shell.Find<TextBox>("GateReport").Text?.TrimEnd());
+        shell.WaitUntil(() => shell.Find<MarkdownView>("GateReport").Markdown is { Length: > 0 }, "the panel reads what approving hands on",
+            () => "It has no report yet.");
+        Assert.Equal("## A (dependency)\n\nA ready.", shell.Find<MarkdownView>("GateReport").Markdown?.TrimEnd());
+        Assert.Equal(["A (dependency)", "A ready."], ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateReport")));
 
         shell.Click(shell.InView<Button>("ApproveGate"));
 
@@ -145,7 +161,7 @@ public sealed class WorkflowRunNavigationTests
         shell.WaitForCard("Approve", "Waiting for approval");
         shell.Click(shell.Find<Button>("NextWaiting"));
 
-        using (var held = new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        using (f.HoldJournal())
         {
             shell.Click(shell.InView<Button>("ApproveGate"));
             Assert.False(shell.Find<Button>("ApproveGate").IsEffectivelyEnabled);
@@ -169,7 +185,7 @@ public sealed class WorkflowRunNavigationTests
         shell.StartRun();
         shell.WaitForCard("Approve", "Waiting for approval");
         shell.Click(shell.Find<Button>("NextWaiting"));
-        var held = new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var held = f.HoldJournal();
         _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(1500)).ContinueWith(_ => held.Dispose());
 
         shell.Click(shell.InView<Button>("ApproveGate"));
@@ -232,9 +248,9 @@ public sealed class WorkflowRunNavigationTests
         second.WaitUntil(() => second.Find<Button>("ConversationSend").IsEffectivelyEnabled, "the reopened conversation takes the reply");
         second.Click(second.Find<Button>("ConversationSend"));
         second.WaitUntil(() => owning.Draft == "", "the reply is queued");
-        // The conversation takes the canvas's place, so the run bar shows again once it closes.
-        second.Click(second.Find<Button>("CloseConversation"));
-        second.Click(second.Find<Button>("ResumeRun"));
+        // The conversation covers the canvas, and it repeats the run's Resume.
+        Assert.Equal("Paused", second.Text("ConversationRunStatus"));
+        second.Click(second.Find<Button>("ConversationResumeRun"));
         second.WaitUntil(() => f.Launches("A") == 2 && second.CardText("A", "CardStatus") == "Waiting for you", "the reply's turn ends",
             () => $"Launches {f.Launches("A")}, card {second.CardText("A", "CardStatus")}, run {second.WorkflowRun?.StatusLabel}, " +
                 $"notice {owning.Notice}, hint {owning.ComposerHint}, draft {owning.Draft}, problem {second.WorkflowRun?.Problem}");
@@ -261,6 +277,27 @@ public sealed class WorkflowRunNavigationTests
         shell.WaitForStatus("Waiting");
         Assert.False(shell.Find<Button>("ResumeRun").IsEffectivelyVisible);
         Assert.Equal(1, f.Launches("A"));
+    }
+
+    [AvaloniaFact]
+    public void A_project_that_opens_while_the_journal_is_busy_shows_its_active_run_once_the_journal_frees()
+    {
+        using var f = ChatChain();
+        var first = f.Window();
+        first.StartRun();
+        first.WaitForCard("A", "Waiting for you");
+        var closing = first.Window.ViewModel.Projects[0].CloseAsync().AsTask();
+        first.WaitUntil(() => closing.IsCompleted, "the first window lets go of the project");
+        // Taking control writes the journal, which another window's step holds longer than one write waits.
+        var held = f.HoldJournal();
+        _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(1600)).ContinueWith(_ => held.Dispose());
+
+        var shell = f.Window();
+
+        Assert.Null(shell.WorkflowRun);
+        shell.WaitUntil(() => shell.WorkflowRun is not null, "the window shows the run once the journal frees", () => $"Status: {shell.Status}");
+        Assert.Equal("Paused", shell.RunStatus);
+        Assert.Equal("", shell.Status);
     }
 
     [AvaloniaFact]

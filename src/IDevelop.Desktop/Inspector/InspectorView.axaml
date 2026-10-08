@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:blueprints="using:IDevelop.Desktop.Blueprints"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:executionCore="using:IDevelop.Execution"
              xmlns:inspector="using:IDevelop.Desktop.Inspector"
@@ -231,13 +232,13 @@
                   <inspector:InspectorSection Key="Run" Title="Run">
                     <StackPanel>
                       <!-- A task that the canvas's workflow run owns shows the run's state, not its own Run and Cancel. -->
-                      <inspector:InspectorRow Label="Status" Icon="{StaticResource IconStatus}" IsShown="{Binding ShowsRunState}">
+                      <!-- Stacked, so a long status such as what a pending task waits for has the section's whole width. -->
+                      <inspector:InspectorRow Label="Status" Layout="Stacked" Icon="{StaticResource IconStatus}" IsShown="{Binding ShowsRunState}">
                         <Border Classes="pill" HorizontalAlignment="Left"
                                 Classes.running="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                                 Classes.complete="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                                 Classes.problem="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                                 Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
-                          <!-- A long status, such as what a pending task waits for, trims inside the value column. -->
                           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
                             <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
                             <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}" TextTrimming="CharacterEllipsis"
@@ -374,9 +375,17 @@
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}"
                                                     IsShown="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBox Text="{Binding Report, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="240" FontSize="13"
-                                       AutomationProperties.AutomationId="GateReport"
-                                       AutomationProperties.Name="What approving hands on" />
+                              <!-- The forwarded report is Markdown, which renders as the conversation renders it. -->
+                              <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8">
+                                <Border.Styles>
+                                  <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
+                                </Border.Styles>
+                                <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled">
+                                  <conversation:MarkdownView Markdown="{Binding Report}"
+                                                             AutomationProperties.AutomationId="GateReport"
+                                                             AutomationProperties.Name="What approving hands on" />
+                                </ScrollViewer>
+                              </Border>
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding SentBackReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Text="{Binding SentBackReason, StringFormat='Sent back: {0}'}" TextWrapping="Wrap" FontSize="12"
