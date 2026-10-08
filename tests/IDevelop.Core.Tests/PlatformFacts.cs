@@ -25,6 +25,17 @@ internal sealed class GitBashFactAttribute : FactAttribute
     }
 }
 
+internal sealed class CaseInsensitiveFactAttribute : FactAttribute
+{
+    public CaseInsensitiveFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        {
+            Skip = "Windows and macOS only.";
+        }
+    }
+}
+
 internal sealed class UnixFactAttribute : FactAttribute
 {
     public UnixFactAttribute()

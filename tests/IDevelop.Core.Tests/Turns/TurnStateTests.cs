@@ -280,6 +280,87 @@ public sealed class TurnStateTests
     }
 
     [Fact]
+    public Task An_unfenced_owner_is_found_from_the_project_path_with_a_trailing_separator() =>
+        UnfencedOwnerIsFoundFrom(folder => folder + Path.DirectorySeparatorChar);
+
+    [CaseInsensitiveFact]
+    public Task An_unfenced_owner_is_found_from_the_project_path_in_another_case() =>
+        UnfencedOwnerIsFoundFrom(folder => folder.ToUpperInvariant());
+
+    private static async Task UnfencedOwnerIsFoundFrom(Func<string, string> spell)
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        f.Runs.StopSeam = _ => false;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
+        using var process = Process.GetProcessById(launched.ProcessId);
+        try
+        {
+            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+            Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound));
+            f.Preparation.ReleaseControl();
+            await f.Runs.DisposeAsync().AsTask().WaitAsync(Bound);
+            var spelled = spell(f.Preparation.Git.Folder);
+            Assert.NotEqual(f.Preparation.Git.Folder, spelled);
+            using var permit = Assert.IsType<ControlTake.Owned>(RunStore.Open(spelled).TakeControl(W, f.Preparation.RunId)).Permit;
+            await using var reopened = f.OpenRuns(await f.Fakes.DiscoverAsync());
+            var found = Assert.IsType<TurnSettlement.Unresolved>(Assert.IsType<Reconciliation.Found>(
+                await reopened.Reconcile(permit, f.Preparation.Op(), launch).WaitAsync(Bound)).Settlement).Turn;
+            Assert.Equal("Uncertain", found.Reason.ToString());
+            Assert.Equal(ProcessMatch.Same, found.Root);
+            Assert.True(found.Lease.Held);
+            Assert.Equal(1, f.Launches);
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+        }
+    }
+
+    [Fact]
+    public async Task Closing_returns_at_once_while_the_close_fence_waits_for_a_busy_journal()
+    {
+        await using var f = new TurnFixture();
+        await f.Open(f.Waiting(hang: true));
+        f.Runs.StopSeam = _ => false;
+        var permit = f.Preparation.Permit;
+        var running = await f.Start();
+        var launch = running.Address.Launch;
+        var launched = Assert.Single(f.Log(launch).Events.OfType<AttemptEvent.Launched>());
+        using var process = Process.GetProcessById(launched.ProcessId);
+        FileStream? held = null;
+        try
+        {
+            await WaitUntilAsync(() => f.Log(launch).Record?.SessionId == "session-1");
+            Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
+            Assert.IsType<TurnSettlement.Unresolved>(await running.Settlement.WaitAsync(Bound));
+            held = f.LockJournal();
+            f.Runs.ShutdownTime = TimeSpan.FromSeconds(5);
+            var retrying = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            f.Runs.Probe = point => { if (point == "journal.close-fence.retry") retrying.TrySetResult(); };
+            var clock = Stopwatch.StartNew();
+            var disposal = f.Runs.DisposeAsync().AsTask();
+            var returned = clock.Elapsed;
+            Assert.True(returned < TimeSpan.FromSeconds(1), $"DisposeAsync returned after {returned}.");
+            await retrying.Task.WaitAsync(Bound);
+            held.Dispose();
+            await disposal.WaitAsync(Bound);
+            Assert.Contains(launch, f.Preparation.Read().Fenced);
+            Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
+        }
+        finally
+        {
+            held?.Dispose();
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync().WaitAsync(Bound);
+        }
+    }
+
+    [Fact]
     public async Task A_launch_that_read_open_creates_its_process_before_shutdown_is_published()
     {
         await using var f = new TurnFixture();
