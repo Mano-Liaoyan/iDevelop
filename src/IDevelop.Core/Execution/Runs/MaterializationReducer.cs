@@ -156,13 +156,15 @@ internal static partial class RunReducer
                     !record.Preparations.TryGetValue(new(baseline.Previous, 1), out var previousPreparation) ||
                     !record.Preparations.TryGetValue(new(recoveryPreservation.Attempt, 1), out var preservedPreparation) ||
                     preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null ||
-                    ResolveReceiptBlocks(record, baselined.Resolved, recoveryPreservation.Task) is not { } baselineBlocks)
+                    ResolveReceiptBlocks(record, baselined.Resolved, recoveryPreservation.Task,
+                        block => OperationIds.Derive(block.Operation, "baseline") == entry.Operation || CheckedWithCheckout(block.Scope)) is not { } baselineBlocks)
                     return Reject(RunProblem.InvalidData);
                 return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined), Blocks = baselineBlocks }, null);
             case RunEvent.Restored restored:
                 if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration restoration ||
                     record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan) ||
-                    ResolveReceiptBlocks(record, restored.Resolved, restoration.Task) is not { } restoredBlocks)
+                    ResolveReceiptBlocks(record, restored.Resolved, restoration.Task,
+                        block => block.Operation == restored.Plan || block.Scope is BlockScope.Refs || CheckedWithCheckout(block.Scope)) is not { } restoredBlocks)
                     return Reject(RunProblem.InvalidData);
                 return (record with { Restorations = record.Restorations.Add(restored.Plan, restored), Blocks = restoredBlocks }, null);
             case RunEvent.Preserved preserved:
@@ -185,14 +187,17 @@ internal static partial class RunReducer
         }
     }
 
+    // Restore and RecordRecoveryBaseline verify the whole checkout, its worktree ownership and Git before their receipt.
+    internal static bool CheckedWithCheckout(BlockScope scope) => scope is BlockScope.Checkout or BlockScope.Ownership or BlockScope.Repository;
+
     private static ImmutableDictionary<OperationId, MaterializationBlockState>? ResolveReceiptBlocks(RunRecord record,
-        ImmutableArray<OperationId> resolved, TaskId task)
+        ImmutableArray<OperationId> resolved, TaskId task, Func<MaterializationBlock, bool> checkedBlock)
     {
         if (resolved.IsDefault) return null;
         var blocks = record.Blocks;
         foreach (var id in resolved)
         {
-            if (!blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != task) return null;
+            if (!blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != task || !checkedBlock(block.Block)) return null;
             blocks = blocks.SetItem(id, block with { Resolved = true });
         }
         return blocks;

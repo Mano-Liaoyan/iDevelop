@@ -27,9 +27,7 @@ public sealed class RecoveryBaselineTests
         var refused = Assert.IsType<RecoveryBaselining.Blocked>(f.Materializer()
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
         Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
-        Assert.Empty(refused.Block.Scope!.Paths);
-        Assert.Empty(refused.Block.Scope.Refs);
-        Assert.False(refused.Block.Scope.IndexLock);
+        Assert.Equal(new BlockScope.Ownership(), refused.Block.Scope);
         var own = f.Read().Blocks.Single(b => b.Value.Block.Operation == operation).Key;
         Assert.False(f.Read().Blocks[own].Resolved);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
@@ -166,14 +164,14 @@ public sealed class RecoveryBaselineTests
         Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, previous));
         var block = Assert.Single(f.Read().Blocks);
         Assert.Equal("UncertainOwnership", block.Value.Block.Problem.ToString());
-        Assert.Equal(new[] { ready.Execution.Location.Owner.Branch }, block.Value.Block.Scope!.Refs);
+        Assert.Equal(new BlockScope.Checkout(["keep.txt"], Branch: true), block.Value.Block.Scope);
         Assert.False(block.Value.Resolved);
         var cause = new AttemptCause.Continue(previous, confirmation);
         Assert.Equal("OutcomeMismatch", Assert.IsType<Preparation.Rejected>(await f.Prepare(T, cause: cause)).Reason.Problem.ToString());
         var unrelated = f.Op();
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, unrelated, new RunEvent.Blocked(
-            new(unrelated, T, previous, MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Unrelated drift.")
-            { Scope = new(["other.txt"], [], false) })));
+            new(unrelated, T, previous, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "Unrelated stash drift.")
+            { Scope = new BlockScope.Refs(["refs/stash"]) })));
         var operation = f.Op();
         var first = Assert.IsType<RecoveryBaselining.Recorded>(f.Materializer().RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
         var sequence = f.Read().Sequence;
@@ -414,7 +412,7 @@ public sealed class RecoveryBaselineTests
         Assert.IsType<Preservation.Preserved>(await f.Materializer().Preserve(f.Lease(T), preservation, previous));
         var drift = OperationIds.Derive(preservation, "preserve-drift");
         Assert.False(f.Read().Blocks[drift].Resolved);
-        Assert.Equal(new[] { "keep.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
+        Assert.Equal(new BlockScope.Checkout(["keep.txt"]), f.Read().Blocks[drift].Block.Scope);
         var operation = f.Op();
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == point) throw new Crash(); })
             .RecordRecoveryBaseline(f.Lease(T), operation, previous, confirmation, preservation));
@@ -478,7 +476,7 @@ public sealed class RecoveryBaselineTests
             .RecordRecoveryBaseline(f.Lease(T), f.Op(), previous, confirmation, preservation));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal("iDevelop cannot read this file's identity on this system, so Restore cannot remove index.lock. Remove it outside iDevelop, then preserve again.", blocked.Block.Detail);
-        Assert.True(blocked.Block.Scope!.IndexLock);
+        Assert.Equal(new BlockScope.Checkout([], IndexLock: true), blocked.Block.Scope);
         Assert.Equal("lock\n", File.ReadAllText(lockPath));
         Assert.Empty(f.Read().Baselines);
         File.Delete(lockPath);

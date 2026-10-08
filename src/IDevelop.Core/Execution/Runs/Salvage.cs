@@ -38,7 +38,7 @@ internal abstract record RestorePreviewRead
 {
     private RestorePreviewRead() { }
     internal sealed record Previewed(RestorePreview Preview) : RestorePreviewRead;
-    internal sealed record Refused(MaterializationProblem Problem, string Detail, BlockScope? Scope) : RestorePreviewRead;
+    internal sealed record Refused(MaterializationProblem Problem, string Detail, BlockScope Scope) : RestorePreviewRead;
     internal sealed record Rejected(RunRejection Reason) : RestorePreviewRead;
 }
 

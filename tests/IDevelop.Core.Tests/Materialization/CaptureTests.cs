@@ -845,7 +845,7 @@ public sealed class CaptureTests
             var operation = f.Op();
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(new(
                 operation, U, sibling.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable,
-                sibling.Execution.Inputs, [], "Sibling input became unavailable."))));
+                sibling.Execution.Inputs, [], "Sibling input became unavailable.") { Scope = new BlockScope.Operation() })));
         }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
         Assert.Equal("Matched", settled.Disposition.GetType().Name);
         Assert.Equal(2, snapshots);

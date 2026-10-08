@@ -50,10 +50,10 @@ public sealed class ReceiptResolutionTests
         var own = f.Op();
         Assert.Equal("Recorded", f.Store.Record(f.Permit, own, new RunEvent.Blocked(
             new(command == "restore" ? plan : operation, T, attempt, MaterializationProblem.InputUnavailable,
-                ready.Execution.Inputs, [], "Own failure."))).GetType().Name);
+                ready.Execution.Inputs, [], "Own failure.") { Scope = new BlockScope.Operation() })).GetType().Name);
         var other = f.Op();
         Assert.Equal("Recorded", f.Store.Record(f.Permit, other, new RunEvent.Blocked(
-            new(other, invalid == "other-task" ? C : T, null, MaterializationProblem.GitFailed, null, [], "Other failure."))).GetType().Name);
+            new(other, invalid == "other-task" ? C : T, null, MaterializationProblem.GitFailed, null, [], "Other failure.") { Scope = new BlockScope.Operation() })).GetType().Name);
         if (invalid == "resolved")
             Assert.Equal("Recorded", f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(other, "Manually resolved.")).GetType().Name);
         ImmutableArray<OperationId> ids = invalid switch

@@ -99,16 +99,50 @@ internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int 
 internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, AttemptId? Attempt, MaterializationProblem Problem,
     InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null)
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public BlockScope? Scope { get; init; }
+    public required BlockScope Scope { get; init; } = BlockScope.Unrecorded.Value;
 }
 
-internal sealed record BlockScope(ImmutableArray<string> Paths, ImmutableArray<string> Refs, bool IndexLock)
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Checkout), "checkout")]
+[JsonDerivedType(typeof(Refs), "refs")]
+[JsonDerivedType(typeof(Ownership), "ownership")]
+[JsonDerivedType(typeof(Repository), "repository")]
+[JsonDerivedType(typeof(Operation), "operation")]
+internal abstract record BlockScope
 {
-    public bool Equals(BlockScope? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) &&
-        Refs.SequenceEqual(other.Refs, StringComparer.Ordinal) && IndexLock == other.IndexLock;
+    private BlockScope() { }
 
-    public override int GetHashCode() => HashCode.Combine(Paths.Length, Refs.Length, IndexLock);
+    // Naming no path, ref or lock means the checkout as a whole.
+    internal sealed record Checkout(ImmutableArray<string> Paths, bool Branch = false, bool Head = false, bool IndexLock = false) : BlockScope
+    {
+        public static Checkout Whole { get; } = new([]);
+
+        public bool Equals(Checkout? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) &&
+            Branch == other.Branch && Head == other.Head && IndexLock == other.IndexLock;
+
+        public override int GetHashCode() => HashCode.Combine(Paths.Length, Branch, Head, IndexLock);
+    }
+
+    internal sealed record Refs(ImmutableArray<string> Names) : BlockScope
+    {
+        public bool Equals(Refs? other) => other is not null && Names.SequenceEqual(other.Names, StringComparer.Ordinal);
+
+        public override int GetHashCode() => Names.Length;
+    }
+
+    internal sealed record Ownership : BlockScope;
+
+    internal sealed record Repository : BlockScope;
+
+    internal sealed record Operation : BlockScope;
+
+    // Journaled before blocks named their scope; never written.
+    internal sealed record Unrecorded : BlockScope
+    {
+        private Unrecorded() { }
+
+        public static Unrecorded Value { get; } = new();
+    }
 }
 
 internal sealed record PreservationObservation(int Ordinal, DateTimeOffset Started, DateTimeOffset Completed, CheckoutState State,

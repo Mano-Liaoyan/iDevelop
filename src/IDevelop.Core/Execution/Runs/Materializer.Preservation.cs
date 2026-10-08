@@ -70,9 +70,9 @@ internal sealed partial class Materializer
                 Journal(step, () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
             step = "preserve-ref";
-            RequirePublication(_refs.Publish(permit, operation, planId, step, repository, new(plan.Ref, null, plan.Commit)));
+            RequirePublication(_refs.Publish(permit, operation, planId, step, repository, new(plan.Ref, null, plan.Commit)), new BlockScope.Refs([plan.Ref]));
             if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
-                throw Fault(MaterializationProblem.UncertainOwnership, "The preservation retention ref changed.", new([], [plan.Ref], false));
+                throw Fault(MaterializationProblem.UncertainOwnership, "The preservation retention ref changed.", new BlockScope.Refs([plan.Ref]));
             step = "preserved";
             var preserved = (RunEvent.Preserved)DecisionEvent(Journal(step, () => _store.Record(permit,
                 OperationIds.Derive(operation, "preserved"), new RunEvent.Preserved(planId, plan.Ref, plan.Commit))));
@@ -83,7 +83,7 @@ internal sealed partial class Materializer
         catch (MaterializationFailure failed)
         { return PreservationBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return PreservationBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return PreservationBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
     }
 
     private void RecordPreservationDrift(CoordinatorPermit permit, OperationId operation, GitRepository repository, RunRecord record,
@@ -95,7 +95,8 @@ internal sealed partial class Materializer
             record = record with { Receipts = record.Receipts.Where(e => e.Value.Sequence < planned.Sequence).ToImmutableDictionary() };
         var baseline = CheckoutBaseline.Fold(record, owner, commit => Value(repository.ReadCommit(commit)).Tree);
         var paths = new SortedSet<string>(StringComparer.Ordinal);
-        var refs = ImmutableArray.CreateBuilder<string>();
+        var branch = false;
+        var head = false;
         var drifted = state.IndexLock is not null;
         foreach (var component in baseline.Components)
         {
@@ -109,8 +110,8 @@ internal sealed partial class Materializer
             };
             if (!differs) continue;
             drifted = true;
-            if (component.Key == "branch") refs.Add(owner.Branch);
-            else if (component.Key == "head") refs.Add("HEAD");
+            if (component.Key == "branch") branch = true;
+            else if (component.Key == "head") head = true;
             else
             {
                 var expected = component.Value is ComponentBaseline.Fixed f ? f.Value : ((ComponentBaseline.Pending)component.Value).Before;
@@ -119,8 +120,8 @@ internal sealed partial class Materializer
         }
         if (!drifted) return;
         var block = new MaterializationBlock(id, owner.Task, attempt,
-            refs.Count == 0 ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership, inputs, [],
-            "The checkout differs from its recorded baseline.") { Scope = new([.. paths], refs.ToImmutable(), state.IndexLock is not null) };
+            branch || head ? MaterializationProblem.UncertainOwnership : MaterializationProblem.DirtyWorktree, inputs, [],
+            "The checkout differs from its recorded baseline.") { Scope = new BlockScope.Checkout([.. paths], branch, head, state.IndexLock is not null) };
         Journal("preserve-drift", () => _store.Record(permit, id, new RunEvent.Blocked(block)));
     }
 
@@ -133,13 +134,13 @@ internal sealed partial class Materializer
             ? repository.ReadCommit(plan.Commit) is GitRead<GitCommit>.Read read && read.Value.Tree == plan.Recipe.Tree &&
                 read.Value.Parents.SequenceEqual(plan.Recipe.Parents)
             : Mutate("preserve-commit", () => repository.CreateCommit(plan.Recipe)) is GitRead<CommitId>.Read created && created.Value == plan.Commit;
-        if (!valid) throw Fault(MaterializationProblem.InputUnavailable, "The preservation commit is missing. Preserve again.");
+        if (!valid) throw Fault(MaterializationProblem.InputUnavailable, "The preservation commit is missing. Preserve again.", new BlockScope.Operation());
     }
 
     private static string PreservationMessage(RunRecord record, TaskId task, AttemptId attempt, OperationId operation, string title) =>
         $"Preserve {title}\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\nIDP-Operation: {operation.Value:D}\n";
 
-    private async ValueTask<(PreservationObservation First, PreservationObservation Second, BlockScope? Scope)> ObservePreservationPair(
+    private async ValueTask<(PreservationObservation First, PreservationObservation Second, BlockScope.Checkout? Scope)> ObservePreservationPair(
         GitRepository repository, RunRecord record, ExecutionLocation location, AttemptId attempt, OperationId operation,
         string label, string message, CancellationToken cancellation)
     {
@@ -149,7 +150,7 @@ internal sealed partial class Materializer
         if (remaining > TimeSpan.Zero) await Task.Delay(remaining, _clock, cancellation);
         cancellation.ThrowIfCancellationRequested();
         var second = Mutate(label + "-observe-2", () => ObservePreservation(repository, record, location, attempt, operation, 2, message, first.Recipe.Timestamp));
-        return (first, second, PreservationDifference(repository, location.Owner, attempt, first, second));
+        return (first, second, PreservationDifference(repository, attempt, first, second));
     }
 
     private PreservationObservation ObservePreservation(GitRepository repository, RunRecord record, ExecutionLocation location,
@@ -203,7 +204,7 @@ internal sealed partial class Materializer
         var stages = Value(repository.UnmergedEntries(checkout));
         var capture = Value(repository.Capture(checkout));
         if (capture.IndexBefore != capture.IndexAfter || capture.IndexBefore != index?.Content)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The index changed during preservation capture.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The index changed during preservation capture.", BlockScope.Checkout.Whole);
         var indexTree = Value(repository.WriteTree(indexBytes is null ? [] : GitRepository.ParseIndex(indexBytes)));
         var untracked = Untracked(repository, checkout);
         var outbox = ImmutableArray.CreateBuilder<ArtifactRecord>();
@@ -224,25 +225,24 @@ internal sealed partial class Materializer
 
     private static ImmutableArray<CommitId> PreservationParents(GitRepository repository, CommitId? branch, CommitId? head)
     {
-        if (head is null) throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.", new([], ["HEAD"], false));
+        if (head is null) throw Fault(MaterializationProblem.UncertainOwnership, "The checkout HEAD is absent.", new BlockScope.Checkout([], Head: true));
         if (branch is null || branch == head) return [head.Value];
         return repository.IsAncestor(branch.Value, head.Value) switch
         {
             GitAncestry.Yes => [head.Value],
             GitAncestry.No => [head.Value, branch.Value],
-            GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail),
+            GitAncestry.Failed failed => throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Repository()),
             _ => throw new InvalidOperationException(),
         };
     }
 
-    private static BlockScope? PreservationDifference(GitRepository repository, WorktreeOwner owner, AttemptId attempt,
+    private static BlockScope.Checkout? PreservationDifference(GitRepository repository, AttemptId attempt,
         PreservationObservation first, PreservationObservation second)
     {
         var a = first.State;
         var b = second.State;
-        ImmutableArray<string> refs = [];
-        if (a.Branch != b.Branch) refs = refs.Add(owner.Branch);
-        if (a.Head != b.Head || a.SymbolicHead != b.SymbolicHead) refs = refs.Add("HEAD");
+        var branch = a.Branch != b.Branch;
+        var head = a.Head != b.Head || a.SymbolicHead != b.SymbolicHead;
         var lockDiffers = a.IndexLock?.Identity != b.IndexLock?.Identity || !SameBytes(a.IndexLock?.Bytes, b.IndexLock?.Bytes);
         var paths = new SortedSet<string>(StringComparer.Ordinal);
         if (a.Files != b.Files) paths.UnionWith(Value(repository.DiffTreePaths(a.Files, b.Files)));
@@ -252,9 +252,9 @@ internal sealed partial class Materializer
         AddDifferences(first.Outbox, second.Outbox, file => RunLayout.Outbox(attempt) + "/" + file.Name, file => (file.Content, file.ByteLength));
         AddDifferences(first.Stages, second.Stages, stage => $"{stage.Stage}/{stage.Path}", stage => (stage.Mode, stage.Object),
             key => key[(key.IndexOf('/') + 1)..]);
-        if (refs.IsEmpty && paths.Count == 0 && !lockDiffers && SameBytes(a.Index, b.Index) && a.IndexTree == b.IndexTree && first.Commit == second.Commit)
+        if (!branch && !head && paths.Count == 0 && !lockDiffers && SameBytes(a.Index, b.Index) && a.IndexTree == b.IndexTree && first.Commit == second.Commit)
             return null;
-        return new([.. paths], [.. refs.Order(StringComparer.Ordinal)], lockDiffers);
+        return new([.. paths], branch, head, lockDiffers);
 
         void AddDifferences<T, TValue>(ImmutableArray<T> left, ImmutableArray<T> right, Func<T, string> key, Func<T, TValue> value,
             Func<string, string>? path = null)
@@ -271,18 +271,18 @@ internal sealed partial class Materializer
         first is null ? second is null : second is not null && first.Content == second.Content && first.ByteLength == second.ByteLength;
 
     private RunEvent.PreservationDiverged RecordPreservationDivergence(CoordinatorPermit permit, OperationId operation, string label,
-        PreservationObservation first, PreservationObservation second, BlockScope scope) =>
+        PreservationObservation first, PreservationObservation second, BlockScope.Checkout scope) =>
         (RunEvent.PreservationDiverged)DecisionEvent(Journal(label + "-diverged", () => _store.Record(permit,
             OperationIds.Derive(operation, "preservation-diverged"), new RunEvent.PreservationDiverged(operation, first, second, scope))));
 
     private static MaterializationBlock DivergenceBlock(OperationId operation, TaskId task, AttemptId attempt, InputId? inputs,
         RunEvent.PreservationDiverged divergence) => new(operation, task, attempt,
-            divergence.Scope.Refs.IsEmpty ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership, inputs, [],
-            divergence.Scope.Refs.IsEmpty ? "The checkout changed between preservation observations." :
+            divergence.Scope is { Branch: false, Head: false } ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership, inputs, [],
+            divergence.Scope is { Branch: false, Head: false } ? "The checkout changed between preservation observations." :
                 "The branch or HEAD changed between preservation observations.") { Scope = divergence.Scope };
 
     private Preservation PreservationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
+        Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new Preservation.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Preservation.Rejected(rejected.Reason),

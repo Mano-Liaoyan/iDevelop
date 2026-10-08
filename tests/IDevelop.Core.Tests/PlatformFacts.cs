@@ -55,6 +55,14 @@ internal sealed class LinuxOrWindowsFactAttribute : FactAttribute
     }
 }
 
+internal sealed class LinuxOrWindowsTheoryAttribute : TheoryAttribute
+{
+    public LinuxOrWindowsTheoryAttribute()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) Skip = "Linux and Windows only.";
+    }
+}
+
 internal sealed class LinuxFactAttribute : FactAttribute
 {
     public LinuxFactAttribute()

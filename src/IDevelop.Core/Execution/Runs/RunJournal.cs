@@ -149,6 +149,12 @@ internal static class RunJournal
                 info.Properties.Single(property => property.Name == "artifacts").ShouldSerialize =
                     (_, value) => value is System.Collections.Immutable.ImmutableArray<ArtifactRecord> { IsDefaultOrEmpty: false };
             }
+            if (info.Type == typeof(MaterializationBlock))
+            {
+                var scope = info.Properties.Single(property => property.Name == "scope");
+                scope.IsRequired = false;
+                scope.ShouldSerialize = (_, value) => value is not BlockScope.Unrecorded;
+            }
         });
         return resolver;
     }

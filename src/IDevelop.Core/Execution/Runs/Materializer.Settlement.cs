@@ -49,7 +49,7 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             var location = record.Preparations[launch].Location;
             var tip = Value(repository.ReadRef(location.Owner.Branch)) ??
-                throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.");
+                throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new BlockScope.Checkout([], Branch: true));
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
             var ownership = RefOwnership.Accepts(record, repository, location.Owner.Branch, tip)
                 ? TipOwnership.Explained : TipOwnership.Unexplained;
@@ -204,14 +204,14 @@ internal sealed partial class Materializer
         var started = _clock.GetUtcNow();
         var prepared = record.Preparations[launch];
         try { VerifyOwnedCheckout(repository, prepared.Location, record); }
-        catch (MaterializationFailure failed) { throw Fault(MaterializationProblem.UncertainOwnership, failed.Message); }
+        catch (MaterializationFailure failed) { throw Fault(MaterializationProblem.UncertainOwnership, failed.Message, new BlockScope.Ownership()); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { throw Fault(MaterializationProblem.UncertainOwnership, error.Message); }
+        { throw Fault(MaterializationProblem.UncertainOwnership, error.Message, new BlockScope.Ownership()); }
         var checkout = Checkout(repository, prepared.Location.Owner);
         if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", BlockScope.Checkout.Whole);
         var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
-        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked));
+        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Checkout(tracked));
         var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
         var head = Value(repository.SymbolicHead(checkout));
         var storage = new RunStorage(_project, record.Workflow, record.Id);
@@ -225,10 +225,10 @@ internal sealed partial class Materializer
         }
         var captured = Value(repository.Capture(checkout));
         if (captured.IndexBefore != captured.IndexAfter || captured.IndexBefore != index?.Content)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed during capture.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed during capture.", BlockScope.Checkout.Whole);
         var task = record.Attempts[launch.Attempt].Task;
         var logged = AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id, task, launch.Attempt), log);
-        if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString());
+        if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString(), new BlockScope.Operation());
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(new OperationId(id.Value), "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);

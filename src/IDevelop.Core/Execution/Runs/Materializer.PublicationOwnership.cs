@@ -21,7 +21,7 @@ internal sealed partial class Materializer
         var identity = OperationIds.Derive(operation, "ownership-" + Revision.Hash(observed).Sha256);
         evidence = [storage.WriteEvidence(identity, "refs-before.json", bytes), storage.WriteEvidence(identity, "refs-after.json", observed)];
         throw Fault(MaterializationProblem.UncertainOwnership,
-            $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.", new([], names, false));
+            $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.", new BlockScope.Refs(names));
     }
 
     private static SortedDictionary<string, CommitId> SharedRefSnapshot(GitRepository repository, RunRecord record) =>
@@ -37,7 +37,7 @@ internal sealed partial class Materializer
         var storage = new RunStorage(_project, record.Workflow, record.Id);
         bytes = RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
-            throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.");
+            throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.", new BlockScope.Operation());
         var patience = Stopwatch.StartNew();
         for (var cap = 4; ; cap = Math.Min(cap * 2, 64))
         {

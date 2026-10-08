@@ -26,7 +26,7 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new RestorePreviewRead.Rejected(refused.Reason); }
         catch (MaterializationFailure failed) { return new RestorePreviewRead.Refused(failed.Problem, failed.Message, failed.Scope); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
-        { return new RestorePreviewRead.Refused(MaterializationProblem.InputUnavailable, error.Message, null); }
+        { return new RestorePreviewRead.Refused(MaterializationProblem.InputUnavailable, error.Message, BlockScope.Checkout.Whole); }
     }
 
     private MaterializationPlan.Preservation RestorationPreservation(RunRecord record, RunLease lease, AttemptId attempt, OperationId preservation)
@@ -45,7 +45,7 @@ internal sealed partial class Materializer
     {
         if (!Value(repository.PlainIndex(Checkout(repository, location.Owner))))
             throw Fault(MaterializationProblem.DirtyWorktree,
-                "Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", new([], [], false));
+                "Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", BlockScope.Checkout.Whole);
         return ReadPreservationCheckout(repository, record, location, attempt, (name, bytes) =>
         {
             if (name == "index.lock") retainLock?.Invoke(bytes);
@@ -64,13 +64,12 @@ internal sealed partial class Materializer
         _ => throw new InvalidOperationException(),
     };
 
-    private static BlockScope? CheckoutDifference(GitRepository repository, WorktreeOwner owner, CheckoutState first, CheckoutState second,
+    private static BlockScope.Checkout? CheckoutDifference(GitRepository repository, CheckoutState first, CheckoutState second,
         bool compareIndexDigest = true, bool compareUntracked = true)
     {
         var paths = new SortedSet<string>(StringComparer.Ordinal);
-        var refs = ImmutableArray.CreateBuilder<string>();
-        if (first.Branch != second.Branch) refs.Add(owner.Branch);
-        if (first.Head != second.Head || first.SymbolicHead != second.SymbolicHead) refs.Add("HEAD");
+        var branch = first.Branch != second.Branch;
+        var head = first.Head != second.Head || first.SymbolicHead != second.SymbolicHead;
         if (first.Files != second.Files) paths.UnionWith(Value(repository.DiffTreePaths(first.Files, second.Files)));
         if (first.IndexTree != second.IndexTree && first.IndexTree is { } ai && second.IndexTree is { } bi)
             paths.UnionWith(Value(repository.DiffTreePaths(ai, bi)));
@@ -82,16 +81,16 @@ internal sealed partial class Materializer
                 if (!a.TryGetValue(path, out var av) || !b.TryGetValue(path, out var bv) || av != bv) paths.Add(path);
         }
         var locks = first.IndexLock?.Identity != second.IndexLock?.Identity || !SameBytes(first.IndexLock?.Bytes, second.IndexLock?.Bytes);
-        if (paths.Count == 0 && refs.Count == 0 && !locks && first.IndexTree == second.IndexTree &&
+        if (paths.Count == 0 && !branch && !head && !locks && first.IndexTree == second.IndexTree &&
             (!compareIndexDigest || SameBytes(first.Index, second.Index))) return null;
-        return new([.. paths], refs.ToImmutable(), locks);
+        return new([.. paths], branch, head, locks);
     }
 
     private RestorePreview BuildRestorePreview(GitRepository repository, RunRecord record, PreparedExecution prepared, OperationId preservation,
         MaterializationPlan.Preservation plan, CheckoutState current, ImmutableArray<StageEntry> stages)
     {
         var owner = prepared.Location.Owner;
-        if (CheckoutDifference(repository, owner, plan.Preserved, current) is { } difference)
+        if (CheckoutDifference(repository, plan.Preserved, current) is { } difference)
             throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, difference);
         var fold = CheckoutBaseline.Fold(record, owner, commit => Value(repository.ReadCommit(commit)).Tree);
         var unfinished = fold.Components.Values.OfType<ComponentBaseline.Unfinished>().FirstOrDefault();
@@ -99,7 +98,7 @@ internal sealed partial class Materializer
         if (unfinished is not null && !lockOnly)
         {
             throw Fault(MaterializationProblem.UncertainOwnership,
-                UnfinishedStepDetail(record, unfinished.Owner), new([], [], false));
+                UnfinishedStepDetail(record, unfinished.Owner), BlockScope.Checkout.Whole);
         }
         string? Target(string name)
         {
@@ -126,7 +125,7 @@ internal sealed partial class Materializer
             ? current.Index : fold.Index;
         if (!lockOnly && fold.Components["index"] is ComponentBaseline.Fixed { Value: null } && !SameBytes(current.Index, fold.Index))
             throw Fault(MaterializationProblem.DirtyWorktree,
-                "The baseline index was recorded before index retention. Restore the index outside iDevelop, then preserve again.", new([], [], false));
+                "The baseline index was recorded before index retention. Restore the index outside iDevelop, then preserve again.", BlockScope.Checkout.Whole);
         var to = current with { Branch = branch, Head = head == owner.Branch ? branch : current.Head, SymbolicHead = head,
             Files = new(files), Index = indexEvidence, IndexTree = index is null ? null : new(index), IndexLock = null };
         var paths = RestorePaths(repository, current.Files, to.Files);
@@ -153,16 +152,14 @@ internal sealed partial class Materializer
                     before.TryGetValue(path, out var a);
                     after.TryGetValue(path, out var b);
                     if ((a?.Mode == "160000" || b?.Mode == "160000") && a != b)
-                        throw Fault(MaterializationProblem.SubmoduleUnavailable, "Restore cannot change a submodule: " + path, new([path], [], false));
+                        throw Fault(MaterializationProblem.SubmoduleUnavailable, "Restore cannot change a submodule: " + path, new BlockScope.Checkout([path]));
                 }
             }
-            if (current.Index is null) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs an index. The index is absent.", new([], [], false));
+            if (current.Index is null) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs an index. The index is absent.", BlockScope.Checkout.Whole);
         }
         if (!lockOnly)
         {
-            if (!stages.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs a plain index. The index has unresolved stages.", new([.. stages.Select(s => s.Path).Distinct().Order(StringComparer.Ordinal)], [], false));
-            if (!Value(repository.PlainIndex(Checkout(repository, owner))))
-                throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs a plain index. The index marks entries assume-unchanged or skip-worktree.", new([], [], false));
+            if (!stages.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Restore needs a plain index. The index has unresolved stages.", new BlockScope.Checkout([.. stages.Select(s => s.Path).Distinct().Order(StringComparer.Ordinal)]));
         }
         if (!paths.IsEmpty)
         {
@@ -170,23 +167,24 @@ internal sealed partial class Materializer
             var gitVolume = _volumes(Path.GetDirectoryName(Value(repository.IndexPath(Checkout(repository, owner))))!);
             if (checkoutVolume is null || gitVolume is null)
                 throw Fault(MaterializationProblem.DirtyWorktree,
-                    "iDevelop cannot confirm that the checkout and its Git folder share a file system on this system, so Restore will not replace files. Change them outside iDevelop, then preserve again.", new([.. paths.Select(p => p.Path)], [], false));
+                    "iDevelop cannot confirm that the checkout and its Git folder share a file system on this system, so Restore will not replace files. Change them outside iDevelop, then preserve again.", new BlockScope.Checkout([.. paths.Select(p => p.Path)]));
             if (checkoutVolume != gitVolume)
                 throw Fault(MaterializationProblem.DirtyWorktree,
-                    "The checkout and its Git folder are on different file systems, so Restore cannot replace files atomically.", new([.. paths.Select(p => p.Path)], [], false));
+                    "The checkout and its Git folder are on different file systems, so Restore cannot replace files atomically.", new BlockScope.Checkout([.. paths.Select(p => p.Path)]));
         }
         if (current.IndexLock is { Identity: null })
             throw Fault(MaterializationProblem.DirtyWorktree,
-                "iDevelop cannot read this file's identity on this system, so it will not remove index.lock. Remove it outside iDevelop, then preserve again.", new([], [], true));
+                "iDevelop cannot read this file's identity on this system, so it will not remove index.lock. Remove it outside iDevelop, then preserve again.", new BlockScope.Checkout([], IndexLock: true));
         var refs = ImmutableArray.CreateBuilder<string>();
         if (current.Branch != to.Branch) refs.Add(owner.Branch);
         if (current.SymbolicHead != to.SymbolicHead) refs.Add("HEAD");
-        var blocks = record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == owner.Task && b.Value.Block.Scope is not null)
+        var blocks = record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == owner.Task)
             .OrderBy(b => record.Receipts[b.Key].Sequence).ToArray();
         var repairs = blocks.Where(b => lockOnly
-            ? b.Value.Block.Scope is { Paths.IsEmpty: true, Refs.IsEmpty: true, IndexLock: true }
-            : b.Value.Block.Scope!.Refs.All(r => r == owner.Branch || r == "HEAD")).Select(b => b.Key).ToImmutableArray();
-        var rechecks = lockOnly ? [] : blocks.Where(b => b.Value.Block.Scope!.Refs.Any(r => r != owner.Branch && r != "HEAD")).Select(b => b.Key).ToImmutableArray();
+            ? b.Value.Block.Scope is BlockScope.Checkout { Paths.IsEmpty: true, Branch: false, Head: false, IndexLock: true }
+            : RunReducer.CheckedWithCheckout(b.Value.Block.Scope)).Select(b => b.Key).ToImmutableArray();
+        var rechecks = lockOnly ? [] : blocks.Where(b => b.Value.Block.Scope is BlockScope.Refs named && named.Names.All(name => !Pinned(record, name)))
+            .Select(b => b.Key).ToImmutableArray();
         var supersedes = RunReducer.UnfinishedRestorations(record, owner).Cast<OperationId?>().SingleOrDefault();
         var preview = new RestorePreview(preservation, current, fold.Components, to, paths, refs.ToImmutable(), current.IndexLock,
             repairs, rechecks, SharedRefSnapshot(repository, record), supersedes, new Digest(""));
@@ -210,10 +208,10 @@ internal sealed partial class Materializer
             var aKind = Kind(before, path, a);
             var bKind = Kind(after, path, b);
             if (a?.Mode == "160000" || b?.Mode == "160000")
-                throw Fault(MaterializationProblem.SubmoduleUnavailable, "Restore cannot change a submodule: " + path, new([path], [], false));
+                throw Fault(MaterializationProblem.SubmoduleUnavailable, "Restore cannot change a submodule: " + path, new BlockScope.Checkout([path]));
             if (aKind is not ("absent" or "a file") || bKind is not ("absent" or "a file"))
                 throw Fault(MaterializationProblem.DirtyWorktree,
-                    $"Restore changes only regular, non-executable files. {path} is {aKind} now and {bKind} in the baseline. Change it outside iDevelop, then preserve again.", new([path], [], false));
+                    $"Restore changes only regular, non-executable files. {path} is {aKind} now and {bKind} in the baseline. Change it outside iDevelop, then preserve again.", new BlockScope.Checkout([path]));
             paths.Add(new(path, a?.Object, b?.Object));
         }
         return paths.ToImmutable();
@@ -262,7 +260,7 @@ internal sealed partial class Materializer
             VerifyOwnedCheckout(repository, prepared.Location, record);
             if (Value(repository.ReadRef(preserved.Ref)) != preserved.Commit ||
                 Value(repository.CreateCommit(preserved.Recipe)) != preserved.Commit)
-                throw Fault(MaterializationProblem.UncertainOwnership, "The retained preservation ref or commit differs from its recipe.", new([], [preserved.Ref], false));
+                throw Fault(MaterializationProblem.UncertainOwnership, "The retained preservation ref or commit differs from its recipe.", new BlockScope.Refs([preserved.Ref]));
             var checkout = Checkout(repository, prepared.Location.Owner);
             MaterializationPlan.Restoration plan;
             if (existing is MaterializationPlan.Restoration persisted) plan = persisted;
@@ -299,7 +297,7 @@ internal sealed partial class Materializer
                         return FileIdentities.Remove(Value(repository.IndexPath(checkout)) + ".lock", bytes, indexLock.Identity!.Value);
                     });
                     if (result is LockRemoval.Changed or LockRemoval.Unavailable)
-                        throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([], [], true));
+                        throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([], IndexLock: true));
                     Observed(step, intended, result == LockRemoval.Absent, null);
                 }
             }
@@ -311,13 +309,13 @@ internal sealed partial class Materializer
                     step = "restore-head";
                     Recheck();
                     if (Value(repository.Worktrees()).Any(w => w.Branch == attach.Branch && !SamePath(w.Path, checkout)))
-                        throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.", new([], [attach.Branch], false));
+                        throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.", new BlockScope.Ownership());
                     var adopted = Value(repository.SymbolicHead(checkout)) == attach.Branch;
                     var intended = Intent(step, attach);
                     if (!adopted)
                     {
                         var result = Mutate(step, () => { Recheck(); return repository.AttachHead(checkout, attach.Branch); });
-                        if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, new([], ["HEAD"], false));
+                        if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, new BlockScope.Checkout([], Head: true));
                     }
                     Observed(step, intended, adopted, attach.Branch);
                 }
@@ -332,7 +330,7 @@ internal sealed partial class Materializer
                     if (point == "git.restore-branch.before") Recheck();
                 });
                 RequirePublication(publisher.Restore(permit, operation, planId, step, repository,
-                    new(prepared.Location.Owner.Branch, plan.From.Branch, plan.To.Branch!.Value)));
+                    new(prepared.Location.Owner.Branch, plan.From.Branch, plan.To.Branch!.Value)), new BlockScope.Checkout([], Branch: true));
             }
             if (!plan.Paths.IsEmpty)
             {
@@ -352,7 +350,7 @@ internal sealed partial class Materializer
                             var destination = RunStorage.SafePath(checkout, path.Path);
                             var content = LiveContent(repository, checkout, path.Path);
                             if (content == path.To) return true;
-                            if (content != path.From) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([path.Path], [], false));
+                            if (content != path.From) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([path.Path]));
                             if (path.To is null) File.Delete(destination);
                             else
                             {
@@ -361,11 +359,11 @@ internal sealed partial class Materializer
                                 var bytes = Value(repository.WorkingTreeBlobBytes(checkout, path.Path, path.To));
                                 File.WriteAllBytes(temporary, bytes);
                                 if (Value(repository.WorkingFileBlob(checkout, path.Path, temporary)) != path.To)
-                                    throw Fault(MaterializationProblem.InputUnavailable, "The restore blob differs from its preview.", new([path.Path], [], false));
+                                    throw Fault(MaterializationProblem.InputUnavailable, "The restore blob differs from its preview.", new BlockScope.Checkout([path.Path]));
                                 _probe?.Invoke("restore.file." + path.Path + ".written");
                                 RecheckRecord();
                                 if (LiveContent(repository, checkout, path.Path) != path.From)
-                                    throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([path.Path], [], false));
+                                    throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([path.Path]));
                                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                                 File.Move(temporary, destination, overwrite: true);
                             }
@@ -393,18 +391,18 @@ internal sealed partial class Materializer
                         var live = ObserveRestore(repository, Read(permit.Workflow, permit.Run), prepared.Location, attempt, preserved, RetainLock).State;
                         if (live.IndexLock is not null)
                         {
-                            throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([], [], true));
+                            throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new BlockScope.Checkout([], IndexLock: true));
                         }
                         return repository.AlignIndex(checkout, align.Expected, align.Target);
                     });
-                    if (result is IndexAlignment.Unexpected) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, new([], [], false));
-                    if (result is IndexAlignment.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail, new([], [], false));
+                    if (result is IndexAlignment.Unexpected) throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, BlockScope.Checkout.Whole);
+                    if (result is IndexAlignment.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail, BlockScope.Checkout.Whole);
                     Observed(step, intended, result is IndexAlignment.AlreadyAligned, align.Target.Hex);
                 }
             }
             step = "restore-verify";
             var final = ObserveRestore(repository, Read(permit.Workflow, permit.Run), prepared.Location, attempt, preserved, RetainLock).State;
-            if (CheckoutDifference(repository, prepared.Location.Owner, plan.To, final, plan.To.Index is not null, false) is { } remaining)
+            if (CheckoutDifference(repository, plan.To, final, plan.To.Index is not null, false) is { } remaining)
                 throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, remaining);
             if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
             if (Directory.Exists(scratchRoot) && !Directory.EnumerateFileSystemEntries(scratchRoot).Any()) Directory.Delete(scratchRoot);
@@ -447,7 +445,7 @@ internal sealed partial class Materializer
         catch (MaterializationFailure failed)
         { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
-        { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
+        { return RestorationBlock(permit, operation, step, new(planId, lease.Task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = BlockScope.Checkout.Whole }); }
     }
 
     private static string? LiveContent(GitRepository repository, string checkout, string relativePath)
@@ -462,15 +460,13 @@ internal sealed partial class Materializer
         MaterializationPlan.Restoration plan, CheckoutState live)
     {
         var intents = record.GitIntents.Values.Where(i => i.Plan == planId).Select(i => i.Mutation).ToArray();
-        var refs = ImmutableArray.CreateBuilder<string>();
         var paths = new SortedSet<string>(StringComparer.Ordinal);
-        if (Completed<GitMutation.RestoreRef>() ? live.Branch != plan.To.Branch :
-            live.Branch != plan.From.Branch && !(intents.OfType<GitMutation.RestoreRef>().Any() && live.Branch == plan.To.Branch)) refs.Add(owner.Branch);
+        var branch = Completed<GitMutation.RestoreRef>() ? live.Branch != plan.To.Branch :
+            live.Branch != plan.From.Branch && !(intents.OfType<GitMutation.RestoreRef>().Any() && live.Branch == plan.To.Branch);
         var attached = intents.OfType<GitMutation.AttachHead>().Any();
-        if (Completed<GitMutation.AttachHead>() ? live.SymbolicHead != plan.To.SymbolicHead :
-            live.SymbolicHead != plan.From.SymbolicHead && !(attached && live.SymbolicHead == plan.To.SymbolicHead)) refs.Add("HEAD");
         var expectedHead = live.SymbolicHead == owner.Branch ? live.Branch : plan.From.Head;
-        if (live.Head != expectedHead) refs.Add("HEAD");
+        var head = (Completed<GitMutation.AttachHead>() ? live.SymbolicHead != plan.To.SymbolicHead :
+            live.SymbolicHead != plan.From.SymbolicHead && !(attached && live.SymbolicHead == plan.To.SymbolicHead)) || live.Head != expectedHead;
         var a = Value(repository.TreeEntries(plan.From.Files)).ToDictionary(e => e.Path, StringComparer.Ordinal);
         var b = Value(repository.TreeEntries(plan.To.Files)).ToDictionary(e => e.Path, StringComparer.Ordinal);
         var c = Value(repository.TreeEntries(live.Files)).ToDictionary(e => e.Path, StringComparer.Ordinal);
@@ -491,9 +487,9 @@ internal sealed partial class Materializer
         var lockOkay = Completed<GitMutation.RemoveIndexLock>() ? live.IndexLock is null :
             SameBytes(live.IndexLock?.Bytes, plan.From.IndexLock?.Bytes) && live.IndexLock?.Identity == plan.From.IndexLock?.Identity ||
             intents.OfType<GitMutation.RemoveIndexLock>().Any() && live.IndexLock is null;
-        if (paths.Count != 0 || refs.Count != 0 || !indexOkay || !lockOkay)
-            throw Fault(refs.Count == 0 ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership,
-                PreservationChanged, new([.. paths], [.. refs.Distinct()], !lockOkay));
+        if (paths.Count != 0 || branch || head || !indexOkay || !lockOkay)
+            throw Fault(branch || head ? MaterializationProblem.UncertainOwnership : MaterializationProblem.DirtyWorktree,
+                PreservationChanged, new BlockScope.Checkout([.. paths], branch, head, !lockOkay));
 
         bool Completed<T>() where T : GitMutation => record.GitIntents.Any(i => i.Value.Plan == planId && i.Value.Mutation is T &&
             record.GitObservations.ContainsKey(i.Key));
@@ -509,14 +505,22 @@ internal sealed partial class Materializer
             RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength), RunJournal.Options)!;
         return record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == plan.Task &&
             (plan.Repairs.Contains(b.Key) || plan.Rechecks.Contains(b.Key) || b.Value.Block.Operation == planId) &&
-            (b.Value.Block.Scope is not { } scope || scope.Refs.All(name => name == "HEAD" || name == prepared.Location.Owner.Branch ||
-                (name == "refs/stash" ? Value(repository.ReadRef(name)) == (before.TryGetValue(name, out var old) ? old : (CommitId?)null) :
-                    RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name)))))))
+            b.Value.Block.Scope switch
+            {
+                BlockScope.Refs refs => refs.Names.All(name => !Pinned(record, name) && (name == "refs/stash"
+                    ? Value(repository.ReadRef(name)) == (before.TryGetValue(name, out var old) ? old : (CommitId?)null)
+                    : RefOwnership.Accepts(record, repository, name, Value(repository.ReadRef(name))))),
+                BlockScope.Operation => b.Value.Block.Operation == planId,
+                var scope => RunReducer.CheckedWithCheckout(scope),
+            })
             .OrderBy(b => record.Receipts[b.Key].Sequence).Select(b => b.Key).ToImmutableArray();
     }
 
+    // Only the operation that writes a pin rewrites it, so no recheck can vouch for a pin someone else moved.
+    private static bool Pinned(RunRecord record, string name) => name.StartsWith(RunLayout.PinPrefix(record.RunKey!), StringComparison.Ordinal);
+
     private Restoration RestorationBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
+        Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new Restoration.Blocked(blocked.Block),
             Preparation.Rejected rejected => new Restoration.Rejected(rejected.Reason),

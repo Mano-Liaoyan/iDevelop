@@ -46,7 +46,7 @@ internal sealed partial class Materializer
             if (plan.Preserved.IndexLock is { } indexLock)
                 throw Fault(MaterializationProblem.DirtyWorktree, indexLock.Identity is null
                     ? "iDevelop cannot read this file's identity on this system, so Restore cannot remove index.lock. Remove it outside iDevelop, then preserve again."
-                    : "Remove index.lock with Restore first.", new([], [], true));
+                    : "Remove index.lock with Restore first.", new BlockScope.Checkout([], IndexLock: true));
             var fold = CheckoutBaseline.Fold(record, prepared.Location.Owner, commit => Value(repository.ReadCommit(commit)).Tree);
             var unfinished = fold.Components.Values.Select(component => component switch
             {
@@ -55,17 +55,16 @@ internal sealed partial class Materializer
                 _ => null,
             }).FirstOrDefault(owner => owner is not null);
             if (unfinished is { } owner)
-                throw Fault(MaterializationProblem.UncertainOwnership, UnfinishedStepDetail(record, owner), new([], [], false));
+                throw Fault(MaterializationProblem.UncertainOwnership, UnfinishedStepDetail(record, owner), BlockScope.Checkout.Whole);
             step = "baseline-observe";
             var current = Mutate(step, () => ReadRecoveryCheckout(repository, record, prepared.Location, previous));
-            if (CheckoutDifference(repository, prepared.Location.Owner, plan.Preserved, current) is { } difference)
+            if (CheckoutDifference(repository, plan.Preserved, current) is { } difference)
                 throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, difference);
             step = "baseline";
             var baselineId = OperationIds.Derive(operation, "baseline");
             record = Read(permit.Workflow, permit.Run);
-            var driftId = OperationIds.Derive(preservation, "preserve-drift");
             var resolved = record.Blocks.Where(b => !b.Value.Resolved && b.Value.Block.Task == lease.Task &&
-                (b.Key == driftId || b.Value.Block.Operation == operation))
+                (b.Value.Block.Operation == operation || RunReducer.CheckedWithCheckout(b.Value.Block.Scope)))
                 .OrderBy(b => record.Receipts[b.Key].Sequence).Select(b => b.Key).ToImmutableArray();
             receipt = (RunEvent.RecoveryBaselined)DecisionEvent(Journal(step, () => _store.Record(permit, baselineId,
                 new RunEvent.RecoveryBaselined(new(previous, confirmation, session, preservation), resolved))));
@@ -75,7 +74,7 @@ internal sealed partial class Materializer
         catch (MaterializationFailure failed)
         { return RecoveryBaselineBlock(permit, operation, step, new(operation, lease.Task, previous, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return RecoveryBaselineBlock(permit, operation, step, new(operation, lease.Task, previous, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return RecoveryBaselineBlock(permit, operation, step, new(operation, lease.Task, previous, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = BlockScope.Checkout.Whole }); }
     }
 
     private static CheckoutState ReadRecoveryCheckout(GitRepository repository, RunRecord record, ExecutionLocation location, AttemptId previous) =>
@@ -88,13 +87,13 @@ internal sealed partial class Materializer
             !record.Baselines.TryGetValue((continued.Previous, continued.Confirmation), out var receipt)) return;
         var plan = (MaterializationPlan.Preservation)record.Plans[OperationIds.Derive(receipt.Baseline.Preservation, "preserve-plan")];
         var current = ReadRecoveryCheckout(repository, record, location, continued.Previous);
-        if (CheckoutDifference(repository, location.Owner, plan.Preserved, current) is { } difference)
-            throw Fault(difference.Refs.IsEmpty ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership,
+        if (CheckoutDifference(repository, plan.Preserved, current) is { } difference)
+            throw Fault(difference is { Branch: false, Head: false } ? MaterializationProblem.DirtyWorktree : MaterializationProblem.UncertainOwnership,
                 PreservationChanged, difference);
     }
 
     private RecoveryBaselining RecoveryBaselineBlock(CoordinatorPermit permit, OperationId operation, string step, MaterializationBlock block) =>
-        Block(permit, operation, step, ScopedCheckoutBlock(block)) switch
+        Block(permit, operation, step, block) switch
         {
             Preparation.Blocked blocked => new RecoveryBaselining.Blocked(blocked.Block),
             Preparation.Rejected rejected => new RecoveryBaselining.Rejected(rejected.Reason),

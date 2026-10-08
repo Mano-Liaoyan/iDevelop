@@ -28,9 +28,7 @@ public sealed class PreservationTests
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "unlock", ready.Checkout).ExitCode);
         var refused = Assert.IsType<Preservation.Blocked>(await f.Materializer().Preserve(f.Lease(T), Operation, attempt));
         Assert.Equal("UncertainOwnership", refused.Block.Problem.ToString());
-        Assert.Empty(refused.Block.Scope!.Paths);
-        Assert.Empty(refused.Block.Scope.Refs);
-        Assert.False(refused.Block.Scope.IndexLock);
+        Assert.Equal(new BlockScope.Ownership(), refused.Block.Scope);
         var own = Assert.Single(f.Read().Blocks).Key;
         Assert.False(f.Read().Blocks[own].Resolved);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "worktree", "lock", "--reason", reason, ready.Checkout).ExitCode);
@@ -49,7 +47,7 @@ public sealed class PreservationTests
         Assert.Equal("Preserved.", Assert.Single(f.Read().Receipts.Values.Select(e => e.Event).OfType<RunEvent.BlockResolved>()).Reason);
         var drift = OperationIds.Derive(Operation, "preserve-drift");
         Assert.False(f.Read().Blocks[drift].Resolved);
-        Assert.Equal(new[] { "a.txt" }, f.Read().Blocks[drift].Block.Scope!.Paths);
+        Assert.Equal(new BlockScope.Checkout(["a.txt"]), f.Read().Blocks[drift].Block.Scope);
         var sequence = f.Read().Sequence;
         Assert.Equal(result, await f.Materializer().Preserve(f.Lease(T), Operation, attempt));
         Assert.Equal(sequence, f.Read().Sequence);
@@ -105,7 +103,7 @@ public sealed class PreservationTests
             : Assert.IsType<Preservation.Blocked>(await materializer.Preserve(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The checkout changed between preservation observations.", block.Detail);
-        Assert.Equal(new[] { "changing.txt" }, block.Scope!.Paths);
+        Assert.Equal(new BlockScope.Checkout(["changing.txt"]), block.Scope);
         var pins = Pins(f, ready, Operation);
         Assert.Equal("before\n", f.Git.Git("show", pins[0] + ":changing.txt"));
         Assert.Equal("changing\n", f.Git.Git("show", pins[1] + ":changing.txt"));
@@ -330,7 +328,7 @@ public sealed class PreservationTests
                     ready.Execution.Launch.Attempt, preservation, f.Op(), fresh.Identity));
                 Assert.Equal("DirtyWorktree", refusal.Block.Problem.ToString());
                 Assert.Equal("The checkout changed after it was preserved. Preserve it again.", refusal.Block.Detail);
-                Assert.True(refusal.Block.Scope!.IndexLock);
+                Assert.Equal(new BlockScope.Checkout([], IndexLock: true), refusal.Block.Scope);
                 Assert.Equal(0, RestoreTests.Moves(f, replacementOperation));
                 Assert.Equal(identical ? "lock\n" : "lock2\n", File.ReadAllText(lockPath));
                 Assert.NotEqual(fresh.IndexLock!.Identity, FileIdentities.ReadFile(lockPath)!.Value.Identity);
@@ -360,8 +358,7 @@ public sealed class PreservationTests
             if (point == "git.preserve-observe-1.after") File.Move(replacement, lockPath, overwrite: true);
         }).Preserve(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.True(blocked.Block.Scope!.IndexLock);
-        Assert.Empty(blocked.Block.Scope.Paths);
+        Assert.Equal(new BlockScope.Checkout([], IndexLock: true), blocked.Block.Scope);
         var divergence = f.Read().PreservationDivergences[Operation];
         Assert.Equal(divergence.First.State.IndexLock!.Bytes.Content, divergence.Second.State.IndexLock!.Bytes.Content);
         Assert.NotEqual(divergence.First.State.IndexLock.Identity, divergence.Second.State.IndexLock.Identity);

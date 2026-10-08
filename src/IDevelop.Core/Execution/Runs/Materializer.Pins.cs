@@ -44,7 +44,7 @@ internal sealed partial class Materializer
             foreach (var (name, tip) in pins.Where(pair => !retained.Any(prefix => pair.Key.StartsWith(prefix, StringComparison.Ordinal))))
             {
                 var deleted = Mutate("release-pin", () => repository.DeleteRef(name, tip));
-                if (deleted.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, deleted.Stderr);
+                if (deleted.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, deleted.Stderr, new BlockScope.Refs([name]));
                 count++;
             }
             return new PinRelease.Released(count);
@@ -59,7 +59,7 @@ internal sealed partial class Materializer
     {
         var current = Value(repository.ReadRef(name));
         var moved = Mutate("pin", () => repository.MoveRef(new(name, current, tip)));
-        if (moved is RefMove.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail);
-        if (moved is RefMove.Conflict) throw Fault(MaterializationProblem.UncertainOwnership, "The retention pin changed while it was being updated.");
+        if (moved is RefMove.Failed failed) throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Refs([name]));
+        if (moved is RefMove.Conflict) throw Fault(MaterializationProblem.UncertainOwnership, "The retention pin changed while it was being updated.", new BlockScope.Refs([name]));
     }
 }

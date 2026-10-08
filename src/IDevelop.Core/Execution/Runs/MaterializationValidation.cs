@@ -56,7 +56,7 @@ internal static partial class RunValidation
         RunEvent.Blocked { Block: var block } => block.Operation.Value != Guid.Empty && block.Task.Value != Guid.Empty &&
             block.Attempt?.Value != Guid.Empty && block.Inputs?.Value != Guid.Empty && Enum.IsDefined(block.Problem) &&
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
-            (block.Conflict is null || Conflict(block.Conflict)) && (block.Scope is null || Scope(block.Scope)),
+            (block.Conflict is null || Conflict(block.Conflict)) && Scope(block.Scope),
         RunEvent.SalvageRetained retained => retained.Plan.Value != Guid.Empty && Reference(retained.Ref) && Revision.IsCommit(retained.Commit.Hex),
         RunEvent.RecoveryBaselined { Baseline: var baseline, Resolved: var resolved } => baseline.Previous.Value != Guid.Empty &&
             baseline.Confirmation.Value != Guid.Empty && baseline.Preservation.Value != Guid.Empty && !string.IsNullOrEmpty(baseline.Session) &&
@@ -147,8 +147,12 @@ internal static partial class RunValidation
         (state.Index is null || Evidence(state.Index)) && (state.IndexTree is null || Revision.IsCommit(state.IndexTree.Value.Hex)) &&
         !state.Untracked.IsDefault && state.Untracked.All(Evidence) && (state.IndexLock is null || Evidence(state.IndexLock.Bytes));
 
-    private static bool Scope(BlockScope scope) => !scope.Paths.IsDefault && scope.Paths.All(Path) &&
-        !scope.Refs.IsDefault && scope.Refs.All(reference => reference == "HEAD" || ScopedReference(reference));
+    private static bool Scope(BlockScope scope) => scope switch
+    {
+        BlockScope.Checkout checkout => !checkout.Paths.IsDefault && checkout.Paths.All(Path),
+        BlockScope.Refs refs => !refs.Names.IsDefaultOrEmpty && refs.Names.All(ScopedReference),
+        _ => true,
+    };
 
     private static bool ScopedReference(string reference) => Reference(reference) && !reference.EndsWith('.') &&
         !reference.Contains("@{", StringComparison.Ordinal) && !reference.Any(c => c is '~' or '^' or '?' or '*' or '[' or '\u007f') &&

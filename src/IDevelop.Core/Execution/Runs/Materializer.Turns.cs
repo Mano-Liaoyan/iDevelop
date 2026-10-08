@@ -48,6 +48,7 @@ internal sealed partial class Materializer
                             record.Plans.Values.OfType<MaterializationPlan.Preparation>().Single(plan => plan.Attempt == key.Attempt).Sources,
                         existingJoin.Join);
                 VerifyDelivery(record, existing, repository);
+                ResolveMaintenanceBlocks(permit, operation, "Prepared.");
                 return new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner));
             }
             var execution = old with { Launch = key, Prompt = prompt, PromptHash = Revision.Hash(prompt) };
@@ -61,7 +62,7 @@ internal sealed partial class Materializer
                     intent.Plan == refreshPair.Key && intent.Mutation is GitMutation.ResetCheckout);
                 var resetTree = resetPending ? Value(repository.ReadCommit(record.Inputs[((MaterializationPlan.Refresh)refreshPair.Value!).Inputs].CodeBase)).Tree : oldTree;
                 if (captureTree != indexTree || captureTree != oldTree && captureTree != resetTree)
-                    throw Fault(MaterializationProblem.DirtyWorktree, "The reviewer checkout must be clean before refreshing its inputs.");
+                    throw Fault(MaterializationProblem.DirtyWorktree, "The reviewer checkout must be clean before refreshing its inputs.", BlockScope.Checkout.Whole);
                 JoinRecord? join = (refreshPair.Value as MaterializationPlan.Refresh)?.Composed;
                 if (refreshPair.Value is not MaterializationPlan.Refresh)
                 {
@@ -93,10 +94,11 @@ internal sealed partial class Materializer
                 var input = record.Inputs[plan.Inputs];
                 inputs = input.Id;
                 if (RunReducer.InputProblem(record, input, true) is { } stale) throw new Refusal(stale);
+                var retained = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId);
                 RequirePublication(_refs.Publish(permit, operation, planId, "refresh-retain", repository,
-                    new(RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId), null, old.Location.AttemptBase)));
+                    new(retained, null, old.Location.AttemptBase)), new BlockScope.Refs([retained]));
                 RequirePublication(_refs.Publish(permit, operation, planId, "refresh-branch", repository,
-                    new(old.Location.Owner.Branch, old.Location.AttemptBase, input.CodeBase)));
+                    new(old.Location.Owner.Branch, old.Location.AttemptBase, input.CodeBase)), new BlockScope.Checkout([], Branch: true));
                 var reset = new GitMutation.ResetCheckout(task, input.CodeBase);
                 if (!PublicationObserved(record, planId, reset))
                 {
@@ -108,7 +110,7 @@ internal sealed partial class Materializer
                         VerifyResetHead(repository, checkout, old.Location.Owner.Branch, input.CodeBase);
                         return repository.ResetCheckout(checkout, input.CodeBase);
                     });
-                    if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr);
+                    if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
                     Journal("refresh-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "refresh-reset-observed"),
                         new RunEvent.GitObserved(intended, new(false, input.CodeBase.Hex))));
                 }
@@ -120,12 +122,13 @@ internal sealed partial class Materializer
             }
             var refs = Snapshot(storage, operation, repository, record);
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
     }
 }

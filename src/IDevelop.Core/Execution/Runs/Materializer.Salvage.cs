@@ -51,7 +51,7 @@ internal sealed partial class Materializer
                 plan = persisted;
                 step = "salvage-commit";
                 if (Value(Mutate("salvage-commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The persisted salvage recipe produced a different commit.");
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The persisted salvage recipe produced a different commit.", new BlockScope.Operation());
             }
             else
             {
@@ -82,9 +82,9 @@ internal sealed partial class Materializer
                 Journal("salvage-plan", () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
             step = "salvage-ref";
-            RequirePublication(_refs.Publish(permit, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit)));
+            RequirePublication(_refs.Publish(permit, operation, planId, "salvage-ref", repository, new(plan.Ref, null, plan.Commit)), new BlockScope.Refs([plan.Ref]));
             if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
-                throw Fault(MaterializationProblem.UncertainOwnership, "The salvage retention ref changed.");
+                throw Fault(MaterializationProblem.UncertainOwnership, "The salvage retention ref changed.", new BlockScope.Refs([plan.Ref]));
             step = "salvage-retained";
             var retained = (RunEvent.SalvageRetained)DecisionEvent(Journal("salvage-retained", () => _store.Record(permit,
                 OperationIds.Derive(operation, "salvage-retained"), new RunEvent.SalvageRetained(planId, plan.Ref, plan.Commit))));
@@ -94,7 +94,7 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new Salvage.Rejected(refused.Reason); }
         catch (MaterializationFailure failed) { return SalvageBlock(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
+        { return SalvageBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = new BlockScope.Operation() }); }
     }
 
     private static bool SalvageOwnershipUnresolved(RunRecord record, AttemptId attempt) =>

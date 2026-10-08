@@ -59,7 +59,7 @@ internal sealed partial class Materializer
             var preparedReceipt = record.Receipts.GetValueOrDefault(OperationIds.Derive(operation, "prepared"));
             if (preparedReceipt?.Event is not RunEvent.Prepared) Mutate("exclusions", repository.EnsureExcluded);
             var tracked = Value(repository.TrackedFiles(repository.ProjectFolder, ".idp/inputs", ".idp/outbox"));
-            if (!tracked.IsEmpty) throw Fault(MaterializationProblem.InputUnavailable, "Tracked execution data: " + string.Join(", ", tracked));
+            if (!tracked.IsEmpty) throw Fault(MaterializationProblem.InputUnavailable, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Operation());
             if (preparedReceipt?.Event is RunEvent.Prepared completed)
             {
                 var original = record.Attempts[completed.Execution.Launch.Attempt];
@@ -72,7 +72,8 @@ internal sealed partial class Materializer
                 inputs = completed.Execution.Inputs;
                 VerifyRepository(record, repository);
                 if (Value(repository.ReadRef(RunLayout.ApprovedBase(record.RunKey!))) != record.Base.Commit)
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The approved base retention ref has changed.");
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The approved base retention ref has changed.",
+                        new BlockScope.Refs([RunLayout.ApprovedBase(record.RunKey!)]));
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
@@ -81,6 +82,7 @@ internal sealed partial class Materializer
                 VerifyDelivery(record, completed.Execution, repository);
                 RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
                     completed.SharedRefs.Content, completed.SharedRefs.ByteLength);
+                ResolveMaintenanceBlocks(permit, operation, "Prepared.");
                 return new Preparation.Ready(completed.Execution, Checkout(repository, completed.Execution.Location.Owner));
             }
             step = "layout";
@@ -143,18 +145,19 @@ internal sealed partial class Materializer
             // A sibling result may supersede an input while Git and file delivery run.
             if (RunReducer.InputProblem(Read(workflow, run), input, true) is { } stale) return new Preparation.Rejected(stale);
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
         catch (MaterializationFailure failed) { return Block(permit, operation, step, new(operation, task, attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { return Block(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message)); }
+        { return Block(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
     }
 
     private GitRepository OpenRepository() => GitRepository.Open(_project, _environment) switch
     {
         RepositoryOpen.Opened opened => opened.Repository,
-        RepositoryOpen.Refused refused => throw Fault(refused.Problem, refused.Detail),
+        RepositoryOpen.Refused refused => throw Fault(refused.Problem, refused.Detail, new BlockScope.Repository()),
         _ => throw new InvalidOperationException(),
     };
 
@@ -215,7 +218,7 @@ internal sealed partial class Materializer
     private static T Value<T>(GitRead<T> read) => read switch
     {
         GitRead<T>.Read success => success.Value,
-        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail),
+        GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail, new BlockScope.Repository()),
         _ => throw new InvalidOperationException(),
     };
 
@@ -253,13 +256,9 @@ internal sealed partial class Materializer
         return prompt;
     }
 
-    private static MaterializationBlock ScopedCheckoutBlock(MaterializationBlock block) =>
-        block.Scope is null && block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership
-            ? block with { Scope = new([], [], false) } : block;
-
-    private static MaterializationFailure Fault(MaterializationProblem problem, string detail, BlockScope? scope = null) => new(problem, detail, scope);
-    private sealed class MaterializationFailure(MaterializationProblem problem, string detail, BlockScope? scope = null) : Exception(detail)
-    { public MaterializationProblem Problem { get; } = problem; public BlockScope? Scope { get; } = scope; }
+    private static MaterializationFailure Fault(MaterializationProblem problem, string detail, BlockScope scope) => new(problem, detail, scope);
+    private sealed class MaterializationFailure(MaterializationProblem problem, string detail, BlockScope scope) : Exception(detail)
+    { public MaterializationProblem Problem { get; } = problem; public BlockScope Scope { get; } = scope; }
     private sealed class Refusal(RunRejection reason) : Exception
     { public RunRejection Reason { get; } = reason; }
 }

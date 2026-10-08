@@ -253,7 +253,7 @@ internal abstract record RunEvent
     internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
 
     internal sealed record PreservationDiverged(OperationId Operation, PreservationObservation First, PreservationObservation Second,
-        BlockScope Scope) : RunEvent;
+        BlockScope.Checkout Scope) : RunEvent;
 
     internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
 

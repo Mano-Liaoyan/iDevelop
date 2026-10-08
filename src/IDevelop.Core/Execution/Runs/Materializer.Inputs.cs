@@ -13,7 +13,7 @@ internal sealed partial class Materializer
             {
                 try { storage.ReadArtifact(result.Id, artifact); }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                { throw Fault(MaterializationProblem.InputUnavailable, $"Result {result.Id.Value:D}, stored path {artifact.StoredPath}: {error.Message}"); }
+                { throw Fault(MaterializationProblem.InputUnavailable, $"Result {result.Id.Value:D}, stored path {artifact.StoredPath}: {error.Message}", new BlockScope.Operation()); }
             }
         }
     }
@@ -25,7 +25,7 @@ internal sealed partial class Materializer
         var artifact = result.Artifacts.Single(artifact => file.RelativePath.EndsWith("/artifacts/" + artifact.Name, StringComparison.Ordinal));
         try { return storage.ReadArtifact(result.Id, artifact); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { throw Fault(MaterializationProblem.InputUnavailable, $"Result {result.Id.Value:D}, stored path {artifact.StoredPath}: {error.Message}"); }
+        { throw Fault(MaterializationProblem.InputUnavailable, $"Result {result.Id.Value:D}, stored path {artifact.StoredPath}: {error.Message}", new BlockScope.Operation()); }
     }
 
     private static void Deliver(RunRecord record, InputRecord input, GitRepository repository, WorktreeOwner owner, RunStorage storage)
@@ -35,10 +35,10 @@ internal sealed partial class Materializer
         {
             try { RunStorage.Publish(checkout, file.RelativePath, DeliveredBytes(record, file, storage), file.Content, file.ByteLength); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-            { throw Fault(MaterializationProblem.InputUnavailable, $"Result {file.Source.Value:D}, delivery {file.RelativePath}: {error.Message}"); }
+            { throw Fault(MaterializationProblem.InputUnavailable, $"Result {file.Source.Value:D}, delivery {file.RelativePath}: {error.Message}", new BlockScope.Operation()); }
             if (repository.CheckIgnore(checkout, file.RelativePath).ExitCode != 0 ||
                 repository.CheckIgnore(repository.ProjectFolder, file.RelativePath).ExitCode != 0)
-                throw Fault(MaterializationProblem.InputUnavailable, "Delivered input is not ignored: " + file.RelativePath);
+                throw Fault(MaterializationProblem.InputUnavailable, "Delivered input is not ignored: " + file.RelativePath, new BlockScope.Operation());
         }
     }
 
@@ -50,10 +50,10 @@ internal sealed partial class Materializer
             RunStorage.Read(checkout, file.RelativePath, file.Content, file.ByteLength);
             if (repository.CheckIgnore(checkout, file.RelativePath).ExitCode != 0 ||
                 repository.CheckIgnore(repository.ProjectFolder, file.RelativePath).ExitCode != 0)
-                throw Fault(MaterializationProblem.InputUnavailable, "Delivered input is not ignored: " + file.RelativePath);
+                throw Fault(MaterializationProblem.InputUnavailable, "Delivered input is not ignored: " + file.RelativePath, new BlockScope.Operation());
         }
         if (execution.OutboxPath.Length != 0 && !Directory.Exists(RunStorage.SafePath(checkout, execution.OutboxPath)))
-            throw Fault(MaterializationProblem.InputUnavailable, "The prepared outbox is absent.");
+            throw Fault(MaterializationProblem.InputUnavailable, "The prepared outbox is absent.", new BlockScope.Operation());
         VerifyOutbox(repository, checkout, execution.OutboxPath);
     }
 
@@ -61,7 +61,7 @@ internal sealed partial class Materializer
     {
         if (outbox.Length != 0 && (repository.CheckIgnore(checkout, outbox + "/manifest.json").ExitCode != 0 ||
             repository.CheckIgnore(repository.ProjectFolder, outbox + "/manifest.json").ExitCode != 0))
-            throw Fault(MaterializationProblem.InputUnavailable, "The outbox is not ignored: " + outbox);
+            throw Fault(MaterializationProblem.InputUnavailable, "The outbox is not ignored: " + outbox, new BlockScope.Operation());
     }
 
     private static EvidenceFile Snapshot(RunStorage storage, OperationId operation, GitRepository repository, RunRecord record)

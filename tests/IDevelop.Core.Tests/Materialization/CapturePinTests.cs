@@ -234,7 +234,7 @@ public sealed class CapturePinTests
             TerminalAttemptOutcome.Succeeded, log));
         var blocked = f.Op();
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, blocked, new RunEvent.Blocked(new(blocked, T,
-            writer.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable, writer.Execution.Inputs, [], "Input became unavailable."))));
+            writer.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable, writer.Execution.Inputs, [], "Input became unavailable.") { Scope = new BlockScope.Operation() })));
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(blocked, "Rechecked.")));
         var salvage = f.Op();
