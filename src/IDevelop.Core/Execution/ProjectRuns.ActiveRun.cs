@@ -25,6 +25,7 @@ public sealed partial class ProjectRuns
         private readonly RunOwnership _ownership;
         private TurnOwner? Workflow => (_ownership as RunOwnership.Workflow)?.Owner;
         private bool _brokenLog;
+        private Exception? _workflowError;
         private int _startedRun;
         private Task _watcher = Task.CompletedTask;
         private Input.Exit? _workflowExit;
@@ -355,7 +356,8 @@ public sealed partial class ProjectRuns
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception) when (Workflow is not null) { _brokenLog = true; }
+            catch (Exception error) when (Workflow is not null && error is IOException or UnauthorizedAccessException) { _brokenLog = true; }
+            catch (Exception error) when (Workflow is not null) { _workflowError = error; }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 Record = AttemptReducer.Abandon(Record, CannotWriteLog(error), _owner.TimeProvider.GetUtcNow());
@@ -874,7 +876,7 @@ public sealed partial class ProjectRuns
                 Cleanup? cleanup = null;
                 if (Workflow is { } workflow)
                 {
-                    if (!workflow.Observe(new RootExit.Exited(code)))
+                    if (!workflow.ObserveExit(new RootExit.Exited(code)))
                     {
                         turn.Process.Dispose();
                         return;
@@ -895,7 +897,7 @@ public sealed partial class ProjectRuns
             }
             catch (Exception) when (Workflow is not null)
             {
-                if (Workflow.Detached) turn.Process.Dispose();
+                if (Workflow.RootAbandoned) turn.Process.Dispose();
                 else BreakLog();
             }
             catch (Exception error) when (error is ObjectDisposedException or InvalidOperationException) { }
@@ -926,27 +928,17 @@ public sealed partial class ProjectRuns
         private async Task FinalizeWorkflowAsync()
         {
             var workflow = Workflow!;
+            RootObservation? root = null;
+            LogCheckpoint? checkpoint = null;
             try
             {
                 if (!_turn.Process.HasExited) StopTree();
-                var detached = false;
-                try { await workflow.RootStep.Task.WaitAsync(_owner.ShutdownTime, _owner.TimeProvider); }
-                catch (TimeoutException)
-                {
-                    lock (workflow.Gate)
-                    {
-                        if (!workflow.RootStep.Task.IsCompleted)
-                        {
-                            workflow.Detached = detached = true;
-                            workflow.RootExited.TrySetException(new InvalidOperationException("The client did not exit after it was stopped."));
-                        }
-                    }
-                }
-                if (detached)
+                root = await workflow.WaitForRoot();
+                if (root is null)
                 {
                     await DisposeTurnAsync();
                     _log.Dispose();
-                    workflow.Complete(workflow.Unresolved(UnresolvedReason.Uncertain));
+                    if (_workflowError is { } detachedError) workflow.Fault(detachedError);
                     return;
                 }
                 await _watcher;
@@ -954,17 +946,32 @@ public sealed partial class ProjectRuns
                 await DisposeTurnAsync();
                 if (_owner.BeforeRelease is { } beforeRelease) await beforeRelease();
                 _log.Dispose();
+                if (_workflowError is { } error)
+                {
+                    workflow.Fault(error);
+                    return;
+                }
                 _owner.Probe?.Invoke("runner.checkpoint.before");
-                workflow.Checkpoint = AttemptEvidence.Read(_log.Folder).Checkpoint;
+                checkpoint = AttemptEvidence.Read(_log.Folder).Checkpoint;
                 _owner.Probe?.Invoke("runner.checkpoint.after");
-                workflow.Complete(await workflow.Settle());
+                await workflow.Settle(checkpoint, root);
             }
-            catch
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 await DisposeTurnAsync();
                 _log.Dispose();
-                workflow.RootExited.TrySetException(new InvalidOperationException("The turn's root observation could not be recorded."));
-                workflow.Complete(workflow.Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)));
+                if (_workflowError is { } failure) workflow.Fault(failure);
+                else
+                {
+                    workflow.RootExited.TrySetException(new InvalidOperationException("The turn's root observation could not be recorded."));
+                    workflow.Complete(workflow.Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)), checkpoint, root);
+                }
+            }
+            catch (Exception error)
+            {
+                await DisposeTurnAsync();
+                _log.Dispose();
+                workflow.Fault(_workflowError ?? error);
             }
         }
 
@@ -1076,9 +1083,9 @@ public sealed partial class ProjectRuns
                     if (_brokenLog && Workflow is not null) throw new IOException("The turn's log is broken.");
                     _log.Append(e);
                 }
-                catch
+                catch (Exception error)
                 {
-                    if (Workflow is not null) _brokenLog = true;
+                    if (Workflow is not null && error is IOException or UnauthorizedAccessException) _brokenLog = true;
                     throw;
                 }
                 Record = AttemptReducer.Apply(Record, e);

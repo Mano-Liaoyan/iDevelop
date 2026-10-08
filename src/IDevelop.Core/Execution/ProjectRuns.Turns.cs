@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using IDevelop.Nodes;
 using IDevelop.Workflows;
 
@@ -21,7 +22,9 @@ public sealed partial class ProjectRuns
 
     internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default)
     {
-        Task<TurnStart> command;
+        Task<TurnStart>? command = null;
+        LaunchKey? existing = null;
+        var duplicate = false;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_leaving is not null, this);
@@ -30,15 +33,23 @@ public sealed partial class ProjectRuns
             if (_commands.TryGetValue(key, out var prior))
             {
                 if (prior.Intent != intent) return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
-                if (!prior.Task.IsCompleted) return ExistingWhenComplete(prior.Task, permit, wait);
-                if (prior.Task.IsCompletedSuccessfully && LaunchOf(prior.Task.Result) is { } launch)
-                    return Task.FromResult<TurnStart>(Existing(permit, launch)).WaitAsync(wait);
-                _commands.Remove(key);
+                if (!prior.Task.IsCompleted)
+                {
+                    command = prior.Task;
+                    duplicate = true;
+                }
+                else if (prior.Task.IsCompletedSuccessfully && LaunchOf(prior.Task.Result) is { } launch)
+                    existing = launch;
+                else _commands.Remove(key);
             }
-            command = Task.Run(() => StartTurnCore(permit, intent));
-            _commands.Add(key, new(intent, command));
+            if (command is null && existing is null)
+            {
+                command = Task.Run(() => StartTurnCore(permit, intent));
+                _commands.Add(key, new(intent, command));
+            }
         }
-        return command.WaitAsync(wait);
+        if (existing is { } completed) return Task.FromResult<TurnStart>(Existing(permit, completed)).WaitAsync(wait);
+        return duplicate ? ExistingWhenComplete(command!, permit, wait) : command!.WaitAsync(wait);
     }
 
     private async Task<TurnStart> ExistingWhenComplete(Task<TurnStart> command, CoordinatorPermit permit, CancellationToken wait)
@@ -68,7 +79,8 @@ public sealed partial class ProjectRuns
         TurnOwner? owner;
         lock (_gate) owner = _owned.GetValueOrDefault((permit.Workflow, permit.Run, launch));
         if (owner is null) return new(launch, null, null);
-        lock (owner.Gate) return new(launch, owner.Running, owner.Outcome);
+        var snapshot = owner.Snapshot();
+        return new(launch, snapshot.Running, snapshot.Outcome);
     }
 
     private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent)
@@ -80,6 +92,7 @@ public sealed partial class ProjectRuns
         RunLease? lease = null;
         AttemptLog? log = null;
         TurnOwner? owner = null;
+        ActiveRun? active = null;
         try
         {
             Probe?.Invoke("runner.lookup");
@@ -183,17 +196,7 @@ public sealed partial class ProjectRuns
                 new(record.Repository!, permit.Workflow, permit.Run, task, prepared.Launch), Operation(intent), prepared, log, definition);
             lease = null;
             log = null;
-            bool closing;
-            lock (_gate)
-            {
-                _owned.Add((permit.Workflow, permit.Run, prepared.Launch), owner);
-                closing = _leaving is not null;
-            }
-            if (closing)
-            {
-                owner.Leave();
-                _ = owner.LeaveAsync();
-            }
+            lock (_gate) _owned.Add((permit.Workflow, permit.Run, prepared.Launch), owner);
             if (claimFailure is not null) return new TurnStart.Settled(await owner.NotStarted(claimFailure));
             Probe?.Invoke("runner.claim.after");
             if (intent is TurnIntent.Next)
@@ -203,41 +206,34 @@ public sealed partial class ProjectRuns
                 {
                     Conversation = definition.Conversation, Consumed = [.. evidence!.Record!.Queued.Select(message => message.Id)], Tree = tree,
                 });
-                owner.Requested = true;
+                owner.MarkRequested();
                 Probe?.Invoke("runner.turn-requested.after");
             }
-            else owner.Requested = true;
             Probe?.Invoke("runner.launch.before");
             var launchEvidence = AttemptEvidence.Read(folder);
             if (launchEvidence.Record is null || launchEvidence.Rejection is not null)
                 return new TurnStart.Settled(await owner.NotStarted("The turn's request could not be read."));
-            string? notStarted = null;
-            lock (owner.Gate)
+            active = owner.Launch(() =>
             {
-                if (owner.Leaving) notStarted = "The project was closed before the client started.";
-                else
-                {
-                    var process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, ready.Checkout, ProcessLifetime.Workflow);
-                    owner.Active = new ActiveRun(this, 0, plan, process, owner.Log!, new RunOwnership.Workflow(owner), launchEvidence.Record);
-                    owner.Running = new(owner.Address, owner.RootExited.Task, owner.Settlement.Task,
-                        () => owner.Active.StopAsync(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow())),
-                        owner.SendAsync);
-                }
-            }
-            if (notStarted is not null) return new TurnStart.Settled(await owner.NotStarted(notStarted));
+                var process = ChildProcess.Start(plan.Command, plan.Launch.Arguments, ready.Checkout, ProcessLifetime.Workflow);
+                return new ActiveRun(this, 0, plan, process, owner.Log!, new RunOwnership.Workflow(owner), launchEvidence.Record);
+            }, run => new(owner.Address, owner.RootExited.Task, owner.Settlement.Task,
+                () => run.StopAsync(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow())),
+                (text, stopTurn) => owner.SendAsync(run, text, stopTurn)));
+            if (active is null) return new TurnStart.Settled(await owner.NotStarted("The project was closed before the client started."));
             Probe?.Invoke("runner.launch.after");
-            owner.Active!.Launched();
-            owner.Active.Start();
+            active.Launched();
+            active.Start();
             Probe?.Invoke("runner.running");
-            return new TurnStart.Started(owner.Running!);
+            return new TurnStart.Started(owner.Snapshot().Running!);
         }
         catch (Exception error) when (owner is not null)
         {
-            if (owner.Active is { } active)
+            if (active is not null)
             {
                 active.BreakLog();
                 active.Start();
-                return new TurnStart.Started(owner.Running!);
+                return new TurnStart.Started(owner.Snapshot().Running!);
             }
             return new TurnStart.Settled(await owner.NotStarted(error.Message));
         }
@@ -254,13 +250,13 @@ public sealed partial class ProjectRuns
 
     internal Task<TurnSettlement> Reconcile(CoordinatorPermit permit, OperationId operation, LaunchKey launch, CancellationToken wait = default)
     {
-        Task<TurnSettlement> reconciliation;
+        TurnOwner? owner;
         lock (_gate)
         {
-            if (_owned.TryGetValue((permit.Workflow, permit.Run, launch), out var owner))
-                reconciliation = owner.Reconcile();
-            else reconciliation = Task.Run(() => ReconcileCore(permit, operation, launch));
+            ObjectDisposedException.ThrowIf(_leaving is not null, this);
+            owner = _owned.GetValueOrDefault((permit.Workflow, permit.Run, launch));
         }
+        var reconciliation = owner?.Reconcile() ?? Task.Run(() => ReconcileCore(permit, operation, launch));
         return reconciliation.WaitAsync(wait);
     }
 
@@ -279,19 +275,32 @@ public sealed partial class ProjectRuns
         }
         var owner = new TurnOwner(this, store, TurnMaterializer(store), taken.Lease,
             new(record.Repository!, permit.Workflow, permit.Run, task, launch), operation, record.Preparations[launch], null,
-            record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot.Tasks[task]);
+            record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot.Tasks[task], adopted: true);
         bool closing;
         lock (_gate)
         {
-            _owned.Add((permit.Workflow, permit.Run, launch), owner);
             closing = _leaving is not null;
+            if (!closing) _owned.Add((permit.Workflow, permit.Run, launch), owner);
         }
         if (closing)
         {
-            owner.Leave();
-            _ = owner.LeaveAsync();
+            taken.Lease.Dispose();
+            return new TurnSettlement.Refused(new(RunProblem.RunStopped));
         }
-        return await owner.Recover();
+        return await owner.Reconcile()!;
+    }
+
+    private void Forget(TurnOwner owner)
+    {
+        var address = owner.Address;
+        lock (_gate)
+        {
+            var key = (address.Workflow, address.Run, address.Launch);
+            if (_owned.GetValueOrDefault(key) == owner) _owned.Remove(key);
+            foreach (var command in _commands.Where(pair => pair.Key.Workflow == address.Workflow && pair.Key.Run == address.Run &&
+                pair.Value.Task.IsCompletedSuccessfully && LaunchOf(pair.Value.Task.Result) == address.Launch).Select(pair => pair.Key).ToArray())
+                _commands.Remove(command);
+        }
     }
 
     private StartProblem? WorkflowOwner(TaskId task)
@@ -316,142 +325,364 @@ public sealed partial class ProjectRuns
         internal sealed record Workflow(TurnOwner Owner) : RunOwnership;
     }
 
-    private sealed class TurnOwner(ProjectRuns project, RunStore store, Materializer materializer, RunLease lease,
-        ExecutionAddress address, OperationId operation, PreparedExecution preparation, AttemptLog? log, TaskDefinition definition)
+    private abstract record TurnState
     {
-        public readonly Lock Gate = new();
+        private TurnState() { }
+        public sealed record Claimed(bool Requested) : TurnState;
+        public sealed record Running(ActiveRun Active) : TurnState;
+        public sealed record Observing : TurnState;
+        public sealed record Finalizing(RootObservation Root) : TurnState;
+        public sealed record Settled(TurnSettlement Outcome, LogCheckpoint? Checkpoint, RootObservation? Root) : TurnState;
+        public sealed record Retrying(Task<TurnSettlement> Retry, LogCheckpoint? Checkpoint, RootObservation? Root) : TurnState;
+        public sealed record Faulted(Exception Error) : TurnState;
+        public sealed record Released(TurnDisposition Receipt, TurnSettlement Outcome) : TurnState;
+        public sealed record Adopted : TurnState;
+    }
+
+    private sealed class TurnOwner(ProjectRuns project, RunStore store, Materializer materializer, RunLease lease,
+        ExecutionAddress address, OperationId operation, PreparedExecution preparation, AttemptLog? log, TaskDefinition definition,
+        bool adopted = false)
+    {
+        private readonly Lock _gate = new();
+        private TurnState _state = adopted ? new TurnState.Adopted() : new TurnState.Claimed(address.Launch.Turn == 1);
+        private RunningTurn? _running;
         public readonly RunStore Store = store;
         public readonly Materializer Materializer = materializer;
         public readonly RunLease Lease = lease;
         public readonly ExecutionAddress Address = address;
         public readonly PreparedExecution Preparation = preparation;
         public readonly OperationId SettleOperation = OperationIds.Derive(operation, "settle");
+        private readonly OperationId _rootOperation = OperationIds.Derive(operation, "root");
         public readonly TaskCompletionSource RootExited = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public readonly TaskCompletionSource<RootObservation> RootStep = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<RootObservation> _root = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskCompletionSource<TurnSettlement> Settlement = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly TaskDefinition Definition = definition;
         public readonly AttemptLog? Log = log;
-        public bool Requested = address.Launch.Turn == 1;
-        public bool Leaving;
-        public bool Detached;
-        public ActiveRun? Active;
-        public RunningTurn? Running;
-        public TurnSettlement? Outcome;
-        public LogCheckpoint? Checkpoint;
-        private Task<TurnSettlement>? _retry;
 
-        public Task<SendResult> SendAsync(string text, bool stopTurn)
+        public ActiveRun? Launch(Func<ActiveRun> create, Func<ActiveRun, RunningTurn> handle)
+        {
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Claimed when !project.Closing:
+                        var active = create();
+                        _running = handle(active);
+                        _state = new TurnState.Running(active);
+                        return active;
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
+                        return null;
+                    default: throw new UnreachableException();
+                }
+            }
+        }
+
+        public void MarkRequested()
+        {
+            lock (_gate)
+            {
+                _state = _state switch
+                {
+                    TurnState.Claimed { Requested: false } => new TurnState.Claimed(true),
+                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted => _state,
+                    _ => throw new UnreachableException(),
+                };
+            }
+        }
+
+        public (RunningTurn? Running, TurnSettlement? Outcome) Snapshot()
+        {
+            lock (_gate)
+            {
+                return (_running, _state switch
+                {
+                    TurnState.Settled settled => settled.Outcome,
+                    TurnState.Released released => released.Outcome,
+                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted => null,
+                    _ => throw new UnreachableException(),
+                });
+            }
+        }
+
+        public Task<SendResult> SendAsync(ActiveRun active, string text, bool stopTurn)
         {
             if (string.IsNullOrWhiteSpace(text)) return Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.EmptyMessage()));
             return (NodeWorks.For(Definition.Blueprint.Work) as IConverses)?.Receive(text) switch
             {
-                MessageUse.Guidance guidance => Active!.GuideAsync(Definition, guidance.Text, default, null),
-                MessageUse.Turn turn => Active!.SendAsync(Definition, turn.Prompt, stopTurn, default, null),
+                MessageUse.Guidance guidance => active.GuideAsync(Definition, guidance.Text, default, null),
+                MessageUse.Turn turn => active.SendAsync(Definition, turn.Prompt, stopTurn, default, null),
                 _ => Task.FromResult<SendResult>(new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.NoConversation()))),
             };
         }
 
-        public void Leave()
+        public void Shutdown()
         {
-            lock (Gate)
+            lock (_gate)
             {
-                Leaving = true;
-                if (Active is { } active) _ = active.StopAsync(new AttemptEvent.InterruptRequested(project.TimeProvider.GetUtcNow(), LeaveReason));
+                switch (_state)
+                {
+                    case TurnState.Running running:
+                        _ = running.Active.StopAsync(new AttemptEvent.InterruptRequested(project.TimeProvider.GetUtcNow(), LeaveReason));
+                        break;
+                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
+                        break;
+                    default: throw new UnreachableException();
+                }
             }
         }
 
-        public async Task LeaveAsync()
+        public async Task Leave()
         {
-            Task settlement;
-            lock (Gate) settlement = _retry ?? Settlement.Task;
-            try { await settlement.WaitAsync(project.LeaveTimeout, project.TimeProvider); }
-            catch (TimeoutException)
+            Task pending;
+            lock (_gate)
             {
-                lock (Gate) Active?.Abandon(new(project.TimeProvider.GetUtcNow(), LeaveReason));
+                pending = _state switch
+                {
+                    TurnState.Retrying retrying => retrying.Retry,
+                    TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Settled or TurnState.Faulted or TurnState.Released or TurnState.Adopted => Settlement.Task,
+                    _ => throw new UnreachableException(),
+                };
             }
-            finally
+            await Task.WhenAny(pending, Task.Delay(project.LeaveTimeout, project.TimeProvider));
+            ActiveRun? active = null;
+            lock (_gate)
             {
-                if (settlement.IsCompleted) Lease.Dispose();
-                else _ = ReleaseAfterSettlement(settlement);
+                switch (_state)
+                {
+                    case TurnState.Running running:
+                        active = running.Active;
+                        break;
+                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
+                        break;
+                    default: throw new UnreachableException();
+                }
+            }
+            active?.Abandon(new(project.TimeProvider.GetUtcNow(), LeaveReason));
+        }
+
+        public bool RootAbandoned
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _state switch
+                    {
+                        TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Adopted => false,
+                        TurnState.Finalizing or TurnState.Settled or TurnState.Retrying or
+                            TurnState.Faulted or TurnState.Released => !_root.Task.IsCompleted,
+                        _ => throw new UnreachableException(),
+                    };
+                }
             }
         }
 
-        private async Task ReleaseAfterSettlement(Task settlement)
+        public bool ObserveExit(RootExit exit)
         {
-            await settlement;
-            Lease.Dispose();
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Running:
+                        _state = new TurnState.Observing();
+                        break;
+                    case TurnState.Claimed or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted:
+                        return false;
+                    default: throw new UnreachableException();
+                }
+            }
+            Observe(exit);
+            return true;
         }
 
-        public bool Observe(RootExit exit)
+        private RootObservation Observe(RootExit exit)
         {
-            lock (Gate)
+            RootObservation root;
+            try { root = Materializer.ObserveRootExit(Lease, _rootOperation, Address.Launch, exit, project.ShutdownTime); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            { root = new RootObservation.Rejected(new(RunProblem.StorageUnavailable)); }
+            catch (Exception error)
             {
-                if (Detached) return false;
-                RootObservation observation;
-                try { observation = Materializer.ObserveRootExit(Lease, OperationIds.Derive(operation, "root"), Address.Launch, exit, project.ShutdownTime); }
-                catch { observation = new RootObservation.Rejected(new(RunProblem.StorageUnavailable)); }
-                RootStep.TrySetResult(observation);
-                if (observation is RootObservation.Rejected rejected)
+                Fault(error);
+                throw;
+            }
+            lock (_gate)
+            {
+                _state = _state switch
+                {
+                    TurnState.Observing => new TurnState.Finalizing(root),
+                    TurnState.Claimed or TurnState.Running or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Released or TurnState.Adopted => throw new UnreachableException(),
+                    _ => throw new UnreachableException(),
+                };
+            }
+            _root.TrySetResult(root);
+            switch (root)
+            {
+                case RootObservation.Rejected rejected:
                     RootExited.TrySetException(new InvalidOperationException(rejected.Reason.Problem.ToString()));
-                else RootExited.TrySetResult();
-                return true;
+                    break;
+                case RootObservation.Observed or RootObservation.Fenced:
+                    RootExited.TrySetResult();
+                    break;
+                default: throw new UnreachableException();
             }
+            return root;
+        }
+
+        public async Task<RootObservation?> WaitForRoot()
+        {
+            if (await Task.WhenAny(_root.Task, Task.Delay(project.ShutdownTime, project.TimeProvider)) == _root.Task)
+                return await _root.Task;
+            TurnSettlement? outcome = null;
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Running:
+                        outcome = Unresolved(UnresolvedReason.Uncertain);
+                        _state = new TurnState.Settled(outcome, null, null);
+                        break;
+                    case TurnState.Observing or TurnState.Finalizing or TurnState.Faulted:
+                        break;
+                    case TurnState.Settled or TurnState.Retrying or TurnState.Released:
+                        if (!_root.Task.IsCompleted) return null;
+                        break;
+                    case TurnState.Claimed or TurnState.Adopted:
+                        throw new UnreachableException();
+                    default: throw new UnreachableException();
+                }
+            }
+            if (outcome is null) return await _root.Task;
+            RootExited.TrySetException(new InvalidOperationException("The client did not exit after it was stopped."));
+            Settlement.TrySetResult(outcome);
+            return null;
         }
 
         public TurnSettlement Unresolved(UnresolvedReason reason, RunRejection? rejection = null, ProcessMatch? root = null) =>
-            new TurnSettlement.Unresolved(new(Store, Address, reason, rejection, root, Lease));
+            new TurnSettlement.Unresolved(new(Release, Address, reason, rejection, root, Lease));
 
-        public TurnSettlement Complete(TurnSettlement outcome)
+        public TurnSettlement Complete(TurnSettlement outcome, LogCheckpoint? checkpoint, RootObservation? root)
         {
-            if (outcome is TurnSettlement.Settled) RootExited.TrySetResult();
-            else if (!RootExited.Task.IsCompleted)
-                RootExited.TrySetException(new InvalidOperationException(outcome is TurnSettlement.Unresolved unresolved
-                    ? unresolved.Turn.Rejection?.Problem.ToString() ?? unresolved.Turn.Reason.ToString()
-                    : ((TurnSettlement.Refused)outcome).Reason.Problem.ToString()));
-            lock (Gate) Outcome = outcome;
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Released released: return released.Outcome;
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
+                        _state = new TurnState.Settled(outcome, checkpoint, root);
+                        break;
+                    default: throw new UnreachableException();
+                }
+            }
+            switch (outcome)
+            {
+                case TurnSettlement.Settled:
+                    RootExited.TrySetResult();
+                    break;
+                case TurnSettlement.Unresolved unresolved:
+                    RootExited.TrySetException(new InvalidOperationException(unresolved.Turn.Rejection?.Problem.ToString() ?? unresolved.Turn.Reason.ToString()));
+                    break;
+                case TurnSettlement.Refused refused:
+                    RootExited.TrySetException(new InvalidOperationException(refused.Reason.Problem.ToString()));
+                    break;
+                default: throw new UnreachableException();
+            }
             Settlement.TrySetResult(outcome);
             return outcome;
         }
 
+        public void Fault(Exception error)
+        {
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Released: return;
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Settled or TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
+                        _state = new TurnState.Faulted(error);
+                        break;
+                    default: throw new UnreachableException();
+                }
+            }
+            _root.TrySetException(error);
+            RootExited.TrySetException(error);
+            Settlement.TrySetException(error);
+        }
+
         public async Task<TurnSettlement> NotStarted(string detail)
         {
+            bool requested;
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Claimed claimed:
+                        requested = claimed.Requested;
+                        _state = new TurnState.Observing();
+                        break;
+                    case TurnState.Faulted faulted: throw faulted.Error;
+                    case TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Settled or
+                        TurnState.Retrying or TurnState.Released or TurnState.Adopted:
+                        throw new UnreachableException();
+                    default: throw new UnreachableException();
+                }
+            }
+            RootObservation? root = null;
+            LogCheckpoint? checkpoint = null;
             try
             {
-                Observe(new RootExit.NotStarted(detail));
-                if (Requested && Log is not null) Log.Append(new AttemptEvent.LaunchFailed(project.TimeProvider.GetUtcNow(), detail));
+                root = Observe(new RootExit.NotStarted(detail));
+                if (requested && Log is not null) Log.Append(new AttemptEvent.LaunchFailed(project.TimeProvider.GetUtcNow(), detail));
                 Log?.Dispose();
-                Checkpoint = AttemptEvidence.Read(Folder).Checkpoint;
-                return Complete(await Settle());
+                checkpoint = AttemptEvidence.Read(Folder).Checkpoint;
+                return await Settle(checkpoint, root);
             }
-            catch
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 Log?.Dispose();
                 RootExited.TrySetException(new InvalidOperationException("The turn's root observation could not be recorded."));
-                return Complete(Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)));
+                return Complete(Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)), checkpoint, root);
+            }
+            catch (Exception error)
+            {
+                Log?.Dispose();
+                Fault(error);
+                throw;
             }
         }
 
         private string Folder => Store.AttemptFolder(Address.Workflow, Address.Run, Address.Task, Address.Launch.Attempt);
 
-        public async Task<TurnSettlement> Settle()
+        public async Task<TurnSettlement> Settle(LogCheckpoint? checkpoint, RootObservation root) =>
+            Complete(await SettlementFor(checkpoint, root), checkpoint, root);
+
+        private async Task<TurnSettlement> SettlementFor(LogCheckpoint? checkpoint, RootObservation? root)
         {
             if (!Lease.Held) return Unresolved(UnresolvedReason.OwnershipConflict, new(RunProblem.TaskBusy));
-            if (RootStep.Task.IsCompletedSuccessfully)
+            switch (root)
             {
-                switch (RootStep.Task.Result)
-                {
-                    case RootObservation.Fenced: return Unresolved(UnresolvedReason.OwnershipConflict);
-                    case RootObservation.Rejected rejected:
-                        return Unresolved(UnresolvedReason.OwnershipConflict, rejected.Reason);
-                }
+                case RootObservation.Fenced: return Unresolved(UnresolvedReason.OwnershipConflict);
+                case RootObservation.Rejected rejected: return Unresolved(UnresolvedReason.OwnershipConflict, rejected.Reason);
+                case RootObservation.Observed or null: break;
+                default: throw new UnreachableException();
             }
-            if (Checkpoint is null) return Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.EvidenceMismatch));
-            var settlement = await Materializer.Settle(Lease, SettleOperation, Address.Launch, Checkpoint);
+            if (checkpoint is null) return Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.EvidenceMismatch));
+            var settlement = await Materializer.Settle(Lease, SettleOperation, Address.Launch, checkpoint);
             return settlement switch
             {
                 Execution.Settlement.Closed => BuildSettled(),
                 Execution.Settlement.Rejected rejected => Unresolved(UnresolvedReason.IncompleteEvidence, rejected.Reason),
-                _ => throw new InvalidOperationException(),
+                _ => throw new UnreachableException(),
             };
         }
 
@@ -465,44 +696,68 @@ public sealed partial class ProjectRuns
             if (evidence.Record is null || evidence.Rejection is not null)
                 return Unresolved(UnresolvedReason.IncompleteEvidence, evidence.Rejection);
             var closure = record.Receipts.Values.Select(receipt => receipt.Event).OfType<RunEvent.TurnClosed>().Single(value => value.Key == Address.Launch);
-            return new TurnSettlement.Settled(new(Store, Address, record.Preparations[Address.Launch], checkpoint,
+            return new TurnSettlement.Settled(new(Release, Address, record.Preparations[Address.Launch], checkpoint,
                 record.RootExits[Address.Launch], closure, record.Dispositions[record.Settlements[Address.Launch]],
                 evidence.Record, evidence.Events.OfType<AttemptEvent.CleanedUp>().LastOrDefault(), Lease));
         }
 
-        public Task<TurnSettlement> Reconcile()
+        public Task<TurnSettlement>? Reconcile()
         {
-            lock (Gate)
+            TaskCompletionSource<Task<TurnSettlement>> start;
+            Task<TurnSettlement> retry;
+            LogCheckpoint? checkpoint;
+            RootObservation? root;
+            lock (_gate)
             {
-                if (Outcome is null) return Settlement.Task;
-                if (Outcome is TurnSettlement.Settled) return Task.FromResult(Outcome);
-                if (_retry is { IsCompleted: false }) return _retry;
-                return _retry = Task.Run(async () =>
+                switch (_state)
                 {
-                    TurnSettlement outcome;
-                    try
-                    {
-                        outcome = Checkpoint is not null && RootStep.Task.IsCompletedSuccessfully && RootStep.Task.Result is RootObservation.Observed
-                            ? await Settle() : await Recover();
-                    }
-                    catch { outcome = Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)); }
-                    return Complete(outcome);
-                });
+                    case TurnState.Settled { Outcome: TurnSettlement.Settled } settled: return Task.FromResult(settled.Outcome);
+                    case TurnState.Settled settled:
+                        checkpoint = settled.Checkpoint;
+                        root = settled.Root;
+                        break;
+                    case TurnState.Faulted or TurnState.Adopted:
+                        checkpoint = null;
+                        root = null;
+                        break;
+                    case TurnState.Retrying retrying: return retrying.Retry;
+                    case TurnState.Released: return null;
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing: return Settlement.Task;
+                    default: throw new UnreachableException();
+                }
+                start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                retry = start.Task.Unwrap();
+                _state = new TurnState.Retrying(retry, checkpoint, root);
             }
+            start.SetResult(Task.Run(async () =>
+            {
+                TurnSettlement outcome;
+                try
+                {
+                    outcome = checkpoint is not null && root is RootObservation.Observed
+                        ? await SettlementFor(checkpoint, root) : await Recover();
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                { outcome = Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)); }
+                catch (Exception error)
+                {
+                    Fault(error);
+                    throw;
+                }
+                return Complete(outcome, checkpoint, root);
+            }));
+            return retry;
         }
 
-        public async Task<TurnSettlement> Recover()
+        private async Task<TurnSettlement> Recover()
         {
             if (Store.Read(Address.Workflow, Address.Run) is not RunRead.Loaded loaded)
-                return Complete(Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable)));
+                return Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.StorageUnavailable));
             var record = loaded.Record;
             if (!record.Claims.ContainsKey(Address.Launch))
-            {
-                Lease.Dispose();
-                return Complete(new TurnSettlement.Refused(new(RunProblem.InvalidClaim)));
-            }
-            if (!Lease.Held) return Complete(Unresolved(UnresolvedReason.OwnershipConflict));
-            if (record.TurnClosures.ContainsKey(Address.Launch)) return Complete(BuildSettled());
+                return Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.InvalidClaim));
+            if (!Lease.Held) return Unresolved(UnresolvedReason.OwnershipConflict);
+            if (record.TurnClosures.ContainsKey(Address.Launch)) return BuildSettled();
             if (!record.RootExits.ContainsKey(Address.Launch))
             {
                 var events = AttemptEvidence.Read(Folder).Events;
@@ -514,13 +769,50 @@ public sealed partial class ProjectRuns
                     if (index == Address.Launch.Turn && e is AttemptEvent.Launched launched)
                         identity = new(launched.ProcessId, launched.ProcessStarted);
                 }
-                return Complete(Unresolved(UnresolvedReason.Uncertain, root: identity is null ? null : ProcessCheck.Check(identity.Value)));
+                return Unresolved(UnresolvedReason.Uncertain, root: identity is null ? null : ProcessCheck.Check(identity.Value));
             }
-            RootStep.TrySetResult(new RootObservation.Observed(record.RootExits[Address.Launch]));
-            RootExited.TrySetResult();
             var result = await Materializer.RecoverSettlement(Lease, SettleOperation, Address.Launch);
-            return Complete(result is Execution.Settlement.Closed ? BuildSettled() :
-                Unresolved(UnresolvedReason.IncompleteEvidence, ((Execution.Settlement.Rejected)result).Reason));
+            return result switch
+            {
+                Execution.Settlement.Closed => BuildSettled(),
+                Execution.Settlement.Rejected rejected => Unresolved(UnresolvedReason.IncompleteEvidence, rejected.Reason),
+                _ => throw new UnreachableException(),
+            };
+        }
+
+        public Release Release()
+        {
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Released released: return new Release.Released(released.Receipt);
+                    case TurnState.Settled: break;
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
+                        return new Release.Held(new(RunProblem.NotSettled));
+                    default: throw new UnreachableException();
+                }
+            }
+            var receipt = TurnReceipts.Receipt(Store, Address);
+            if (receipt is null) return new Release.Held(new(RunProblem.NotSettled));
+            lock (_gate)
+            {
+                switch (_state)
+                {
+                    case TurnState.Settled settled:
+                        _state = new TurnState.Released(receipt, settled.Outcome);
+                        break;
+                    case TurnState.Released released: return new Release.Released(released.Receipt);
+                    case TurnState.Claimed or TurnState.Running or TurnState.Observing or TurnState.Finalizing or
+                        TurnState.Retrying or TurnState.Faulted or TurnState.Adopted:
+                        return new Release.Held(new(RunProblem.NotSettled));
+                    default: throw new UnreachableException();
+                }
+            }
+            Lease.Dispose();
+            project.Forget(this);
+            return new Release.Released(receipt);
         }
     }
 }

@@ -40,7 +40,7 @@ internal abstract record TurnSettlement
     internal sealed record Refused(RunRejection Reason) : TurnSettlement;
 }
 
-internal sealed class SettledTurn(RunStore store, ExecutionAddress address, PreparedExecution preparation,
+internal sealed class SettledTurn(Func<Release> release, ExecutionAddress address, PreparedExecution preparation,
     LogCheckpoint log, RunEvent.RootExitObserved exit, RunEvent.TurnClosed closure, RunEvent.CaptureDisposed capture,
     AttemptRecord attempt, AttemptEvent.CleanedUp? cleanup, RunLease lease)
 {
@@ -53,12 +53,12 @@ internal sealed class SettledTurn(RunStore store, ExecutionAddress address, Prep
     public AttemptRecord Attempt { get; } = attempt;
     public AttemptEvent.CleanedUp? Cleanup { get; } = cleanup;
     public RunLease Lease { get; } = lease;
-    public Release Release() => TurnReceipts.Release(store, Address, Lease);
+    public Release Release() => release();
 }
 
 internal enum UnresolvedReason { Uncertain, IncompleteEvidence, OwnershipConflict }
 
-internal sealed class UnresolvedTurn(RunStore store, ExecutionAddress address, UnresolvedReason reason,
+internal sealed class UnresolvedTurn(Func<Release> release, ExecutionAddress address, UnresolvedReason reason,
     RunRejection? rejection, ProcessMatch? root, RunLease lease)
 {
     public ExecutionAddress Address { get; } = address;
@@ -66,7 +66,7 @@ internal sealed class UnresolvedTurn(RunStore store, ExecutionAddress address, U
     public RunRejection? Rejection { get; } = rejection;
     public ProcessMatch? Root { get; } = root;
     public RunLease Lease { get; } = lease;
-    public Release Release() => TurnReceipts.Release(store, Address, Lease);
+    public Release Release() => release();
 }
 
 internal abstract record TurnDisposition
@@ -96,10 +96,10 @@ internal abstract record ClaimCheck
 
 internal static class TurnReceipts
 {
-    public static Release Release(RunStore store, ExecutionAddress address, RunLease lease)
+    public static TurnDisposition? Receipt(RunStore store, ExecutionAddress address)
     {
         if (store.Read(address.Workflow, address.Run) is not RunRead.Loaded loaded)
-            return new Release.Held(new(RunProblem.NotSettled));
+            return null;
         var record = loaded.Record;
         var attempt = address.Launch.Attempt;
         var log = AttemptEvidence.Read(store.AttemptFolder(address.Workflow, address.Run, address.Task, attempt));
@@ -115,8 +115,6 @@ internal static class TurnReceipts
             receipt = new TurnDisposition.Ended(end);
         else if (record.Blocks.FirstOrDefault(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt) is { Value: not null } block)
             receipt = new TurnDisposition.Blocked(block.Key);
-        if (receipt is null) return new Release.Held(new(RunProblem.NotSettled));
-        lease.Dispose();
-        return new Release.Released(receipt);
+        return receipt;
     }
 }

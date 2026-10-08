@@ -31,6 +31,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private readonly Lock _advancing = new();
     private long _launches;
     private Task? _leaving;
+    internal bool Closing => Volatile.Read(ref _leaving) is not null;
     private ImmutableDictionary<WorkflowId, Workflow> _workflows = ImmutableDictionary<WorkflowId, Workflow>.Empty;
 
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
@@ -574,6 +575,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         TurnOwner[] owners = [];
+        Task<TurnStart>[] commands = [];
+        Task[] standalone = [];
+        TaskCompletionSource<Task>? source = null;
         Task leaving;
         lock (_gate)
         {
@@ -586,10 +590,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 }
                 else
                 {
+                    source = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _leaving = source.Task.Unwrap();
+                    standalone = [.. _active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout))];
                     owners = [.. _owned.Values];
-                    _leaving = Task.WhenAll(_active.Values.ToList().Select(run => LeaveAsync(run, LeaveTimeout))
-                        .Concat(owners.Select(owner => owner.LeaveAsync()))
-                        .Concat(_commands.Values.Select(command => WaitForCommand(command.Task))));
+                    commands = [.. _commands.Values.Select(command => command.Task)];
                 }
                 NotifyConversations(null);
             }
@@ -597,8 +602,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             leaving = _leaving;
         }
 
-        // Leaving waits for an owner's root observation, which runs Git, so it happens outside the gate.
-        foreach (var owner in owners) owner.Leave();
+        foreach (var owner in owners) owner.Shutdown();
+        source?.SetResult(Task.WhenAll(standalone.Concat(owners.Select(owner => owner.Leave()))
+            .Concat(commands.Select(command => WaitForCommand(command)))));
         return new ValueTask(leaving);
     }
 
