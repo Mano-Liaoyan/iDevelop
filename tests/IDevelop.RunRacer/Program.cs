@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.Workflows;
 
@@ -16,6 +17,51 @@ internal static class Program
         _ = store.Read(workflow, run);
         switch (mode)
         {
+            case "turn-crash":
+            {
+                var task = new TaskId(Guid.Parse(args[4]));
+                var operation = new OperationId(Guid.Parse(args[5]));
+                var clients = new ClientDirectory(CommandResolver.Create([args[6]],
+                    OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []));
+                clients.RefreshAsync().GetAwaiter().GetResult();
+                var runs = ProjectRuns.Open(project, clients);
+                var take = store.TakeControl(workflow, run);
+                Console.WriteLine(Describe(take));
+                Console.Out.Flush();
+                if (take is not ControlTake.Owned owned)
+                {
+                    runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    return 2;
+                }
+                using var permit = owned.Permit;
+                runs.MaterializerClock = TimeProvider.System;
+                var crashPoint = args[9];
+                runs.Probe = point =>
+                {
+                    if (point != crashPoint) return;
+                    if (point is "runner.launch.after" or "runner.running")
+                    {
+                        var expected = int.Parse(args[8]);
+                        var limit = Stopwatch.StartNew();
+                        while (RunLaunches(args[7]) < expected)
+                        {
+                            if (limit.Elapsed >= TimeSpan.FromSeconds(30)) throw new TimeoutException("The fake client did not enter.");
+                            Thread.Sleep(5);
+                        }
+                    }
+                    Console.WriteLine(point);
+                    Console.Out.Flush();
+                    Environment.Exit(73);
+                };
+                TurnIntent intent = args.Length > 10
+                    ? new TurnIntent.Next(operation, new(new AttemptId(Guid.Parse(args[10])), int.Parse(args[11])), args[12])
+                    : new TurnIntent.First(operation, task, new AttemptCause.Initial());
+                var start = runs.StartTurn(permit, intent).GetAwaiter().GetResult();
+                if (start is TurnStart.Started started) Console.WriteLine(started.Turn.Settlement.GetAwaiter().GetResult());
+                else Console.WriteLine(start);
+                runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                return 6;
+            }
             case "control":
             {
                 At(args[4]);
@@ -231,6 +277,16 @@ internal static class Program
                 return 3;
         }
     }
+
+    private static int RunLaunches(string folder) => Directory.EnumerateFiles(folder, "*.json").Count(file =>
+    {
+        try
+        {
+            var arguments = JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(file))!;
+            return arguments.Contains("app-server") || arguments.Contains("-p") || arguments.Contains("--print=");
+        }
+        catch (Exception error) when (error is IOException or JsonException) { return false; }
+    });
 
     private static string Describe(ControlTake take) => take switch
     {
