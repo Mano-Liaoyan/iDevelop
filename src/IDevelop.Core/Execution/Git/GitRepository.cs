@@ -249,6 +249,10 @@ internal sealed partial class GitRepository
     public GitRead<ImmutableArray<string>> IgnoredFiles(string checkout) =>
         ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]));
 
+    /// <summary>The ignored entries of a work tree, a wholly ignored folder as one entry ending in a slash.</summary>
+    public GitRead<ImmutableArray<string>> IgnoredEntries(string checkout) =>
+        ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]));
+
     public GitRead<ImmutableArray<string>> TreeFiles(CommitId commit) =>
         ReadPaths(Git(ProjectFolder, GitOperation.Metadata, ["ls-tree", "-r", "--name-only", "-z", commit.Hex]));
 
@@ -582,6 +586,9 @@ internal sealed partial class GitRepository
         }
         return result;
     }
+
+    /// <summary>The lines of <c>git submodule status --recursive</c>, one per submodule.</summary>
+    public GitRead<string> SubmoduleStatus(string checkout) => ReadText(Git(checkout, GitOperation.Worktree, ["submodule", "status", "--recursive"]), trim: false);
 
     public GitResult InitializeSubmodules(string checkout)
     {

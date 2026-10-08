@@ -30,6 +30,8 @@ internal static class RunLayout
 
     public static string ResultRef(string run, string task, AttemptId attempt) => $"refs/idp/{run}/result/{task}/{attempt.Value:D}";
 
+    public static string RebaseRef(string run, string task, ResultId result) => $"refs/idp/{run}/rebase/{task}/{result.Value:D}";
+
     public static string SalvageRef(string run, string task, AttemptId attempt) => $"refs/idp/{run}/salvage/{task}/{attempt.Value:D}";
 
     public static string ResalvageRef(string run, string task, AttemptId attempt, OperationId operation) =>

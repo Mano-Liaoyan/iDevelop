@@ -46,7 +46,7 @@ internal static class RunProjection
         var tasks = ImmutableSortedDictionary.CreateBuilder<TaskId, TaskView>();
         foreach (var (task, view) in progress) tasks[task] = view;
         foreach (var task in plan.Ready)
-            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent ? TaskState.Ready : TaskState.Unsupported);
+            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ? TaskState.Ready : TaskState.Unsupported);
         foreach (var (task, holders) in plan.Blocked) tasks[task] = new(task, TaskState.Pending) { HeldBy = [.. holders.Keys] };
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);
@@ -91,6 +91,7 @@ internal static class RunProjection
             }) { Attempt = attempt };
         }
         var hold = holds.GetValueOrDefault(task);
+        if (record.Revision.Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Person) return GateProjection.Of(record, task, result, hold);
         if (hold is TaskHold.Unresolved unresolved)
         {
             return new(task, unresolved.Transient ? TaskState.Settling : TaskState.Uncertain)
@@ -157,7 +158,8 @@ internal static class RunProjection
             holds.Values.Any(hold => hold.Retried) || states.All(state => state == TaskState.Done))
             return RunStatus.Running;
         if (states.Contains(TaskState.Waiting) &&
-            !states.Any(state => state is TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or TaskState.Unsupported))
+            !states.Any(state => state is TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or
+                TaskState.Unsupported or TaskState.SentBack))
             return RunStatus.Waiting;
         return RunStatus.NeedsAttention;
     }
