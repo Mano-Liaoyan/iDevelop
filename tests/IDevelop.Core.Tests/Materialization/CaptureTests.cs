@@ -150,6 +150,8 @@ public sealed class CaptureTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(T), f.Op(), ready.Execution.Launch,
+            f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
         f.Git.Write("result.txt", "done\n", ready.Checkout);
         var log = f.ObserveAndLog(ready);
         var operation = f.Op();
@@ -181,6 +183,16 @@ public sealed class CaptureTests
         var sequence = f.Read().Sequence;
         Assert.Equal(closed, await f.Materializer(probe: _ => throw new CaptureCrash()).Settle(f.Lease(T), operation, ready.Execution.Launch, log));
         Assert.Equal(sequence, f.Read().Sequence);
+        if (point is "journal.capture-disposition.after" or "journal.close-turn.after")
+        {
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, operation, ready.Execution.Launch.Attempt,
+                TerminalAttemptOutcome.Succeeded, log));
+            var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+            Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+            Assert.Single(f.Read().Results);
+            Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+            Assert.Single(f.Read().Claims);
+        }
     }
 
     [Fact]

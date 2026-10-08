@@ -1,4 +1,5 @@
 using System.Text;
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
@@ -38,7 +39,7 @@ public sealed class E2JournalTests
     }
 
     [Fact]
-    public void Genuine_E2_history_replays_exactly_but_cannot_plan_or_take_control()
+    public async System.Threading.Tasks.Task Genuine_E2_history_replays_exactly_but_cannot_plan_or_take_control()
     {
         using var f = new RunFixtures();
         using var authority = new RunFixtures();
@@ -49,6 +50,11 @@ public sealed class E2JournalTests
         Assert.Null(decoded.Rejection);
         var record = f.Read();
         Assert.Equal((2, 27L, 1), (record.Schema, record.Sequence, record.Results.Count));
+        Assert.Empty(record.RootExits);
+        Assert.Empty(record.Captures);
+        Assert.Empty(record.Dispositions);
+        Assert.Empty(record.Settlements);
+        Assert.Null(Assert.Single(record.Plans.Values.OfType<MaterializationPlan.Publication>()).Capture);
         Assert.Equal(new[] { new LaunchKey(new(Id(104)), 1) }, record.UnresolvedClaims);
         Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
         Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Plan(authority.Lease(U), new OperationId(Id(2001)), record.Revision.Id, new AttemptCause.Initial())));
@@ -62,11 +68,22 @@ public sealed class E2JournalTests
             Assert.IsType<ControlTake.Rejected>(f.Store.TakeControl(W, Run)).Reason);
         Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(f.Journal(W, Run))!, "control.lock")));
-        using var current = new RunFixtures();
-        current.Approve();
+        using var current = new PreparationFixture(FixtureWorkflow(PreparationFixture.Writer(T)));
         Assert.Equal(3, current.Read().Schema);
         var owned = Assert.IsType<ControlTake.Owned>(current.Store.TakeControl(W, Run));
         using (owned.Permit) Assert.True(owned.Permit.Held);
+        var ready = Assert.IsType<Preparation.Ready>(await current.Prepare(T));
+        Assert.IsType<RunDecision.Granted>(current.Store.Claim(current.Lease(T), current.Op(), ready.Execution.Launch,
+            current.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
+        current.Git.Write("result.txt", "done\n", ready.Checkout);
+        await current.Close(ready);
+        var accepted = Assert.IsType<Publication.Accepted>(current.Materializer().Publish(current.Lease(T), current.Op(), ready.Execution.Launch.Attempt));
+        Assert.Equal("done\n", current.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Single(current.Read().RootExits);
+        Assert.Equal(2, Assert.Single(current.Read().Captures).Value.Count);
+        Assert.IsType<CaptureDisposition.Matched>(Assert.Single(current.Read().Dispositions).Value.Disposition);
+        var capture = Assert.Single(current.Read().Settlements).Value;
+        Assert.Equal(capture, Assert.Single(current.Read().Plans.Values.OfType<MaterializationPlan.Publication>()).Capture);
     }
 
     [Fact]

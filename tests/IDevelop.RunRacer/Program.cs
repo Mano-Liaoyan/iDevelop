@@ -110,6 +110,53 @@ internal static class Program
                 }
                 return 0;
             }
+            case "settle-crash":
+            {
+                var task = new TaskId(Guid.Parse(args[4]));
+                var key = new LaunchKey(new AttemptId(Guid.Parse(args[5])), 1);
+                var operation = new OperationId(Guid.Parse(args[6]));
+                var take = store.TakeControl(workflow, run);
+                Console.WriteLine(Describe(take));
+                if (take is not ControlTake.Owned owned) return 2;
+                using var permit = owned.Permit;
+                using var lease = ((LeaseTake.Taken)permit.TakeTask(task)).Lease;
+                var record = ((RunRead.Loaded)store.Read(workflow, run)).Record;
+                var prepared = record.Preparations[key];
+                var claim = store.Claim(lease, OperationIds.Derive(operation, "claim"), key,
+                    record.Inputs[prepared.Inputs], prepared.PromptHash);
+                if (claim is not RunDecision.Granted) { Console.WriteLine(Describe(claim)); return 4; }
+                var checkout = Path.Combine(project, prepared.Location.Owner.RelativePath);
+                File.WriteAllText(Path.Combine(checkout, "result.txt"), "done\n");
+                var materializer = Materializer.Open(project, store);
+                if (materializer.ObserveRootExit(lease, OperationIds.Derive(operation, "root"), key,
+                    new RootExit.Exited(0)) is not RootObservation.Observed) return 5;
+                var attempt = record.Attempts[key.Attempt];
+                var definition = record.Revisions[attempt.Revision].Snapshot.Tasks[task];
+                var folder = store.AttemptFolder(workflow, run, task, key.Attempt);
+                var at = DateTimeOffset.UtcNow;
+                using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
+                    at, key.Attempt, task, definition.Title, definition.Execution!, prepared.Prompt, "codex", [])
+                {
+                    RunBinding = new(workflow, run, attempt.Revision, prepared.Inputs), Conversation = definition.Conversation,
+                }))
+                {
+                    log.Append(new AttemptEvent.Agent(at, new AgentEvent.SessionStarted("racer")));
+                    log.Append(new AttemptEvent.Agent(at, new AgentEvent.Succeeded("Done.\n")));
+                    log.Append(new AttemptEvent.Exited(at, 0, ""));
+                }
+                var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
+                var checkpoint = new LogCheckpoint(bytes.LongLength, Revision.Hash(bytes));
+                var crashing = Materializer.Open(project, store, null, TimeProvider.System, null, point =>
+                {
+                    if (point != "journal.capture-1.after") return;
+                    Console.WriteLine("capture-1");
+                    Console.Out.Flush();
+                    Environment.Exit(73);
+                });
+                var settlement = crashing.Settle(lease, operation, key, checkpoint).AsTask().GetAwaiter().GetResult();
+                Console.WriteLine(settlement);
+                return 6;
+            }
             case "stale-stop":
             {
                 var permit = ((ControlTake.Owned)store.TakeControl(workflow, run)).Permit;

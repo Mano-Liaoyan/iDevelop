@@ -390,16 +390,21 @@ public sealed class PublicationTests
     public async Task Duplicate_publication_returns_the_original_receipt_and_leaves_a_later_block_unresolved()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await ChangedWriter(f);
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(T), f.Op(), ready.Execution.Launch,
+            f.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        await f.Close(ready);
         var original = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
-        File.WriteAllText(Path.Combine(ready.Checkout, "new.txt"), "later\n");
+        File.WriteAllText(Path.Combine(ready.Checkout, "result.txt"), "late\n");
         var plan = Assert.Single(f.Read().Plans, pair => pair.Value is MaterializationPlan.Publication).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(plan, T,
             ready.Execution.Launch.Attempt, MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Later writer drift."))));
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(original, accepted);
-        Assert.Equal("new\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":new.txt"));
-        Assert.Equal("later\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
+        Assert.Equal(original.Result, accepted.Result);
+        Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Equal("late\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
         Assert.Single(f.Read().Results);
         Assert.False(Assert.Single(f.Read().Blocks).Value.Resolved);
         Assert.Equal(0, f.Read().Receipts.Values.Count(entry => entry.Event is RunEvent.BlockResolved));
