@@ -57,25 +57,7 @@ internal sealed partial class Materializer
             Pin(repository, pin, tip);
             var observation = new RunEvent.RootExitObserved(launch, exit, _clock.GetUtcNow(), tip, head, ownership);
             RunDecision decision;
-            try
-            {
-                var started = retryFor > TimeSpan.Zero ? _clock.GetTimestamp() : 0;
-                while (true)
-                {
-                    try
-                    {
-                        decision = Journal("root-exit", () => _store.Record(permit, OperationIds.Derive(operation, "root-exit"), observation));
-                        break;
-                    }
-                    catch (Refusal busy) when (busy.Reason.Problem == RunProblem.JournalBusy && retryFor > TimeSpan.Zero)
-                    {
-                        if (_clock.GetElapsedTime(started) > retryFor) throw;
-                        _probe?.Invoke("journal.root-exit.retry");
-                        Thread.Sleep(100);
-                        if (_clock.GetElapsedTime(started) > retryFor) throw;
-                    }
-                }
-            }
+            try { decision = JournalRetrying("root-exit", retryFor, () => _store.Record(permit, OperationIds.Derive(operation, "root-exit"), observation)); }
             catch (Refusal refused)
             {
                 if (Read(permit.Workflow, permit.Run).RootExits.TryGetValue(launch, out var recorded))
@@ -102,19 +84,35 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new RootObservation.Rejected(refused.Reason); }
     }
 
-    public bool FenceLaunch(RunLease lease, OperationId operation, LaunchKey launch)
+    public bool FenceLaunch(RunLease lease, OperationId operation, LaunchKey launch, TimeSpan retryFor)
     {
-        using var authority = lease.Use();
-        if (authority is null) return !lease.Permit.Held;
         var permit = lease.Permit;
+        using var authority = lease.Use();
         try
         {
             if (Read(permit.Workflow, permit.Run).Fenced.Contains(launch)) return true;
-            Journal("close-fence", () => _store.Record(permit, OperationIds.Derive(operation, "close-fence"),
+            if (authority is null) return false;
+            JournalRetrying("close-fence", retryFor, () => _store.Record(permit, OperationIds.Derive(operation, "close-fence"),
                 new RunEvent.OwnershipFenced([launch])));
             return true;
         }
         catch (Refusal) { return false; }
+    }
+
+    private RunDecision JournalRetrying(string step, TimeSpan retryFor, Func<RunDecision> action)
+    {
+        var started = _clock.GetTimestamp();
+        while (true)
+        {
+            try { return Journal(step, action); }
+            catch (Refusal busy) when (busy.Reason.Problem == RunProblem.JournalBusy && retryFor > TimeSpan.Zero)
+            {
+                if (_clock.GetElapsedTime(started) > retryFor) throw;
+                _probe?.Invoke("journal." + step + ".retry");
+                Thread.Sleep(100);
+                if (_clock.GetElapsedTime(started) > retryFor) throw;
+            }
+        }
     }
 
     public ValueTask<Settlement> Settle(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint log,

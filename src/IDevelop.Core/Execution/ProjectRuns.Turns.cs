@@ -8,6 +8,7 @@ public sealed partial class ProjectRuns
 {
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, OperationId Operation), TurnCommand> _commands = [];
     private readonly Dictionary<(WorkflowId Workflow, RunId Run, LaunchKey Launch), TurnOwner> _owned = [];
+    private static readonly Dictionary<(string Project, TaskId Task), TurnOwner> Unfenced = [];
 
     internal Action<string>? Probe { get; set; }
     internal Func<Stream, Stream>? RequestStream { get; set; }
@@ -272,7 +273,9 @@ public sealed partial class ProjectRuns
         var record = loaded.Record;
         if (!record.Attempts.TryGetValue(launch.Attempt, out var attempt)) return new Reconciliation.Refused(new(RunProblem.InvalidClaim));
         var task = attempt.Task;
-        if (permit.TakeTask(task) is not LeaseTake.Taken taken) return new Reconciliation.Refused(new(RunProblem.TaskBusy));
+        var take = permit.TakeTask(task);
+        if (take is LeaseTake.Busy && UnfencedOwner(permit.Project, task)?.HandOff() == true) take = permit.TakeTask(task);
+        if (take is not LeaseTake.Taken taken) return new Reconciliation.Refused(new(RunProblem.TaskBusy));
         if (!record.Claims.ContainsKey(launch))
         {
             taken.Lease.Dispose();
@@ -295,6 +298,11 @@ public sealed partial class ProjectRuns
         return new Reconciliation.Found(await owner.Reconcile()!);
     }
 
+    private static TurnOwner? UnfencedOwner(string project, TaskId task)
+    {
+        lock (Unfenced) return Unfenced.GetValueOrDefault((project, task));
+    }
+
     private void Forget(TurnOwner owner)
     {
         var address = owner.Address;
@@ -305,6 +313,11 @@ public sealed partial class ProjectRuns
             foreach (var command in _commands.Where(pair => pair.Key.Workflow == address.Workflow && pair.Key.Run == address.Run &&
                 pair.Value.Task.IsCompletedSuccessfully && LaunchOf(pair.Value.Task.Result) == address.Launch).Select(pair => pair.Key).ToArray())
                 _commands.Remove(command);
+        }
+        lock (Unfenced)
+        {
+            var key = (owner.Lease.Permit.Project, address.Task);
+            if (Unfenced.GetValueOrDefault(key) == owner) Unfenced.Remove(key);
         }
     }
 
@@ -341,7 +354,7 @@ public sealed partial class ProjectRuns
         public sealed record Retrying(Task<TurnSettlement> Retry, LogCheckpoint? Checkpoint, RootObservation? Root) : TurnState;
         public sealed record Faulted(Exception Error) : TurnState;
         public sealed record Released(TurnDisposition Receipt, TurnSettlement Outcome) : TurnState;
-        public sealed record HandedOff(TurnSettlement Outcome) : TurnState;
+        public sealed record HandedOff(TurnSettlement? Outcome) : TurnState;
         public sealed record Adopted : TurnState;
     }
 
@@ -575,13 +588,16 @@ public sealed partial class ProjectRuns
 
         public void Fault(Exception error)
         {
+            bool handOff;
             lock (_gate)
             {
                 if (_state is not (TurnState.Running or TurnState.Observing or TurnState.Finalizing or TurnState.Retrying)) return;
                 _state = new TurnState.Faulted(error);
+                handOff = project.Closing;
             }
             _root.TrySetException(error);
             RootExited.TrySetException(error);
+            if (handOff) HandOff();
             Settlement.TrySetException(error);
         }
 
@@ -774,23 +790,36 @@ public sealed partial class ProjectRuns
             return new Release.Released(receipt);
         }
 
-        private void HandOff()
+        public bool HandOff()
         {
             lock (_gate)
             {
-                if (_state is not TurnState.Settled { Outcome: TurnSettlement.Unresolved }) return;
+                if (_state is TurnState.HandedOff) return true;
+                if (_state is not (TurnState.Settled { Outcome: TurnSettlement.Unresolved } or TurnState.Faulted)) return false;
             }
             bool fenced;
-            try { fenced = Materializer.FenceLaunch(Lease, _closeOperation, Address.Launch); }
+            try { fenced = Materializer.FenceLaunch(Lease, _closeOperation, Address.Launch, project.ShutdownTime); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { fenced = false; }
-            if (!fenced) return;
             lock (_gate)
             {
-                if (_state is not TurnState.Settled { Outcome: TurnSettlement.Unresolved } settled) return;
-                _state = new TurnState.HandedOff(settled.Outcome);
+                switch (_state)
+                {
+                    case TurnState.HandedOff: return true;
+                    case TurnState.Settled { Outcome: TurnSettlement.Unresolved } or TurnState.Faulted when !fenced:
+                        lock (Unfenced) Unfenced[(Lease.Permit.Project, Address.Task)] = this;
+                        return false;
+                    case TurnState.Settled { Outcome: TurnSettlement.Unresolved } settled:
+                        _state = new TurnState.HandedOff(settled.Outcome);
+                        break;
+                    case TurnState.Faulted:
+                        _state = new TurnState.HandedOff(null);
+                        break;
+                    default: return false;
+                }
             }
             project.Forget(this);
             Lease.Dispose();
+            return true;
         }
     }
 }
