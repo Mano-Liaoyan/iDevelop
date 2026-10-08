@@ -1,6 +1,8 @@
+using IDevelop.Core.Tests.Runs;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Turns.TurnFixture;
 
 namespace IDevelop.Core.Tests.Turns;
@@ -52,5 +54,34 @@ public sealed class ReadOnlyAcceptanceTests
             Assert.Equal("OutcomeMismatch", Assert.IsType<RunDecision.Rejected>(accepted).Reason.Problem.ToString());
             Assert.Empty(f.Preparation.Read().Results);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_launched_client_without_a_capture_is_never_accepted(bool launched)
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        var reservation = f.Reserve(T);
+        f.Claim(reservation);
+        var folder = f.Store.AttemptFolder(W, Run, T, reservation.Attempt.Id);
+        var task = f.Read().Revision.Snapshot.Tasks[T];
+        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
+            At, reservation.Attempt.Id, T, task.Title, task.Execution!, "Inspect", "codex", [])
+        {
+            RunBinding = new(W, Run, reservation.Attempt.Revision, reservation.Inputs.Id), Conversation = task.Conversation, ReadOnly = true,
+        }))
+        {
+            if (launched) log.Append(new AttemptEvent.Launched(At, 4242, At));
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.SessionStarted("session-1")));
+            log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Checked.")));
+            log.Append(new AttemptEvent.Exited(At, 0, ""));
+        }
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), reservation.Attempt.Id, TerminalAttemptOutcome.Succeeded,
+            Checkpoint(folder)));
+        var accepted = f.Store.AcceptReport(f.Permit, f.Op(), reservation.Attempt.Id, reservation.Inputs.Id, "Checked.");
+        if (launched) Assert.Equal(RunProblem.OutcomeMismatch, Problem(accepted));
+        else Assert.IsType<RunDecision.Created>(accepted);
     }
 }
