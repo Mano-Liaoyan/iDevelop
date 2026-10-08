@@ -34,13 +34,14 @@ public sealed partial class ProjectRuns
             var key = (permit.Workflow, permit.Run, operation);
             if (_commands.TryGetValue(key, out var prior))
             {
-                if (prior.Intent != intent) return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
-                if (!prior.Task.IsCompleted)
+                if (!Equals(prior.Intent, intent) || prior.Task is not Task<TurnStart> priorTask)
+                    return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
+                if (!priorTask.IsCompleted)
                 {
-                    command = prior.Task;
+                    command = priorTask;
                     duplicate = true;
                 }
-                else if (prior.Task.IsCompletedSuccessfully && LaunchOf(prior.Task.Result) is { } launch)
+                else if (priorTask.IsCompletedSuccessfully && LaunchOf(priorTask.Result) is { } launch)
                     existing = launch;
                 else _commands.Remove(key);
             }
@@ -324,7 +325,8 @@ public sealed partial class ProjectRuns
             var key = (address.Workflow, address.Run, address.Launch);
             if (_owned.GetValueOrDefault(key) == owner) _owned.Remove(key);
             foreach (var command in _commands.Where(pair => pair.Key.Workflow == address.Workflow && pair.Key.Run == address.Run &&
-                pair.Value.Task.IsCompletedSuccessfully && LaunchOf(pair.Value.Task.Result) == address.Launch).Select(pair => pair.Key).ToArray())
+                pair.Value.Task is Task<TurnStart> { IsCompletedSuccessfully: true } start && LaunchOf(start.Result) == address.Launch)
+                .Select(pair => pair.Key).ToArray())
                 _commands.Remove(command);
         }
         lock (Unfenced)
@@ -344,7 +346,8 @@ public sealed partial class ProjectRuns
         return new StartProblem.RunOwned(name ?? owner.Address.Workflow.ToString());
     }
 
-    private sealed record TurnCommand(TurnIntent Intent, Task<TurnStart> Task);
+    /// <summary>One command per operation in this window: a turn start or a resting closure, with what it asked for.</summary>
+    private sealed record TurnCommand(object Intent, Task Task);
 
     private abstract record RunOwnership
     {

@@ -146,6 +146,21 @@ internal sealed class TurnFixture : IAsyncDisposable
         return launch;
     }
 
+    /// <summary>Exits a racer that runs one resting closure at <paramref name="point"/>, after taking this fixture's control.</summary>
+    public async Task CloseCrash(OperationId operation, AttemptId attempt, string end, string? failure, string point)
+    {
+        ConfigureRacerGit();
+        Preparation.ReleaseControl();
+        string[] args = ["close-crash", Preparation.Git.Folder, W.Value.ToString("D"), Preparation.RunId.Value.ToString("D"),
+            operation.Value.ToString("D"), attempt.Value.ToString("D"), end, point];
+        if (failure is not null) args = [.. args, failure];
+        using var racer = new IDevelop.Core.Tests.Runs.Racer(args);
+        Assert.Equal("Owned:", await racer.Line());
+        Assert.Equal(point, await racer.Line());
+        await racer.Exit();
+        Assert.Equal(73, racer.ExitCode);
+    }
+
     /// <summary>Closes this window's project and opens it again, as a restart does.</summary>
     public async Task Reopen()
     {
