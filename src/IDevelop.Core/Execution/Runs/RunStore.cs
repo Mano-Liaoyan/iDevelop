@@ -260,7 +260,7 @@ internal sealed class RunStore
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
                 MaterializationPlan.RetryReset or MaterializationPlan.Refresh } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
-                RunEvent.SalvageRetained or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced))
+                RunEvent.SalvageRetained or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
             {
                 return Refuse(RunProblem.InvalidData);
             }
@@ -348,10 +348,11 @@ internal sealed class RunStore
         }, validate: record => AttemptLeaseProblem(record, lease, key.Attempt));
     }
 
-    public RunDecision CloseTurn(CoordinatorPermit permit, OperationId operation, LaunchKey key, LogCheckpoint evidence) =>
+    public RunDecision CloseTurn(CoordinatorPermit permit, OperationId operation, LaunchKey key, LogCheckpoint evidence, CaptureId? capture = null) =>
         Transact(permit, operation, Fingerprint("closeTurn", new
         {
             key,
+            capture,
             evidence
         }), (record, _) =>
         {
@@ -364,8 +365,8 @@ internal sealed class RunStore
 
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
-                return RunReducer.Same(existing, evidence)
-                            ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing)) : Refuse(RunProblem.EvidenceMismatch);
+                return RunReducer.Same(existing, evidence) && (record.Settlements.TryGetValue(key, out var settled) ? settled : (CaptureId?)null) == capture
+                            ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing) { Capture = capture }) : Refuse(RunProblem.EvidenceMismatch);
             }
 
             if (!record.Attempts.TryGetValue(key.Attempt, out var attempt))
@@ -389,7 +390,7 @@ internal sealed class RunStore
                 return Refuse(RunProblem.OutcomeMismatch);
             }
 
-            return new Mutation.Append(new RunEvent.TurnClosed(key, evidence));
+            return new Mutation.Append(new RunEvent.TurnClosed(key, evidence) { Capture = capture });
         });
 
     public RunDecision CloseAttempt(CoordinatorPermit permit, OperationId operation, AttemptId attempt,

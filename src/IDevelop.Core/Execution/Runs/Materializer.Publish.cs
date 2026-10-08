@@ -90,7 +90,7 @@ internal sealed partial class Materializer
                     return new Publication.Rejected(new(RunProblem.OutcomeMismatch));
                 var result = new ResultId(OperationIds.Derive(operation, "result").Value);
                 step = "outbox";
-                var artifacts = FreezeOutbox(workflow, run, operation, attempt, result, checkout, ref evidence);
+                var artifacts = FreezeOutbox(workflow, run, operation, attempt, $"results/{result.Value:D}/artifacts", checkout, ref evidence);
                 var timestamp = DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds());
                 var recipe = new CommitRecipe(capture.Tree, [tip],
                     $"{definition.Title}\n\nIDP-Run: {run.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {attempt.Value:D}\n",

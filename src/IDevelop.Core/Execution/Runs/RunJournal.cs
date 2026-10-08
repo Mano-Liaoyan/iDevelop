@@ -17,7 +17,7 @@ internal static class RunJournal
     internal static readonly JsonSerializerOptions Options = CreateOptions();
 
     private static readonly HashSet<string> RunEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
-        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved"];
+        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured", "captureDisposed"];
 
     private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
         "prepared", "blocked", "salvageRetained", "blockResolved"];
@@ -133,6 +133,7 @@ internal static class RunJournal
             new IdConverter<InputId>(id => id.Value, value => new(value)),
             new IdConverter<ResultId>(id => id.Value, value => new(value)),
             new IdConverter<OperationId>(id => id.Value, value => new(value)),
+            new IdConverter<CaptureId>(id => id.Value, value => new(value)),
             new InputConverter(), new WorkflowConverter(), new TaskConverter(), new BlueprintConverter(),
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false),
         },

@@ -25,7 +25,7 @@ public sealed class PublicationOwnershipTests
         else File.WriteAllText(Path.Combine(f.Git.Open().CommonDirectory, "info", "grafts"), tip + " " + A + "\n");
         Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", tip).ExitCode);
-        f.Close(writer);
+        await f.Close(writer, assertMatched: false);
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
@@ -75,7 +75,7 @@ public sealed class PublicationOwnershipTests
         const string tip = "1d16e561de9187d92215b37e2ea2d8d456081ac8";
         Assert.Equal(tip, Head(f, writer.Checkout));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "merge-base", "--is-ancestor", A, tip).ExitCode);
-        f.Close(writer);
+        await f.Close(writer, assertMatched: false);
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
@@ -96,7 +96,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "-q", "--hard", below).ExitCode);
         f.Git.Write("b.txt", "B\n", writer.Checkout);
         Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
-        f.Close(writer);
+        await f.Close(writer, assertMatched: false);
         var repository = f.Git.Open();
         var capture = GitFixture.Read(repository.Capture(writer.Checkout));
         var recipe = new CommitRecipe(capture.Tree, [new CommitId(below)], "B\n", "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", At);
@@ -126,7 +126,7 @@ public sealed class PublicationOwnershipTests
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "symbolic-ref", "HEAD", writer.Execution.Location.Owner.Branch).ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "HEAD").ExitCode);
-        f.Close(writer);
+        await f.Close(writer, assertMatched: false);
         var operation = f.Op();
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
@@ -160,7 +160,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "b.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
         Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
-        f.Close(writer);
+        await f.Close(writer);
         var operation = f.Op();
         if (resume) Assert.Throws<Crash>(() => f.Materializer(probe: step =>
         {
@@ -183,7 +183,7 @@ public sealed class PublicationOwnershipTests
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         CommitFile(f, sibling.Checkout, "c.txt", "C\n");
         f.Git.Write("a.txt", "A from C\n", sibling.Checkout);
-        f.Close(sibling, "C ready.\n");
+        await f.Close(sibling, "C ready.\n");
         Assert.Equal(0, f.Git.Run(first.Checkout, "reset", "-q", "--hard", A).ExitCode);
         var operation = f.Op();
         var before = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), operation, sibling.Execution.Launch.Attempt));
@@ -250,7 +250,7 @@ public sealed class PublicationOwnershipTests
         if (mode == "review") await f.Publish(C, f.A);
         var writer = await PublicationTests.ChangedWriter(f);
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: mode == "review" ? "Review." : null));
-        f.Close(sibling, outcome: mode == "failed" ? TerminalAttemptOutcome.Failed : TerminalAttemptOutcome.Succeeded);
+        await f.Close(sibling, outcome: mode == "failed" ? TerminalAttemptOutcome.Failed : TerminalAttemptOutcome.Succeeded);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal(mode == "review" ? "bae683e6ffa6b64a4c788e890a69ff3207ce81f5" : "81cae59086bf9597301026b65f1bb57380b74686",
             Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex);
@@ -284,7 +284,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(0, f.Git.Run(sibling.Checkout, "add", "c.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(sibling.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "c").ExitCode);
         Assert.Equal("7025720b8121cfd45a182b2ead881a0c0461beb0\n", f.Git.Run(sibling.Checkout, "rev-parse", "HEAD").Text);
-        f.Close(sibling);
+        await f.Close(sibling);
         var first = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(first.Result.Code).Code.Commit.Hex);
         var second = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
@@ -418,7 +418,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(0, f.Git.Run(sibling.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "c").ExitCode);
         var first = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal(MaterializationProblem.UncertainOwnership, first.Block.Problem);
-        f.Close(sibling, "C ready.\n");
+        await f.Close(sibling, "C ready.\n");
         var second = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("e954b83b974db2a85981aa86b3a2eabee42d7803", Assert.IsType<CodeOutput.Produced>(second.Result.Code).Code.Commit.Hex);
         Assert.Equal(C, Assert.Single(f.Read().Results).Task);
@@ -459,7 +459,7 @@ public sealed class PublicationOwnershipTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "a.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "left").ExitCode);
         Assert.Equal(1, f.Git.Run(ready.Checkout, "merge", "--no-edit", "other").ExitCode);
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         Assert.Equal("DirtyWorktree", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
             ready.Execution.Launch.Attempt))
             .Block.Problem.ToString());
@@ -485,7 +485,7 @@ public sealed class PublicationOwnershipTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         CommitFile(f, sibling.Checkout, "u.txt", "U\n");
-        f.Close(sibling);
+        await f.Close(sibling);
         var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
         var writer = await PublicationTests.ChangedWriter(f);
         f.Git.Git("update-ref", sibling.Execution.Location.Owner.Branch, A);
@@ -502,7 +502,7 @@ public sealed class PublicationOwnershipTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Task(U)));
         var reader = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-        f.Close(reader, "Read.\n");
+        await f.Close(reader, "Read.\n");
         var writer = await PublicationTests.ChangedWriter(f);
         CommitFile(f, reader.Checkout, "c.txt", "C\n");
         var moved = Head(f, reader.Checkout);
@@ -520,7 +520,7 @@ public sealed class PublicationOwnershipTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         CommitFile(f, sibling.Checkout, "u.txt", "U\n");
-        f.Close(sibling);
+        await f.Close(sibling);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
         var writer = await PublicationTests.ChangedWriter(f);
         CommitFile(f, sibling.Checkout, "late.txt", "late\n");
@@ -540,7 +540,7 @@ public sealed class PublicationOwnershipTests
         var first = await f.Publish(U, f.A);
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(U, cause: new AttemptCause.Retry(AttemptOf(first), f.Op())));
         CommitFile(f, again.Checkout, "u.txt", "U\n");
-        f.Close(again);
+        await f.Close(again);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
         var writer = await PublicationTests.ChangedWriter(f);
         var firstCommit = Assert.IsType<CodeOutput.Produced>(first.Code).Code.Commit.Hex;
@@ -559,7 +559,7 @@ public sealed class PublicationOwnershipTests
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         var writer = await PublicationTests.ChangedWriter(f);
         CommitFile(f, sibling.Checkout, "u.txt", "U\n");
-        f.Close(sibling);
+        await f.Close(sibling);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(sibling.Execution.Location.Owner.Task), f.Op(), sibling.Execution.Launch.Attempt));
         f.Git.Git("update-ref", sibling.Execution.Location.Owner.Branch, A);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
@@ -624,7 +624,7 @@ public sealed class PublicationOwnershipTests
         await f.Publish(U, f.A);
         const string reference = "refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102";
         f.Git.Git("update-ref", "-d", reference);
-        var writer = await PublicationTests.ChangedWriter(f);
+        var writer = await PublicationTests.ChangedWriter(f, assertMatched: false);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
         Assert.Equal("Attempt 00000000-0000-0000-0000-000000000104: unexplained shared ref refs/idp/93f23689/result/c67f2fc3/00000000-0000-0000-0000-000000000102, absent to absent.", blocked.Block.Detail);

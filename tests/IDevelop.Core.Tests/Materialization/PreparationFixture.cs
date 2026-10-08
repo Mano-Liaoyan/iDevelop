@@ -73,16 +73,31 @@ internal sealed class PreparationFixture : IDisposable
             File.WriteAllText(Path.Combine(outbox, "manifest.json"),
                 "{\"schema\":1,\"artifacts\":[{\"name\":\"" + artifactName + "\",\"path\":\"payload.bin\"}]}");
         }
-        Close(ready, report);
+        await Close(ready, report);
         return Assert.IsType<Publication.Accepted>(Materializer().Publish(Lease(task), Op(), ready.Execution.Launch.Attempt)).Result;
     }
 
-    public void Close(Preparation.Ready ready, string report = "B ready.\n", TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded)
+    public async Task Close(Preparation.Ready ready, string report = "B ready.\n",
+        TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded, bool assertMatched = true)
+    {
+        var checkpoint = ObserveAndLog(ready, report, outcome);
+        var task = ready.Execution.Location.Owner.Task;
+        var operation = Op();
+        var closed = Assert.IsType<Settlement.Closed>(await Materializer().Settle(Lease(task), operation, ready.Execution.Launch, checkpoint));
+        if (assertMatched) Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(Permit, operation, ready.Execution.Launch.Attempt, outcome, checkpoint));
+    }
+
+    public LogCheckpoint ObserveAndLog(Preparation.Ready ready, string report = "B ready.\n",
+        TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded)
     {
         var execution = ready.Execution;
         var attempt = Read().Attempts[execution.Launch.Attempt];
         var input = Read().Inputs[execution.Inputs];
-        Assert.IsType<RunDecision.Granted>(Store.Claim(Lease(attempt.Task), Op(), execution.Launch, input, execution.PromptHash));
+        var claimed = Read().Claims.ContainsKey(execution.Launch);
+        var claim = Store.Claim(Lease(attempt.Task), Op(), execution.Launch, input, execution.PromptHash);
+        if (claimed) Assert.IsType<RunDecision.Existing>(claim);
+        else Assert.IsType<RunDecision.Granted>(claim);
         Assert.IsType<RootObservation.Observed>(Materializer().ObserveRootExit(Lease(attempt.Task), Op(), execution.Launch,
             new RootExit.Exited(outcome == TerminalAttemptOutcome.Failed ? 1 : 0)));
         var definition = Read().Revision.Snapshot.Tasks[attempt.Task];
@@ -99,7 +114,7 @@ internal sealed class PreparationFixture : IDisposable
             log.Append(new AttemptEvent.Agent(At, outcome == TerminalAttemptOutcome.Failed ? new AgentEvent.Failed("Failed.") : new AgentEvent.Succeeded(report)));
             log.Append(new AttemptEvent.Exited(At, outcome == TerminalAttemptOutcome.Failed ? 1 : 0, ""));
         }
-        Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(Permit, Op(), attempt.Id, outcome, Checkpoint(folder)));
+        return Checkpoint(folder);
     }
 
     public void Dispose()
@@ -109,5 +124,10 @@ internal sealed class PreparationFixture : IDisposable
     }
     public sealed class QuiescentBoundary : IExecutionBoundary
     { public WriterState Inspect(AttemptId attempt) => new WriterState.Quiescent(attempt, "controlled fixture"); }
-    public sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => At; }
+    public sealed class Clock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => At;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            TimeProvider.System.CreateTimer(callback, state, TimeSpan.Zero, period);
+    }
 }

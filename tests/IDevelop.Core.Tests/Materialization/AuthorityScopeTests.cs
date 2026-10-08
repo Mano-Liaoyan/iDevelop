@@ -20,7 +20,7 @@ public sealed class AuthorityScopeTests
         if (publish)
         {
             ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-            f.Close(ready);
+            await f.Close(ready);
         }
         using var entered = new SemaphoreSlim(0);
         using var release = new SemaphoreSlim(0);

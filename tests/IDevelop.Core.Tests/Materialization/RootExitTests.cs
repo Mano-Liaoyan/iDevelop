@@ -52,7 +52,7 @@ public sealed class RootExitTests
             var tip = GitFixture.Read(repository.ReadRef(writer.Execution.Location.Owner.Branch));
             Assert.Equal(before, RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch, tip));
             var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-            f.Close(sibling);
+            await f.Close(sibling, assertMatched: before);
             var publication = f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt);
             if (before)
             {

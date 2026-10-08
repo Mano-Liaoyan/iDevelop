@@ -25,7 +25,7 @@ public sealed class JoinInvariantTests
             var environment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_COMMITTER_DATE"] = committerDate };
             Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "-c", "commit.gpgSign=false", "commit", "-q", "-m", message).ExitCode);
         }
-        f.Close(ready);
+        await f.Close(ready);
         var materializer = clock is null ? Open(f) : MergeJoins.Open(f.Git.Folder, f.Store, new QuiescentBoundary(), clock, f.Git.Environment);
         return Assert.IsType<CodeOutput.Produced>(Assert.IsType<Publication.Accepted>(materializer.Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
             ready.Execution.Launch.Attempt)).Result.Code).Code;
@@ -55,7 +55,7 @@ public sealed class JoinInvariantTests
         using var f = new PreparationFixture(workflow);
         await Write(f, T, "b.txt", "B\n", "b");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
-        f.Close(forwarded, "Forwarded.\n");
+        await f.Close(forwarded, "Forwarded.\n");
         Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
         await Write(f, D, "e.txt", "E\n", "e");
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
@@ -114,7 +114,7 @@ public sealed class JoinInvariantTests
         var b = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Assert.Equal(0, f.Git.Run(b.Checkout, "mv", "d", "renamed").ExitCode);
         Assert.Equal(0, f.Git.Run(b.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "rename").ExitCode);
-        f.Close(b);
+        await f.Close(b);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         await Write(f, C, "d/added", "added\n", "add");
         var blocked = Assert.IsType<Preparation.Blocked>(await Prepare(f, f.Op()));
@@ -154,13 +154,13 @@ public sealed class JoinInvariantTests
         await f.Publish(T, f.A);
         await Write(f, D, "c.txt", "C\n", "c");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
-        f.Close(forwarded, "Forwarded.\n");
+        await f.Close(forwarded, "Forwarded.\n");
         Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt, forwarded.Execution.Inputs, "Forwarded.\n"));
         var review = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(U), f.Op(), new AttemptCause.Initial(), "Review."));
         CloseReviewTurn(f, review);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         OwnCommit(f, fix, "a.txt", "Fixed\n", "fix");
-        f.Close(fix, "Repaired.\n");
+        await f.Close(fix, "Repaired.\n");
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
         return review;
     }
@@ -194,7 +194,7 @@ public sealed class JoinInvariantTests
         var current = f.Read().CurrentResults[T];
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)current.Origin).Attempt, f.Op())));
         OwnCommit(f, again, "a.txt", "Fixed again\n", "fix again");
-        f.Close(again);
+        await f.Close(again);
         Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
         var blocked = Assert.IsType<Preparation.Blocked>(await Open(f).PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review the fix."));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());

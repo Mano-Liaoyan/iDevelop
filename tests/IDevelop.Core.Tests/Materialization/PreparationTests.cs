@@ -27,7 +27,7 @@ public sealed class PreparationTests
         Assert.False(File.Exists(f.Git.PathOf("outside/kept.bin")));
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer);
+        await f.Close(writer);
         var publicationOperation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation,
             writer.Execution.Launch.Attempt));
@@ -51,7 +51,7 @@ public sealed class PreparationTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
         var salvageOperation = f.Op();
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
         Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
@@ -79,7 +79,7 @@ public sealed class PreparationTests
         Assert.Equal("S outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
         Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed);
+        await f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed, assertMatched: false);
         var index = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout));
         var bytes = File.ReadAllBytes(index);
         var operation = f.Op();
@@ -117,7 +117,7 @@ public sealed class PreparationTests
         Assert.Equal(0, f.Git.Run(writer.Checkout, "update-index", "--no-skip-worktree", "outside/kept.bin").ExitCode);
         Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "-c", "core.sparseCheckout=false",
             "ls-files", "-v", "outside/kept.bin").Text);
-        f.Close(writer);
+        await f.Close(writer);
         var operation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
@@ -175,7 +175,7 @@ public sealed class PreparationTests
         f.Git.Write("b.txt", "B\n", checkout);
         Assert.Equal(0, f.Git.Run(checkout, "add", "b.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "b").ExitCode);
-        f.Close(ready);
+        await f.Close(ready);
         var operation = f.Op();
         AttemptCause cause = continuation ? new AttemptCause.Continue(ready.Execution.Launch.Attempt, f.Op()) :
             new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op());
@@ -231,7 +231,7 @@ public sealed class PreparationTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Close(ready);
+        await f.Close(ready);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
         f.Git.Write("a.txt", "hidden edit\n", ready.Checkout);
         var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));

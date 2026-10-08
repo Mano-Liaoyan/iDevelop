@@ -32,7 +32,7 @@ public sealed class SalvageTests
         f.Git.Write("a/inside.txt", "edited\n", ready.Checkout);
         f.Git.Write("a/new.txt", "new\n", ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = retained.Commit.Hex;
         Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
@@ -58,7 +58,7 @@ public sealed class SalvageTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "update-index", "--refresh").ExitCode);
         File.WriteAllText(file, "INSIDE\n");
         File.SetLastWriteTimeUtc(file, old);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = retained.Commit.Hex;
         Assert.Equal("INSIDE\n", f.Git.Git("show", commit + ":a/inside.txt"));
@@ -134,7 +134,7 @@ public sealed class SalvageTests
         f.Git.Write("a.txt", "modified\n", ready.Checkout);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
         f.Git.Write("cache.txt", "cache\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         return ready;
     }
 
@@ -237,7 +237,7 @@ public sealed class SalvageTests
         Assert.Equal(0, (detached ? f.Git.Run(ready.Checkout, "checkout", "--detach", parent) :
             f.Git.Run(ready.Checkout, "reset", "--hard", parent)).ExitCode);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed, assertMatched: detached);
         return ready;
     }
 
@@ -458,7 +458,7 @@ public sealed class SalvageTests
         f.Git.Write("a.txt", "unfinished\n", ready.Checkout);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
         f.Git.Write("cache.txt", "cache\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Throws<Crash>(() => f.Materializer(probe: step => { if (step == "git.retry-reset.after") throw new Crash(); })
             .ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
@@ -499,7 +499,7 @@ public sealed class SalvageTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "remove a").ExitCode);
         File.AppendAllText(Path.Combine(f.Git.Open().CommonDirectory, "info/exclude"), "/a.txt\n");
         f.Git.Write("a.txt", "ignored unfinished\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         var blocked = Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(f.Lease(T), ResetOperation, retained.Receipt.Plan, f.Op()));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
@@ -521,7 +521,7 @@ public sealed class SalvageTests
         f.Git.Write("m/module.txt", "dirty module\n", ready.Checkout);
         f.Git.Write("m/new.txt", "module unfinished\n", ready.Checkout);
         f.Git.Write("new.txt", "outer unfinished\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var before = File.ReadAllBytes(GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)));
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("outer unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
@@ -701,7 +701,7 @@ public sealed class SalvageTests
             _ => f.Git.Run(ready.Checkout, "checkout", "-q", "-b", "side", "HEAD~1"),
         }).ExitCode);
         f.Git.Write("new.txt", "unfinished\n", ready.Checkout);
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
         Assert.Equal("3292b7a2adf71a45a545bbfb04cefc7d663bbe93", branchCommit);

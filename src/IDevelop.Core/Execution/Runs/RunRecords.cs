@@ -119,6 +119,28 @@ internal abstract record RootExit
     internal sealed record NotStarted(string Detail) : RootExit;
 }
 
+internal readonly record struct CaptureId(Guid Value);
+
+internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, LaunchKey Launch, LogCheckpoint Log,
+    DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId Candidate, CommitId? Tip, string? Head,
+    EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, ImmutableArray<string> UnexplainedRefs);
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Matched), "matched")]
+[JsonDerivedType(typeof(Diverged), "diverged")]
+[JsonDerivedType(typeof(Failed), "failed")]
+internal abstract record CaptureDisposition
+{
+    private CaptureDisposition() { }
+
+    internal sealed record Matched : CaptureDisposition;
+
+    internal sealed record Diverged(MaterializationProblem Problem, ImmutableArray<string> Paths, ImmutableArray<string> Refs,
+        string Detail) : CaptureDisposition;
+
+    internal sealed record Failed(MaterializationProblem Problem, string Detail, ImmutableArray<EvidenceFile> Evidence) : CaptureDisposition;
+}
+
 internal enum TipOwnership { Explained, Unexplained }
 
 internal enum RecoveryOutcome { NotStarted, Stopped }
@@ -183,6 +205,8 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
 [JsonDerivedType(typeof(RootExitObserved), "rootExitObserved")]
+[JsonDerivedType(typeof(TurnCaptured), "turnCaptured")]
+[JsonDerivedType(typeof(CaptureDisposed), "captureDisposed")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -214,7 +238,15 @@ internal abstract record RunEvent
     internal sealed record RootExitObserved(LaunchKey Launch, RootExit Exit, DateTimeOffset At, CommitId Tip, string? Head,
         TipOwnership Ownership) : RunEvent;
 
-    internal sealed record TurnClosed(LaunchKey Key, LogCheckpoint Evidence) : RunEvent;
+    internal sealed record TurnCaptured(CaptureObservation Observation) : RunEvent;
+
+    internal sealed record CaptureDisposed(CaptureId Capture, LaunchKey Launch, CaptureDisposition Disposition) : RunEvent;
+
+    internal sealed record TurnClosed(LaunchKey Key, LogCheckpoint Evidence) : RunEvent
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CaptureId? Capture { get; init; }
+    }
 
     internal sealed record AttemptClosed(AttemptId Attempt, AttemptEnd End) : RunEvent;
 
@@ -339,6 +371,14 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
 
     public ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved> RootExits { get; internal init; } =
         ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved>.Empty;
+
+    public ImmutableDictionary<CaptureId, ImmutableList<CaptureObservation>> Captures { get; internal init; } =
+        ImmutableDictionary<CaptureId, ImmutableList<CaptureObservation>>.Empty;
+
+    public ImmutableDictionary<CaptureId, RunEvent.CaptureDisposed> Dispositions { get; internal init; } =
+        ImmutableDictionary<CaptureId, RunEvent.CaptureDisposed>.Empty;
+
+    public ImmutableDictionary<LaunchKey, CaptureId> Settlements { get; internal init; } = ImmutableDictionary<LaunchKey, CaptureId>.Empty;
 
     public ImmutableHashSet<LaunchKey> Fenced { get; internal init; } = ImmutableHashSet<LaunchKey>.Empty;
 

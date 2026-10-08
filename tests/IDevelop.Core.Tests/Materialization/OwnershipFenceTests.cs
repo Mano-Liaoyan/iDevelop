@@ -20,7 +20,7 @@ public sealed class OwnershipFenceTests
             Assert.Equal(0, f.Git.Run(t.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "foreign").ExitCode);
             var foreign = f.Git.Run(t.Checkout, "rev-parse", "HEAD").Text.Trim();
             var u = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-            f.Close(u);
+            await f.Close(u);
             if (fence)
             {
                 f.ReleaseControl();
@@ -62,7 +62,7 @@ public sealed class OwnershipFenceTests
                     RecoveryOutcome.Stopped, f.Op(), "Root stopped."));
             }
             var u = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-            f.Close(u);
+            await f.Close(u, assertMatched: observed);
             f.ReleaseControl();
             Assert.True(f.Permit.Held);
             Assert.Empty(f.Read().Fenced);

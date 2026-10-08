@@ -31,7 +31,7 @@ public sealed class PublicationTests
         f.Git.Write("a/inside.txt", "edited\n", ready.Checkout);
         f.Git.Write("a/new.txt", "new\n", ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "status", "--porcelain").ExitCode);
-        f.Close(ready);
+        await f.Close(ready);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
@@ -57,7 +57,7 @@ public sealed class PublicationTests
         Assert.Equal(0, f.Git.Run(ready.Checkout, environment, "update-index", "--refresh").ExitCode);
         File.WriteAllText(file, "INSIDE\n");
         File.SetLastWriteTimeUtc(file, old);
-        f.Close(ready);
+        await f.Close(ready);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("INSIDE\n", f.Git.Git("show", commit + ":a/inside.txt"));
@@ -75,7 +75,7 @@ public sealed class PublicationTests
         if (!ownCommit)
         {
             f.Git.Write("a.txt", "A captured\n", ready.Checkout);
-            f.Close(ready);
+            await f.Close(ready);
         }
         Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
         var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
@@ -117,7 +117,7 @@ public sealed class PublicationTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write(path, "{\"schema\":1,\"artifacts\":[]}", ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "-f", "--", path).ExitCode);
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal(detail, blocked.Block.Detail);
@@ -222,7 +222,7 @@ public sealed class PublicationTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), Operation,
             ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
-        f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
+        await f.Close(ready, outcome: TerminalAttemptOutcome.Failed);
         Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), Operation,
             ready.Execution.Launch.Attempt)).Reason.Problem.ToString());
         Assert.Equal("UnknownAttempt", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(T), Operation, new(Id(999)))).Reason.Problem.ToString());
@@ -371,7 +371,7 @@ public sealed class PublicationTests
         }
     }
 
-    internal static async Task<Preparation.Ready> ChangedWriter(PreparationFixture f, bool artifact = false)
+    internal static async Task<Preparation.Ready> ChangedWriter(PreparationFixture f, bool artifact = false, bool assertMatched = true)
     {
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("b.txt", "B\n", ready.Checkout);
@@ -386,7 +386,7 @@ public sealed class PublicationTests
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
             File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
         }
-        f.Close(ready);
+        await f.Close(ready, assertMatched: assertMatched);
         return ready;
     }
 

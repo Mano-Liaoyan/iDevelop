@@ -56,7 +56,7 @@ public sealed class OutboxTests
         File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
         Directory.CreateDirectory(Path.Combine(outbox, "directory"));
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name, path } } }));
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -80,7 +80,7 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), manifest);
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -98,7 +98,7 @@ public sealed class OutboxTests
             if (directory) Directory.CreateSymbolicLink(Path.Combine(outbox, "via"), target);
             else File.CreateSymbolicLink(Path.Combine(outbox, "payload.bin"), Path.Combine(target, "payload.bin"));
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name = "payload", path } } }));
-            f.Close(ready);
+            await f.Close(ready, assertMatched: false);
             CheckRejected(f, ready);
             Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
         }
@@ -125,7 +125,7 @@ public sealed class OutboxTests
         try
         {
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"via/payload.bin\"}]}");
-            f.Close(ready);
+            await f.Close(ready, assertMatched: false);
             CheckRejected(f, ready);
             Assert.Equal(new byte[] { 67, 0, 127 }, File.ReadAllBytes(Path.Combine(target, "payload.bin")));
         }
@@ -144,7 +144,7 @@ public sealed class OutboxTests
         var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
         Assert.Equal(0, Mkfifo(Path.Combine(outbox, "payload.bin"), 0x180));
         File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
-        f.Close(ready);
+        await f.Close(ready, assertMatched: false);
         CheckRejected(f, ready);
     }
 
@@ -216,6 +216,8 @@ public sealed class OutboxTests
 
     private static void CheckRejected(PreparationFixture f, Preparation.Ready ready)
     {
+        Assert.Equal(MaterializationProblem.InputUnavailable, Assert.IsType<CaptureDisposition.Failed>(
+            f.Read().Dispositions[f.Read().Settlements[ready.Execution.Launch]].Disposition).Problem);
         var block = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("InputUnavailable", block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", block.Detail);

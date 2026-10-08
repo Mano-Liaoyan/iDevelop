@@ -8,7 +8,7 @@ namespace IDevelop.Execution;
 internal sealed partial class Materializer
 {
     private ImmutableArray<ArtifactRecord> FreezeOutbox(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
-        ResultId result, string checkout, ref ImmutableArray<EvidenceFile> evidence)
+        string destination, string checkout, ref ImmutableArray<EvidenceFile> evidence)
     {
         var manifest = RunLayout.Outbox(attempt) + "/manifest.json";
         var storage = new RunStorage(_project, workflow, run);
@@ -37,7 +37,7 @@ internal sealed partial class Materializer
                 var name = artifact.GetProperty("name").GetString()!;
                 var relative = artifact.GetProperty("path").GetString()!;
                 if (name.Contains('/') || !names.Add(name)) throw new IOException($"Invalid or duplicate artifact name {name}.");
-                RunStorage.SafePath(storage.Folder, RunStorage.ArtifactPath(result, name));
+                RunStorage.SafePath(storage.Folder, destination + "/" + name);
                 var source = RunStorage.SafePath(checkout, RunLayout.Outbox(attempt) + "/" + relative);
                 RegularFile.Verify(source);
                 declarations.Add((name, source));
@@ -47,7 +47,7 @@ internal sealed partial class Materializer
             {
                 _probe?.Invoke("artifact." + declaration.Name + ".before");
                 var bytes = File.ReadAllBytes(declaration.Path);
-                var relative = RunStorage.ArtifactPath(result, declaration.Name);
+                var relative = destination + "/" + declaration.Name;
                 var digest = Revision.Hash(bytes);
                 RunStorage.Publish(storage.Folder, relative, bytes, digest, bytes.LongLength);
                 records.Add(new(declaration.Name, relative, digest, bytes.LongLength));

@@ -23,7 +23,7 @@ internal static partial class RunReducer
                 record.Plans.GetValueOrDefault(intent.Plan) is MaterializationPlan.Salvage salvage &&
                 move.Change.Expected is null && move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
             RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained => true,
-            RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved => record.Phase == RunPhase.Abandoned,
+            RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured or RunEvent.CaptureDisposed => record.Phase == RunPhase.Abandoned,
             _ => false,
         };
     }

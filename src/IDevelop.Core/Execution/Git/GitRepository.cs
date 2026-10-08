@@ -306,23 +306,34 @@ internal sealed partial class GitRepository
 
     public GitRead<string> IndexPath(string checkout) => ReadText(Git(checkout, GitOperation.Metadata, ["rev-parse", "--path-format=absolute", "--git-path", "index"]), trim: true);
 
-    /// <summary>Null identifies an absent index, distinct from the digest of an existing empty file.</summary>
-    public GitRead<Digest?> IndexDigest(string checkout)
+    public GitRead<ImmutableArray<string>> DiffTreePaths(TreeId first, TreeId second)
+    {
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["diff-tree", "-r", "--name-only", "-z", first.Hex, second.Hex]);
+        return result.ExitCode == 0
+            ? new GitRead<ImmutableArray<string>>.Read([.. NulFields(result).Order(StringComparer.Ordinal)])
+            : Failure<ImmutableArray<string>>(result);
+    }
+
+    public GitRead<Digest?> IndexDigest(string checkout) => IndexBytes(checkout) switch
+    {
+        GitRead<byte[]?>.Read read => new GitRead<Digest?>.Read(read.Value is { } bytes ? Revision.Hash(bytes) : null),
+        GitRead<byte[]?>.Failed failed => new GitRead<Digest?>.Failed(failed.Problem, failed.Detail),
+        _ => throw new InvalidOperationException(),
+    };
+
+    public GitRead<byte[]?> IndexBytes(string checkout)
     {
         var index = IndexPath(checkout);
-        if (index is not GitRead<string>.Read path)
-        {
-            return ConvertFailure<string, Digest?>(index);
-        }
+        if (index is not GitRead<string>.Read path) return ConvertFailure<string, byte[]?>(index);
         try
         {
-            if (!File.Exists(path.Value)) return new GitRead<Digest?>.Read(null);
+            if (!File.Exists(path.Value)) return new GitRead<byte[]?>.Read(null);
             var staged = Git(checkout, GitOperation.Metadata, ["ls-files", "--stage", "-v", "-z"]);
-            return staged.ExitCode == 0 ? new GitRead<Digest?>.Read(Revision.Hash(staged.Stdout)) : Failure<Digest?>(staged);
+            return staged.ExitCode == 0 ? new GitRead<byte[]?>.Read(staged.Stdout) : Failure<byte[]?>(staged);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            return new GitRead<Digest?>.Failed(MaterializationProblem.GitFailed, error.Message);
+            return new GitRead<byte[]?>.Failed(MaterializationProblem.GitFailed, error.Message);
         }
     }
 
