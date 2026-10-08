@@ -947,7 +947,7 @@ public sealed class ConversationDrainTests : IDisposable
         var expected = session.Snapshot.Current!.Value;
         var entered = FileAt("git-entered");
         var release = FileAt("git-release");
-        _fakes.Install("git", FakeRule.On("rev-parse", "--git-path", "index")
+        _fakes.Install("git", FakeRule.On("ls-files", "--stage", "-v", "-z")
             .Write(entered, "entered").WaitForFile(release).Exit(1));
         var previousPath = Environment.GetEnvironmentVariable("PATH");
         Task<SendResult>? send = null;

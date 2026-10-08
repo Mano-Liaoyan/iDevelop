@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,6 +10,24 @@ namespace IDevelop.Core.Tests.Git;
 
 public sealed class GitRepositoryTests
 {
+    [Fact]
+    public void Git_tree_snapshot_completes_on_a_thread_whose_synchronization_context_never_runs_posts()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("a.txt", "S\n");
+        string? tree = null;
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new NonRunningSynchronizationContext());
+            tree = GitTree.Snapshot(f.Folder);
+        }) { IsBackground = true };
+        thread.Start();
+        var joined = thread.Join(TimeSpan.FromSeconds(30));
+        Assert.True(joined, "GitTree.Snapshot did not complete without running synchronization context callbacks.");
+        Assert.Equal("S\n", f.Git("show", tree + ":a.txt"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -719,6 +738,14 @@ public sealed class GitRepositoryTests
             if (writer >= 0) Close(writer);
             await removal.WaitAsync(TimeSpan.FromSeconds(5));
         }
+    }
+
+    private sealed class NonRunningSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+
+        public override void Post(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
+        public override void Send(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
     }
 
     [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]
