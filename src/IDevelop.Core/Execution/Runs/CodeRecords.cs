@@ -97,4 +97,53 @@ internal sealed record ConflictEvidence(ImmutableArray<CodeSource> Sources, int 
     ImmutableArray<ConfigEntry> MergeConfig, CommitId AttributeSource);
 
 internal sealed record MaterializationBlock(OperationId Operation, TaskId Task, AttemptId? Attempt, MaterializationProblem Problem,
-    InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null);
+    InputId? Inputs, ImmutableArray<EvidenceFile> Evidence, string Detail, ConflictEvidence? Conflict = null)
+{
+    public required BlockScope Scope { get; init; } = BlockScope.Unrecorded.Value;
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(Checkout), "checkout")]
+[JsonDerivedType(typeof(Refs), "refs")]
+[JsonDerivedType(typeof(Ownership), "ownership")]
+[JsonDerivedType(typeof(Repository), "repository")]
+[JsonDerivedType(typeof(Operation), "operation")]
+internal abstract record BlockScope
+{
+    private BlockScope() { }
+
+    // Naming no path, ref or lock means the checkout as a whole.
+    internal sealed record Checkout(ImmutableArray<string> Paths, bool Branch = false, bool Head = false, bool IndexLock = false) : BlockScope
+    {
+        public static Checkout Whole { get; } = new([]);
+
+        public bool Equals(Checkout? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) &&
+            Branch == other.Branch && Head == other.Head && IndexLock == other.IndexLock;
+
+        public override int GetHashCode() => HashCode.Combine(Paths.Length, Branch, Head, IndexLock);
+    }
+
+    internal sealed record Refs(ImmutableArray<string> Names) : BlockScope
+    {
+        public bool Equals(Refs? other) => other is not null && Names.SequenceEqual(other.Names, StringComparer.Ordinal);
+
+        public override int GetHashCode() => Names.Length;
+    }
+
+    internal sealed record Ownership : BlockScope;
+
+    internal sealed record Repository : BlockScope;
+
+    internal sealed record Operation : BlockScope;
+
+    // Journaled before blocks named their scope; never written.
+    internal sealed record Unrecorded : BlockScope
+    {
+        private Unrecorded() { }
+
+        public static Unrecorded Value { get; } = new();
+    }
+}
+
+internal sealed record PreservationObservation(int Ordinal, DateTimeOffset Started, DateTimeOffset Completed, CheckoutState State,
+    CommitRecipe Recipe, CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, ImmutableArray<StageEntry> Stages);

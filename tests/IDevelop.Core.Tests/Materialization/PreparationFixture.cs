@@ -1,6 +1,7 @@
 using IDevelop.Core.Tests.Git;
 using IDevelop.Core.Tests.Runs;
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
@@ -24,8 +25,21 @@ internal sealed class PreparationFixture : IDisposable
         Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A, BaseChoice.Head)));
     }
 
-    public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null) =>
-        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), Git.Environment, probe);
+    public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null,
+        Func<string, ulong?>? volumes = null, IReadOnlyDictionary<string, string>? environment = null) =>
+        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), environment ?? Git.Environment, probe, volumes);
+
+    public Materializer FailingGit(string arguments)
+    {
+        var realGit = CommandResolver.Create((System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator), []).Resolve("git")!.Path;
+        var bin = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(Git.Folder)!, "failing-git")).FullName;
+        Executable.Write(Path.Combine(bin, "git"), "#!/bin/sh\ncase \" $* \" in *' " + arguments + " '*) echo 'fatal: injected failure' >&2; exit 128;; esac\nexec '" +
+            realGit.Replace("'", "'\\''", StringComparison.Ordinal) + "' \"$@\"\n");
+        return Materializer(environment: new Dictionary<string, string>(Git.Environment)
+        {
+            ["PATH"] = bin + Path.PathSeparator + System.Environment.GetEnvironmentVariable("PATH"),
+        });
+    }
     public CoordinatorPermit Permit => _permit ??= Assert.IsType<ControlTake.Owned>(RunStore.Open(Git.Folder).TakeControl(W, RunId)).Permit;
 
     public RunLease Lease(TaskId task)

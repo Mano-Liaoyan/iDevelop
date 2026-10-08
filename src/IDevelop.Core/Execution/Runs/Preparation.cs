@@ -14,5 +14,5 @@ internal sealed class UnavailableJoins : IJoinComposer
 {
     public ValueTask<JoinOutcome> Compose(JoinRequest request, CancellationToken cancellation) =>
         ValueTask.FromResult<JoinOutcome>(new JoinOutcome.Blocked(new(request.Operation, request.Task, null,
-            MaterializationProblem.JoinRequired, request.Inputs, [], "Multiple code revisions require a join.")));
+            MaterializationProblem.JoinRequired, request.Inputs, [], "Multiple code revisions require a join.") { Scope = new BlockScope.Operation() }));
 }

@@ -52,4 +52,49 @@ internal sealed class RefPublisher(RunStore store, Action<string>? probe = null)
             return decision;
         }
     }
+    public RefPublication Restore(CoordinatorPermit permit, OperationId operation, OperationId plan, string step,
+        GitRepository repository, RefChange change)
+    {
+        var read = store.Read(permit.Workflow, permit.Run);
+        if (read is RunRead.Rejected rejected) return new RefPublication.Rejected(rejected.Reason);
+        var record = ((RunRead.Loaded)read).Record;
+        if (RunReducer.RestorationSuperseded(record, plan)) return new RefPublication.Rejected(new(RunProblem.ReplacementConflict));
+        var mutation = new GitMutation.RestoreRef(change);
+        var prior = record.GitIntents.FirstOrDefault(pair => pair.Value.Plan == plan && RunReducer.Same(pair.Value.Mutation, mutation));
+        if (prior.Value is not null && record.GitObservations.TryGetValue(prior.Key, out var completed))
+            return new RefPublication.Completed(completed);
+        var live = repository.ReadRef(change.Ref);
+        if (live is GitRead<CommitId?>.Failed failed) return new RefPublication.Blocked(failed.Problem, failed.Detail);
+        var value = ((GitRead<CommitId?>.Read)live).Value;
+        var adopted = prior.Value is not null && value == change.Target;
+        if (value != change.Expected && !adopted)
+            return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
+                $"Restoration ref {change.Ref} has unexpected value {value?.Hex ?? "absent"}.");
+        var intended = OperationIds.Derive(operation, step + "-intent");
+        var intent = Journal(step + "-intent", intended, new RunEvent.GitIntended(plan, mutation));
+        if (intent is RunDecision.Rejected refused) return new RefPublication.Rejected(refused.Reason);
+        if (!adopted)
+        {
+            probe?.Invoke("git." + step + ".before");
+            var moved = repository.MoveRef(change);
+            probe?.Invoke("git." + step + ".after");
+            if (moved is RefMove.Conflict conflict)
+                return new RefPublication.Blocked(MaterializationProblem.UncertainOwnership,
+                    $"Restoration ref {change.Ref} has unexpected value {conflict.Observed?.Hex ?? "absent"}.");
+            if (moved is RefMove.Failed failure) return new RefPublication.Blocked(MaterializationProblem.GitFailed, failure.Detail);
+            adopted = moved is RefMove.AlreadyAtTarget;
+        }
+        var observation = new GitObservation(adopted, change.Target.Hex);
+        var observed = Journal(step + "-observed", OperationIds.Derive(operation, step + "-observed"), new RunEvent.GitObserved(intended, observation));
+        return observed is RunDecision.Rejected refusal ? new RefPublication.Rejected(refusal.Reason) : new RefPublication.Completed(observation);
+
+        RunDecision Journal(string label, OperationId id, RunEvent entry)
+        {
+            probe?.Invoke("journal." + label + ".before");
+            var decision = store.Record(permit, id, entry);
+            probe?.Invoke("journal." + label + ".after");
+            return decision;
+        }
+    }
+
 }

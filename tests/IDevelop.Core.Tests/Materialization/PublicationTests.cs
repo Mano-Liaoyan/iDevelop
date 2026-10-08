@@ -545,7 +545,7 @@ public sealed class PublicationTests
         File.WriteAllText(Path.Combine(ready.Checkout, "result.txt"), "late\n");
         var plan = Assert.Single(f.Read().Plans, pair => pair.Value is MaterializationPlan.Publication).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(plan, T,
-            ready.Execution.Launch.Attempt, MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Later writer drift."))));
+            ready.Execution.Launch.Attempt, MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Later writer drift.") { Scope = BlockScope.Checkout.Whole })));
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal(original, accepted);
         Assert.Equal(original.Result, accepted.Result);
@@ -649,7 +649,7 @@ public sealed class PublicationTests
         var sequence = record.Sequence;
         var branch = ready.Execution.Location.Owner.Branch;
         var drift = new MaterializationBlock(new(Id(2001)), T, ready.Execution.Launch.Attempt,
-            MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Concurrent salvage observed drift.");
+            MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Concurrent salvage observed drift.") { Scope = BlockScope.Checkout.Whole };
         var blockId = new OperationId(Id(9000));
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(probe: step =>
         {
@@ -689,7 +689,7 @@ public sealed class PublicationTests
         f.Git.Write("result.txt", "done\n", ready.Checkout);
         await f.Close(ready);
         var first = new MaterializationBlock(f.Op(), T, ready.Execution.Launch.Attempt,
-            Enum.Parse<MaterializationProblem>(problem), ready.Execution.Inputs, [], "First observed drift.");
+            Enum.Parse<MaterializationProblem>(problem), ready.Execution.Inputs, [], "First observed drift.") { Scope = BlockScope.Checkout.Whole };
         var firstId = new OperationId(Id(9000));
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, firstId, new RunEvent.Blocked(first)));
         var second = first with { Operation = f.Op(), Detail = "Second observed drift." };
@@ -847,7 +847,7 @@ public sealed class PublicationTests
             var plan = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Publication>());
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(
                 OperationIds.Derive(Operation, "plan"), T, plan.Attempt, MaterializationProblem.DirtyWorktree,
-                ready.Execution.Inputs, [], "Later writer drift."))));
+                ready.Execution.Inputs, [], "Later writer drift.") { Scope = BlockScope.Checkout.Whole })));
         }).Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Equal("late\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));

@@ -57,3 +57,35 @@ internal sealed class UnixTheoryAttribute : TheoryAttribute
         }
     }
 }
+
+internal sealed class LinuxOrWindowsFactAttribute : FactAttribute
+{
+    public LinuxOrWindowsFactAttribute()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) Skip = "Linux and Windows only.";
+    }
+}
+
+internal sealed class LinuxOrWindowsTheoryAttribute : TheoryAttribute
+{
+    public LinuxOrWindowsTheoryAttribute()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows()) Skip = "Linux and Windows only.";
+    }
+}
+
+internal sealed class LinuxFactAttribute : FactAttribute
+{
+    public LinuxFactAttribute()
+    {
+        if (!OperatingSystem.IsLinux()) Skip = "Linux only.";
+    }
+}
+
+internal sealed class OtherPlatformFactAttribute : FactAttribute
+{
+    public OtherPlatformFactAttribute()
+    {
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsWindows()) Skip = "Platforms without file identity only.";
+    }
+}

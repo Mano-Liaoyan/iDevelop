@@ -61,18 +61,18 @@ public sealed class InspectionTests
         var indexLock = f.Git.Run(ready.Checkout, "rev-parse", "--path-format=absolute", "--git-path", "index").Text.Trim() + ".lock";
         File.WriteAllText(indexLock, "lock\n");
         foreach (var id in new[] { 3002, 3001, 3000 })
-            Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(f.Materializer()
+            Assert.Equal("DirtyWorktree", Assert.IsType<Salvage.Blocked>(await f.Materializer()
                 .Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(id)), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         var resolved = f.Read().Blocks.Single(pair => pair.Value.Block.Operation == new OperationId(Id(3001))).Key;
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(resolved, "Inspected.")));
         File.Delete(indexLock);
-        Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(2000)), ready.Execution.Launch.Attempt));
+        Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), new(Id(2000)), ready.Execution.Launch.Attempt));
         var workspace = Assert.IsType<TaskWorkspace>(f.Materializer().Inspect(W, f.RunId, T));
         Assert.Equal(new[] { "00000000-0000-0000-0000-000000003002", "00000000-0000-0000-0000-000000003000" },
             workspace.Blocks.Select(block => block.Operation.Value.ToString("D")));
         var salvage = Assert.Single(workspace.Salvages);
         Assert.Equal("refs/idp/93f23689/salvage/90d5b0a2/00000000-0000-0000-0000-000000000102", salvage.Ref);
-        Assert.Equal("0dbf5cbc9310ef3abbc28073142652917c69dc2f", salvage.Commit.Hex);
+        Assert.Equal("8d9b46f696d0fac188d61ba44f41170aa73a4037", salvage.Commit.Hex);
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", workspace.BranchTip?.Hex);
         Assert.False(workspace.Clean);
         Assert.Null(workspace.LatestAcceptedCommit);

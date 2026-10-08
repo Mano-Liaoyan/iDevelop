@@ -45,7 +45,7 @@ internal sealed partial class Materializer
                 ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(accepted);
             }
-            if (PublicationDrift(record, attempt) is { } drift) return new Publication.Blocked(drift);
+            if (PublicationDrift(record, attempt, operation, planId) is { } drift) return new Publication.Blocked(drift);
             if (record.Phase is not (RunPhase.Approved or RunPhase.StopRequested)) return new Publication.Rejected(new(RunProblem.RunStopped));
             step = "settlement";
             VerifyPublicationDisposition(record, captureId, ref evidence);
@@ -65,7 +65,7 @@ internal sealed partial class Materializer
                 ResolvePublicationBlocks(permit, operation, planId);
                 return new Publication.Accepted(concurrent);
             }
-            if (PublicationDrift(record, attempt) is { } concurrentDrift) return new Publication.Blocked(concurrentDrift);
+            if (PublicationDrift(record, attempt, operation, planId) is { } concurrentDrift) return new Publication.Blocked(concurrentDrift);
             step = "settlement";
             VerifyPublicationDisposition(record, captureId, ref evidence);
             frozen = record.Captures[captureId][0];
@@ -82,7 +82,7 @@ internal sealed partial class Materializer
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, plan.VerifiedTip);
                 step = "commit";
                 if (Value(Mutate("commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The persisted publication recipe produced a different commit.");
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The persisted publication recipe produced a different commit.", new BlockScope.Operation());
             }
             else
             {
@@ -91,14 +91,14 @@ internal sealed partial class Materializer
                 VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, root.Tip);
                 step = "capture";
-                VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence);
+                VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence, frozen.IndexTree);
                 var result = new ResultId(OperationIds.Derive(operation, "result").Value);
                 step = "outbox";
                 var artifacts = CopyPublicationArtifacts(workflow, run, frozen, result);
                 step = "commit";
                 var commit = Value(Mutate("commit", () => repository.CreateCommit(frozen.Recipe)));
                 if (commit != frozen.Candidate)
-                    throw Fault(MaterializationProblem.UncertainOwnership, "The frozen publication recipe produced a different commit.");
+                    throw Fault(MaterializationProblem.UncertainOwnership, "The frozen publication recipe produced a different commit.", new BlockScope.Operation());
                 plan = new(attempt, result, record.CurrentResults.GetValueOrDefault(task)?.Id, root.Tip, frozen.Index?.Content,
                     frozen.Recipe, frozen.Candidate, frozen.Report!, artifacts) { Capture = frozen.Capture };
                 step = "plan";
@@ -110,7 +110,7 @@ internal sealed partial class Materializer
             step = "branch";
             var branch = new GitMutation.MoveRef(new(prepared.Location.Owner.Branch, plan.VerifiedTip, plan.Commit));
             VerifyPendingPublicationMove(branch);
-            RequirePublication(_refs.Publish(permit, operation, planId, "branch", repository, branch.Change));
+            RequirePublication(_refs.Publish(permit, operation, planId, "branch", repository, branch.Change), new BlockScope.Checkout([], Branch: true));
             step = "index";
             var indexIntent = OperationIds.Derive(operation, "index-intent");
             record = Read(workflow, run);
@@ -127,17 +127,17 @@ internal sealed partial class Materializer
                 if (aligned is IndexAlignment.Unexpected or IndexAlignment.Failed)
                     VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
                 if (aligned is IndexAlignment.Unexpected)
-                    throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed before publication alignment.");
+                    throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed before publication alignment.", BlockScope.Checkout.Whole);
                 if (aligned is IndexAlignment.Failed failed)
                     throw Fault(Value(repository.Capture(checkout)).Tree != plan.Recipe.Tree ? MaterializationProblem.DirtyWorktree : MaterializationProblem.GitFailed,
-                        failed.Detail);
+                        failed.Detail, BlockScope.Checkout.Whole);
                 Journal("index-observed", () => _store.Record(permit, OperationIds.Derive(operation, "index-observed"),
                     new RunEvent.GitObserved(indexIntent, new(aligned is IndexAlignment.AlreadyAligned, plan.Recipe.Tree.Hex))));
             }
             step = "result-ref";
             var resultRef = new GitMutation.MoveRef(new(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[task], attempt), null, plan.Commit));
             VerifyPendingPublicationMove(resultRef);
-            RequirePublication(_refs.Publish(permit, operation, planId, "result", repository, resultRef.Change));
+            RequirePublication(_refs.Publish(permit, operation, planId, "result", repository, resultRef.Change), new BlockScope.Refs([resultRef.Change.Ref]));
             step = "verify";
             VerifyPublicationRefs(Read(workflow, run), repository, prepared, operation, workflow, run, ref evidence);
             VerifyPublication(repository, prepared, plan, workflow, run);
@@ -152,17 +152,18 @@ internal sealed partial class Materializer
                 var current = Read(workflow, run);
                 if (PublicationObserved(current, planId, move)) return;
                 var compareIndex = !current.GitIntents.Values.Any(intent => intent.Plan == planId && intent.Mutation is GitMutation.AlignIndex);
-                VerifyPublicationBaseline(repository, checkout, plan.Recipe.Tree, plan.IndexBefore, compareIndex, permit, operation, ref evidence);
+                VerifyPublicationBaseline(repository, checkout, plan.Recipe.Tree, plan.IndexBefore, compareIndex, permit, operation, ref evidence, frozen.IndexTree);
                 if (PublicationObserved(current, planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree)) &&
                     (repository.ReadIndexTree(checkout) is not GitRead<TreeId>.Read index || index.Value != plan.Recipe.Tree))
-                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
+                    throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.",
+                        new BlockScope.Checkout(repository.ReadIndexTree(checkout) is GitRead<TreeId>.Read actual ? Value(repository.DiffTreePaths(actual.Value, plan.Recipe.Tree)) : []));
             }
         }
         catch (Refusal refused) { return new Publication.Rejected(refused.Reason); }
         catch (MaterializationFailure failed)
-        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message)); }
+        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, failed.Problem, inputs, evidence, failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
-        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message)); }
+        { return PublicationBlock(permit, operation, step, new(planId, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = new BlockScope.Operation() }); }
     }
 
     private static void VerifyPublicationParent(GitRepository repository, CommitId attemptBase, CommitId tip)
@@ -170,9 +171,9 @@ internal sealed partial class Materializer
         switch (repository.IsAncestor(attemptBase, tip))
         {
             case GitAncestry.No:
-                throw Fault(MaterializationProblem.UncertainOwnership, $"The writer branch tip {tip.Hex} does not contain the attempt base {attemptBase.Hex}.");
+                throw Fault(MaterializationProblem.UncertainOwnership, $"The writer branch tip {tip.Hex} does not contain the attempt base {attemptBase.Hex}.", new BlockScope.Checkout([], Branch: true));
             case GitAncestry.Failed failed:
-                throw Fault(MaterializationProblem.GitFailed, failed.Detail);
+                throw Fault(MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Operation());
         }
     }
 
@@ -199,34 +200,48 @@ internal sealed partial class Materializer
                     var storage = new RunStorage(_project, record.Workflow, record.Id);
                     var snapshots = evidence.Select(file => JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
                         RunStorage.Read(storage.Folder, file.RelativePath, file.Content, file.ByteLength), RunJournal.Options) ??
-                        throw Fault(MaterializationProblem.InputUnavailable, "The shared-ref snapshot is absent.")).ToArray();
+                        throw Fault(MaterializationProblem.InputUnavailable, "The shared-ref snapshot is absent.", new BlockScope.Operation())).ToArray();
                     var detail = diverged.Refs.Select(name => $"{name}: prepared {Tip(snapshots[0], name)}, " +
                         $"observation 1 {Tip(snapshots[1], name)}, observation 2 {Tip(snapshots[2], name)}");
-                    throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail));
+                    throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail), DivergedScope(record, observations[0].Launch, diverged));
                 }
-                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)));
+                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)),
+                    DivergedScope(record, record.Captures[capture][0].Launch, diverged));
             case CaptureDisposition.Failed failed:
                 evidence = failed.Evidence;
-                throw Fault(failed.Problem, failed.Detail);
+                throw Fault(failed.Problem, failed.Detail, new BlockScope.Operation());
         }
+    }
+
+    private static BlockScope DivergedScope(RunRecord record, LaunchKey launch, CaptureDisposition.Diverged diverged)
+    {
+        var branch = record.Preparations[launch].Location.Owner.Branch;
+        return diverged.Refs.All(name => name == branch || name == "HEAD")
+            ? new BlockScope.Checkout(diverged.Paths, diverged.Refs.Contains(branch), diverged.Refs.Contains("HEAD"))
+            : new BlockScope.Refs(diverged.Refs);
     }
 
     private static string Tip(IReadOnlyDictionary<string, CommitId> refs, string name) =>
         refs.TryGetValue(name, out var tip) ? tip.Hex : "absent";
 
     private void VerifyPublicationBaseline(GitRepository repository, string checkout, TreeId tree, Digest? index,
-        bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence)
+        bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence, TreeId? indexTree = null)
     {
         VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
         if (repository.UnmergedEntries(checkout) is not GitRead<ImmutableArray<StageEntry>>.Read stages)
-            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.", BlockScope.Checkout.Whole);
         if (!stages.Value.IsEmpty)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", new BlockScope.Checkout([.. stages.Value.Select(s => s.Path).Distinct().Order(StringComparer.Ordinal)]));
         var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
-        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked));
+        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Checkout(tracked));
         var live = Value(Mutate("capture", () => repository.Capture(checkout)));
         if (live.Tree != tree || compareIndex && (live.IndexBefore != index || live.IndexAfter != index))
-            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.");
+        {
+            var paths = new SortedSet<string>(Value(repository.DiffTreePaths(live.Tree, tree)), StringComparer.Ordinal);
+            if (compareIndex && indexTree is { } expectedIndex && repository.ReadIndexTree(checkout) is GitRead<TreeId>.Read actualIndex)
+                paths.UnionWith(Value(repository.DiffTreePaths(actualIndex.Value, expectedIndex)));
+            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.", new BlockScope.Checkout([.. paths]));
+        }
     }
 
     private ImmutableArray<ArtifactRecord> CopyPublicationArtifacts(WorkflowId workflow, RunId run, CaptureObservation frozen,
@@ -245,24 +260,26 @@ internal sealed partial class Materializer
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 throw Fault(MaterializationProblem.InputUnavailable,
-                    $"Attempt {frozen.Launch.Attempt.Value:D}, capture path {artifact.StoredPath}, result path {destination}: {error.Message}");
+                    $"Attempt {frozen.Launch.Attempt.Value:D}, capture path {artifact.StoredPath}, result path {destination}: {error.Message}", new BlockScope.Operation());
             }
             _probe?.Invoke("artifact." + artifact.Name + ".after");
             return artifact with { StoredPath = destination };
         })];
     }
 
-    private static bool IsPublicationDrift(MaterializationBlock block) =>
-        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership;
+    // Publish reruns its own evidence and repository checks, so only drift elsewhere, or another operation's fault there, stops it.
+    private static bool IsPublicationDrift(MaterializationBlock block, OperationId operation, OperationId plan) =>
+        block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
+        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation && block.Operation != plan);
 
-    private static MaterializationBlock? PublicationDrift(RunRecord record, AttemptId attempt) =>
-        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt && IsPublicationDrift(pair.Value.Block))
+    private static MaterializationBlock? PublicationDrift(RunRecord record, AttemptId attempt, OperationId operation, OperationId plan) =>
+        record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt && IsPublicationDrift(pair.Value.Block, operation, plan))
             .OrderBy(pair => record.Receipts[pair.Key].Sequence).Select(pair => pair.Value.Block).FirstOrDefault();
 
-    private static void RequirePublication(RefPublication outcome)
+    private static void RequirePublication(RefPublication outcome, BlockScope scope)
     {
         if (outcome is RefPublication.Rejected rejected) throw new Refusal(rejected.Reason);
-        if (outcome is RefPublication.Blocked blocked) throw Fault(blocked.Problem, blocked.Detail);
+        if (outcome is RefPublication.Blocked blocked) throw Fault(blocked.Problem, blocked.Detail, scope);
     }
 
     private static bool PublicationObserved(RunRecord record, OperationId plan, GitMutation mutation) =>
@@ -276,19 +293,21 @@ internal sealed partial class Materializer
         var capture = Mutate("verify-capture", () => repository.Capture(checkout));
         var record = Read(workflow, run);
         VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
-        if (Value(repository.ReadRef(prepared.Location.Owner.Branch)) != plan.Commit ||
-            Value(repository.ReadRef(RunLayout.ResultRef(record.RunKey!, record.TaskKeys[prepared.Location.Owner.Task], plan.Attempt))) != plan.Commit)
-            throw Fault(MaterializationProblem.UncertainOwnership, "Publication branch or result ref changed.");
+        if (Value(repository.ReadRef(prepared.Location.Owner.Branch)) != plan.Commit)
+            throw Fault(MaterializationProblem.UncertainOwnership, "Publication branch or result ref changed.", new BlockScope.Checkout([], Branch: true));
+        var resultRef = RunLayout.ResultRef(record.RunKey!, record.TaskKeys[prepared.Location.Owner.Task], plan.Attempt);
+        if (Value(repository.ReadRef(resultRef)) != plan.Commit)
+            throw Fault(MaterializationProblem.UncertainOwnership, "Publication branch or result ref changed.", new BlockScope.Refs([resultRef]));
         if (capture is not GitRead<GitCapture>.Read captured || captured.Value.Tree != plan.Recipe.Tree ||
             Value(repository.Status(checkout)).Length != 0 ||
             repository.ReadIndexTree(checkout) is not GitRead<TreeId>.Read index || index.Value != plan.Recipe.Tree)
-            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the publication capture.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the publication capture.", BlockScope.Checkout.Whole);
         var storage = new RunStorage(_project, workflow, run);
         foreach (var artifact in plan.Artifacts)
         {
             try { storage.ReadArtifact(plan.Result, artifact); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-            { throw Fault(MaterializationProblem.InputUnavailable, $"Attempt {plan.Attempt.Value:D}, result {plan.Result.Value:D}, path {artifact.StoredPath}: {error.Message}"); }
+            { throw Fault(MaterializationProblem.InputUnavailable, $"Attempt {plan.Attempt.Value:D}, result {plan.Result.Value:D}, path {artifact.StoredPath}: {error.Message}", new BlockScope.Operation()); }
         }
     }
 
@@ -299,7 +318,7 @@ internal sealed partial class Materializer
         var record = Read(workflow, run);
         var accepted = record.Receipts.Values.Single(entry => entry.Event is RunEvent.ResultAccepted { Result.Origin: ResultOrigin.Executed e } &&
             record.Plans[plan] is MaterializationPlan.Publication publication && e.Attempt == publication.Attempt);
-        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && !IsPublicationDrift(pair.Value.Block) && record.Receipts[pair.Key].Sequence < accepted.Sequence &&
+        foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && !IsPublicationDrift(pair.Value.Block, operation, plan) && record.Receipts[pair.Key].Sequence < accepted.Sequence &&
             (pair.Value.Block.Operation == plan || pair.Value.Block.Operation == operation)).OrderBy(pair => pair.Key.Value))
             Journal("resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
                 OperationIds.Derive(operation, "resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, "Publication verified.")));

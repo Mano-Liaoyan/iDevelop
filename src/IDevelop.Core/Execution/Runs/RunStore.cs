@@ -184,7 +184,9 @@ internal sealed class RunStore
                 return new Mutation.Existing(new RunEvent.Planned(original));
             }
             var inputs = new InputId(_ids());
-            return new Mutation.Append(new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) }));
+            var planned = new RunEvent.Planned(candidate with { Inputs = inputs, Attempt = new(_ids()) });
+            if (RunReducer.AppendProblem(record, planned) is { } appendProblem) return Refuse(appendProblem);
+            return new Mutation.Append(planned);
         }, validate: record => LeaseProblem(record, lease));
 
     public RunDecision Refresh(RunLease lease, OperationId operation, LaunchKey launch, JoinRecord? join = null) =>
@@ -244,8 +246,10 @@ internal sealed class RunStore
             {
                 return Refuse(planProblem);
             }
-            return new Mutation.Append(new RunEvent.Reserved(new(preparation.Attempt, preparation.Task, preparation.Revision,
-                preparation.Inputs, preparation.Cause), inputs));
+            var reservedEvent = new RunEvent.Reserved(new(preparation.Attempt, preparation.Task, preparation.Revision,
+                preparation.Inputs, preparation.Cause), inputs);
+            if (RunReducer.AppendProblem(record, reservedEvent) is { } appendProblem) return Refuse(appendProblem);
+            return new Mutation.Append(reservedEvent);
         }, validate: record => LeaseProblem(record, lease) ??
             (record.Plans.GetValueOrDefault(plan) is MaterializationPlan.Preparation preparation && preparation.Task != lease.Task
                 ? RunProblem.IdentityMismatch : null));
@@ -258,8 +262,8 @@ internal sealed class RunStore
                 return Missing();
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
-                MaterializationPlan.RetryReset or MaterializationPlan.Refresh } or RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or
-                RunEvent.SalvageRetained or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
+                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration } or RunEvent.GitIntended or RunEvent.GitObserved or
+                RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
             {
                 return Refuse(RunProblem.InvalidData);
             }

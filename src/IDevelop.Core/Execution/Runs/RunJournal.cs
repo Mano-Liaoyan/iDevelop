@@ -20,7 +20,7 @@ internal static class RunJournal
         "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured", "captureDisposed"];
 
     private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
-        "prepared", "blocked", "salvageRetained", "blockResolved"];
+        "prepared", "blocked", "salvageRetained", "blockResolved", "preserved", "preservationDiverged", "restored", "recoveryBaselined"];
 
     public static string Encode(RunEntry entry) => JsonSerializer.Serialize(entry, Options) + "\n";
 
@@ -148,6 +148,12 @@ internal static class RunJournal
             {
                 info.Properties.Single(property => property.Name == "artifacts").ShouldSerialize =
                     (_, value) => value is System.Collections.Immutable.ImmutableArray<ArtifactRecord> { IsDefaultOrEmpty: false };
+            }
+            if (info.Type == typeof(MaterializationBlock))
+            {
+                var scope = info.Properties.Single(property => property.Name == "scope");
+                scope.IsRequired = false;
+                scope.ShouldSerialize = (_, value) => value is not BlockScope.Unrecorded;
             }
         });
         return resolver;

@@ -125,7 +125,7 @@ public sealed class TurnEndOwnershipTests
         var basis = writer.Execution.Location.AttemptBase;
         Assert.True(RefOwnership.Accepts(f.Read(), repository, branch, writerTip));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", basis.Hex).ExitCode);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
         Assert.False(RefOwnership.Accepts(f.Read(), repository, branch, basis));
         Assert.True(RefOwnership.Accepts(f.Read(), repository, branch, writerTip));
         Assert.Equal("A\n", f.Git.Git("show", retained.Commit.Hex + ":a.txt"));
@@ -145,7 +145,7 @@ public sealed class TurnEndOwnershipTests
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
         Assert.Equal(1, f.Read().Results.Count(result => result.Task == U));
-        var control = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+        var control = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal(basis, Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), f.Op(), control.Receipt.Plan, f.Op())).Target);
         Assert.Equal(1, f.Read().GitIntents.Values.Count(intent => intent.Mutation is GitMutation.ResetCheckout));
         Assert.Equal("writer\n", f.Git.Git("show", control.Commit.Hex + ":result.txt"));
@@ -255,7 +255,7 @@ public sealed class TurnEndOwnershipTests
         var first = await PrepareAndClaim(f, T);
         f.Git.Write("result.txt", "a\n", first.Checkout);
         await f.Close(first);
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), first.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), first.Execution.Launch.Attempt));
         var next = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: new AttemptCause.Continue(first.Execution.Launch.Attempt, f.Op())));
         Assert.Equal(first.Execution.Location.Owner, next.Execution.Location.Owner);
@@ -267,14 +267,14 @@ public sealed class TurnEndOwnershipTests
             Assert.Equal("UnresolvedOwnership", Assert.IsType<RetryReset.Rejected>(f.Materializer().ResetForRetry(
                 f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op())).Reason.Problem.ToString());
         else
-            Assert.Equal("UnresolvedOwnership", Assert.IsType<Salvage.Rejected>(f.Materializer().Salvage(
+            Assert.Equal("UnresolvedOwnership", Assert.IsType<Salvage.Rejected>(await f.Materializer().Salvage(
                 f.Lease(T), f.Op(), first.Execution.Launch.Attempt)).Reason.Problem.ToString());
         Assert.Equal(sequence, f.Read().Sequence);
         Assert.Equal("b\n", File.ReadAllText(Path.Combine(next.Checkout, "result.txt")));
         Assert.Single(GitFixture.Read(f.Git.Open().RefSnapshot($"refs/idp/{f.Read().RunKey}/salvage/", $"refs/idp/{f.Read().RunKey}/resalvage/")));
 
         var log = f.ObserveAndLog(next);
-        var control = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), first.Execution.Launch.Attempt));
+        var control = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), first.Execution.Launch.Attempt));
         Assert.Equal("b\n", f.Git.Git("show", control.Commit.Hex + ":result.txt"));
         Assert.Equal(2, f.Read().Salvages.Count);
         Assert.Equal(2, GitFixture.Read(f.Git.Open().RefSnapshot($"refs/idp/{f.Read().RunKey}/salvage/",
