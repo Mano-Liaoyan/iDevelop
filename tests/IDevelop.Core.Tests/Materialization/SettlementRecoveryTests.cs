@@ -212,8 +212,10 @@ public sealed class SettlementRecoveryTests
     [Theory]
     [InlineData("journal.capture-1.before", false)]
     [InlineData("journal.capture-1.after", false)]
+    [InlineData("journal.close-turn.before", false)]
     [InlineData("journal.capture-1.before", true)]
     [InlineData("journal.capture-1.after", true)]
+    [InlineData("journal.close-turn.before", true)]
     public async AsyncTask Closure_waits_for_a_settling_launch(string point, bool takeover)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
@@ -238,7 +240,11 @@ public sealed class SettlementRecoveryTests
         Assert.Single(f.Read().TurnClosures);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
         if (point == "journal.capture-1.before") Assert.IsType<CaptureDisposition.Failed>(settlement.Disposition);
-        else Assert.IsType<CaptureDisposition.Matched>(settlement.Disposition);
+        else
+        {
+            Assert.IsType<CaptureDisposition.Matched>(settlement.Disposition);
+            AssertPublished(f, ready);
+        }
         using var control = new RunFixtures();
         control.Approve();
         var reserved = control.Reserve();
@@ -285,6 +291,41 @@ public sealed class SettlementRecoveryTests
         Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await control.Materializer().RecoverSettlement(
             control.Lease(T), control.Op(), valid.Execution.Launch)).Disposition);
         CloseAndPublish(control, valid, checkpoint);
+    }
+
+    [Theory]
+    [InlineData("locked")]
+    [InlineData("rewritten")]
+    public async AsyncTask A_decided_settlement_stays_pending_unless_its_log_reads_as_moved_on(string state)
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        await Crash(f, ready, log, f.Op(), "journal.close-turn.before");
+        var folder = f.Store.AttemptFolder(W, f.RunId, T, launch.Attempt);
+        using (var attempt = AttemptLog.Open(folder))
+            attempt.Append(new AttemptEvent.HandedToTerminal(At, ready.Checkout, "codex resume fixture"));
+        var lease = f.Lease(T);
+        var sequence = f.Read().Sequence;
+        var operation = f.Op();
+        var confirmation = f.Op();
+        var path = Path.Combine(folder, "events.jsonl");
+        var moved = File.ReadAllBytes(path);
+        if (state == "rewritten")
+        {
+            var rewritten = moved.ToArray();
+            rewritten[0] = (byte)' ';
+            File.WriteAllBytes(path, rewritten);
+        }
+        using (state == "locked" ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None) : null)
+            Assert.Equal("SettlementPending", ProblemName(f.Store.Recover(lease, operation, launch.Attempt,
+                RecoveryOutcome.Stopped, confirmation, "The person stopped the turn after its log moved on.")));
+        File.WriteAllBytes(path, moved);
+        Assert.Equal(sequence, f.Read().Sequence);
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(lease, operation, launch.Attempt,
+            RecoveryOutcome.Stopped, confirmation, "The person stopped the turn after its log moved on."));
+        Assert.Equal("Stopped", Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[launch.Attempt]).Outcome.ToString());
+        Assert.Equal(sequence + 1, f.Read().Sequence);
     }
 
     [Fact]
