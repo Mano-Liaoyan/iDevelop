@@ -5,6 +5,23 @@ internal static partial class RunReducer
     internal static RunProblem? AppendProblem(RunRecord record, RunEvent e)
     {
         if (record.Schema != 3) return null;
+        var cause = e switch
+        {
+            RunEvent.Planned { Plan: MaterializationPlan.Preparation preparation } => preparation.Cause,
+            RunEvent.Reserved reserved => reserved.Attempt.Cause,
+            _ => null,
+        };
+        if (cause is AttemptCause.Continue continued && record.Closures.TryGetValue(continued.Previous, out var end) &&
+            (end is AttemptEnd.Recovered { Outcome: RecoveryOutcome.Stopped } or
+                AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Interrupted } ||
+                end is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } && record.ReviewOf(continued.Previous) is not null) &&
+            !record.Baselines.ContainsKey((continued.Previous, continued.Confirmation)))
+            return RunProblem.RecoveryEvidenceInsufficient;
+        if (e is RunEvent.GitIntended intended && record.Plans.GetValueOrDefault(intended.Plan) is MaterializationPlan.Restoration &&
+            RestorationSuperseded(record, intended.Plan) || e is RunEvent.GitObserved observed &&
+            record.GitIntents.TryGetValue(observed.Mutation, out var oldIntent) &&
+            record.Plans.GetValueOrDefault(oldIntent.Plan) is MaterializationPlan.Restoration && RestorationSuperseded(record, oldIntent.Plan))
+            return RunProblem.ReplacementConflict;
         if (e is RunEvent.TurnClosed { Capture: null } turn && record.RootExits.ContainsKey(turn.Key))
             return RunProblem.SettlementPending;
         if (e is RunEvent.AttemptClosed attempt && record.Claims.Keys.Any(launch =>
@@ -26,7 +43,8 @@ internal static partial class RunReducer
 internal static class CaptureComparison
 {
     internal static bool Index(CaptureObservation first, CaptureObservation second) =>
-        first.Index?.Content == second.Index?.Content && first.Index?.ByteLength == second.Index?.ByteLength;
+        first.Index?.Content == second.Index?.Content && first.Index?.ByteLength == second.Index?.ByteLength &&
+        first.IndexTree == second.IndexTree;
 
     internal static bool Artifacts(CaptureObservation first, CaptureObservation second) =>
         first.Artifacts.OrderBy(file => file.Name, StringComparer.Ordinal).Select(file => (file.Name, file.Content, file.ByteLength))
@@ -51,6 +69,7 @@ internal static partial class RunValidation
         (observation.Head is null || !string.IsNullOrWhiteSpace(observation.Head)) &&
         (observation.Index is null || Evidence(observation.Index) &&
             observation.Index.RelativePath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "index")) &&
+        (observation.IndexTree is null || Revision.IsCommit(observation.IndexTree.Value.Hex)) &&
         !observation.Artifacts.IsDefault && observation.Artifacts.All(file => Artifact(file) &&
             file.StoredPath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "artifacts/" + file.Name)) &&
         observation.Artifacts.Select(file => file.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == observation.Artifacts.Length &&

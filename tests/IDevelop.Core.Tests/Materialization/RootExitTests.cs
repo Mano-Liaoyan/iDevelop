@@ -263,7 +263,7 @@ public sealed class RootExitTests
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Failed, checkpoint));
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed));
         var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
-        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RootObservation.Rejected>(f.Materializer().ObserveRootExit(
             f.Lease(T), f.Op(), writer.Execution.Launch, new RootExit.Exited(1))).Reason.Problem);

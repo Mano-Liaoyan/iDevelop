@@ -49,7 +49,7 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             var location = record.Preparations[launch].Location;
             var tip = Value(repository.ReadRef(location.Owner.Branch)) ??
-                throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.");
+                throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new BlockScope.Checkout([], Branch: true));
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
             var ownership = RefOwnership.Accepts(record, repository, location.Owner.Branch, tip)
                 ? TipOwnership.Explained : TipOwnership.Unexplained;
@@ -163,7 +163,8 @@ internal sealed partial class Materializer
                             repository ??= OpenRepository();
                             record = Read(permit.Workflow, permit.Run);
                             observation = Mutate("capture-" + ordinal, () => ObserveCapture(repository, record,
-                                capture, ordinal, launch, log!, ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
+                                capture, ordinal, launch, log!, ordinal == 1 || !recoveringPair || observations[0].IndexTree is not null,
+                                ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
                         }
                         catch (MaterializationFailure failed)
                         {
@@ -198,24 +199,25 @@ internal sealed partial class Materializer
     }
 
     private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id,
-        int ordinal, LaunchKey launch, LogCheckpoint log, ref ImmutableArray<EvidenceFile> evidence)
+        int ordinal, LaunchKey launch, LogCheckpoint log, bool retainIndex, ref ImmutableArray<EvidenceFile> evidence)
     {
         var started = _clock.GetUtcNow();
         var prepared = record.Preparations[launch];
         try { VerifyOwnedCheckout(repository, prepared.Location, record); }
-        catch (MaterializationFailure failed) { throw Fault(MaterializationProblem.UncertainOwnership, failed.Message); }
+        catch (MaterializationFailure failed) { throw Fault(MaterializationProblem.UncertainOwnership, failed.Message, new BlockScope.Ownership()); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        { throw Fault(MaterializationProblem.UncertainOwnership, error.Message); }
+        { throw Fault(MaterializationProblem.UncertainOwnership, error.Message, new BlockScope.Ownership()); }
         var checkout = Checkout(repository, prepared.Location.Owner);
         if (!Value(repository.UnmergedEntries(checkout)).IsEmpty)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", BlockScope.Checkout.Whole);
         var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
-        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked));
+        if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Checkout(tracked));
         var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
         var head = Value(repository.SymbolicHead(checkout));
         var storage = new RunStorage(_project, record.Workflow, record.Id);
         EvidenceFile? index = null;
-        if (Value(repository.IndexBytes(checkout)) is { } bytes)
+        var indexBytes = Value(repository.IndexBytes(checkout));
+        if (indexBytes is { } bytes)
         {
             var relative = RunStorage.CapturePath(id, ordinal, "index");
             index = new(relative, Revision.Hash(bytes), bytes.LongLength);
@@ -223,10 +225,10 @@ internal sealed partial class Materializer
         }
         var captured = Value(repository.Capture(checkout));
         if (captured.IndexBefore != captured.IndexAfter || captured.IndexBefore != index?.Content)
-            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed during capture.");
+            throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed during capture.", BlockScope.Checkout.Whole);
         var task = record.Attempts[launch.Attempt].Task;
         var logged = AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id, task, launch.Attempt), log);
-        if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString());
+        if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString(), new BlockScope.Operation());
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(new OperationId(id.Value), "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
@@ -240,10 +242,18 @@ internal sealed partial class Materializer
         var recipe = new CommitRecipe(captured.Tree, [root.Tip],
             $"{definition.Title}\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {launch.Attempt.Value:D}\n",
             "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", DateTimeOffset.FromUnixTimeSeconds(root.At.ToUnixTimeSeconds()));
+        TreeId? indexTree = null;
+        if (index is not null && retainIndex)
+        {
+            indexTree = Value(repository.WriteTree(GitRepository.ParseIndex(indexBytes!)));
+            var indexRecipe = recipe with { Tree = indexTree.Value, Parents = [], Message = "Index of " + recipe.Message };
+            var indexCommit = Value(repository.CreateCommit(indexRecipe));
+            Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, ordinal), indexCommit);
+        }
         var candidate = Value(repository.CreateCommit(recipe));
         Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate);
         return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
-            logged.Record!.Result, artifacts, refs, unexplained);
+            logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
     }
 
     private CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation first, CaptureObservation second)

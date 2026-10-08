@@ -19,11 +19,16 @@ internal static partial class RunReducer
         }
         return e switch
         {
-            RunEvent.Planned { Plan: MaterializationPlan.Salvage } => true,
+            RunEvent.Planned { Plan: MaterializationPlan.Salvage or MaterializationPlan.Preservation or MaterializationPlan.Restoration } => true,
+            RunEvent.GitIntended intent when record.Plans.GetValueOrDefault(intent.Plan) is MaterializationPlan.Restoration => true,
             RunEvent.GitIntended { Mutation: GitMutation.MoveRef move } intent =>
-                record.Plans.GetValueOrDefault(intent.Plan) is MaterializationPlan.Salvage salvage &&
-                move.Change.Expected is null && move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
-            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained => true,
+                move.Change.Expected is null && (record.Plans.GetValueOrDefault(intent.Plan) switch
+                {
+                    MaterializationPlan.Salvage salvage => move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
+                    MaterializationPlan.Preservation preservation => move.Change.Ref == preservation.Ref && move.Change.Target == preservation.Commit,
+                    _ => false,
+                }),
+            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined => true,
             RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured or RunEvent.CaptureDisposed => record.Phase == RunPhase.Abandoned,
             _ => false,
         };
@@ -78,6 +83,8 @@ internal static partial class RunReducer
                 {
                     return Reject(RunProblem.InvalidData);
                 }
+                if (intended.Mutation is GitMutation.RestoreRef or GitMutation.RestoreFiles or GitMutation.RemoveIndexLock &&
+                    !RestorationMutation(record, intended)) return Reject(RunProblem.InvalidData);
                 return (record with { GitIntents = record.GitIntents.Add(entry.Operation, intended) }, null);
             case RunEvent.GitObserved observed:
                 if (observed.Mutation == entry.Operation || !record.GitIntents.ContainsKey(observed.Mutation) ||
@@ -138,6 +145,37 @@ internal static partial class RunReducer
                     return Reject(RunProblem.InvalidData);
                 }
                 return (record with { Salvages = record.Salvages.Add(retained.Plan, retained) }, null);
+            case RunEvent.RecoveryBaselined baselined:
+                var baseline = baselined.Baseline;
+                var preservationId = OperationIds.Derive(baseline.Preservation, "preserve-plan");
+                if (record.Schema != 3 || !record.Closures.TryGetValue(baseline.Previous, out var previousEnd) ||
+                    previousEnd is AttemptEnd.Recovered { Outcome: RecoveryOutcome.NotStarted } ||
+                    record.Baselines.ContainsKey((baseline.Previous, baseline.Confirmation)) || string.IsNullOrEmpty(baseline.Session) ||
+                    !record.Preservations.ContainsKey(preservationId) ||
+                    record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation recoveryPreservation ||
+                    !record.Preparations.TryGetValue(new(baseline.Previous, 1), out var previousPreparation) ||
+                    !record.Preparations.TryGetValue(new(recoveryPreservation.Attempt, 1), out var preservedPreparation) ||
+                    preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null ||
+                    ResolveReceiptBlocks(record, baselined.Resolved, recoveryPreservation.Task,
+                        (_, block) => OperationIds.Derive(block.Operation, "baseline") == entry.Operation || CheckedWithCheckout(block.Scope)) is not { } baselineBlocks)
+                    return Reject(RunProblem.InvalidData);
+                return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined), Blocks = baselineBlocks }, null);
+            case RunEvent.Restored restored:
+                if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration restoration ||
+                    record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan) ||
+                    ResolveReceiptBlocks(record, restored.Resolved, restoration.Task,
+                        (id, block) => RestoreResolves(record, restored.Plan, restoration, id, block)) is not { } restoredBlocks)
+                    return Reject(RunProblem.InvalidData);
+                return (record with { Restorations = record.Restorations.Add(restored.Plan, restored), Blocks = restoredBlocks }, null);
+            case RunEvent.Preserved preserved:
+                if (record.Plans.GetValueOrDefault(preserved.Plan) is not MaterializationPlan.Preservation preservation ||
+                    preserved.Ref != preservation.Ref || preserved.Commit != preservation.Commit || record.Preservations.ContainsKey(preserved.Plan) ||
+                    !ObservedMove(record, preserved.Plan, preserved.Ref, null, preserved.Commit))
+                    return Reject(RunProblem.InvalidData);
+                return (record with { Preservations = record.Preservations.Add(preserved.Plan, preserved) }, null);
+            case RunEvent.PreservationDiverged diverged:
+                if (record.PreservationDivergences.ContainsKey(diverged.Operation)) return Reject(RunProblem.InvalidData);
+                return (record with { PreservationDivergences = record.PreservationDivergences.Add(diverged.Operation, diverged) }, null);
             case RunEvent.BlockResolved resolved:
                 if (!record.Blocks.TryGetValue(resolved.Block, out var state) || state.Resolved)
                 {
@@ -147,6 +185,70 @@ internal static partial class RunReducer
             default:
                 return Reject(RunProblem.UnsupportedEvent);
         }
+    }
+
+    // Restore and RecordRecoveryBaseline verify the whole checkout, its worktree ownership and the repository identity before their receipt.
+    internal static bool CheckedWithCheckout(BlockScope scope) => scope is BlockScope.Checkout or BlockScope.Ownership or BlockScope.Repository;
+
+    // A restore resolves what its plan repaired or rechecked and its own faults. No recheck vouches for a pin, which only its writer rewrites.
+    internal static bool RestoreResolves(RunRecord record, OperationId planId, MaterializationPlan.Restoration plan, OperationId id,
+        MaterializationBlock block) =>
+        block.Task == plan.Task && (plan.Repairs.Contains(id) || plan.Rechecks.Contains(id) || OwnOrSuperseded(record, planId, block.Operation)) && block.Scope switch
+        {
+            BlockScope.Refs refs => refs.Names.All(name => !Pinned(record, name)),
+            BlockScope.Operation => OwnOrSuperseded(record, planId, block.Operation),
+            BlockScope.Unrecorded => plan.Repairs.Contains(id),
+            var scope => CheckedWithCheckout(scope),
+        };
+
+    // A superseded restore never reruns, so the restore that replaces it, directly or along a chain, answers for its faults.
+    private static bool OwnOrSuperseded(RunRecord record, OperationId planId, OperationId owner)
+    {
+        for (OperationId? plan = planId; plan is { } id; plan = (record.Plans.GetValueOrDefault(id) as MaterializationPlan.Restoration)?.Supersedes)
+            if (id == owner) return true;
+        return false;
+    }
+
+    internal static bool Pinned(RunRecord record, string name) => name.StartsWith(RunLayout.PinPrefix(record.RunKey!), StringComparison.Ordinal);
+
+    private static ImmutableDictionary<OperationId, MaterializationBlockState>? ResolveReceiptBlocks(RunRecord record,
+        ImmutableArray<OperationId> resolved, TaskId task, Func<OperationId, MaterializationBlock, bool> checkedBlock)
+    {
+        if (resolved.IsDefault) return null;
+        var blocks = record.Blocks;
+        foreach (var id in resolved)
+        {
+            if (!blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != task || !checkedBlock(id, block.Block)) return null;
+            blocks = blocks.SetItem(id, block with { Resolved = true });
+        }
+        return blocks;
+    }
+
+    internal static bool RestorationSuperseded(RunRecord record, OperationId plan) =>
+        record.Plans.Values.OfType<MaterializationPlan.Restoration>().Any(p => p.Supersedes == plan);
+
+    internal static IEnumerable<OperationId> UnfinishedRestorations(RunRecord record, WorktreeOwner owner) =>
+        record.Plans.Where(p => p.Value is MaterializationPlan.Restoration restoration &&
+            record.Preparations[new(restoration.Attempt, 1)].Location.Owner == owner &&
+            !record.Restorations.ContainsKey(p.Key) && !RestorationSuperseded(record, p.Key)).Select(p => p.Key);
+
+    private static long RestorationLastSequence(RunRecord record, OperationId plan) =>
+        record.Receipts.Values.Where(e => e.Operation == plan || e.Event is RunEvent.GitIntended intended && intended.Plan == plan ||
+            e.Event is RunEvent.GitObserved observed && record.GitIntents[observed.Mutation].Plan == plan ||
+            e.Event is RunEvent.Blocked blocked && blocked.Block.Operation == plan).Max(e => e.Sequence);
+
+    private static bool RestorationMutation(RunRecord record, RunEvent.GitIntended intended)
+    {
+        if (record.Plans.GetValueOrDefault(intended.Plan) is not MaterializationPlan.Restoration plan ||
+            RestorationSuperseded(record, intended.Plan)) return false;
+        var owner = record.Preparations[new(plan.Attempt, 1)].Location.Owner;
+        return intended.Mutation switch
+        {
+            GitMutation.RestoreRef m => plan.To.Branch is { } target && m.Change == new RefChange(owner.Branch, plan.From.Branch, target),
+            GitMutation.RestoreFiles m => m.Task == plan.Task && Same(m.Paths, plan.Paths),
+            GitMutation.RemoveIndexLock m => m.Task == plan.Task && Same(m.Lock, plan.From.IndexLock),
+            _ => false,
+        };
     }
 
     private static bool CanRefresh(RunRecord record, AttemptId attempt) =>
@@ -293,8 +395,30 @@ internal static partial class RunReducer
                 return publication.Recipe.Parents.Length == 1 && publication.Recipe.Parents[0] == publication.VerifiedTip ? null : RunProblem.InvalidData;
             case MaterializationPlan.Salvage salvage:
                 return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&
-                    salvage.Recipe.Parents.Length is 1 or 2 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
-                    (salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents[1] == salvage.BranchTip) ? null : RunProblem.InvalidData;
+                    salvage.Recipe.Parents.Length is >= 1 and <= 4 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
+                    (salvage.Preserved is { } preserved ? salvage.Recipe.Tree == preserved.Files :
+                        salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents.Length == 2 && salvage.Recipe.Parents[1] == salvage.BranchTip)
+                    ? null : RunProblem.InvalidData;
+            case MaterializationPlan.Preservation preservation:
+                if (!record.Attempts.TryGetValue(preservation.Attempt, out var preservedAttempt) || preservedAttempt.Task != preservation.Task ||
+                    !record.Preparations.ContainsKey(new(preservation.Attempt, 1)) || preservation.Recipe.Tree != preservation.Preserved.Files ||
+                    record.RunKey is not { } preservedRun || !record.TaskKeys.TryGetValue(preservation.Task, out var preservedKey))
+                    return RunProblem.InvalidData;
+                var prefix = RunLayout.PreserveRef(preservedRun, preservedKey, new(Guid.Empty))[..^36];
+                return preservation.Ref.StartsWith(prefix, StringComparison.Ordinal) &&
+                    Guid.TryParseExact(preservation.Ref[prefix.Length..], "D", out var operation) && operation != Guid.Empty
+                    ? null : RunProblem.InvalidData;
+            case MaterializationPlan.Restoration restoration:
+                var preservationId = OperationIds.Derive(restoration.Preservation, "preserve-plan");
+                if (record.Schema != 3 || !record.Preservations.ContainsKey(preservationId) ||
+                    record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation retainedPreservation ||
+                    retainedPreservation.Task != restoration.Task || retainedPreservation.Attempt != restoration.Attempt ||
+                    !Same(restoration.From, retainedPreservation.Preserved)) return RunProblem.InvalidData;
+                var unfinished = UnfinishedRestorations(record, record.Preparations[new(restoration.Attempt, 1)].Location.Owner).ToArray();
+                if (unfinished.Length == 0) return restoration.Supersedes is null ? null : RunProblem.InvalidData;
+                if (unfinished.Length != 1 || restoration.Supersedes != unfinished[0]) return RunProblem.InvalidData;
+                var preservedSequence = record.Receipts.Values.Single(e => e.Event is RunEvent.Preserved p && p.Plan == preservationId).Sequence;
+                return preservedSequence > RestorationLastSequence(record, unfinished[0]) ? null : RunProblem.InvalidData;
             case MaterializationPlan.RetryReset reset:
                 return record.Salvages.ContainsKey(reset.SalvagePlan) &&
                     record.Plans.GetValueOrDefault(reset.SalvagePlan) is MaterializationPlan.Salvage retained &&

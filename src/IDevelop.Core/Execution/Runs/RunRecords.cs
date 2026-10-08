@@ -127,6 +127,9 @@ internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, Launch
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Recovery { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TreeId? IndexTree { get; init; }
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
@@ -206,6 +209,10 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(Prepared), "prepared")]
 [JsonDerivedType(typeof(Blocked), "blocked")]
 [JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
+[JsonDerivedType(typeof(Preserved), "preserved")]
+[JsonDerivedType(typeof(Restored), "restored")]
+[JsonDerivedType(typeof(RecoveryBaselined), "recoveryBaselined")]
+[JsonDerivedType(typeof(PreservationDiverged), "preservationDiverged")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
 [JsonDerivedType(typeof(RootExitObserved), "rootExitObserved")]
@@ -228,6 +235,25 @@ internal abstract record RunEvent
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
 
     internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
+
+    internal sealed record Restored(OperationId Plan, ImmutableArray<OperationId> Resolved) : RunEvent
+    {
+        public bool Equals(Restored? other) => other is not null && Plan == other.Plan && Resolved.SequenceEqual(other.Resolved);
+
+        public override int GetHashCode() => HashCode.Combine(Plan, Resolved.Length);
+    }
+
+    internal sealed record RecoveryBaselined(RecoveryBaseline Baseline, ImmutableArray<OperationId> Resolved) : RunEvent
+    {
+        public bool Equals(RecoveryBaselined? other) => other is not null && Baseline == other.Baseline && Resolved.SequenceEqual(other.Resolved);
+
+        public override int GetHashCode() => HashCode.Combine(Baseline, Resolved.Length);
+    }
+
+    internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
+
+    internal sealed record PreservationDiverged(OperationId Operation, PreservationObservation First, PreservationObservation Second,
+        BlockScope.Checkout Scope) : RunEvent;
 
     internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
 
@@ -279,7 +305,7 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending,
+    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending, SessionUnavailable,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -350,6 +376,15 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<LaunchKey, PreparedExecution> Preparations { get; internal init; } = ImmutableDictionary<LaunchKey, PreparedExecution>.Empty;
 
     public ImmutableDictionary<OperationId, MaterializationBlockState> Blocks { get; internal init; } = ImmutableDictionary<OperationId, MaterializationBlockState>.Empty;
+
+    public ImmutableDictionary<(AttemptId Previous, OperationId Confirmation), RunEvent.RecoveryBaselined> Baselines { get; internal init; } =
+        ImmutableDictionary<(AttemptId, OperationId), RunEvent.RecoveryBaselined>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.Restored> Restorations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Restored>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.Preserved> Preservations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Preserved>.Empty;
+
+    public ImmutableDictionary<OperationId, RunEvent.PreservationDiverged> PreservationDivergences { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.PreservationDiverged>.Empty;
 
     public ImmutableDictionary<OperationId, RunEvent.SalvageRetained> Salvages { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.SalvageRetained>.Empty;
 

@@ -61,7 +61,7 @@ internal sealed partial class Materializer
             var detail = $"Attempt {attempt.Value:D}, manifest {manifest}: {error.Message}";
             var bytes = Encoding.UTF8.GetBytes(detail);
             evidence = [storage.WriteEvidence(OperationIds.Derive(operation, "outbox-" + Revision.Hash(bytes).Sha256), "outbox-rejection.txt", bytes)];
-            throw Fault(MaterializationProblem.InputUnavailable, detail);
+            throw Fault(MaterializationProblem.InputUnavailable, detail, new BlockScope.Operation());
         }
     }
 

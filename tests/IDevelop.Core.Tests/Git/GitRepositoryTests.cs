@@ -11,6 +11,27 @@ namespace IDevelop.Core.Tests.Git;
 public sealed class GitRepositoryTests
 {
     [Fact]
+    public void Recorded_index_entries_build_a_fresh_tree_without_checkout_entries()
+    {
+        using var f = new GitFixture();
+        f.Diamond();
+        f.Write("staged.txt", "staged\n");
+        Assert.Equal(0, f.Run(f.Folder, "add", "staged.txt").ExitCode);
+        var blob = f.Git("rev-parse", ":staged.txt").Trim();
+        var bytes = Encoding.UTF8.GetBytes($"H 100644 {blob} 0\tspace and\ttab.txt\0" +
+            $"M 100644 {blob} 2\tconflict.txt\0");
+        var entries = GitRepository.ParseIndex(bytes);
+        var entry = Assert.Single(entries);
+        Assert.Equal(new StageEntry("100644", blob, 0, "space and\ttab.txt"), entry);
+        var repository = f.Open();
+        var tree = Read(repository.WriteTree(entries));
+        Assert.Equal("staged\n", f.Git("show", tree.Hex + ":space and\ttab.txt"));
+        Assert.Equal("space and\ttab.txt\0", f.Git("ls-tree", "-rz", "--name-only", tree.Hex));
+        Assert.Equal("A\n", f.Git("show", ":a.txt"));
+        Assert.Equal("staged\n", f.Git("show", ":staged.txt"));
+    }
+
+    [Fact]
     public void Git_tree_snapshot_completes_on_a_thread_whose_synchronization_context_never_runs_posts()
     {
         using var f = new GitFixture();

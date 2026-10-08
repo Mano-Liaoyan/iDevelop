@@ -4,10 +4,10 @@ internal static class RefOwnership
 {
     private static bool Reads(RunRecord record, RunEvent e) => e switch
     {
-        RunEvent.GitIntended { Mutation: GitMutation.MoveRef or GitMutation.CreateWorktree } => true,
-        RunEvent.GitObserved observed => record.GitIntents[observed.Mutation].Mutation is GitMutation.MoveRef or GitMutation.CreateWorktree,
+        RunEvent.GitIntended { Mutation: GitMutation.MoveRef or GitMutation.CreateWorktree or GitMutation.RestoreRef } => true,
+        RunEvent.GitObserved observed => record.GitIntents[observed.Mutation].Mutation is GitMutation.MoveRef or GitMutation.CreateWorktree or GitMutation.RestoreRef,
         RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.RootExitObserved or RunEvent.TurnClosed or
-            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained => true,
+            RunEvent.AttemptClosed or RunEvent.OwnershipFenced or RunEvent.SalvageRetained or RunEvent.RecoveryBaselined => true,
         _ => false,
     };
 
@@ -40,6 +40,11 @@ internal static class RefOwnership
                         target = null;
                         lease = false;
                     }
+                    if (mutation is GitMutation.RestoreRef restored && restored.Change.Ref == name)
+                    {
+                        expected = observed.Observation.Value is { } restoredValue ? new CommitId(restoredValue) : null;
+                        lease = false;
+                    }
                     break;
                 case RunEvent.Prepared prepared when record.Schema < 3 && prepared.Execution.Location.Owner.Branch == name &&
                     RunReducer.Editable(record, record.Attempts[prepared.Execution.Launch.Attempt]):
@@ -68,6 +73,13 @@ internal static class RefOwnership
                     break;
                 case RunEvent.OwnershipFenced fenced when fenced.Claims.Any(key =>
                     record.Preparations[key].Location.Owner.Branch == name):
+                    lease = false;
+                    break;
+                case RunEvent.RecoveryBaselined { Baseline: var baseline } when
+                    record.Preparations[new(baseline.Previous, 1)].Location.Owner.Branch == name:
+                    expected = ((MaterializationPlan.Preservation)record.Plans[
+                        OperationIds.Derive(baseline.Preservation, "preserve-plan")]).Preserved.Branch;
+                    target = null;
                     lease = false;
                     break;
                 case RunEvent.SalvageRetained retained:

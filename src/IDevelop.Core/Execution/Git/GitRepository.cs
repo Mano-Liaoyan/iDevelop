@@ -17,7 +17,10 @@ internal abstract record GitRead<T>
 {
     private GitRead() { }
     internal sealed record Read(T Value) : GitRead<T>;
-    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>;
+    internal sealed record Failed(MaterializationProblem Problem, string Detail) : GitRead<T>
+    {
+        public ImmutableArray<string> Refs { get; init; } = [];
+    }
 }
 
 internal abstract record RepositoryOpen
@@ -162,14 +165,14 @@ internal sealed partial class GitRepository
         var symbolic = Git(ProjectFolder, GitOperation.Metadata, ["symbolic-ref", "--quiet", name]);
         if (symbolic.ExitCode == 0)
             return new GitRead<CommitId?>.Failed(MaterializationProblem.UncertainOwnership,
-                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.");
-        if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic);
+                $"Ref {name} is symbolic to {symbolic.Text.TrimEnd('\r', '\n')}.") { Refs = [name] };
+        if (symbolic.ExitCode != 1) return Failure<CommitId?>(symbolic) with { Refs = [name] };
         var result = Git(ProjectFolder, GitOperation.Metadata, ["rev-parse", "--verify", "--quiet", name]);
         return result.ExitCode switch
         {
             0 => new GitRead<CommitId?>.Read(new(result.Text.Trim())),
             1 => new GitRead<CommitId?>.Read(null),
-            _ => Failure<CommitId?>(result),
+            _ => Failure<CommitId?>(result) with { Refs = [name] },
         };
     }
 
@@ -265,7 +268,7 @@ internal sealed partial class GitRepository
             if (excludedPrefix is not null && fields[0].StartsWith(excludedPrefix, StringComparison.Ordinal)) continue;
             if (fields[2].Length != 0)
                 return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
-                    $"Ref {fields[0]} is symbolic to {fields[2]}.");
+                    $"Ref {fields[0]} is symbolic to {fields[2]}.") { Refs = [fields[0]] };
             refs.Add(fields[0], new(fields[1]));
         }
         return new GitRead<SortedDictionary<string, CommitId>>.Read(refs);
@@ -420,6 +423,54 @@ internal sealed partial class GitRepository
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    public GitRead<TreeId> WriteTree(IEnumerable<StageEntry> entries)
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), $"idevelop-index-{Guid.NewGuid():N}");
+        try
+        {
+            var environment = new Dictionary<string, string> { ["GIT_INDEX_FILE"] = temporary };
+            var bytes = Encoding.UTF8.GetBytes(string.Concat(entries.Select(entry =>
+                $"{entry.Mode} {entry.Object} {entry.Stage.ToString(CultureInfo.InvariantCulture)}\t{entry.Path}\0")));
+            var indexed = Git(ProjectFolder, GitOperation.Worktree, ["update-index", "-z", "--index-info"], environment, bytes);
+            if (indexed.ExitCode != 0) return Failure<TreeId>(indexed);
+            var tree = Git(ProjectFolder, GitOperation.Worktree, ["write-tree"], environment);
+            return tree.ExitCode == 0 ? new GitRead<TreeId>.Read(new(tree.Text.Trim())) : Failure<TreeId>(tree);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new GitRead<TreeId>.Failed(MaterializationProblem.GitFailed, error.Message);
+        }
+        finally
+        {
+            File.Delete(temporary);
+            File.Delete(temporary + ".lock");
+        }
+    }
+
+    internal static ImmutableArray<StageEntry> ParseIndex(byte[] bytes)
+    {
+        var entries = ImmutableArray.CreateBuilder<StageEntry>();
+        string text;
+        try { text = new UTF8Encoding(false, true).GetString(bytes); }
+        catch (DecoderFallbackException error) { throw new IOException("The recorded index has a non-UTF-8 path.", error); }
+        var offset = 0;
+        while (offset < text.Length)
+        {
+            var end = text.IndexOf('\0', offset);
+            if (end < 0) throw new IOException("The recorded index has an incomplete entry.");
+            var tab = text.IndexOf('\t', offset, end - offset);
+            if (tab < 0) throw new IOException("The recorded index has an invalid entry.");
+            var header = text[offset..tab].Split(' ');
+            if (header.Length != 4 || header[0].Length != 1 || header[1].Length != 6 ||
+                !header[1].All(character => character is >= '0' and <= '7') || !Revision.IsCommit(header[2]) ||
+                !int.TryParse(header[3], NumberStyles.None, CultureInfo.InvariantCulture, out var stage) || stage is < 0 or > 3 || tab + 1 == end)
+                throw new IOException("The recorded index has an invalid entry.");
+            if (stage == 0) entries.Add(new(header[1], header[2], stage, text[(tab + 1)..end]));
+            offset = end + 1;
+        }
+        return entries.ToImmutable();
     }
 
     public GitRead<CommitId> CreateCommit(CommitRecipe recipe)

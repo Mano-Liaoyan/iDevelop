@@ -137,7 +137,7 @@ public sealed class MaterializationTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
         Assert.Equal(RunProblem.UnfinishedPublication, Problem(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped)));
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(operation, T, A1,
-            MaterializationProblem.DirtyWorktree, reservation.Inputs.Id, [], "Checkout changed."))));
+            MaterializationProblem.DirtyWorktree, reservation.Inputs.Id, [], "Checkout changed.") { Scope = BlockScope.Checkout.Whole })));
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped));
         Assert.Equal(RunPhase.Stopped, f.Read().Phase);
     }
@@ -281,7 +281,7 @@ public sealed class MaterializationTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(reset)));
         var block = f.Op();
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, block, new RunEvent.Blocked(new(operation, T, A1,
-            MaterializationProblem.UncertainOwnership, reservation.Inputs.Id, [file], "Retained for inspection."))));
+            MaterializationProblem.UncertainOwnership, reservation.Inputs.Id, [file], "Retained for inspection.") { Scope = new BlockScope.Ownership() })));
         Assert.Equal(RunProblem.InvalidData, Problem(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(block, " "))));
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(block, "Verified ownership.")));
         Assert.True(f.Read().Blocks[block].Resolved);

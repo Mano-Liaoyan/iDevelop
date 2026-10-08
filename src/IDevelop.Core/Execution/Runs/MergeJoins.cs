@@ -22,24 +22,24 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
     {
         cancellation.ThrowIfCancellationRequested();
         try { return ValueTask.FromResult(Compose(request)); }
-        catch (MergeFailure failed) { return ValueTask.FromResult(Block(request, failed.Problem, failed.Message)); }
+        catch (MergeFailure failed) { return ValueTask.FromResult(Block(request, failed.Problem, failed.Message, new BlockScope.Operation())); }
     }
 
     private JoinOutcome Compose(JoinRequest request)
     {
         var read = store.Read(request.Permit.Workflow, request.Permit.Run);
-        if (read is RunRead.Rejected rejected) return Block(request, MaterializationProblem.InputUnavailable, rejected.Reason.Problem.ToString());
+        if (read is RunRead.Rejected rejected) return Block(request, MaterializationProblem.InputUnavailable, rejected.Reason.Problem.ToString(), new BlockScope.Operation());
         var record = ((RunRead.Loaded)read).Record;
         if (request.Sources.Any(source => record.CurrentResults.GetValueOrDefault(source.Task)?.Id != source.Result))
-            return Block(request, MaterializationProblem.InputUnavailable, "A join source is no longer its task's current result.");
+            return Block(request, MaterializationProblem.InputUnavailable, "A join source is no longer its task's current result.", new BlockScope.Operation());
         var reference = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[request.Task]);
         ImmutableArray<CommitId> parents = [.. request.Sources.Select(source => source.Commit).Distinct()];
         var existing = record.Plans.GetValueOrDefault(request.Operation) as MaterializationPlan.Join;
         if (existing is not null && (existing.Task != request.Task || existing.Inputs != request.Inputs || !RunReducer.Same(existing.Sources, request.Sources)))
-            return Block(request, MaterializationProblem.InputUnavailable, $"Join operation {request.Operation.Value:D} has different inputs.");
+            return Block(request, MaterializationProblem.InputUnavailable, $"Join operation {request.Operation.Value:D} has different inputs.", new BlockScope.Operation());
         var repository = Repository();
         if (GitRepository.ParseVersion(repository.Version) is not { } version || version < new Version(2, 43, 0))
-            return Block(request, MaterializationProblem.GitVersionUnsupported, $"Joins need Git 2.43 or later. Installed: {repository.Version}.");
+            return Block(request, MaterializationProblem.GitVersionUnsupported, $"Joins need Git 2.43 or later. Installed: {repository.Version}.", new BlockScope.Operation());
         repository.RemoveMergeScratchFolders();
         var timestamps = Value(repository.CommitterTimestamps(parents));
         var timestamp = timestamps[0];
@@ -68,10 +68,10 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                     var detail = $"Merge step {step} of {parents.Length - 1} conflicts" + (paths.IsEmpty ? "." : " in " + string.Join(", ", paths) + ".");
                     return new JoinOutcome.Blocked(new(request.Operation, request.Task, null, MaterializationProblem.FanInConflict,
                         request.Inputs, [stdout, stderr], detail, new(request.Sources, step, paths, conflict.Stages, conflict.Messages,
-                            stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit)));
+                            stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit)) { Scope = new BlockScope.Operation() });
                 }
                 case TreeMerge.Failed failed:
-                    return Block(request, MaterializationProblem.GitFailed, failed.Detail);
+                    return Block(request, MaterializationProblem.GitFailed, failed.Detail, new BlockScope.Operation());
                 default:
                     throw new InvalidOperationException();
             }
@@ -80,16 +80,16 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         if (existing is not null)
         {
             if (tree != existing.Recipe.Tree || !parents.SequenceEqual(existing.Recipe.Parents))
-                return Block(request, MaterializationProblem.InputUnavailable, "The recorded join is not the clean merge of its sources.");
+                return Block(request, MaterializationProblem.InputUnavailable, "The recorded join is not the clean merge of its sources.", new BlockScope.Operation());
             var restored = Value(Mutate("join-commit", () => repository.CreateCommit(existing.Recipe)));
             if (restored != existing.Commit)
-                return Block(request, MaterializationProblem.InputUnavailable, "The recorded join commit does not match its recipe.");
+                return Block(request, MaterializationProblem.InputUnavailable, "The recorded join commit does not match its recipe.", new BlockScope.Operation());
             plan = existing;
         }
         else
         {
             if (!RefOwnership.Accepts(record, repository, reference, request.ExpectedJoin))
-                return Block(request, MaterializationProblem.UncertainOwnership, $"Join ref {reference} has unexpected value {request.ExpectedJoin?.Hex ?? "absent"}.");
+                return Block(request, MaterializationProblem.UncertainOwnership, $"Join ref {reference} has unexpected value {request.ExpectedJoin?.Hex ?? "absent"}.", new BlockScope.Refs([reference]));
             var recipe = Recipe(tree, parents, timestamp);
             var commit = Value(Mutate("join-commit", () => repository.CreateCommit(recipe)));
             plan = new(request.Task, request.Inputs, request.Sources, recipe, commit, request.ExpectedJoin, reference);
@@ -97,14 +97,14 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
             var decision = store.Record(request.Permit, request.Operation, new RunEvent.Planned(plan));
             probe?.Invoke("journal.join-plan.after");
             if (decision is RunDecision.Rejected refused)
-                return Block(request, MaterializationProblem.InputUnavailable, refused.Reason.Problem.ToString());
+                return Block(request, MaterializationProblem.InputUnavailable, refused.Reason.Problem.ToString(), new BlockScope.Operation());
         }
         return new RefPublisher(store, probe).Publish(request.Permit, request.Operation, request.Operation, "join",
             repository, new(reference, plan.Previous, plan.Commit)) switch
         {
             RefPublication.Completed => new JoinOutcome.Ready(new(request.Operation, request.Sources, plan.Commit, plan.Recipe.Tree, reference)),
-            RefPublication.Blocked blocked => Block(request, blocked.Problem, blocked.Detail),
-            RefPublication.Rejected refused => Block(request, MaterializationProblem.InputUnavailable, refused.Reason.Problem.ToString()),
+            RefPublication.Blocked blocked => Block(request, blocked.Problem, blocked.Detail, new BlockScope.Refs([reference])),
+            RefPublication.Rejected refused => Block(request, MaterializationProblem.InputUnavailable, refused.Reason.Problem.ToString(), new BlockScope.Operation()),
             _ => throw new InvalidOperationException(),
         };
 
@@ -135,8 +135,8 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
         _ => throw new InvalidOperationException(),
     };
 
-    private static JoinOutcome Block(JoinRequest request, MaterializationProblem problem, string detail) =>
-        new JoinOutcome.Blocked(new(request.Operation, request.Task, null, problem, request.Inputs, [], detail));
+    private static JoinOutcome Block(JoinRequest request, MaterializationProblem problem, string detail, BlockScope scope) =>
+        new JoinOutcome.Blocked(new(request.Operation, request.Task, null, problem, request.Inputs, [], detail) { Scope = scope });
 
     private sealed class MergeFailure(MaterializationProblem problem, string detail) : Exception(detail)
     { public MaterializationProblem Problem { get; } = problem; }

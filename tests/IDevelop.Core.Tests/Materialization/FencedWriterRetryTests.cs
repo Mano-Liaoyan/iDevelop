@@ -27,7 +27,7 @@ public sealed class FencedWriterRetryTests
             Assert.Equal(new[] { ready.Execution.Launch }, f.Read().Fenced);
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
-        var retained = Assert.IsType<Salvage.Retained>(f.Materializer().Salvage(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("B\n", f.Git.Git("show", retained.Commit.Hex + ":b.txt"));
         var reset = f.Materializer().ResetForRetry(f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op());
         Assert.Equal(expected, reset switch

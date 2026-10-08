@@ -35,6 +35,19 @@ public sealed class RunLayoutTests
     }
 
     [Fact]
+    public void Capture_and_preservation_pins_use_full_attempt_and_operation_ids()
+    {
+        var attempt = new AttemptId(Guid.Parse("019a9d2e-0000-7000-8000-000000000001"));
+        var operation = new OperationId(Guid.Parse("019a9d2e-0000-7000-8000-000000000002"));
+        Assert.Equal("refs/idp/3940f0a5/pin/b258126a/019a9d2e-0000-7000-8000-000000000001/3/capture-2-index",
+            RunLayout.CaptureIndexPin("3940f0a5", "b258126a", new(attempt, 3), 2));
+        Assert.Equal("refs/idp/3940f0a5/pin/b258126a/019a9d2e-0000-7000-8000-000000000001/preserve/019a9d2e-0000-7000-8000-000000000002/2",
+            RunLayout.PreservationPin("3940f0a5", "b258126a", attempt, operation, 2));
+        Assert.Equal("refs/idp/3940f0a5/preserve/b258126a/019a9d2e-0000-7000-8000-000000000002",
+            RunLayout.PreserveRef("3940f0a5", "b258126a", operation));
+    }
+
+    [Fact]
     public void Used_run_keys_include_branches_and_retention_refs_but_not_neighbors()
     {
         var refs = new Dictionary<string, CommitId>

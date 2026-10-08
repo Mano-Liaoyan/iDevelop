@@ -43,6 +43,15 @@ internal static class RunLayout
     public static string CapturePin(string run, string task, LaunchKey launch, int ordinal) =>
         $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-{ordinal}";
 
+    public static string CaptureIndexPin(string run, string task, LaunchKey launch, int ordinal) =>
+        $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-{ordinal}-index";
+
+    public static string PreservationPin(string run, string task, AttemptId attempt, OperationId operation, int ordinal) =>
+        $"{PinPrefix(run)}{task}/{attempt.Value:D}/preserve/{operation.Value:D}/{ordinal}";
+
+    public static string PreserveRef(string run, string task, OperationId operation) =>
+        $"refs/idp/{run}/preserve/{task}/{operation.Value:D}";
+
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 
     public static string Outbox(AttemptId attempt) => $".idp/outbox/{attempt.Value:D}";

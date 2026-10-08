@@ -44,6 +44,32 @@ public sealed class CaptureTests
     }
 
     [Fact]
+    public async System.Threading.Tasks.Task Matching_captures_require_equal_retained_index_trees()
+    {
+        var template = await ObservationTemplates();
+        foreach (var matches in new[] { false, true })
+        {
+            using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+            var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+            var log = f.ObserveAndLog(ready);
+            var first = template.First with { Launch = ready.Execution.Launch, Log = log };
+            Assert.NotNull(first.IndexTree);
+            RecordObservation(f, first);
+            RecordObservation(f, template.Second with { Launch = first.Launch, Log = first.Log,
+                IndexTree = matches ? first.IndexTree : null });
+            var outcome = f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(first.Capture,
+                first.Launch, new CaptureDisposition.Matched()));
+            if (matches) Assert.IsType<CaptureDisposition.Matched>(Assert.Single(Assert.IsType<RunDecision.Recorded>(outcome).Record.Dispositions).Value.Disposition);
+            else
+            {
+                Assert.Equal("EvidenceMismatch", Assert.IsType<RunDecision.Rejected>(outcome).Reason.Problem.ToString());
+                Assert.Empty(f.Read().Dispositions);
+            }
+            Assert.Equal(2, f.Read().Captures[first.Capture].Count);
+        }
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task Capture_ordinals_must_start_at_one_and_advance_once()
     {
         var template = await ObservationTemplates();
@@ -819,7 +845,7 @@ public sealed class CaptureTests
             var operation = f.Op();
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Blocked(new(
                 operation, U, sibling.Execution.Launch.Attempt, MaterializationProblem.InputUnavailable,
-                sibling.Execution.Inputs, [], "Sibling input became unavailable."))));
+                sibling.Execution.Inputs, [], "Sibling input became unavailable.") { Scope = new BlockScope.Operation() })));
         }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
         Assert.Equal("Matched", settled.Disposition.GetType().Name);
         Assert.Equal(2, snapshots);
