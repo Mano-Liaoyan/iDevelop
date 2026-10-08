@@ -253,11 +253,16 @@ public sealed class CoordinatorProcessTests
             f.ReleaseControl();
             var start = Soon(2500);
             var release = Path.Combine(f.Project, "release");
+            var go = Path.Combine(f.Project, "go");
+            using var stopper = new Racer("stale-stop", f.Project, G(W.Value), G(Run.Value), Shift(start, round * 15), go);
+            Assert.Equal("ready", await stopper.Line());
             using var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), G(A1.Value), "hold", start, release);
             Assert.Equal("Owned:", await owner.Line());
-            using var stopper = new Racer("stop", f.Project, G(W.Value), G(Run.Value), Shift(start, round * 15));
+            File.WriteAllText(go, "");
             Assert.Equal("claim:Granted@7", await owner.Line());
-            Assert.Equal("Busy", await stopper.Line());
+            var bytes = File.ReadAllBytes(f.Journal(W, Run));
+            Assert.Equal("Busy|Rejected:TaskBusy", await stopper.Line());
+            Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
             Assert.Equal("ready:True,-,True", await owner.Line());
             Assert.Equal(RunPhase.Approved, f.Read().Phase);
             Assert.Equal(7, f.Read().Sequence);
@@ -274,17 +279,23 @@ public sealed class CoordinatorProcessTests
     {
         using var f = new RunFixtures(FixtureWorkflow(Task(T), Task(U)));
         f.Approve();
+        var go = Path.Combine(f.Project, "go");
+        using var stopper = new Racer("stale-stop", f.Project, G(W.Value), G(Run.Value), "-", go);
+        Assert.Equal("ready", await stopper.Line());
+        using var reserver = new Racer("stale-reserve", f.Project, G(W.Value), G(Run.Value), G(U.Value), "-", go);
+        Assert.Equal("ready", await reserver.Line());
         using var owner = new Racer("own", f.Project, G(W.Value), G(Run.Value), G(T.Value), "-", "hold", "-",
             Path.Combine(f.Project, "never"));
         Assert.Equal("Owned:", await owner.Line());
         Assert.Equal("ready:True,-,True", await owner.Line());
         Assert.IsType<ControlTake.Busy>(f.Store.TakeControl(W, Run));
-        using var stopper = new Racer("stop", f.Project, G(W.Value), G(Run.Value), "-");
-        using var reserver = new Racer("reserve", f.Project, G(W.Value), G(Run.Value), G(U.Value), "-");
-        Assert.Equal("Busy", await stopper.Line());
-        Assert.Equal("Busy", await reserver.Line());
+        var bytes = File.ReadAllBytes(f.Journal(W, Run));
+        File.WriteAllText(go, "");
+        Assert.Equal("Busy|Rejected:TaskBusy", await stopper.Line());
+        Assert.Equal("Busy|Rejected:TaskBusy", await reserver.Line());
         await stopper.Exit();
         await reserver.Exit();
+        Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
         Assert.Equal(1, f.Read().Sequence);
         Assert.Equal(RunPhase.Approved, f.Read().Phase);
         owner.Kill();

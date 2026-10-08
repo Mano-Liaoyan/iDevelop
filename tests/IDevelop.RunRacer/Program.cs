@@ -110,6 +110,40 @@ internal static class Program
                 }
                 return 0;
             }
+            case "stale-stop":
+            {
+                var permit = ((ControlTake.Owned)store.TakeControl(workflow, run)).Permit;
+                permit.Dispose();
+                Console.WriteLine("ready");
+                Wait(args[5]);
+                At(args[4]);
+                var take = store.TakeControl(workflow, run);
+                using var fresh = (take as ControlTake.Owned)?.Permit;
+                Console.Write(Describe(take) + "|");
+                Console.WriteLine(Describe(store.Stop(permit, new OperationId(Guid.CreateVersion7()))));
+                return 0;
+            }
+            case "stale-reserve":
+            {
+                var permit = ((ControlTake.Owned)store.TakeControl(workflow, run)).Permit;
+                var task = new TaskId(Guid.Parse(args[4]));
+                var lease = ((LeaseTake.Taken)permit.TakeTask(task)).Lease;
+                var record = ((RunRead.Loaded)store.Read(workflow, run)).Record;
+                lease.Dispose();
+                permit.Dispose();
+                Console.WriteLine("ready");
+                Wait(args[6]);
+                At(args[5]);
+                var take = store.TakeControl(workflow, run);
+                using var fresh = (take as ControlTake.Owned)?.Permit;
+                Console.Write(Describe(take) + "|");
+                var plan = new OperationId(Guid.CreateVersion7());
+                var decision = store.Plan(lease, plan, record.Revision.Id, new AttemptCause.Initial());
+                if (decision is not RunDecision.Rejected)
+                    decision = store.Reserve(lease, new OperationId(Guid.CreateVersion7()), plan);
+                Console.WriteLine(Describe(decision));
+                return 0;
+            }
             case "stop":
             {
                 At(args[4]);
