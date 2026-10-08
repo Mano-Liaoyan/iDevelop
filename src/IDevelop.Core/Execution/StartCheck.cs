@@ -34,8 +34,8 @@ public abstract record StartProblem
     public sealed record SubjectNotDone(string Title) : StartProblem;
 
     /// <summary>
-    /// iDevelop has no record of the subject's change: the project is not in Git, a sparse checkout left files out, Git
-    /// failed, or the subject ran before iDevelop recorded changes.
+    /// iDevelop cannot show the subject's change: the project is not in Git, a sparse checkout left files out, Git
+    /// failed or can no longer read the recorded trees, or the subject ran before iDevelop recorded changes.
     /// </summary>
     public sealed record NoChange(string Title) : StartProblem;
 

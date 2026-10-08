@@ -370,7 +370,7 @@ internal sealed partial class GitRepository
         foreach (var path in NulFields(listed).Where(entry => char.ToUpperInvariant(entry[0]) == 'S').Select(entry => entry[2..]))
         {
             var full = Path.Combine(folder, path);
-            if (!Path.Exists(full) && new FileInfo(full).LinkTarget is null)
+            if (!Path.Exists(full))
                 return new GitRead<TreeId>.Failed(MaterializationProblem.DirtyWorktree, $"The index marks {path} skip-worktree, and the work tree has no such file.");
         }
         return WriteTree(folder, excludedPaths, environment, limits);
@@ -663,12 +663,12 @@ internal sealed partial class GitRepository
             using var output = new MemoryStream();
             using var stdoutPipe = process.StandardOutput;
             using var stderrPipe = process.StandardError;
-            using var stdinPipe = process.StandardInput;
+            using var stdinPipe = process.StandardInput.BaseStream;
             var stdout = Task.Run(() => stdoutPipe.BaseStream.CopyToAsync(output, stop.Token));
             var stderr = Task.Run(() => stderrPipe.ReadToEndAsync(stop.Token));
             var input = Task.Run(async () =>
             {
-                if (stdin is not null) await stdinPipe.BaseStream.WriteAsync(stdin, stop.Token).ConfigureAwait(false);
+                if (stdin is not null) await stdinPipe.WriteAsync(stdin, stop.Token).ConfigureAwait(false);
                 stdinPipe.Close();
             });
             var pipes = Task.WhenAll(stdout, stderr, input);
@@ -684,10 +684,10 @@ internal sealed partial class GitRepository
                 throw error.GetBaseException();
             }
             // A process that outlived Git, such as one a hook started, can hold the pipes open, and no tree kill finds it.
+            // On Windows, closing a pipe does not end a read blocked on it, so the reads are canceled first.
             ProcessCheck.KillTreeQuietly(process);
             process.WaitForExit(Settle);
             if (Task.WaitAny([pipes], Settle) < 0) stop.Cancel();
-            Task.WaitAny([pipes], Settle);
             return new(-1, [], (stderr.IsCompletedSuccessfully ? stderr.Result : "") + "Git timed out.");
         }
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
