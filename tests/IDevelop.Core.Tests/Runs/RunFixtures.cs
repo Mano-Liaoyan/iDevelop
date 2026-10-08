@@ -103,7 +103,7 @@ internal sealed class RunFixtures : IDisposable
         _permits.Clear();
     }
 
-    public RunStore NewStore() => RunStore.Open(Project, new FixedClock(), () => Id(Interlocked.Increment(ref _id)));
+    public RunStore NewStore(TimeProvider? clock = null) => RunStore.Open(Project, clock ?? new FixedClock(), () => Id(Interlocked.Increment(ref _id)));
 
     public string AnotherProject() => _temp.Create("other");
 
