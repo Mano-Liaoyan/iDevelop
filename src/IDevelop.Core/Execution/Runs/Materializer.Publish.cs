@@ -180,17 +180,34 @@ internal sealed partial class Materializer
         return capture;
     }
 
-    private static void VerifyPublicationDisposition(RunRecord record, CaptureId capture, ref ImmutableArray<EvidenceFile> evidence)
+    private void VerifyPublicationDisposition(RunRecord record, CaptureId capture, ref ImmutableArray<EvidenceFile> evidence)
     {
         switch (record.Dispositions[capture].Disposition)
         {
             case CaptureDisposition.Diverged diverged:
+                if (diverged.Problem == MaterializationProblem.UncertainOwnership)
+                {
+                    var observations = record.Captures[capture];
+                    var prepared = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
+                        .Single(entry => entry.Execution.Launch == observations[0].Launch).SharedRefs;
+                    evidence = [prepared, .. observations.Select(observation => observation.SharedRefs)];
+                    var storage = new RunStorage(_project, record.Workflow, record.Id);
+                    var snapshots = evidence.Select(file => JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
+                        RunStorage.Read(storage.Folder, file.RelativePath, file.Content, file.ByteLength), RunJournal.Options) ??
+                        throw Fault(MaterializationProblem.InputUnavailable, "The shared-ref snapshot is absent.")).ToArray();
+                    var detail = diverged.Refs.Select(name => $"{name}: prepared {Tip(snapshots[0], name)}, " +
+                        $"observation 1 {Tip(snapshots[1], name)}, observation 2 {Tip(snapshots[2], name)}");
+                    throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail));
+                }
                 throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)));
             case CaptureDisposition.Failed failed:
                 evidence = failed.Evidence;
                 throw Fault(failed.Problem, failed.Detail);
         }
     }
+
+    private static string Tip(IReadOnlyDictionary<string, CommitId> refs, string name) =>
+        refs.TryGetValue(name, out var tip) ? tip.Hex : "absent";
 
     private void VerifyPublicationBaseline(GitRepository repository, string checkout, TreeId tree, Digest? index,
         bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence)

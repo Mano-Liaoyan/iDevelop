@@ -123,7 +123,7 @@ internal readonly record struct CaptureId(Guid Value);
 
 internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, LaunchKey Launch, LogCheckpoint Log,
     DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId Candidate, CommitId? Tip, string? Head,
-    EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, ImmutableArray<string> UnexplainedRefs);
+    EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, EvidenceFile SharedRefs, ImmutableArray<string> UnexplainedRefs);
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Matched), "matched")]
@@ -275,7 +275,7 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable,
+    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);

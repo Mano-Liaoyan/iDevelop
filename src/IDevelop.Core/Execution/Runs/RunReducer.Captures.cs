@@ -38,6 +38,8 @@ internal static partial class RunValidation
         !observation.Artifacts.IsDefault && observation.Artifacts.All(file => Artifact(file) &&
             file.StoredPath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "artifacts/" + file.Name)) &&
         observation.Artifacts.Select(file => file.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == observation.Artifacts.Length &&
+        Evidence(observation.SharedRefs) &&
+        observation.SharedRefs.RelativePath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "refs.json") &&
         !observation.UnexplainedRefs.IsDefault && observation.UnexplainedRefs.All(Reference);
 
     private static bool Disposition(CaptureDisposition disposition) => disposition switch

@@ -23,6 +23,10 @@ internal sealed partial class Materializer
             $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.");
     }
 
+    private static SortedDictionary<string, CommitId> SharedRefSnapshot(GitRepository repository, RunRecord record) =>
+        Value(repository.RefSnapshot(["refs/stash", $"refs/heads/idp/{record.RunKey}/", $"refs/idp/{record.RunKey}/"],
+            RunLayout.PinPrefix(record.RunKey!)));
+
     private ImmutableArray<string> UnexplainedPublicationRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
         out byte[] bytes, out SortedDictionary<string, CommitId> before, out SortedDictionary<string, CommitId> after)
     {
@@ -33,7 +37,7 @@ internal sealed partial class Materializer
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
             throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.");
         var firstSequence = record.Sequence;
-        after = Value(repository.RefSnapshot("refs/stash", $"refs/heads/idp/{record.RunKey}/", $"refs/idp/{record.RunKey}/"));
+        after = SharedRefSnapshot(repository, record);
         _probe?.Invoke("refs.snapshot.after");
         record = Read(record.Workflow, record.Id);
         var sequences = record.Receipts.Values.Where(entry => entry.Sequence >= firstSequence).Select(entry => entry.Sequence).ToArray();

@@ -266,7 +266,8 @@ public sealed class ReviewMaterializationTests
         Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("approved\n", File.ReadAllText(Path.Combine(ready.Checkout, "plan.txt")));
-        Assert.Equal("refs/idp/93f23689/resalvage/c67f2fc3/00000000-0000-0000-0000-000000000109/3e518864-e0d7-82d3-9b24-f6c4cb9835c6",
+        Assert.Equal("refs/idp/93f23689/pin/c67f2fc3/00000000-0000-0000-0000-000000000109/1/root\n" +
+            "refs/idp/93f23689/resalvage/c67f2fc3/00000000-0000-0000-0000-000000000109/3e518864-e0d7-82d3-9b24-f6c4cb9835c6",
             f.Git.Git("for-each-ref", "--contains", "76e13b8982291f82ffbee6a1302464dedddae3f5", "--format=%(refname)").Trim());
         Assert.Equal("A\n", f.Git.Git("show", "76e13b8982291f82ffbee6a1302464dedddae3f5:a.txt"));
         var refresh = Assert.Single(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());

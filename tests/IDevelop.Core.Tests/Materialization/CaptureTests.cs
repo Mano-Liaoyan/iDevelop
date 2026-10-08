@@ -244,7 +244,8 @@ public sealed class CaptureTests
             new(3, current.Sequence + 1, f.Op(), Prompt, At, e));
         var falseMatch = record with { Captures = record.Captures.SetItem(pair.Key, pair.Value.SetItem(1, pair.Value[1] with { Report = "Different." })) };
         Assert.Equal(RunProblem.EvidenceMismatch, Assert.IsType<RunRead.Rejected>(Apply(falseMatch, matched)).Reason.Problem);
-        var third = pair.Value[1] with { Ordinal = 3, Index = pair.Value[1].Index! with { RelativePath = RunStorage.CapturePath(pair.Key, 3, "index") } };
+        var third = pair.Value[1] with { Ordinal = 3, Index = pair.Value[1].Index! with { RelativePath = RunStorage.CapturePath(pair.Key, 3, "index") },
+            SharedRefs = pair.Value[1].SharedRefs with { RelativePath = RunStorage.CapturePath(pair.Key, 3, "refs.json") } };
         Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RunRead.Rejected>(Apply(record, new RunEvent.TurnCaptured(third))).Reason.Problem);
         var disposed = Assert.IsType<RunRead.Loaded>(Apply(record, matched)).Record;
         Assert.Equal(RunProblem.EvidenceMismatch, Assert.IsType<RunRead.Rejected>(Apply(disposed,
@@ -265,7 +266,8 @@ public sealed class CaptureTests
         var log = new LogCheckpoint(10, Prompt);
         var observation = new CaptureObservation(capture, 1, launch, log, At, At,
             new(new(Base.Hex), [Base], "capture", "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", At),
-            Base, Base, "refs/heads/idp/task", null, null, [], []);
+            Base, Base, "refs/heads/idp/task", null, null, [],
+            new(RunStorage.CapturePath(capture, 1, "refs.json"), Prompt, 10), []);
         RunEvent[] events = [new RunEvent.TurnCaptured(observation),
             new RunEvent.CaptureDisposed(capture, launch, new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable, "Missing.", [])),
             new RunEvent.TurnClosed(launch, log) { Capture = capture }];

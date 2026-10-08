@@ -246,7 +246,9 @@ internal sealed partial class GitRepository
     public GitRead<ImmutableArray<string>> TreeFiles(CommitId commit) =>
         ReadPaths(Git(ProjectFolder, GitOperation.Metadata, ["ls-tree", "-r", "--name-only", "-z", commit.Hex]));
 
-    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns)
+    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(params string[] patterns) => RefSnapshot(patterns, null);
+
+    public GitRead<SortedDictionary<string, CommitId>> RefSnapshot(string[] patterns, string? excludedPrefix)
     {
         var result = Git(ProjectFolder, GitOperation.Metadata, ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)", .. patterns]);
         if (result.ExitCode != 0)
@@ -257,6 +259,7 @@ internal sealed partial class GitRepository
         foreach (var line in result.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var fields = line.Split('\0');
+            if (excludedPrefix is not null && fields[0].StartsWith(excludedPrefix, StringComparison.Ordinal)) continue;
             if (fields[2].Length != 0)
                 return new GitRead<SortedDictionary<string, CommitId>>.Failed(MaterializationProblem.UncertainOwnership,
                     $"Ref {fields[0]} is symbolic to {fields[2]}.");
@@ -419,6 +422,9 @@ internal sealed partial class GitRepository
             _ => throw new InvalidOperationException(),
         };
     }
+
+    public GitResult DeleteRef(string name, CommitId expected) =>
+        Git(ProjectFolder, GitOperation.Metadata, ["update-ref", "--no-deref", "-d", name, expected.Hex]);
 
     public IndexAlignment AlignIndex(string checkout, Digest? expected, TreeId target)
     {

@@ -383,7 +383,8 @@ public sealed class MaterializationTests
                 { StoredPath = RunStorage.CapturePath(capture, ordinal, "artifacts/" + artifact.Name) }).ToImmutableArray();
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(new(capture, ordinal,
                 prepared.Launch, log, at, at, Recipe(prepared.Location.AttemptBase), candidate ?? WriterCommit,
-                prepared.Location.AttemptBase, prepared.Location.Owner.Branch, null, report, frozenArtifacts, []))));
+                prepared.Location.AttemptBase, prepared.Location.Owner.Branch, null, report, frozenArtifacts,
+                new(RunStorage.CapturePath(capture, ordinal, "refs.json"), Prompt, 10), []))));
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(capture, prepared.Launch,
             new CaptureDisposition.Matched())));

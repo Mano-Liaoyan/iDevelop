@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace IDevelop.Execution;
 
@@ -48,6 +49,7 @@ internal sealed partial class Materializer
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
             var ownership = RefOwnership.Accepts(record, repository, location.Owner.Branch, tip)
                 ? TipOwnership.Explained : TipOwnership.Unexplained;
+            Pin(repository, RunLayout.RootPin(record.RunKey!, record.TaskKeys[location.Owner.Task], launch), tip);
             var observation = new RunEvent.RootExitObserved(launch, exit, _clock.GetUtcNow(), tip, head, ownership);
             var decision = Journal("root-exit", () => _store.Record(permit, OperationIds.Derive(operation, "root-exit"), observation));
             return new RootObservation.Observed((RunEvent.RootExitObserved)DecisionEvent(decision));
@@ -183,15 +185,20 @@ internal sealed partial class Materializer
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(operation, "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
-        var unexplained = UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out _);
+        var unexplained = UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out var sharedRefs);
+        var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
+        var refs = new EvidenceFile(RunStorage.CapturePath(id, ordinal, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
+        RunStorage.Publish(storage.Folder, refs.RelativePath, refBytes, refs.Content, refs.ByteLength);
+        evidence = evidence.Add(refs);
         var root = record.RootExits[launch];
         var definition = record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot.Tasks[task];
         var recipe = new CommitRecipe(captured.Tree, [root.Tip],
             $"{definition.Title}\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {launch.Attempt.Value:D}\n",
             "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", DateTimeOffset.FromUnixTimeSeconds(root.At.ToUnixTimeSeconds()));
         var candidate = Value(repository.CreateCommit(recipe));
+        Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate);
         return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
-            logged.Record!.Result, artifacts, unexplained);
+            logged.Record!.Result, artifacts, refs, unexplained);
     }
 
     private CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation first, CaptureObservation second)
