@@ -458,7 +458,7 @@ public sealed class RunReviewTests
     [Theory]
     [InlineData("runner.lookup")]
     [InlineData("runner.claim.before")]
-    public async Task A_fix_round_whose_start_failed_starts_once_as_first_asked_while_new_guidance_waits_for_the_next_step(string point)
+    public async Task A_fix_round_whose_start_failed_starts_once_and_takes_guidance_only_while_nothing_was_reserved(string point)
     {
         await using var f = new RunConversationFixture(Reviewed());
         Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
@@ -484,13 +484,15 @@ public sealed class RunReviewTests
 
         var record = f.Read();
         Assert.Equal(1, thrown);
+        // A start refused before its reservation asks again with the guidance; a reserved one keeps the guidance it recorded.
+        var reserved = point == "runner.claim.before";
         var fix = Assert.Single(record.Attempts.Values, attempt => attempt.Cause is AttemptCause.ReviewFix);
-        Assert.Equal(0, Assert.IsType<AttemptCause.ReviewFix>(fix.Cause).Link.Guidance);
+        Assert.Equal(reserved ? 0 : 1, Assert.IsType<AttemptCause.ReviewFix>(fix.Cause).Link.Guidance);
         Assert.Equal(1, record.Claims.Keys.Count(key => key.Attempt == fix.Id));
         Assert.Equal((2, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
         Assert.Equal("session-1", f.Resumed(A, 2));
         Assert.StartsWith("Fix the findings.\n\n### Finding 1", f.Prompt(A, 2));
-        Assert.DoesNotContain("Keep add on one line.", f.Prompt(A, 2));
+        Assert.Equal(!reserved, f.Prompt(A, 2).Contains("## Guidance from the person\n\nKeep add on one line.", StringComparison.Ordinal));
         Assert.Contains("## Guidance from the person\n\nKeep add on one line.", f.Prompt(R, 2));
     }
 

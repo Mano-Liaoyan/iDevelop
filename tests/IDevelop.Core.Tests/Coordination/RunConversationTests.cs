@@ -664,4 +664,36 @@ public sealed class RunConversationTests
         var result = await command.WaitAsync(Bound);
         return (result.Outcome, result.Detail);
     }
+
+    [Fact]
+    public async Task A_continuation_whose_start_was_refused_takes_text_queued_meanwhile()
+    {
+        await using var f = new RunConversationFixture(Chat(A, B));
+        f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done."))
+            .Answer(B, f.Says(B, 1, "Which file?", session: "session-b"), f.Says(B, 2, "Done B.", session: "session-b", gate: "b-2"))
+            .Route("Use the fixture", A).Route("Use b.txt", B);
+        await f.Open();
+        await f.Resume();
+        await f.UntilWaiting(A, 1);
+        await f.UntilWaiting(B, 1);
+        // A's continuation finds its task busy, before it records anything, and waits to be tried again.
+        RunLease? held = null;
+        f.Runs.Probe = point =>
+        {
+            if (point == "coordinator.continue" && held is null) held = ((LeaseTake.Taken)f.Coordinator.Permit!.TakeTask(A)).Lease;
+        };
+        Assert.IsType<SendResult.Queued>(await f.Coordinator.Send(f.Address, A, new TurnKey(f.Attempt(A), 1), "Use the fixture", false).WaitAsync(Bound));
+        await f.Until(view => view.Tasks[A].State == TaskState.Refused);
+        // B takes the slot meanwhile, and once A's task is free the person writes to A again.
+        Assert.IsType<SendResult.Queued>(await f.Coordinator.Send(f.Address, B, new TurnKey(f.Attempt(B), 1), "Use b.txt", false).WaitAsync(Bound));
+        await f.Until(view => view.Tasks[B].State == TaskState.Running);
+        held!.Dispose();
+        await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        Assert.IsType<SendResult.Queued>(await f.Coordinator.Send(f.Address, A, new TurnKey(f.Attempt(A), 1), "Also add tests", false).WaitAsync(Bound));
+        f.Open("b-2");
+
+        await f.UntilWaiting(A, 2);
+        Assert.Equal("Use the fixture\n\nAlso add tests", f.Prompt(A, 2));
+        Assert.Equal((2, 2), (f.Launches(A), f.Launches(B)));
+    }
 }

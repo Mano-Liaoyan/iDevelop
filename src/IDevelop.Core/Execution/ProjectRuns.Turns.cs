@@ -34,16 +34,20 @@ public sealed partial class ProjectRuns
             var key = (permit.Workflow, permit.Run, operation);
             if (_commands.TryGetValue(key, out var prior))
             {
-                if (!Equals(prior.Intent, intent) || prior.Task is not Task<TurnStart> priorTask)
+                if (prior.Task is not Task<TurnStart> priorTask)
                     return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
-                if (!priorTask.IsCompleted)
+                var launched = priorTask.IsCompletedSuccessfully && LaunchOf(priorTask.Result) is not null;
+                // An earlier start that ended without a launch holds nothing in this window. Whatever it recorded is in the
+                // journal, whose receipts refuse a different intent for the operation, so a retry may ask anew.
+                if (priorTask.IsCompleted && !launched) _commands.Remove(key);
+                else if (!Equals(prior.Intent, intent))
+                    return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.OperationConflict)));
+                else if (!priorTask.IsCompleted)
                 {
                     command = priorTask;
                     duplicate = true;
                 }
-                else if (priorTask.IsCompletedSuccessfully && LaunchOf(priorTask.Result) is { } launch)
-                    existing = launch;
-                else _commands.Remove(key);
+                else existing = LaunchOf(priorTask.Result);
             }
             if (command is null && existing is null)
             {
