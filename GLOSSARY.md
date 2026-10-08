@@ -15,7 +15,7 @@ A task run on its own, outside any run.
 _Avoid_: run, when no workflow run is meant
 
 **Attempt**:
-One try at a task, made of one or more turns. A retry, a fix, or a continuation is a new attempt.
+One try at a task, made of one or more turns. A retry, a review fix, and a Continue each start a new attempt, while a reply to a waiting attempt is its next turn.
 _Avoid_: run, execution
 
 **Turn**:
@@ -29,11 +29,15 @@ The controlling window's permission to schedule a run's work, needed for a new r
 _Avoid_: Continue, Retry
 
 **Continue**:
-A new attempt that resumes an interrupted attempt's stored client session.
-_Avoid_: Resume
+A new attempt that resumes an interrupted attempt's stored client session, as Continue fix does after the app closed.
+_Avoid_: Resume, continuation
+
+**Continuation**:
+The next turn of the same attempt, started by a reply or by text queued during a turn.
+_Avoid_: Continue, which starts a new attempt
 
 **Retry**:
-A new attempt with a fresh client session. Nothing retries by itself.
+A new attempt of a task with a fresh client session, started only by a person. A step the coordinator tries again after a busy refusal is not a Retry.
 _Avoid_: Resume, rerun
 
 **Client slot**:
@@ -52,7 +56,7 @@ A task's newest result. It supersedes the one before, which stays recorded.
 What produced a result: an executed attempt, a reused standalone report, an approved rebase, or a person's gate approval. Only an executed result comes from a client in the run.
 
 **Stale result**:
-A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on, and its task needs attention.
+A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one needs attention, while an Approval node takes a new gate request instead.
 _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate request that is no longer open.
 
 **Rebase**:
@@ -62,8 +66,7 @@ _Avoid_: git rebase, which iDevelop does not run
 ### Blocks
 
 **Block**:
-A durable record, with evidence, that holds a task back until a recorded recheck or repair resolves it, such as a dirty checkout or a conflicting join.
-_Avoid_: blocked, for a task that only waits for its dependencies, which is pending
+A durable record, with evidence, that holds a task back until a recorded recheck or repair resolves it, such as a dirty checkout or a conflicting join. In a run, a task under a block is Blocked, and a task that only waits for its dependencies is Pending, although the standalone schedule and the product direction also call that task blocked.
 
 **Drift**:
 A change to a task's checkout after its result was accepted or its baseline was recorded. It becomes a block and never changes the accepted result.
