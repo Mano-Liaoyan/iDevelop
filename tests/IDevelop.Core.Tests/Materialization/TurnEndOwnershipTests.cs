@@ -1,14 +1,12 @@
 using IDevelop.Core.Tests.Git;
 using IDevelop.Core.Tests.Runs;
 using IDevelop.Execution;
-using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class TurnEndOwnershipTests
 {
     [Fact]

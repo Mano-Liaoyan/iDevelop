@@ -1,12 +1,10 @@
 using IDevelop.Execution;
-using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
-[Collection(ProcessCollection.Name)]
 public sealed class PublicationEvidenceTests
 {
     [Fact]
