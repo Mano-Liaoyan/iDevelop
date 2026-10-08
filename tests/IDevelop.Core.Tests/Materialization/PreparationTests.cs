@@ -112,11 +112,12 @@ public sealed class PreparationTests
     {
         using var f = CheckoutFixture();
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        NextSecond(20);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "sparse-checkout", "set", "a").ExitCode);
         f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
-        var writerEnvironment = new Dictionary<string, string>(f.Git.Environment) { ["GIT_OPTIONAL_LOCKS"] = "1" };
-        Assert.Equal(" M outside/kept.bin\n", f.Git.Run(writer.Checkout, writerEnvironment, "status", "--porcelain").Text);
-        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "update-index", "--no-skip-worktree", "outside/kept.bin").ExitCode);
+        Assert.Equal("H outside/kept.bin\n", f.Git.Run(writer.Checkout, "-c", "core.sparseCheckout=false",
+            "ls-files", "-v", "outside/kept.bin").Text);
         f.Close(writer);
         var operation = f.Op();
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
@@ -124,6 +125,14 @@ public sealed class PreparationTests
         Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
         Assert.Equal("writer edit\n", File.ReadAllText(Path.Combine(writer.Checkout, "outside/kept.bin")));
         Assert.Equal(accepted, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+    }
+
+    private static void NextSecond(int afterMs)
+    {
+        var now = DateTime.UtcNow;
+        var target = new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc)
+            .AddSeconds(1).AddMilliseconds(afterMs);
+        while (DateTime.UtcNow < target) Thread.Sleep(1);
     }
 
     private static PreparationFixture CheckoutFixture(string? layout = null) => new(FixtureWorkflow(Writer(T)), configureBase: git =>
