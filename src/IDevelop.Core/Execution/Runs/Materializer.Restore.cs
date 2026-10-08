@@ -268,7 +268,11 @@ internal sealed partial class Materializer
                 return new Restoration.Rejected(new(RunProblem.OperationConflict));
             if (record.Restorations.TryGetValue(planId, out var receipt))
             {
-                ResolveRestoreBlocks(permit, planId, repository, prepared, (MaterializationPlan.Restoration)existing!);
+                var completed = (MaterializationPlan.Restoration)existing!;
+                var live = ObserveRestore(repository, record, prepared.Location, attempt, preserved, RetainLock).State;
+                if (CheckoutDifference(repository, prepared.Location.Owner, completed.To, live, completed.To.Index is not null, false) is { } difference)
+                    throw Fault(MaterializationProblem.DirtyWorktree, PreservationChanged, difference);
+                ResolveRestoreBlocks(permit, planId, repository, prepared, completed);
                 return new Restoration.Restored(receipt);
             }
             if (Value(repository.ReadRef(preserved.Ref)) != preserved.Commit ||
