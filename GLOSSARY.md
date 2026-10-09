@@ -10,6 +10,10 @@ iDevelop coordinates coding agents over a workflow of tasks on a node canvas. Th
 One approved execution of a workflow, from its approval until it settles Completed or Stopped, with its own journal.
 _Avoid_: job, execution
 
+**Node run**:
+A run that a node's Run started. It runs that node and any node the person runs while it is active, and each task after them once all of that task's dependency predecessors have results in the run. It completes once nothing more can start.
+_Avoid_: partial run, run from here
+
 **Standalone run**:
 A task run on its own, outside any run.
 _Avoid_: run, when no workflow run is meant
