@@ -118,9 +118,12 @@ public sealed partial class TaskNodeViewModel
             .Select(node => new CardWait(node.Title, node.StatusLabel, node.Kind))]
         : [];
 
-    /// <summary>The expanded card offers Run: the task is the person's to start, and nothing of it runs or waits now.</summary>
-    public bool ShowsCardRun => HasAgent && !IsRunOwned && State is not (NodeState.Running or NodeState.RunningElsewhere or NodeState.Stopping
-        or NodeState.Waiting or NodeState.InReview);
+    /// <summary>
+    /// The expanded card offers Run where the inspector does, while nothing of the task runs or waits, and its tooltip says
+    /// why Run would start nothing.
+    /// </summary>
+    public bool ShowsCardRun => HasAgent && ShowsRunControls && State is not (NodeState.Running or NodeState.RunningElsewhere
+        or NodeState.Stopping or NodeState.Waiting or NodeState.InReview);
 
     /// <summary>The expanded card offers Stop while this window runs the task on its own.</summary>
     public bool ShowsCardStop => !IsRunOwned && State == NodeState.Running && RunsHere;
@@ -192,7 +195,7 @@ public sealed partial class TaskNodeViewModel
             OnPropertyChanged(nameof(PeekProblem));
         }
 
-        if (e.PropertyName is nameof(State) or nameof(RunTask) or nameof(IsRunOwned))
+        if (e.PropertyName is nameof(State) or nameof(RunTask) or nameof(IsRunOwned) or nameof(Role))
         {
             OnPropertyChanged(nameof(ShowsCardRun));
             OnPropertyChanged(nameof(ShowsCardStop));

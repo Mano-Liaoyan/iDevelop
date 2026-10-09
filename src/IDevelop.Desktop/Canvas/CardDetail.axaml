@@ -215,6 +215,7 @@
         </Button>
       </StackPanel>
       <Button Grid.Column="2" Classes="cardAction" Command="{Binding RunCommand}" IsVisible="{Binding ShowsCardRun}"
+              ToolTip.Tip="{Binding StartProblem}" ToolTip.ShowOnDisabled="True"
               AutomationProperties.AutomationId="CardRun" AutomationProperties.Name="Run">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />

@@ -18,6 +18,7 @@ public sealed partial class WorkflowCanvasViewModel
 
     private RelayCommand? _expandCards;
     private bool _layoutScheduled;
+    private bool _expandingAll;
 
     /// <summary>Some card of the workflow is expanded, so the canvas offers Collapse All.</summary>
     public bool AnyCardExpanded => Nodes.Any(node => node.IsExpanded);
@@ -29,10 +30,21 @@ public sealed partial class WorkflowCanvasViewModel
     public ICommand ExpandCardsCommand => _expandCards ??= new RelayCommand(() =>
     {
         var expand = !AnyCardExpanded;
-        foreach (var node in Nodes)
+        // One change for all the cards, so the window remembers them once.
+        _expandingAll = true;
+        try
         {
-            node.IsExpanded = expand;
+            foreach (var node in Nodes)
+            {
+                node.IsExpanded = expand;
+            }
         }
+        finally
+        {
+            _expandingAll = false;
+        }
+
+        OnCardExpansionChanged();
     });
 
     /// <summary>The expanded cards, which the window remembers for this workflow on this machine.</summary>
@@ -52,6 +64,11 @@ public sealed partial class WorkflowCanvasViewModel
 
     internal void OnCardExpansionChanged()
     {
+        if (_expandingAll)
+        {
+            return;
+        }
+
         OnPropertyChanged(nameof(AnyCardExpanded));
         OnPropertyChanged(nameof(ExpandCardsLabel));
         OnPropertyChanged(nameof(ExpandedCards));
