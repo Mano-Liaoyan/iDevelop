@@ -6,22 +6,31 @@ using Avalonia.Media;
 
 namespace IDevelop.Desktop.Inspector;
 
-/// <summary>How a row places its label and its editor.</summary>
+/// <summary>How a row places its label and its value.</summary>
 public enum RowLayout
 {
-    /// <summary>The label in the label column and the value in the value column, at every width.</summary>
+    /// <summary>
+    /// The label in the label column and the value beside it in the value column, or, in an inspector narrower than
+    /// <see cref="InspectorGrid.NarrowPanelWidth"/>, the value under its label from the glyph column to the value edge.
+    /// </summary>
     Columns,
 
-    /// <summary>As <see cref="Columns"/>, with the editor under its label once the row is narrower than <see cref="InspectorGrid.NarrowWidth"/>.</summary>
-    Editor,
-
-    /// <summary>The label on its own line, the editor under it from the glyph column to the value edge, for text of several lines.</summary>
+    /// <summary>
+    /// The label on its own line and the value under it from the glyph column to the value edge, for a value that needs the
+    /// width: text of several lines, a sentence, a row of chips, or a segmented control.
+    /// </summary>
     Stacked,
 
-    /// <summary>No label shown. The content runs from the glyph column to the value edge, and the label, if any, only matches the filter.</summary>
+    /// <summary>
+    /// No label shown. Text or buttons from the glyph column to the panel's inset, since they have no edge of their own,
+    /// and the label, if any, only matches the filter.
+    /// </summary>
     Full,
 
-    /// <summary>The label alone across the label and value columns, as a list entry such as a blueprint, with its actions after it.</summary>
+    /// <summary>No label shown. A box, such as a message composer, from the glyph column to the value edge.</summary>
+    Box,
+
+    /// <summary>The label alone across the label and value columns, as a list entry such as a blueprint, with its actions or count after it.</summary>
     Title,
 }
 
@@ -57,6 +66,8 @@ public sealed class InspectorRow : InspectorPart
     public static readonly StyledProperty<string?> RevertIdProperty = AvaloniaProperty.Register<InspectorRow, string?>(nameof(RevertId));
 
     private InspectorSection? _section;
+
+    public InspectorRow() => UpdateShape();
 
     /// <summary>The glyph in the row's first column, such as the gauge for Reasoning.</summary>
     public Geometry? Icon
@@ -158,21 +169,12 @@ public sealed class InspectorRow : InspectorPart
         base.OnDetachedFromLogicalTree(e);
     }
 
-    protected override void OnSizeChanged(SizeChangedEventArgs e)
-    {
-        base.OnSizeChanged(e);
-        PseudoClasses.Set(":narrow", e.NewSize.Width < InspectorGrid.NarrowWidth);
-    }
-
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == LayoutProperty)
+        if (change.Property == LayoutProperty || change.Property == InspectorGrid.IsNarrowProperty)
         {
-            PseudoClasses.Set(":editor", Layout == RowLayout.Editor);
-            PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked);
-            PseudoClasses.Set(":full", Layout == RowLayout.Full);
-            PseudoClasses.Set(":title", Layout == RowLayout.Title);
+            UpdateShape();
         }
         else if (change.Property == LabelProperty)
         {
@@ -183,5 +185,15 @@ public sealed class InspectorRow : InspectorPart
         {
             _section?.Refresh();
         }
+    }
+
+    // A narrow panel stacks every labelled value, so a row beside its label takes a stacked row's shape there.
+    private void UpdateShape()
+    {
+        var narrow = InspectorGrid.GetIsNarrow(this);
+        PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked || Layout == RowLayout.Columns && narrow);
+        PseudoClasses.Set(":full", Layout == RowLayout.Full);
+        PseudoClasses.Set(":box", Layout == RowLayout.Box);
+        PseudoClasses.Set(":title", Layout == RowLayout.Title);
     }
 }
