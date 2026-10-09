@@ -101,7 +101,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
-  <Style Selector="Button.glyph.revert">
+  <Style Selector="Button.glyph.revert, Button.glyph.open">
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
   <Style Selector="Border.infoGlyph">
@@ -277,6 +277,12 @@
                    inspector|InspectorRow:buttons /template/ Panel#PART_LeadLine, inspector|InspectorRow:buttons /template/ Panel#PART_LabelLine, inspector|InspectorRow:buttons /template/ StackPanel#PART_Trail">
     <Setter Property="IsVisible" Value="False" />
   </Style>
+  <!-- A proposed task's row is full content with a Change button in the trailing column, at the action edge. Its first
+       line is the check box's 32 px, so the button's 28 px line sits 2 px down, centred on the title. -->
+  <Style Selector="inspector|InspectorRow.firstLine:full /template/ StackPanel#PART_Trail">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Margin" Value="0,2,0,0" />
+  </Style>
   <Style Selector="inspector|InspectorRow:full /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Column" Value="0" />
     <Setter Property="Grid.ColumnSpan" Value="4" />
@@ -338,6 +344,11 @@
   </Style>
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />
+  </Style>
+  <!-- A button that an action row widens keeps its label in the middle. -->
+  <Style Selector="inspector|ActionRow > Button">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
   </Style>
   <!-- A status in a row wraps rather than losing its end, such as which tasks a pending task waits for. -->
   <Style Selector="inspector|InspectorRow Border.pill">
@@ -446,6 +457,12 @@
     <Setter Property="ItemsSource" Value="{Binding Activity}" />
   </Style>
 
+  <!-- A proposed task's agent under its title: plain secondary text that wraps rather than cuts a name off. -->
+  <Style Selector="TextBlock.agentLine">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
   <Style Selector="TextBlock.itemTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />

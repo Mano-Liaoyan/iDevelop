@@ -222,10 +222,10 @@ The [node system redesign record](handoffs/2026-10-05-node-system-redesign.md) h
 - Every icon comes from Microsoft's Fluent UI System Icons, which are MIT licensed, at a pinned commit. Phosphor, which is closer to Apple's SF Symbols, stays a candidate.
 - One Add popover adds every node. Right-click, double-click, or N on empty canvas opens it, and so do the sidebar's Add Node button, a wire dropped on empty canvas, and Insert Node on a connection. Cards and connections have context menus with icons and shortcut hints.
 - The inspector follows Godot's: a pinned header with the kind tile, a property filter, foldable sections, two-column rows, and revert arrows. With nothing selected, it shows the workflow's kinds and the blueprint library.
-- Generate Workflow places a Plan node in Chat mode with the person's description and runs it. The planner's proposal shows as ghost cards, and nothing joins the workflow until the person accepts it.
+- Generate Workflow places a Plan node in Chat mode with the person's description and runs it. The planner chooses each new task's client, model, and reasoning from what the machine has ready, with a reason. The proposal shows as ghost cards with each task's agent, and nothing joins the workflow until the person accepts it.
 - Undo and redo cover every workflow edit, from the keyboard, the breadcrumb, and the Add popover.
 
-On 2026-10-06 the user approved giving blueprints their own icon and color. The file-format field arrives within W1's format and migration review, not as a separate format change. The user also confirmed the box "New tasks use the planner's agent" on 2026-10-06. It lets a generated workflow's new tasks take the planner's agent when their blueprint has none.
+On 2026-10-06 the user approved giving blueprints their own icon and color. The file-format field arrives within W1's format and migration review, not as a separate format change. The user also confirmed the box "New tasks use the planner's agent" on 2026-10-06. It lets a generated workflow's new tasks take the planner's agent when their blueprint has none. On 2026-10-09 the user found that every generated task then had the same agent and asked the planner to choose each task's agent, in issue #91. The box now reads "Fall back to the planner's agent" and applies only to a new task that has no usable choice from the planner or the person.
 
 ### The next milestone responds to the workspace feedback
 
