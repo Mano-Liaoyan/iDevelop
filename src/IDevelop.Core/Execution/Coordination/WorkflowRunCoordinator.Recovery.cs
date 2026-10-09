@@ -166,19 +166,23 @@ internal sealed partial class WorkflowRunCoordinator
         return identity;
     }
 
-    /// <summary>For each shared ref a block names, the commit it pointed at when its turn was prepared and when the block was recorded.</summary>
+    /// <summary>
+    /// For each shared ref a block names, the commit it pointed at when its turn was prepared and when the block was found,
+    /// from the snapshots the block keeps: a publication's before and after, or a capture's preparation and observations.
+    /// </summary>
     private IEnumerable<SharedRefDrift> SharedRefs(RunRecord record, MaterializationBlock block)
     {
         if (block.Scope is not BlockScope.Refs { Names: var names }) return [];
-        var before = Snapshot(record, block, "refs-before.json");
-        var after = Snapshot(record, block, "refs-after.json");
+        EvidenceFile? Named(string name) => block.Evidence.LastOrDefault(file => file.RelativePath.EndsWith("/" + name, StringComparison.Ordinal));
+        var before = Snapshot(record, Named("refs-before.json") ?? Named("shared-refs.json"));
+        var after = Snapshot(record, Named("refs-after.json") ?? Named("refs.json"));
         return names.Select(name => new SharedRefDrift(name, before?.GetValueOrDefault(name), after?.GetValueOrDefault(name),
             before is not null && after is not null));
     }
 
-    private SortedDictionary<string, CommitId?>? Snapshot(RunRecord record, MaterializationBlock block, string name)
+    private SortedDictionary<string, CommitId?>? Snapshot(RunRecord record, EvidenceFile? file)
     {
-        if (block.Evidence.FirstOrDefault(file => file.RelativePath.EndsWith("/" + name, StringComparison.Ordinal)) is not { } file) return null;
+        if (file is null) return null;
         try
         {
             var bytes = RunStorage.Read(new RunStorage(Address.Project, record.Workflow, record.Id).Folder, file.RelativePath, file.Content, file.ByteLength);

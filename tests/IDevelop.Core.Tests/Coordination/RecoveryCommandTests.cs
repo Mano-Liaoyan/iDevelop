@@ -193,6 +193,29 @@ public sealed class RecoveryCommandTests
     }
 
     [Fact]
+    public async Task A_stash_moved_during_the_turn_shows_where_it_pointed_from_the_preparation_and_the_capture()
+    {
+        await using var f = new CoordinatorFixture(Pair());
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        var moved = false;
+        f.Runs.Probe = point =>
+        {
+            if (point != "journal.root-exit.before" || moved) return;
+            moved = true;
+            f.Preparation.Git.Git("update-ref", "refs/stash", PlanCommit.Hex);
+        };
+        await f.Resume();
+        var stuck = await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[A].State == TaskState.Blocked);
+        f.Runs.Probe = null;
+        Assert.Equal(new BlockScope.Refs(["refs/stash"]), stuck.Tasks[A].Block!.Scope);
+        // The capture's block keeps the preparation's snapshot and each observation's, not a publication's before and after.
+        Assert.DoesNotContain(stuck.Tasks[A].Block!.Evidence, file => file.RelativePath.EndsWith("refs-before.json", StringComparison.Ordinal));
+
+        Assert.Equal([new SharedRefDrift("refs/stash", null, PlanCommit, Known: true)], f.Coordinator.Evidence(A)!.Refs.ToArray());
+    }
+
+    [Fact]
     public async Task The_evidence_names_the_newest_turn_and_no_process_when_its_launch_was_not_logged()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat), Agent(B)], (A, B)));

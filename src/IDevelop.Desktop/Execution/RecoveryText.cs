@@ -110,15 +110,20 @@ internal static class RecoveryText
         return evidence.Dispositions.LastOrDefault()?.Disposition switch
         {
             CaptureDisposition.Matched => $"{count}{recovery}. They match.",
-            CaptureDisposition.Diverged { Paths.IsEmpty: true } => $"{count}{recovery}. They differ.",
-            CaptureDisposition.Diverged => $"{count}{recovery}. They differ in these paths:",
+            CaptureDisposition.Diverged { Paths.IsEmpty: false } => $"{count}{recovery}. They differ in these paths:",
+            CaptureDisposition.Diverged { Refs.IsEmpty: false } => $"{count}{recovery}. They show shared refs that no task of the run moved:",
+            CaptureDisposition.Diverged => $"{count}{recovery}. They were not accepted.",
             _ => $"{count}{recovery}, not yet compared.",
         };
     }
 
-    /// <summary>The paths in which the newest turn's captures differ, one per line, or null.</summary>
-    public static string? CapturePaths(TaskEvidence evidence) =>
-        evidence.Dispositions.LastOrDefault()?.Disposition is CaptureDisposition.Diverged { Paths.IsEmpty: false } diverged ? Lines(diverged.Paths) : null;
+    /// <summary>The paths in which the newest turn's captures differ, or the shared refs they show moved, one per line, or null.</summary>
+    public static string? CapturePaths(TaskEvidence evidence) => evidence.Dispositions.LastOrDefault()?.Disposition switch
+    {
+        CaptureDisposition.Diverged { Paths.IsEmpty: false } diverged => Lines(diverged.Paths),
+        CaptureDisposition.Diverged { Refs.IsEmpty: false } diverged => Lines(diverged.Refs),
+        _ => null,
+    };
 
     /// <summary>How the newest turn's cleanup ended, or null when none ran.</summary>
     public static string? Cleanup(TaskEvidence evidence) => evidence.Cleanup switch
