@@ -14,6 +14,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (hold is TaskHold.Blocked blocked && record.Blocks.Values.Any(state => state.Resolved && RunReducer.Same(state.Block, blocked.Block)))
                 _holds.Remove(task);
         }
+        ReleaseClosed(record);
         var view = Project(record);
         switch (record.Phase)
         {
@@ -155,6 +156,7 @@ internal sealed partial class WorkflowRunCoordinator
             case TurnSettlement.Unresolved unresolved:
                 _live.Remove(task);
                 var turn = unresolved.Turn;
+                _unresolved[task] = turn;
                 Hold(task, new TaskHold.Unresolved(turn.Reason, turn.Rejection, Transient(turn.Rejection?.Problem)));
                 break;
         }

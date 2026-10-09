@@ -196,4 +196,34 @@ public sealed class ProjectionTests
         Assert.Equal(TaskState.Settling, live.Tasks[C].State);
         Assert.Equal(1, live.Slots);
     }
+
+    [Fact]
+    public void An_unresolved_turn_says_whether_its_root_exit_is_recorded()
+    {
+        using var f = new RunFixtures(Graph());
+        f.Approve();
+        var reservation = f.Reserve(T);
+        f.Claim(reservation);
+        var held = new Dictionary<TaskId, TaskHold> { [T] = new TaskHold.Unresolved(UnresolvedReason.IncompleteEvidence, new(RunProblem.EvidenceMismatch), Transient: false) };
+        Assert.Equal((TaskState.Uncertain, false), (View(f, holds: held).Tasks[T].State, View(f, holds: held).Tasks[T].RootExited));
+
+        var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
+            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch, TipOwnership.Explained)));
+
+        var exited = View(f, holds: held).Tasks[T];
+        Assert.Equal((TaskState.Uncertain, true, RunProblem.EvidenceMismatch), (exited.State, exited.RootExited, exited.Refusal!.Problem));
+        // Without the hold, a turn whose root exited is still settling.
+        Assert.Equal(TaskState.Settling, View(f).Tasks[T].State);
+    }
+
+    [Fact]
+    public void A_report_result_carries_no_code_to_rebase()
+    {
+        using var f = new RunFixtures(Graph());
+        f.Approve();
+        f.Complete(f.Reserve(T), report: "T ready.\n");
+
+        Assert.Equal((TaskState.Done, false), (View(f).Tasks[T].State, View(f).Tasks[T].CarriesCode));
+    }
 }

@@ -18,9 +18,12 @@ public sealed partial class ProjectRuns
     internal RunStore? Store { get; set; }
     internal Func<ChildProcess, bool>? StopSeam { get; set; }
 
+    /// <summary>The file system a folder lives on, for Restore's same-volume check. Tests emulate macOS, which has none.</summary>
+    internal Func<string, ulong?>? Volumes { get; set; }
+
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
     private Materializer TurnMaterializer(RunStore store) => MergeJoins.Open(_projectFolder, store,
-        MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point));
+        MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point), Volumes);
 
     internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default)
     {

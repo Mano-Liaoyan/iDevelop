@@ -68,6 +68,64 @@ internal sealed class WorkflowRunFixture : IDisposable
 
     public static WorkflowEdit.Connect Dependency(TaskId from, TaskId to) => new(new ConnectionKey(from, to), ConnectionKind.Dependency);
 
+    /// <summary>A Review node whose reviewer is Codex, whose first prompt starts with its title.</summary>
+    public static WorkflowEdit.PlaceNode Review(TaskId id, string title, double x) =>
+        new(id, BuiltInBlueprints.Review, new CanvasPoint(x, 90)) { Title = title, Settings = new NodeSettings(Codex, ConversationMode.Autonomous) };
+
+    /// <summary>A reviewer's answer with its verdict block.</summary>
+    public static string Verdict(string json) => $"I read the change.\n\n```idevelop\n{json}\n```";
+
+    /// <summary>A fix round's answer to each finding.</summary>
+    public static string Answers(string answers) => $"I answered each finding.\n\n```idevelop\n{{\"status\": \"answers\", \"answers\": {answers}}}\n```";
+
+    /// <summary>Called with every probe point of each window's runs, off the UI thread.</summary>
+    public Action<string>? Probe { get; set; }
+
+    /// <summary>The file system each folder lives on, for Restore. Null reads the real one; a function returning null emulates macOS.</summary>
+    public Func<string, ulong?>? Volumes { get; set; }
+
+    /// <summary>A turn that writes <paramref name="file"/> in the task's checkout, then answers <paramref name="reply"/>.</summary>
+    public FakeRule Writes(string file, string text, string reply, string session = "session-1", string? gate = null)
+    {
+        var rule = FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, session));
+        return (gate is null ? rule : rule.WaitForFile(Gate(gate))).Write(file, text).Print(FakeAgents.ReplyLines(ClientId.Codex, reply));
+    }
+
+    /// <summary>The journal of the project's one run.</summary>
+    public RunRecord Record()
+    {
+        var folder = RunFolders().Single(folder => File.Exists(Path.Combine(folder, "events.jsonl")));
+        var workflow = new WorkflowId(Guid.Parse(Path.GetFileName(Path.GetDirectoryName(folder))!));
+        return Assert.IsType<RunRead.Loaded>(RunStore.Open(Project).Read(workflow, new RunId(Guid.Parse(Path.GetFileName(folder))))).Record;
+    }
+
+    /// <summary>The checkout of <paramref name="task"/>'s newest attempt in the run.</summary>
+    public string Checkout(TaskId task)
+    {
+        var record = Record();
+        return Path.Combine(Project, record.Preparations[new(RunProjection.LatestAttempts(record)[task], 1)].Location.Owner.RelativePath);
+    }
+
+    /// <summary>
+    /// Approves a run of the project's workflow in another process, which exits once the run is open, then runs
+    /// <paramref name="title"/>'s initial turn in another and ends that one at <paramref name="point"/>, as a crash or a
+    /// kill ends the app. Call it before any window opens the project.
+    /// </summary>
+    public void Crash(TaskId task, string title, string point)
+    {
+        _ = Clients();
+        var workflowFile = Directory.EnumerateFiles(Path.Combine(Project, ".idp", "workflows"), "*.json").Single();
+        var approval = RunRacerProcess.Run(Git, "approve-crash", Project, workflowFile, Fakes.Folder, Guid.NewGuid().ToString("D"), "Head",
+            "approval.opened.after");
+        Assert.True(approval.Exit == 73, approval.Output);
+        var folder = Assert.Single(RunFolders());
+        var run = new RunId(Guid.Parse(Path.GetFileName(folder)));
+        var crash = RunRacerProcess.Run(Git, "turn-crash", Project, Path.GetFileName(Path.GetDirectoryName(folder))!, run.Value.ToString("D"),
+            task.Value.ToString("D"), RunOperations.Initial(run, task).Value.ToString("D"), Fakes.Folder, Evidence, "1", point);
+        Assert.True(crash.Exit == 73 && crash.Output.Contains(point), crash.Output);
+        Assert.Equal(1, Launches(title));
+    }
+
     /// <summary>A turn that reports <paramref name="session"/>, waits for the gate when it names one, and answers <paramref name="text"/>.</summary>
     public FakeRule Says(string text, string session = "session-1", string? gate = null)
     {
@@ -147,6 +205,8 @@ internal sealed class WorkflowRunFixture : IDisposable
     public void Configure(ProjectRuns runs)
     {
         runs.GitEnvironment = Git;
+        runs.Probe = point => Probe?.Invoke(point);
+        runs.Volumes = Volumes;
         runs.ShutdownTime = TimeSpan.FromMilliseconds(250);
         runs.LeaveTimeout = TimeSpan.FromSeconds(5);
         runs.CoordinatorRetry = TimeSpan.FromMilliseconds(50);

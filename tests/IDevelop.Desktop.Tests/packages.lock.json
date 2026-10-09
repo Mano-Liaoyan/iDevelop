@@ -258,6 +258,12 @@
       "idevelop.fakeagent": {
         "type": "Project"
       },
+      "idevelop.runracer": {
+        "type": "Project",
+        "dependencies": {
+          "IDevelop.Core": "[1.0.0, )"
+        }
+      },
       "Avalonia": {
         "type": "CentralTransitive",
         "requested": "[11.3.22, )",

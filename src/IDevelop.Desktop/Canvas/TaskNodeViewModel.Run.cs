@@ -1,5 +1,6 @@
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
@@ -15,6 +16,7 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
+        nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
 
     private TaskView? _runTask;
@@ -23,6 +25,10 @@ public sealed partial class TaskNodeViewModel
     private AttemptId? _runBaseline;
     private string? _runWorkflow;
     private GateViewModel? _gate;
+    private RecoveryViewModel? _recovery;
+    private UpdatedInputsViewModel? _updatedInputs;
+    private readonly Dictionary<(AttemptId Fix, FixChoice Choice), OperationId> _fixChoices = [];
+    private bool _choosingFix;
 
     /// <summary>The run's view of the task while the canvas's run shows it, or null.</summary>
     internal TaskView? RunTask => _runTask is not null && (_runActive || _attempt?.Id == _runBaseline) ? _runTask : null;
@@ -42,7 +48,8 @@ public sealed partial class TaskNodeViewModel
     public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
-    public string? RunDetail => RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
+    public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
+        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
     public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
@@ -60,6 +67,42 @@ public sealed partial class TaskNodeViewModel
             }
         }
     }
+
+    /// <summary>A block or an unresolved turn of the task in the run, with its evidence and the person's recovery, or null.</summary>
+    public RecoveryViewModel? Recovery
+    {
+        get => _recovery;
+        private set
+        {
+            var old = _recovery;
+            if (SetProperty(ref _recovery, value))
+            {
+                old?.Dispose();
+            }
+        }
+    }
+
+    /// <summary>The task's stale result in the run, with Review updated inputs and Approve rebase, or null.</summary>
+    public UpdatedInputsViewModel? UpdatedInputs
+    {
+        get => _updatedInputs;
+        private set
+        {
+            var old = _updatedInputs;
+            if (SetProperty(ref _updatedInputs, value))
+            {
+                old?.Dispose();
+            }
+        }
+    }
+
+    /// <summary>The run needs the person's choice in this task's inspector rather than in its conversation.</summary>
+    private bool NeedsRunPanel => Recovery is not null || UpdatedInputs is not null || RunFix is not null;
+
+    /// <summary>The review's fix round that closing iDevelop interrupted in the canvas's active run, or null.</summary>
+    private FixRecovery? RunFix => _runActive ? RunTask?.Fix : null;
+
+    private bool CanChooseRunFix => !_choosingFix && _canvas.Run is { IsControlled: true, IsActive: true };
 
     private string RunOwnedProblem => (_runActive, HasAgent) switch
     {
@@ -118,6 +161,7 @@ public sealed partial class TaskNodeViewModel
     {
         _shownRun = RunTask;
         ShowGate();
+        ShowPanels();
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);
@@ -130,6 +174,107 @@ public sealed partial class TaskNodeViewModel
         _send.NotifyCanExecuteChanged();
         _stopAndSend.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();
+        _continueFix.NotifyCanExecuteChanged();
+        _retryFix.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// The Recovery and Updated inputs sections follow the task's state while the run is active. A shown section stays
+    /// while the task settles, as it does while the section's own command or a reconciliation runs, so what the person
+    /// typed and the command's outcome stay with it.
+    /// </summary>
+    private void ShowPanels()
+    {
+        var run = _canvas.Run;
+        var task = _runActive ? RunTask : null;
+        var settling = task is { State: TaskState.Settling };
+        if (_recovery is null || !settling)
+        {
+            if (run is null || task is not { State: TaskState.Blocked or TaskState.Uncertain })
+            {
+                Recovery = null;
+            }
+            else if (_recovery is { } shown && shown.Shows(run, task))
+            {
+                shown.Show(task);
+            }
+            else
+            {
+                Recovery = new RecoveryViewModel(run, task, TitleOf, Show);
+            }
+        }
+
+        if (_updatedInputs is null || !settling)
+        {
+            if (run is null || task is not { State: TaskState.Stale })
+            {
+                UpdatedInputs = null;
+            }
+            else if (_updatedInputs is not { } current || !current.Shows(run, task))
+            {
+                UpdatedInputs = new UpdatedInputsViewModel(run, task.Task, TitleOf, task.CarriesCode);
+            }
+        }
+
+        OnPropertyChanged(nameof(AttendCommand));
+        OnPropertyChanged(nameof(AttendHelp));
+    }
+
+    /// <summary>How the review's fix round ended, by a closed app or a person's closure after a crash, and what each choice can do.</summary>
+    private string FixDetail(FixRecovery fix)
+    {
+        var subject = _canvas.Workflow.SubjectOf(Id);
+        var end = subject is { } owner && _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
+        return WorkflowRunText.FixChoice(fix, subject is { } id ? TitleOf(id) : "the task", end);
+    }
+
+    /// <summary>Selects another task of the canvas, such as the one whose checkout a block is on.</summary>
+    private void Show(TaskId task)
+    {
+        if (_canvas.Nodes.FirstOrDefault(node => node.Id == task) is { } node)
+        {
+            _canvas.Inspect(node);
+        }
+    }
+
+    /// <summary>
+    /// Continue fix or Retry fix of the run's review. One confirmation per round and choice, so a repeat or a retry after a
+    /// busy refusal reserves one attempt; the run's next decision shows it.
+    /// </summary>
+    private async Task ChooseRunFixAsync(FixChoice choice)
+    {
+        if (RunFix is not { } fix || _canvas.Run is not { } run)
+        {
+            return;
+        }
+
+        var key = (fix.Fix, choice);
+        var confirmation = _fixChoices.TryGetValue(key, out var known) ? known : _fixChoices[key] = new OperationId(Guid.NewGuid());
+        var (coordinator, address) = (run.Coordinator, run.Address);
+        _choosingFix = true;
+        _continueFix.NotifyCanExecuteChanged();
+        _retryFix.NotifyCanExecuteChanged();
+        FixReply reply;
+        try
+        {
+            reply = await WorkflowRunViewModel.Retrying(
+                () => choice == FixChoice.Continue ? coordinator.ContinueFix(address, Id, confirmation) : coordinator.RetryFix(address, Id, confirmation),
+                outcome => outcome is FixReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
+        }
+        finally
+        {
+            _choosingFix = false;
+            _continueFix.NotifyCanExecuteChanged();
+            _retryFix.NotifyCanExecuteChanged();
+        }
+
+        _canvas.Notice(reply switch
+        {
+            FixReply.Blocked blocked => $"{blocked.Block.Detail} The fix did not start.",
+            FixReply.Refused refused => RecoveryText.Problem(refused.Reason),
+            FixReply.Unavailable unavailable => unavailable.Message,
+            _ => null,
+        });
     }
 
     private void ShowGate()
@@ -150,7 +295,7 @@ public sealed partial class TaskNodeViewModel
     }
 
     private static bool WaitsInRun(TaskView run) => run.State == TaskState.Waiting &&
-        (run.Gate is { Status: GateStatus.Waiting } || run.Status == AttemptStatus.WaitingForInput);
+        (run.Gate is { Status: GateStatus.Waiting } || run.Fix is not null || run.Status == AttemptStatus.WaitingForInput);
 
     /// <summary>A task of the run by the title the workflow gives it now.</summary>
     private string TitleOf(TaskId task) => _canvas.Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
