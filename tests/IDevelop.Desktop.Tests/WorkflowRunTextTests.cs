@@ -160,7 +160,7 @@ public sealed class WorkflowRunTextTests
         Assert.Equal((NodeState.Idle, "Not started"), WorkflowRunText.Of(unrun, Title, active: false));
         Assert.Null(WorkflowRunText.Detail(unrun, Title));
         Assert.Null(WorkflowRunText.Needs(unrun, Title));
-        Assert.Equal("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run it.", WorkflowRunText.Detail(join, Title, tasks: tasks));
+        Assert.Equal("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run\u00A0it.", WorkflowRunText.Detail(join, Title, tasks: tasks));
         Assert.Equal("It starts once \"A\" hands on a result.",
             WorkflowRunText.Detail(join with { HeldBy = [TestTasks.Design] }, Title, tasks: tasks));
     }

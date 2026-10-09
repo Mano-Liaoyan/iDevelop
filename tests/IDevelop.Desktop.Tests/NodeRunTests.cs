@@ -110,7 +110,7 @@ public sealed class NodeRunTests
 
         Assert.Equal(["Running", "Not started", "Waits for 2 tasks"], new[] { "A", "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
         Select(shell, "C");
-        Assert.Equal(Whole("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run it."), shell.Text("RunTaskDetail"));
+        Assert.Equal(Whole("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run\u00A0it."), shell.Text("RunTaskDetail"));
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Select(shell, "B");
         Assert.Equal("Not started", shell.InView<TextBlock>("RunTaskStatus").Text);
