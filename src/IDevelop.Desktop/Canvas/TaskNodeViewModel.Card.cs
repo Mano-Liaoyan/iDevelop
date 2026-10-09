@@ -46,6 +46,14 @@ public sealed partial class TaskNodeViewModel
         : State == NodeState.NeedsSetup && Problem is { } problem && CardText.ShortReason(problem) is { } reason ? reason
         : StatusLabel;
 
+    /// <summary>
+    /// The first line's texts when it is not the client, the fullest first, of which the card shows the first that fits
+    /// whole: a task of the run that waits for one task names it, and counts it when its title is too long (#90).
+    /// </summary>
+    public IReadOnlyList<string> SubtitleChoices => RunTask is { State: TaskState.Pending, HeldBy.Count: 1 } && Subtitle == StatusLabel
+        ? [Subtitle, "Waits for 1 task"]
+        : [Subtitle];
+
     /// <summary>The kind tile's help text, such as "Implement version 1".</summary>
     public string KindHelp => $"{TypeName} version {_task.Blueprint.Key.Version}";
 
@@ -62,6 +70,8 @@ public sealed partial class TaskNodeViewModel
     {
         Title,
         HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName,
+        // What a task of the run waits for, by name, which the card may only count.
+        RunTask is { State: TaskState.Pending } ? RunDetail?.Replace('\u00A0', ' ') : null,
         ReviewSummary,
         FirstFieldLines(),
         Problem is { } problem ? RunText.Describe(problem) : null,
@@ -83,6 +93,7 @@ public sealed partial class TaskNodeViewModel
             case nameof(State):
                 OnPropertyChanged(nameof(ShowsAgent));
                 OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(SubtitleChoices));
                 break;
             case nameof(Role):
                 OnPropertyChanged(nameof(ShowsAgent));
@@ -91,9 +102,12 @@ public sealed partial class TaskNodeViewModel
                 break;
             case nameof(Proposal) or nameof(StatusLabel):
                 OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(SubtitleChoices));
+                OnPropertyChanged(nameof(CardTip));
                 break;
             case nameof(Problem):
                 OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(SubtitleChoices));
                 OnPropertyChanged(nameof(ReviewerTip));
                 OnPropertyChanged(nameof(CardTip));
                 break;

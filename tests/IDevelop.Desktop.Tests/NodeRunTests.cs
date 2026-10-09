@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -315,5 +316,27 @@ public sealed class NodeRunTests
         OpenNodePreflight(shell, "Zed");
 
         Assert.Equal(["After \"Alpha\", \"Zed\""], shell.TextsOf("PreflightInputs"));
+    }
+
+    [AvaloniaFact]
+    public void A_card_names_the_task_it_waits_for_when_the_name_fits_and_counts_it_when_it_does_not()
+    {
+        const string longTitle = "Render the settings view for every user";
+        using var f = new WorkflowRunFixture(Task(A, longTitle, 105), Below(B, "B"), At(C, "C", 405, 90), At(D, "D", 405, 250),
+            Dependency(A, C), Dependency(B, D));
+        f.Answer(longTitle, f.Says("Rendered.", gate: "go")).Answer("B", f.Says("B ready.", gate: "go")).Answer("C", f.Says("C ready.")).Answer("D", f.Says("D ready."));
+        var shell = f.Window();
+
+        shell.StartRun();
+        shell.WaitForCard("B", "Running");
+
+        Assert.Equal(("Waits for 1 task", "Waits for \"B\""), (shell.CardText("C", "CardStatus"), shell.CardText("D", "CardStatus")));
+        Assert.Contains($"It starts once \"{longTitle}\" hands on a result.", (string?)ToolTip.GetTip(shell.InCard<Panel>("C", "TaskCard")));
+        string[] cut = [.. shell.Nodes().SelectMany(node => node.GetVisualDescendants().OfType<TextBlock>())
+            .Where(text => text.IsEffectivelyVisible && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
+            .Select(text => text.Text ?? "")];
+        Assert.Equal([longTitle], cut);
+        f.Open("go");
+        shell.WaitForStatus("Completed");
     }
 }
