@@ -756,6 +756,24 @@ public sealed class GitRepositoryTests
         Assert.True(File.Exists(Path.Combine(repository.CommonDirectory, "idevelop", "mutation.lock")));
     }
 
+    [Fact]
+    public async Task A_longer_patience_waits_for_the_mutation_lock_while_another_step_holds_it()
+    {
+        using var f = new GitFixture();
+        _ = f.Diamond();
+        var held = f.Open().TakeMutationLock();
+        Assert.NotNull(held);
+        var waiting = Task.Run(() => f.Open().TakeMutationLock(TimeSpan.FromSeconds(30)));
+        // Longer than the default patience, so only the longer one still waits.
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        Assert.False(waiting.IsCompleted);
+        Assert.Null(f.Open().TakeMutationLock());
+        held.Dispose();
+        using var taken = await waiting.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.NotNull(taken);
+        Assert.Null(f.Open().TakeMutationLock());
+    }
+
     [UnixFact]
     public void Metadata_times_out_while_a_worktree_scan_uses_its_longer_limit()
     {

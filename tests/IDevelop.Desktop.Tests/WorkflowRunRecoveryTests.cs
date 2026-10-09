@@ -359,7 +359,7 @@ public sealed class WorkflowRunRecoveryTests
         Thread.Sleep(300);
         shell.Render();
         Assert.Equal(("Stopping", "Uncertain"), (shell.RunStatus, shell.CardText("A", "CardStatus")));
-        Assert.Equal("Stopping waits for you to close \"A\" as stopped.", shell.Text("RunActivity"));
+        Assert.Equal("Stopping waits for you to close\u00A0\"A\" as stopped.", shell.Text("RunActivity"));
         Assert.Equal(RunPhase.StopRequested, f.Record().Phase);
         shell.Click(shell.InCard<Button>("A", "CardAttention"));
         shell.Click(shell.InView<TextBox>("RecoveryReason"));

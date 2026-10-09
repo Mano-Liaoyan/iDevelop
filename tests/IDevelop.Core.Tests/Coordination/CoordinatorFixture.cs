@@ -174,6 +174,24 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
         Assert.Equal(73, racer.ExitCode);
     }
 
+    /// <summary>
+    /// Runs the run in a racer window that resumes it, and exits that window once <paramref name="running"/> of its tasks'
+    /// clients run at once, as a crash does. Call it before <see cref="Open"/>, which then takes control after the crash.
+    /// </summary>
+    public async Task CrashRun(int running)
+    {
+        Install();
+        Preparation.Git.Git("config", "user.name", "E2");
+        Preparation.Git.Git("config", "user.email", "e2@example.test");
+        Preparation.Git.Git("config", "commit.gpgSign", "false");
+        using var racer = new Runs.Racer("run-crash", Preparation.Git.Folder, W.Value.ToString("D"), Preparation.RunId.Value.ToString("D"),
+            Fakes.Folder, Fakes.LaunchFolder!, running.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("Opened", await racer.Line());
+        Assert.Equal("Running:" + running, await racer.Line());
+        await racer.Exit();
+        Assert.Equal(73, racer.ExitCode);
+    }
+
     /// <summary>Opens the project in a second window, which only reads the run while this one controls it.</summary>
     public async Task<(ProjectRuns Runs, WorkflowRunCoordinator Coordinator)> SecondWindow()
     {

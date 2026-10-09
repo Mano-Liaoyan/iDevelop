@@ -13,7 +13,7 @@ internal abstract record FixReply
 {
     private FixReply() { }
 
-    /// <summary>The replacement attempt is reserved and prepared. It starts when the run's client slot is free.</summary>
+    /// <summary>The replacement attempt is reserved and prepared. It starts at once, or once a client slot is free at the run's bound.</summary>
     internal sealed record Reserved(AttemptId Attempt) : FixReply;
 
     /// <summary>A recorded block holds the subject's checkout, such as a preservation whose two observations differ.</summary>

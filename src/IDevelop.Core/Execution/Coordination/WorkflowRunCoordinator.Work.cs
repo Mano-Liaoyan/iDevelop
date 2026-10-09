@@ -42,23 +42,38 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Concludes the reviews that agreed or failed. Then, while no client root of the run is starting or running, starts a
-    /// resting attempt's next turn that has text for its agent, or else the first ready task, or else a review's next
-    /// reviewer turn or fix round, each in task order.
+    /// Concludes the reviews that agreed or failed. Then starts every resting attempt's next turn that has text for its
+    /// agent, every ready task, and every review's next reviewer turn or fix round, in that order and each in task order,
+    /// while the run's client roots stay under <see cref="ProjectRuns.ClientRoots"/>. Below that bound they all start at
+    /// once, so the order only decides which wait once the bound is reached (ADR 0018).
     /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
         EndFixes(record, view);
         ConcludeReviews(record, view);
-        if (!Slotted.IsEmpty) return;
-        if (Continue(record, view)) return;
-        // A reserved fix of a review round resumes from its review, which knows its prompt.
-        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task) && !FixesReview(record, task));
-        if (next is null)
+        var free = _runs.ClientRoots - Slotted.Length;
+        free -= Continue(record, view, free);
+        free -= StartReady(record, view, free);
+        AdvanceReviews(record, view, free);
+    }
+
+    /// <summary>Starts each ready task, in task order, up to <paramref name="free"/> of them, and returns how many started.</summary>
+    private int StartReady(RunRecord record, RunView view, int free)
+    {
+        var started = 0;
+        foreach (var next in view.Tasks.Values)
         {
-            AdvanceReviews(record, view);
-            return;
+            if (started >= free) break;
+            // A reserved fix of a review round resumes from its review, which knows its prompt.
+            if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || FixesReview(record, next)) continue;
+            Start(record, next);
+            started++;
         }
+        return started;
+    }
+
+    private void Start(RunRecord record, TaskView next)
+    {
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
         var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
@@ -66,7 +81,7 @@ internal sealed partial class WorkflowRunCoordinator
         var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
+        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause)), halted: Halted),
             start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);
@@ -125,7 +140,7 @@ internal sealed partial class WorkflowRunCoordinator
         Hold(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
     }
 
-    /// <summary>Holds the slot until the turn's root exits, then waits for its settlement without one.</summary>
+    /// <summary>Holds a client slot of the run until the turn's root exits, then waits for its settlement without one.</summary>
     private void Track(TaskId task, RunningTurn turn)
     {
         _live[task] = new(LiveStage.Running, turn);
@@ -207,7 +222,7 @@ internal sealed partial class WorkflowRunCoordinator
             _runs.Probe?.Invoke("coordinator.close-attempt.before");
             if (_store.CloseAttempt(_permit!, RunOperations.CloseAttempt(operation), launch.Attempt, ended, turn.Log) is RunDecision.Rejected rejected)
                 return new Release.Held(rejected.Reason);
-            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation) is { } refusal)
+            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation, Scheduled()) is { } refusal)
                 return new Release.Held(refusal);
         }
         _runs.Probe?.Invoke("coordinator.release.before");
@@ -215,14 +230,14 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>Publishes a successfully closed writer's frozen capture, or accepts a read-only attempt's report.</summary>
-    private RunRejection? Finish(RunLease lease, TaskId task, AttemptId attempt, OperationId operation)
+    private RunRejection? Finish(RunLease lease, TaskId task, AttemptId attempt, OperationId operation, Materializer materializer)
     {
         if (Record() is not { } record) return new(RunProblem.StorageUnavailable);
         var definition = record.Revisions[record.Attempts[attempt].Revision].Snapshot.Tasks[task];
         if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
         {
             _runs.Probe?.Invoke("coordinator.publish.before");
-            return _materializer().Publish(lease, RunOperations.Publish(operation), attempt) is Publication.Rejected rejected ? rejected.Reason : null;
+            return materializer.Publish(lease, RunOperations.Publish(operation), attempt) is Publication.Rejected rejected ? rejected.Reason : null;
         }
         if (record.Closures.GetValueOrDefault(attempt) is not AttemptEnd.Logged closure) return new(RunProblem.OutcomeMismatch);
         var evidence = AttemptEvidence.Read(_store.AttemptFolder(Address.Workflow, Address.Run, task, attempt), closure.Evidence);
@@ -287,7 +302,7 @@ internal sealed partial class WorkflowRunCoordinator
         Offload(() =>
         {
             if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RunRejection(RunProblem.TaskBusy);
-            using (taken.Lease) return Finish(taken.Lease, task, attempt, operation);
+            using (taken.Lease) return Finish(taken.Lease, task, attempt, operation, Scheduled());
         }, refusal =>
         {
             _live.Remove(task);
@@ -332,7 +347,8 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Settling);
         Background(async () =>
         {
-            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel()).ConfigureAwait(false);
+            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel(), scheduled: true,
+                halted: Halted).ConfigureAwait(false);
             return closing switch
             {
                 RestingClose.Closed closed => closed.Attempt.Release() is Release.Held held ? new TaskHold.Refused(held.Reason, null, Transient(held.Reason.Problem)) : null,
@@ -391,7 +407,7 @@ internal sealed partial class WorkflowRunCoordinator
     {
         if (_pinsReleasing) return;
         _pinsReleasing = true;
-        Offload(() => _materializer().ReleasePins(_permit!, RunOperations.ReleasePins(Address.Run)), release =>
+        Offload(() => Scheduled().ReleasePins(_permit!, RunOperations.ReleasePins(Address.Run)), release =>
         {
             if (release is PinRelease.Released) _pinsReleased = true;
             else _problem = $"The run's retention pins were not released: {release}.";

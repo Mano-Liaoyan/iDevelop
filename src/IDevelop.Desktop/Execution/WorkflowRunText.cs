@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Execution;
@@ -20,6 +22,78 @@ internal static class WorkflowRunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>
+    /// The run's status on its pill. While the run goes on, it counts only the tasks whose client runs: "3 running", or
+    /// "Running" for one. With none running, it says "Starting" or "Finishing" while a task's client starts or finishes,
+    /// and otherwise the run's own label.
+    /// </summary>
+    public static string Status(RunView view)
+    {
+        if (view.Status != RunStatus.Running) return view.Label;
+        var tasks = view.Tasks.Values;
+        return tasks.Count(task => task.State == TaskState.Running) switch
+        {
+            > 1 and var running => $"{running} running",
+            1 => "Running",
+            _ when tasks.Any(task => task.State == TaskState.Starting) => "Starting",
+            _ when tasks.Any(task => task.State == TaskState.Settling) => "Finishing",
+            _ => view.Label,
+        };
+    }
+
+    /// <summary>Whether the task's client starts, runs, or finishes, which its card shows with the running ring.</summary>
+    public static bool Busy(TaskView task) => task.State is TaskState.Starting or TaskState.Running or TaskState.Settling;
+
+    /// <summary>
+    /// What the run's busy tasks do, by title, as in Running "A" and "B" · Starting "C". Null while none is busy.
+    /// </summary>
+    public static string? Working(IEnumerable<TaskView> tasks, Func<TaskId, string> title)
+    {
+        var busy = tasks.Where(Busy).Select(task => (task.State, Title: title(task.Task), task.Task))
+            .OrderBy(task => task.Title, StringComparer.CurrentCultureIgnoreCase).ThenBy(task => task.Task).ToArray();
+        var groups = new[] { (TaskState.Running, "Running"), (TaskState.Starting, "Starting"), (TaskState.Settling, "Finishing") }
+            .Select(group => (Verb: group.Item2, Titles: busy.Where(task => task.State == group.Item1).Select(task => task.Title).ToArray()))
+            .Where(group => group.Titles.Length > 0)
+            .Select(group => $"{group.Verb} {Listed(group.Titles)}")
+            .ToArray();
+        return groups.Length == 0 ? null : string.Join(" · ", groups);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each quoted title kept on one line beside the word before it, so a line wraps only
+    /// between items: after a comma or a middle dot. Spaces and hyphens inside quotes, a space between a word and an opening
+    /// quote, and a space before a middle dot become non-breaking, and a slash inside quotes joins the next character.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(text))]
+    public static string? Unbroken(string? text)
+    {
+        if (text is null) return null;
+        var unbroken = new StringBuilder(text.Length);
+        var quoted = false;
+        for (var at = 0; at < text.Length; at++)
+        {
+            var character = text[at];
+            if (character == '"') quoted = !quoted;
+            else if (quoted && character is ' ' or '-' or '/')
+            {
+                unbroken.Append(character switch { ' ' => NoBreakSpace, '-' => NoBreakHyphen, _ => "/" + WordJoiner });
+                continue;
+            }
+            else if (!quoted && character == ' ' && at + 1 < text.Length &&
+                (text[at + 1] == '"' && at > 0 && char.IsLetter(text[at - 1]) || text[at + 1] == '·'))
+            {
+                unbroken.Append(NoBreakSpace);
+                continue;
+            }
+            unbroken.Append(character);
+        }
+        return unbroken.ToString();
+    }
+
+    private const string NoBreakSpace = "\u00A0";
+    private const string NoBreakHyphen = "\u2011";
+    private const string WordJoiner = "\u2060";
+
     /// <summary>"2 of 5 done", or null for a run without tasks.</summary>
     public static string? Progress(RunView view) => view.Tasks.Count == 0 ? null
         : $"{view.Tasks.Values.Count(task => task.State == TaskState.Done)} of {view.Tasks.Count} done";
@@ -29,7 +103,13 @@ internal static class WorkflowRunText
     public static (NodeState State, string Label) Of(TaskView task, Func<TaskId, string> title, bool active = true) => task.State switch
     {
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported when !active => (NodeState.Idle, "Not started"),
-        TaskState.Pending => (NodeState.Idle, task.HeldBy.IsEmpty ? "Pending" : $"Waits for {Names(task.HeldBy, title)}"),
+        // A card fits one title; the inspector's detail names every task it waits for.
+        TaskState.Pending => (NodeState.Idle, task.HeldBy.Count switch
+        {
+            0 => "Pending",
+            1 => $"Waits for \"{title(task.HeldBy.Min)}\"",
+            var count => $"Waits for {count} tasks",
+        }),
         TaskState.Ready => (NodeState.Idle, "Ready"),
         TaskState.Starting => (NodeState.Running, "Starting"),
         TaskState.Running => (NodeState.Running, "Running"),
@@ -165,6 +245,19 @@ internal static class WorkflowRunText
         MaterializationProblem.InputUnavailable => "An input it needs is unavailable.",
         _ => $"{problem}.",
     };
+
+    /// <summary>Up to three quoted titles in full, and the first two and a count beyond that.</summary>
+    private static string Listed(string[] titles)
+    {
+        var names = titles.Select(title => $"\"{title}\"").ToArray();
+        return names.Length switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            3 => $"{names[0]}, {names[1]}, and {names[2]}",
+            _ => $"{names[0]}, {names[1]}, and {names.Length - 2} more",
+        };
+    }
 
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {

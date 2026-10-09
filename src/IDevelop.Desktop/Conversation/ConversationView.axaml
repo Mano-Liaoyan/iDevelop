@@ -69,23 +69,27 @@
           <Binding Path="!$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="True" />
         </MultiBinding>
       </Border.IsVisible>
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10" HorizontalAlignment="Stretch">
-        <Border Classes="pill" VerticalAlignment="Center"
-                Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
-                Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
-                Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
-                Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" />
-            <TextBlock Text="{Binding Run.StatusLabel, FallbackValue=''}" AutomationProperties.AutomationId="ConversationRunStatus" />
-          </StackPanel>
-        </Border>
-        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Run.Progress, FallbackValue=''}" VerticalAlignment="Center"
-                   AutomationProperties.AutomationId="ConversationRunProgress" />
-        <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Run.Activity, FallbackValue=''}" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
-                   AutomationProperties.AutomationId="ConversationRunActivity" />
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" HorizontalAlignment="Stretch">
+        <!-- The activity follows the status while it fits, and otherwise takes a line of its own, where several running
+             tasks' titles wrap to a second line, between titles, before they are cut, as on the run bar. -->
+        <WrapPanel VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
+          <Border Classes="pill" VerticalAlignment="Center"
+                  Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
+                  Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
+                  Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
+                  Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" />
+              <TextBlock Text="{Binding Run.StatusLabel, FallbackValue=''}" AutomationProperties.AutomationId="ConversationRunStatus" />
+            </StackPanel>
+          </Border>
+          <TextBlock Classes="caption" Text="{Binding Run.Progress, FallbackValue=''}" VerticalAlignment="Center"
+                     AutomationProperties.AutomationId="ConversationRunProgress" />
+          <TextBlock Classes="caption" Text="{Binding Run.Activity, FallbackValue=''}" VerticalAlignment="Center"
+                     TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
+                     AutomationProperties.AutomationId="ConversationRunActivity" />
+        </WrapPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <Button Classes="ghost" Height="28"
                   Command="{Binding Run.ResumeCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
                   ToolTip.Tip="Start the run's next tasks in this window"

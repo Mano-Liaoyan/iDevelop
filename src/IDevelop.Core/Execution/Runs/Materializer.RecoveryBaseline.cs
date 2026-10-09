@@ -39,7 +39,7 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             VerifyRepository(record, repository);
             VerifyOwnedCheckout(repository, prepared.Location, record);
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience, Halted);
             if (mutation is null) return new RecoveryBaselining.Rejected(new(RunProblem.JournalBusy));
             record = Read(permit.Workflow, permit.Run);
             if (record.Baselines.TryGetValue((previous, confirmation), out receipt)) return AdoptBaseline(permit, operation, receipt);
