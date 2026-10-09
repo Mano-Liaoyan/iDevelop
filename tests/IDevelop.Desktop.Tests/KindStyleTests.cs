@@ -90,6 +90,27 @@ public sealed class KindStyleTests
     }
 
     [AvaloniaFact]
+    public void An_out_of_date_card_and_its_status_pill_share_one_warning_color_and_the_sync_glyph()
+    {
+        var ring = new Border { Classes = { "stateStroke" } };
+        var tint = new Border { Classes = { "stateTint" } };
+        var glyph = new PathIcon { Classes = { "stateIcon" } };
+        var pillGlyph = new PathIcon();
+        var pill = new Border { Classes = { "pill", "warning" }, Child = pillGlyph };
+        Show(new StackPanel { Children = { ring, tint, glyph, pill } }, ThemeVariant.Light);
+        foreach (var element in new StyledElement[] { ring, tint, glyph })
+        {
+            StyleClass.SetKind(element, NodeKind.Implement);
+            StyleClass.SetState(element, NodeState.OutOfDate);
+        }
+
+        Assert.Equal((Hex(ring.BorderBrush), Hex(tint.Background)), (Hex(pill.BorderBrush), Hex(pill.Background)));
+        Assert.Equal(Hex(glyph.Foreground), Hex(pillGlyph.Foreground));
+        Assert.Same(Application.Current!.FindResource("IconStateOutOfDate"), glyph.Data);
+        Assert.Same(glyph.Data, pillGlyph.Data);
+    }
+
+    [AvaloniaFact]
     public void A_waiting_pill_is_orange()
     {
         var pill = new Border { Classes = { "pill", "waiting" } };
@@ -114,7 +135,7 @@ public sealed class KindStyleTests
         string[] icons =
         [
             "IconStateNeedsSetup", "IconStateRunning", "IconStateElsewhere", "IconStop", "IconStateWaiting", "IconStateInReview",
-            "IconStateSucceeded", "IconStateFailed", "IconStateInterrupted", "IconStateCancelled", "IconSparkle",
+            "IconStateSucceeded", "IconStateFailed", "IconStateInterrupted", "IconStateCancelled", "IconStateOutOfDate", "IconSparkle",
         ];
         Assert.Equal(
             icons.Select(key => Application.Current!.FindResource(key)),
