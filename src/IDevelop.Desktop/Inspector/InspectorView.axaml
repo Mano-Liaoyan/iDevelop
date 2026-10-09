@@ -60,18 +60,21 @@
                     <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
                                AutomationProperties.AccessibilityView="Raw" />
                   </Panel>
-                  <!-- The kind line wraps between its parts, and a long blueprint name wraps within its own. -->
+                  <!-- The kind line wraps between the type and the version, which keeps its help glyph, and a long blueprint
+                       name wraps within its own. -->
                   <WrapPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                              AutomationProperties.AutomationId="InspectorKind">
                     <TextBlock Classes="kindLine" Text="{Binding TypeName}"
                                AutomationProperties.AutomationId="TaskType" />
                     <TextBlock Classes="kindLine" Text=" · " />
-                    <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
-                               AutomationProperties.AutomationId="TaskTypeVersion" />
-                    <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
-                            IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
-                    </Border>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
+                                 AutomationProperties.AutomationId="TaskTypeVersion" />
+                      <Border Classes="infoGlyph kindHelp" Margin="2,0,0,0" ToolTip.Tip="{Binding Description}"
+                              IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
+                      </Border>
+                    </StackPanel>
                   </WrapPanel>
                 </Grid>
                 <Button Grid.Column="4" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
