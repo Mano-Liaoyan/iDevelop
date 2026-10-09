@@ -159,6 +159,26 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Docking_in_a_large_window_moves_the_cards_and_the_proposals_ghosts_out_from_under_the_floating_controls()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Window();
+        FanOut.Run(shell);
+        FanOut.Generate(shell);
+        Resize(shell, 1600, 1000, 320);
+        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+
+        shell.Click(shell.Find<Button>("ConversationLayout"));
+
+        var controls = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "WorkflowRunBar" }.Select(id => shell.Bounds(shell.Find<Control>(id)))
+            .Concat(new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
+                .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds)).ToArray();
+        var cards = Cards(shell);
+        Assert.Equal(7, cards.Length);
+        Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
+    }
+
+    [AvaloniaFact]
     public void Fit_to_view_uses_the_room_a_long_status_leaves_on_the_docked_canvas()
     {
         using var f = FanOut.Fixture();
@@ -169,20 +189,15 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.StartsWith("That would create a cycle", shell.Status);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
         shell.Click(shell.Find<Button>("ConversationLayout"));
-        Resize(shell, 900, 600, 320);
-        var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "Status" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
-        var bar = shell.Bounds(shell.Find<Control>("WorkflowRunBar"));
-        Assert.True(bar.Top - top < 48 + 2 * 24, $"The status leaves {bar.Top - top} px, room for the margins too.");
+        Resize(shell, 900, 660, 320);
+        var (top, bottom) = Rows(shell);
+        Assert.True(bottom - top < 48 + 2 * 24, $"The status leaves {bottom - top} px, room for the margins too.");
         shell.Editor.ViewportLocation = new Point(-2000, -2000);
         shell.Render();
 
         shell.Click(shell.Find<Button>("FitToScreen"));
 
-        foreach (var node in shell.Nodes())
-        {
-            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
-            Assert.True(card.Top >= top - 0.5 && card.Bottom <= bar.Top + 0.5, $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is not between {top} and {bar.Top}");
-        }
+        Assert.All(Cards(shell), card => Assert.True(card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5, $"The card at {card} is not between {top} and {bottom}."));
     }
 
     /// <summary>How many lines the boxes take: boxes whose heights overlap share a line.</summary>
@@ -202,10 +217,14 @@ public sealed class CanvasChromeTests : IDisposable
         return lines;
     }
 
+    /// <summary>
+    /// A fit keeps the cards and the proposal's ghost cards 24 px clear of both rows of floating controls, and on the docked
+    /// canvas of the smallest window, which has no room for those margins, right against them.
+    /// </summary>
     [AvaloniaTheory]
-    [InlineData(1600, 600, 280, false)]
-    [InlineData(900, 600, 320, true)]
-    public void Fit_to_view_keeps_the_cards_below_the_top_row_and_above_the_run_bar(double width, double height, double inspector, bool docked)
+    [InlineData(1600, 600, 280, false, 24)]
+    [InlineData(900, 600, 320, true, 0)]
+    public void Fit_to_view_keeps_the_cards_clear_of_the_top_row_and_the_bottom_row(double width, double height, double inspector, bool docked, double margin)
     {
         using var f = FanOut.Fixture();
         var shell = f.Window();
@@ -213,21 +232,33 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Generate(shell);
         if (docked)
         {
-            // The docked conversation leaves a short, compact canvas, where the pill sits under the buttons.
             shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
             shell.Click(shell.Find<Button>("ConversationLayout"));
         }
 
         Resize(shell, width, height, inspector);
+        shell.Editor.ViewportLocation = new Point(-2000, -2000);
+        shell.Render();
         shell.Click(shell.Find<Button>("FitToScreen"));
 
-        var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
-        var bar = shell.Bounds(shell.Find<Control>("WorkflowRunBar"));
-        foreach (var node in shell.Nodes())
-        {
-            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
-            Assert.True(card.Top >= top + 24 - 0.5 && card.Bottom <= bar.Top - 24 + 0.5, $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is not 24 px inside {top} and {bar.Top}");
-        }
+        var (top, bottom) = Rows(shell);
+        Assert.All(Cards(shell), card => Assert.True(card.Top >= top + margin - 0.5 && card.Bottom <= bottom - margin + 0.5,
+            $"The card at {card} is not {margin} px inside {top} and {bottom}."));
+    }
+
+    /// <summary>The lowest edge of the top row's controls and the highest edge of the bottom row's.</summary>
+    private static (double Top, double Bottom) Rows(Shell shell) =>
+        (new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "RunWorkflow", "Status" }.Where(shell.ShowsAny).Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom),
+         new Control[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating"), shell.Find<Control>("WorkflowRunBar") }
+            .Where(control => control.IsEffectivelyVisible).Min(control => shell.Bounds(control).Top));
+
+    /// <summary>The cards and the proposal's ghost cards as they show, at the editor's zoom.</summary>
+    private static Rect[] Cards(Shell shell)
+    {
+        var zoom = shell.Editor.ViewportZoom;
+        return [.. shell.Nodes().Select(node => shell.Bounds(node).WithWidth(node.Bounds.Width * zoom).WithHeight(node.Bounds.Height * zoom))
+            .Concat(Shell.ById<Control>(shell.Window, "GhostCard").Select(ghost => shell.Bounds(ghost)
+                .WithWidth(WorkflowCanvasViewModel.TaskCardWidth * zoom).WithHeight(WorkflowCanvasViewModel.TaskCardHeight * zoom)))];
     }
 
     [AvaloniaFact]
