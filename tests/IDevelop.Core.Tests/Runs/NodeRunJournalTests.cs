@@ -119,6 +119,9 @@ public sealed class NodeRunJournalTests
 
         Assert.Equal(RunProblem.RunStopped, Refused(f.Store.Request(f.Permit, f.Op(), U)).Problem);
         Assert.Equal(0, Requests(f));
+        var record = f.Read();
+        Assert.Equal(RunProblem.RunStopped, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record,
+            new RunEntry(record.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.Requested(U)))).Reason.Problem);
     }
 
     [Fact]
