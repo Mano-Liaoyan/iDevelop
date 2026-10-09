@@ -151,12 +151,18 @@ internal sealed partial class WorkflowRunCoordinator
                 case (_, { } problem): return new RunCommand.Refused(problem);
             }
         }
-        return _store.Request(_permit!, operation, task, carried) switch
-        {
-            RunDecision.Rejected rejected => new RunCommand.Refused(rejected.Reason),
-            _ => Accepted,
-        };
+        if (_store.Request(_permit!, operation, task, carried) is not RunDecision.Rejected rejected) return Accepted;
+        // A refused request carries nothing, so what it kept and copied for that goes, unless the journal took it after all.
+        if (!carried.IsEmpty && Read() is { } after && !after.Receipts.ContainsKey(operation)) Forget(carried);
+        return new RunCommand.Refused(rejected.Reason);
     }, wait);
+
+    /// <summary>Removes the refs and copied artifacts of <paramref name="carried"/>, which no journal names.</summary>
+    private void Forget(ImmutableArray<IncludedResult> carried)
+    {
+        if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is RepositoryOpen.Opened opened)
+            Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, carried);
+    }
 
     /// <summary>The results of earlier runs <paramref name="widened"/> needs, built, kept, and copied for the request <paramref name="operation"/> (#90).</summary>
     private (ImmutableArray<IncludedResult> Carried, RunRejection? Problem) Carry(RunRecord widened, OperationId operation)
@@ -169,8 +175,13 @@ internal sealed partial class WorkflowRunCoordinator
             var history = RunHistory.Of(_store.Records(Address.Workflow), widened.Revision.Snapshot);
             var build = Carrying.Build(opened.Repository, widened, history, operation);
             if (build.Carried.IsEmpty) return ([], null);
-            return Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is null
-                ? (build.Carried, null) : ([], new(RunProblem.StorageUnavailable));
+            if (Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is not null)
+            {
+                Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, build.Carried);
+                return ([], new(RunProblem.StorageUnavailable));
+            }
+            _runs.Probe?.Invoke("request.carry.kept");
+            return (build.Carried, null);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return ([], new(RunProblem.StorageUnavailable)); }
     }

@@ -175,6 +175,28 @@ internal static class Carrying
         return null;
     }
 
+    /// <summary>
+    /// Removes the refs and the copied artifacts of <paramref name="carried"/>, which an event of <paramref name="run"/> that
+    /// was refused would have carried. Best effort: what stays only keeps a commit or a file that nothing names.
+    /// </summary>
+    public static void Forget(GitRepository repository, string project, RunId run, WorkflowId workflow, ImmutableArray<IncludedResult> carried)
+    {
+        var storage = new RunStorage(project, workflow, run);
+        foreach (var item in carried)
+        {
+            foreach (var name in new[] { RunLayout.CarriedCode(run, item.Result.Id), RunLayout.CarriedJoin(run, item.Result.Id) })
+            {
+                if (repository.ReadRef(name) is GitRead<CommitId?>.Read { Value: { } commit }) repository.DeleteRef(name, commit);
+            }
+            var copied = Path.Combine(storage.Folder, "results", item.Result.Id.Value.ToString("D"));
+            try
+            {
+                if (Directory.Exists(copied)) Directory.Delete(copied, recursive: true);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
     /// <summary>Removes the refs that keep the commits of <paramref name="run"/>'s carried results, for a run that was never approved.</summary>
     public static void Release(GitRepository repository, RunId run)
     {

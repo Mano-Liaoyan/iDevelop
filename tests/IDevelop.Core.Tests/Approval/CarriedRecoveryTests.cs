@@ -175,6 +175,47 @@ public sealed class CarriedRecoveryTests
         Assert.Equal([1, 1, 1, 1], Launches(f, A, B, C, D));
     }
 
+    [Fact]
+    public async Task A_request_the_journal_refuses_after_it_kept_its_carried_results_lets_go_of_them()
+    {
+        await using var f = Held(out var gate);
+        f.Answer(B, Writes(B, "out-b.txt", "B\n").Outbox("notes", [7, 8]));
+        await f.Open();
+        await RunNode(f, B, 1);
+        f.Git.Write("root.txt", "root moved\n");
+        f.GitText("add", "root.txt");
+        f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), BaseChoice.Head, new(Guid.NewGuid()));
+        var coordinator = started.Coordinator;
+        await coordinator.Until(view => view.Tasks[D].State == TaskState.Running).WaitAsync(Bound);
+        var run = coordinator.Address.Run;
+        // Once the request has kept B's replayed commit, the journal is busy for longer than the request waits.
+        FileStream? held = null;
+        f.Runs.Probe = point =>
+        {
+            if (point == "request.carry.kept")
+                held ??= new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        };
+        var confirmation = new OperationId(Guid.NewGuid());
+
+        var refused = Assert.IsType<RunCommand.Refused>(await coordinator.Request(coordinator.Address, A, confirmation).WaitAsync(Bound));
+
+        Assert.Equal(RunProblem.JournalBusy, refused.Reason.Problem);
+        Assert.Equal("", CarriedRefs(f, run));
+        var results = Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), run.ToString(), "results");
+        Assert.False(Directory.Exists(results) && Directory.EnumerateFiles(results, "*", SearchOption.AllDirectories).Any());
+        held!.Dispose();
+        f.Runs.Probe = null;
+        Assert.IsType<RunCommand.Accepted>(await coordinator.Request(coordinator.Address, A, confirmation).WaitAsync(Bound));
+        await coordinator.Until(view => view.Tasks[C].State == TaskState.Done).WaitAsync(Bound);
+        File.WriteAllText(gate, "go");
+        await Completed(coordinator);
+        var carried = f.Read(run).CurrentResults[B];
+        Assert.Equal($"{RunLayout.CarriedCode(run, carried.Id)} {Assert.IsType<CodeOutput.Produced>(carried.Code).Code.Commit.Hex}\n", CarriedRefs(f, run));
+        Assert.Equal([7, 8], File.ReadAllBytes(Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), run.ToString(),
+            Assert.Single(carried.Artifacts).StoredPath)));
+    }
+
     private sealed class Same<T> : IEqualityComparer<T>
     {
         public bool Equals(T? x, T? y) => RunJournal.Canonical(x) == RunJournal.Canonical(y);
