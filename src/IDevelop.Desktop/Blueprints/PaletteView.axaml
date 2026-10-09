@@ -41,12 +41,12 @@
                         <Button Classes="glyph" Command="{Binding PlaceCommand}" ToolTip.Tip="Place in view"
                                 AutomationProperties.AutomationId="PlaceBlueprint"
                                 AutomationProperties.Name="{Binding PlaceName}">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" Width="14" Height="14" />
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" />
                         </Button>
                         <Button Classes="glyph" ToolTip.Tip="More"
                                 AutomationProperties.AutomationId="BlueprintMore"
                                 AutomationProperties.Name="{Binding MoreName}">
-                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" Width="14" Height="14" />
+                          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconMore}" />
                           <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
                               <MenuItem Header="Derive Blueprint…" Command="{Binding DeriveCommand}"
@@ -86,8 +86,8 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </inspector:InspectorRow>
-    <inspector:InspectorRow Layout="Full">
-      <Button Classes="ghost" HorizontalAlignment="Left" Height="28" Margin="-8,4,0,0" Command="{Binding ReloadCommand}"
+    <inspector:InspectorRow Layout="Buttons">
+      <Button Classes="ghost" HorizontalAlignment="Left" Height="{x:Static inspector:InspectorGrid.LineHeight}" Margin="-8,4,0,0" Command="{Binding ReloadCommand}"
               ToolTip.Tip="Read the project and personal libraries again"
               AutomationProperties.AutomationId="ReloadBlueprints"
               AutomationProperties.Name="Read the libraries again">
