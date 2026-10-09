@@ -1,0 +1,199 @@
+using System.Windows.Input;
+using IDevelop.Desktop.Execution;
+using IDevelop.Desktop.Mvvm;
+using IDevelop.Execution;
+using IDevelop.Nodes;
+using IDevelop.Workflows;
+
+namespace IDevelop.Desktop.Canvas;
+
+/// <summary>
+/// The agent that a task a proposal adds takes once accepted, which the review shows and the person may change: their
+/// own choice, else the planner's when this machine can run it, else its type's, else the planner's agent while the
+/// proposal's box is ticked. A planner's choice this machine cannot run says why, on the task's row and its ghost card.
+/// </summary>
+public sealed class ProposalAgentViewModel : ObservableObject
+{
+    private static readonly string[] Summary = [nameof(Label), nameof(Client), nameof(Model), nameof(Reason), nameof(Note)];
+
+    // A new list clears its picker's selection, so each list is raised before its selection.
+    private static readonly string[] Pickers =
+    [
+        nameof(ClientChoices), nameof(SelectedClient), nameof(ModelChoices), nameof(SelectedModel), nameof(ReasoningChoices),
+        nameof(SelectedReasoning), nameof(HasReasoning),
+    ];
+
+    private readonly ProposalViewModel _proposal;
+    private readonly ProposedNode _node;
+    private AgentCheck _check;
+    private ExecutionSettings? _changed;
+    private bool _isEditing;
+
+    internal ProposalAgentViewModel(ProposalViewModel proposal, ProposedNode node)
+    {
+        _proposal = proposal;
+        _node = node;
+        _check = Check();
+        EditCommand = new RelayCommand(() => _proposal.Edit(this));
+    }
+
+    /// <summary>"Codex · GPT-5.5 · high", or "No agent".</summary>
+    public string Label => RunText.AgentLabel(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
+
+    /// <summary>The agent's first line, as a card shows it: the client, or "No agent".</summary>
+    public string Client => Lines.Client;
+
+    /// <summary>The agent's second line, as a card shows it: the model and its level, or null.</summary>
+    public string? Model => Lines.Model;
+
+    /// <summary>
+    /// Why the task takes its agent: "Set by the blueprint" for a type with an agent of its own, the planner's reason for
+    /// its choice, or what the person's own choice replaced.
+    /// </summary>
+    public string? Reason => _changed is not null
+        ? Own is { } own ? $"Your choice. The blueprint sets {RunText.AgentLabel(own, _proposal.Status(own.Client))}."
+        : _check switch
+        {
+            AgentCheck.Usable usable => $"Your choice. The planner chose {RunText.AgentLabel(usable.Settings, _proposal.Status(usable.Settings.Client))}.",
+            AgentCheck.Unusable unusable => $"Your choice. {unusable.Problem}",
+            _ => "Your choice.",
+        }
+        : Own is not null ? "Set by the blueprint"
+        : _check is AgentCheck.Usable ? _node.Agent?.Reason : null;
+
+    /// <summary>Why the planner's choice falls back, and to what, or null.</summary>
+    public string? Note => Unusable is { } unusable
+        ? $"{unusable.Problem} {(_proposal.Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
+        : null;
+
+    /// <summary>
+    /// The tab under the task's ghost card, such as "Pi isn't ready", or null. The card's own lines show the agent the
+    /// task takes instead, and the review row says the rest.
+    /// </summary>
+    public string? GhostNote => Unusable?.Brief;
+
+    /// <summary>Whether the pickers show under the task's row. One task's at a time.</summary>
+    public bool IsEditing
+    {
+        get => _isEditing;
+        internal set
+        {
+            if (SetProperty(ref _isEditing, value))
+            {
+                OnPropertyChanged(nameof(Editor));
+                OnPropertyChanged(nameof(EditName));
+            }
+        }
+    }
+
+    /// <summary>This agent while its pickers show, else null, so only the open task's pickers are in the window.</summary>
+    public ProposalAgentViewModel? Editor => _isEditing ? this : null;
+
+    public ICommand EditCommand { get; }
+
+    public string EditName => _isEditing ? $"Done changing the agent of \"{_node.Title}\"" : $"Change the agent of \"{_node.Title}\"";
+
+    /// <summary>Every client, or only those with a read-only mode for a task that only reads.</summary>
+    public IReadOnlyList<ClientChoice> ClientChoices =>
+        [.. Clients.All.Where(id => !ReadOnly || Clients.HasReadOnlyMode(id)).Select(id => new ClientChoice(_node.Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
+
+    public ClientChoice? SelectedClient => ClientChoices.FirstOrDefault(choice => choice.Id == Settings?.Client);
+
+    public IReadOnlyList<Choice> ModelChoices => Settings is { } settings
+        ? [.. ExecutionChoices.Models(settings, _proposal.Status(settings.Client))
+            .Select(choice => new Choice(_node.Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, _proposal.Status(settings.Client))))]
+        : [];
+
+    public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == Settings?.Model);
+
+    public IReadOnlyList<Choice> ReasoningChoices => Settings is { } settings
+        ? [.. ExecutionChoices.Reasoning(settings, _proposal.Status(settings.Client)).Select(choice => new Choice(_node.Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
+        : [];
+
+    public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == Settings?.Reasoning);
+
+    /// <summary>False when the model takes no reasoning level.</summary>
+    public bool HasReasoning => ReasoningChoices.Count > 0;
+
+    internal TaskId Id => _node.Id;
+
+    /// <summary>The planner's choice that this machine can run, which the task takes only when its type has no agent of its own.</summary>
+    internal ExecutionSettings? Planned => (_check as AgentCheck.Usable)?.Settings;
+
+    /// <summary>The person's choice in the review, which wins over everything.</summary>
+    internal ExecutionSettings? Changed => _changed;
+
+    /// <summary>
+    /// What accepting gives the task, as <see cref="Proposal.Accept"/> decides it: the person's choice, else its type's own
+    /// agent, else the planner's choice, else the planner's agent while the box is ticked.
+    /// </summary>
+    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? _proposal.Fallback;
+
+    /// <summary>The task has no agent of its own, its type has none, and the planner gave none it can use, so the box decides.</summary>
+    internal bool NeedsFallback => _changed is null && Own is null && Planned is null;
+
+    private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
+
+    private bool ReadOnly => _node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
+
+    /// <summary>The agent the task's blueprint saves, which wins over the planner's choice.</summary>
+    private ExecutionSettings? Own => _node.Blueprint.Defaults.Execution;
+
+    /// <summary>A planner's choice that falls back: one the machine cannot run, for a type without an agent of its own.</summary>
+    private AgentCheck.Unusable? Unusable => _changed is null && Own is null ? _check as AgentCheck.Unusable : null;
+
+    internal void ChooseClient(ClientChoice choice)
+    {
+        if (choice.Id is { } id && id != Settings?.Client)
+        {
+            Change(ExecutionChoices.ForClient(id, _proposal.Status(id)));
+        }
+    }
+
+    internal void ChooseModel(Choice choice)
+    {
+        if (Settings is { } settings && choice.Id != settings.Model && ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), choice.Id) is { } model)
+        {
+            Change(ExecutionChoices.ForModel(settings, model));
+        }
+    }
+
+    internal void ChooseReasoning(Choice choice)
+    {
+        if (Settings is { } settings && choice.Id != settings.Reasoning
+            && ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), settings.Model) is { } model && model.ReasoningLevels.Contains(choice.Id))
+        {
+            Change(settings with { Reasoning = choice.Id });
+        }
+    }
+
+    /// <summary>Checks the planner's choice again, after what the clients offer changed.</summary>
+    internal void Recheck() => _check = Check();
+
+    /// <summary>Shows the agent and its words again, as after an edit of the workflow that may change the planner's agent.</summary>
+    internal void ShowSummary()
+    {
+        foreach (var property in Summary)
+        {
+            OnPropertyChanged(property);
+        }
+    }
+
+    /// <summary>Shows what changed, the pickers too: the person's choice, the box, or the clients.</summary>
+    internal void Show()
+    {
+        ShowSummary();
+        foreach (var property in Pickers)
+        {
+            OnPropertyChanged(property);
+        }
+    }
+
+    private AgentCheck Check() => AgentCheck.Of(_node.Agent, _node.Blueprint, _proposal.ClientStatuses);
+
+    private void Change(ExecutionSettings settings)
+    {
+        _changed = settings;
+        _proposal.OnAgentChanged();
+    }
+}

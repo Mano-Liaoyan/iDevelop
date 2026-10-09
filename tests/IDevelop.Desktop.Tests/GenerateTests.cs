@@ -40,6 +40,24 @@ public sealed class GenerateTests : IDisposable
         ```
         """;
 
+    // The planner chose an agent for each task: Codex and Claude Code, which are ready, and Pi, which is not installed.
+    private static readonly string ChoosingReply = """
+        Here is the plan.
+
+        ```idevelop
+        {"status": "proposal",
+         "add": [{"id": "api", "type": "type-1", "title": "Export API", "fields": {"instructions": "Add the CSV endpoint."},
+                  "agent": {"client": "codex", "model": "gpt-6.1-sol", "reasoning": "xhigh", "reason": "The endpoint shapes the export's data."}},
+                 {"id": "button", "type": "type-1", "title": "Export button", "fields": {"instructions": "Add the button."},
+                  "agent": {"client": "claude-code", "model": "claude-haiku-4-5", "reasoning": "low", "reason": "A small view change."}},
+                 {"id": "tests", "type": "type-1", "title": "Export tests", "fields": {"instructions": "Test the export."},
+                  "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low", "reason": "Fast and cheap."}}],
+         "connect": [{"from": "planner", "to": "api"}, {"from": "api", "to": "button"}, {"from": "api", "to": "tests"}]}
+        ```
+        """;
+
+    private static readonly ExecutionSettings Haiku = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "low" };
+
     private readonly TempFolder _temp = AppTempFolder.New();
     private readonly FakeClients _fakes;
 
@@ -172,7 +190,7 @@ public sealed class GenerateTests : IDisposable
         var shell = Generated();
         var planner = shell.Window.ViewModel.Canvas!.SelectedNode!;
 
-        Assert.Equal(["New Implement Export API", "New Implement Export button", "New Implement Export tests"], Ghosts(shell));
+        Assert.Equal(["Codex · GPT-6.1-Sol · high Export API", "Codex · GPT-6.1-Sol · high Export button", "Codex · GPT-6.1-Sol · high Export tests"], Ghosts(shell));
         Assert.Equal(NodeRole.Proposing, planner.Role);
         Assert.Equal("Review Proposal", ButtonLabel(shell));
         Assert.True(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
@@ -421,6 +439,329 @@ public sealed class GenerateTests : IDisposable
         Assert.False(shell.Has<GenerateSheet>("GenerateSheet"));
     }
 
+    [AvaloniaFact]
+    public void The_planners_prompt_lists_the_clients_ready_here_with_their_models_and_levels()
+    {
+        var prompt = Path.Combine(_temp.Create("evidence"), "prompt.txt");
+        Install(_fakes, ClientId.ClaudeCode);
+        var shell = OpenEmpty(Fresh(ClientId.Codex).CaptureStdin(prompt).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Reply)));
+
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+
+        var text = File.ReadAllText(prompt);
+        Assert.Contains("\nAgents you may choose:\n- claude-code (Claude Code):\n  - claude-fable-5-1, Claude Fable 5.1. Reasoning: low, medium, high, xhigh, max.\n", text);
+        Assert.Contains("\n- codex (Codex):\n  - gpt-6.1-sol, GPT-6.1-Sol. Reasoning: low, medium, high, xhigh, max, ultra.\n", text);
+        Assert.DoesNotContain("- pi (Pi)", text);
+        Assert.Contains("\"agent\": {\"client\": \"...\", \"model\": \"...\", \"reasoning\": \"...\", \"reason\": \"...\"}", text);
+    }
+
+    [AvaloniaFact]
+    public void Each_ghost_card_shows_the_agent_its_task_takes_and_a_choice_that_falls_back_says_why()
+    {
+        var shell = GeneratedChoosing();
+
+        Assert.Equal(
+            ["Codex · GPT-6.1-Sol · xhigh Export API", "Claude Code · Claude Haiku 4.5 · low Export button", "Codex · GPT-6.1-Sol · high Export tests"],
+            Ghosts(shell));
+        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
+        // Every card has the client on one line and the model and level on the next, whatever their length.
+        Assert.Equal([["Codex", "GPT-6.1-Sol · xhigh"], ["Claude Code", "Claude Haiku 4.5 · low"], ["Codex", "GPT-6.1-Sol · high"]], GhostLines(shell));
+    }
+
+    [AvaloniaFact]
+    public void The_review_shows_each_new_tasks_agent_and_reason_and_why_a_choice_falls_back()
+    {
+        var shell = GeneratedChoosing();
+
+        Assert.Equal(
+            [
+                ("Export API", "Codex · GPT-6.1-Sol · xhigh", "The endpoint shapes the export's data.", null),
+                ("Export button", "Claude Code · Claude Haiku 4.5 · low", "A small view change.", null),
+                ("Export tests", "Codex · GPT-6.1-Sol · high", null,
+                    "The planner chose Pi, which isn't installed. The task takes the planner's agent instead."),
+            ],
+            Review(shell));
+        Assert.True(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Accept_writes_each_tasks_chosen_agent_and_the_planners_into_a_task_whose_choice_fell_back()
+    {
+        var shell = GeneratedChoosing();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var planner = canvas.SelectedNode!.Id;
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        var added = canvas.Workflow.Tasks.Values.Where(task => task.Id != planner).ToDictionary(task => task.Title, task => task.Execution);
+        Assert.Equal(
+            new Dictionary<string, ExecutionSettings?>
+            {
+                ["Export API"] = Codex with { Reasoning = "xhigh" },
+                ["Export button"] = Haiku,
+                ["Export tests"] = Codex,
+            },
+            added);
+        shell.ShowTasks();
+        Assert.Equal("Claude Code · Claude Haiku 4.5 · low", shell.CardAgent("Export button"));
+    }
+
+    [AvaloniaFact]
+    public void Unticked_the_box_leaves_a_task_whose_choice_fell_back_without_an_agent_and_its_note_says_so()
+    {
+        var shell = GeneratedChoosing();
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
+
+        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
+        Assert.Equal("New Implement Export tests", Ghosts(shell)[2]);
+        Assert.Equal(
+            "The planner chose Pi, which isn't installed. Choose the task's agent before it runs.",
+            Review(shell)[2].Note);
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        Assert.Null(canvas.Workflow.Tasks.Values.Single(task => task.Title == "Export tests").Execution);
+        Assert.Equal(Haiku, canvas.Workflow.Tasks.Values.Single(task => task.Title == "Export button").Execution);
+    }
+
+    [AvaloniaFact]
+    public void The_person_changes_a_tasks_agent_in_the_review_and_Accept_writes_their_choice()
+    {
+        var shell = GeneratedChoosing();
+        var canvas = shell.Window.ViewModel.Canvas!;
+        Assert.False(shell.Has<ComboBox>("ProposalAgentClient"));
+
+        shell.Click(EditButton(shell, "Export tests"));
+        Assert.Equal(["Claude Code", "Codex", "Pi · not installed", "Antigravity CLI · not installed"], shell.Pick("ProposalAgentClient", "Claude Code"));
+        shell.Pick("ProposalAgentModel", "Claude Sonnet 5.5");
+        shell.Pick("ProposalAgentReasoning", "medium");
+
+        Assert.Equal("Claude Code · Claude Sonnet 5.5 · medium Export tests", Ghosts(shell)[2]);
+        Assert.Equal(new string?[] { null, null, null }, GhostNotes(shell));
+        Assert.Equal(
+            ("Export tests", "Claude Code · Claude Sonnet 5.5 · medium", "Your choice. The planner chose Pi, which isn't installed.", null),
+            Review(shell)[2]);
+        Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+
+        shell.Click(EditButton(shell, "Export tests"));
+        Assert.False(shell.Has<ComboBox>("ProposalAgentClient"));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        Assert.Equal(
+            new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-sonnet-5-5", Reasoning = "medium" },
+            canvas.Workflow.Tasks.Values.Single(task => task.Title == "Export tests").Execution);
+    }
+
+    [AvaloniaFact]
+    public void A_choice_falls_back_until_its_client_is_ready_and_then_is_the_tasks_agent()
+    {
+        var shell = GeneratedChoosing();
+
+        Install(_fakes, ClientId.Pi);
+        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
+        shell.Render();
+
+        Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low Export tests", Ghosts(shell)[2]);
+        Assert.Equal(new string?[] { null, null, null }, GhostNotes(shell));
+        Assert.Equal(("Export tests", "Pi · deepseek · DeepSeek V4.1 Flash · low", "Fast and cheap.", null), Review(shell)[2]);
+        Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_Pi_model_keeps_its_level_whole_on_its_ghost_card_and_its_row_at_every_inspector_width()
+    {
+        Install(_fakes, ClientId.Pi);
+        var shell = GeneratedChoosing();
+
+        Assert.Equal(["Pi · deepseek", "DeepSeek V4.1 Flash · low"], GhostLines(shell)[2]);
+        foreach (var width in new[] { 280.0, 320, 520 })
+        {
+            shell.SizeInspector(width);
+            Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low", Review(shell)[2].Agent);
+            var texts = GhostCards(shell).Concat<Visual>(ById<StackPanel>(shell, "ProposalAgent"))
+                .SelectMany(root => root.GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
+            Assert.All(texts, text => Assert.False(text.TextLayout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" is cut short at {width} px."));
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_agent_each_row_shows_is_the_agent_Accept_writes_for_a_type_with_an_agent_of_its_own()
+    {
+        var implement = BuiltInBlueprints.Implement;
+        var project = _temp.Create("seed");
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("careful", 1), "Careful", implement.Work, implement.Fields,
+            new NodeSettings(Haiku, ConversationMode.Autonomous)) { DerivedFrom = implement.Key });
+        const string reply = """
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "chosen", "type": "type-6", "title": "Chosen", "fields": {"instructions": "A."},
+                      "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low", "reason": "Routine."}},
+                     {"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}},
+                     {"id": "unusable", "type": "type-6", "title": "Unusable", "fields": {"instructions": "C."},
+                      "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low"}},
+                     {"id": "plain", "type": "type-1", "title": "Plain", "fields": {"instructions": "D."}}]}
+            ```
+            """;
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        var shown = Review(shell).ToDictionary(row => row.Title, row => row.Agent);
+        var ghosts = Ghosts(shell);
+        // The blueprint's own agent wins over the planner's choice, usable or not, and the row says so.
+        Assert.Equal(
+            [
+                ("Chosen", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Own", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Unusable", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Plain", "Codex · GPT-6.1-Sol · high", null, null),
+            ],
+            Review(shell));
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        string[] titles = ["Chosen", "Own", "Unusable", "Plain"];
+        Assert.Equal(titles.Select(title => shown[title]), titles.Select(shell.CardAgent));
+        Assert.Equal(ghosts.Order(), titles.Select(title => $"{shell.CardAgent(title)} {title}").Order());
+    }
+
+    [AvaloniaFact]
+    public void The_persons_choice_on_a_row_wins_over_its_blueprints_own_agent_and_Accept_writes_it()
+    {
+        var implement = BuiltInBlueprints.Implement;
+        var project = _temp.Create("seed");
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("careful", 1), "Careful", implement.Work, implement.Fields,
+            new NodeSettings(Haiku, ConversationMode.Autonomous)) { DerivedFrom = implement.Key });
+        const string reply = """
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}}]}
+            ```
+            """;
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        Assert.Equal(("Own", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null), Assert.Single(Review(shell)));
+
+        shell.Click(EditButton(shell, "Own"));
+        shell.Pick("ProposalAgentClient", "Codex");
+
+        Assert.Equal(
+            ("Own", "Codex · GPT-6.1-Sol · low", "Your choice. The blueprint sets Claude Code · Claude Haiku 4.5 · low.", null),
+            Assert.Single(Review(shell)));
+        Assert.Equal(["Codex · GPT-6.1-Sol · low Own"], Ghosts(shell));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        Assert.Equal(
+            new ExecutionSettings(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" },
+            shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values.Single(task => task.Title == "Own").Execution);
+        Assert.Equal("Codex · GPT-6.1-Sol · low", shell.CardAgent("Own"));
+    }
+
+    [AvaloniaFact]
+    public void A_client_still_being_checked_when_the_planner_starts_is_named_in_the_review()
+    {
+        var gate = Path.Combine(_temp.Create("gate"), "agy");
+        _fakes.Install("agy", FakeRule.On("models").WaitForFile(gate).Replay(Fixture.Path("agy-models.txt")));
+        var prompt = Path.Combine(_temp.Create("evidence"), "prompt.txt");
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).CaptureStdin(prompt).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Reply)));
+        var clients = new ClientDirectory(_fakes.Resolver);
+        var codexReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        clients.Changed += (_, _) =>
+        {
+            if (clients.Current[ClientId.Codex] is ClientStatus.Ready)
+            {
+                codexReady.TrySetResult();
+            }
+        };
+        var refresh = clients.RefreshAsync();
+        try
+        {
+            Assert.True(codexReady.Task.Wait(TimeSpan.FromSeconds(60)), "Codex is ready");
+            var shell = Shell.Open(_temp.Create("seed"), clients);
+            Submit(shell, Prompt);
+            shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+
+            Assert.IsType<ClientStatus.Checking>(clients.Current[ClientId.Antigravity]);
+            Assert.DoesNotContain("antigravity", File.ReadAllText(prompt));
+            Assert.Equal(
+                "Antigravity CLI was still being checked when the planner started, so the planner didn't consider it.",
+                shell.InView<TextBlock>("ProposalCheckingNote").Text);
+        }
+        finally
+        {
+            File.WriteAllText(gate, "");
+            refresh.Wait(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [AvaloniaFact]
+    public void Without_a_client_still_being_checked_the_review_has_no_such_note()
+    {
+        var shell = GeneratedChoosing();
+
+        Assert.False(shell.Find<TextBlock>("ProposalCheckingNote").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_click_on_a_tasks_agent_or_reason_leaves_its_box_as_it_was()
+    {
+        var shell = GeneratedChoosing();
+        var entry = ById<StackPanel>(shell, "ProposalEntry").First();
+        var box = Shell.ById<CheckBox>(entry, "ProposalItem").Single();
+
+        var title = Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single();
+        var edit = Shell.ById<Button>(entry, "ProposalAgentEdit").Single();
+        entry.BringIntoView();
+        shell.Render();
+        Assert.True(shell.Window.InputHitTest(shell.Center(title)) is Visual hit && box.IsVisualAncestorOf(hit), "the title is in view");
+        shell.Click(Shell.ById<StackPanel>(entry, "ProposalAgent").Single());
+        shell.Click(Shell.ById<TextBlock>(entry, "ProposalAgentReason").Single());
+        // The empty end of the title's line, before the Change button, is no part of the box either.
+        shell.Click(new Point(shell.Bounds(edit).Left - 24, shell.Center(title).Y));
+        Assert.True(box.IsChecked);
+
+        shell.Click(title);
+        Assert.False(box.IsChecked);
+    }
+
+    [AvaloniaFact]
+    public void Only_one_tasks_agent_is_open_for_change_at_a_time()
+    {
+        var shell = GeneratedChoosing();
+
+        shell.Click(EditButton(shell, "Export API"));
+        shell.Click(EditButton(shell, "Export button"));
+
+        Assert.Equal("Claude Code", shell.Picked("ProposalAgentClient"));
+        Assert.Equal("Claude Haiku 4.5", shell.Picked("ProposalAgentModel"));
+    }
+
+    [AvaloniaFact]
+    public void A_task_whose_type_takes_no_agent_shows_none_and_the_box_waits_for_a_task_without_a_choice()
+    {
+        const string reply = """
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "api", "type": "type-1", "title": "Export API", "fields": {"instructions": "Add the CSV endpoint."},
+                      "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low", "reason": "Routine."}},
+                     {"id": "sign", "type": "type-5", "title": "Sign off", "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low"}}],
+             "connect": [{"from": "api", "to": "sign"}]}
+            ```
+            """;
+        var shell = OpenEmpty(Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        Submit(shell, Prompt);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+
+        Assert.Equal(["Codex · GPT-5.5 · low Export API", "New Approval Sign off"], Ghosts(shell));
+        Assert.Equal([("Export API", "Codex · GPT-5.5 · low", "Routine.", null), ("Sign off", null, null, null)], Review(shell));
+        Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+        Assert.Single(ById<Button>(shell, "ProposalAgentEdit"));
+    }
+
     [Theory]
     [InlineData("Add CSV export.", "Add CSV export.")]
     [InlineData("\n   \n  Add CSV export.  \r\nWith tests.", "Add CSV export.")]
@@ -448,6 +789,55 @@ public sealed class GenerateTests : IDisposable
         return shell;
     }
 
+    /// <summary>Generates from an empty project with Codex and Claude Code ready, and waits for <see cref="ChoosingReply"/>.</summary>
+    private Shell GeneratedChoosing()
+    {
+        Install(_fakes, ClientId.ClaudeCode);
+        var shell = OpenEmpty(Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, ChoosingReply)));
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        return shell;
+    }
+
+    /// <summary>Generates <see cref="Prompt"/> with Codex as the planner, which the sheet would not pick while Claude Code is ready.</summary>
+    private static void SubmitOnCodex(Shell shell)
+    {
+        OpenSheet(shell);
+        shell.Type(Prompt);
+        shell.Pick("GenerateClient", "Codex");
+        shell.Click(shell.Find<Button>("GenerateSubmit"));
+    }
+
+    private static IEnumerable<T> ById<T>(Shell shell, string automationId) where T : Control =>
+        Shell.ById<T>(shell.Window, automationId).Where(control => control.IsEffectivelyVisible);
+
+    /// <summary>Each proposed task in the review: its title, the agent it takes, the reason shown, and the note on its choice.</summary>
+    private static (string Title, string? Agent, string? Reason, string? Note)[] Review(Shell shell) =>
+        [.. ById<StackPanel>(shell, "ProposalEntry").Select(entry => (
+            Shell.TextOf(Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single()),
+            AgentLines(entry),
+            Visible(entry, "ProposalAgentReason"),
+            Visible(entry, "ProposalAgentNote")))];
+
+    /// <summary>A proposed task's agent on its row: the client's line, then the model and level's, joined as one label.</summary>
+    private static string? AgentLines(Visual entry) =>
+        Shell.ById<StackPanel>(entry, "ProposalAgent").SingleOrDefault(agent => agent.IsEffectivelyVisible) is { } agent
+            ? string.Join(" · ", Shell.Texts(agent))
+            : null;
+
+    private static string? Visible(Visual root, string automationId) =>
+        Shell.ById<TextBlock>(root, automationId).SingleOrDefault(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))?.Text;
+
+    /// <summary>The button that opens or closes the agent of the proposed task with this title.</summary>
+    private static Button EditButton(Shell shell, string title)
+    {
+        var entry = ById<StackPanel>(shell, "ProposalEntry").Single(entry => Shell.TextOf(Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single()) == title);
+        var button = Shell.ById<Button>(entry, "ProposalAgentEdit").Single();
+        button.BringIntoView();
+        shell.Render();
+        return button;
+    }
+
     private static void OpenSheet(Shell shell)
     {
         shell.Click(shell.Find<Button>("GenerateWorkflow"));
@@ -473,8 +863,18 @@ public sealed class GenerateTests : IDisposable
 
     private static string? ButtonLabel(Shell shell) => AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"));
 
+    private static IEnumerable<Panel> GhostCards(Shell shell) =>
+        shell.Window.GetVisualDescendants().OfType<Panel>().Where(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard")
+            .OrderBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.X).ThenBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.Y);
+
+    /// <summary>Each ghost card's subtitle, its two lines joined as one label, then its title.</summary>
     private static string[] Ghosts(Shell shell) =>
-        [.. shell.Window.GetVisualDescendants().OfType<Panel>()
-            .Where(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard")
-            .Select(panel => $"{Shell.TextOf(panel.GetVisualDescendants().OfType<TextBlock>().Single(text => AutomationProperties.GetAutomationId(text) == "GhostLabel"))} {AutomationProperties.GetName(panel)}")];
+        [.. GhostCards(shell).Select(panel => $"{string.Join(" · ", new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>())} {AutomationProperties.GetName(panel)}")];
+
+    /// <summary>Each ghost card's subtitle lines, in the order of <see cref="Ghosts"/>.</summary>
+    private static string[][] GhostLines(Shell shell) =>
+        [.. GhostCards(shell).Select(panel => new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>().ToArray())];
+
+    /// <summary>The note under each ghost card, in the order of <see cref="Ghosts"/>, or null for a card without one.</summary>
+    private static string?[] GhostNotes(Shell shell) => [.. GhostCards(shell).Select(panel => Visible(panel, "GhostNote"))];
 }

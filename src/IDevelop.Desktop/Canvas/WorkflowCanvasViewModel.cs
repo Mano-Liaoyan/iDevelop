@@ -205,6 +205,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
 
     internal ProjectViewModel Project { get; }
 
+    private readonly Dictionary<TaskId, ImmutableArray<ClientId>> _checkingAtStart = [];
+
     internal WorkflowDocument Document { get; }
 
     internal Workflow Workflow => Document.Current;
@@ -220,6 +222,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         {
             node.OnAgentChanged();
             node.RecheckProblem();
+            node.Proposal?.OnClientsChanged();
         }
     }
 
@@ -300,8 +303,22 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal NodeKind KindOf(Blueprint blueprint) =>
         NodeKinds.Of(blueprint, key => Workflow.Blueprints.GetValueOrDefault(key) ?? Blueprints.Placeable.FirstOrDefault(placeable => placeable.Key == key));
 
-    /// <summary>What the planner may fill and place when it starts now: the palette's blueprints are its types.</summary>
-    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted);
+    /// <summary>
+    /// What the planner may fill and place when it starts now: the palette's blueprints are its types, and the clients
+    /// ready on this machine are the agents it chooses from for each task it adds.
+    /// </summary>
+    internal PlanningContext Planning(TaskId planner)
+    {
+        var clients = Clients.Current;
+        _checkingAtStart[planner] = [.. IDevelop.Execution.Clients.All.Where(id => clients[id] is ClientStatus.Checking)];
+        return PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted) with { Agents = PlanningContext.Offers(clients) };
+    }
+
+    /// <summary>
+    /// The clients that this window was still checking when it last started the planner, which its prompt therefore left
+    /// out, so the proposal can say so. Empty for a planner this window has not started.
+    /// </summary>
+    internal ImmutableArray<ClientId> CheckingAtStart(TaskId planner) => _checkingAtStart.GetValueOrDefault(planner, []);
 
     /// <summary>Whether the task has an attempt in this project.</summary>
     internal bool HasStarted(TaskId task) => Runs.Latest.ContainsKey(task);

@@ -51,7 +51,9 @@
         <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" VerticalAlignment="Center"
                         AutomationProperties.AutomationId="CardKind"
                         AutomationProperties.HelpText="{Binding KindHelp}" />
-        <StackPanel Grid.Column="1" Margin="0,14,0,0">
+        <!-- Three lines in every state: the title, the client or the status, then the model and level, which stays while a
+             status shows. A line without text keeps its place, so every card's text sits the same. -->
+        <StackPanel Grid.Column="1" Classes="cardText">
           <!-- The row keeps the title's height while the rename box replaces the title. -->
           <Panel MinHeight="18">
             <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
@@ -62,13 +64,16 @@
                                  AutomationProperties.Name="Title" />
           </Panel>
           <Panel>
-            <TextBlock Classes="cardAgent" Text="{Binding AgentLabel}" TextTrimming="CharacterEllipsis"
+            <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding ShowsAgent}"
                        AutomationProperties.AutomationId="CardAgent" />
-            <TextBlock Classes="cardStatus" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding !ShowsAgent}"
-                       AutomationProperties.AutomationId="CardStatus" />
+            <!-- A status names what it waits for when the name fits whole, and counts it when it does not. -->
+            <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
+                                IsVisible="{Binding !ShowsAgent}"
+                                AutomationProperties.AutomationId="CardStatus" />
           </Panel>
+          <TextBlock Classes="cardAgent" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
+                     AutomationProperties.AutomationId="CardModel" />
         </StackPanel>
         <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs, or,
              for an approval, selects it so the inspector shows its request. -->

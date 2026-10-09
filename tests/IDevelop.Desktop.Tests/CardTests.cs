@@ -103,7 +103,7 @@ public sealed class CardTests : IDisposable
         Install(_fakes, ClientId.Codex);
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Draft it.")), _fakes.DiscoverAsync().Result);
 
-        Assert.Equal(["Design", "Codex · GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Codex", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
         Assert.Equal("Design\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(shell.InCard<Panel>("Design", "TaskCard")));
     }
@@ -152,6 +152,42 @@ public sealed class CardTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Every_card_shows_its_client_over_its_model_and_level_whole_and_on_the_same_lines()
+    {
+        Install(_fakes, ClientId.Codex);
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Antigravity);
+        Install(_fakes, ClientId.Pi);
+        var fourth = new TaskId(Guid.Parse("019a9d2e-5d00-7000-8000-000000000044"));
+        var fifth = new TaskId(Guid.Parse("019a9d2e-5e00-7000-8000-000000000055"));
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90, Codex, "Draft it."),
+            TaskAt(Build, "Build", 405, 90, new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-sonnet-5-5", Reasoning = "xhigh" }, "Build it."),
+            TaskAt(Review, "Review", 105, 290, new ExecutionSettings(ClientId.Antigravity) { Model = "claude-opus-4-6-thinking" }, "Check it."),
+            TaskAt(fourth, "Fourth", 405, 290, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "medium" }, "Try it."),
+            TaskAt(fifth, "Fifth", 705, 90, new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-flash", Reasoning = "max" }, "Test it.")),
+            _fakes.DiscoverAsync().Result);
+        string[] titles = ["Design", "Build", "Review", "Fourth", "Fifth"];
+
+        Assert.Equal(
+            [
+                ["Design", "Codex", "GPT-5.5 · high"],
+                ["Build", "Claude Code", "Claude Sonnet 5.5 · xhigh"],
+                ["Review", "Antigravity CLI", "Claude Opus 4.6 (Thinking)"],
+                ["Fourth", "Antigravity CLI", "Gemini 3.8 Flash · medium"],
+                // Pi names its model's provider, which goes on the client's line, so the model keeps its level.
+                ["Fifth", "Pi · deepseek", "DeepSeek V4.1 Flash · max"],
+            ],
+            titles.Select(title => Shell.Texts(shell.Node(title))));
+        // Each line sits at the same height on every card, and none is cut short at the default zoom.
+        Assert.Single(titles.Select(title => (Top(title, "CardAgent"), Top(title, "CardModel"))).Distinct());
+        Assert.All(titles.SelectMany(title => shell.Node(title).GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible),
+            text => Assert.False(text.TextLayout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" is cut short."));
+
+        double Top(string title, string id) => shell.InCard<TextBlock>(title, id).TranslatePoint(default, shell.Node(title))!.Value.Y;
+    }
+
+    [AvaloniaFact]
     public void A_card_without_an_agent_asks_for_one_with_the_warning_glyph()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
@@ -175,7 +211,8 @@ public sealed class CardTests : IDisposable
         shell.RunOnItsOwn();
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Running"], Shell.Texts(shell.Node("Design")));
+        // The status takes the client's line, and the model and level stay on the line under it.
+        Assert.Equal(["Design", "Running", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-running", ring.Classes);
         Assert.Equal(shell.Resource("KindImplementStrokeBrush"), ((ISolidColorBrush)ring.BorderBrush!).Color);
         Assert.Same(Application.Current!.FindResource("IconStateRunning"), shell.CardGlyph("Design").Data);
@@ -196,7 +233,7 @@ public sealed class CardTests : IDisposable
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Waiting for you", "the task waits");
 
         var ring = shell.CardLayer("Design", "stateStroke");
-        Assert.Equal(["Design", "Waiting for you"], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", "Waiting for you", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.Contains("state-waiting", ring.Classes);
         Assert.Equal(Color.Parse("#C55300"), ((ISolidColorBrush)ring.BorderBrush!).Color);
     }
@@ -217,7 +254,7 @@ public sealed class CardTests : IDisposable
         // come a render tick after the status text, so the test waits for the pixel too.
         shell.WaitUntil(() => shell.ColorAt(shell.Node("Design"), new Point(130, 0)) == Color.Parse(ring), $"the ring turns {ring}");
 
-        Assert.Equal(["Design", label], Shell.Texts(shell.Node("Design")));
+        Assert.Equal(["Design", label, "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
     }
 
     [AvaloniaFact]
@@ -245,7 +282,7 @@ public sealed class CardTests : IDisposable
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
 
         var ring = shell.CardLayer("Plan export", "stateStroke");
-        Assert.Equal(["Plan export", "Proposal · 2 tasks"], Shell.Texts(shell.Node("Plan export")));
+        Assert.Equal(["Plan export", "Proposal · 2 tasks", "GPT-5.5 · high"], Shell.Texts(shell.Node("Plan export")));
         Assert.Same(Application.Current!.FindResource("IconSparkle"), shell.CardGlyph("Plan export").Data);
         Assert.Contains("role-proposing", ring.Classes);
         Assert.Equal(Color.Parse("#1E6EF4"), ((ISolidColorBrush)ring.BorderBrush!).Color);

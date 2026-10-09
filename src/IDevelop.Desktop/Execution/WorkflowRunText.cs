@@ -214,8 +214,9 @@ internal static class WorkflowRunText
         return unrun.Length switch
         {
             0 => waits,
-            1 => $"{waits} {Names(unrun, title)} runs only when you run it.",
-            _ => $"{waits} {Names(unrun, title)} run only when you run them.",
+            // The last word stays with the one before it, so a narrow inspector leaves no word alone on a line.
+            1 => $"{waits} {Names(unrun, title)} runs only when you run\u00A0it.",
+            _ => $"{waits} {Names(unrun, title)} run only when you run\u00A0them.",
         };
     }
 
