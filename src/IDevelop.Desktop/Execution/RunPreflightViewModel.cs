@@ -413,7 +413,7 @@ public sealed class RunPreflightViewModel : ObservableObject
                     ? $"Workflow runs need the project folder to be a Git repository's root. {git.Detail}" : git.Detail, null),
                 PreflightGap.Submodules submodules => new($"Git could not read the project's submodules. {submodules.Detail}", null),
                 PreflightGap.Records records => new($"A run record of this workflow could not be read. {records.Detail}", null),
-                PreflightGap.After after => new($"{Title(preview, after.Id)}: {WorkflowRunText.RunsAfter(after.Predecessors, TaskTitle)}", ShowNode(after.Id)),
+                PreflightGap.After after => new($"{Title(preview, after.Id)}: {WorkflowRunText.RunsAfter(after.Predecessors, task => TitleOf(preview, task))}", ShowNode(after.Id)),
                 _ => new(gap.ToString(), null),
             };
         }
@@ -428,11 +428,12 @@ public sealed class RunPreflightViewModel : ObservableObject
         })
         : null;
 
-    /// <summary>A task by the title the workflow gives it now, for a task the node's preview does not list.</summary>
-    private string TaskTitle(TaskId task) => _canvas.Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
-
+    /// <summary>A task by its title in the previewed workflow, which also holds the tasks a node's preview does not list.</summary>
     private static string Title(RunPreflight preview, TaskId task) =>
-        preview.Tasks.FirstOrDefault(row => row.Task == task)?.Title is { Length: > 0 } title ? $"\"{title}\"" : "A task";
+        preview.Revision.Snapshot.Tasks.GetValueOrDefault(task)?.Title is { Length: > 0 } title ? $"\"{title}\"" : "A task";
+
+    /// <summary>A task's title in the previewed workflow, unquoted, for text that quotes it.</summary>
+    private static string TitleOf(RunPreflight preview, TaskId task) => preview.Revision.Snapshot.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
 
     private static string Short(CommitId commit) => commit.Hex.Length > 7 ? commit.Hex[..7] : commit.Hex;
 

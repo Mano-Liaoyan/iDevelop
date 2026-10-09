@@ -61,6 +61,10 @@ public sealed class NodeRunTests
         Assert.Equal(["Succeeded", "Succeeded", "Not started"], new[] { "A", "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
         Assert.Equal(("Completed", "2 of 3 done", "Every task it ran has a current result."),
             (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        Select(shell, "C");
+        Assert.Equal("The last run of the \"Workflow\" workflow did not start this task.", shell.Text("RunOwner"));
+        Select(shell, "B");
+        Assert.Equal("A run of the \"Workflow\" workflow ran this task last.", shell.Text("RunOwner"));
         Assert.Equal([A], f.Record().Requested!);
     }
 
@@ -86,7 +90,10 @@ public sealed class NodeRunTests
         using var f = Join();
         f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready.", gate: "b")).Answer("C", f.Says("C ready."));
         var shell = f.Window();
-        OpenNodePreflight(shell, "A");
+        var preflight = OpenNodePreflight(shell, "A");
+        Assert.Equal(["A", "C"], preflight.Tasks);
+        // The preview names a task it does not list by its title too.
+        Assert.Equal(["After \"A\", \"B\""], shell.TextsOf("PreflightInputs"));
         shell.Click(shell.Find<Button>("PreflightStart"));
         shell.WaitForCard("A", "Running");
 
@@ -96,7 +103,7 @@ public sealed class NodeRunTests
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Select(shell, "B");
         Assert.Equal("Not started", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("A run of the \"Workflow\" workflow is active. Run adds this task to it.", shell.Text("RunOwner"));
+        Assert.Equal("A run of the \"Workflow\" workflow is active. Run this task to add it to that run.", shell.Text("RunOwner"));
         Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
         Assert.False(shell.Find<Button>("CancelRun").IsEffectivelyVisible);
 

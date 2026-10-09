@@ -39,6 +39,8 @@ public sealed class NodePreflightTests
         Assert.Null(whole.Node);
         Assert.Equal(4, whole.Tasks.Length);
         Assert.Equal<PreflightGap>([new PreflightGap.Task(X, new StartProblem.NoAgent())], whole.Gaps);
+        // The node comes first, then the tasks after it.
+        Assert.Equal([X, AfterX], f.Runs.Preflight(f.Workflow, X).Tasks.Select(task => task.Task));
     }
 
     [Fact]

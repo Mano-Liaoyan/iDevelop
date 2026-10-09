@@ -112,7 +112,7 @@ public sealed partial class TaskNodeViewModel
 
     private string RunOwnedProblem => (_runActive, HasAgent) switch
     {
-        (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run adds this task to it.",
+        (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run this task to add it to that run.",
         (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
         (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate?.Status switch
         {
@@ -121,6 +121,8 @@ public sealed partial class TaskNodeViewModel
             GateStatus.SentBack => "You sent its request back. It asks again once its inputs change.",
             _ => "It asks for your approval once the tasks before it hand on.",
         }),
+        (false, true) when RunTask is { State: TaskState.Pending or TaskState.Ready or TaskState.Unrequested } =>
+            $"The last run of the \"{RunWorkflowName}\" workflow did not start this task.",
         (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last.",
         (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval last.",
     };

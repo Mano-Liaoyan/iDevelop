@@ -44,7 +44,9 @@ internal sealed class RunApprovals
     {
         var revision = Revision.Capture(workflow);
         var scope = RunScope.InFlow(workflow, node is { } requested ? new HashSet<TaskId> { requested } : null);
-        ImmutableArray<PreflightTask> tasks = [.. workflow.Tasks.Values.Where(task => scope.Contains(task.Id)).OrderBy(task => task.Id).Select(task => Task(workflow, task))];
+        // A node's preview lists the node first, then the tasks after it.
+        ImmutableArray<PreflightTask> tasks = [.. workflow.Tasks.Values.Where(task => scope.Contains(task.Id)).OrderBy(task => task.Id != node)
+            .ThenBy(task => task.Id).Select(task => Task(workflow, task))];
         var gaps = ImmutableArray.CreateBuilder<PreflightGap>();
         if (node is { } started && workflow.Tasks.ContainsKey(started) &&
             RunScope.Predecessors(workflow)[started].Order().ToImmutableArray() is { IsEmpty: false } predecessors)
