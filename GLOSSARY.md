@@ -103,7 +103,7 @@ The attempt whose checkout a task's current result keeps, where that task's drif
 ### Approval and gates
 
 **Preflight**:
-Run Workflow's preview of what a run would approve. It records nothing.
+The preview of what a run would approve, which Run Workflow opens for the whole workflow and a node's Run for that node and the tasks after it. It records nothing.
 
 **Run approval**:
 A person's confirmation of a preflight, which approves exactly one run on one base.
