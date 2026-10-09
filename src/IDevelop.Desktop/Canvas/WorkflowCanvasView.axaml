@@ -4,6 +4,7 @@
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              xmlns:execution="using:IDevelop.Desktop.Execution"
              xmlns:theme="using:IDevelop.Desktop.Theme"
+             xmlns:proto="using:IDevelop.Desktop.Proto"
              x:Class="IDevelop.Desktop.Canvas.WorkflowCanvasView"
              x:DataType="canvas:WorkflowCanvasViewModel">
 
@@ -113,7 +114,7 @@
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
                       x:DataType="canvas:TaskNodeViewModel">
-          <Setter Property="Location" Value="{Binding Location}" />
+          <Setter Property="Location" Value="{Binding DisplayLocation}" />
           <Setter Property="BorderThickness" Value="0" />
           <Setter Property="SelectedBorderThickness" Value="0" />
           <!-- The selection ring and the shadow are drawn outside the card's box. -->
@@ -131,6 +132,54 @@
         </ControlTheme>
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
+
+    <!-- N1 PROTOTYPE, option B: the margin notes, drawn over the editor with its own pan and zoom, because Nodify 6.6.0
+         moves a decorator with the viewport but never scales it. The layer has no background, so the canvas keeps every
+         pointer input outside a note. -->
+    <ItemsControl ItemsSource="{Binding Notes}" ClipToBounds="False"
+                  RenderOptions.TextRenderingMode="Antialias"
+                  RenderTransform="{Binding #Editor.ViewportTransform}" RenderTransformOrigin="0,0">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <Canvas />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.Styles>
+        <Style Selector="ItemsControl > ContentPresenter" x:DataType="proto:MarginNote">
+          <Setter Property="Canvas.Left" Value="{Binding Location.X}" />
+          <Setter Property="Canvas.Top" Value="{Binding Location.Y}" />
+        </Style>
+      </ItemsControl.Styles>
+      <ItemsControl.DataTemplates>
+            <!-- N1 PROTOTYPE, option B: a pinned card's note in the margin lane right of the graph. Its header repeats the
+                 card's tile, title, and status, so it names its card without a line across the graph. -->
+            <DataTemplate DataType="proto:MarginNote">
+              <Panel Width="{x:Static proto:N1Notes.Width}" proto:N1Size.TrackNote="True" Tag="{Binding Surface}"
+                     AutomationProperties.AutomationId="MarginNote" AutomationProperties.Name="{Binding Node.Title}">
+                <Border Classes="card" CornerRadius="{StaticResource RadiusXl}" />
+                <Border Classes="stateTint" VerticalAlignment="Top" Height="52" CornerRadius="14,14,0,0" IsHitTestVisible="False"
+                        theme:StyleClass.Kind="{Binding Node.Kind}" theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Role="{Binding Node.Role}" />
+                <StackPanel>
+                  <Grid Height="52" Margin="12,0" ColumnDefinitions="24,*,16" ColumnSpacing="10">
+                    <theme:KindTile Kind="{Binding Node.Kind}" TileSize="24" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Classes="cardTitle" Text="{Binding Node.Title}" />
+                      <TextBlock Classes="cardStatus" Text="{Binding Node.StatusLabel}" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="attention" VerticalAlignment="Center" Command="{Binding Node.ToggleExpandCommand}"
+                            ToolTip.Tip="Close the note" AutomationProperties.Name="Close the note">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" Width="12" Height="12"
+                                Foreground="{DynamicResource TextMutedBrush}" />
+                    </Button>
+                  </Grid>
+                  <proto:CardDetail DataContext="{Binding Node}" />
+                </StackPanel>
+                <Border Classes="stateStroke" CornerRadius="{StaticResource RadiusXl}" BorderThickness="1.5" IsHitTestVisible="False"
+                        theme:StyleClass.Kind="{Binding Node.Kind}" theme:StyleClass.State="{Binding Node.State}" theme:StyleClass.Role="{Binding Node.Role}" />
+              </Panel>
+            </DataTemplate>
+      </ItemsControl.DataTemplates>
+    </ItemsControl>
 
     <canvas:GenerateLayer />
 

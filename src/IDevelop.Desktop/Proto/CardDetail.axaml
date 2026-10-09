@@ -1,0 +1,269 @@
+<!-- THROWAWAY N1 PROTOTYPE. Never merge. What an expanded card shows under its header: what goes on now, the agent, and
+     the actions. Every option places this same body; only where it sits differs. Every section starts at the content edge,
+     12 px from the surface's edge, and ends 12 px from the other edge, so its text lines up with the header's tile and
+     its buttons with the header's glyphs. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             xmlns:proto="using:IDevelop.Desktop.Proto"
+             x:Class="IDevelop.Desktop.Proto.CardDetail"
+             x:DataType="canvas:TaskNodeViewModel">
+  <UserControl.Styles>
+    <Style Selector=":is(Control).tabHidden">
+      <Setter Property="MaxHeight" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.hairline">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource Border60Brush}" />
+    </Style>
+    <Style Selector="StackPanel.section">
+      <Setter Property="Margin" Value="12,10,12,12" />
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="LineHeight" Value="17" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+    <Style Selector="PathIcon.head">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="Border.callout">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="10,8,10,10" />
+    </Style>
+    <Style Selector="Border.callout.waiting">
+      <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
+    </Style>
+    <Style Selector="Border.callout.failed">
+      <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
+    </Style>
+    <Style Selector="Rectangle.placeholder">
+      <Setter Property="RadiusX" Value="8" />
+      <Setter Property="RadiusY" Value="8" />
+      <Setter Property="StrokeThickness" Value="1" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+      <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
+    </Style>
+    <Style Selector="ComboBox.card">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="Button.link">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    </Style>
+    <Style Selector="Button.link PathIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel>
+    <!-- What goes on now: one section, whose content follows the task's state. -->
+    <Border Classes="hairline" />
+    <StackPanel Classes="section" proto:CardDetail.Section="now">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" MinHeight="18">
+        <Panel Width="14" Height="14" VerticalAlignment="Center">
+          <PathIcon Classes="head" Data="{StaticResource IconChat}" IsVisible="{Binding IsRunningDetail}" />
+          <PathIcon Classes="head" Data="{StaticResource IconStateWaiting}" IsVisible="{Binding IsQuestionDetail}"
+                    Foreground="{DynamicResource StateWaitingStrongBrush}" />
+          <PathIcon Classes="head" Data="{StaticResource IconDescription}" IsVisible="{Binding IsResultDetail}" />
+          <PathIcon Classes="head" Data="{StaticResource IconStateFailed}" IsVisible="{Binding IsFailedDetail}"
+                    Foreground="{DynamicResource StateFailedStrongBrush}" />
+          <PathIcon Classes="head" Data="{StaticResource IconWireDependency}" IsVisible="{Binding IsWaitsDetail}" />
+          <PathIcon Classes="head" Data="{StaticResource IconBrief}" IsVisible="{Binding IsNotRunDetail}" />
+        </Panel>
+        <TextBlock Grid.Column="1" Classes="heading" Text="{Binding NowHeading}" />
+        <TextBlock Grid.Column="2" Classes="meta" Text="{Binding NowMeta}"
+                   IsVisible="{Binding NowMeta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </Grid>
+
+      <!-- Running: the agent's latest message, whole. -->
+      <TextBlock Classes="body" Text="{Binding NowText}" IsVisible="{Binding IsRunningDetail}"
+                 AutomationProperties.AutomationId="CardLatestMessage" />
+
+      <!-- Waiting: the question, and the answer box that goes to the agent. -->
+      <Border Classes="callout waiting" IsVisible="{Binding IsQuestionDetail}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="body" Text="{Binding NowText}" Foreground="{DynamicResource TextStrongBrush}"
+                     AutomationProperties.AutomationId="CardQuestion" />
+          <TextBox Text="{Binding Draft}" Watermark="Answer the agent" TextWrapping="Wrap" AcceptsReturn="True"
+                   FontSize="12" MinHeight="52" Padding="8,6"
+                   AutomationProperties.AutomationId="CardAnswer" AutomationProperties.Name="Answer">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CardSendCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="meta" Text="Ctrl+Enter sends" />
+            <Button Grid.Column="1" Classes="primary small" Command="{Binding CardSendCommand}"
+                    AutomationProperties.AutomationId="CardSend" AutomationProperties.Name="Send the answer">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
+                <TextBlock Text="Send" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Done: the result's first paragraph, then what it handed on. -->
+      <TextBlock Classes="body" Text="{Binding NowText}" IsVisible="{Binding IsResultDetail}"
+                 AutomationProperties.AutomationId="CardResult" />
+      <ItemsControl ItemsSource="{Binding ResultLinks}" IsVisible="{Binding HasResultLinks}" Margin="0,2,0,0">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel ItemSpacing="6" LineSpacing="6" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="canvas:ResultLink">
+            <Button Classes="link" Command="{Binding Command}" ToolTip.Tip="{Binding Help}"
+                    AutomationProperties.AutomationId="CardResultLink" AutomationProperties.Name="{Binding Label}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDescription}" />
+                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Failed: why, in the client's words. -->
+      <Border Classes="callout failed" IsVisible="{Binding IsFailedDetail}">
+        <TextBlock Classes="body" Text="{Binding NowText}" Foreground="{DynamicResource TextStrongBrush}"
+                   AutomationProperties.AutomationId="CardFailure" />
+      </Border>
+
+      <!-- Pending: the tasks it waits for, each with where it stands. -->
+      <ItemsControl ItemsSource="{Binding WaitsFor}" IsVisible="{Binding IsWaitsDetail}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="4" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="canvas:WaitItem">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" MinHeight="22">
+              <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="body" Text="{Binding Title}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Status}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Never run: the task's first field, which says what it will do. -->
+      <TextBlock Classes="body" Text="{Binding NowText}" IsVisible="{Binding IsNotRunDetail}"
+                 AutomationProperties.AutomationId="CardInstructions" />
+    </StackPanel>
+
+    <!-- The agent that runs it next. A change describes the next attempt and never the running one. -->
+    <Border Classes="hairline" />
+    <StackPanel Classes="section" proto:CardDetail.Section="agent" IsVisible="{Binding HasAgent}">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" MinHeight="18">
+        <PathIcon Classes="head" Data="{StaticResource IconAgent}" />
+        <TextBlock Grid.Column="1" Classes="heading" Text="Agent" />
+        <TextBlock Grid.Column="2" Classes="meta" Text="Applies to the next run" IsVisible="{Binding IsRunningDetail}" />
+      </Grid>
+      <ComboBox Classes="card" ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}"
+                SelectionChanged="OnClientChosen" AutomationProperties.AutomationId="CardClient" AutomationProperties.Name="Client">
+        <ComboBox.ItemTemplate>
+          <DataTemplate DataType="canvas:ClientChoice">
+            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <Grid ColumnDefinitions="*,6,96" IsVisible="{Binding HasClient}">
+        <ComboBox Classes="card" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}"
+                  SelectionChanged="OnModelChosen" PlaceholderText="Choose a model"
+                  AutomationProperties.AutomationId="CardModel" AutomationProperties.Name="Model">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="canvas:Choice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ComboBox Grid.Column="2" Classes="card" ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}"
+                  SelectionChanged="OnReasoningChosen" PlaceholderText="Level" IsEnabled="{Binding HasReasoning}"
+                  AutomationProperties.AutomationId="CardReasoning" AutomationProperties.Name="Reasoning">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="canvas:Choice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </StackPanel>
+
+    <!-- Where GitHub issues, pull requests, and teammates' comments will appear. Marked as later, and off by default. -->
+    <StackPanel IsVisible="{Binding ShowsPlaceholders}" proto:CardDetail.Section="later">
+      <Border Classes="hairline" />
+      <StackPanel Classes="section">
+        <Panel>
+          <Rectangle Classes="placeholder" />
+          <StackPanel Spacing="4" Margin="10,8">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+              <PathIcon Classes="head" Data="{StaticResource IconLink}" />
+              <TextBlock Grid.Column="1" Classes="heading" Text="Issues and pull requests" Foreground="{DynamicResource TextMutedBrush}" />
+              <TextBlock Grid.Column="2" Classes="meta" Text="Later" />
+            </Grid>
+            <TextBlock Classes="body" Foreground="{DynamicResource TextMutedBrush}"
+                       Text="An issue or pull request you publish from the inspector is linked here." />
+          </StackPanel>
+        </Panel>
+        <Panel>
+          <Rectangle Classes="placeholder" />
+          <StackPanel Spacing="4" Margin="10,8">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+              <PathIcon Classes="head" Data="{StaticResource IconConversation}" />
+              <TextBlock Grid.Column="1" Classes="heading" Text="Comments" Foreground="{DynamicResource TextMutedBrush}" />
+              <TextBlock Grid.Column="2" Classes="meta" Text="With team sync" />
+            </Grid>
+            <TextBlock Classes="body" Foreground="{DynamicResource TextMutedBrush}"
+                       Text="Teammates' comments on this task appear here once projects sync." />
+          </StackPanel>
+        </Panel>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- The actions, on the action edge: the conversation, and Run or Stop when the task is the person's to start. -->
+    <Border Classes="hairline" IsVisible="{Binding $parent[proto:CardDetail].ShowsActions}" />
+    <proto:CardActions Margin="12,8,12,10" proto:CardDetail.Section="actions" IsVisible="{Binding $parent[proto:CardDetail].ShowsActions}" />
+  </StackPanel>
+</UserControl>

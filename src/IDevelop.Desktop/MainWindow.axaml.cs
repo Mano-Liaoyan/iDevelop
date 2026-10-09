@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         ViewModel = new MainWindowViewModel(clients, text => Copy(text), app?.PersonalBlueprints, app?.SessionFile);
         InitializeComponent();
         DataContext = ViewModel;
+        Proto.N1Probe.Attach(this);
         PickFolder = PickFolderWithStorageProvider;
         // A press or the focus in a workflow's task list shows that workflow first, so the list's choice selects a card
         // on the canvas that shows it.

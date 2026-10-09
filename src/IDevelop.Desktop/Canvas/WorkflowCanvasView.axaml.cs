@@ -62,8 +62,15 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
-        SizeChanged += (_, e) => RunBars.Margin =
-            e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
+        SizeChanged += (_, e) =>
+        {
+            RunBars.Margin = e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
+            // N1 PROTOTYPE: a narrow canvas shows Expand All as its glyph alone, so the toolbar keeps clear of the breadcrumb.
+            if (_viewModel is { } canvas)
+            {
+                canvas.IsNarrow = e.NewSize.Width < 700;
+            }
+        };
     }
 
     /// <inheritdoc />

@@ -70,11 +70,13 @@ public sealed class ConnectionViewModel : ObservableObject
     internal void Reroute()
     {
         // The wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
+        // N1 PROTOTYPE: every card at the size and place it shows, so a wire goes around an expanded card.
         Rect[] cards =
         [
-            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => WireRouting.Card(node.Location)),
-            WireRouting.Card(From.Output.Anchor - (Vector)WorkflowCanvasViewModel.OutputPortCenter),
-            WireRouting.Card(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter),
+            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DisplayRect),
+            From.DisplayRect,
+            To.DisplayRect,
+            .. Proto.N1Notes.Obstacles(_canvas),
         ];
         var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);
         if (!route.SequenceEqual(_route))

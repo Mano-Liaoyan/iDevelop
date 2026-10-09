@@ -3,7 +3,8 @@
                     xmlns:nodify="https://miroiu.github.io/nodify"
                     xmlns:canvas="using:IDevelop.Desktop.Canvas"
                     xmlns:theme="using:IDevelop.Desktop.Theme"
-                    xmlns:workflows="using:IDevelop.Workflows">
+                    xmlns:workflows="using:IDevelop.Workflows"
+                    xmlns:proto="using:IDevelop.Desktop.Proto">
   <ControlTheme x:Key="PortTheme" TargetType="nodify:Connector">
     <Setter Property="Template">
       <ControlTemplate>
@@ -35,65 +36,99 @@
     <Setter Property="Fill" Value="{DynamicResource SurfaceOverlayBrush}" />
   </ControlTheme>
 
-  <!-- The card is 240 by 64 in a 260 wide container, whose 10 px gutters hold the ports on the card's edges. Kind lives in
-       the tile; state lives in the ring, the tint, the glyph, and the subtitle. The state ring, the tint, and the card are
-       separate layers, because a running ring pulses and must not take the text with it. -->
+  <!-- N1 PROTOTYPE: the card is 240 by 64 collapsed, in a container whose 10 px gutters hold the ports. Expanded, the option
+       decides its width and where its body goes. The header stays 64 px in every state, and the ports sit on its middle
+       line, so a card that grows never moves a wire. The state glyph sits on the title's line and the disclosure on the
+       last line, both in the 16 px column the glyph always had, so the title keeps its full width. -->
   <DataTemplate x:Key="TaskCardTemplate" DataType="canvas:TaskNodeViewModel">
-    <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
-           Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-           ToolTip.Tip="{Binding CardTip}"
+    <Panel Width="{Binding CardContainerWidth}"
+           MinHeight="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+           ToolTip.Tip="{Binding CardTipOrPeek}"
+           proto:N1Size.Track="True"
            AutomationProperties.AutomationId="TaskCard"
            AutomationProperties.Name="{Binding Title}">
       <Border Classes="card" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-      <Border Classes="stateTint" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" IsHitTestVisible="False"
+      <!-- Expanded, the state's tint stays on the header, so the body reads on the card's own surface. -->
+      <Border Classes="stateTint" Margin="10,0" VerticalAlignment="Top" Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
+              CornerRadius="{Binding TintCorners}" IsHitTestVisible="False"
               theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-      <Grid Margin="22,0" ColumnDefinitions="32,*,Auto" ColumnSpacing="12">
-        <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" VerticalAlignment="Center"
-                        AutomationProperties.AutomationId="CardKind"
-                        AutomationProperties.HelpText="{Binding KindHelp}" />
-        <!-- Three lines in every state: the title, the client or the status, then the model and level, which stays while a
-             status shows. A line without text keeps its place, so every card's text sits the same. -->
-        <StackPanel Grid.Column="1" Classes="cardText">
-          <!-- The row keeps the title's height while the rename box replaces the title. -->
-          <Panel MinHeight="18">
-            <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding !IsRenaming}"
-                       AutomationProperties.AutomationId="CardTitle" />
-            <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
-                                 AutomationProperties.AutomationId="CardTitleBox"
-                                 AutomationProperties.Name="Title" />
+      <StackPanel Margin="10,0">
+        <Grid Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" Margin="12,0" ColumnDefinitions="32,*,16" ColumnSpacing="12">
+          <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" VerticalAlignment="Center"
+                          AutomationProperties.AutomationId="CardKind"
+                          AutomationProperties.HelpText="{Binding KindHelp}" />
+          <!-- Three lines in every state: the title, the client or the status, then the model and level. -->
+          <StackPanel Grid.Column="1" Classes="cardText">
+            <Panel MinHeight="18">
+              <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding !IsRenaming}"
+                         AutomationProperties.AutomationId="CardTitle" />
+              <canvas:CardTitleBox Classes="cardTitle" IsVisible="{Binding IsRenaming}"
+                                   AutomationProperties.AutomationId="CardTitleBox"
+                                   AutomationProperties.Name="Title" />
+            </Panel>
+            <Panel>
+              <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding ShowsAgent}"
+                         AutomationProperties.AutomationId="CardAgent" />
+              <TextBlock Classes="cardStatus" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding !ShowsAgent}"
+                         AutomationProperties.AutomationId="CardStatus" />
+            </Panel>
+            <TextBlock Classes="cardAgent" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
+                       AutomationProperties.AutomationId="CardModel" />
+          </StackPanel>
+          <!-- The state glyph on the title's line; while the task needs the person, a button that attends to it. -->
+          <Panel Grid.Column="2" VerticalAlignment="Top" Margin="0,8,0,0" Height="16">
+            <Panel IsVisible="{Binding !HasAttention}">
+              <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
+                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
+                        AutomationProperties.AutomationId="CardStateGlyph" />
+            </Panel>
+            <Button Classes="attention" IsVisible="{Binding HasAttention}"
+                    Command="{Binding AttendCommand}"
+                    ToolTip.Tip="{Binding AttentionLabel}"
+                    AutomationProperties.AutomationId="CardAttention"
+                    AutomationProperties.Name="{Binding AttentionLabel}"
+                    AutomationProperties.HelpText="{Binding AttendHelp}">
+              <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
+                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+            </Button>
           </Panel>
-          <Panel>
-            <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding ShowsAgent}"
-                       AutomationProperties.AutomationId="CardAgent" />
-            <TextBlock Classes="cardStatus" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding !ShowsAgent}"
-                       AutomationProperties.AutomationId="CardStatus" />
-          </Panel>
-          <TextBlock Classes="cardAgent" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="CardModel" />
+          <!-- The disclosure on the last line, under the glyph. -->
+          <ToggleButton Grid.Column="2" Classes="cardChevron" VerticalAlignment="Top" Margin="-6,35,-6,0"
+                        IsChecked="{Binding IsExpanded}"
+                        ToolTip.Tip="{Binding ExpandName}"
+                        AutomationProperties.AutomationId="CardExpand"
+                        AutomationProperties.Name="{Binding ExpandName}">
+            <PathIcon Theme="{StaticResource Glyph}" />
+          </ToggleButton>
+        </Grid>
+        <!-- Option C: the body is one size in every state, with tabs, and its actions stay on the card's last line. -->
+        <Border Height="1" Background="{DynamicResource Border60Brush}" IsVisible="{Binding ShowsTabs}" />
+        <Border IsVisible="{Binding ShowsTabs}" Margin="12,10,12,0" Background="{DynamicResource SurfaceMutedBrush}"
+                CornerRadius="{StaticResource RadiusMd}" Padding="2">
+          <UniformGrid Rows="1">
+            <RadioButton Classes="segment" GroupName="{Binding TabGroup}" Content="Now"
+                         IsChecked="{Binding IsNowTab, Mode=OneWay}" Command="{Binding SelectTabCommand}" CommandParameter="now"
+                         AutomationProperties.AutomationId="CardTabNow" />
+            <RadioButton Classes="segment" GroupName="{Binding TabGroup}" Content="Agent"
+                         IsChecked="{Binding IsAgentTab, Mode=OneWay}" Command="{Binding SelectTabCommand}" CommandParameter="agent"
+                         AutomationProperties.AutomationId="CardTabAgent" />
+            <RadioButton Classes="segment" GroupName="{Binding TabGroup}" Content="Later" IsVisible="{Binding ShowsPlaceholders}"
+                         IsChecked="{Binding IsLaterTab, Mode=OneWay}" Command="{Binding SelectTabCommand}" CommandParameter="later"
+                         AutomationProperties.AutomationId="CardTabLater" />
+          </UniformGrid>
+        </Border>
+        <ScrollViewer IsVisible="{Binding ShowsInlineDetail}" Height="{Binding DetailViewportHeight}"
+                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <proto:CardDetail ShownSection="{Binding ShownTab}" ShowsActions="{Binding DetailShowsActions}" />
+        </ScrollViewer>
+        <StackPanel IsVisible="{Binding ShowsTabs}">
+          <Border Height="1" Background="{DynamicResource Border60Brush}" />
+          <proto:CardActions Margin="12,8,12,10" />
         </StackPanel>
-        <!-- While the task needs the person, its state glyph is a button that opens the conversation at what it needs, or,
-             for an approval, selects it so the inspector shows its request. -->
-        <Panel Grid.Column="2" VerticalAlignment="Center">
-          <!-- The state styles hide the glyph of some states, so the attention switch sits on a panel around it. -->
-          <Panel IsVisible="{Binding !HasAttention}">
-            <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
-                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}"
-                      AutomationProperties.AutomationId="CardStateGlyph" />
-          </Panel>
-          <Button Classes="attention" IsVisible="{Binding HasAttention}"
-                  Command="{Binding AttendCommand}"
-                  ToolTip.Tip="{Binding AttentionLabel}"
-                  AutomationProperties.AutomationId="CardAttention"
-                  AutomationProperties.Name="{Binding AttentionLabel}"
-                  AutomationProperties.HelpText="{Binding AttendHelp}">
-            <PathIcon Classes="stateIcon" Theme="{StaticResource Glyph}"
-                      theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-          </Button>
-        </Panel>
-      </Grid>
+      </StackPanel>
       <!-- A review that goes on with this node marks its tile with the Review tile. -->
       <Border Classes="roleBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="38.5,36.5,0,0"
               IsVisible="{Binding IsUnderReview}" ToolTip.Tip="{Binding ReviewerTip}"
@@ -104,7 +139,7 @@
               theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
       <!-- The selection ring lies outside the card, over the card's shadow. -->
       <Border Classes="ring" Margin="6,-4" CornerRadius="18" BorderThickness="2" IsHitTestVisible="False" />
-      <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Center">
+      <ContentControl Content="{Binding Input}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,22,0,0">
         <ContentControl.ContentTemplate>
           <DataTemplate DataType="canvas:PortViewModel">
             <nodify:NodeInput Theme="{StaticResource PortTheme}"
@@ -114,7 +149,7 @@
           </DataTemplate>
         </ContentControl.ContentTemplate>
       </ContentControl>
-      <ContentControl Content="{Binding Output}" HorizontalAlignment="Right" VerticalAlignment="Center">
+      <ContentControl Content="{Binding Output}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,22,0,0">
         <ContentControl.ContentTemplate>
           <DataTemplate DataType="canvas:PortViewModel">
             <nodify:NodeOutput Theme="{StaticResource PortTheme}"

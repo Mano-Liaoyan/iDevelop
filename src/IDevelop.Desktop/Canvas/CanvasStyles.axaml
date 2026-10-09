@@ -86,6 +86,36 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
 
+  <!-- N1 PROTOTYPE: the card's disclosure, a 28 px target drawn in the 16 px glyph column. -->
+  <Style Selector="ToggleButton.cardChevron">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron:checked PathIcon">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
+
   <!-- A port's ring is neutral until a connection uses it. Then Kinds.axaml paints it in its node's kind. -->
   <Style Selector="Ellipse.port:not(.kindStroke)">
     <Setter Property="Stroke" Value="{DynamicResource Border100Brush}" />
