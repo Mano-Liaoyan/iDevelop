@@ -356,7 +356,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply with DONE.")), _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
         shell.Render();
 
@@ -484,7 +484,7 @@ public sealed class InspectorLayoutTests : IDisposable
         }
 
         shell.Click(shell.Header(shell.Node("Pi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Pi", "CardStatus") == "Succeeded", "the run succeeds");
         shell.Render();
 
@@ -502,7 +502,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply.")), _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
         shell.Render();
 

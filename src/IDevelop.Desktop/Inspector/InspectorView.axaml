@@ -293,7 +293,13 @@
                           </Grid>
                         </Border>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsRunState}">
+                      <inspector:InspectorRow Layout="Full">
+                        <inspector:InspectorRow.IsShown>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="ShowsRunState" />
+                            <Binding Path="RunOwner" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                          </MultiBinding>
+                        </inspector:InspectorRow.IsShown>
                         <TextBlock Text="{Binding RunOwner}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                                    AutomationProperties.AutomationId="RunOwner" />
                       </inspector:InspectorRow>
@@ -310,6 +316,7 @@
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsCancel}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRunControls}"
+                                  ToolTip.Tip="{Binding RunRefusal}" ToolTip.ShowOnDisabled="True"
                                   AutomationProperties.AutomationId="RunTask"
                                   AutomationProperties.Name="Run">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -317,7 +324,7 @@
                               <TextBlock Text="Run" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding CancelCommand}"
+                          <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancelButton}"
                                   AutomationProperties.AutomationId="CancelRun"
                                   AutomationProperties.Name="Cancel run">
                             <StackPanel Orientation="Horizontal" Spacing="6">

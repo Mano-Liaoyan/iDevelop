@@ -16,6 +16,12 @@ internal sealed record RunPreflight(string Project, ApprovedRevision Revision, P
 {
     public WorkflowId Workflow => Revision.Snapshot.Id;
 
+    /// <summary>
+    /// The node whose Run asks for the run, or null for Run Workflow (#90). Its preview lists, checks, and offers only that
+    /// node and the tasks after it, since only those can start.
+    /// </summary>
+    public TaskId? Node { get; init; }
+
     public WorktreePolicy Worktrees { get; } = new(".worktrees", "idp/");
 
     /// <summary>What keeps the workflow from being approved now. Empty when it can be.</summary>
@@ -121,4 +127,15 @@ internal abstract record PreflightGap
 
     /// <summary>A run record of the workflow could not be read, so no run can be approved until it is repaired.</summary>
     internal sealed record Records(string Detail) : PreflightGap;
+
+    /// <summary>
+    /// The node runs only after these dependency predecessors have results, which a new run does not have yet (#90). The
+    /// person runs them first.
+    /// </summary>
+    internal sealed record After(TaskId Id, ImmutableArray<TaskId> Predecessors) : PreflightGap
+    {
+        public bool Equals(After? other) => other is not null && Id == other.Id && Predecessors.SequenceEqual(other.Predecessors);
+
+        public override int GetHashCode() => HashCode.Combine(Id, Predecessors.Length);
+    }
 }

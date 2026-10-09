@@ -128,8 +128,9 @@ internal sealed class RunFixtures : IDisposable
 
     public RunRecord Read(RunId? run = null) => Assert.IsType<RunRead.Loaded>(Store.Read(W, run ?? Run)).Record;
 
-    public void Approve(CommitId? codeBase = null, RunId? run = null) => Assert.IsType<RunDecision.Created>(
-        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head)));
+    /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
+    public void Approve(CommitId? codeBase = null, RunId? run = null, TaskId? node = null) => Assert.IsType<RunDecision.Created>(
+        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head), node: node));
 
     public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null) =>
         Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(Lease(task ?? T, run ?? Run), Op(),

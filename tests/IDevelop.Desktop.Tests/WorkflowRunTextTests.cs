@@ -148,4 +148,52 @@ public sealed class WorkflowRunTextTests
         Assert.Equal((NodeState.Idle, "Waits for 2 tasks"), WorkflowRunText.Of(two, Title));
         Assert.Equal("It starts once \"A\" and \"B\" hand on a result.", WorkflowRunText.Detail(two, Title));
     }
+
+    [Fact]
+    public void A_task_nobody_ran_shows_as_not_started_and_a_task_waiting_for_it_says_who_runs_it()
+    {
+        var unrun = new TaskView(Task, TaskState.Unrequested) { Dormant = true };
+        var join = new TaskView(TestTasks.Review, TaskState.Pending) { HeldBy = [TestTasks.Design, Task] };
+        var tasks = new Dictionary<TaskId, TaskView> { [TestTasks.Design] = new(TestTasks.Design, TaskState.Running), [Task] = unrun, [TestTasks.Review] = join };
+
+        Assert.Equal((NodeState.Idle, "Not started"), WorkflowRunText.Of(unrun, Title));
+        Assert.Equal((NodeState.Idle, "Not started"), WorkflowRunText.Of(unrun, Title, active: false));
+        Assert.Null(WorkflowRunText.Detail(unrun, Title));
+        Assert.Null(WorkflowRunText.Needs(unrun, Title));
+        Assert.Equal("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run\u00A0it.", WorkflowRunText.Detail(join, Title, tasks: tasks));
+        Assert.Equal("It starts once \"A\" hands on a result.",
+            WorkflowRunText.Detail(join with { HeldBy = [TestTasks.Design] }, Title, tasks: tasks));
+    }
+
+    [Fact]
+    public void A_node_whose_predecessors_have_no_results_says_it_runs_after_them()
+    {
+        string Named(TaskId task) => task == TestTasks.Design ? "A" : task == Task ? "B" : "C";
+
+        Assert.Null(WorkflowRunText.RunsAfter([], Named));
+        Assert.Equal("Runs after \"A\". Run \"A\"\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design], Named));
+        Assert.Equal("Runs after \"A\" and \"B\". Run them\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task], Named));
+        Assert.Equal("Runs after \"A\" and 2 more. Run them\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task, TestTasks.Review], Named));
+        // Titles read in title order, whatever order the tasks come in.
+        Assert.Equal("Runs after \"A\" and \"B\". Run them\u00A0first.", WorkflowRunText.RunsAfter([Task, TestTasks.Design], Named));
+    }
+
+    [Fact]
+    public void A_node_run_counts_the_tasks_it_reaches_and_names_what_they_still_wait_for()
+    {
+        string Named(TaskId task) => task == TestTasks.Design ? "Parse input" : task == Task ? "Render view" : "Ship";
+        RunView Completed(params TaskView[] tasks) => new(new("/project", new WorkflowId(Guid.NewGuid()), new RunId(Guid.NewGuid())),
+            RunPhase.Completed, RunStatus.Completed, true, true, 0, tasks.ToImmutableSortedDictionary(task => task.Task, task => task));
+        var parse = new TaskView(TestTasks.Design, TaskState.Done);
+        var render = new TaskView(Task, TaskState.Unrequested) { Dormant = true };
+        var ship = new TaskView(TestTasks.Review, TaskState.Pending) { HeldBy = [Task], Dormant = true };
+
+        // Render view is not part of the run, so the count covers Parse input and Ship.
+        Assert.Equal("1 of 2 done", WorkflowRunText.Progress(Completed(parse, render, ship)));
+        Assert.Equal("\"Ship\" waits for \"Render view\".", WorkflowRunText.StillWaiting([parse, render, ship], Named));
+        Assert.Null(WorkflowRunText.StillWaiting([parse, render], Named));
+        // Run Workflow reaches every task.
+        Assert.Equal("1 of 3 done", WorkflowRunText.Progress(Completed(parse, render with { State = TaskState.Failed }, ship)));
+        Assert.Null(WorkflowRunText.Progress(Completed(render)));
+    }
 }

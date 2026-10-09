@@ -10,6 +10,10 @@ iDevelop coordinates coding agents over a workflow of tasks on a node canvas. Th
 One approved execution of a workflow, from its approval until it settles Completed or Stopped, with its own journal.
 _Avoid_: job, execution
 
+**Node run**:
+A run that a node's Run started. It runs that node and any node the person runs while it is active, and each task after them once all of that task's dependency predecessors have results in the run. It completes once nothing more can start.
+_Avoid_: partial run, run from here
+
 **Standalone run**:
 A task run on its own, outside any run.
 _Avoid_: run, when no workflow run is meant
@@ -99,7 +103,7 @@ The attempt whose checkout a task's current result keeps, where that task's drif
 ### Approval and gates
 
 **Preflight**:
-Run Workflow's preview of what a run would approve. It records nothing.
+The preview of what a run would approve, which Run Workflow opens for the whole workflow and a node's Run for that node and the tasks after it. It records nothing.
 
 **Run approval**:
 A person's confirmation of a preflight, which approves exactly one run on one base.

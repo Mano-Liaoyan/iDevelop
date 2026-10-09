@@ -14,7 +14,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
+        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(CardTip), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
         nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
@@ -30,8 +30,15 @@ public sealed partial class TaskNodeViewModel
     private readonly Dictionary<(AttemptId Fix, FixChoice Choice), OperationId> _fixChoices = [];
     private bool _choosingFix;
 
-    /// <summary>The run's view of the task while the canvas's run shows it, or null.</summary>
-    internal TaskView? RunTask => _runTask is not null && (_runActive || _attempt?.Id == _runBaseline) ? _runTask : null;
+    /// <summary>
+    /// The run's view of the task while the canvas's run shows it, or null. A settled run shows it until the task's own
+    /// attempt changes, and gives way at once to an attempt of its own that runs or waits for the person, which its own
+    /// commands answer.
+    /// </summary>
+    internal TaskView? RunTask => _runTask is not null && (_runActive || _attempt?.Id == _runBaseline && !OwnAttemptNeedsAttention) ? _runTask : null;
+
+    /// <summary>The task's own latest attempt runs, waits for the person, or rests in review.</summary>
+    private bool OwnAttemptNeedsAttention => _attempt is { Status: AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview };
 
     /// <summary>The card, the inspector, and the conversation show the task as the canvas's run sees it.</summary>
     public bool ShowsRunState => RunTask is not null;
@@ -39,8 +46,19 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
     public bool IsRunOwned => RunTask is not null && _runActive;
 
-    /// <summary>Which run owns the task, or ran it last, while the inspector shows the run's state.</summary>
-    public string? RunOwner => ShowsRunState ? RunOwnedProblem : null;
+    /// <summary>
+    /// The canvas's active run started from another node and has not taken this task in, so its Run adds the task to that
+    /// run (#90).
+    /// </summary>
+    public bool JoinsRun => IsRunOwned && RunTask is { State: TaskState.Unrequested } && _canvas.Run is { View.Phase: RunPhase.Approved };
+
+    /// <summary>
+    /// Which run owns the task, or ran it last, while the inspector shows the run's state, and that the run uses the task
+    /// as it was when the run started once the document's version differs. Null while Run would refuse to add the task to
+    /// the run, since the line under Run then says why.
+    /// </summary>
+    public string? RunOwner => !ShowsRunState || JoinsRun && RunRefusal is not null ? null
+        : WorkflowRunText.Unbroken(_canvas.RunsAsApproved(this) ? $"{RunOwnedProblem} The run uses this task as it was when the run started." : RunOwnedProblem);
 
     /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval".</summary>
     public string? RunStatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : null;
@@ -48,8 +66,8 @@ public sealed partial class TaskNodeViewModel
     public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
-    public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
-        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
+    public string? RunDetail => WorkflowRunText.Unbroken(RunFix is { } fix ? FixDetail(fix)
+        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null);
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
     public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
@@ -106,6 +124,11 @@ public sealed partial class TaskNodeViewModel
 
     private string RunOwnedProblem => (_runActive, HasAgent) switch
     {
+        (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run this task to add it to that run.",
+        // A task the run has not started yet has no conversation to talk to.
+        (true, true) when _canvas.Run is { View.Phase: RunPhase.StopRequested } && NotStarted =>
+            $"A run of the \"{RunWorkflowName}\" workflow is stopping and will not start this task.",
+        (true, true) when NotStarted => $"A run of the \"{RunWorkflowName}\" workflow owns this task. It has not started it yet.",
         (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
         (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate?.Status switch
         {
@@ -114,11 +137,16 @@ public sealed partial class TaskNodeViewModel
             GateStatus.SentBack => "You sent its request back. It asks again once its inputs change.",
             _ => "It asks for your approval once the tasks before it hand on.",
         }),
-        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last. Run it on its own to show its own result again.",
+        (false, true) when NotStarted =>
+            $"The last run of the \"{RunWorkflowName}\" workflow did not start this task.",
+        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last.",
         (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval last.",
     };
 
     private string RunWorkflowName => _runWorkflow ?? Workflow.UnnamedName;
+
+    /// <summary>The canvas's run holds the task but has not started it: it waits, it is ready, or nobody ran it.</summary>
+    private bool NotStarted => RunTask is { State: TaskState.Pending or TaskState.Ready or TaskState.Unrequested };
 
     /// <summary>
     /// Called on the UI thread with the task's view in the canvas's run, or null when the run does not hold it. A new run

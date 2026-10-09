@@ -1,4 +1,4 @@
-<!-- Run Workflow's preflight, over a scrim that covers the whole window, as the Generate Workflow sheet does. -->
+<!-- The preflight of Run Workflow or of a node's Run, over a scrim that covers the whole window, as the Generate Workflow sheet does. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:execution="using:IDevelop.Desktop.Execution"
@@ -6,7 +6,7 @@
              x:Class="IDevelop.Desktop.Execution.RunPreflightSheet"
              x:DataType="execution:RunPreflightViewModel"
              AutomationProperties.AutomationId="PreflightSheet"
-             AutomationProperties.Name="Run Workflow">
+             AutomationProperties.Name="{Binding Heading}">
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Ctrl+Enter" Command="{Binding StartCommand}" />
     <KeyBinding Gesture="Meta+Enter" Command="{Binding StartCommand}" />
@@ -34,17 +34,19 @@
     <Border Classes="popover" Width="560" MaxHeight="640" Margin="24" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
             KeyboardNavigation.TabNavigation="Cycle">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,16">
+        <!-- A node's title can be long, so the title and the workflow's name share the row and each trims its own end. -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10" Margin="0,0,0,16">
           <Border Width="24" Height="24" CornerRadius="6" Background="{DynamicResource AccentFillBrush}">
             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="15" Height="15"
                       Foreground="{DynamicResource OnAccentBrush}" />
           </Border>
-          <TextBlock Text="Run Workflow" VerticalAlignment="Center"
-                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}" />
-          <TextBlock Text="{Binding WorkflowName}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
+          <TextBlock Grid.Column="1" Text="{Binding Heading}" VerticalAlignment="Center" MaxWidth="300" TextTrimming="CharacterEllipsis"
+                     FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}"
+                     AutomationProperties.AutomationId="PreflightTitle" />
+          <TextBlock Grid.Column="2" Text="{Binding WorkflowName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                      FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
                      AutomationProperties.AutomationId="PreflightWorkflow" />
-        </StackPanel>
+        </Grid>
 
         <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,16,0,0">
           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8"

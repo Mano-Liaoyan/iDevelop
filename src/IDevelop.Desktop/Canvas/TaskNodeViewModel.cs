@@ -69,7 +69,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         Fields = [.. task.Blueprint.Fields.Select(field => new FieldViewModel(this, field))];
         Input = new PortViewModel(this, PortSide.Input);
         Output = new PortViewModel(this, PortSide.Output);
-        _run = new RelayCommand(Run, () => !RunsHere && !IsRunOwned);
+        _run = new RelayCommand(Run, () => !RunsHere && (!IsRunOwned || JoinsRun) && RunRefusal is null);
         _cancel = new RelayCommand(
             async () => _canvas.Notice(await _canvas.Runs.CancelAsync(Id) is { } problem ? RunText.Describe(problem) : null),
             () => !IsRunOwned && (StandaloneWaiting || _attempt is { Status: AttemptStatus.InReview } ||
@@ -93,6 +93,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     }
 
     public TaskId Id => _task.Id;
+
+    /// <summary>The task as the workflow document holds it now.</summary>
+    internal TaskDefinition Definition => _task;
 
     public NodeKind Kind
     {
@@ -256,9 +259,22 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     public string StatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : RunText.StatusLabel(_attempt, RunsElsewhere);
 
-    /// <summary>Why this task cannot start now, shown under the Run button before any click.</summary>
-    public string? StartProblem => IsRunOwned ? RunOwnedProblem
-        : !RunsHere && _canvas.Runs.Check(_task) is { } problem ? RunText.Describe(problem) : null;
+    /// <summary>
+    /// Why this task cannot start now, shown under the Run button before any click: a fix round of its own that closing
+    /// iDevelop interrupted, which its Continue fix and Retry fix answer, else the tasks before it that have no results
+    /// yet, or what keeps it from starting in a workflow run as configured (#90).
+    /// </summary>
+    public string? StartProblem => WorkflowRunText.Unbroken(IsRunOwned && !JoinsRun ? RunOwnedProblem
+        : RunsHere ? null
+        : _problem is StartProblem.FixInterrupted interrupted ? RunText.Describe(interrupted)
+        : RunRefusal);
+
+    /// <summary>
+    /// Why Run would start nothing, which keeps it off and is its tooltip: the tasks before this one that have no results
+    /// yet, or what keeps it from starting in a workflow run as configured (#90). Null when Run can start it, or when Run
+    /// does not show because this window runs the task or the canvas's run already holds it.
+    /// </summary>
+    public string? RunRefusal => RunsHere || IsRunOwned && !JoinsRun ? null : WorkflowRunText.Unbroken(_canvas.RunRefusal(this));
 
     /// <summary>
     /// Only the inspector shows it, so only the selected task reads the attempts that its last run continues. A task that
@@ -268,8 +284,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere, _canvas.Clients.Current[_attempt.Requested.Client]);
 
     /// <summary>
-    /// Enabled unless this window runs the task. A task that cannot start shows why instead of launching, which is also
-    /// how a task that another window runs, or ran, finds out.
+    /// Runs the task in a workflow run, which then starts each task after it once all of that task's predecessors have
+    /// results (#90). Off while this window runs the task on its own, while the canvas's active run already holds it, and
+    /// while <see cref="RunRefusal"/> says why it would start nothing.
     /// </summary>
     public ICommand RunCommand => _run;
 
@@ -373,6 +390,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(StartProblem));
+            OnPropertyChanged(nameof(RunRefusal));
+            OnPropertyChanged(nameof(RunOwner));
+            _run.NotifyCanExecuteChanged();
             OnConversationChanged();
         }
 
@@ -401,6 +421,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(StartProblem));
+        OnPropertyChanged(nameof(RunRefusal));
         _run.NotifyCanExecuteChanged();
         _cancel.NotifyCanExecuteChanged();
         _markDone.NotifyCanExecuteChanged();
@@ -425,6 +446,12 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             _continueFix.NotifyCanExecuteChanged();
             _retryFix.NotifyCanExecuteChanged();
         }
+
+        // A changed connection can change the tasks this one runs after.
+        OnPropertyChanged(nameof(StartProblem));
+        OnPropertyChanged(nameof(RunRefusal));
+        OnPropertyChanged(nameof(RunOwner));
+        _run.NotifyCanExecuteChanged();
 
         ShowState();
     }
@@ -462,6 +489,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(AgentLabel));
         OnPropertyChanged(nameof(StartProblem));
+        OnPropertyChanged(nameof(RunRefusal));
+        _run.NotifyCanExecuteChanged();
         foreach (var property in PickerProperties)
         {
             OnPropertyChanged(property);
@@ -531,7 +560,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private void MarkDone() =>
         _canvas.Notice(_canvas.Runs.MarkDone(Id) is { } problem ? RunText.Describe(problem) : null);
 
-    private void Run() =>
+    private void Run() => _canvas.RunNode(this);
+
+    /// <summary>
+    /// Runs the task on its own in the project folder, as Generate Workflow runs its planner. Its connections play no part,
+    /// and a refused start says why in the notice.
+    /// </summary>
+    internal void RunOnItsOwn() =>
         _canvas.Notice(_canvas.Runs.Start(_task, _canvas.Planning(Id)) is StartResult.Refused refused ? RunText.Describe(refused.Problem) : null);
 
     private async void Send(bool stopTurn)

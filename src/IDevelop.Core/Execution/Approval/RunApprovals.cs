@@ -36,11 +36,21 @@ internal sealed class RunApprovals
         _clock = clock;
     }
 
-    public RunPreflight Inspect(Workflow workflow)
+    /// <param name="node">
+    /// The node whose Run asks for the run, or null for Run Workflow (#90). The preview then lists, checks, and offers only
+    /// that node and the tasks after it, and names the predecessors it would wait for.
+    /// </param>
+    public RunPreflight Inspect(Workflow workflow, TaskId? node = null)
     {
         var revision = Revision.Capture(workflow);
-        ImmutableArray<PreflightTask> tasks = [.. workflow.Tasks.Values.OrderBy(task => task.Id).Select(task => Task(workflow, task))];
+        var scope = RunScope.InFlow(workflow, node is { } requested ? new HashSet<TaskId> { requested } : null);
+        // A node's preview lists the node first, then the tasks after it.
+        ImmutableArray<PreflightTask> tasks = [.. workflow.Tasks.Values.Where(task => scope.Contains(task.Id)).OrderBy(task => task.Id != node)
+            .ThenBy(task => task.Id).Select(task => Task(workflow, task))];
         var gaps = ImmutableArray.CreateBuilder<PreflightGap>();
+        if (node is { } started && workflow.Tasks.ContainsKey(started) &&
+            RunScope.Predecessors(workflow)[started].Order().ToImmutableArray() is { IsEmpty: false } predecessors)
+            gaps.Add(new PreflightGap.After(started, predecessors));
         var open = GitRepository.Open(_project, _environment);
         GitRepository? repository = null;
         PreflightGit git;
@@ -69,20 +79,25 @@ internal sealed class RunApprovals
         RunId? active = null;
         try { active = Active(workflow.Id)?.Id; }
         catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
-        var preview = new RunPreflight(_project, revision, git, found, tasks, active) { Gaps = gaps.ToImmutable() };
+        var preview = new RunPreflight(_project, revision, git, found, tasks, active) { Gaps = gaps.ToImmutable(), Node = node };
+        // A node's Run offers only that node's earlier report: including another task's would hand on a result that no
+        // task after it asked for.
         return found is null ? preview : preview with
         {
-            Reusable = Reusable(workflow, found, RunPreflight.Offered(found)),
-            Planners = Planners(workflow, found, RunPreflight.Offered(found)),
+            Reusable = [.. Reusable(workflow, found, RunPreflight.Offered(found)).Where(report => node is null || report.Task == node)],
+            Planners = [.. Planners(workflow, found, RunPreflight.Offered(found)).Where(planner => node is null || planner.Task == node)],
         };
     }
 
     /// <summary>Why the task could not start as configured, as a single start would say, or null.</summary>
-    private StartProblem? Gap(TaskDefinition task)
+    private StartProblem? Gap(TaskDefinition task) => Gap(task, _project, _clients);
+
+    /// <summary>Why <paramref name="task"/> could not start in a run as configured, as the preflight names it, or null.</summary>
+    internal static StartProblem? Gap(TaskDefinition task, string project, IReadOnlyDictionary<ClientId, ClientStatus> clients)
     {
         if (task.Blueprint.Work is WorkSpec.Person) return null;
         // A run renders the prompt from the node and its inputs, so this checks the agent and its settings, then the fields.
-        if (StartCheck.Evaluate(task, _project, _clients, new Resumption(null, "Preflight")) is StartVerdict.Blocked blocked) return blocked.Problem;
+        if (StartCheck.Evaluate(task, project, clients, new Resumption(null, "Preflight")) is StartVerdict.Blocked blocked) return blocked.Problem;
         return task.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(task.Field(field.Key))) is { } missing
             ? new StartProblem.FieldMissing(missing.Label) : null;
     }
@@ -246,7 +261,7 @@ internal sealed class RunApprovals
     {
         if (confirmation.Command.Value == Guid.Empty)
             return new RunApproval.Refused(ApprovalProblem.ConfirmationRequired, "A confirmation needs its own command ID.");
-        var live = Inspect(current);
+        var live = Inspect(current, confirmation.Preview.Node);
         var choice = confirmation.Choice;
         var intents = new ApprovalIntents(_project, live.Workflow);
         try
@@ -279,7 +294,7 @@ internal sealed class RunApprovals
             var chosen = adopted is null
                 ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
                     [confirmation.Command], live.Revision, choice, live.Base!.Head, choice == BaseChoice.Snapshot ? live.Base.WorkTree : null,
-                    DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds())) { Inclusions = inclusions }
+                    DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds())) { Inclusions = inclusions, Node = live.Node }
                 : Confirmed(adopted, confirmation.Command);
             intents.Write(chosen);
             _probe?.Invoke("approval.intent.after");
@@ -297,7 +312,7 @@ internal sealed class RunApprovals
                 return new RunApproval.Refused(ApprovalProblem.GitFailed, $"Git could not keep the run base under {ApprovalPin.Name(chosen.Run)}.");
             _probe?.Invoke("approval.pinned.after");
             var decision = _store.Approve(live.Workflow, chosen.Run, chosen.Operation, chosen.Revision, codeBase, chosen.Inclusions,
-                chosen.Confirmations[0]);
+                chosen.Confirmations[0], chosen.Node);
             _probe?.Invoke("approval.approved.after");
             return decision switch
             {

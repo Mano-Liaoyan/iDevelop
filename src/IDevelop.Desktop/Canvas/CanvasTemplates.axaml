@@ -67,9 +67,10 @@
             <TextBlock Classes="cardAgent" Text="{Binding AgentClient}" TextTrimming="CharacterEllipsis"
                        IsVisible="{Binding ShowsAgent}"
                        AutomationProperties.AutomationId="CardAgent" />
-            <TextBlock Classes="cardStatus" Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis"
-                       IsVisible="{Binding !ShowsAgent}"
-                       AutomationProperties.AutomationId="CardStatus" />
+            <!-- A status names what it waits for when the name fits whole, and counts it when it does not. -->
+            <canvas:FittingText Classes="cardStatus" Choices="{Binding SubtitleChoices}" TextTrimming="CharacterEllipsis"
+                                IsVisible="{Binding !ShowsAgent}"
+                                AutomationProperties.AutomationId="CardStatus" />
           </Panel>
           <TextBlock Classes="cardAgent" Text="{Binding AgentModel}" TextTrimming="CharacterEllipsis"
                      AutomationProperties.AutomationId="CardModel" />
