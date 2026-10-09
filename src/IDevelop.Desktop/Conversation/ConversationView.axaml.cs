@@ -46,6 +46,37 @@ public partial class ConversationView : UserControl
         Transcript.LayoutUpdated += OnTranscriptLaidOut;
     }
 
+    // The row of Rows that holds the transcript.
+    private const int TranscriptRow = 3;
+
+    /// <summary>The least transcript a docked conversation keeps: a few lines of messages.</summary>
+    internal const double MinTranscriptHeight = 96;
+
+    /// <summary>Raised, after a layout, when <see cref="RequiredHeight"/> changed.</summary>
+    public static readonly RoutedEvent<RoutedEventArgs> RequiredHeightChangedEvent =
+        RoutedEvent.Register<ConversationView, RoutedEventArgs>("RequiredHeightChanged", RoutingStrategies.Bubble);
+
+    /// <summary>
+    /// The height the view needs: its header, the run's strip, the limitations, and the composer as tall as they lay out
+    /// at its width, and <see cref="MinTranscriptHeight"/> of transcript.
+    /// </summary>
+    internal double RequiredHeight { get; private set; }
+
+    // The grid gives each row but the transcript's the height it asks for, however short the view, so their sum is what the
+    // view needs. The window learns of a change after the layout, where it may resize the dock.
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var size = base.ArrangeOverride(finalSize);
+        var required = Rows.RowDefinitions.Where((_, index) => index != TranscriptRow).Sum(row => row.ActualHeight) + MinTranscriptHeight;
+        if (Math.Abs(required - RequiredHeight) >= 0.5)
+        {
+            RequiredHeight = required;
+            Dispatcher.UIThread.Post(() => RaiseEvent(new RoutedEventArgs(RequiredHeightChangedEvent)));
+        }
+
+        return size;
+    }
+
     /// <summary>The entry at the top of the view and how far it scrolled into it, or null at the end.</summary>
     internal (EntryId Entry, double Offset)? Anchor => _follow ? null : _anchor;
 

@@ -3,6 +3,7 @@
              xmlns:local="using:IDevelop.Desktop"
              xmlns:conversation="using:IDevelop.Desktop.Conversation"
              xmlns:execution="using:IDevelop.Desktop.Execution"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
              x:Class="IDevelop.Desktop.Conversation.ConversationView"
              x:DataType="conversation:ConversationViewModel"
              Background="{DynamicResource AppShellBrush}"
@@ -11,32 +12,39 @@
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Escape" Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}" />
   </UserControl.KeyBindings>
-  <DockPanel>
-    <Border DockPanel.Dock="Top" Classes="conversationHeader">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
-        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Foreground="{DynamicResource TextMutedBrush}" />
-        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-          <TextBlock Classes="conversationTitle" Text="{Binding Title}"
-                     AutomationProperties.AutomationId="ConversationTitle" />
-          <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
-                     AutomationProperties.AutomationId="ConversationBreadcrumb" />
-        </StackPanel>
-        <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center">
-          <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
+  <!-- The header, the run's strip, the client's limitations, and the composer take the height they need, and the transcript
+       takes the rest. The window keeps the docked conversation tall enough for a few lines of the transcript. -->
+  <Grid x:Name="Rows" RowDefinitions="Auto,Auto,Auto,*,Auto">
+    <Border Classes="conversationHeader">
+      <!-- The status and the attempt picker sit beside the title while it keeps 160 px after its glyph. Otherwise they move
+           under the title, from its start. While the picker shows the latest attempt, whose status its choice names, the
+           status gives way, so the header keeps two lines. The layout and close buttons stay at the first line's end. A long
+           attempt wraps inside its picker. -->
+      <theme:SpillRow MinLeadWidth="186" Spacing="10" ItemsAlignment="Start" SpillIndent="26">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Foreground="{DynamicResource TextMutedBrush}" />
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+            <TextBlock Classes="conversationTitle" Text="{Binding Title}"
+                       AutomationProperties.AutomationId="ConversationTitle" />
+            <!-- The canvas's breadcrumb shows above the dock, so the docked header leaves it out. -->
+            <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
+                       AutomationProperties.AutomationId="ConversationBreadcrumb" />
+          </StackPanel>
+        </Grid>
+        <Border theme:SpillRow.Pinned="True" Classes="limitsGlyph" ToolTip.Tip="{Binding Limitations}"
+                AutomationProperties.AccessibilityView="Control"
+                AutomationProperties.AutomationId="ClientLimitationsInfo"
+                AutomationProperties.Name="{Binding Limitations}">
+          <Border.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="Limitations" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+              <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
+            </MultiBinding>
+          </Border.IsVisible>
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" />
         </Border>
-        <ComboBox Grid.Column="3" MinWidth="200" MaxWidth="400" VerticalAlignment="Center"
-                  ItemsSource="{Binding Attempts}" SelectedItem="{Binding SelectedAttempt}"
-                  IsVisible="{Binding !!Attempts.Count}"
-                  ToolTip.Tip="Every attempt of this task, oldest first"
-                  AutomationProperties.AutomationId="AttemptPicker"
-                  AutomationProperties.Name="Attempt">
-          <ComboBox.ItemTemplate>
-            <DataTemplate DataType="conversation:AttemptChoice">
-              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-        <Button Grid.Column="4" Classes="icon"
+        <Button theme:SpillRow.Pinned="True" Classes="icon"
                 Command="{Binding $parent[local:MainWindow].ViewModel.ToggleConversationLayoutCommand, FallbackValue={x:Null}}"
                 ToolTip.Tip="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}"
                 AutomationProperties.AutomationId="ConversationLayout"
@@ -48,19 +56,41 @@
                       IsVisible="{Binding $parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=False}" />
           </Panel>
         </Button>
-        <Button Grid.Column="5" Classes="icon"
+        <Button theme:SpillRow.Pinned="True" Classes="icon"
                 Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}"
                 ToolTip.Tip="Close the conversation (Esc)"
                 AutomationProperties.AutomationId="CloseConversation"
                 AutomationProperties.Name="Close conversation">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
         </Button>
-      </Grid>
+        <!-- The status names the latest attempt, as the picker's choice does while it shows that attempt. -->
+        <Border Classes="pill" VerticalAlignment="Center">
+          <theme:SpillRow.BesideOnly>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!!Attempts.Count" />
+              <Binding Path="!IsHistorical" />
+            </MultiBinding>
+          </theme:SpillRow.BesideOnly>
+          <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
+        </Border>
+        <ComboBox MinWidth="200" MaxWidth="400" VerticalAlignment="Center"
+                  ItemsSource="{Binding Attempts}" SelectedItem="{Binding SelectedAttempt}"
+                  IsVisible="{Binding !!Attempts.Count}"
+                  ToolTip.Tip="Every attempt of this task, oldest first"
+                  AutomationProperties.AutomationId="AttemptPicker"
+                  AutomationProperties.Name="Attempt">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="conversation:AttemptChoice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </theme:SpillRow>
     </Border>
 
     <!-- While the conversation takes the canvas's place, it repeats the run bar: the run's status, Resume, and Stop Workflow.
          The dock leaves the canvas and its run bar in view, so it shows nothing here. -->
-    <Border DockPanel.Dock="Top" Classes="limitations"
+    <Border Grid.Row="1" Classes="limitations"
             AutomationProperties.AutomationId="ConversationRun"
             AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
       <Border.IsVisible>
@@ -69,9 +99,10 @@
           <Binding Path="!$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="True" />
         </MultiBinding>
       </Border.IsVisible>
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" HorizontalAlignment="Stretch">
-        <!-- The activity follows the status while it fits, and otherwise takes a line of its own, where several running
-             tasks' titles wrap to a second line, between titles, before they are cut, as on the run bar. -->
+      <!-- The activity follows the status while it fits, and otherwise takes a line of its own, where several running tasks'
+           titles wrap to a second line, between titles, before they are cut, as on the run bar. Resume and Stop Workflow
+           sit at the end while the status keeps 200 px beside them, and otherwise under it, at the end. -->
+      <theme:SpillRow MinLeadWidth="200" Spacing="10">
         <WrapPanel VerticalAlignment="Center" ItemSpacing="10" LineSpacing="4">
           <Border Classes="pill" VerticalAlignment="Center"
                   Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
@@ -89,33 +120,37 @@
                      TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
                      AutomationProperties.AutomationId="ConversationRunActivity" />
         </WrapPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="ghost" Height="28"
-                  Command="{Binding Run.ResumeCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
-                  ToolTip.Tip="Start the run's next tasks in this window"
-                  AutomationProperties.AutomationId="ConversationResumeRun"
-                  AutomationProperties.Name="Resume run">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
-              <TextBlock Text="Resume" />
-            </StackPanel>
-          </Button>
-          <Button Classes="ghost" Height="28"
-                  Command="{Binding Run.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
-                  ToolTip.Tip="Start no more tasks and stop the running ones. Finished work stays."
-                  AutomationProperties.AutomationId="ConversationStopWorkflow"
-                  AutomationProperties.Name="Stop Workflow">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-              <TextBlock Text="Stop Workflow" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
-      </Grid>
+        <Button Classes="ghost" Height="28"
+                Command="{Binding Run.ResumeCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
+                ToolTip.Tip="Start the run's next tasks in this window"
+                AutomationProperties.AutomationId="ConversationResumeRun"
+                AutomationProperties.Name="Resume run">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
+            <TextBlock Text="Resume" />
+          </StackPanel>
+        </Button>
+        <Button Classes="ghost" Height="28"
+                Command="{Binding Run.StopCommand, FallbackValue={x:Null}}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
+                ToolTip.Tip="Start no more tasks and stop the running ones. Finished work stays."
+                AutomationProperties.AutomationId="ConversationStopWorkflow"
+                AutomationProperties.Name="Stop Workflow">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+            <TextBlock Text="Stop Workflow" />
+          </StackPanel>
+        </Button>
+      </theme:SpillRow>
     </Border>
 
-    <Border DockPanel.Dock="Top" Classes="limitations"
-            IsVisible="{Binding Limitations, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+    <!-- In the dock, where height is short, the limitations sit behind the header's info glyph instead. -->
+    <Border Grid.Row="2" Classes="limitations">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Limitations" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+          <Binding Path="!$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="True" />
+        </MultiBinding>
+      </Border.IsVisible>
       <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" HorizontalAlignment="Center" MaxWidth="760">
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14" Foreground="{DynamicResource TextMutedBrush}" />
         <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Limitations}" TextWrapping="Wrap"
@@ -123,18 +158,18 @@
       </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Classes="composer">
+    <Border Grid.Row="4" Classes="composer">
       <StackPanel Spacing="6">
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsHistorical}" Margin="4,0">
+        <theme:SpillRow MinLeadWidth="200" Spacing="8" IsVisible="{Binding IsHistorical}" Margin="4,0,0,0">
           <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap"
                      Text="You are reading an earlier attempt. Return to current conversation to send."
                      AutomationProperties.AutomationId="HistoricalNote" />
-          <Button Grid.Column="1" Classes="action" Command="{Binding ReturnToCurrentCommand}"
+          <Button Classes="action" Command="{Binding ReturnToCurrentCommand}"
                   AutomationProperties.AutomationId="ReturnToCurrent"
                   AutomationProperties.Name="Return to current conversation">
             <TextBlock Text="Return to current" />
           </Button>
-        </Grid>
+        </theme:SpillRow>
         <TextBox x:Name="Composer" Classes="composerBox" Text="{Binding Draft}"
                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;"
                  Watermark="{Binding Watermark}"
@@ -146,45 +181,45 @@
             <KeyBinding Gesture="Meta+Enter" Command="{Binding SendCommand}" />
           </TextBox.KeyBindings>
         </TextBox>
-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <!-- The hint keeps 200 px beside the buttons, and otherwise takes its own line above them. The buttons end where the
+             box ends, and Send, the last, ends there on the last line. -->
+        <theme:SpillRow MinLeadWidth="200" Spacing="8" LineSpacing="8">
           <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" Margin="4,0,0,0"
                      Text="{Binding ComposerHint}"
                      AutomationProperties.AutomationId="ComposerHint" />
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-            <Button Classes="action" Command="{Binding OpenInTerminalCommand}" IsVisible="{Binding ShowsTerminal}"
-                    AutomationProperties.AutomationId="ConversationTerminal"
-                    AutomationProperties.Name="Open in terminal">
-              <TextBlock Text="Open in terminal" />
-            </Button>
-            <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding ShowsMarkDone}"
-                    AutomationProperties.AutomationId="ConversationMarkDone"
-                    AutomationProperties.Name="Mark done">
-              <TextBlock Text="Mark done" />
-            </Button>
-            <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancel}"
-                    AutomationProperties.AutomationId="ConversationCancel"
-                    AutomationProperties.Name="Cancel attempt">
-              <TextBlock Text="Cancel" />
-            </Button>
-            <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
-                    AutomationProperties.AutomationId="ConversationStopAndSend"
-                    AutomationProperties.Name="Stop and send">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                <TextBlock Text="Stop and send" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-            <Button Classes="primary" Command="{Binding SendCommand}"
-                    ToolTip.Tip="Send (Ctrl+Enter)"
-                    AutomationProperties.AutomationId="ConversationSend"
-                    AutomationProperties.Name="Send">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
-                <TextBlock Text="Send" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-        </Grid>
+          <Button Classes="action" Command="{Binding OpenInTerminalCommand}" IsVisible="{Binding ShowsTerminal}"
+                  AutomationProperties.AutomationId="ConversationTerminal"
+                  AutomationProperties.Name="Open in terminal">
+            <TextBlock Text="Open in terminal" />
+          </Button>
+          <Button Classes="action" Command="{Binding MarkDoneCommand}" IsVisible="{Binding ShowsMarkDone}"
+                  AutomationProperties.AutomationId="ConversationMarkDone"
+                  AutomationProperties.Name="Mark done">
+            <TextBlock Text="Mark done" />
+          </Button>
+          <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancel}"
+                  AutomationProperties.AutomationId="ConversationCancel"
+                  AutomationProperties.Name="Cancel attempt">
+            <TextBlock Text="Cancel" />
+          </Button>
+          <Button Classes="action" Command="{Binding StopAndSendCommand}" IsVisible="{Binding ShowsStopAndSend}"
+                  AutomationProperties.AutomationId="ConversationStopAndSend"
+                  AutomationProperties.Name="Stop and send">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+              <TextBlock Text="Stop and send" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="primary" Command="{Binding SendCommand}"
+                  ToolTip.Tip="Send (Ctrl+Enter)"
+                  AutomationProperties.AutomationId="ConversationSend"
+                  AutomationProperties.Name="Send">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
+              <TextBlock Text="Send" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </theme:SpillRow>
         <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap" Margin="4,0,0,0"
                    Foreground="{DynamicResource StateWarningStrongBrush}"
                    IsVisible="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -192,7 +227,7 @@
       </StackPanel>
     </Border>
 
-    <Panel>
+    <Panel Grid.Row="3">
       <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <StackPanel>
@@ -239,7 +274,23 @@
                               Classes.undelivered="{Binding IsUndelivered}"
                               AutomationProperties.AutomationId="Message"
                               AutomationProperties.Name="{Binding AuthorLabel}">
-                        <conversation:MarkdownView Markdown="{Binding Text}" />
+                        <StackPanel Spacing="10">
+                          <conversation:MarkdownView Markdown="{Binding Text}" />
+                          <!-- iDevelop's own artifact instructions to the agent fold into one line that opens on a click. -->
+                          <StackPanel Spacing="6" IsVisible="{Binding HasInstructions}">
+                            <ToggleButton Classes="instructions" IsChecked="{Binding IsInstructionsOpen}"
+                                          AutomationProperties.AutomationId="ArtifactInstructions"
+                                          AutomationProperties.Name="Artifact instructions from iDevelop">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Theme="{StaticResource Glyph}" />
+                                <TextBlock Text="Artifact instructions from iDevelop" />
+                              </StackPanel>
+                            </ToggleButton>
+                            <SelectableTextBlock Classes="instructions" Text="{Binding Instructions}"
+                                                 IsVisible="{Binding IsInstructionsOpen}"
+                                                 AutomationProperties.AutomationId="ArtifactInstructionsText" />
+                          </StackPanel>
+                        </StackPanel>
                       </Border>
                     </Grid>
                     <TextBlock Classes="caption" HorizontalAlignment="Right" Text="{Binding StateLabel}"
@@ -373,5 +424,5 @@
         </StackPanel>
       </Button>
     </Panel>
-  </DockPanel>
+  </Grid>
 </UserControl>

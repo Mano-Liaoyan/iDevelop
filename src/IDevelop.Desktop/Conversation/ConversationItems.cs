@@ -32,6 +32,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 {
     private readonly ConversationViewModel _owner;
     private ConversationContent.Message _message;
+    private bool _instructionsOpen;
 
     internal MessageItemViewModel(ConversationEntry entry, ConversationViewModel owner) : base(entry)
     {
@@ -55,8 +56,29 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         MessageAuthor.Application => "iDevelop",
     };
 
-    /// <summary>The source the message shows. An agent's result block leaves the prose, and <see cref="ResultNote"/> says what it held.</summary>
-    public string Text => IsAgent && _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text) : _message.Text;
+    /// <summary>
+    /// The source the message shows. An agent's result block leaves the prose, and <see cref="ResultNote"/> says what it
+    /// held. The artifact instructions that end iDevelop's own prompt leave it for <see cref="Instructions"/>.
+    /// </summary>
+    public string Text => IsAgent && _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text)
+        : IsApplication ? ArtifactInstructions.Split(_message.Text).Text
+        : _message.Text;
+
+    /// <summary>
+    /// iDevelop's own instructions to the agent at the end of a run task's prompt: where to declare its artifacts. They
+    /// fold into a one-line note that opens on a click, so the task's own text reads first. A person's message keeps all
+    /// of its text.
+    /// </summary>
+    public string? Instructions => IsApplication ? ArtifactInstructions.Split(_message.Text).Instructions : null;
+
+    public bool HasInstructions => Instructions is not null;
+
+    /// <summary>Whether the note shows the instructions. It stays as the person left it while the row refreshes.</summary>
+    public bool IsInstructionsOpen
+    {
+        get => _instructionsOpen;
+        set => SetProperty(ref _instructionsOpen, value);
+    }
 
     /// <summary>What an agent's readable result block said, such as its question, or why iDevelop could not read it.</summary>
     public string? ResultNote => !IsAgent || _message.State is not MessageState.Complete ? null : ResultBlock.Read(_message.Text) switch
@@ -97,6 +119,8 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
         {
             _message = message;
             OnPropertyChanged(nameof(Text));
+            OnPropertyChanged(nameof(Instructions));
+            OnPropertyChanged(nameof(HasInstructions));
             OnPropertyChanged(nameof(ResultNote));
             OnPropertyChanged(nameof(State));
             OnPropertyChanged(nameof(IsStreaming));

@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Theme;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -115,6 +116,57 @@ public sealed class ConversationViewTests : IDisposable
         Assert.Equal(Enumerable.Range(0, 500).Select(i => $"m{i}"), Ids(model));
         Render();
         Assert.InRange(transcript.GetRealizedContainers().Count(), 1, 60);
+    }
+
+    [AvaloniaFact]
+    public void A_narrow_header_drops_the_status_only_while_the_picker_shows_the_latest_attempt()
+    {
+        _session.Snapshot = Snapshot(Record(B), Actions());
+        _session.Attempts = [new AttemptSummary(A, null, T0, AttemptStatus.Succeeded, CodexHigh),
+            new AttemptSummary(B, null, T0.AddMinutes(1), AttemptStatus.WaitingForInput, CodexHigh) { Label = "Run 1" }];
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        window.Window.Width = 360;
+        Render();
+        var status = Shell.Around(Shell.ById<TextBlock>(view, "ConversationStatus").Single(), "pill");
+
+        Assert.True(status.Bounds.Width == 0, "The status shows beside the latest attempt's choice, which names it.");
+
+        model.SelectedAttempt = model.Attempts[0];
+        Settle(model);
+        Render();
+        Assert.True(model.IsHistorical);
+        Assert.True(status.IsEffectivelyVisible && status.Bounds.Width > 0, "The latest attempt's status gave way while an earlier one shows.");
+    }
+
+    [AvaloniaFact]
+    public void A_narrow_header_keeps_the_status_while_there_is_no_attempt_to_pick()
+    {
+        _session.Attempts = [];
+        var model = Open();
+        using var window = new DisposableWindow(Host(model, out var view));
+        window.Window.Width = 250;
+        Render();
+
+        Assert.Empty(model.Attempts);
+        Assert.True(Shell.Around(Shell.ById<TextBlock>(view, "ConversationTitle").Single(), "conversationHeader").GetVisualDescendants().OfType<SpillRow>().Single().IsSpilled);
+        var status = Shell.Around(Shell.ById<TextBlock>(view, "ConversationStatus").Single(), "pill");
+        Assert.True(status.IsEffectivelyVisible && status.Bounds.Width > 0, "The status gave way with no picker to name it.");
+    }
+
+    [AvaloniaFact]
+    public void Only_idevelops_own_prompt_folds_the_artifact_instructions_that_end_it()
+    {
+        const string instructions = "Declare artifacts in .idp/outbox/019aa000-0000-7000-8000-00000000000a/manifest.json using " +
+            "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}. Artifact paths are relative to that folder.";
+        _pager.Rows.AddRange([
+            Said("p0", MessageAuthor.Application, "# Design\n\nDraft it.\n\n" + instructions, MessageState.Submitted),
+            Said("p1", MessageAuthor.Person, "Try again.\n\n" + instructions, MessageState.Submitted)]);
+        var model = Open();
+
+        var (prompt, person) = (Assert.IsType<MessageItemViewModel>(model.Items[0]), Assert.IsType<MessageItemViewModel>(model.Items[1]));
+        Assert.Equal(("# Design\n\nDraft it.", instructions), (prompt.Text, prompt.Instructions));
+        Assert.Equal(("Try again.\n\n" + instructions, (string?)null), (person.Text, person.Instructions));
     }
 
     [AvaloniaFact]
