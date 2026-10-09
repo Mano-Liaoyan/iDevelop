@@ -174,6 +174,50 @@ public sealed class CarriedResultTests
     }
 
     [AvaloniaFact]
+    public void A_task_after_one_that_is_out_of_date_names_what_put_it_out_of_date()
+    {
+        // A → B → C, all three ran, and then only A changed.
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), At(B, "B", 105, 250), At(C, "C", 405, 170), Dependency(A, B), Dependency(B, C));
+        f.Answer("A", f.Writes("out-a.txt", "A\n", "A ready.")).Answer("B", f.Writes("out-b.txt", "B\n", "B ready.")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+        RunNode(shell, "A");
+        Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], Cards(shell));
+
+        shell.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.EditTitle(A, "Parse"));
+        shell.Render();
+
+        Assert.Equal(["Out of date", "Out of date"], new[] { "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
+        Select(shell, "B");
+        Assert.Equal(WorkflowRunText.Unbroken("Out of date because \"Parse\" changed. Run \"Parse\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
+        // B did not change: it is out of date because A is.
+        Select(shell, "C");
+        Assert.Equal(WorkflowRunText.Unbroken("Out of date because \"B\" is out of date. Run \"B\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
+    }
+
+    [AvaloniaFact]
+    public void Open_conversation_of_a_task_a_settled_run_carried_opens_the_task_s_own_conversation()
+    {
+        using var f = Join();
+        var shell = f.Window();
+        RunNode(shell, "B");
+        RunNode(shell, "A");
+
+        Select(shell, "B");
+        shell.Click(shell.InView<Button>("OpenConversation"));
+        shell.WaitUntil(() => shell.Window.ViewModel.Conversation?.Target.Task == B, "B's conversation opens");
+        // The run carried B's result and never talked to it.
+        Assert.False(shell.Window.ViewModel.ConversationGoesThroughRun);
+        shell.Window.ViewModel.CloseConversation();
+        shell.Render();
+
+        // The run talked to A, so A's conversation goes through it.
+        Select(shell, "A");
+        shell.Click(shell.InView<Button>("OpenConversation"));
+        shell.WaitUntil(() => shell.Window.ViewModel.Conversation?.Target.Task == A, "A's conversation opens");
+        Assert.True(shell.Window.ViewModel.ConversationGoesThroughRun);
+    }
+
+    [AvaloniaFact]
     public void A_node_s_preflight_says_why_it_cannot_use_an_earlier_result_whose_code_conflicts_with_the_base()
     {
         using var f = Join();

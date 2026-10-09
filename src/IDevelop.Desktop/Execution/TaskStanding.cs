@@ -91,14 +91,18 @@ internal abstract record TaskStanding
 
     /// <summary>
     /// Run's refusal when this task is out of date because of <paramref name="holder"/>, the one task it runs after that has
-    /// no current result: one sentence, as in "Out of date because "B" changed. Run "B" first." when B is out of date too,
+    /// no current result: one sentence, as in "Out of date because "B" changed. Run "B" first." when B changed itself,
+    /// "Out of date because "B" is out of date. Run "B" first." when B is out of date for a task before it,
     /// or "Out of date because a later run of "B" ended without a result. Run "B" first." when B's newest run left it none.
     /// Null otherwise.
     /// </summary>
     public string? RunsAfter(TaskId holder, TaskHistory? holderHistory, Func<TaskId, string> title) => (this, holderHistory) switch
     {
-        (OutOfDate { Input: { } input }, TaskHistory.OutOfDate) when input == holder =>
+        (OutOfDate { Input: { } input }, TaskHistory.OutOfDate { Reason: OutOfDateReason.Changed }) when input == holder =>
             $"Out of date because \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first.",
+        // The task before it did not change itself: a task before that one did, or has another result now.
+        (OutOfDate { Input: { } input }, TaskHistory.OutOfDate) when input == holder =>
+            $"Out of date because \"{title(holder)}\" is out of date. Run \"{title(holder)}\"\u00A0first.",
         (OutOfDate { Input: { } input, Reason: OutOfDateReason.InputReplaced }, TaskHistory.None) when input == holder =>
             $"Out of date because a later run of \"{title(holder)}\" ended without a result. Run \"{title(holder)}\"\u00A0first.",
         _ => null,
