@@ -113,17 +113,32 @@ internal sealed partial class RunStore
     /// report through E1's <see cref="ReportReuse.Validate"/>. One that fails approves nothing.
     /// </summary>
     /// <param name="node">The node whose Run started the run, or null for Run Workflow, which runs every root (#90).</param>
+    /// <param name="carried">
+    /// The results of earlier runs that a node's run takes for the tasks it does not run (#90), built and kept by
+    /// <see cref="Carrying"/>. Each must still be its task's current result in the workflow's history.
+    /// </param>
     public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase,
-        ImmutableArray<ReportInclusion> include = default, OperationId confirmation = default, TaskId? node = null) =>
-        Transact(workflow, run, operation, (include.IsDefaultOrEmpty, node) switch
+        ImmutableArray<ReportInclusion> include = default, OperationId confirmation = default, TaskId? node = null,
+        ImmutableArray<IncludedResult> carried = default) =>
+        Transact(workflow, run, operation, (include.IsDefaultOrEmpty, node, carried.IsDefaultOrEmpty) switch
         {
-            (true, null) => Fingerprint("approve", new
+            (_, _, false) => Fingerprint("approve", new
+            {
+                revision = Revision.Canonical(revision.Snapshot),
+                revision.Id,
+                codeBase,
+                include = include.IsDefault ? [] : include,
+                confirmation,
+                node,
+                carried
+            }),
+            (true, null, _) => Fingerprint("approve", new
             {
                 revision = Revision.Canonical(revision.Snapshot),
                 revision.Id,
                 codeBase
             }),
-            (false, null) => Fingerprint("approve", new
+            (false, null, _) => Fingerprint("approve", new
             {
                 revision = Revision.Canonical(revision.Snapshot),
                 revision.Id,
@@ -152,7 +167,11 @@ internal sealed partial class RunStore
                 return new Mutation.Rejected(new(RunProblem.RunBusy));
             }
 
-            if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Node = node });
+            // A carried result must still be its task's current result, as the history of every run read in this
+            // transaction has it.
+            if (CarriedProblem(all, revision.Snapshot, carried) is { } stale) return new Mutation.Rejected(stale);
+            ImmutableArray<IncludedResult>? carrying = carried.IsDefaultOrEmpty ? null : carried;
+            if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Node = node, Carried = carrying });
             // Both validators refuse an inclusion without the person's confirmation.
             if (include.Select(inclusion => inclusion.Task).Distinct().Count() != include.Length) return Refuse(RunProblem.InputConflict);
             var included = ImmutableArray.CreateBuilder<IncludedResult>();
@@ -163,8 +182,51 @@ internal sealed partial class RunStore
                 if (accepted.Rejection is { } rejection) return new Mutation.Rejected(rejection);
                 included.Add(accepted.Result!);
             }
-            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Included = included.ToImmutable(), Node = node });
+            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Included = included.ToImmutable(), Node = node, Carried = carrying });
         });
+
+    /// <summary>
+    /// The workflow's runs, read for their history (#90): every journal with a readable approval, an incomplete last line
+    /// left aside. Throws <see cref="IOException"/> for a run it cannot read, so no result counts past it.
+    /// </summary>
+    public ImmutableArray<RunRecord> Records(WorkflowId workflow)
+    {
+        var folder = Path.Combine(_runs, workflow.ToString());
+        if (!Directory.Exists(folder)) return [];
+        var records = ImmutableArray.CreateBuilder<RunRecord>();
+        foreach (var runFolder in Directory.EnumerateDirectories(folder).Order(StringComparer.Ordinal))
+        {
+            var journal = Path.Combine(runFolder, "events.jsonl");
+            if (!File.Exists(journal) || new FileInfo(journal).Length == 0) continue;
+            if (!Guid.TryParse(Path.GetFileName(runFolder), out var id)) throw new IOException($"Run folder {Path.GetFileName(runFolder)}: invalid run identity.");
+            switch (Read(workflow, new(id)))
+            {
+                case RunRead.Loaded loaded:
+                    records.Add(loaded.Record);
+                    break;
+                case RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: var prefix }:
+                    if (prefix is not null) records.Add(prefix);
+                    break;
+                case RunRead.Rejected rejected:
+                    throw new IOException($"Run {id:D}: {rejected.Reason.Problem}.");
+            }
+        }
+        return records.ToImmutable();
+    }
+
+    /// <summary>Why one of <paramref name="carried"/> is no longer its task's current result in the history of <paramref name="all"/>, or null.</summary>
+    private static RunRejection? CarriedProblem(ImmutableArray<RunRecord> all, Workflow workflow, ImmutableArray<IncludedResult> carried)
+    {
+        if (carried.IsDefaultOrEmpty) return null;
+        var history = RunHistory.Of(all, workflow);
+        foreach (var item in carried)
+        {
+            if (item.Result.Origin is not ResultOrigin.Carried origin || history.CurrentOf(item.Result.Task) is not { } current ||
+                current.Run.Id != origin.Run || current.Result.Id != origin.Result)
+                return new(RunProblem.StaleInput, Task: item.Result.Task);
+        }
+        return null;
+    }
 
     /// <summary>The result an approval records for <paramref name="inclusion"/>, or why it cannot. Null for an unknown task.</summary>
     private (IncludedResult? Result, RunRejection? Rejection)? Include(ApprovedRevision revision, RunBase codeBase, ReportInclusion inclusion,
@@ -932,18 +994,30 @@ internal sealed partial class RunStore
     /// <see cref="RunProblem.MissingDependencyResult"/> naming the first one without. A task that the run can already
     /// start, or a repeat, records nothing more.
     /// </summary>
-    public RunDecision Request(CoordinatorPermit permit, OperationId operation, TaskId task) =>
-        Transact(permit, operation, Fingerprint("request", new
+    /// <param name="carried">
+    /// The results of earlier runs that the tasks it adds need (#90), built and kept by <see cref="Carrying"/>. Each must
+    /// still be its task's current result in the workflow's history.
+    /// </param>
+    public RunDecision Request(CoordinatorPermit permit, OperationId operation, TaskId task, ImmutableArray<IncludedResult> carried = default) =>
+        Transact(permit, operation, carried.IsDefaultOrEmpty ? Fingerprint("request", new
         {
             task
-        }), (record, _) =>
+        }) : Fingerprint("request", new
+        {
+            task,
+            carried
+        }), (record, all) =>
         {
             if (record is null) return Missing();
             if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
             if (!record.Revision.Snapshot.Tasks.ContainsKey(task)) return new Mutation.Rejected(new(RunProblem.IdentityMismatch, Task: task));
             if (RunScope.InFlow(record).Contains(task)) return new Mutation.Existing(new RunEvent.Requested(task));
-            if (RunScope.Missing(record, task) is { } missing) return new Mutation.Rejected(new(RunProblem.MissingDependencyResult, Task: missing));
-            return new Mutation.Append(new RunEvent.Requested(task));
+            if (record.Results.Any(result => result.Task == task)) return new Mutation.Rejected(new(RunProblem.StartConflict, Task: task));
+            if (CarriedProblem(all, record.Revision.Snapshot, carried) is { } stale) return new Mutation.Rejected(stale);
+            var widened = record;
+            foreach (var item in carried.IsDefault ? [] : carried) widened = RunReducer.WithCarried(widened, item);
+            if (RunScope.Missing(widened, task) is { } missing) return new Mutation.Rejected(new(RunProblem.MissingDependencyResult, Task: missing));
+            return new Mutation.Append(new RunEvent.Requested(task) { Carried = carried.IsDefaultOrEmpty ? null : carried });
         });
 
     public RunDecision Settle(CoordinatorPermit permit, OperationId operation, RunOutcome outcome) =>

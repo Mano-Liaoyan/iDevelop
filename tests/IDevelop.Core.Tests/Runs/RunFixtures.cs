@@ -171,7 +171,7 @@ internal sealed class RunFixtures : IDisposable
     public void Claim(RunEvent.Reserved reservation, RunId? run = null, RunLease? lease = null)
     {
         Prepare(reservation, run);
-        Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
+        Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task, run), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
     }
 
     public LogCheckpoint WriteLog(RunEvent.Reserved reservation, TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded,

@@ -141,8 +141,15 @@ internal sealed class ApprovalIntents
     /// </summary>
     public void Remove(RunId run, GitRepository? repository)
     {
-        if (repository is not null) ApprovalPin.Release(repository, run);
+        if (repository is not null)
+        {
+            ApprovalPin.Release(repository, run);
+            Carrying.Release(repository, run);
+        }
         var folder = Path.Combine(_folder, run.ToString());
+        // The artifacts it copied for the results it would have carried (#90) go with it; a run with a journal keeps them.
+        var copied = Path.Combine(folder, "results");
+        if (!File.Exists(Path.Combine(folder, "events.jsonl")) && Directory.Exists(copied)) Directory.Delete(copied, recursive: true);
         File.Delete(Path.Combine(folder, FileName));
         if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);
     }

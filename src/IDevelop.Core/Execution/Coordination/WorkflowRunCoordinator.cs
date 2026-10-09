@@ -130,12 +130,47 @@ internal sealed partial class WorkflowRunCoordinator
     /// a busy refusal adds it once, and a reopened run starts it after Resume. A task with a dependency predecessor that has
     /// no current result is refused with <see cref="RunProblem.MissingDependencyResult"/>, which names that predecessor.
     /// </summary>
-    public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, _ =>
-        _store.Request(_permit!, RunOperations.Request(confirmation, task), task) switch
+    /// <remarks>
+    /// A dependency predecessor of the tasks it adds that the run cannot start and has no result of counts when an earlier
+    /// run left it a current result: the request carries that result, replayed onto the run's base, as a node's approval
+    /// does. One whose code conflicts with the base is not carried, so the task is refused for it.
+    /// </remarks>
+    public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, record =>
+    {
+        var operation = RunOperations.Request(confirmation, task);
+        ImmutableArray<IncludedResult> carried = [];
+        if (record.Requested is { } nodes && record.Phase == RunPhase.Approved && !record.Receipts.ContainsKey(operation) &&
+            !RunScope.InFlow(record).Contains(task) && !record.Results.Any(result => result.Task == task))
+        {
+            switch (Carry(record with { Requested = nodes.Add(task) }, operation))
+            {
+                case (var built, null): carried = built; break;
+                case (_, { } problem): return new RunCommand.Refused(problem);
+            }
+        }
+        return _store.Request(_permit!, operation, task, carried) switch
         {
             RunDecision.Rejected rejected => new RunCommand.Refused(rejected.Reason),
             _ => Accepted,
-        }, wait);
+        };
+    }, wait);
+
+    /// <summary>The results of earlier runs <paramref name="widened"/> needs, built, kept, and copied for the request <paramref name="operation"/> (#90).</summary>
+    private (ImmutableArray<IncludedResult> Carried, RunRejection? Problem) Carry(RunRecord widened, OperationId operation)
+    {
+        if (Carrying.Needed(widened).IsEmpty) return ([], null);
+        try
+        {
+            if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is not RepositoryOpen.Opened opened)
+                return ([], new(RunProblem.StorageUnavailable));
+            var history = RunHistory.Of(_store.Records(Address.Workflow), widened.Revision.Snapshot);
+            var build = Carrying.Build(opened.Repository, widened, history, operation, preview: false);
+            if (build.Carried.IsEmpty) return ([], null);
+            return Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is null
+                ? (build.Carried, null) : ([], new(RunProblem.StorageUnavailable));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return ([], new(RunProblem.StorageUnavailable)); }
+    }
 
     /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
     public void Refresh() => Post(() => { });

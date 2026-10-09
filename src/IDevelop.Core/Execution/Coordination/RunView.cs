@@ -135,6 +135,9 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>The task's current result carries code of its own, which a rebase can replay. A report does not.</summary>
     public bool CarriesCode { get; init; }
+
+    /// <summary>The task's current result comes from an earlier run, which this run carried instead of running the task (#90).</summary>
+    public bool Carried { get; init; }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
