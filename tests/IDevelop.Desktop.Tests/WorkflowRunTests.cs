@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -147,7 +148,7 @@ public sealed class WorkflowRunTests
         shell.Click(shell.Header(shell.Node("A")));
 
         Assert.Equal("Running", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run.", shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run."), shell.Text("RunOwner"));
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Assert.False(shell.Find<Button>("CancelRun").IsEffectivelyVisible);
         Assert.False(shell.Find<TextBlock>("StartProblem").IsEffectivelyVisible);
@@ -155,7 +156,7 @@ public sealed class WorkflowRunTests
 
         f.Open("a");
         shell.WaitForStatus("Completed");
-        Assert.Equal("A run of the \"Workflow\" workflow ran this task last.", shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow ran this task last."), shell.Text("RunOwner"));
         Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
         shell.Click(shell.InView<Button>("RunTask"));
 

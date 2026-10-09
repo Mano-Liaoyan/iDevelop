@@ -209,8 +209,10 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
             case RunStatus.Stopped:
                 return "Stopped. Finished work stays.";
             case RunStatus.Completed:
-                // A run that a node's Run started completes once nothing more can start, which can leave tasks it never ran (#90).
-                return tasks.All(task => task.State == TaskState.Done) ? "Every task has a current result." : "Every task it ran has a current result.";
+                // A run that a node's Run started completes once nothing more can start, which can leave tasks of the run
+                // that wait for a task nobody ran, and tasks it never reached (#90).
+                return WorkflowRunText.StillWaiting(tasks, _title)
+                    ?? (tasks.All(task => task.State == TaskState.Done) ? "Every task has a current result." : "Every task it ran has a current result.");
         }
 
         if (WorkflowRunText.Working(tasks, _title) is { } working)

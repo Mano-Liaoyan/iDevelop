@@ -14,7 +14,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
+        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
         nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
@@ -46,7 +46,7 @@ public sealed partial class TaskNodeViewModel
     public bool JoinsRun => IsRunOwned && RunTask is { State: TaskState.Unrequested } && _canvas.Run is { View.Phase: RunPhase.Approved };
 
     /// <summary>Which run owns the task, or ran it last, while the inspector shows the run's state.</summary>
-    public string? RunOwner => ShowsRunState ? RunOwnedProblem : null;
+    public string? RunOwner => ShowsRunState ? WorkflowRunText.Unbroken(RunOwnedProblem) : null;
 
     /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval".</summary>
     public string? RunStatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : null;
@@ -54,8 +54,8 @@ public sealed partial class TaskNodeViewModel
     public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
-    public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
-        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null;
+    public string? RunDetail => WorkflowRunText.Unbroken(RunFix is { } fix ? FixDetail(fix)
+        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null);
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
     public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
