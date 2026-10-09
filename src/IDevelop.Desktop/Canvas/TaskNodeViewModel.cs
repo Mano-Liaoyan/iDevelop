@@ -220,6 +220,12 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     public string AgentLabel => RunText.AgentLabel(_task.Execution, Status);
 
+    /// <summary>The card's first agent line: the client, or "No agent".</summary>
+    public string AgentClient => RunText.AgentLines(_task.Execution, Status).Client;
+
+    /// <summary>The card's second line in every state: the model and its level, or empty while the task names neither.</summary>
+    public string AgentModel => RunText.AgentLines(_task.Execution, Status).Model ?? "";
+
     public IReadOnlyList<ClientChoice> ClientChoices =>
         [new(Id, null, "None"), .. Clients.All.Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _canvas.Clients.Current[id])))];
 
