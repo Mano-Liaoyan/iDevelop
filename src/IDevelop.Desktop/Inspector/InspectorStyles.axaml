@@ -6,7 +6,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:execution="using:IDevelop.Desktop.Execution"
-        xmlns:inspector="using:IDevelop.Desktop.Inspector">
+        xmlns:inspector="using:IDevelop.Desktop.Inspector"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
 
   <Style Selector="Border.inspectorHeader">
     <Setter Property="Padding" Value="12,12,12,8" />
@@ -21,14 +22,15 @@
     <Setter Property="MinHeight" Value="28" />
     <Setter Property="Padding" Value="5,3" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- The title as text, at the box's border and padding, so it ends in an ellipsis where the box would clip. The box sits
-       6 px before the column, so the text starts where a connection's or a workflow's name starts. -->
+  <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
+       before the column, so the text starts where a connection's or a workflow's name starts. -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Margin" Value="6,0" />
   </Style>
@@ -42,13 +44,19 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.headerName">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <!-- A header's tile centres on a one-line title and its kind line, and stays there when a long title wraps. -->
+  <Style Selector="theme|KindTile.headerTile, Border.headerTile">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,7,0,0" />
   </Style>
   <!-- A tile for what has no kind, such as a connection or the workflow: neutral, so it never reads as a node kind. -->
   <Style Selector="Border.neutralTile">
@@ -177,11 +185,12 @@
   </Style>
 
   <!-- The label's look comes before the row styles that move it, which a later style of the same weight would undo. -->
+  <!-- A label too long for its column wraps rather than losing its end. -->
   <Style Selector="TextBlock.rowLabel">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Margin" Value="0,0,8,0" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
@@ -201,7 +210,7 @@
                               AutomationProperties.AccessibilityView="Raw"
                               IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </Panel>
-          <Panel Name="PART_LabelLine" Grid.Column="2" VerticalAlignment="Top" Height="{x:Static inspector:InspectorGrid.LineHeight}">
+          <Panel Name="PART_LabelLine" Grid.Column="2" VerticalAlignment="Top" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}">
             <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
           </Panel>
           <ContentPresenter Name="PART_ContentPresenter" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -248,7 +257,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LabelLine">
     <Setter Property="Grid.ColumnSpan" Value="2" />
-    <Setter Property="Height" Value="24" />
+    <Setter Property="MinHeight" Value="24" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label">
     <Setter Property="VerticalAlignment" Value="Bottom" />
@@ -260,20 +269,20 @@
     <Setter Property="Grid.ColumnSpan" Value="4" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
-  <!-- Text and buttons without a label have no edge of their own, so they take the trailing column too. A box without a
-       label ends at the value edge like any other box. -->
+  <!-- Content without a label, such as a paragraph or a box, ends at the value edge like any other value. Only a row of
+       buttons takes the trailing column too, since buttons are actions and the actions end at the panel's inset. -->
   <Style Selector="inspector|InspectorRow:full /template/ Panel#PART_LeadLine, inspector|InspectorRow:full /template/ Panel#PART_LabelLine, inspector|InspectorRow:full /template/ StackPanel#PART_Trail,
-                   inspector|InspectorRow:box /template/ Panel#PART_LeadLine, inspector|InspectorRow:box /template/ Panel#PART_LabelLine, inspector|InspectorRow:box /template/ StackPanel#PART_Trail">
+                   inspector|InspectorRow:buttons /template/ Panel#PART_LeadLine, inspector|InspectorRow:buttons /template/ Panel#PART_LabelLine, inspector|InspectorRow:buttons /template/ StackPanel#PART_Trail">
     <Setter Property="IsVisible" Value="False" />
   </Style>
   <Style Selector="inspector|InspectorRow:full /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Column" Value="0" />
-    <Setter Property="Grid.ColumnSpan" Value="5" />
+    <Setter Property="Grid.ColumnSpan" Value="4" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
-  <Style Selector="inspector|InspectorRow:box /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="inspector|InspectorRow:buttons /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Column" Value="0" />
-    <Setter Property="Grid.ColumnSpan" Value="4" />
+    <Setter Property="Grid.ColumnSpan" Value="5" />
     <Setter Property="MinHeight" Value="0" />
   </Style>
   <Style Selector="inspector|InspectorRow:title /template/ Panel#PART_LabelLine">
@@ -281,11 +290,6 @@
   </Style>
   <Style Selector="inspector|InspectorRow:title /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="IsVisible" Value="False" />
-  </Style>
-  <!-- A paragraph keeps a readable measure, about 70 characters, however wide the panel grows. -->
-  <Style Selector="inspector|InspectorRow TextBlock[TextWrapping=Wrap]">
-    <Setter Property="MaxWidth" Value="440" />
-    <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
   <!-- An entry, such as a kind in the overview or a blueprint in the library, names a thing rather than a property. -->
   <Style Selector="inspector|InspectorRow.entry /template/ TextBlock#PART_Label">
@@ -303,14 +307,13 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- A one-line note, short enough to show whole, whose tooltip holds the full text where a paragraph used to be. -->
+  <!-- A short note, whose tooltip holds the full text where a paragraph used to be. It wraps rather than losing its end. -->
   <Style Selector="TextBlock.note">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow CheckBox">
@@ -322,6 +325,15 @@
   </Style>
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />
+  </Style>
+  <!-- A status in a row wraps rather than losing its end, such as which tasks a pending task waits for. -->
+  <Style Selector="inspector|InspectorRow Border.pill">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="8,3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow Border.pill TextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <!-- A row's buttons are a picker's height, with the side padding of a small button, so two of them share a line in the narrowest panel. -->
   <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
@@ -359,9 +371,10 @@
     <Setter Property="ItemSpacing" Value="4" />
     <Setter Property="LineSpacing" Value="4" />
   </Style>
+  <!-- A chip grows to a second line rather than losing the end of a long name. -->
   <Style Selector="Border.chip">
-    <Setter Property="Height" Value="22" />
-    <Setter Property="Padding" Value="7,0" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="7,3" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
@@ -369,7 +382,7 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <!-- A disclosure: a chevron and a count that show or hide detail most people never need. -->
@@ -406,7 +419,7 @@
   <Style Selector="TextBlock.activity">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.activity.tool">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
@@ -423,7 +436,7 @@
   <Style Selector="TextBlock.itemTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="TextBlock.groupHeading">

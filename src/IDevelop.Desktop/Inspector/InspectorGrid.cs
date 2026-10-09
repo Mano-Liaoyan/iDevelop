@@ -21,14 +21,15 @@ public sealed class InspectorGrid : Grid
     public const double LineHeight = 28;
 
     /// <summary>
-    /// The inspector width under which every value moves under its label: the 320 px default. Narrower, the value column
-    /// would clip a picker's choice.
+    /// The inspector width under which every value moves under its label, the 320 px default among them. From this width
+    /// the value column holds a picker showing the longest model name a client offers, Pi's "DeepSeek V4.1 Flash
+    /// (deepseek)", about 190 px of text and 44 px of the picker's own, with room to spare for another platform's font.
     /// </summary>
-    public const double NarrowPanelWidth = 320;
+    public const double NarrowPanelWidth = 440;
 
     /// <summary>
     /// Whether the inspector is narrower than <see cref="NarrowPanelWidth"/>, so every row puts its value under its label.
-    /// The panel sets it and its rows inherit it, so they switch together, even a row inside a card.
+    /// The panel sets it and its rows inherit it, so they switch together, even a row inside a group.
     /// </summary>
     public static readonly AttachedProperty<bool> IsNarrowProperty =
         AvaloniaProperty.RegisterAttached<InspectorGrid, Control, bool>("IsNarrow", inherits: true);

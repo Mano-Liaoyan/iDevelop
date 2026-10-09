@@ -24,7 +24,7 @@ internal sealed partial class Shell
 
     /// <summary>The labels of the labelled rows the inspector shows now, in order.</summary>
     public string[] ShownRows() =>
-        [.. Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Box)).Select(row => row.Label ?? "")];
+        [.. Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons)).Select(row => row.Label ?? "")];
 
     private Button SectionHeader(string key) => Section(key).GetVisualDescendants().OfType<Button>().First(button => button.Name == "PART_Header");
 

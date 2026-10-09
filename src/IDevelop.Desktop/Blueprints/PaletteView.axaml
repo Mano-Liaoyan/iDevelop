@@ -86,7 +86,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </inspector:InspectorRow>
-    <inspector:InspectorRow Layout="Full">
+    <inspector:InspectorRow Layout="Buttons">
       <Button Classes="ghost" HorizontalAlignment="Left" Height="28" Margin="-8,4,0,0" Command="{Binding ReloadCommand}"
               ToolTip.Tip="Read the project and personal libraries again"
               AutomationProperties.AutomationId="ReloadBlueprints"

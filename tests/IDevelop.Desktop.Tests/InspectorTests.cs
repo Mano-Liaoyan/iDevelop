@@ -220,7 +220,8 @@ public sealed class InspectorTests : IDisposable
 
         Assert.Equal("Succeeded", shell.Find<TextBlock>("LastRunStatus").Text);
         var agent = shell.InView<ItemsControl>("LastRunConfiguration");
-        Assert.Equal(["Codex", "gpt-5.5", "high"], Shell.Texts(agent));
+        // The chips name the model as its picker does.
+        Assert.Equal(["Codex", "GPT-5.5", "high"], Shell.Texts(agent));
         Assert.Equal("Requested Codex · gpt-5.5 · high.", ToolTip.GetTip(agent));
         var time = shell.Find<Control>("LastRunTiming");
         Assert.Matches(@"^Just now \d+ s$", Shell.TextOf(time));
@@ -447,7 +448,7 @@ public sealed class InspectorTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_long_title_ends_in_an_ellipsis_until_its_box_has_focus()
+    public void A_long_title_wraps_as_its_box_wraps_it_once_the_box_has_focus()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Add CSV export to the reports page with tests for quoting", 105, 90)));
         shell.Click(shell.Header(shell.Node("Add CSV export to the reports page with tests for quoting")));
@@ -456,13 +457,16 @@ public sealed class InspectorTests : IDisposable
         var typed = box.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.TextPresenter>().Single();
 
         Assert.True(shown.IsEffectivelyVisible);
-        Assert.True(shown.TextLayout.TextLines.Any(line => line.HasCollapsed), "The title ends in an ellipsis.");
+        Assert.DoesNotContain(shown.TextLayout.TextLines, line => line.HasCollapsed);
+        Assert.True(shown.TextLayout.TextLines.Count > 1, "The title wraps.");
+        Assert.Equal(shown.TextLayout.TextLines.Count, typed.TextLayout.TextLines.Count);
         Assert.Equal(0, typed.Opacity);
         Assert.Equal(shell.Bounds(typed).X, shell.Bounds(shown).X, 0.5);
         Assert.Equal(shell.Center(typed).Y, shell.Center(shown).Y, 0.5);
 
         shell.Click(box);
-        shell.Press(Key.End);
+        // The title wraps, so End would stop at the end of its first line.
+        shell.Press(Key.End, RawInputModifiers.Control);
 
         Assert.False(shown.IsEffectivelyVisible);
         Assert.Equal(1, typed.Opacity);

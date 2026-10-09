@@ -13,6 +13,11 @@
   <UserControl.Styles>
     <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
   </UserControl.Styles>
+  <UserControl.Resources>
+    <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
+         buttons, and the rows never move for it. -->
+    <x:Double x:Key="ScrollBarSize">10</x:Double>
+  </UserControl.Resources>
   <Panel>
     <!-- The blueprint editor takes the panel while it is open. Its sections fold apart from the inspector's. -->
     <ScrollViewer x:Name="EditorHost" IsVisible="{Binding Blueprints.Editor, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -39,9 +44,15 @@
           <DataTemplate DataType="canvas:TaskNodeViewModel">
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
-                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" RowDefinitions="28,18" ColumnSpacing="10">
-                  <theme:KindTile Grid.RowSpan="2" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
-                  <!-- A text box cannot end in an ellipsis, so until it has focus a text block over it shows the title. -->
+                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" MinHeight="28" />
+                    <RowDefinition Height="Auto" MinHeight="18" />
+                  </Grid.RowDefinitions>
+                  <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
+                  <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
+                       reads as a title rather than a field. -->
                   <Panel Grid.Column="1" Classes="headerTitle" Margin="-6,0,0,0">
                     <TextBox Classes="headerTitle" Text="{Binding Title}"
                              AutomationProperties.AutomationId="TaskTitle"
@@ -49,9 +60,10 @@
                     <TextBlock Classes="headerTitle" Text="{Binding Title}" IsHitTestVisible="False"
                                AutomationProperties.AccessibilityView="Raw" />
                   </Panel>
-                  <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
-                              AutomationProperties.AutomationId="InspectorKind">
-                    <TextBlock Classes="kindLine" Text="{Binding TypeName}" MaxWidth="140" TextTrimming="CharacterEllipsis"
+                  <!-- The kind line wraps between its parts, and a long blueprint name wraps within its own. -->
+                  <WrapPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                             AutomationProperties.AutomationId="InspectorKind">
+                    <TextBlock Classes="kindLine" Text="{Binding TypeName}"
                                AutomationProperties.AutomationId="TaskType" />
                     <TextBlock Classes="kindLine" Text=" · " />
                     <TextBlock Classes="kindLine" Text="{Binding TypeVersion}"
@@ -60,7 +72,7 @@
                             IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconHelp}" />
                     </Border>
-                  </StackPanel>
+                  </WrapPanel>
                 </Grid>
                 <Button Grid.Column="4" Classes="glyph" ToolTip.Tip="More" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"
                         AutomationProperties.AutomationId="InspectorMore"
@@ -87,8 +99,13 @@
           <DataTemplate DataType="canvas:ConnectionViewModel">
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
-                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" RowDefinitions="28,18" ColumnSpacing="10">
-                  <Border Grid.RowSpan="2" Classes="neutralTile">
+                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" MinHeight="28" />
+                    <RowDefinition Height="Auto" MinHeight="18" />
+                  </Grid.RowDefinitions>
+                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
                   </Border>
                   <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding Kind}" />
@@ -100,8 +117,13 @@
           <DataTemplate DataType="inspector:WorkflowOverviewViewModel">
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
-                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" RowDefinitions="28,18" ColumnSpacing="10">
-                  <Border Grid.RowSpan="2" Classes="neutralTile">
+                <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" MinHeight="28" />
+                    <RowDefinition Height="Auto" MinHeight="18" />
+                  </Grid.RowDefinitions>
+                  <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
                   </Border>
                   <TextBlock Grid.Column="1" Classes="headerName" Text="{Binding Name}" />
@@ -183,7 +205,7 @@
                                   AutomationProperties.Name="Client">
                           <ComboBox.ItemTemplate>
                             <DataTemplate DataType="canvas:ClientChoice">
-                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                             </DataTemplate>
                           </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -195,7 +217,7 @@
                                   AutomationProperties.Name="Model">
                           <ComboBox.ItemTemplate>
                             <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                             </DataTemplate>
                           </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -207,7 +229,7 @@
                                   AutomationProperties.Name="Reasoning">
                           <ComboBox.ItemTemplate>
                             <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                             </DataTemplate>
                           </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -220,7 +242,7 @@
                                   AutomationProperties.Name="Conversation">
                           <ComboBox.ItemTemplate>
                             <DataTemplate DataType="canvas:Choice">
-                              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                             </DataTemplate>
                           </ComboBox.ItemTemplate>
                         </ComboBox>
@@ -240,7 +262,7 @@
                                 Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
                           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
                             <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
-                            <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}" TextTrimming="CharacterEllipsis"
+                            <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}"
                                        AutomationProperties.AutomationId="RunTaskStatus" />
                           </Grid>
                         </Border>
@@ -259,7 +281,7 @@
                         <TextBlock Text="{Binding RunDetail}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                    AutomationProperties.AutomationId="RunTaskDetail" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsCancel}">
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsCancel}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRunControls}"
                                   AutomationProperties.AutomationId="RunTask"
@@ -279,7 +301,7 @@
                           </Button>
                         </StackPanel>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsFixChoice}">
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsFixChoice}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <Button Classes="primary" Command="{Binding ContinueFixCommand}"
                                   AutomationProperties.AutomationId="ContinueFix"
@@ -309,7 +331,7 @@
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StartProblem}" Background="Transparent">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
                                     VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap"
                                      FontSize="12" Foreground="{DynamicResource TextBrush}"
                                      AutomationProperties.AutomationId="StartProblem" />
                         </Grid>
@@ -401,7 +423,7 @@
                                   <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
                                 </Border.Styles>
                                 <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled">
-                                  <conversation:MarkdownView Markdown="{Binding Report}"
+                                  <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
                                                              AutomationProperties.AutomationId="GateReport"
                                                              AutomationProperties.Name="What approving hands on" />
                                 </ScrollViewer>
@@ -412,13 +434,13 @@
                                          Foreground="{DynamicResource TextBrush}"
                                          AutomationProperties.AutomationId="GateSentBackReason" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Box" IsShown="{Binding IsWaiting}">
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsWaiting}">
                               <TextBox Text="{Binding Reason}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
                                        Watermark="Why send it back? The reason stays with the request."
                                        AutomationProperties.AutomationId="GateReason"
                                        AutomationProperties.Name="Reason to send back" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsWaiting}">
+                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding IsWaiting}">
                               <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Classes="primary" Command="{Binding ApproveCommand}"
                                         AutomationProperties.AutomationId="ApproveGate"
@@ -521,7 +543,7 @@
                               <TextBlock Text="{Binding CapturesText}" TextWrapping="Wrap" FontSize="13"
                                          Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryCaptures" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Box" IsShown="{Binding CapturePaths, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CapturePaths, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBox Text="{Binding CapturePaths, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
                                        AutomationProperties.AutomationId="RecoveryCapturePaths"
                                        AutomationProperties.Name="Paths in which the captures differ" />
@@ -597,13 +619,13 @@
                                            AutomationProperties.AutomationId="RecoveryStillRuns" />
                               </StackPanel>
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Box" IsShown="{Binding CanClose}">
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CanClose}">
                               <TextBox Text="{Binding Reason}" AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="48"
                                        Watermark="What did you check? For example, that the client no longer runs."
                                        AutomationProperties.AutomationId="RecoveryReason"
                                        AutomationProperties.Name="Why you close the turn" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CanClose}">
+                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding CanClose}">
                               <Button Classes="action" HorizontalAlignment="Left" Command="{Binding CloseCommand}"
                                       AutomationProperties.AutomationId="CloseAsStopped"
                                       AutomationProperties.Name="Close as stopped">
@@ -672,7 +694,7 @@
                               <TextBlock Text="{Binding Candidate}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                          AutomationProperties.AutomationId="RebaseCandidate" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Box">
+                            <inspector:InspectorRow Layout="Full">
                               <inspector:InspectorRow.IsShown>
                                 <MultiBinding Converter="{x:Static BoolConverters.And}">
                                   <Binding Path="HasPreview" />
@@ -683,7 +705,7 @@
                                        AutomationProperties.AutomationId="RebaseCandidatePaths"
                                        AutomationProperties.Name="Files the rebase changes" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding HasPreview}">
+                            <inspector:InspectorRow Layout="Buttons" IsShown="{Binding HasPreview}">
                               <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Classes="primary" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
                                         AutomationProperties.AutomationId="ApproveRebase"
@@ -779,7 +801,7 @@
                         </ContentControl.ContentTemplate>
                       </ContentControl>
                       <!-- A waiting Chat planner ends its conversation by accepting, so Accept and Finish leads there. -->
-                      <inspector:InspectorRow Layout="Full">
+                      <inspector:InspectorRow Layout="Buttons">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="primary" Command="{Binding AcceptAndFinishCommand}" IsVisible="{Binding ShowsAcceptAndFinish}"
                                   ToolTip.Tip="Adds and fills the chosen tasks, then marks the planner done"
@@ -809,7 +831,7 @@
                   </inspector:InspectorSection>
 
                   <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                    <inspector:InspectorRow Layout="Box">
+                    <inspector:InspectorRow Layout="Full">
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
                         <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
@@ -844,7 +866,7 @@
 
                   <inspector:InspectorSection Key="Conversation" Title="{Binding ComposerSectionTitle}" TitleId="ComposerHeading">
                     <StackPanel>
-                      <inspector:InspectorRow Layout="Full">
+                      <inspector:InspectorRow Layout="Buttons">
                         <Button Classes="action" Command="{Binding OpenConversationCommand}"
                                 ToolTip.Tip="{Binding AttentionLabel, FallbackValue='Open the full conversation'}"
                                 AutomationProperties.AutomationId="OpenConversation"
@@ -858,7 +880,7 @@
                       <ContentControl Content="{Binding LastRun}">
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="execution:AttemptViewModel">
-                            <inspector:InspectorRow Layout="Box">
+                            <inspector:InspectorRow Layout="Full">
                               <StackPanel Spacing="8">
                                 <ItemsControl ItemsSource="{Binding Conversation}"
                                               AutomationProperties.AutomationId="Conversation"
@@ -957,7 +979,7 @@
                                      AutomationProperties.AutomationId="PendingQuestion" />
                         </StackPanel>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Box" IsShown="{Binding !IsRunOwned}">
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsRunOwned}">
                         <!-- Ctrl+Enter sends, so Enter stays a line break in the message. -->
                         <TextBox Text="{Binding Draft}"
                                  AcceptsReturn="True" TextWrapping="Wrap" NewLine="&#10;" MinHeight="64"
@@ -969,7 +991,7 @@
                           </TextBox.KeyBindings>
                         </TextBox>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding !IsRunOwned}">
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding !IsRunOwned}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="action" Command="{Binding SendCommand}"
                                   AutomationProperties.AutomationId="SendMessage"
@@ -1060,7 +1082,7 @@
                       <inspector:InspectorRow Label="Description" Layout="Stacked" Icon="{StaticResource IconDescription}" IsShown="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock Classes="value" Text="{Binding Description}" TextWrapping="Wrap" />
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full">
+                      <inspector:InspectorRow Layout="Buttons">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" Margin="0,4,0,0">
                           <Button Classes="action" Command="{Binding DeriveCommand}"
                                   ToolTip.Tip="A new blueprint with this type's fields and template"
@@ -1139,7 +1161,7 @@
                         </UniformGrid>
                       </Border>
                     </inspector:InspectorRow>
-                    <inspector:InspectorRow Layout="Full">
+                    <inspector:InspectorRow Layout="Buttons">
                       <Button Classes="destructive" Command="{Binding DeleteCommand}" Margin="0,6,0,0"
                               AutomationProperties.AutomationId="DeleteConnection"
                               AutomationProperties.Name="Delete Connection">
@@ -1179,9 +1201,10 @@
               </DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>
-          <!-- Outside the swapped content, so the hint stays in the tree, hidden, while something is selected. -->
-          <TextBlock Text="Select a task or connection to edit it." Margin="0,4,0,0"
-                     TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
+          <!-- Outside the swapped content, so the hint stays in the tree, hidden, while something is selected. It ends at the
+               value edge, before the trailing column, as every other paragraph does. -->
+          <TextBlock Text="Select a task or connection to edit it." Margin="0,4,52,0"
+                     TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
                      IsVisible="{Binding Inspected, Converter={x:Static ObjectConverters.IsNull}}"
                      AutomationProperties.AutomationId="InspectorHint" />
         </StackPanel>

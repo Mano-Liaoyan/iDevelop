@@ -22,13 +22,13 @@ public enum RowLayout
     Stacked,
 
     /// <summary>
-    /// No label shown. Text or buttons from the glyph column to the panel's inset, since they have no edge of their own,
-    /// and the label, if any, only matches the filter.
+    /// No label shown. Content, such as a paragraph or a message composer, from the glyph column to the value edge, and the
+    /// label, if any, only matches the filter.
     /// </summary>
     Full,
 
-    /// <summary>No label shown. A box, such as a message composer, from the glyph column to the value edge.</summary>
-    Box,
+    /// <summary>No label shown. A row of buttons from the glyph column to the panel's inset, where the other actions end.</summary>
+    Buttons,
 
     /// <summary>The label alone across the label and value columns, as a list entry such as a blueprint, with its actions or count after it.</summary>
     Title,
@@ -193,7 +193,7 @@ public sealed class InspectorRow : InspectorPart
         var narrow = InspectorGrid.GetIsNarrow(this);
         PseudoClasses.Set(":stacked", Layout == RowLayout.Stacked || Layout == RowLayout.Columns && narrow);
         PseudoClasses.Set(":full", Layout == RowLayout.Full);
-        PseudoClasses.Set(":box", Layout == RowLayout.Box);
+        PseudoClasses.Set(":buttons", Layout == RowLayout.Buttons);
         PseudoClasses.Set(":title", Layout == RowLayout.Title);
     }
 }

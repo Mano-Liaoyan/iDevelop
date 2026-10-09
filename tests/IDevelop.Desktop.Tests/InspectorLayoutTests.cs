@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -19,7 +20,8 @@ namespace IDevelop.Desktop.Tests;
 /// <summary>
 /// The inspector's shared columns: every view ends its glyph buttons and counts at the panel's 12 px inset and its boxes
 /// 64 px from the panel's edge, keeps one label column at every width, centres each row on a 28 px first line, and in an
-/// inspector narrower than 320 px puts every value under its label.
+/// inspector narrower than 440 px, where the longest model names would not fit beside their labels, puts every value under
+/// its label. No text is cut short.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class InspectorLayoutTests : IDisposable
@@ -67,9 +69,10 @@ public sealed class InspectorLayoutTests : IDisposable
 
     [AvaloniaTheory]
     [InlineData(280, true)]
-    [InlineData(320, false)]
+    [InlineData(320, true)]
+    [InlineData(440, false)]
     [InlineData(520, false)]
-    public void A_picker_sits_under_its_label_only_in_an_inspector_narrower_than_320(double width, bool under)
+    public void A_picker_sits_under_its_label_only_in_an_inspector_narrower_than_440(double width, bool under)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
         shell.SizeInspector(width);
@@ -121,7 +124,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Box)).ToArray();
+            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons)).ToArray();
 
         Assert.Equal(
             ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Conversation", "Type", "Version", "Description"],
@@ -172,6 +175,7 @@ public sealed class InspectorLayoutTests : IDisposable
     public void Kinds_blueprints_and_short_values_share_one_line_height()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        shell.SizeInspector(520);
 
         var entries = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row.IsEffectivelyVisible && row.Classes.Contains("entry")).ToArray();
@@ -188,10 +192,10 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(320)]
-    [InlineData(400)]
+    [InlineData(440)]
+    [InlineData(480)]
     [InlineData(520)]
-    public void Labels_and_values_keep_one_column_each_at_every_width_from_320(double width)
+    public void Labels_and_values_keep_one_column_each_at_every_width_from_440(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
@@ -207,12 +211,14 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal("labels at 36, values at 124", Columns(shell));
     }
 
-    [AvaloniaFact]
-    public void Under_320_every_labelled_value_sits_under_its_label_from_the_content_edge_to_the_value_edge()
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    public void Under_440_every_labelled_value_sits_under_its_label_from_the_content_edge_to_the_value_edge(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
-        shell.SizeInspector(280);
+        shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
         AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Conversation", "Type", "Version", "Description"]);
@@ -223,7 +229,7 @@ public sealed class InspectorLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(320)]
+    [InlineData(440)]
     [InlineData(520)]
     public void A_row_centres_its_glyph_label_value_and_buttons_on_its_first_line(double width)
     {
@@ -301,7 +307,7 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
-    public void Text_and_buttons_without_a_label_reach_the_action_edge_and_boxes_stop_at_the_value_edge(double width)
+    public void Text_and_boxes_without_a_label_end_at_the_value_edge_and_only_rows_of_buttons_reach_the_action_edge(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90)));
         shell.SizeInspector(width);
@@ -309,21 +315,138 @@ public sealed class InspectorLayoutTests : IDisposable
         var right = shell.Bounds(shell.Find<Control>("Inspector")).Right;
 
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>().Where(row => row.IsEffectivelyVisible).ToArray();
-        var text = rows.Where(row => row.Layout == RowLayout.Full).Select(Presenter).ToArray();
-        var boxes = rows.Where(row => row.Layout == RowLayout.Box).Select(Presenter).ToArray();
-        Assert.NotEmpty(text);
-        Assert.All(text, presenter => Assert.Equal(right - Inset, shell.Bounds(presenter).Right, 0.5));
-        Assert.Contains(shell.Find<TextBox>("Composer").FindAncestorOfType<InspectorRow>(), rows.Where(row => row.Layout == RowLayout.Box));
-        Assert.All(boxes, presenter => Assert.Equal(right - Inset - InspectorGrid.TrailWidth, shell.Bounds(presenter).Right, 0.5));
+        var full = rows.Where(row => row.Layout == RowLayout.Full).ToArray();
+        var buttons = rows.Where(row => row.Layout == RowLayout.Buttons).ToArray();
+        Assert.Contains(shell.Find<TextBlock>("SendProblem").FindAncestorOfType<InspectorRow>(), full);
+        Assert.Contains(shell.Find<TextBox>("Composer").FindAncestorOfType<InspectorRow>(), full);
+        Assert.Contains(shell.Find<Button>("DeriveTaskType").FindAncestorOfType<InspectorRow>(), buttons);
+        Assert.All(full, row => Assert.Equal(right - Inset - InspectorGrid.TrailWidth, shell.Bounds(Presenter(row)).Right, 0.5));
+        Assert.All(buttons, row => Assert.Equal(right - Inset, shell.Bounds(Presenter(row)).Right, 0.5));
+        Assert.All(full.SelectMany(row => row.GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible),
+            text => Assert.True(shell.Bounds(text).Right <= right - Inset - InspectorGrid.TrailWidth + 0.5, $"\"{text.Text}\" ends at {shell.Bounds(text).Right}."));
 
         // The two blueprint buttons share a line even in the narrowest panel.
         var (derive, save) = (shell.Find<Button>("DeriveTaskType"), shell.Find<Button>("SaveAsBlueprint"));
         Assert.Equal(shell.Bounds(derive).Top, shell.Bounds(save).Top);
     }
 
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void A_long_title_wraps_in_the_header_and_nothing_in_the_task_or_its_connection_is_cut_short(double width)
+    {
+        const string title = "Draft the release notes for the storage adapter and its migration";
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, title, 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
+            new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node(title)));
+
+        var header = shell.Find<Control>("InspectorHeader");
+        var shown = header.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("headerTitle"));
+        Assert.Equal(title, shown.Text);
+        Assert.True(shown.TextLayout.TextLines.Count > 1, "The title wraps.");
+        AssertNothingCutShort(shell);
+        // More stays on the title's first line, at the panel's action edge.
+        var more = shell.Bounds(shell.Find<Button>("InspectorMore"));
+        Assert.Equal(shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset, more.Right, 0.5);
+        Assert.True(more.Top < shell.Bounds(shown).Top + 14, $"More starts at {more.Top}, under the title's first line at {shell.Bounds(shown).Top}.");
+
+        shell.Click(shell.ConnectionInto("Build"));
+
+        AssertNothingCutShort(shell);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(440)]
+    [InlineData(520)]
+    public void The_longest_model_names_of_every_client_show_whole_in_their_pickers_and_chips(double width)
+    {
+        TaskId claude = TaskId.New(), codex = TaskId.New(), pi = TaskId.New(), agy = TaskId.New();
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Codex);
+        Install(_fakes, ClientId.Pi, Fresh(ClientId.Pi).Print(SessionLine(ClientId.Pi, "s1")).Print(ReplyLines(ClientId.Pi, "Done.")));
+        Install(_fakes, ClientId.Antigravity);
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(claude, "Claude", 105, 90, new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-sonnet-5-5", Reasoning = "high" }),
+            TaskAt(codex, "Codex", 105, 190, new ExecutionSettings(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "high" }),
+            TaskAt(pi, "Pi", 105, 290, new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-flash", Reasoning = "high" }, "Reply."),
+            TaskAt(agy, "Antigravity", 105, 390, new ExecutionSettings(ClientId.Antigravity) { Model = "claude-opus-4-6-thinking" })), _fakes.DiscoverAsync().Result);
+        shell.SizeInspector(width);
+
+        foreach (var (title, model) in new[] { ("Claude", "Claude Sonnet 5.5"), ("Codex", "GPT-6.1-Sol"), ("Pi", "DeepSeek V4.1 Flash (deepseek)"), ("Antigravity", "Claude Opus 4.6 (Thinking)") })
+        {
+            shell.Click(shell.Header(shell.Node(title)));
+            Assert.Equal((title, model), (title, shell.Picked("TaskModel")));
+            AssertNothingCutShort(shell);
+        }
+
+        shell.Click(shell.Header(shell.Node("Pi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Pi", "CardStatus") == "Succeeded", "the run succeeds");
+        shell.Render();
+
+        Assert.Equal(["Pi", "DeepSeek V4.1 Flash (deepseek)", "high"], Shell.Texts(shell.InView<ItemsControl>("LastRunConfiguration")));
+        AssertNothingCutShort(shell);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    public void The_activity_wraps_at_the_value_edge(double width)
+    {
+        const string said = "I drafted the release notes. They list the new table, the migration step, and the totals that now match the ledger.";
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, "s1")).Print(ReplyLines(ClientId.Codex, said)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Say hi", 105, 90, Codex, "Reply.")), _fakes.DiscoverAsync().Result);
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.Click(shell.InView<Button>("RunTask"));
+        shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
+        shell.Render();
+
+        var line = shell.InView<ItemsControl>("LastRunActivity").GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.Equal(said, line.Text);
+        Assert.DoesNotContain(line.TextLayout.TextLines, text => text.HasCollapsed);
+        Assert.True(line.TextLayout.TextLines.Count > 1);
+        Assert.True(shell.Bounds(line).Right <= shell.Bounds(shell.Find<Control>("Inspector")).Right - Inset - InspectorGrid.TrailWidth + 0.5);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(520)]
+    public void The_scroll_bar_keeps_to_the_right_inset_so_nothing_sits_under_it(double width)
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex)));
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Click(shell.Find<TextBox>("TaskInstructions"));
+        shell.Type("Write it.");
+        var right = shell.Bounds(shell.Find<Control>("Inspector")).Right;
+
+        // A scroll bar lays out at its expanded width and only draws thinner while collapsed, so its bounds are where it
+        // expands to, and it overlays the content, which never moves for it.
+        var bar = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<ScrollBar>()
+            .Single(scroll => scroll.IsEffectivelyVisible && scroll.Orientation == Avalonia.Layout.Orientation.Vertical);
+        Assert.Equal(right, shell.Bounds(bar).Right, 0.5);
+        Assert.True(shell.Bounds(bar).Left >= right - Inset + 2, $"The bar starts {right - shell.Bounds(bar).Left} px from the edge.");
+        Assert.True(shell.Bounds(shell.Find<Button>("RevertInstructions")).Right <= shell.Bounds(bar).Left - 2);
+    }
+
     private const double Inset = 12;
 
     private static TextBlock Label(InspectorRow row) => row.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Label");
+
+    /// <summary>No text the inspector shows ends in an ellipsis or runs past its box, a picker's choice and a chip included.</summary>
+    private static void AssertNothingCutShort(Shell shell)
+    {
+        var cut = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<TextBlock>()
+            .Where(text => text.IsEffectivelyVisible && text.FindAncestorOfType<TextBox>() is null
+                && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
+            .Select(text => text.Text).ToArray();
+        Assert.Empty(cut);
+    }
 
     private static ContentPresenter Presenter(InspectorRow row) =>
         row.GetVisualDescendants().OfType<ContentPresenter>().First(presenter => presenter.Name == "PART_ContentPresenter");
@@ -349,7 +472,7 @@ public sealed class InspectorLayoutTests : IDisposable
     {
         var inspector = shell.Bounds(shell.Find<Control>("Inspector"));
         var rows = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
-            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Box or RowLayout.Title)).ToArray();
+            .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons or RowLayout.Title)).ToArray();
         Assert.Equal(labels, rows.Select(row => row.Label));
         foreach (var row in rows)
         {
