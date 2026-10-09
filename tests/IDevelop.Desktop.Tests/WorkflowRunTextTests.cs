@@ -174,5 +174,26 @@ public sealed class WorkflowRunTextTests
         Assert.Equal("Runs after \"A\". Run \"A\" first.", WorkflowRunText.RunsAfter([TestTasks.Design], Named));
         Assert.Equal("Runs after \"A\" and \"B\". Run them first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task], Named));
         Assert.Equal("Runs after \"A\" and 2 more. Run them first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task, TestTasks.Review], Named));
+        // Titles read in title order, whatever order the tasks come in.
+        Assert.Equal("Runs after \"A\" and \"B\". Run them first.", WorkflowRunText.RunsAfter([Task, TestTasks.Design], Named));
+    }
+
+    [Fact]
+    public void A_node_run_counts_the_tasks_it_reaches_and_names_what_they_still_wait_for()
+    {
+        string Named(TaskId task) => task == TestTasks.Design ? "Parse input" : task == Task ? "Render view" : "Ship";
+        RunView Completed(params TaskView[] tasks) => new(new("/project", new WorkflowId(Guid.NewGuid()), new RunId(Guid.NewGuid())),
+            RunPhase.Completed, RunStatus.Completed, true, true, 0, tasks.ToImmutableSortedDictionary(task => task.Task, task => task));
+        var parse = new TaskView(TestTasks.Design, TaskState.Done);
+        var render = new TaskView(Task, TaskState.Unrequested) { Dormant = true };
+        var ship = new TaskView(TestTasks.Review, TaskState.Pending) { HeldBy = [Task], Dormant = true };
+
+        // Render view is not part of the run, so the count covers Parse input and Ship.
+        Assert.Equal("1 of 2 done", WorkflowRunText.Progress(Completed(parse, render, ship)));
+        Assert.Equal("\"Ship\" waits for \"Render view\".", WorkflowRunText.StillWaiting([parse, render, ship], Named));
+        Assert.Null(WorkflowRunText.StillWaiting([parse, render], Named));
+        // Run Workflow reaches every task.
+        Assert.Equal("1 of 3 done", WorkflowRunText.Progress(Completed(parse, render with { State = TaskState.Failed }, ship)));
+        Assert.Null(WorkflowRunText.Progress(Completed(render)));
     }
 }

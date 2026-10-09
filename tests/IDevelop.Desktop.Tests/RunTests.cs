@@ -65,7 +65,7 @@ public sealed class RunTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Running_a_task_whose_client_is_not_ready_shows_why_and_launches_nothing()
+    public void A_task_whose_client_is_not_ready_keeps_Run_off_says_why_and_launches_nothing()
     {
         _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
         var folder = _temp.Seed(SayHiTask(new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "high" }));
@@ -73,10 +73,13 @@ public sealed class RunTests : IDisposable
         shell.Click(shell.Header(shell.Node("Say hi")));
         const string reason = "Claude Code is not ready. Claude Code is not signed in. Run claude in a terminal and sign in.";
         Assert.Equal(reason, shell.InView<TextBlock>("StartProblem").Text);
+        var run = shell.InView<Button>("RunTask");
+        Assert.Equal((false, reason), (run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.Click(run);
 
-        Assert.Equal(reason, shell.Status);
+        Assert.Equal("", shell.Status);
+        Assert.Null(shell.Preflight);
         Assert.Equal("Claude Code isn't ready", shell.CardText("Say hi", "CardStatus"));
         Assert.False(Directory.Exists(Path.Combine(folder, ".idp", "attempts")));
     }

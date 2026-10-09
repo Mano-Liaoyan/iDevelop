@@ -94,9 +94,29 @@ internal static class WorkflowRunText
     private const string NoBreakHyphen = "\u2011";
     private const string WordJoiner = "\u2060";
 
-    /// <summary>"2 of 5 done", or null for a run without tasks.</summary>
-    public static string? Progress(RunView view) => view.Tasks.Count == 0 ? null
-        : $"{view.Tasks.Values.Count(task => task.State == TaskState.Done)} of {view.Tasks.Count} done";
+    /// <summary>
+    /// "2 of 5 done" over the tasks the run can reach, or null for a run without any. Run Workflow reaches every task; a run
+    /// that a node's Run started reaches the nodes the person ran and the tasks after them, not a task nobody ran (#90).
+    /// </summary>
+    public static string? Progress(RunView view) => view.Tasks.Values.Count(task => task.State != TaskState.Unrequested) is var reached and > 0
+        ? $"{view.Tasks.Values.Count(task => task.State == TaskState.Done)} of {reached} done"
+        : null;
+
+    /// <summary>
+    /// What a completed run's tasks still wait for: each task of the run that waits for a task nobody ran, as
+    /// "\"Ship\" waits for \"Render view\"", in title order and joined by middle dots. Null when none waits.
+    /// </summary>
+    public static string? StillWaiting(IEnumerable<TaskView> tasks, Func<TaskId, string> title)
+    {
+        var all = tasks.ToDictionary(task => task.Task);
+        string[] waiting = [.. all.Values
+            .Where(task => task.State == TaskState.Pending)
+            .Select(task => (task.Task, Unrun: task.HeldBy.Where(holder => all.GetValueOrDefault(holder) is { State: TaskState.Unrequested }).ToArray()))
+            .Where(task => task.Unrun.Length > 0)
+            .OrderBy(task => title(task.Task), StringComparer.CurrentCultureIgnoreCase).ThenBy(task => task.Task)
+            .Select(task => $"\"{title(task.Task)}\" waits for {Names(task.Unrun, title)}")];
+        return waiting.Length == 0 ? null : string.Join(" · ", waiting) + ".";
+    }
 
     /// <summary>A task of the run as its card shows it: the node state for its ring and glyph, and its subtitle.</summary>
     /// <param name="active">The run is approved or stopping. A task that a settled run never started shows as not started.</param>
@@ -187,6 +207,17 @@ internal static class WorkflowRunText
         1 => $"Runs after {Names(predecessors, title)}. Run {Names(predecessors, title)} first.",
         _ => $"Runs after {Names(predecessors, title)}. Run them first.",
     };
+
+    /// <summary>
+    /// Why a run's approved version of a task keeps it from starting although the document's version could: "This run uses
+    /// "B" as it was when the run started, and it had no agent then. Run it once the run finishes."
+    /// </summary>
+    public static string AsApproved(string title, StartProblem problem) => $"This run uses \"{title}\" as it was when the run started, and " + problem switch
+    {
+        StartProblem.NoAgent => "it had no agent then.",
+        StartProblem.FieldMissing missing => $"its {missing.Label} field was empty then.",
+        _ => "it could not start as it was then.",
+    } + " Run it once the run finishes.";
 
     /// <summary>What a task of the run needs from the person, which its card's glyph shows, or null.</summary>
     public static Attention? Needs(TaskView task, Func<TaskId, string> title)
@@ -289,9 +320,11 @@ internal static class WorkflowRunText
         };
     }
 
+    /// <summary>Quoted titles in title order, as the run bar lists them: one, two, or the first and a count.</summary>
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {
-        var names = tasks.Select(task => $"\"{title(task)}\"").ToArray();
+        var names = tasks.Select(task => (Title: title(task), Task: task)).OrderBy(task => task.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(task => task.Task).Select(task => $"\"{task.Title}\"").ToArray();
         return names.Length switch
         {
             1 => names[0],

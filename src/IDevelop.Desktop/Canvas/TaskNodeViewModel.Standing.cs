@@ -38,6 +38,8 @@ public sealed partial class TaskNodeViewModel
     internal void OnHistoryChanged()
     {
         OnPropertyChanged(nameof(StartProblem));
+        OnPropertyChanged(nameof(RunRefusal));
+        OnPropertyChanged(nameof(RunOwner));
         _run.NotifyCanExecuteChanged();
     }
 

@@ -22,6 +22,6 @@ A node's Run starts a workflow run of that node, with the same preflight, approv
 
 - Until results carry from one run to the next, "complete" means complete in the active run. After the person runs A of `A → C ← B` alone, the run completes, and a later Run of B starts a new run in which C does not start, because A's result belongs to the earlier run. The second pull request of #90 carries earlier current results into a new run, under the owner's rule that a result counts while it is still current and its changes apply cleanly on today's code, and keeps each card's state between runs.
 - A node's Run no longer edits the project folder; its code lands in the run's checkouts.
-- An older build refuses a journal with a `requested` event and ignores an approval intent that names a node. Older journals read as before.
+- An older build refuses every node run's journal, not only one with a `requested` event: its journal reader allows no unknown member, so the `node` of the `approved` event already fails it closed. It also ignores an approval intent that names a node. Older journals read as before.
 
 Source: issue [#90](https://github.com/Mano-Liaoyan/iDevelop/issues/90), decided by the owner and the coordinator on 2026-10-09, and pull request [#102](https://github.com/Mano-Liaoyan/iDevelop/pull/102), its Decisions 1 to 8.

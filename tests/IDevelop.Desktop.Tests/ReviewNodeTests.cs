@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.Nodes;
 using IDevelop.Projects;
@@ -219,9 +220,9 @@ public sealed class ReviewNodeTests : IDisposable
         var shell = Shell.Open(project, clients);
         shell.Click(shell.Header(shell.Node("Review add")));
         shell.WaitUntil(() => shell.Has<Button>("ContinueFix") && shell.Find<Button>("RetryFix").IsEffectivelyVisible, "the review offers the choice");
-        Assert.Equal(clientChanged
+        Assert.Equal(WorkflowRunText.Unbroken(clientChanged
             ? "Closing iDevelop interrupted fix round 1 of \"Add numbers\". Its session cannot go on, so retry the fix in a fresh session."
-            : "Closing iDevelop interrupted fix round 1 of \"Add numbers\". Continue the fix in its session, or retry it in a fresh one.",
+            : "Closing iDevelop interrupted fix round 1 of \"Add numbers\". Continue the fix in its session, or retry it in a fresh one."),
             shell.Find<TextBlock>("StartProblem").Text);
         Assert.Equal((!clientChanged, true), (shell.Find<Button>("ContinueFix").IsEffectivelyEnabled, shell.Find<Button>("RetryFix").IsEffectivelyEnabled));
         if (clientChanged)
