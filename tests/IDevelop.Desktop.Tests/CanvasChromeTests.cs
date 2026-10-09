@@ -68,11 +68,16 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Generate(shell);
         Assert.Equal(("1 task waits for you", "Review Proposal"), (shell.Text("WaitingCount"), AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"))));
         Assert.True(shell.ShowsUnsavedChanges);
+        // A refused connection's status sits under the breadcrumb, beside the pill when the pill moves under the buttons.
+        // The view moves left first, so "Write docs"'s output is clear of the inspector's splitter.
+        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
+        shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
+        Assert.StartsWith("That would create a cycle", shell.Status);
 
         foreach (var (width, height, inspector) in Sizes)
         {
             Resize(shell, width, height, inspector);
-            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "NextWaiting", "RunWorkflow", "GenerateWorkflow");
+            AssertTopRow(shell, $"{width}x{height}, inspector {inspector}", "Breadcrumb", "NextWaiting", "RunWorkflow", "GenerateWorkflow", "Status");
         }
     }
 
