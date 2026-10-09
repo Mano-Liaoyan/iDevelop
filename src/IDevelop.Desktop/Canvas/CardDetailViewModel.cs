@@ -98,7 +98,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     public bool IsQuietStop => IsStopped && !IsProblem;
 
     /// <summary>What needs the person, or a problem, sits in a box of its state's tint.</summary>
-    public bool IsCallout => IsAnswerable || IsProblem;
+    public bool IsCallout => IsAnswerable || IsProblem && !_now.Quiet;
 
     /// <summary>
     /// An approval's request, a planner's proposal, and a run's recovery choices are answered in the inspector, which the

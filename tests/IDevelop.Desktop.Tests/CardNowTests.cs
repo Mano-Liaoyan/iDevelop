@@ -97,7 +97,9 @@ public sealed class CardNowTests
         var ended = CardNow.Of(new CardFacts(NodeState.Failed, "Failed") { Owner = "A run of the \"W\" workflow ran this task last." });
         var waits = CardNow.Of(new CardFacts(NodeState.Idle, "Waits for 2 tasks") { Waits = true, WaitsNote = "\"B\" runs only when you run it." });
 
-        Assert.Equal((CardNowKind.Stopped, "Failed", "A run of the \"W\" workflow ran this task last."), (ended.Kind, ended.Heading, ended.Text));
+        // Which run ended it is no reason, so it stays out of the failure's callout.
+        Assert.Equal((CardNowKind.Stopped, "Failed", "A run of the \"W\" workflow ran this task last.", true), (ended.Kind, ended.Heading, ended.Text, ended.Quiet));
+        Assert.False(Of(NodeState.Failed, status: "Failed", detail: "The test host could not start.").Quiet);
         Assert.Equal((CardNowKind.Waits, "Starts after", "\"B\" runs only when you run it."), (waits.Kind, waits.Heading, waits.Text));
     }
 

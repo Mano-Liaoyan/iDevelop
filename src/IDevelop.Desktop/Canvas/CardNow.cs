@@ -67,6 +67,12 @@ internal sealed record CardFacts(NodeState State, string Status)
 /// </summary>
 public sealed record CardNow(CardNowKind Kind, string Heading, string? Text, string? Meta = null)
 {
+    /// <summary>
+    /// The text says only which run left the task where it stands, not why, so it stays out of the state's callout: a run
+    /// that ended a task between runs keeps no reason for it.
+    /// </summary>
+    public bool Quiet { get; init; }
+
     internal static CardNow Of(CardFacts facts)
     {
         var latest = facts.Latest;
@@ -94,7 +100,9 @@ public sealed record CardNow(CardNowKind Kind, string Heading, string? Text, str
             // Said once: why its result no longer counts, or, where Run's refusal says that, what to run first.
             NodeState.OutOfDate => new(CardNowKind.OutOfDate, "Out of date", facts.Detail ?? facts.Refusal ?? "Its result from an earlier run no longer counts."),
             // A run that ended the task says why; the attempt it shows says why only when it is the one that ended.
-            NodeState.Failed or NodeState.Interrupted or NodeState.Cancelled => new(CardNowKind.Stopped, facts.Status, facts.Detail ?? latest?.Detail ?? facts.Owner),
+            NodeState.Failed or NodeState.Interrupted or NodeState.Cancelled => (facts.Detail ?? latest?.Detail) is { } why
+                ? new(CardNowKind.Stopped, facts.Status, why)
+                : new(CardNowKind.Stopped, facts.Status, facts.Owner) { Quiet = true },
             _ when facts.Waits => new(CardNowKind.Waits, "Starts after", facts.WaitsNote),
             _ => new(CardNowKind.Task, facts.FieldLabel, FirstParagraph(facts.FieldText) ?? "Nothing written yet."),
         };
