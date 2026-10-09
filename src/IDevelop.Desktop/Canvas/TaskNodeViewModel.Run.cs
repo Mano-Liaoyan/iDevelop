@@ -48,9 +48,7 @@ public sealed partial class TaskNodeViewModel
     public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
-    public string? RunDetail => RunFix is { } fix
-        ? RunText.Describe(new StartProblem.FixInterrupted(_canvas.Workflow.SubjectOf(Id) is { } subject ? TitleOf(subject) : "the task", fix.Round,
-            fix.ContinueUnavailable is null))
+    public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
         : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
@@ -214,12 +212,20 @@ public sealed partial class TaskNodeViewModel
             }
             else if (_updatedInputs is not { } current || !current.Shows(run, task))
             {
-                UpdatedInputs = new UpdatedInputsViewModel(run, task.Task, TitleOf);
+                UpdatedInputs = new UpdatedInputsViewModel(run, task.Task, TitleOf, task.CarriesCode);
             }
         }
 
         OnPropertyChanged(nameof(AttendCommand));
         OnPropertyChanged(nameof(AttendHelp));
+    }
+
+    /// <summary>How the review's fix round ended, by a closed app or a person's closure after a crash, and what each choice can do.</summary>
+    private string FixDetail(FixRecovery fix)
+    {
+        var subject = _canvas.Workflow.SubjectOf(Id);
+        var end = subject is { } owner && _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
+        return WorkflowRunText.FixChoice(fix, subject is { } id ? TitleOf(id) : "the task", end);
     }
 
     /// <summary>Selects another task of the canvas, such as the one whose checkout a block is on.</summary>

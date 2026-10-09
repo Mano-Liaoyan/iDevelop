@@ -37,11 +37,14 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     private Task<T> Request<T, TWork>(RunAddress address, TaskId task, Func<string, T> unavailable, Func<RunRejection, T> refused, bool mark,
         Func<TWork> work, Func<TWork, T> finish, CancellationToken wait) =>
-        Request(address, task, unavailable, refused, mark, () => Task.FromResult(work()), finish, wait);
+        Request(address, task, unavailable, refused, mark, _ => Task.FromResult(work()), finish, wait);
 
-    /// <inheritdoc cref="Request{T, TWork}(RunAddress, TaskId, Func{string, T}, Func{RunRejection, T}, bool, Func{TWork}, Func{TWork, T}, CancellationToken)"/>
+    /// <summary>
+    /// As the other overload, for asynchronous work. The work gets the task's turn whose settlement stayed unresolved, read
+    /// on the loop, so it can use the lease that turn still holds.
+    /// </summary>
     private Task<T> Request<T, TWork>(RunAddress address, TaskId task, Func<string, T> unavailable, Func<RunRejection, T> refused, bool mark,
-        Func<Task<TWork>> work, Func<TWork, T> finish, CancellationToken wait)
+        Func<UnresolvedTurn?, Task<TWork>> work, Func<TWork, T> finish, CancellationToken wait)
     {
         var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!Post(() =>
@@ -52,7 +55,8 @@ internal sealed partial class WorkflowRunCoordinator
                 else
                 {
                     if (mark) _live[task] = new(LiveStage.Settling);
-                    Background(work, outcome =>
+                    var held = _unresolved.GetValueOrDefault(task);
+                    Background(() => work(held), outcome =>
                     {
                         if (mark) _live.Remove(task);
                         done.TrySetResult(finish(outcome));

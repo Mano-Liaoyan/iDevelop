@@ -468,16 +468,44 @@
                                 </Button>
                               </StackPanel>
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Paths" Icon="{StaticResource IconFolder}"
-                                                    IsShown="{Binding PathsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding PathsText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryPaths" />
+                            <inspector:InspectorRow Label="Attempt" Icon="{StaticResource IconVersion}"
+                                                    IsShown="{Binding AttemptText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding AttemptText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
+                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryAttempt" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Refs" Icon="{StaticResource IconLink}"
-                                                    IsShown="{Binding RefsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding RefsText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryRefs" />
-                            </inspector:InspectorRow>
+                            <!-- Every block that holds the task, each with every path and ref it names, in boxes that scroll. -->
+                            <ItemsControl ItemsSource="{Binding Blocks}" AutomationProperties.AutomationId="RecoveryBlocks">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="execution:RecoveryBlock">
+                                  <StackPanel>
+                                    <inspector:InspectorRow Label="Block" Layout="Stacked" Icon="{StaticResource IconStateFailed}">
+                                      <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextBrush}"
+                                                   AutomationProperties.AutomationId="RecoveryBlockProblem" />
+                                        <TextBlock Classes="caption" Text="{Binding Detail}" TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="RecoveryBlockDetail" />
+                                      </StackPanel>
+                                    </inspector:InspectorRow>
+                                    <inspector:InspectorRow Label="Paths" Layout="Stacked" Icon="{StaticResource IconFolder}"
+                                                            IsShown="{Binding Paths, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                      <TextBox Text="{Binding Paths, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RecoveryPaths"
+                                       AutomationProperties.Name="Paths the block names" />
+                                    </inspector:InspectorRow>
+                                    <inspector:InspectorRow Label="Refs" Layout="Stacked" Icon="{StaticResource IconLink}"
+                                                            IsShown="{Binding Refs, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                      <TextBox Text="{Binding Refs, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RecoveryRefs"
+                                       AutomationProperties.Name="Refs the block names" />
+                                    </inspector:InspectorRow>
+                                    <inspector:InspectorRow Layout="Full" IsShown="{Binding RefRepair, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                      <TextBlock Text="{Binding RefRepair}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                                 AutomationProperties.AutomationId="RecoveryRefRepair" />
+                                    </inspector:InspectorRow>
+                                  </StackPanel>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <inspector:InspectorRow Label="Client" Icon="{StaticResource IconAgent}"
                                                     IsShown="{Binding ClientText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Text="{Binding ClientText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
@@ -492,6 +520,11 @@
                                                     IsShown="{Binding CapturesText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Text="{Binding CapturesText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
                                          Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryCaptures" />
+                            </inspector:InspectorRow>
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CapturePaths, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBox Text="{Binding CapturePaths, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RecoveryCapturePaths"
+                                       AutomationProperties.Name="Paths in which the captures differ" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Label="Cleanup" Icon="{StaticResource IconRefresh}"
                                                     IsShown="{Binding CleanupText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -547,7 +580,11 @@
                                 </Button>
                               </StackPanel>
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding IsUncertain}">
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding UnsettledNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding UnsettledNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                         AutomationProperties.AutomationId="RecoveryUnsettled" />
+                            </inspector:InspectorRow>
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding CanClose}">
                               <StackPanel Spacing="6">
                                 <TextBlock Classes="caption" TextWrapping="Wrap"
                                            Text="Close as stopped records that its client stopped, with your reason. It records no result, and the run never starts this turn again." />
@@ -584,7 +621,11 @@
                       <ContentControl.ContentTemplate>
                         <DataTemplate DataType="execution:UpdatedInputsViewModel">
                           <StackPanel>
-                            <inspector:InspectorRow Layout="Full" IsShown="{Binding !HasPreview}">
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding NoRebaseNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding NoRebaseNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                         AutomationProperties.AutomationId="RebaseUnavailable" />
+                            </inspector:InspectorRow>
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsReview}">
                               <StackPanel Spacing="6">
                                 <TextBlock Classes="caption" Text="{Binding Intro}" TextWrapping="Wrap" />
                                 <Button Classes="primary" HorizontalAlignment="Left" Command="{Binding ReviewCommand}"
@@ -597,18 +638,21 @@
                                 </Button>
                               </StackPanel>
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Updated" Icon="{StaticResource IconRefresh}" IsShown="{Binding HasPreview}">
-                              <TextBlock Text="{Binding Updated}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RebaseUpdated" />
+                            <inspector:InspectorRow Label="Newer results from" Layout="Stacked" Icon="{StaticResource IconRefresh}" IsShown="{Binding HasPreview}">
+                              <TextBox Text="{Binding Updated, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RebaseUpdated"
+                                       AutomationProperties.Name="Tasks that handed on newer results" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Its change" Icon="{StaticResource IconEdit}" IsShown="{Binding HasPreview}">
-                              <TextBlock Text="{Binding Changes}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RebaseChanges" />
+                            <inspector:InspectorRow Label="Its change" Layout="Stacked" Icon="{StaticResource IconEdit}" IsShown="{Binding HasPreview}">
+                              <TextBox Text="{Binding Changes, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RebaseChanges"
+                                       AutomationProperties.Name="Paths the task's change touches" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Artifacts" Icon="{StaticResource IconCopy}"
+                            <inspector:InspectorRow Label="Artifacts" Layout="Stacked" Icon="{StaticResource IconCopy}"
                                                     IsShown="{Binding Artifacts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <TextBlock Text="{Binding Artifacts}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
-                                         Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RebaseArtifacts" />
+                              <TextBox Text="{Binding Artifacts, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                       AutomationProperties.AutomationId="RebaseArtifacts"
+                                       AutomationProperties.Name="Artifacts the rebase carries forward" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Label="Carries forward" Layout="Stacked" Icon="{StaticResource IconBrief}"
                                                     IsShown="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
@@ -620,6 +664,10 @@
                               <StackPanel Spacing="6">
                                 <TextBlock Text="{Binding Candidate}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
                                            AutomationProperties.AutomationId="RebaseCandidate" />
+                                <TextBox Text="{Binding CandidatePaths, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" FontSize="13"
+                                         IsVisible="{Binding CandidatePaths, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                         AutomationProperties.AutomationId="RebaseCandidatePaths"
+                                         AutomationProperties.Name="Files the rebase changes" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                   <Button Classes="primary" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
                                           AutomationProperties.AutomationId="ApproveRebase"

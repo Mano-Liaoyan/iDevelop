@@ -93,6 +93,32 @@ internal static class WorkflowRunText
         };
     }
 
+    /// <summary>
+    /// What a stopping run waits for: the person's closure of a turn whose client was never seen to exit, or the
+    /// settlement of one whose client exited, which only opening the project again tries once more.
+    /// </summary>
+    public static string Stopping(IEnumerable<TaskView> tasks, Func<TaskId, string> title) =>
+        tasks.FirstOrDefault(task => task.State == TaskState.Uncertain) switch
+        {
+            null => "Stopping. Finished work stays.",
+            { RootExited: true } settling => $"Stopping waits for \"{title(settling.Task)}\" to settle. Open the project again to retry.",
+            var uncertain => $"Stopping waits for you to close \"{title(uncertain.Task)}\" as stopped.",
+        };
+
+    /// <summary>
+    /// Why a run's review waits for Continue fix or Retry fix: closing iDevelop interrupted its fix round, or the round's
+    /// turn ended without a recorded end and a person closed it as stopped. Then what each choice can do, with the reason
+    /// Continue cannot go on when it cannot.
+    /// </summary>
+    /// <param name="end">How the fix attempt ended, or null when the run does not show it.</param>
+    public static string FixChoice(FixRecovery fix, string subject, AttemptEnd? end)
+    {
+        var what = end is AttemptEnd.Recovered
+            ? $"Fix round {fix.Round} of \"{subject}\" ended without a recorded end, and it was closed as stopped."
+            : $"Closing iDevelop interrupted fix round {fix.Round} of \"{subject}\".";
+        return fix.ContinueUnavailable is { } why ? $"{what} {why}" : $"{what} Continue the fix in its session, or retry it in a fresh one.";
+    }
+
     /// <summary>One sentence for each reason the run refused a command.</summary>
     public static string Problem(RunRejection rejection) => rejection.Problem switch
     {
@@ -129,7 +155,7 @@ internal static class WorkflowRunText
     /// <summary>Whether a refusal comes from a lock or a journal that another step holds for a moment, so trying again can succeed.</summary>
     public static bool Transient(RunRejection rejection) => rejection.Problem is RunProblem.JournalBusy or RunProblem.TaskBusy or RunProblem.RunBusy;
 
-    private static string Problem(MaterializationProblem problem) => problem switch
+    internal static string Problem(MaterializationProblem problem) => problem switch
     {
         MaterializationProblem.DirtyWorktree => "Files changed in the task's checkout after its turn ended.",
         MaterializationProblem.UncertainOwnership => "A branch moved that no task of the run moved.",

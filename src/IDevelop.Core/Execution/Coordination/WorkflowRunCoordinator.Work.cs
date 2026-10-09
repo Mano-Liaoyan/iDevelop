@@ -14,6 +14,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (hold is TaskHold.Blocked blocked && record.Blocks.Values.Any(state => state.Resolved && RunReducer.Same(state.Block, blocked.Block)))
                 _holds.Remove(task);
         }
+        ReleaseClosed(record);
         var view = Project(record);
         switch (record.Phase)
         {

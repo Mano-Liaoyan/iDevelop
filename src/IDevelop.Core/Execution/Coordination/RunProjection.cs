@@ -104,7 +104,10 @@ internal static class RunProjection
         if (hold is TaskHold.Unresolved unresolved)
         {
             return new(task, unresolved.Transient ? TaskState.Settling : TaskState.Uncertain)
-            { Attempt = attempt, Unresolved = unresolved.Reason, Refusal = unresolved.Rejection };
+            {
+                Attempt = attempt, Unresolved = unresolved.Reason, Refusal = unresolved.Rejection,
+                RootExited = attempt is { } id && LastLaunch(record, id) is { } launch && record.RootExits.ContainsKey(launch),
+            };
         }
         // An attempt reserved after the current result was accepted, such as a retry or a fix, decides the task's state.
         var current = result is not null && !Replaced(record, result, attempt) ? result : null;
@@ -112,7 +115,7 @@ internal static class RunProjection
         if (current is not null)
         {
             var state = block is not null ? TaskState.Blocked : record.StaleResults.Contains(current.Id) ? TaskState.Stale : TaskState.Done;
-            return new(task, state) { Attempt = attempt, Result = current.Id, Block = block };
+            return new(task, state) { Attempt = attempt, Result = current.Id, Block = block, CarriesCode = current.Code is CodeOutput.Produced };
         }
         return Attempted(record, task, attempt, log, hold, block) is { } view ? view with { Result = result?.Id } : null;
     }

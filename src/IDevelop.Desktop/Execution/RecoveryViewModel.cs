@@ -45,7 +45,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         _show = show;
         _preserve = new RelayCommand(() => _ = PreserveAsync(), () => CanAct && ShowsPreserve);
         _restore = new RelayCommand(() => _ = RestoreAsync(), () => CanAct && _preview is not null);
-        _close = new RelayCommand(() => _ = CloseAsync(Reason.Trim()), () => CanAct && IsUncertain && !string.IsNullOrWhiteSpace(Reason));
+        _close = new RelayCommand(() => _ = CloseAsync(Reason.Trim()), () => CanAct && CanClose && !string.IsNullOrWhiteSpace(Reason));
         _showOwner = new RelayCommand(() => _show(Owner));
         run.PropertyChanged += OnRunChanged;
         _ = LoadEvidenceAsync();
@@ -68,10 +68,14 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
     /// <summary>Selects the task whose checkout the block is on.</summary>
     public ICommand ShowOwnerCommand => _showOwner;
 
-    /// <summary>The paths, branch, HEAD, and index lock the block names.</summary>
-    public string? PathsText => Block is { } block && !IsElsewhere ? RecoveryText.Paths(block) : null;
+    /// <summary>"Initial attempt · 01a11de4": the attempt the evidence is about.</summary>
+    public string? AttemptText => _evidence is { Attempt: not null } evidence && !IsElsewhere ? RecoveryText.Attempt(evidence) : null;
 
-    public string? RefsText => Block is { } block && !IsElsewhere ? RecoveryText.Refs(block) : null;
+    /// <summary>Every block that holds the task, oldest first, each with all the paths and refs it names.</summary>
+    public IReadOnlyList<RecoveryBlock> Blocks => IsElsewhere ? [] :
+        [.. (_evidence is { } evidence ? evidence.Blocks : Block is { } shown ? [shown] : []).Select(block => new RecoveryBlock(
+            RecoveryText.Problem(block), block.Detail, RecoveryText.Paths(block), RecoveryText.Refs(block),
+            RecoveryText.RefRepair(block, _evidence?.Refs ?? []), block.Attempt is { } attempt ? attempt.Value.ToString("D")[..8] : null))];
 
     /// <summary>The newest turn's client process, and whether it still runs.</summary>
     public string? ClientText => _evidence is { } evidence && !IsElsewhere ? RecoveryText.Client(evidence) : null;
@@ -79,6 +83,9 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
     public string? TurnEndText => _evidence is { Attempt: not null } evidence && !IsElsewhere ? RecoveryText.TurnEnd(evidence) : null;
 
     public string? CapturesText => _evidence is { Attempt: not null } evidence && !IsElsewhere ? RecoveryText.Captures(evidence) : null;
+
+    /// <summary>Every path in which the captures differ, one per line.</summary>
+    public string? CapturePaths => _evidence is { Attempt: not null } evidence && !IsElsewhere ? RecoveryText.CapturePaths(evidence) : null;
 
     public string? CleanupText => _evidence is { } evidence && !IsElsewhere ? RecoveryText.Cleanup(evidence) : null;
 
@@ -128,8 +135,17 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// The turn's client was never seen to exit, so the person may close it as stopped. A turn whose exit is recorded only
+    /// waits for its settlement, which the person cannot close.
+    /// </summary>
+    public bool CanClose => IsUncertain && !_view.RootExited;
+
+    /// <summary>Why an uncertain turn whose client exited cannot be closed, and what tries its settlement again.</summary>
+    public string? UnsettledNote => IsUncertain && _view.RootExited ? RecoveryText.Unsettled(_view, _run.View.Phase == RunPhase.StopRequested) : null;
+
     /// <summary>The client still runs, which the person should stop before closing its turn.</summary>
-    public string? StillRuns => IsUncertain && _evidence is { RootNow: ProcessMatch.Same, Root: { } root }
+    public string? StillRuns => CanClose && _evidence is { RootNow: ProcessMatch.Same, Root: { } root }
         ? $"Process {root.Id} still runs. Stop it first, or what it writes later blocks the checkout." : null;
 
     /// <summary>Closes the unresolved turn as stopped. It records no result, and the run does not start it again.</summary>
@@ -180,6 +196,10 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(WorkflowRunViewModel.IsControlled) or nameof(WorkflowRunViewModel.IsActive))
         {
             Refresh();
+        }
+        else if (e.PropertyName == nameof(WorkflowRunViewModel.StatusLabel))
+        {
+            OnPropertyChanged(nameof(UnsettledNote));
         }
     }
 
@@ -307,7 +327,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
 
         Notice = restored switch
         {
-            Restoration.Restored => "Restored. The tasks this block held go on.",
+            Restoration.Restored => null,
             Restoration.Blocked blocked => $"{blocked.Block.Detail} Nothing more moved.",
             Restoration.Refused refused => refused.Detail,
             Restoration.Rejected rejected => RecoveryText.Problem(rejected.Reason),
@@ -316,6 +336,14 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         };
         Raise();
         await LoadEvidenceAsync();
+        // A restore resolves only what it repaired, and the blocks it rechecked whose refs are back, so the journal says
+        // whether the task goes on.
+        if (restored is Restoration.Restored && !_disposed)
+        {
+            Notice = _evidence is { Blocks.IsEmpty: false } still
+                ? $"Restore finished, but {(still.Blocks.Length == 1 ? "1 block still holds" : $"{still.Blocks.Length} blocks still hold")} this task. Each one says what it needs."
+                : "Restored. The tasks this block held go on.";
+        }
     }
 
     private async Task CloseAsync(string reason)
@@ -364,9 +392,10 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
     {
         foreach (var property in new[]
         {
-            nameof(IsUncertain), nameof(IsElsewhere), nameof(OwnerNote), nameof(ShowOwnerLabel), nameof(PathsText), nameof(RefsText), nameof(ClientText),
-            nameof(TurnEndText), nameof(CapturesText), nameof(CleanupText), nameof(CanRestore), nameof(NoActionNote), nameof(HandRepairNote),
+            nameof(IsUncertain), nameof(IsElsewhere), nameof(OwnerNote), nameof(ShowOwnerLabel), nameof(AttemptText), nameof(Blocks), nameof(ClientText),
+            nameof(TurnEndText), nameof(CapturesText), nameof(CapturePaths), nameof(CleanupText), nameof(CanRestore), nameof(NoActionNote), nameof(HandRepairNote),
             nameof(ShowsPreserve), nameof(HasPreview), nameof(PreviewTarget), nameof(PreviewMoves), nameof(PreviewRest), nameof(Retained), nameof(StillRuns),
+            nameof(CanClose), nameof(UnsettledNote),
         })
         {
             OnPropertyChanged(property);
@@ -383,3 +412,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         _close.NotifyCanExecuteChanged();
     }
 }
+
+/// <summary>One block that holds a task, as the Recovery section lists it: what went wrong, every path and ref it names, and how to repair a ref.</summary>
+/// <param name="Attempt">The short id of the attempt the block is on, or null for a block on the task as a whole.</param>
+public sealed record RecoveryBlock(string Problem, string Detail, string? Paths, string? Refs, string? RefRepair, string? Attempt);

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -64,10 +65,12 @@ public sealed class WorkflowRunReviewTests
         shell.Click(shell.InView<Button>("ReviewUpdatedInputs"));
         shell.WaitUntil(() => shell.Has<Button>("ApproveRebase") && shell.Find<Button>("ApproveRebase").IsEffectivelyVisible, "the rebase is previewed",
             () => $"Notice: {(shell.Has<TextBlock>("RebaseNotice") ? shell.Text("RebaseNotice") : null)}");
-        Assert.Equal("Newer results from \"A\".", shell.Text("RebaseUpdated"));
-        Assert.Equal("d.txt", shell.Text("RebaseChanges"));
+        Assert.Equal("\"A\"", shell.Find<TextBox>("RebaseUpdated").Text);
+        Assert.Equal("d.txt", shell.Find<TextBox>("RebaseChanges").Text);
         Assert.Equal("D ready.", shell.Find<TextBox>("RebaseReport").Text);
-        Assert.Equal("Its change replays cleanly. Its checkout gets calc.txt from the newer inputs.", shell.Text("RebaseCandidate"));
+        Assert.Equal("Its change replays cleanly. Its checkout gets these files from the newer inputs:", shell.Text("RebaseCandidate"));
+        Assert.Equal("calc.txt", shell.Find<TextBox>("RebaseCandidatePaths").Text);
+        Assert.False(shell.Find<TextBlock>("RebaseUnavailable").IsEffectivelyVisible);
         Assert.Equal("a - b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
 
         shell.Click(shell.InView<Button>("ApproveRebase"));
@@ -78,6 +81,81 @@ public sealed class WorkflowRunReviewTests
         Assert.Equal((2, 2, 1, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
         Assert.Single(f.Record().Results, result => result.Origin is ResultOrigin.Rebased);
         Assert.False(shell.Has<Button>("ReviewUpdatedInputs") && shell.Find<Button>("ReviewUpdatedInputs").IsEffectivelyVisible);
+    }
+
+    /// <summary>A read-only agent whose prompt starts with its title, so its result is a report with no code of its own.</summary>
+    private static WorkflowEdit.PlaceNode Reader(TaskId id, string title, double x, double y) =>
+        new(id, new Blueprint(new("example.reader", 1), "Reader",
+            new WorkSpec.Agent(AgentAccess.ReadOnly, Proposes: false, PromptTemplate.Parse("{{#title}}# {{title}}\n\n{{/title}}Read the project.\n")), [],
+            new(WorkflowRunFixture.Codex, ConversationMode.Autonomous)), new CanvasPoint(x, y))
+        { Title = title, Settings = new NodeSettings(WorkflowRunFixture.Codex, ConversationMode.Autonomous) };
+
+    [AvaloniaFact]
+    public void A_stale_report_says_it_cannot_be_rebased_and_offers_no_rebase()
+    {
+        using var f = Reviewed(Reader(D, "D", 405, 300), Dependency(A, D));
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed))).Answer("D", f.Says("D read it."));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("D", "Inputs changed");
+        shell.WaitForStatus("Needs attention");
+
+        shell.Click(shell.InCard<Button>("D", "CardAttention"));
+
+        Assert.Equal(RecoveryText.NoRebase, shell.InView<TextBlock>("RebaseUnavailable").Text);
+        Assert.False(shell.Find<Button>("ReviewUpdatedInputs").IsEffectivelyVisible);
+        Assert.Equal(1, f.Launches("D"));
+    }
+
+    [AvaloniaFact]
+    public void A_fix_round_whose_turn_end_a_crash_lost_is_closed_as_stopped_and_then_continues_in_its_session()
+    {
+        using var f = Reviewed();
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("keep.txt", "keep\n", "Fixing."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)));
+        // The window loses the fix turn's root exit, as a crash between the client's exit and its record does.
+        var lost = 0;
+        f.Probe = point =>
+        {
+            if (point == "journal.root-exit.before" && f.Launches("A") == 2 && Interlocked.Exchange(ref lost, 1) == 0)
+            {
+                throw new InvalidOperationException("Crashed before the root exit was recorded.");
+            }
+        };
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("A", "Uncertain");
+        shell.Click(shell.InCard<Button>("A", "CardAttention"));
+        shell.WaitUntil(() => shell.Has<TextBox>("RecoveryReason") && shell.Find<TextBox>("RecoveryReason").IsEffectivelyVisible, "the turn can be closed");
+        shell.Click(shell.InView<TextBox>("RecoveryReason"));
+        shell.Type("The fix's client is gone.");
+        shell.Click(shell.InView<Button>("CloseAsStopped"));
+
+        shell.WaitForCard("Review", "Fix interrupted");
+        shell.Click(shell.InCard<Button>("Review", "CardAttention"));
+        Assert.Equal("Fix round 1 of \"A\" ended without a recorded end, and it was closed as stopped. Continue the fix in its session, or retry it in a fresh one.",
+            shell.Text("RunTaskDetail"));
+        shell.Click(shell.InView<Button>("ContinueFix"));
+
+        shell.WaitForStatus("Completed");
+        Assert.Equal((3, 2, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B")));
+        Assert.StartsWith("Closing iDevelop interrupted your work on these findings.", f.Prompt("A", 3));
+        Assert.Single(f.Record().Attempts.Values, attempt => attempt.Cause is AttemptCause.Continue);
+        Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
+    }
+
+    [AvaloniaFact]
+    public void A_fix_round_without_a_session_says_why_it_cannot_continue_and_offers_only_Retry_fix()
+    {
+        using var f = Reviewed();
+        // Neither A's turn nor its fix round reports a session, so the interrupted round has none to go on in.
+        var silent = FakeRule.On().Write("keep.txt", "keep\n").Write(Path.Combine(f.Evidence, "fix-wrote"), "yes").WaitForFile(f.Gate("never"));
+        f.Answer("A", FakeRule.On().Write("calc.txt", "a - b\n").Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.")), silent)
+            .Route("Your earlier session could not continue", "A");
+        var shell = Interrupted(f);
+
+        Assert.Equal("Closing iDevelop interrupted fix round 1 of \"A\". The fix reported no session, so it cannot go on. Retry fix starts the round in a fresh session.",
+            shell.Text("RunTaskDetail"));
+        Assert.Equal((false, true), (shell.InView<Button>("ContinueFix").IsEffectivelyEnabled, shell.Find<Button>("RetryFix").IsEffectivelyEnabled));
     }
 
     /// <summary>Runs the review until its fix round writes <c>keep.txt</c>, then closes the project and opens it in a new window.</summary>

@@ -24,12 +24,14 @@ public sealed class UpdatedInputsViewModel : ObservableObject, IDisposable
     private bool _busy;
     private bool _disposed;
 
-    internal UpdatedInputsViewModel(WorkflowRunViewModel run, TaskId task, Func<TaskId, string> title)
+    /// <param name="rebasable">The stale result carries code of its own, which a rebase can replay. A report cannot be rebased.</param>
+    internal UpdatedInputsViewModel(WorkflowRunViewModel run, TaskId task, Func<TaskId, string> title, bool rebasable)
     {
         _run = run;
         _task = task;
         _title = title;
-        _review = new RelayCommand(() => _ = ReviewAsync(), () => CanAct);
+        CanRebase = rebasable;
+        _review = new RelayCommand(() => _ = ReviewAsync(), () => CanAct && CanRebase);
         _approve = new RelayCommand(() => _ = ApproveAsync(), () => CanAct && CanApprove);
         run.PropertyChanged += OnRunChanged;
     }
@@ -37,26 +39,37 @@ public sealed class UpdatedInputsViewModel : ObservableObject, IDisposable
     /// <summary>What reviewing does, before the first preview.</summary>
     public string Intro => "Review updated inputs replays this task's change onto the newer inputs as one commit, which you approve. No agent runs.";
 
+    /// <summary>The stale result carries code of its own, so Review updated inputs can rebase it.</summary>
+    public bool CanRebase { get; }
+
+    /// <summary>Why a stale report cannot be rebased, and that Retry, which would bring it up to date, is not offered yet.</summary>
+    public string? NoRebaseNote => CanRebase ? null : RecoveryText.NoRebase;
+
+    /// <summary>Review updated inputs shows until a preview is shown, for a result that can be rebased.</summary>
+    public bool ShowsReview => CanRebase && !HasPreview;
+
     /// <summary>Builds the rebase's preview. It records nothing.</summary>
     public ICommand ReviewCommand => _review;
 
     public bool HasPreview => _preview is not null;
 
-    /// <summary>"Newer results from "A"."</summary>
-    public string? Updated => _preview is { } preview
-        ? $"Newer results from {RecoveryText.List([.. preview.Updated.Select(task => $"\"{_title(task)}\"")])}." : null;
+    /// <summary>Each task that handed on a newer result, one per line.</summary>
+    public string? Updated => _preview is { } preview ? RecoveryText.Lines(preview.Updated.Select(task => $"\"{_title(task)}\"")) : null;
 
-    /// <summary>The paths the task's recorded change touches.</summary>
-    public string? Changes => _preview is { } preview ? preview.Changes.IsEmpty ? "None" : RecoveryText.List(preview.Changes) : null;
+    /// <summary>Every path the task's recorded change touches, one per line.</summary>
+    public string? Changes => _preview is { } preview ? preview.Changes.IsEmpty ? "None" : RecoveryText.Lines(preview.Changes) : null;
 
     /// <summary>The task's report, which the rebased result carries forward.</summary>
     public string? Report => _preview?.Report is { Length: > 0 } report ? report.TrimEnd() : null;
 
-    /// <summary>The artifacts the rebased result carries forward.</summary>
-    public string? Artifacts => _preview is { Artifacts.IsEmpty: false } preview ? RecoveryText.List([.. preview.Artifacts.Select(artifact => artifact.Name)]) : null;
+    /// <summary>Every artifact the rebased result carries forward, one per line.</summary>
+    public string? Artifacts => _preview is { Artifacts.IsEmpty: false } preview ? RecoveryText.Lines(preview.Artifacts.Select(artifact => artifact.Name)) : null;
 
     /// <summary>What the clean candidate updates, or why there is none.</summary>
     public string? Candidate => _preview is { } preview ? RecoveryText.Candidate(preview.Candidate) : null;
+
+    /// <summary>Every file the clean candidate updates, or every conflicting one, one per line.</summary>
+    public string? CandidatePaths => _preview is { } preview ? RecoveryText.CandidatePaths(preview.Candidate) : null;
 
     /// <summary>The preview has a clean candidate to approve.</summary>
     public bool CanApprove => _preview is { Candidate: RebaseCandidate.Clean };
@@ -73,7 +86,8 @@ public sealed class UpdatedInputsViewModel : ObservableObject, IDisposable
 
     public bool CanAct => _run.IsControlled && _run.IsActive && !_busy;
 
-    internal bool Shows(WorkflowRunViewModel run, TaskView view) => run == _run && view.Task == _task && view.State == TaskState.Stale;
+    internal bool Shows(WorkflowRunViewModel run, TaskView view) => run == _run && view.Task == _task && view.State == TaskState.Stale &&
+        view.CarriesCode == CanRebase;
 
     public void Dispose()
     {
@@ -183,7 +197,11 @@ public sealed class UpdatedInputsViewModel : ObservableObject, IDisposable
 
     private void Raise()
     {
-        foreach (var property in new[] { nameof(HasPreview), nameof(Updated), nameof(Changes), nameof(Report), nameof(Artifacts), nameof(Candidate), nameof(CanApprove) })
+        foreach (var property in new[]
+        {
+            nameof(HasPreview), nameof(ShowsReview), nameof(Updated), nameof(Changes), nameof(Report), nameof(Artifacts), nameof(Candidate), nameof(CandidatePaths),
+            nameof(CanApprove),
+        })
         {
             OnPropertyChanged(property);
         }

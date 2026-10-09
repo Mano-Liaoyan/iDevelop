@@ -58,4 +58,38 @@ public sealed class WorkflowRunTextTests
         Assert.Equal(new Attention.Problem("Inputs changed: A task before it handed on a newer result after this one finished."), WorkflowRunText.Needs(stale, Title));
         Assert.Null(WorkflowRunText.Needs(new TaskView(Task, TaskState.Waiting) { Status = AttemptStatus.InReview }, Title));
     }
+
+    [Fact]
+    public void A_fix_round_says_how_it_ended_and_why_it_cannot_continue()
+    {
+        var fix = new FixRecovery(new(Guid.NewGuid()), 2, null);
+
+        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"A\". Continue the fix in its session, or retry it in a fresh one.",
+            WorkflowRunText.FixChoice(fix, "A", new AttemptEnd.Logged(TerminalAttemptOutcome.Interrupted, new(0, new(new string('0', 64))))));
+        Assert.Equal("Fix round 2 of \"A\" ended without a recorded end, and it was closed as stopped. Continue the fix in its session, or retry it in a fresh one.",
+            WorkflowRunText.FixChoice(fix, "A", new AttemptEnd.Recovered(RecoveryOutcome.Stopped, new(Guid.NewGuid()), "Gone.")));
+        Assert.Equal("Closing iDevelop interrupted fix round 2 of \"A\". The fix's client never started, so its session cannot go on. Retry fix starts the round in a fresh session.",
+            WorkflowRunText.FixChoice(fix with { ContinueUnavailable = RunReviews.NotStartedFix }, "A", null));
+    }
+
+    [Fact]
+    public void A_stopping_run_says_whether_it_waits_for_a_closure_or_a_settlement()
+    {
+        Assert.Equal("Stopping. Finished work stays.", WorkflowRunText.Stopping([new TaskView(Task, TaskState.Done)], Title));
+        Assert.Equal("Stopping waits for you to close \"B\" as stopped.", WorkflowRunText.Stopping([new TaskView(Task, TaskState.Uncertain)], Title));
+        Assert.Equal("Stopping waits for \"B\" to settle. Open the project again to retry.",
+            WorkflowRunText.Stopping([new TaskView(Task, TaskState.Uncertain) { RootExited = true }], Title));
+    }
+
+    [Fact]
+    public void Every_path_ref_and_update_shows()
+    {
+        string[] paths = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"];
+        var block = new MaterializationBlock(new(Guid.NewGuid()), Task, null, MaterializationProblem.DirtyWorktree, null, [], "drift")
+            { Scope = new BlockScope.Checkout([.. paths], Branch: true) };
+
+        Assert.Equal(string.Join("\n", paths) + "\nthe task's branch", RecoveryText.Paths(block));
+        Assert.Equal(string.Join("\n", paths), RecoveryText.CandidatePaths(new RebaseCandidate.Clean(new(new string('1', 40)), new(new string('2', 40)), [.. paths])));
+        Assert.Equal(string.Join("\n", paths), RecoveryText.Refs(block with { Scope = new BlockScope.Refs([.. paths]) }));
+    }
 }

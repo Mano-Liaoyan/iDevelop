@@ -152,6 +152,80 @@ public sealed class RecoveryCommandTests
     }
 
     [Fact]
+    public async Task A_moved_stash_blocks_publication_and_Restore_clears_it_only_once_the_stash_is_back()
+    {
+        await using var f = new CoordinatorFixture(Pair());
+        f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        var moved = false;
+        f.Runs.Probe = point =>
+        {
+            if (point != "coordinator.publish.before" || moved) return;
+            moved = true;
+            f.Preparation.Git.Git("update-ref", "refs/stash", PlanCommit.Hex);
+        };
+        await f.Resume();
+        var stuck = await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[A].State == TaskState.Blocked);
+        f.Runs.Probe = null;
+        var block = stuck.Tasks[A].Block!;
+        Assert.Equal((MaterializationProblem.UncertainOwnership, new BlockScope.Refs(["refs/stash"])), (block.Problem, (BlockScope)block.Scope));
+        Assert.Equal([new SharedRefDrift("refs/stash", null, PlanCommit, Known: true)], f.Coordinator.Evidence(A)!.Refs.ToArray());
+        var attempt = block.Attempt!.Value;
+
+        async Task<Restoration.Restored> Restored()
+        {
+            var preservation = f.Preparation.Op();
+            Assert.IsType<Preservation.Preserved>(await f.Coordinator.Preserve(f.Address, A, attempt, preservation).WaitAsync(Bound));
+            var preview = Assert.IsType<RestorePreviewRead.Previewed>(await f.Coordinator.PreviewRestore(f.Address, A, attempt, preservation).WaitAsync(Bound)).Preview;
+            Assert.Equal((0, 1), (preview.Repairs.Length, preview.Rechecks.Length));
+            return Assert.IsType<Restoration.Restored>(await f.Coordinator.Restore(f.Address, A, attempt, preservation, preview.Identity, f.Preparation.Op()).WaitAsync(Bound));
+        }
+
+        // While the stash still points elsewhere, the recheck resolves nothing and the task stays blocked.
+        Assert.Empty((await Restored()).Receipt.Resolved);
+        Assert.Equal(TaskState.Blocked, (await f.Decided()).Tasks[A].State);
+        Assert.Equal(0, f.Launches(B));
+
+        f.Preparation.Git.Git("update-ref", "-d", "refs/stash");
+        Assert.NotEmpty((await Restored()).Receipt.Resolved);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal([1, 1], new[] { f.Launches(A), f.Launches(B) });
+    }
+
+    [Fact]
+    public async Task The_evidence_names_the_newest_turn_and_no_process_when_its_launch_was_not_logged()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat), Agent(B)], (A, B)));
+        f.Answer(A, Reports(A), Reports(A));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        var attempt = waiting.Tasks[A].Attempt!.Value;
+        var first = f.Coordinator.Evidence(A)!;
+        Assert.Equal((1, true), (first.Turn, first.Root is not null));
+        Assert.IsType<AttemptCause.Initial>(first.Cause);
+        await f.Close();
+
+        // The next turn is claimed in another process that exits before it launches anything, as a crash does.
+        var record = f.Read();
+        var launch = new LaunchKey(attempt, 2);
+        using (var racer = new Runs.Racer("turn-crash", f.Preparation.Git.Folder, Runs.RunFixtures.W.Value.ToString("D"), f.Preparation.RunId.Value.ToString("D"),
+            A.Value.ToString("D"), RunOperations.Turn(record, launch).Value.ToString("D"), f.Fakes.Folder, f.Fakes.LaunchFolder!, "1", "runner.claim.after",
+            attempt.Value.ToString("D"), "2", "Use the fixture"))
+        {
+            Assert.Equal("Owned:", await racer.Line());
+            Assert.Equal("runner.claim.after", await racer.Line());
+            await racer.Exit();
+        }
+        await f.OpenAgain();
+
+        Assert.Equal(TaskState.Uncertain, (await f.Decided()).Tasks[A].State);
+        var second = f.Coordinator.Evidence(A)!;
+        Assert.Equal((2, (ProcessIdentity?)null, (RunEvent.RootExitObserved?)null), (second.Turn, second.Root, second.Exit));
+        Assert.Equal(1, f.Launches(A));
+    }
+
+    [Fact]
     public async Task A_waiting_attempt_is_not_closed_as_stopped()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat), Agent(B)], (A, B)));

@@ -61,7 +61,9 @@ public sealed class WorkflowRunRecoveryTests
         Assert.Equal("A", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
 
         shell.WaitUntil(() => Shows(shell, "RecoveryCaptures"), "the section reads the evidence");
-        Assert.Equal("result.txt", shell.Text("RecoveryPaths"));
+        Assert.Equal("result.txt", shell.Find<TextBox>("RecoveryPaths").Text);
+        Assert.Equal(["Files changed in the task's checkout after its turn ended."], shell.TextsOf("RecoveryBlockProblem"));
+        Assert.StartsWith("Initial attempt · ", shell.Text("RecoveryAttempt"));
         var second = f.Window();
         second.WaitUntil(() => second.WorkflowRun is not null, "the second window shows the run");
         second.Click(second.Header(second.Node("A")));
@@ -181,7 +183,8 @@ public sealed class WorkflowRunRecoveryTests
         shell.Click(shell.Header(shell.Node("D")));
 
         Assert.StartsWith("The results it joins conflict.", shell.Text("RunTaskDetail"));
-        Assert.Equal("settings.txt", shell.Text("RecoveryPaths"));
+        Assert.Equal("settings.txt", shell.Find<TextBox>("RecoveryPaths").Text);
+        Assert.Equal(["The results it joins conflict."], shell.TextsOf("RecoveryBlockProblem"));
         Assert.Equal("Preserve and restore cannot clear this block. Stop Workflow ends the run, and finished work stays.", shell.Text("RecoveryNoAction"));
         Assert.False(Shows(shell, "PreserveCheckout"));
         Assert.False(Shows(shell, "CloseAsStopped"));
@@ -195,6 +198,51 @@ public sealed class WorkflowRunRecoveryTests
         var view = new TaskView(d, TaskState.Blocked) { Block = conflict };
         Assert.True(panel.Shows(shell.WorkflowRun!, view with { Block = conflict with { Operation = new OperationId(Guid.NewGuid()) } }));
         Assert.False(panel.Shows(shell.WorkflowRun!, view with { Block = conflict with { Attempt = new AttemptId(Guid.NewGuid()) } }));
+    }
+
+    [AvaloniaFact]
+    public void A_moved_stash_says_how_to_put_it_back_and_Restore_says_the_block_stays_until_it_is_back()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Writes("result.txt", "done\n", "A ready.")).Answer("B", f.Says("B ready."));
+        var head = f.Run("rev-parse", "HEAD").Trim();
+        var moved = 0;
+        f.Probe = point =>
+        {
+            if (point == "coordinator.publish.before" && Interlocked.Exchange(ref moved, 1) == 0)
+            {
+                f.Run("update-ref", "refs/stash", head);
+            }
+        };
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("A", "Blocked");
+        shell.Click(shell.Header(shell.Node("A")));
+        shell.WaitUntil(() => Shows(shell, "RecoveryRefRepair"), "the section reads the stash's evidence");
+
+        Assert.Equal(["A shared ref changed that no task of the run changed."], shell.TextsOf("RecoveryBlockProblem"));
+        Assert.Equal("refs/stash", shell.Find<TextBox>("RecoveryRefs").Text);
+        Assert.Equal($"refs/stash pointed at nothing when the turn started and pointed at {head[..12]} when this was found. " +
+            "iDevelop does not move these refs. Put each one back outside iDevelop, then preserve and restore so iDevelop checks them again. " +
+            "The block clears once they are back.", shell.Text("RecoveryRefRepair"));
+        shell.Click(shell.InView<Button>("PreserveCheckout"));
+        shell.WaitUntil(() => Shows(shell, "RestoreCheckout"), "the restoration is previewed", () => $"Notice: {Notice(shell)}");
+        Assert.Equal("Nothing moves: the checkout matches its baseline. It clears no block. " +
+            "It checks 1 block on shared refs again, which clears only if those refs are back as recorded.", shell.Text("RestoreRest"));
+
+        shell.Click(shell.InView<Button>("RestoreCheckout"));
+
+        shell.WaitUntil(() => Notice(shell) is { Length: > 0 }, "the restore says what it did");
+        Assert.Equal("Restore finished, but 1 block still holds this task. Each one says what it needs.", Notice(shell));
+        Assert.Equal(("Blocked", 0), (shell.CardText("A", "CardStatus"), f.Launches("B")));
+        Assert.True(Shows(shell, "PreserveCheckout"));
+
+        f.Run("update-ref", "-d", "refs/stash");
+        shell.Click(shell.InView<Button>("PreserveCheckout"));
+        shell.WaitUntil(() => Shows(shell, "RestoreCheckout"), "the second restoration is previewed", () => $"Notice: {Notice(shell)}");
+        shell.Click(shell.InView<Button>("RestoreCheckout"));
+        shell.WaitForStatus("Completed");
+        Assert.Equal((1, 1), (f.Launches("A"), f.Launches("B")));
     }
 
     [AvaloniaFact]
@@ -227,6 +275,18 @@ public sealed class WorkflowRunRecoveryTests
 
         shell.WaitForCard("A", "Closed as stopped");
         Assert.Equal("The client was gone after the crash.", shell.Text("RunTaskDetail"));
+        // A turn whose client exited but whose settlement failed cannot be closed; the section says what retries it.
+        var unsettled = new TaskView(A, TaskState.Uncertain)
+        {
+            Attempt = f.Record().Attempts.Keys.Single(), RootExited = true, Unresolved = UnresolvedReason.IncompleteEvidence,
+            Refusal = new(RunProblem.EvidenceMismatch),
+        };
+        using (var panel = new RecoveryViewModel(shell.WorkflowRun!, unsettled, _ => "A", _ => { }))
+        {
+            Assert.Equal((false, false), (panel.CanClose, panel.CloseCommand.CanExecute(null)));
+            Assert.Equal("Its client exited, but iDevelop could not settle its turn. Its log does not match what the run recorded. Resume tries again.",
+                panel.UnsettledNote);
+        }
         Assert.False(Shows(shell, "CloseAsStopped"));
         var end = Assert.IsType<AttemptEnd.Recovered>(Assert.Single(f.Record().Closures.Values));
         Assert.Equal((RecoveryOutcome.Stopped, "The client was gone after the crash."), (end.Outcome, end.Reason));
