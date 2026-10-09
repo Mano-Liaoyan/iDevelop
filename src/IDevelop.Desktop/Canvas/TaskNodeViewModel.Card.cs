@@ -35,10 +35,13 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>An idle node's subtitle is its agent. Every other node's is its status.</summary>
+    /// <summary>
+    /// An idle node's first line under its title is its client. Every other node's is its status. The second line is its
+    /// model and level in every state, so every card has the same three lines whatever its names.
+    /// </summary>
     public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None && RunTask is null;
 
-    /// <summary>The subtitle when it is not the agent: the proposal, else a missing setting, else the run's status.</summary>
+    /// <summary>The first line when it is not the client: the proposal, else a missing setting, else the run's status.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count)
         : State == NodeState.NeedsSetup && Problem is { } problem && CardText.ShortReason(problem) is { } reason ? reason
         : StatusLabel;
@@ -94,7 +97,12 @@ public sealed partial class TaskNodeViewModel
                 OnPropertyChanged(nameof(ReviewerTip));
                 OnPropertyChanged(nameof(CardTip));
                 break;
-            case nameof(Title) or nameof(AgentLabel) or nameof(ReviewSummary) or nameof(IsRenaming):
+            case nameof(AgentLabel):
+                OnPropertyChanged(nameof(AgentClient));
+                OnPropertyChanged(nameof(AgentModel));
+                OnPropertyChanged(nameof(CardTip));
+                break;
+            case nameof(Title) or nameof(ReviewSummary) or nameof(IsRenaming):
                 OnPropertyChanged(nameof(CardTip));
                 break;
         }

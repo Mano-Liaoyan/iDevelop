@@ -54,6 +54,30 @@ public static class RunText
         return Dotted(Clients.Name(settings.Client), model, settings.Reasoning);
     }
 
+    /// <summary>
+    /// The agent on two lines, as every task card and the proposal review show it: the client, with the provider of a
+    /// model that names one, such as "Pi · deepseek", then the model and its level, such as "Claude Haiku 4.5 · low".
+    /// The model line is null when the agent names neither. "No agent" when the task has none.
+    /// </summary>
+    public static (string Client, string? Model) AgentLines(ExecutionSettings? settings, ClientStatus status)
+    {
+        if (settings is null)
+        {
+            return ("No agent", null);
+        }
+
+        var client = Clients.Name(settings.Client);
+        var offered = settings.Model is { } id ? ExecutionChoices.OfferedModel(status, id) : null;
+        var model = offered?.Name ?? settings.Model;
+        if (offered is { Provider: { } provider } && model is not null && model.EndsWith($" ({provider})", StringComparison.Ordinal))
+        {
+            client = Dotted(client, provider);
+            model = model[..^(provider.Length + 3)];
+        }
+
+        return (client, Dotted(model, settings.Reasoning) is { Length: > 0 } line ? line : null);
+    }
+
     /// <summary>A client in the inspector's picker, with what keeps it from running.</summary>
     public static string ClientChoice(ClientId client, ClientStatus status) => status switch
     {

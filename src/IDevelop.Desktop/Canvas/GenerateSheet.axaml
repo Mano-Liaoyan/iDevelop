@@ -85,7 +85,7 @@
                      AutomationProperties.AutomationId="GenerateProblem" />
         </Grid>
 
-        <TextBlock Text="The planner reads the project and changes no file. New tasks use this agent unless their type has one."
+        <TextBlock Text="The planner reads the project and changes no file. It chooses an agent for each task from the clients ready here, and a task it gives none uses this agent unless its type has one."
                    TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextFaintBrush}" />
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">

@@ -68,24 +68,34 @@
            A proposal's tasks draw as dashed cards over the empty cards they fill, and its connections as dashed wires.
            A wire dropped on empty canvas stays as the line it was while the Add popover is open. -->
       <nodify:NodifyEditor.DataTemplates>
+        <!-- A ghost has a card's three lines. A tab hanging from it says why the planner's choice of agent falls back. -->
         <DataTemplate DataType="canvas:GhostCardViewModel">
-          <Panel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
-                 Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}"
-                 AutomationProperties.AutomationId="GhostCard"
-                 AutomationProperties.Name="{Binding Title}">
-            <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
-            <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
-                       theme:StyleClass.Kind="{Binding Kind}" />
-            <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
-              <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
-              <StackPanel Grid.Column="1" Margin="0,14,0,0">
-                <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                           AutomationProperties.AutomationId="GhostTitle" />
-                <TextBlock Classes="cardStatus" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
-                           AutomationProperties.AutomationId="GhostLabel" />
+          <StackPanel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
+                      AutomationProperties.AutomationId="GhostCard"
+                      AutomationProperties.Name="{Binding Title}">
+            <Panel Height="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}">
+              <Border Classes="ghost" Margin="10,0" CornerRadius="{StaticResource RadiusXl}" />
+              <Rectangle Classes="kindStroke" Margin="10,0" RadiusX="14" RadiusY="14" StrokeThickness="1.5" StrokeDashArray="4,3"
+                         theme:StyleClass.Kind="{Binding Kind}" />
+              <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
+                <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Classes="cardText">
+                  <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="GhostTitle" />
+                  <TextBlock Classes="cardAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="GhostLabel" />
+                  <TextBlock Classes="cardAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                             AutomationProperties.AutomationId="GhostDetail" />
+                </StackPanel>
+              </Grid>
+            </Panel>
+            <Border Classes="ghostNote" IsVisible="{Binding HasNote}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" />
+                <TextBlock Text="{Binding Note}" AutomationProperties.AutomationId="GhostNote" />
               </StackPanel>
-            </Grid>
-          </Panel>
+            </Border>
+          </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="canvas:GhostWireViewModel">
           <nodify:StepConnection Classes="ghost" Source="{Binding Source}" Target="{Binding Target}"
