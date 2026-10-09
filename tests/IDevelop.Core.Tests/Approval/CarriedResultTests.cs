@@ -252,6 +252,50 @@ public sealed class CarriedResultTests
     }
 
     [Fact]
+    public async Task A_carried_result_that_took_code_from_several_tasks_takes_a_join_of_their_carried_results()
+    {
+        // X → B ← D (D plays Y), and A → C ← B. Run Workflow runs everything; running A again carries X, Y, and B.
+        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D), Agent(X)], (X, B), (D, B), (B, C), (A, C)));
+        f.Answer(X, Writes(X, "out-x.txt", "X\n")).Answer(D, Writes(D, "out-y.txt", "Y\n")).Answer(B, Writes(B, "out-b.txt", "B\n"))
+            .Answer(A, Writes(A, "out-a.txt", "A\n"), Writes(A, "out-a.txt", "A2\n"))
+            .Answer(C, Copies(f, C, "out-a.txt", "out-b.txt", "out-x.txt", "out-y.txt"), Copies(f, C, "out-a.txt", "out-b.txt", "out-x.txt", "out-y.txt"));
+        await f.Open();
+        var started = await Start(f, f.Preflight(), BaseChoice.Head, Command(1));
+        await Completed(started.Coordinator);
+
+        var (second, _) = await RunNode(f, A, 2);
+
+        Assert.Equal([2, 1, 2, 1, 1], Launches(f, A, B, C, D, X));
+        Assert.Equal(("A2\n", "B\n", "X\n", "Y\n"), (Copied(f, C, "out-a.txt"), Copied(f, C, "out-b.txt"), Copied(f, C, "out-x.txt"), Copied(f, C, "out-y.txt")));
+        var record = f.Read(second);
+        var approved = Assert.IsType<RunEvent.Approved>(record.Receipts.Values.Single(entry => entry.Sequence == 1).Event);
+        Assert.Equal([D, X, B], approved.Carried!.Value.Select(item => item.Result.Task));
+        var carried = record.CurrentResults[B];
+        var join = Assert.IsType<CodeSelection.Joined>(record.Inputs[carried.Inputs].Code).Join;
+        Assert.Equal(RunLayout.CarriedJoin(second, carried.Id), join.Ref);
+        var code = Assert.IsType<CodeOutput.Produced>(carried.Code).Code;
+        Assert.Equal(join.Commit, code.AttemptBase);
+        Assert.Equal(join.Commit.Hex + "\n", f.GitText("rev-parse", code.Commit.Hex + "^"));
+        Assert.Equal(4, f.GitText("for-each-ref", "--format=%(refname)", RunLayout.CarriedPrefix(second)).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+    }
+
+    [Fact]
+    public async Task A_preview_whose_earlier_result_another_run_replaced_since_is_a_changed_preview()
+    {
+        await using var f = JoinAnswers(new ApprovalFixture(Join()));
+        await f.Open();
+        var (first, _) = await RunNode(f, B, 1);
+        var preview = f.Runs.Preflight(f.Workflow, A);
+        Assert.Equal(first, Assert.Single(preview.Carried).Run);
+        var (second, _) = await RunNode(f, B, 2);
+
+        var changed = Assert.IsType<WorkflowStart.Changed>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(3))).WaitAsync(Bound));
+
+        Assert.Equal(second, Assert.Single(changed.Current.Carried).Run);
+        Assert.Equal(2, f.ApprovedRuns().Length);
+    }
+
+    [Fact]
     public async Task Run_Workflow_runs_every_task_again_and_carries_nothing()
     {
         await using var f = JoinAnswers(new ApprovalFixture(Join()));

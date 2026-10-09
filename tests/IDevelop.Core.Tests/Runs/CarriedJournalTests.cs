@@ -108,7 +108,47 @@ public sealed class CarriedJournalTests
             Result = carried[0].Result with { Artifacts = [new("notes", "results/elsewhere/notes", Revision.Hash("x"), 1)] }
         });
         Assert.Equal(new RunRejection(RunProblem.InputConflict, Task: T), Refused(Approve(f, OtherRun, operation, C, renamed)));
+        var coded = carried.SetItem(0, carried[0] with { Result = carried[0].Result with { Code = new CodeOutput.Forwarded(carried[0].Inputs.Id) } });
+        Assert.Equal(new RunRejection(RunProblem.InputConflict, Task: T), Refused(Approve(f, OtherRun, operation, C, coded)));
         Assert.Equal([Run], f.Store.Records(W).Select(record => record.Id));
+    }
+
+    [Fact]
+    public void A_carried_result_must_take_the_current_results_of_the_run()
+    {
+        using var f = new RunFixtures(Chain());
+        First(f);
+        var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [C] };
+        var operation = f.Op();
+        var carried = Carrying.Build(null, seed, History(f), operation, preview: false).Carried;
+        var withT = RunReducer.WithCarried(seed, carried[0]);
+        Assert.Null(RunReducer.CarriedProblem(withT, carried[1], operation));
+
+        // Once T's carried result is superseded, U's carried result, which took it, no longer fits.
+        var newer = carried[0].Result with { Id = new(Id(900)), Supersedes = carried[0].Result.Id };
+        var superseded = withT with { Results = withT.Results.Add(newer) };
+        Assert.Equal(RunProblem.StaleInput, RunReducer.CarriedProblem(superseded, carried[1], operation));
+    }
+
+    [Fact]
+    public void A_result_that_took_a_result_of_a_task_the_run_runs_again_is_not_carried_and_neither_is_one_after_it()
+    {
+        // X ⇢ Y (context), Y → W, and X, W → Z. The first run runs everything; running X again cannot carry Y, whose result
+        // took X's, nor W, whose result took Y's, so Z waits for W.
+        var x = T;
+        var (y, w, z) = (U, C, D);
+        var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C), Task(D)), x, y, ConnectionKind.Context), y, w), x, z), w, z);
+        using var f = new RunFixtures(workflow);
+        f.Approve();
+        foreach (var task in new[] { x, y, w, z }) f.Complete(f.Reserve(task));
+        Settle(f, Run);
+
+        var build = Carrying.Build(null, new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [x] },
+            History(f), f.Op(), preview: false);
+
+        Assert.Empty(build.Carried);
+        Assert.Equal(new CarryRefusal.InputRefused(y), build.Refused[w]);
+        Assert.Equal(new CarryRefusal.InputRuns(x), build.Refused[y]);
     }
 
     [Fact]
@@ -133,6 +173,10 @@ public sealed class CarriedJournalTests
         Assert.Equal(1, record.Receipts.Values.Count(entry => entry.Event is RunEvent.Requested));
         Assert.Equal(new RunRejection(RunProblem.StartConflict, Task: T), Refused(f.Store.Request(f.PermitFor(OtherRun), f.Op(), T)));
         Assert.IsType<RunDecision.Created>(f.Store.Reserve(f.Lease(U, OtherRun), f.Op(), record.Revision.Id, new AttemptCause.Initial()));
+        // A journal that requests the carried task anyway is refused on replay.
+        record = f.Read(OtherRun);
+        var forged = new RunEntry(3, record.Sequence + 1, f.Op(), Revision.Hash("forged"), At, new RunEvent.Requested(T));
+        Assert.Equal(RunProblem.StartConflict, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, OtherRun, record, forged)).Reason.Problem);
     }
 
 }

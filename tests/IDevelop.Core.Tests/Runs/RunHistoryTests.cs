@@ -136,6 +136,31 @@ public sealed class RunHistoryTests
     }
 
     [Fact]
+    public void A_result_that_a_later_attempt_of_its_run_replaced_or_that_a_block_holds_does_not_count()
+    {
+        using var f = new RunFixtures(Chain());
+        f.Approve(node: T);
+        var t = f.Complete(f.Reserve(T));
+        f.Complete(f.Reserve(U));
+        // T's retry fails after its result was accepted, so the run shows T as failed.
+        var retry = f.Reserve(T, new AttemptCause.Retry(Assert.IsType<ResultOrigin.Executed>(t.Origin).Attempt, f.Op()));
+        f.Claim(retry);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), retry.Attempt.Id, TerminalAttemptOutcome.Failed,
+            f.WriteLog(retry, TerminalAttemptOutcome.Failed)));
+        // A block holds U's attempt, which published its result.
+        var u = f.Read().CurrentResults[U];
+        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(f.Op(), U,
+            Assert.IsType<ResultOrigin.Executed>(u.Origin).Attempt, MaterializationProblem.DirtyWorktree, u.Inputs, [], "Checkout changed.")
+        { Scope = BlockScope.Checkout.Whole })));
+        Settle(f, Run);
+
+        var history = History(f);
+
+        Assert.IsType<TaskHistory.None>(history[T]);
+        Assert.IsType<TaskHistory.None>(history[U]);
+    }
+
+    [Fact]
     public void Runs_count_in_the_order_they_were_approved()
     {
         using var f = new RunFixtures(Chain());

@@ -356,9 +356,6 @@ internal sealed class RunApprovals
             {
                 var history = RunHistory.Of(_store.Records(live.Workflow), chosen.Revision.Snapshot);
                 carried = Carrying.Build(repository, Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation, preview: false);
-                if (!carried.Carried.Select(item => (item.Result.Task, ((ResultOrigin.Carried)item.Result.Origin).Run, ((ResultOrigin.Carried)item.Result.Origin).Result))
-                    .OrderBy(item => item.Task).SequenceEqual(live.CarriedOn(choice).Select(row => (row.Task, row.Run, row.Result))))
-                    return new RunApproval.Changed(live);
                 _probe?.Invoke("approval.carry.built");
                 if (Carrying.Keep(repository, _project, chosen.Run, live.Workflow, carried, history) is { } failure)
                     return new RunApproval.Refused(ApprovalProblem.GitFailed, failure);

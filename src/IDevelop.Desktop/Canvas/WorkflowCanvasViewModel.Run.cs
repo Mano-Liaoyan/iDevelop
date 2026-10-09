@@ -35,7 +35,10 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Opens the preflight of the whole workflow. No node needs to be selected.</summary>
     public ICommand RunWorkflowCommand => _runWorkflow ??= new RelayCommand(OpenPreflight, () => Preflight is null && Sheet is null);
 
-    /// <summary>Hides a run that has settled, so the cards show their tasks' own runs again. The run's records stay.</summary>
+    /// <summary>
+    /// Hides a run that has settled, so the cards show their tasks' own runs again, or where each task stands between runs
+    /// (#90). The run's records stay.
+    /// </summary>
     public ICommand DismissRunCommand => _dismissRun ??= new RelayCommand(DismissRun);
 
     /// <summary>Run Workflow shows until a run of this workflow is active; then the run's own controls take its place.</summary>

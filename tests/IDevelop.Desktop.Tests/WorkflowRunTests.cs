@@ -134,7 +134,8 @@ public sealed class WorkflowRunTests
 
         shell.Click(shell.Find<Button>("DismissRun"));
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal(["Not run", "Not run"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
+        // The cards keep where each task stands between runs (#90).
+        Assert.Equal(["Succeeded", "Succeeded"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
     }
 
     [AvaloniaFact]
@@ -397,7 +398,7 @@ public sealed class WorkflowRunTests
         shell.Click(shell.Find<Button>("StopWorkflow"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Cancelled", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Cancelled", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal("Stopped. Finished work stays.", shell.Text("RunActivity"));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
         Assert.True(shell.Find<Button>("RunWorkflow").IsEffectivelyVisible);

@@ -368,7 +368,7 @@ public sealed class WorkflowRunRecoveryTests
         shell.Click(shell.InView<Button>("CloseAsStopped"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Closed as stopped", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Closed as stopped", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
     }
 
@@ -396,7 +396,7 @@ public sealed class WorkflowRunRecoveryTests
         claim.Set();
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Not started", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Not started", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((0, 0), (f.Launches("A"), f.Launches("B")));
     }
 
@@ -441,7 +441,7 @@ public sealed class WorkflowRunRecoveryTests
         shell.Click(shell.Find<Button>("StopWorkflow"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Cancelled", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Cancelled", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
         Assert.False(shell.Has<Button>("NextWaiting") && shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }

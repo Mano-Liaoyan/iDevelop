@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -46,7 +47,8 @@ public sealed class CarriedResultTests
     {
         var earlier = shell.WorkflowRun?.Address;
         shell.Click(shell.Find<Button>("PreflightStart"));
-        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false } run && run.Address != earlier, $"the run of \"{what}\" settles",
+        // The run lets go of its retention pins after it settles, which a test waits for, so its Git folder is quiet.
+        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false, View.PinsReleased: true } run && run.Address != earlier, $"the run of \"{what}\" settles",
             () => $"Run: {shell.RunStatus}, notice: {shell.Status}");
     }
 
@@ -71,8 +73,8 @@ public sealed class CarriedResultTests
         Assert.Equal(["Not started", "Succeeded", "Waits for \"A\""], Cards(shell));
         Select(shell, "C");
         Assert.Equal("Waits for \"A\"", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("It starts once \"A\" hands on a result. \"A\" runs only when you run it.", shell.Text("RunTaskDetail"));
-        Assert.Equal("Runs after \"A\". Run \"A\" first.", shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("It starts once \"A\" hands on a result. \"A\" runs only when you run it."), shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
         shell.Window.Close();
         shell.Render();
 
@@ -83,10 +85,10 @@ public sealed class CarriedResultTests
         Assert.Equal([agent, "Succeeded", "Waits for \"A\""], Cards(reopened));
         Select(reopened, "B");
         Assert.Equal("Succeeded", reopened.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("Its result from the last run of the \"Workflow\" workflow still counts.", reopened.Text("RunOwner"));
-        Assert.Equal("When you run a task after it, the run uses this result instead of running it again.", reopened.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("Its result from the last run of the \"Workflow\" workflow still counts."), reopened.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("When you run a task after it, the run uses this result instead of running it again."), reopened.Text("RunTaskDetail"));
         Select(reopened, "C");
-        Assert.Equal("Runs after \"A\". Run \"A\" first.", reopened.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), reopened.InView<TextBlock>("StartProblem").Text);
     }
 
     [AvaloniaFact]
@@ -114,10 +116,10 @@ public sealed class CarriedResultTests
 
         Assert.Equal(["Succeeded", "Out of date", "Out of date"], Cards(shell));
         Assert.Equal("Out of date", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("It changed since it ran, or so did the connections into it. Run it again to bring it up to date.", shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("It changed since it ran, or so did the connections into it. Run it again to bring it up to date."), shell.Text("RunTaskDetail"));
         Select(shell, "C");
-        Assert.Equal("The result of \"B\" that it used is out of date. Run it again to bring it up to date.", shell.Text("RunTaskDetail"));
-        Assert.Equal("Runs after \"B\". Run \"B\" first.", shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("The result of \"B\" that it used is out of date. Run it again to bring it up to date."), shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"B\". Run \"B\" first."), shell.InView<TextBlock>("StartProblem").Text);
     }
 
     [AvaloniaFact]
@@ -137,6 +139,53 @@ public sealed class CarriedResultTests
         Start(shell, "A");
         Assert.Equal((1, 1, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
         Assert.Equal("Waits for \"B\"", shell.CardText("C", "CardStatus"));
+    }
+
+    [AvaloniaFact]
+    public void A_task_that_runs_on_its_own_after_the_run_shows_that_run_instead_of_where_it_stood()
+    {
+        using var f = Join();
+        f.Answer("B", f.Writes("out-b.txt", "B\n", "B ready."), f.Says("B again.", gate: "own"));
+        var shell = f.Window();
+        RunNode(shell, "B");
+        Assert.Equal("Succeeded", shell.CardText("B", "CardStatus"));
+
+        shell.RunOnItsOwn("B");
+
+        shell.WaitForCard("B", "Running");
+        f.Open("own");
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "B").LastAttempt is { } attempt &&
+            attempt.StatusLabel == "Succeeded", "B's own run ends");
+        Select(shell, "B");
+        Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
+        Assert.False(shell.Find<TextBlock>("RunTaskStatus").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_node_run_while_a_run_is_active_counts_an_earlier_result_and_its_run_carries_it()
+    {
+        var d = new TaskId(Guid.Parse("019a9d2e-5d11-7a22-b3c4-5d6e7f809a44"));
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), At(B, "B", 105, 250), At(C, "C", 405, 170), At(d, "D", 105, 400),
+            Dependency(A, C), Dependency(B, C));
+        f.Answer("A", f.Writes("out-a.txt", "A\n", "A ready.")).Answer("B", f.Writes("out-b.txt", "B\n", "B ready."))
+            .Answer("C", f.Says("C ready.")).Answer("D", f.Says("D ready.", gate: "d"));
+        var shell = f.Window();
+        RunNode(shell, "B");
+        OpenPreflight(shell, "D");
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitForCard("D", "Running");
+
+        Select(shell, "C");
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
+        Select(shell, "A");
+        shell.Click(shell.InView<Button>("RunTask"));
+
+        shell.WaitForCard("C", "Succeeded");
+        Assert.Equal("Succeeded", shell.CardText("B", "CardStatus"));
+        f.Open("d");
+        shell.WaitForStatus("Completed");
+        Assert.Equal((1, 1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C"), f.Launches("D")));
+        Assert.Null(shell.Preflight);
     }
 
     [AvaloniaFact]
