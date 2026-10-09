@@ -76,8 +76,9 @@ public sealed class CarriedResultTests
         Assert.Equal(["Not started", "Succeeded", "Waits for \"A\""], Cards(shell));
         Select(shell, "C");
         Assert.Equal("Waits for \"A\"", shell.InView<TextBlock>("RunTaskStatus").Text);
-        // Said once: the status names what it waits for, and the line under Run what to run first.
-        Assert.False(Shows(shell, "RunTaskDetail") || Shows(shell, "RunOwner"));
+        // Said once: the status names what it waits for, and the line under Run what to run first. The run never started
+        // C, so it has no conversation with it.
+        Assert.False(Shows(shell, "RunTaskDetail") || Shows(shell, "RunOwner") || Shows(shell, "RunConversationNote"));
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
         // A card whose task nothing more is said of than that it has not started shows its agent, as outside any run.
         Assert.True(shell.InCard<TextBlock>("A", "CardAgent").IsEffectivelyVisible);

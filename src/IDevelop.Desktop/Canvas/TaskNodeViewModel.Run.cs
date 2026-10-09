@@ -47,10 +47,11 @@ public sealed partial class TaskNodeViewModel
     public bool ShowsRunState => RunTask is not null || Standing is not null;
 
     /// <summary>
-    /// The task's conversation in the inspector opens the canvas's run's conversation with it: a run holds the task and
-    /// talked to it there, rather than carrying its result from an earlier run (#90).
+    /// The task's conversation in the inspector opens the canvas's run's conversation with it: the active run holds the task,
+    /// or the settled one started it, and neither carried its result from an earlier run nor shows it only as where it
+    /// stands between runs (#90).
     /// </summary>
-    public bool ShowsRunConversation => RunTask is { Carried: false };
+    public bool ShowsRunConversation => RunTask is { Carried: false } run && Standing is null && (_runActive || run.Attempt is not null);
 
     /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
     public bool IsRunOwned => RunTask is not null && _runActive;
