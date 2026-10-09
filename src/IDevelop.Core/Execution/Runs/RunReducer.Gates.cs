@@ -40,6 +40,7 @@ internal static partial class RunReducer
         if (request.Revision != record.Revision.Id) return RunProblem.RevisionConflict;
         if (!record.Revision.Snapshot.Tasks.TryGetValue(request.Task, out var definition)) return RunProblem.IdentityMismatch;
         if (definition.Blueprint.Work is not WorkSpec.Person) return RunProblem.UnsupportedWork;
+        if (!RunScope.InFlow(record).Contains(request.Task)) return RunProblem.NotRequested;
         if (record.Gates.ContainsKey(request.Id) || record.Inputs.ContainsKey(inputs.Id) ||
             record.Gates.Values.Any(gate => gate.Request.Result == request.Result) || record.Results.Any(result => result.Id == request.Result))
             return RunProblem.StartConflict;

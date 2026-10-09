@@ -285,7 +285,8 @@
                                 Classes.running="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                                 Classes.complete="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                                 Classes.problem="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+                                Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
+                                Classes.warning="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
                             <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
                             <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}"
@@ -293,7 +294,13 @@
                           </Grid>
                         </Border>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsRunState}">
+                      <inspector:InspectorRow Layout="Full">
+                        <inspector:InspectorRow.IsShown>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="ShowsRunState" />
+                            <Binding Path="RunOwner" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                          </MultiBinding>
+                        </inspector:InspectorRow.IsShown>
                         <TextBlock Text="{Binding RunOwner}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                                    AutomationProperties.AutomationId="RunOwner" />
                       </inspector:InspectorRow>
@@ -310,6 +317,7 @@
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsCancel}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRunControls}"
+                                  ToolTip.Tip="{Binding RunRefusal}" ToolTip.ShowOnDisabled="True"
                                   AutomationProperties.AutomationId="RunTask"
                                   AutomationProperties.Name="Run">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -317,7 +325,7 @@
                               <TextBlock Text="Run" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding CancelCommand}"
+                          <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancelButton}"
                                   AutomationProperties.AutomationId="CancelRun"
                                   AutomationProperties.Name="Cancel run">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -1069,7 +1077,7 @@
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
                           <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunState" />
+                            <Binding Path="ShowsRunConversation" />
                             <Binding Path="HasAgent" />
                           </MultiBinding>
                         </inspector:InspectorRow.IsShown>

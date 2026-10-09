@@ -208,7 +208,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
 
         var ring = shell.CardLayer("Design", "stateStroke");
         // The status takes the client's line, and the model and level stay on the line under it.
@@ -229,7 +229,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Waiting for you", "the task waits");
 
         var ring = shell.CardLayer("Design", "stateStroke");
@@ -248,7 +248,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == label, "the run ends");
         // The ring is the card's 1.5 px border, so the card's top pixel row is the ring alone. The frame that shows it can
         // come a render tick after the status text, so the test waits for the pixel too.
@@ -278,7 +278,7 @@ public sealed class CardTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Plan export")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
 
         var ring = shell.CardLayer("Plan export", "stateStroke");

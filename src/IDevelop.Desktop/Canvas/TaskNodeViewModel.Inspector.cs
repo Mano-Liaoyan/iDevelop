@@ -21,7 +21,8 @@ public sealed partial class TaskNodeViewModel
         [nameof(ConversationNote)] = [nameof(ConversationSummary)],
         [nameof(Role)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
         [nameof(State)] = [nameof(ShowsCancel)],
-        [nameof(IsRunOwned)] = [nameof(ShowsRunControls), nameof(ShowsCancel), nameof(ShowsAcceptAndFinish)],
+        [nameof(IsRunOwned)] = [nameof(ShowsRunControls), nameof(ShowsCancel), nameof(ShowsCancelButton), nameof(ShowsAcceptAndFinish)],
+        [nameof(JoinsRun)] = [nameof(ShowsRunControls), nameof(ShowsCancel)],
         [nameof(ShowsRunState)] = [nameof(ShowsAcceptAndFinish)],
     };
 
@@ -89,13 +90,17 @@ public sealed partial class TaskNodeViewModel
     /// Run and the reason it cannot start. While a proposal is open, accepting it is the node's one primary action, so
     /// the Run section keeps only the run's status.
     /// </summary>
-    public bool ShowsRunControls => Role != NodeRole.Proposing && !IsRunOwned;
+    public bool ShowsRunControls => Role != NodeRole.Proposing && (!IsRunOwned || JoinsRun);
 
     /// <summary>
-    /// Cancel shows with Run, and while a proposal is open only during a turn that this window runs. A task that the
-    /// canvas's run owns is cancelled through its conversation or stopped with its run.
+    /// The row of Run and Cancel. Cancel shows with Run, and while a proposal is open only during a turn that this window
+    /// runs. A task that the canvas's run owns is cancelled through its conversation or stopped with its run, so its row
+    /// keeps only the Run that adds it to the run.
     /// </summary>
-    public bool ShowsCancel => !IsRunOwned && (ShowsRunControls || State is NodeState.Running or NodeState.Stopping);
+    public bool ShowsCancel => ShowsRunControls || !IsRunOwned && State is NodeState.Running or NodeState.Stopping;
+
+    /// <summary>Cancel stops this task's own run, which a task that the canvas's run owns does not have.</summary>
+    public bool ShowsCancelButton => !IsRunOwned;
 
     /// <summary>
     /// A Chat planner waits for a reply after each proposal, so accepting is how its conversation ends, and the

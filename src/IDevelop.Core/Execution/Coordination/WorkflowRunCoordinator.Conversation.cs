@@ -248,7 +248,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>Why a task that does not rest between turns takes no message now.</summary>
     private static string Unrested(TaskView? view) => view?.State switch
     {
-        null or TaskState.Pending or TaskState.Ready => NotStartedMessage,
+        null or TaskState.Pending or TaskState.Ready or TaskState.Unrequested => NotStartedMessage,
         TaskState.Starting => StartingMessage,
         TaskState.Running or TaskState.Settling => EndingMessage,
         TaskState.Waiting => NotWaitingMessage,

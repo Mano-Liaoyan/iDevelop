@@ -124,6 +124,68 @@ internal sealed partial class WorkflowRunCoordinator
         return decision is RunDecision.Rejected rejected ? new RunCommand.Refused(rejected.Reason) : Accepted;
     }, wait);
 
+    /// <summary>
+    /// Adds <paramref name="task"/> to a run that a node's Run started, as the person's Run of another node does while the
+    /// run is active (#90). The journal records it once under <paramref name="confirmation"/>, so a repeat or a retry after
+    /// a busy refusal adds it once, and a reopened run starts it after Resume. A task with a dependency predecessor that has
+    /// no current result is refused with <see cref="RunProblem.MissingDependencyResult"/>, which names that predecessor.
+    /// </summary>
+    /// <remarks>
+    /// A dependency predecessor of the tasks it adds that the run cannot start and has no result of counts when an earlier
+    /// run left it a current result: the request carries that result, replayed onto the run's base, as a node's approval
+    /// does. One whose code conflicts with the base is not carried, so the task is refused for it.
+    /// </remarks>
+    public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, record =>
+    {
+        var operation = RunOperations.Request(confirmation, task);
+        // A repeat finds the request recorded, with what it carried.
+        if (record.Receipts.TryGetValue(operation, out var receipt))
+            return receipt.Event is RunEvent.Requested { Task: var recorded } && recorded == task ? Accepted : new RunCommand.Refused(new(RunProblem.OperationConflict));
+        ImmutableArray<IncludedResult> carried = [];
+        if (record.Requested is { } nodes && record.Phase == RunPhase.Approved && !RunScope.InFlow(record).Contains(task) &&
+            !record.Results.Any(result => result.Task == task))
+        {
+            switch (Carry(record with { Requested = nodes.Add(task) }, operation))
+            {
+                case (var built, null): carried = built; break;
+                case (_, { } problem): return new RunCommand.Refused(problem);
+            }
+        }
+        if (_store.Request(_permit!, operation, task, carried) is not RunDecision.Rejected rejected) return Accepted;
+        // A refused request carries nothing, so what it kept and copied for that goes, unless the journal took it after all.
+        if (!carried.IsEmpty && Read() is { } after && !after.Receipts.ContainsKey(operation)) Forget(carried);
+        return new RunCommand.Refused(rejected.Reason);
+    }, wait);
+
+    /// <summary>Removes the refs and copied artifacts of <paramref name="carried"/>, which no journal names.</summary>
+    private void Forget(ImmutableArray<IncludedResult> carried)
+    {
+        if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is RepositoryOpen.Opened opened)
+            Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, carried);
+    }
+
+    /// <summary>The results of earlier runs <paramref name="widened"/> needs, built, kept, and copied for the request <paramref name="operation"/> (#90).</summary>
+    private (ImmutableArray<IncludedResult> Carried, RunRejection? Problem) Carry(RunRecord widened, OperationId operation)
+    {
+        if (Carrying.Needed(widened).IsEmpty) return ([], null);
+        try
+        {
+            if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is not RepositoryOpen.Opened opened)
+                return ([], new(RunProblem.StorageUnavailable));
+            var history = RunHistory.Of(_store.Records(Address.Workflow), widened.Revision.Snapshot);
+            var build = Carrying.Build(opened.Repository, widened, history, operation);
+            if (build.Carried.IsEmpty) return ([], null);
+            if (Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is not null)
+            {
+                Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, build.Carried);
+                return ([], new(RunProblem.StorageUnavailable));
+            }
+            _runs.Probe?.Invoke("request.carry.kept");
+            return (build.Carried, null);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return ([], new(RunProblem.StorageUnavailable)); }
+    }
+
     /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
     public void Refresh() => Post(() => { });
 

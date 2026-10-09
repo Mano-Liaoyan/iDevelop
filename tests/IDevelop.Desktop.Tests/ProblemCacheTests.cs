@@ -115,7 +115,7 @@ public sealed class ProblemCacheTests : IDisposable
         var before = nodes.Select(node => node.ProblemChecks).ToArray();
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Succeeded", "the run succeeds");
 
         Assert.Equal(NodeState.Succeeded, nodes[0].State);

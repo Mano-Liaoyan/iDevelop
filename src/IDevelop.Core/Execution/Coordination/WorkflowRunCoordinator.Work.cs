@@ -311,12 +311,13 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Settles the run as completed once every task is done, which no unresolved block on a task's current attempt or
-    /// result allows, and nothing is open, unresolved, or in flight.
+    /// Settles the run as completed once nothing more can start: every task is done or can no longer start (#90), which no
+    /// unresolved block on a task's current attempt or result allows, and nothing is open, unresolved, or in flight.
     /// </summary>
     private RunRecord Complete(RunRecord record, RunView view)
     {
-        if (_live.Count != 0 || _holds.Count != 0 || !view.Tasks.Values.All(task => task.State == TaskState.Done) || !Closed(record)) return record;
+        if (_live.Count != 0 || _holds.Count != 0 || !view.Tasks.Values.All(task => task.State == TaskState.Done || task.Dormant) || !Closed(record))
+            return record;
         return Settle(record, RunOperations.Completed(Address.Run), RunOutcome.Completed);
     }
 

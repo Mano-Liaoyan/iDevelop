@@ -71,7 +71,7 @@ public sealed partial class ProjectRuns
                     TaskState.Waiting => WorkflowRunCoordinator.NotWaitingMessage,
                     TaskState.Starting => WorkflowRunCoordinator.StartingMessage,
                     TaskState.Settling => WorkflowRunCoordinator.EndingMessage,
-                    null or TaskState.Pending or TaskState.Ready => WorkflowRunCoordinator.NotStartedMessage,
+                    null or TaskState.Pending or TaskState.Ready or TaskState.Unrequested => WorkflowRunCoordinator.NotStartedMessage,
                     TaskState.Blocked or TaskState.Refused or TaskState.Uncertain => WorkflowRunCoordinator.HeldMessage,
                     _ => WorkflowRunCoordinator.ClosedMessage,
                 };
