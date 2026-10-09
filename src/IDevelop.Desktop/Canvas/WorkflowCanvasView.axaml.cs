@@ -143,10 +143,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     private const double MinFitRoom = 16;
 
     /// <summary>
-    /// Fits the view when a card or a proposal's ghost card sits under a control that floats over the canvas, such as the
-    /// run bar, so that every card shows clear of them. The window asks for this when the canvas gets shorter under its controls.
+    /// Fits the view when a card or a proposal's ghost card shows only in part, under a control that floats over the canvas,
+    /// such as the run bar, or past the canvas's edge, so that every card shows whole and clear of the controls. Cards
+    /// wholly out of view, where the person panned, leave the view as it is. The window asks for this when the canvas gets
+    /// smaller under its controls.
     /// </summary>
-    internal void FitIfCovered()
+    internal void FitIfHidden()
     {
         if (TopLevel.GetTopLevel(this) is not MainWindow window || !IsEffectivelyVisible)
         {
@@ -154,13 +156,14 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         }
 
         Rect In(Visual visual) => visual.TranslatePoint(default, this) is { } at ? new Rect(at, visual.Bounds.Size) : default;
+        var view = new Rect(Bounds.Size);
         var controls = window.TopBar.Children.Concat(BottomBar.Children).Concat(RunBars.Children)
             .Where(control => control.IsEffectivelyVisible && control != RunBars && control.Bounds.Width > 0)
             .Select(In).ToArray();
         var cards = Editor.GetVisualDescendants().OfType<ItemContainer>().Select(card => new Rect(In(card).Position, card.Bounds.Size * Editor.ViewportZoom))
             .Concat(Editor.GetVisualDescendants().OfType<DecoratorContainer>().Where(ghost => ghost.DataContext is GhostCardViewModel)
                 .Select(ghost => new Rect(In(ghost).Position, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight) * Editor.ViewportZoom)));
-        if (cards.Any(card => controls.Any(control => control.Intersects(card))))
+        if (cards.Any(card => card.Intersects(view) && (!view.Contains(card) || controls.Any(control => control.Intersects(card)))))
         {
             FitToView();
         }

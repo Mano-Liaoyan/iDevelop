@@ -125,14 +125,14 @@ public partial class MainWindow : Window
         dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
     }
 
-    // When the canvas gets shorter under its floating controls, as the conversation docks, it moves its cards out from
-    // under them.
+    // When the canvas gets smaller under its floating controls while the conversation is docked, as when it docks, it
+    // brings the cards that it cut or covered back into view, clear of the controls.
     private void OnCanvasAreaSized(SizeChangedEventArgs e)
     {
         TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-        if (ViewModel.DockedConversation is not null && e.NewSize.Height < e.PreviousSize.Height)
+        if (ViewModel.DockedConversation is not null && (e.NewSize.Height < e.PreviousSize.Height || e.NewSize.Width < e.PreviousSize.Width))
         {
-            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(), DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(() => CanvasView?.FitIfHidden(), DispatcherPriority.Background);
         }
     }
 

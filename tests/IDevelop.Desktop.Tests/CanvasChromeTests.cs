@@ -159,7 +159,7 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Docking_in_a_large_window_moves_the_cards_and_the_proposals_ghosts_out_from_under_the_floating_controls()
+    public void Docking_moves_the_cards_and_the_proposals_ghosts_into_view_clear_of_the_floating_controls()
     {
         using var f = FanOut.Fixture();
         var shell = f.Window();
@@ -176,6 +176,14 @@ public sealed class CanvasChromeTests : IDisposable
         var cards = Cards(shell);
         Assert.Equal(7, cards.Length);
         Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
+
+        // The window then narrows to its smallest, which cuts the cards at the canvas's edge, so the canvas fits them again.
+        Resize(shell, 900, 600);
+
+        var canvas = shell.Bounds(shell.Editor);
+        var (top, bottom) = Rows(shell);
+        Assert.All(Cards(shell), card => Assert.True(canvas.Contains(card) && card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5,
+            $"The card at {card} is not whole between {top} and {bottom} in {canvas}."));
     }
 
     [AvaloniaFact]
