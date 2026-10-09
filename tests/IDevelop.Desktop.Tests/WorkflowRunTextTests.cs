@@ -171,11 +171,11 @@ public sealed class WorkflowRunTextTests
         string Named(TaskId task) => task == TestTasks.Design ? "A" : task == Task ? "B" : "C";
 
         Assert.Null(WorkflowRunText.RunsAfter([], Named));
-        Assert.Equal("Runs after \"A\". Run \"A\" first.", WorkflowRunText.RunsAfter([TestTasks.Design], Named));
-        Assert.Equal("Runs after \"A\" and \"B\". Run them first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task], Named));
-        Assert.Equal("Runs after \"A\" and 2 more. Run them first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task, TestTasks.Review], Named));
+        Assert.Equal("Runs after \"A\". Run \"A\"\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design], Named));
+        Assert.Equal("Runs after \"A\" and \"B\". Run them\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task], Named));
+        Assert.Equal("Runs after \"A\" and 2 more. Run them\u00A0first.", WorkflowRunText.RunsAfter([TestTasks.Design, Task, TestTasks.Review], Named));
         // Titles read in title order, whatever order the tasks come in.
-        Assert.Equal("Runs after \"A\" and \"B\". Run them first.", WorkflowRunText.RunsAfter([Task, TestTasks.Design], Named));
+        Assert.Equal("Runs after \"A\" and \"B\". Run them\u00A0first.", WorkflowRunText.RunsAfter([Task, TestTasks.Design], Named));
     }
 
     [Fact]

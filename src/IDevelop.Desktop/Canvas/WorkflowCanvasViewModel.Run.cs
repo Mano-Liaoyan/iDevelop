@@ -162,7 +162,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         if (run.View.Tasks.GetValueOrDefault(node.Id) is not { } view || run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is not { } approved)
         {
-            return "Added after this run started. Run it once the run finishes.";
+            return "Added after this run started. Run it once the run\u00A0finishes.";
         }
 
         if (view.State != TaskState.Unrequested)

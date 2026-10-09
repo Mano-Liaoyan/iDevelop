@@ -205,8 +205,9 @@ internal static class WorkflowRunText
     public static string? RunsAfter(IReadOnlyCollection<TaskId> predecessors, Func<TaskId, string> title) => predecessors.Count switch
     {
         0 => null,
-        1 => $"Runs after {Names(predecessors, title)}. Run {Names(predecessors, title)} first.",
-        _ => $"Runs after {Names(predecessors, title)}. Run them first.",
+        // The last word stays with the one before it, so a narrow inspector leaves no word alone on a line.
+        1 => $"Runs after {Names(predecessors, title)}. Run {Names(predecessors, title)}\u00A0first.",
+        _ => $"Runs after {Names(predecessors, title)}. Run them\u00A0first.",
     };
 
     /// <summary>
@@ -218,7 +219,7 @@ internal static class WorkflowRunText
         StartProblem.NoAgent => "it had no agent then.",
         StartProblem.FieldMissing missing => $"its {missing.Label} field was empty then.",
         _ => "it could not start as it was then.",
-    } + " Run it once the run finishes.";
+    } + " Run it once the run\u00A0finishes.";
 
     /// <summary>What a task of the run needs from the person, which its card's glyph shows, or null.</summary>
     public static Attention? Needs(TaskView task, Func<TaskId, string> title)
