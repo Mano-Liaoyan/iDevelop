@@ -143,7 +143,7 @@ public sealed class CarriedResultTests
 
         OpenPreflight(shell, "A");
 
-        Assert.Equal([WorkflowRunText.Unbroken("Uses \"B\"'s result from an earlier run.")], shell.TextsOf("PreflightCarriedResult"));
+        Assert.Equal([WorkflowRunText.Unbroken("Uses \"B\"'s result from an earlier\u00A0run.")], shell.TextsOf("PreflightCarriedResult"));
         Assert.Equal(["A", "C"], shell.TextsOf("PreflightTask"));
         Start(shell, "A");
         Assert.Equal("Completed", shell.RunStatus);
@@ -151,7 +151,7 @@ public sealed class CarriedResultTests
         Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], Cards(shell));
         Select(shell, "B");
         Assert.Equal("Succeeded", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal(WorkflowRunText.Unbroken("The last run of the \"Workflow\" workflow used this task's result from an earlier run."), shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("The last run of the \"Workflow\" workflow used this task's result from an earlier\u00A0run."), shell.Text("RunOwner"));
         // The run carried B's result and never talked to it, so no run conversation is offered for it.
         Assert.False(Shows(shell, "RunConversationNote"));
         // The run bar counts the tasks it ran apart from the one it carried.
@@ -185,7 +185,7 @@ public sealed class CarriedResultTests
 
         OpenPreflight(shell, "A");
 
-        Assert.Equal([WorkflowRunText.Unbroken("Can't use \"B\"'s result from an earlier run: its code conflicts with this base in out-b.txt. The tasks after it wait until it runs again.")],
+        Assert.Equal([WorkflowRunText.Unbroken("Can't use \"B\"'s result from an earlier run: its code conflicts with this base in out-b.txt. The tasks after it wait until it runs\u00A0again.")],
             shell.TextsOf("PreflightCarriedResult"));
         Start(shell, "A");
         Assert.Equal((1, 1, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
@@ -251,6 +251,9 @@ public sealed class CarriedResultTests
 
         shell.WaitForCard("C", "Succeeded");
         Assert.Equal("Succeeded", shell.CardText("B", "CardStatus"));
+        Select(shell, "B");
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow uses this task's result from an earlier run instead of running it\u00A0again."),
+            shell.Text("RunOwner"));
         f.Open("d");
         shell.WaitForStatus("Completed");
         Assert.Equal((1, 1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C"), f.Launches("D")));
