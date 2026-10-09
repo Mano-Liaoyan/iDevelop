@@ -24,7 +24,7 @@ internal sealed partial class Materializer
             inputs = prepared.Inputs;
             if (SalvageOwnershipUnresolved(record, attempt)) return new Preservation.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience);
             if (mutation is null) return new Preservation.Rejected(new(RunProblem.JournalBusy));
             record = Read(permit.Workflow, permit.Run);
             if (SalvageOwnershipUnresolved(record, attempt)) return new Preservation.Rejected(new(RunProblem.UnresolvedOwnership));

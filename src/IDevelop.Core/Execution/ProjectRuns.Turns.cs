@@ -22,8 +22,12 @@ public sealed partial class ProjectRuns
     internal Func<string, ulong?>? Volumes { get; set; }
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
-    private Materializer TurnMaterializer(RunStore store) => MergeJoins.Open(_projectFolder, store,
-        MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point), Volumes);
+    private Materializer TurnMaterializer(RunStore store)
+    {
+        var materializer = MergeJoins.Open(_projectFolder, store, MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point), Volumes);
+        materializer.MutationPatience = MutationPatience;
+        return materializer;
+    }
 
     internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default)
     {

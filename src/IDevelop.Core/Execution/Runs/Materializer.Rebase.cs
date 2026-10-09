@@ -31,7 +31,7 @@ internal sealed partial class Materializer
         {
             // The preview builds merges and clears stale merge scratch folders, which only the repository lock's holder may do.
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience);
             if (mutation is null) return new RebasePreviewRead.Rejected(new(RunProblem.JournalBusy));
             var record = Read(lease.Permit.Workflow, lease.Permit.Run);
             VerifyRepository(record, repository);
@@ -80,7 +80,7 @@ internal sealed partial class Materializer
                 return new Rebasing.Rebased(done);
             }
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience);
             if (mutation is null) return new Rebasing.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             if (RebasedResult(record, planId) is { } concurrent)

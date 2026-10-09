@@ -254,7 +254,7 @@ internal sealed partial class Materializer
             var prepared = record.Preparations[new(attempt, 1)];
             inputs = prepared.Inputs;
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience);
             if (mutation is null) return new Restoration.Rejected(new(RunProblem.JournalBusy));
             record = Read(permit.Workflow, permit.Run);
             if (RunReducer.RestorationSuperseded(record, planId)) return new Restoration.Rejected(new(RunProblem.ReplacementConflict));

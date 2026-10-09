@@ -24,8 +24,9 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>
     /// Sends the person's message to <paramref name="task"/>'s agent. A running turn queues it, and Stop and send ends that
     /// turn first. A resting attempt records it in its log at once, and the coordinator then starts the attempt's next turn
-    /// with every queued message, when the run's client slot is free. The message is refused while a turn starts or settles,
-    /// so the queued text never changes between a next turn's prompt and its claim.
+    /// with every queued message, beside the run's other clients. Only a run at its bound of client roots makes it wait for
+    /// a free slot. The message is refused while a turn starts or settles, so the queued text never changes between a next
+    /// turn's prompt and its claim.
     /// </summary>
     internal Task<SendResult> Send(RunAddress address, TaskId task, TurnKey expected, string text, bool stopTurn, CancellationToken wait = default) =>
         Converse(address, (record, complete) => SendCore(record, task, expected, text, stopTurn, complete), Refusal, wait);
@@ -146,11 +147,16 @@ internal sealed partial class WorkflowRunCoordinator
         return goesOn ? string.Join("\n\n", log.Queued.Select(message => message.Text)) : null;
     }
 
-    /// <summary>Starts the next turn of the first resting attempt, in task order, that has text for its agent.</summary>
-    private bool Continue(RunRecord record, RunView view)
+    /// <summary>
+    /// Starts the next turn of each resting attempt that has text for its agent, in task order, up to
+    /// <paramref name="free"/> of them, and returns how many started.
+    /// </summary>
+    private int Continue(RunRecord record, RunView view, int free)
     {
+        var started = 0;
         foreach (var state in view.Tasks.Values)
         {
+            if (started >= free) break;
             var task = state.Task;
             // The view was projected before this decision's reconciliation, which may have taken up a waiting task's
             // held release since; work this window has on a task always goes first.
@@ -167,9 +173,9 @@ internal sealed partial class WorkflowRunCoordinator
                     _problem = error.Message;
                     HoldStart(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
                 });
-            return true;
+            started++;
         }
-        return false;
+        return started;
     }
 
     private void SendCore(RunRecord record, TaskId task, TurnKey expected, string text, bool stopTurn, Action<SendResult> complete)

@@ -11,8 +11,8 @@ public sealed class StaleInputTests
     private static Workflow Chain() => Graph([Agent(A), Agent(B)], (A, B));
 
     /// <summary>
-    /// A writes <c>a.txt="old\n"</c> and B starts from it. While B runs, the person retries A, which reserves the retry
-    /// for the run's one client slot. B finishes first, and A's retry then publishes <c>a.txt="new\n"</c>, so B's result is stale.
+    /// A writes <c>a.txt="old\n"</c> and B starts from it. While B runs, the person retries A, whose retry runs beside B and
+    /// publishes <c>a.txt="new\n"</c>. B finishes against the input it claimed, so B's result is stale.
     /// </summary>
     private static async Task<ResultRecord> Stale(CoordinatorFixture f)
     {

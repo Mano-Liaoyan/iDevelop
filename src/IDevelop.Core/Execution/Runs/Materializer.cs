@@ -28,6 +28,12 @@ internal sealed partial class Materializer
         _probe = probe;
     }
 
+    /// <summary>
+    /// How long a step waits for the repository's mutation lock while another step holds it. A run's window waits longer,
+    /// because its tasks prepare, claim, and publish at the same time (ADR 0018).
+    /// </summary>
+    internal TimeSpan MutationPatience { get; set; } = GitRepository.MutationPatience;
+
     public static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins = null) =>
         Open(projectFolder, store, joins, TimeProvider.System, null, null);
 
@@ -52,7 +58,7 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var repository = OpenRepository();
-            using var held = repository.TakeMutationLock();
+            using var held = repository.TakeMutationLock(MutationPatience);
             if (held is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             var record = Read(workflow, run);
             if (record.Phase != RunPhase.Approved) return new Preparation.Rejected(new(RunProblem.RunStopped));

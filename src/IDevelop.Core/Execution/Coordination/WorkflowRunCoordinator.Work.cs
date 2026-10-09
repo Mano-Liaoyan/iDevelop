@@ -42,23 +42,38 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Concludes the reviews that agreed or failed. Then, while no client root of the run is starting or running, starts a
-    /// resting attempt's next turn that has text for its agent, or else the first ready task, or else a review's next
-    /// reviewer turn or fix round, each in task order.
+    /// Concludes the reviews that agreed or failed. Then starts every resting attempt's next turn that has text for its
+    /// agent, every ready task, and every review's next reviewer turn or fix round, in that order and each in task order,
+    /// while the run's client roots stay under <see cref="ProjectRuns.ClientRoots"/>. Below that bound they all start at
+    /// once, so the order only decides which wait once the bound is reached (ADR 0018).
     /// </summary>
     private void Dispatch(RunRecord record, RunView view)
     {
         EndFixes(record, view);
         ConcludeReviews(record, view);
-        if (!Slotted.IsEmpty) return;
-        if (Continue(record, view)) return;
-        // A reserved fix of a review round resumes from its review, which knows its prompt.
-        var next = view.Tasks.Values.FirstOrDefault(task => task.State == TaskState.Ready && !_live.ContainsKey(task.Task) && !FixesReview(record, task));
-        if (next is null)
+        var free = _runs.ClientRoots - Slotted.Length;
+        free -= Continue(record, view, free);
+        free -= StartReady(record, view, free);
+        AdvanceReviews(record, view, free);
+    }
+
+    /// <summary>Starts each ready task, in task order, up to <paramref name="free"/> of them, and returns how many started.</summary>
+    private int StartReady(RunRecord record, RunView view, int free)
+    {
+        var started = 0;
+        foreach (var next in view.Tasks.Values)
         {
-            AdvanceReviews(record, view);
-            return;
+            if (started >= free) break;
+            // A reserved fix of a review round resumes from its review, which knows its prompt.
+            if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || FixesReview(record, next)) continue;
+            Start(record, next);
+            started++;
         }
+        return started;
+    }
+
+    private void Start(RunRecord record, TaskView next)
+    {
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
         var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
@@ -125,7 +140,7 @@ internal sealed partial class WorkflowRunCoordinator
         Hold(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
     }
 
-    /// <summary>Holds the slot until the turn's root exits, then waits for its settlement without one.</summary>
+    /// <summary>Holds a client slot of the run until the turn's root exits, then waits for its settlement without one.</summary>
     private void Track(TaskId task, RunningTurn turn)
     {
         _live[task] = new(LiveStage.Running, turn);

@@ -6,9 +6,9 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// Runs one approved workflow run in this window: it schedules the run's tasks along their dependency connections, one
-/// client root at a time, and gives each settled turn its disposition through E3a. It holds the run's
-/// <see cref="CoordinatorPermit"/>, so a second window only reads the run.
+/// Runs one approved workflow run in this window: it schedules the run's tasks along their dependency connections,
+/// starts every task that is ready at once, each with its own client root, and gives each settled turn its disposition
+/// through E3a. It holds the run's <see cref="CoordinatorPermit"/>, so a second window only reads the run.
 /// <para>
 /// Every decision happens on one loop, after a durable reread of the journal. Preparation, launch, settlement,
 /// publication, closure, and reconciliation run outside it as work items that post their outcome back. Only the loop
@@ -19,6 +19,13 @@ internal sealed partial class WorkflowRunCoordinator
 {
     internal const string ElsewhereMessage = "This run is controlled by another iDevelop window.";
     internal const string StoppedReason = "The workflow was stopped before this task started.";
+
+    /// <summary>
+    /// A safety bound on the client roots one run starts or runs at once, far above any workflow a person draws, so in
+    /// practice every ready task starts at once. It is no setting (ADR 0018).
+    /// </summary>
+    internal const int ClientRootLimit = 32;
+
     private static readonly RunCommand Accepted = new RunCommand.Accepted();
 
     private readonly ProjectRuns _runs;
@@ -321,7 +328,7 @@ internal sealed partial class WorkflowRunCoordinator
 
     private void Offload<T>(Func<T> work, Action<T> done, Action<Exception> failed) => Background(() => Task.FromResult(work()), done, failed);
 
-    /// <summary>This window's work for a task. Starting and Running hold the run's one client slot.</summary>
+    /// <summary>This window's work for a task. Starting and Running each hold one of the run's client slots.</summary>
     private sealed record Live(LiveStage Stage, RunningTurn? Turn = null, bool Cancelled = false);
 
     private ImmutableArray<TaskId> Slotted => [.. _live.Where(pair => pair.Value.Stage is LiveStage.Starting or LiveStage.Running).Select(pair => pair.Key)];
