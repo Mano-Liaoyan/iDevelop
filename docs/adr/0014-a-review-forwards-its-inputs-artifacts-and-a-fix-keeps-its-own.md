@@ -1,6 +1,6 @@
 # A review forwards its inputs' artifacts, and a fix keeps those it does not declare again
 
-An agreed review's result forwards its input code, as before, and its dependency inputs' artifacts, copied under the review's own result with their names, bytes, and digests kept, as an approval's result does in [ADR 0007](0007-a-gate-approval-is-a-human-origin-result.md). The code's owners stay the subject's. A review fix's result keeps the artifacts of the subject's prior result that it does not declare again, matched by name without case, and a redeclared name replaces the kept artifact. The coordinator decided the carry-over, and the owner may revise it.
+An agreed review's result forwards its input code, as before, and its dependency inputs' artifacts, copied under the review's own result with their names, bytes, and digests kept, as an approval's result does in [ADR 0007](0007-a-gate-approval-is-a-human-origin-result.md). The code's owners stay the subject's. A review fix's result keeps the artifacts of the subject's prior result that it does not declare again, matched by name without case, and a redeclared name replaces the kept artifact. The carry-over was decided during the 2026-10-08 implementation run, and the owner may revise it.
 
 ## How it works
 
@@ -16,4 +16,4 @@ An agreed review's result forwards its input code, as before, and its dependency
 
 - A fix can replace an artifact of its earlier result but cannot remove one.
 
-Source: pull request [#79](https://github.com/Mano-Liaoyan/iDevelop/pull/79) (E3c.2), its Decisions 7 and 9, the last of them the coordinator's, and its review round 1 (P2-1 and P2-2).
+Source: pull request [#79](https://github.com/Mano-Liaoyan/iDevelop/pull/79) (E3c.2), its Decisions 7 and 9, the last of them decided during the 2026-10-08 implementation run, and its review round 1 (P2-1 and P2-2).

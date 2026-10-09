@@ -66,7 +66,7 @@ _Avoid_: git rebase, which iDevelop does not run
 ### Reviews
 
 **Interrupted fix**:
-A review's fix round that closing iDevelop interrupted. It never starts again by itself and waits for the person's Continue fix or Retry fix.
+A review's fix round that closing iDevelop interrupted, or that a crash or a kill lost and the person then closed as stopped. It never starts again by itself and waits for the person's Continue fix or Retry fix.
 _Avoid_: failed fix
 
 **Continue fix**:
@@ -90,7 +90,7 @@ A person's repair of a drift or capture block: Preserve retains the checkout as 
 _Avoid_: git restore, which iDevelop does not run
 
 **Close as stopped**:
-A person's confirmed closure of a turn whose end was never recorded, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
+A person's confirmed closure of an uncertain turn with no recorded root exit, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
 _Avoid_: Stop, Stop Workflow
 
 **Publishing attempt**:

@@ -1,6 +1,6 @@
 # The app shows a run on its task cards and keeps the run's controls in reach
 
-Run Workflow sits beside Generate and needs no selected node. While a workflow's run is active, a floating run bar at the bottom center, PlanWeave's run bar, holds the run's status, its done count, what goes on now, Resume while the run is paused, and Stop Workflow. The task cards show the run's view of each task through the canvas's existing node states. While a task's conversation covers the canvas, a strip under the conversation's header repeats the run's status, done count, and activity, with Resume and Stop Workflow, so they stay in reach. The strip is the coordinator's decision.
+Run Workflow sits beside Generate and needs no selected node. While a workflow's run is active, a floating run bar at the bottom center, PlanWeave's run bar, holds the run's status, its done count, what goes on now, Resume while the run is paused, and Stop Workflow. The task cards show the run's view of each task through the canvas's existing node states. While a task's conversation covers the canvas, a strip under the conversation's header repeats the run's status, done count, and activity, with Resume and Stop Workflow, so they stay in reach. The strip was decided during the 2026-10-08 implementation run, and the owner may revise it.
 
 ## How it works
 
@@ -13,4 +13,4 @@ Run Workflow sits beside Generate and needs no selected node. While a workflow's
 
 - Floating the run bar above the conversation. It would cover the conversation's composer.
 
-Source: pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its Decisions 2, 3, 8, and 10, the last of them the coordinator's, and its retained-project activity, and pull request [#81](https://github.com/Mano-Liaoyan/iDevelop/pull/81) (E3g.2), its Decision 8.
+Source: pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its Decisions 2, 3, 8, and 10, the last of them decided during the 2026-10-08 implementation run, and its retained-project activity, and pull request [#81](https://github.com/Mano-Liaoyan/iDevelop/pull/81) (E3g.2), its Decision 8.

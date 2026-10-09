@@ -22,7 +22,7 @@ Review updated inputs replays a stale writer result's complete recorded change o
 
 ## Consequences
 
-- No ticket yet owns manual Retry, and the journal's source check refuses a retry of a stale consumer whose upstream code changed with `StaleInput`. So a stale result that cannot be rebased, because of a conflict or because it has no code of its own, has no way forward until the Retry ticket relaxes that check. The Updated inputs panel offers no rebase to a result without code, which the coordinator would refuse with `UnsupportedResult`, and says that a Retry, not offered yet, would bring it up to date.
+- No ticket yet owns manual Retry, and the journal's source check refuses a retry of a stale consumer whose upstream code changed with `StaleInput`. So a stale result that cannot be rebased, because of a conflict or because it has no code of its own, has no way forward until the Retry ticket relaxes that check. The Updated inputs panel offers no rebase to a result without code of its own, which the coordinator would refuse with `UnsupportedResult`, and says that a Retry, not offered yet, would bring it up to date.
 - A rebase does not move the consumer's join branch. The rebase ref keeps the new join commit alive as the candidate's parent.
 
 Source: pull request [#75](https://github.com/Mano-Liaoyan/iDevelop/pull/75) (E3f), its Decisions 1 to 4, 6, and 8 to 10, and its review's note on Retry, and pull request [#81](https://github.com/Mano-Liaoyan/iDevelop/pull/81) (E3g.2), its review fix P2-1.
