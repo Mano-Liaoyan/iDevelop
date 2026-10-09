@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using IDevelop.Execution;
 using IDevelop.Workflows;
 
@@ -11,7 +12,15 @@ namespace IDevelop.Nodes;
 public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDictionary<string, string> Fields);
 
 /// <summary>A new node. Its id is minted from the plan and the agent's own id for it.</summary>
-public sealed record ProposedNode(TaskId Id, string Name, Blueprint Blueprint, string Title, ImmutableSortedDictionary<string, string> Fields);
+public sealed record ProposedNode(TaskId Id, string Name, Blueprint Blueprint, string Title, ImmutableSortedDictionary<string, string> Fields)
+{
+    /// <summary>
+    /// The agent the planner chose for the node, or null when it chose none, as every planner before it was asked to.
+    /// A run's journal leaves out a null agent, so a proposal without agents records as it always did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProposedAgent? Agent { get; init; }
+}
 
 public sealed record ProposedConnection(TaskId From, TaskId To, ConnectionKind Kind);
 
@@ -131,10 +140,21 @@ public sealed record Proposal(
     /// </summary>
     /// <param name="started">Whether a task has an attempt.</param>
     /// <param name="fallback">
-    /// The agent that a new Agent or Review node takes when its blueprint has no default agent, with the blueprint's
-    /// default conversation mode. Null keeps every blueprint's defaults. A fill never changes its node's agent.
+    /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
+    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. Null leaves
+    /// such a node without an agent. A fill never changes its node's agent.
     /// </param>
-    public WorkflowEdit.Batch Accept(Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started, ExecutionSettings? fallback = null)
+    /// <param name="planned">
+    /// The planner's choice for each new Agent or Review node, one this machine can run. A node takes it only when its
+    /// blueprint has no agent of its own, so a blueprint's saved agent wins, as the person chose it.
+    /// </param>
+    /// <param name="changed">
+    /// The person's choice for each new Agent or Review node in the review, which wins over everything. A node that takes
+    /// no agent, and a fill, ignore theirs.
+    /// </param>
+    public WorkflowEdit.Batch Accept(
+        Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started, ExecutionSettings? fallback = null,
+        IReadOnlyDictionary<TaskId, ExecutionSettings>? planned = null, IReadOnlyDictionary<TaskId, ExecutionSettings>? changed = null)
     {
         var layout = Layout(workflow);
         var placed = Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id).ToHashSet();
@@ -149,7 +169,7 @@ public sealed record Proposal(
                 {
                     Title = node.Title,
                     Fields = node.Fields.ToImmutableDictionary(),
-                    Settings = FallbackSettings(node.Blueprint, fallback),
+                    Settings = SettingsFor(node.Blueprint, changed?.GetValueOrDefault(node.Id), planned?.GetValueOrDefault(node.Id), fallback),
                 }),
             .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(Fill),
             .. Connections
@@ -200,13 +220,14 @@ public sealed record Proposal(
         return depths;
     }
 
-    /// <summary>A new node's settings when <paramref name="fallback"/> gives it an agent, or null to keep its blueprint's defaults.</summary>
-    private static NodeSettings? FallbackSettings(Blueprint blueprint, ExecutionSettings? fallback) =>
-        fallback is null || blueprint.Defaults.Execution is not null ? null : blueprint.Work.Kind switch
-        {
-            WorkKind.Agent or WorkKind.Review => blueprint.Defaults with { Execution = fallback },
-            WorkKind.Person => null,
-        };
+    /// <summary>
+    /// A new node's agent, first found of: the person's choice, its blueprint's own agent, the planner's choice, and the
+    /// fallback. Null keeps the blueprint's defaults, as for a blueprint with an agent of its own or a node that takes none.
+    /// </summary>
+    private static NodeSettings? SettingsFor(Blueprint blueprint, ExecutionSettings? changed, ExecutionSettings? planned, ExecutionSettings? fallback) =>
+        blueprint.Work.Kind == WorkKind.Person ? null
+        : (changed ?? (blueprint.Defaults.Execution is null ? planned ?? fallback : null)) is { } agent ? blueprint.Defaults with { Execution = agent }
+        : null;
 
     private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill) =>
     [
@@ -277,7 +298,7 @@ public sealed record Proposal(
             }
 
             var title = Text(item, "title", name) is { } given && !string.IsNullOrWhiteSpace(given) ? given.Trim() : found.Name;
-            nodes.Add(new ProposedNode(id, name, found, title, Fields(item, name)));
+            nodes.Add(new ProposedNode(id, name, found, title, Fields(item, name)) { Agent = Agent(item, name) });
         }
 
         var connections = ImmutableArray.CreateBuilder<ProposedConnection>();
@@ -356,6 +377,42 @@ public sealed record Proposal(
         }
 
         return values.ToImmutable();
+    }
+
+    /// <summary>
+    /// The agent a new task's entry chose, or null for none. An agent that cannot be read stays with its task as
+    /// unreadable, so the person sees why it falls back, and the rest of the proposal still reads.
+    /// </summary>
+    private static ProposedAgent? Agent(JsonElement item, string owner)
+    {
+        if (!item.TryGetProperty("agent", out var agent) || agent.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (agent.ValueKind != JsonValueKind.Object)
+        {
+            return new ProposedAgent(null, null, null, null) { Unreadable = $"The agent of {owner} is not an object." };
+        }
+
+        string? unreadable = null;
+        string? Part(string property)
+        {
+            if (!agent.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null)
+            {
+                return null;
+            }
+
+            if (value.ValueKind != JsonValueKind.String)
+            {
+                unreadable ??= $"The \"{property}\" of {owner}'s agent is not text.";
+                return null;
+            }
+
+            return string.IsNullOrWhiteSpace(value.GetString()) ? null : value.GetString()!.Trim();
+        }
+
+        return new ProposedAgent(Part("client"), Part("model"), Part("reasoning"), Part("reason")) { Unreadable = unreadable };
     }
 
     private static TaskId End(JsonElement item, string property, Dictionary<string, TaskId> ends, PlanningHandles handles)

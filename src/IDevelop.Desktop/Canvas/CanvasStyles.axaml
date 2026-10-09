@@ -32,6 +32,31 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="Opacity" Value="0.85" />
   </Style>
+  <!-- A card's and a ghost's three text lines, 18 + 16 + 16 px, sit 7 px from the card's top and bottom edges. -->
+  <Style Selector="StackPanel.cardText">
+    <Setter Property="Margin" Value="0,7,0,0" />
+  </Style>
+  <!-- Why a ghost's agent falls back: a tab that hangs from the card's bottom edge, inset by the card's corner radius on
+       both sides, so its edges line up with the card's straight edge. -->
+  <Style Selector="Border.ghostNote">
+    <Setter Property="Margin" Value="24,-1,24,0" />
+    <Setter Property="Padding" Value="8,3,8,4" />
+    <Setter Property="CornerRadius" Value="0,0,8,8" />
+    <Setter Property="BorderThickness" Value="1,0,1,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+  </Style>
+  <Style Selector="Border.ghostNote PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <Style Selector="Border.ghostNote TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
   <Style Selector="TextBlock.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
