@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
@@ -45,11 +46,51 @@ public partial class MainWindow : Window
                 SizeDock();
             }
         };
+        _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
+        _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
+        Columns.SizeChanged += (_, _) => LimitPanels();
+        Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
+        Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
+        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+        MainArea.SizeChanged += (_, _) => LimitDock();
+        DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
+    }
+
+    // The largest widths the sidebar's and the inspector's columns declare for themselves.
+    private readonly double _sidebarMax;
+    private readonly double _inspectorMax;
+
+    private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == ColumnDefinition.WidthProperty)
+        {
+            LimitPanels();
+        }
+    }
+
+    // Each panel keeps the width it was given, which its column's largest width caps while the window is too narrow for it.
+    private void LimitPanels()
+    {
+        var (sidebar, inspector) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[4]);
+        var room = Columns.Bounds.Width - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
+        if (room <= 0)
+        {
+            return;
+        }
+
+        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room,
+            new(sidebar.Width.Value, sidebar.MinWidth, _sidebarMax), new(inspector.Width.Value, inspector.MinWidth, _inspectorMax));
+        sidebar.MaxWidth = sidebarMax;
+        inspector.MaxWidth = inspectorMax;
     }
 
     // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
-    // space back when it closes.
+    // space back when it closes. It is never shorter than the conversation needs for its header, its composer, and a few
+    // lines of transcript, and while it can be, it leaves the canvas above it CanvasMinHeight. Its splitter keeps to both.
     private const double DockHeight = 400;
+
+    /// <summary>The canvas's least height above the docked conversation, while the conversation keeps what it needs.</summary>
+    internal const double CanvasMinHeight = 280;
 
     private bool _docked;
 
@@ -59,15 +100,35 @@ public partial class MainWindow : Window
         if (ViewModel.DockedConversation is null)
         {
             dock.MinHeight = 0;
+            dock.MaxHeight = double.PositiveInfinity;
             dock.Height = GridLength.Auto;
             MainArea.RowDefinitions[0].Height = GridLength.Star;
         }
         else
         {
-            dock.MinHeight = 160;
             dock.Height = new GridLength(DockHeight);
+            LimitDock();
+            // Once the dock has its height, the canvas above it moves its cards out from under its floating controls, if
+            // the cards in view before would end up under them. Resizing later never moves the person's view.
+            var shown = CanvasView?.CardsInView() ?? [];
+            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(shown), DispatcherPriority.Background);
         }
     }
+
+    private void LimitDock()
+    {
+        if (ViewModel.DockedConversation is null || MainArea.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var dock = MainArea.RowDefinitions[2];
+        // The dock's border adds its top line to what the conversation needs.
+        var needed = DockedHost.Presenter?.Child is ConversationView { RequiredHeight: > 0 } view ? view.RequiredHeight + 1 : 160;
+        dock.MinHeight = Math.Max(160, needed);
+        dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
+    }
+
 
     public MainWindowViewModel ViewModel { get; }
 
@@ -160,6 +221,14 @@ public partial class MainWindow : Window
     }
 
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
+
+    private void OnGenerate(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Canvas?.ShowGenerate() is { } planner)
+        {
+            CanvasView?.BringIntoViewIfHidden(planner);
+        }
+    }
 
     private void OnAddNode(object? sender, RoutedEventArgs e) =>
         CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);

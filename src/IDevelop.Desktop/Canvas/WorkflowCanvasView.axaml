@@ -128,6 +128,9 @@
                       x:DataType="canvas:Ghost">
           <Setter Property="Location" Value="{Binding Location}" />
           <Setter Property="IsHitTestVisible" Value="False" />
+          <!-- NodifyAvalonia 6.6.0 undoes the editor's zoom on each decorator, so a ghost would keep its size as the cards
+               shrink and cover its neighbours. Without that transform, a ghost takes the zoom as the cards do. -->
+          <Setter Property="RenderTransform" Value="{x:Null}" />
         </ControlTheme>
       </nodify:NodifyEditor.DecoratorContainerStyle>
     </nodify:NodifyEditor>
@@ -136,178 +139,169 @@
 
     <canvas:AddNodePopover x:Name="AddPopover" />
 
-    <Border Classes="floating" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12">
-      <Border>
-        <StackPanel>
-          <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
-                  AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
-          </Button>
-          <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
-                  AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
-          </Button>
-          <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
-                  AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
-          </Button>
-        </StackPanel>
+    <!-- The zoom controls, the run bars, and the minimap share the canvas's bottom edge, 12 px above it. On a compact or a
+         short canvas the code-behind hides the minimap. -->
+    <canvas:CanvasBottomBar x:Name="BottomBar" VerticalAlignment="Bottom" Margin="12">
+      <Border x:Name="ZoomPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Leading">
+        <Border>
+          <StackPanel>
+            <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
+                    AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />
+            </Button>
+            <Button Classes="icon zoom" Click="OnZoomOut" ToolTip.Tip="Zoom out (-)"
+                    AutomationProperties.AutomationId="ZoomOut" AutomationProperties.Name="Zoom out">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomOut}" />
+            </Button>
+            <Button Classes="icon zoom" Click="OnFitToScreen" ToolTip.Tip="Fit to view (F)"
+                    AutomationProperties.AutomationId="FitToScreen" AutomationProperties.Name="Fit to screen">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFit}" />
+            </Button>
+          </StackPanel>
+        </Border>
       </Border>
-    </Border>
 
-    <Button Classes="ghost" Padding="0" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="12"
-            Command="{Binding NextWaitingCommand}"
-            IsVisible="{Binding HasWaiting}"
-            AutomationProperties.AutomationId="NextWaiting"
-            AutomationProperties.Name="Show the next task that waits for you">
-      <Border Classes="pill waiting">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" />
-          <TextBlock Text="{Binding WaitingLabel}" AutomationProperties.AutomationId="WaitingCount" />
-        </StackPanel>
-      </Border>
-    </Button>
-
-    <!-- The code-behind sets the margin, so the bars never cover the zoom controls or the minimap. UI Automation shows
-         no plain border, so a user control carries each bar's id. The workflow run's bar sits above the bar of a task
-         that runs on its own. -->
-    <StackPanel x:Name="RunBars" HorizontalAlignment="Center" VerticalAlignment="Bottom" Spacing="8">
-      <UserControl HorizontalAlignment="Center"
-                   IsVisible="{Binding Run, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   AutomationProperties.AutomationId="WorkflowRunBar"
-                   AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
-        <Border Classes="floating">
-          <Border Padding="12,6,6,6">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-              <StackPanel VerticalAlignment="Center" Spacing="2">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Border Classes="pill" HorizontalAlignment="Left"
-                          Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
-                          Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
-                          Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
-                          Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Theme="{StaticResource Glyph}" />
-                      <TextBlock Text="{Binding Run.StatusLabel}" AutomationProperties.AutomationId="RunStatus" />
-                    </StackPanel>
-                  </Border>
-                  <TextBlock Classes="caption" Text="{Binding Run.Progress}" VerticalAlignment="Center"
-                             AutomationProperties.AutomationId="RunProgress" />
+      <!-- UI Automation shows no plain border, so a user control carries each bar's id. The workflow run's bar sits above the
+           bar of a task that runs on its own. On a compact canvas their buttons show only their glyphs. -->
+      <StackPanel x:Name="RunBars" canvas:CanvasBottomBar.Slot="Center" VerticalAlignment="Bottom" Spacing="8">
+        <UserControl HorizontalAlignment="Center"
+                     IsVisible="{Binding Run, Converter={x:Static ObjectConverters.IsNotNull}}"
+                     AutomationProperties.AutomationId="WorkflowRunBar"
+                     AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
+          <Border Classes="floating">
+            <Border Padding="12,6,6,6">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel VerticalAlignment="Center" Spacing="2">
+                  <WrapPanel ItemSpacing="8" LineSpacing="2">
+                    <Border Classes="pill" HorizontalAlignment="Left"
+                            Classes.running="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}, FallbackValue=False}"
+                            Classes.complete="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}, FallbackValue=False}"
+                            Classes.problem="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}, FallbackValue=False}"
+                            Classes.waiting="{Binding Run.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}, FallbackValue=False}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Theme="{StaticResource Glyph}" />
+                        <TextBlock Text="{Binding Run.StatusLabel}" AutomationProperties.AutomationId="RunStatus" />
+                      </StackPanel>
+                    </Border>
+                    <TextBlock Classes="caption" Text="{Binding Run.Progress}" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="RunProgress" />
+                  </WrapPanel>
+                  <!-- Several running tasks' titles wrap to a second line, between titles, before they are cut. -->
+                  <TextBlock Classes="caption" Text="{Binding Run.Activity}" MaxWidth="360" HorizontalAlignment="Left"
+                             TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity}"
+                             IsVisible="{Binding Run.Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
+                             AutomationProperties.AutomationId="RunActivity" />
                 </StackPanel>
-                <!-- Several running tasks' titles wrap to a second line, between titles, before they are cut. -->
-                <TextBlock Classes="caption" Text="{Binding Run.Activity}" MaxWidth="360" HorizontalAlignment="Left"
-                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity}"
-                           IsVisible="{Binding Run.Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
-                           AutomationProperties.AutomationId="RunActivity" />
-              </StackPanel>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <Button Classes="ghost" Height="32"
-                        Command="{Binding Run.ResumeCommand}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
-                        ToolTip.Tip="Start the run's next tasks in this window"
-                        AutomationProperties.AutomationId="ResumeRun"
-                        AutomationProperties.Name="Resume run">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
-                    <TextBlock Text="Resume" />
-                  </StackPanel>
-                </Button>
-                <Button Classes="ghost" Height="32"
-                        Command="{Binding Run.StopCommand}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
-                        ToolTip.Tip="Start no more tasks and stop the running ones. Finished work stays."
-                        AutomationProperties.AutomationId="StopWorkflow"
-                        AutomationProperties.Name="Stop Workflow">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <Button Classes="ghost glyph" Height="32"
+                          Command="{Binding Run.ResumeCommand}" IsVisible="{Binding Run.ShowsResume, FallbackValue=False}"
+                          ToolTip.Tip="Resume run&#10;Start the run's next tasks in this window"
+                          AutomationProperties.AutomationId="ResumeRun"
+                          AutomationProperties.Name="Resume run">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" Width="14" Height="14" />
+                      <TextBlock Classes="label" Text="Resume" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="ghost glyph" Height="32"
+                          Command="{Binding Run.StopCommand}" IsVisible="{Binding Run.ShowsStop, FallbackValue=False}"
+                          ToolTip.Tip="Stop Workflow&#10;Start no more tasks and stop the running ones. Finished work stays."
+                          AutomationProperties.AutomationId="StopWorkflow"
+                          AutomationProperties.Name="Stop Workflow">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                      <TextBlock Classes="label" Text="Stop Workflow" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="icon" Height="32"
+                          Command="{Binding DismissRunCommand}" IsVisible="{Binding ShowsRunWorkflow}"
+                          ToolTip.Tip="Hide this run. Its records stay."
+                          AutomationProperties.AutomationId="DismissRun"
+                          AutomationProperties.Name="Hide the run">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </Border>
+        </UserControl>
+        <UserControl x:Name="RunBar" HorizontalAlignment="Center"
+                     IsVisible="{Binding ActiveRun.IsVisible}"
+                     AutomationProperties.AutomationId="RunBar"
+                     AutomationProperties.Name="Running task">
+          <Border Classes="floating">
+            <Border Padding="12,6,6,6">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}" Width="14" Height="14"
+                          Foreground="{DynamicResource StateRunningBrush}" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding ActiveRun.TaskTitle}" MaxWidth="200" TextTrimming="CharacterEllipsis"
+                               FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}"
+                               AutomationProperties.AutomationId="RunBarTask" />
+                    <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ActiveRun.AgentLabel}" TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="RunBarAgent" />
+                    <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ActiveRun.Elapsed}"
+                               AutomationProperties.AutomationId="RunBarElapsed" />
+                  </Grid>
+                  <TextBlock Classes="caption" Text="{Binding ActiveRun.LastActivity}" MaxWidth="360" HorizontalAlignment="Left"
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ActiveRun.LastActivity}"
+                             AutomationProperties.AutomationId="RunBarActivity" />
+                </StackPanel>
+                <Button Grid.Column="2" Classes="ghost glyph" Height="32" VerticalAlignment="Center"
+                        Command="{Binding ActiveRun.CancelCommand}"
+                        ToolTip.Tip="Cancel run"
+                        AutomationProperties.AutomationId="RunBarCancel"
+                        AutomationProperties.Name="Cancel run">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                    <TextBlock Text="Stop Workflow" />
+                    <TextBlock Classes="label" Text="Cancel" />
                   </StackPanel>
                 </Button>
-                <Button Classes="icon" Height="32"
-                        Command="{Binding DismissRunCommand}" IsVisible="{Binding ShowsRunWorkflow}"
-                        ToolTip.Tip="Hide this run. Its records stay."
-                        AutomationProperties.AutomationId="DismissRun"
-                        AutomationProperties.Name="Hide the run">
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
-                </Button>
-              </StackPanel>
-            </Grid>
+              </Grid>
+            </Border>
           </Border>
-        </Border>
-      </UserControl>
-      <UserControl x:Name="RunBar" HorizontalAlignment="Center"
-                   IsVisible="{Binding ActiveRun.IsVisible}"
-                   AutomationProperties.AutomationId="RunBar"
-                   AutomationProperties.Name="Running task">
-        <Border Classes="floating">
-          <Border Padding="12,6,6,6">
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-              <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}" Width="14" Height="14"
-                        Foreground="{DynamicResource StateRunningBrush}" />
-              <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                  <TextBlock Text="{Binding ActiveRun.TaskTitle}" MaxWidth="200" TextTrimming="CharacterEllipsis"
-                             FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextStrongBrush}"
-                             AutomationProperties.AutomationId="RunBarTask" />
-                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding ActiveRun.AgentLabel}" TextTrimming="CharacterEllipsis"
-                             AutomationProperties.AutomationId="RunBarAgent" />
-                  <TextBlock Grid.Column="2" Classes="caption" Text="{Binding ActiveRun.Elapsed}"
-                             AutomationProperties.AutomationId="RunBarElapsed" />
-                </Grid>
-                <TextBlock Classes="caption" Text="{Binding ActiveRun.LastActivity}" MaxWidth="360" HorizontalAlignment="Left"
-                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ActiveRun.LastActivity}"
-                           AutomationProperties.AutomationId="RunBarActivity" />
-              </StackPanel>
-              <Button Grid.Column="2" Classes="ghost" Height="32" VerticalAlignment="Center"
-                      Command="{Binding ActiveRun.CancelCommand}"
-                      AutomationProperties.AutomationId="RunBarCancel"
-                      AutomationProperties.Name="Cancel run">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
-                  <TextBlock Text="Cancel" />
-                </StackPanel>
-              </Button>
-            </Grid>
-          </Border>
-        </Border>
-      </UserControl>
-    </StackPanel>
+        </UserControl>
+      </StackPanel>
 
-    <Border Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12" Width="200" Height="150">
-      <Border>
-        <nodify:Minimap x:Name="Minimap"
-                        ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
-                        ViewportLocation="{Binding ViewportLocation}"
-                        ViewportSize="{Binding #Editor.ViewportSize}"
-                        ViewportStyle="{StaticResource MinimapViewportTheme}"
-                        AutomationProperties.AutomationId="Minimap"
-                        AutomationProperties.Name="Minimap">
-          <!-- A card is a small card: its kind's fill, and its state's ring where the state is not idle. A proposal's
-               ghost card is a faint fill in a dashed ring of its kind, as on the canvas. -->
-          <nodify:Minimap.DataTemplates>
-            <DataTemplate DataType="canvas:TaskNodeViewModel">
-              <Panel>
-                <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
-                <Border Classes="minimapRing stateStroke"
-                        theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
-              </Panel>
-            </DataTemplate>
-            <DataTemplate DataType="canvas:GhostCardViewModel">
-              <Panel>
-                <Border Classes="minimapItem ghost" theme:StyleClass.Kind="{Binding Kind}" />
-                <Rectangle Classes="minimapRing kindStroke" theme:StyleClass.Kind="{Binding Kind}" />
-              </Panel>
-            </DataTemplate>
-          </nodify:Minimap.DataTemplates>
-          <nodify:Minimap.ItemContainerTheme>
-            <!-- The items are cards and ghost cards, two types that each have a Location, so the binding finds it by name. -->
-            <ControlTheme TargetType="nodify:MinimapItem"
-                          BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
-              <Setter Property="Location" Value="{ReflectionBinding Location, Mode=OneWay}" />
-              <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
-              <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
-            </ControlTheme>
-          </nodify:Minimap.ItemContainerTheme>
-        </nodify:Minimap>
+      <Border x:Name="MinimapPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Trailing" Width="200" Height="150">
+        <Border>
+          <nodify:Minimap x:Name="Minimap"
+                          ItemsSource="{Binding Converter={x:Static canvas:MinimapItems.Of}}"
+                          ViewportLocation="{Binding ViewportLocation}"
+                          ViewportSize="{Binding #Editor.ViewportSize}"
+                          ViewportStyle="{StaticResource MinimapViewportTheme}"
+                          AutomationProperties.AutomationId="Minimap"
+                          AutomationProperties.Name="Minimap">
+            <!-- A card is a small card: its kind's fill, and its state's ring where the state is not idle. A proposal's
+                 ghost card is a faint fill in a dashed ring of its kind, as on the canvas. -->
+            <nodify:Minimap.DataTemplates>
+              <DataTemplate DataType="canvas:TaskNodeViewModel">
+                <Panel>
+                  <Border Classes="minimapItem" theme:StyleClass.Kind="{Binding Kind}" />
+                  <Border Classes="minimapRing stateStroke"
+                          theme:StyleClass.Kind="{Binding Kind}" theme:StyleClass.State="{Binding State}" theme:StyleClass.Role="{Binding Role}" />
+                </Panel>
+              </DataTemplate>
+              <DataTemplate DataType="canvas:GhostCardViewModel">
+                <Panel>
+                  <Border Classes="minimapItem ghost" theme:StyleClass.Kind="{Binding Kind}" />
+                  <Rectangle Classes="minimapRing kindStroke" theme:StyleClass.Kind="{Binding Kind}" />
+                </Panel>
+              </DataTemplate>
+            </nodify:Minimap.DataTemplates>
+            <nodify:Minimap.ItemContainerTheme>
+              <!-- The items are cards and ghost cards, two types that each have a Location, so the binding finds it by name. -->
+              <ControlTheme TargetType="nodify:MinimapItem"
+                            BasedOn="{StaticResource {x:Type nodify:MinimapItem}}">
+                <Setter Property="Location" Value="{ReflectionBinding Location, Mode=OneWay}" />
+                <Setter Property="Width" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}" />
+                <Setter Property="Height" Value="{x:Static canvas:WorkflowCanvasViewModel.TaskCardHeight}" />
+              </ControlTheme>
+            </nodify:Minimap.ItemContainerTheme>
+          </nodify:Minimap>
+        </Border>
       </Border>
-    </Border>
+    </canvas:CanvasBottomBar>
   </Panel>
 </UserControl>

@@ -1,43 +1,16 @@
-<!-- The canvas layer for Generate Workflow: Run Workflow and the Generate button at the top right and, on an empty workflow,
-     a card that starts from a description. The layer has no background, so every other input passes through to the canvas. -->
+<!-- The canvas layer for Generate Workflow: on an empty workflow, a card that starts from a description. The layer has no
+     background, so every other input passes through to the canvas. The window's top bar holds the Generate button. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:canvas="using:IDevelop.Desktop.Canvas"
              x:Class="IDevelop.Desktop.Canvas.GenerateLayer"
              x:DataType="canvas:WorkflowCanvasViewModel">
   <Panel>
-    <!-- Run Workflow runs the whole workflow, so it needs no selected node. While a run of the workflow is active, the run
-         bar at the bottom holds its controls instead. -->
-    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" Orientation="Horizontal" Spacing="8">
-      <Button Classes="action" Command="{Binding RunWorkflowCommand}" IsVisible="{Binding ShowsRunWorkflow}"
-              ToolTip.Tip="Check the whole workflow, then run it along its dependencies"
-              AutomationProperties.AutomationId="RunWorkflow"
-              AutomationProperties.Name="Run Workflow">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
-          <TextBlock Text="Run Workflow" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-      <Button Classes.primary="{Binding IsGenerateIdle}"
-              Classes.action="{Binding !IsGenerateIdle}"
-              Click="OnGenerate"
-              ToolTip.Tip="Describe what to build, and a planner proposes the tasks"
-              AutomationProperties.AutomationId="GenerateWorkflow"
-              AutomationProperties.Name="{Binding GenerateLabel}">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSparkle}" IsVisible="{Binding IsGenerateIdle}" />
-          <PathIcon Theme="{StaticResource Glyph}" Classes="spin" Data="{StaticResource IconStateRunning}"
-                    Foreground="{DynamicResource AccentStrongBrush}" IsVisible="{Binding IsPlanning}" />
-          <Ellipse Width="8" Height="8" Margin="4,0" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsReviewing}" />
-          <TextBlock Text="{Binding GenerateLabel}" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-    </StackPanel>
-
     <!-- Only the card's button takes input, so a right-click or a pan anywhere else on the card reaches the canvas.
          UI Automation shows no plain border, so a user control carries the card's id. A user control clips to its
-         bounds by default, which would cut off the card's shadow. -->
-    <UserControl HorizontalAlignment="Center" VerticalAlignment="Center" Width="360" ClipToBounds="False"
+         bounds by default, which would cut off the card's shadow. The card keeps 24 px from the canvas's sides, so on the
+         narrowest canvas it narrows and its text wraps. -->
+    <UserControl HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360" Margin="24,0" ClipToBounds="False"
                  IsVisible="{Binding IsEmpty}"
                  AutomationProperties.AutomationId="GenerateEmptyState"
                  AutomationProperties.Name="Start with a description">

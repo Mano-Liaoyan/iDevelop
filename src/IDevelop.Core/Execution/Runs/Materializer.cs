@@ -271,12 +271,7 @@ internal sealed partial class Materializer
         if ((basePrompt is not null || template is not null && !template.Text.Contains("{{inputs}}", StringComparison.Ordinal)) && input.Text.Length != 0)
             prompt += "\n\n" + input.Text;
         if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
-            prompt += "\n\nDeclare artifacts in " + RunLayout.Outbox(attempt) +
-                "/manifest.json using {\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}. " +
-                "Artifact paths are relative to that folder.";
-        if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } && !kept.IsDefaultOrEmpty)
-            prompt += " Your earlier result's artifacts stay with your new result unless you declare one with the same name: " +
-                string.Join(", ", kept.Select(artifact => artifact.Name)) + ".";
+            prompt += "\n\n" + ArtifactInstructions.For(attempt, kept);
         return prompt;
     }
 

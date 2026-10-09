@@ -12,17 +12,15 @@ namespace IDevelop.Desktop.Canvas;
 
 public partial class WorkflowCanvasView : UserControl, ICanvasView
 {
-    // The run bar sits in the bottom row between the zoom controls and the minimap, as PlanWeave's does, when it fits
-    // there. On a narrower canvas it sits above them.
-    private static readonly Thickness BetweenCorners = new(54, 12, 224, 12);
-    private static readonly Thickness AboveCorners = new(12, 12, 12, 174);
-    private const double RunBarWidth = 380;
-
     /// <summary>
-    /// The margin a fitted or first view keeps around its cards. The breadcrumb, the waiting pill, and Generate float
-    /// over the canvas's top 48 px, so the top margin starts below them.
+    /// The margin a first view keeps around its cards. The breadcrumb, Run Workflow, and Generate float over the canvas's
+    /// top 48 px, so the top margin starts below them. A fitted view also keeps the cards below the waiting pill and above
+    /// the bottom row's controls, as <see cref="FitInsets"/> measures.
     /// </summary>
-    private static readonly Thickness ViewInset = new(24, 72, 24, 24);
+    private static readonly Thickness ViewInset = new(CardMargin, 72, CardMargin, CardMargin);
+
+    /// <summary>How far a fitted view keeps its cards from the canvas's edges and from what floats over it.</summary>
+    private const double CardMargin = 24;
 
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
@@ -62,8 +60,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
-        SizeChanged += (_, e) => RunBars.Margin =
-            e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
+        // A compact canvas shows its run bars' buttons as glyphs, and a compact or short one has no room for the minimap.
+        SizeChanged += (_, e) =>
+        {
+            Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+            MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(e.NewSize);
+        };
     }
 
     /// <inheritdoc />
@@ -88,18 +90,95 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         _viewModel?.OpenAdd(new AddTarget.InView());
     }
 
-    /// <summary>Zooms and pans so every card fits inside the view's inset, within the editor's zoom limits.</summary>
+    /// <summary>
+    /// Zooms and pans so every card, and every ghost card of an open proposal, fits clear of the controls that float along
+    /// the canvas's top and bottom edges, within the editor's zoom limits. See <see cref="FitInsets"/>.
+    /// </summary>
     public void FitToView()
     {
-        var extent = Editor.ItemsExtent;
-        var room = new Rect(Editor.Bounds.Size).Deflate(ViewInset);
-        if (extent.Width <= 0 || extent.Height <= 0 || room.Width <= 0 || room.Height <= 0)
+        var extent = (_viewModel?.Ghosts.OfType<GhostCardViewModel>() ?? [])
+            .Select(ghost => new Rect(ghost.Location, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight)))
+            .Aggregate(Editor.ItemsExtent, (union, ghost) => union.Width <= 0 ? ghost : union.Union(ghost));
+        if (extent.Width <= 0 || extent.Height <= 0)
         {
             return;
         }
 
-        Editor.ViewportZoom = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
-        Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+        // The margins give way when the cards would need less than the editor's least zoom to fit inside them, and the
+        // controls' edges only when they leave no room at all.
+        var insets = FitInsets().ToArray();
+        for (var i = 0; i < insets.Length; i++)
+        {
+            var room = new Rect(Editor.Bounds.Size).Deflate(insets[i]);
+            var zoom = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
+            if (i < insets.Length - 1 && (room.Width < MinFitRoom || room.Height < MinFitRoom || i == 0 && zoom < Editor.MinViewportZoom))
+            {
+                continue;
+            }
+
+            Editor.ViewportZoom = zoom;
+            Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// The margins a fit tries in turn. First <see cref="CardMargin"/> clear of everything that floats along the canvas's
+    /// top edge, which the window lays out over the canvas, and of the zoom controls, the run bars, and the minimap along its
+    /// bottom edge. Where that leaves too little room, as with a long status above the docked conversation, right against
+    /// those controls, and with no room left at all, the whole canvas.
+    /// </summary>
+    private IEnumerable<Thickness> FitInsets()
+    {
+        var top = TopLevel.GetTopLevel(this) is MainWindow { TopBar: { IsVisible: true } bar } && bar.TranslatePoint(new Point(0, bar.Bounds.Height), this) is { } below
+            ? below.Y
+            : ViewInset.Top - CardMargin;
+        var bottom = BottomBar.Bounds.Height > 0 && BottomBar.TranslatePoint(default, this) is { } bars ? Bounds.Height - bars.Y : 0;
+        yield return new Thickness(CardMargin, Math.Max(ViewInset.Top, top + CardMargin), CardMargin, bottom + CardMargin);
+        yield return new Thickness(CardMargin, top, CardMargin, bottom);
+        yield return default;
+    }
+
+    // The least room a fit keeps its cards in before it gives up a margin.
+    private const double MinFitRoom = 16;
+
+    /// <summary>The boxes, in canvas units, of the cards and of an open proposal's ghost cards that show in the view now.</summary>
+    internal Rect[] CardsInView()
+    {
+        var view = new Rect(Editor.ViewportLocation, Editor.ViewportSize);
+        return [.. Cards().Where(view.Intersects)];
+    }
+
+    /// <summary>
+    /// Fits the view when one of <paramref name="shown"/>, the cards that showed before the canvas got smaller, now sits under
+    /// a control that floats over the canvas, such as the run bar. A card cut at the canvas's edge leaves the view as it is.
+    /// </summary>
+    internal void FitIfCovered(IReadOnlyCollection<Rect> shown)
+    {
+        if (shown.Count == 0 || TopLevel.GetTopLevel(this) is not MainWindow window || !IsEffectivelyVisible || Editor.ViewportZoom <= 0)
+        {
+            return;
+        }
+
+        // Each control's box in canvas units.
+        Rect InCanvas(Visual control) => control.TranslatePoint(default, Editor) is { } at
+            ? new Rect(Editor.ViewportLocation + (Vector)at / Editor.ViewportZoom, control.Bounds.Size / Editor.ViewportZoom)
+            : default;
+        var controls = window.TopBar.Children.Concat(BottomBar.Children).Concat(RunBars.Children)
+            .Where(control => control.IsEffectivelyVisible && control != RunBars && control.Bounds.Width > 0)
+            .Select(InCanvas).ToArray();
+        if (shown.Any(card => controls.Any(control => control.Intersects(card))))
+        {
+            FitToView();
+        }
+    }
+
+    /// <summary>The cards and an open proposal's ghost cards, in canvas units.</summary>
+    private IEnumerable<Rect> Cards()
+    {
+        var size = new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight);
+        return _viewModel is not { } canvas ? []
+            : canvas.Nodes.Select(node => new Rect(node.Location, size)).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
