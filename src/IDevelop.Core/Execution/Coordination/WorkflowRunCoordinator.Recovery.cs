@@ -13,8 +13,9 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>
     /// What a person needs to judge <paramref name="task"/>'s state: the blocks that hold it, and its attempt's root
     /// process, root exit, captures, and cleanup. <paramref name="attempt"/> names the attempt, such as a block's; by
-    /// default it is the task's newest one. Null when the journal cannot be read or the task has no attempt. It reads the
-    /// journal and the attempt's log off the loop and checks whether the root process still runs.
+    /// default it is the task's newest one, and a task without an attempt has its blocks alone. Null when the journal
+    /// cannot be read or the run has no such task. It reads the journal and the attempt's log off the loop, and checks
+    /// whether the root process still runs.
     /// </summary>
     public TaskEvidence? Evidence(TaskId task, AttemptId? attempt = null)
     {
