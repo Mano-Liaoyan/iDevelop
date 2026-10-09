@@ -220,6 +220,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         {
             node.OnAgentChanged();
             node.RecheckProblem();
+            node.Proposal?.OnClientsChanged();
         }
     }
 
@@ -300,8 +301,12 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
     internal NodeKind KindOf(Blueprint blueprint) =>
         NodeKinds.Of(blueprint, key => Workflow.Blueprints.GetValueOrDefault(key) ?? Blueprints.Placeable.FirstOrDefault(placeable => placeable.Key == key));
 
-    /// <summary>What the planner may fill and place when it starts now: the palette's blueprints are its types.</summary>
-    internal PlanningContext Planning(TaskId planner) => PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted);
+    /// <summary>
+    /// What the planner may fill and place when it starts now: the palette's blueprints are its types, and the clients
+    /// ready on this machine are the agents it chooses from for each task it adds.
+    /// </summary>
+    internal PlanningContext Planning(TaskId planner) =>
+        PlanningContext.For(Workflow, planner, Blueprints.Placeable, HasStarted) with { Agents = PlanningContext.Offers(Clients.Current) };
 
     /// <summary>Whether the task has an attempt in this project.</summary>
     internal bool HasStarted(TaskId task) => Runs.Latest.ContainsKey(task);

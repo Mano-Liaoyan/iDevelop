@@ -95,6 +95,30 @@ public partial class InspectorView : UserControl
         }
     }
 
+    private void OnProposalClientChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: ProposalAgentViewModel agent, SelectedItem: ClientChoice choice } picker && IsChoice(picker))
+        {
+            agent.ChooseClient(choice);
+        }
+    }
+
+    private void OnProposalModelChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: ProposalAgentViewModel agent, SelectedItem: Choice choice } picker && IsChoice(picker))
+        {
+            agent.ChooseModel(choice);
+        }
+    }
+
+    private void OnProposalReasoningChosen(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox { DataContext: ProposalAgentViewModel agent, SelectedItem: Choice choice } picker && IsChoice(picker))
+        {
+            agent.ChooseReasoning(choice);
+        }
+    }
+
     private void OnFilterChanged(object? sender, TextChangedEventArgs e) => _state.Filter(Filter.Text);
 
     private void OnFilterKeyDown(object? sender, KeyEventArgs e)

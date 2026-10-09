@@ -390,7 +390,8 @@ public sealed class InspectorTests : IDisposable
         var shell = WaitingArchitect();
 
         var item = shell.InView<CheckBox>("ProposalItem");
-        Assert.Equal(["Wire export"], Shell.Texts(item));
+        // The planner chose no agent and the box is off, so the new task's row says it has none.
+        Assert.Equal(["Wire export", "No agent"], Shell.Texts(item));
         Assert.Equal(("Add Implement \"Wire export\"", "Add Implement \"Wire export\"\nConnect them."), (AutomationProperties.GetName(item), ToolTip.GetTip(item)));
         var toggle = shell.InView<ToggleButton>("ProposalConnectionsToggle");
         var connections = shell.Find<ItemsControl>("ProposalConnections");

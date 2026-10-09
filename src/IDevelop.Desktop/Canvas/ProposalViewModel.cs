@@ -11,8 +11,10 @@ namespace IDevelop.Desktop.Canvas;
 /// <param name="label">What accepting does, such as Add Implement "Wire export", which names the row and leads its tooltip.</param>
 /// <param name="slot">For a fill, the title of the task it fills, else null.</param>
 /// <param name="hasText">A fill of a task the person has written in, which starts unticked.</param>
+/// <param name="agent">For a new task that takes an agent, the agent it takes once accepted, else null.</param>
 public sealed class ProposalItemViewModel(
-    ProposalViewModel proposal, TaskId id, string title, string label, string preview, bool isChosen, NodeKind kind, string? slot = null, bool hasText = false) : ObservableObject
+    ProposalViewModel proposal, TaskId id, string title, string label, string preview, bool isChosen, NodeKind kind, string? slot = null, bool hasText = false,
+    ProposalAgentViewModel? agent = null) : ObservableObject
 {
     private bool _isChosen = isChosen;
     private bool _hasStarted;
@@ -35,6 +37,11 @@ public sealed class ProposalItemViewModel(
         : $"Fills {slot}";
 
     public string Preview { get; } = preview;
+
+    /// <summary>The agent a new task takes once accepted, or null for a fill and for a task that takes no agent.</summary>
+    public ProposalAgentViewModel? Agent { get; } = agent;
+
+    public bool HasAgent => Agent is not null;
 
     /// <summary>The label, then the first value the proposal gives the task.</summary>
     public string Tip => string.IsNullOrEmpty(Preview) ? Label : $"{Label}\n{Preview}";
@@ -97,7 +104,8 @@ public sealed class ProposalViewModel : ObservableObject
                 Items = [.. Proposal.Fills.Select(FillItem),
                     .. Proposal.Nodes.Where(node => !workflow.Tasks.ContainsKey(node.Id))
                         .Select(node => new ProposalItemViewModel(
-                            this, node.Id, node.Title, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, _canvas.KindOf(node.Blueprint)))];
+                            this, node.Id, node.Title, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, _canvas.KindOf(node.Blueprint),
+                            agent: node.Blueprint.Work is WorkSpec.Person ? null : new ProposalAgentViewModel(this, node)))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -116,12 +124,16 @@ public sealed class ProposalViewModel : ObservableObject
 
     public bool HasItems => Items.Count > 0;
 
-    /// <summary>The proposal adds tasks, whose agent <see cref="UsePlannerAgent"/> decides. A fill keeps its task's agent.</summary>
-    public bool AddsTasks => Items.Count > (Proposal?.Fills.Length ?? 0);
+    /// <summary>
+    /// A new task has no agent of its own, neither the person's nor a planner's choice that this machine runs, and its type
+    /// has none, so <see cref="UsePlannerAgent"/> decides its agent. A fill keeps its task's agent.
+    /// </summary>
+    public bool UsesFallback => Items.Any(item => item.Agent is { NeedsFallback: true });
 
     /// <summary>
-    /// Whether each new task whose type has no agent takes the planner's agent. On for a planner that Generate placed
-    /// in this window, and off for any other, so a new task takes its type's default agent unless the person opts in.
+    /// Whether each new task without an agent of its own, whose type has none, takes the planner's agent. On for a planner
+    /// that Generate placed in this window, and off for any other, so such a task takes its type's default agent unless
+    /// the person opts in.
     /// </summary>
     public bool UsePlannerAgent
     {
@@ -132,6 +144,7 @@ public sealed class ProposalViewModel : ObservableObject
             {
                 _canvas.ChoosePlannerAgent(proposal.Planner, value);
                 OnPropertyChanged();
+                OnAgentChanged();
             }
         }
     }
@@ -160,6 +173,14 @@ public sealed class ProposalViewModel : ObservableObject
     public ICommand DismissCommand { get; }
 
     internal Proposal? Proposal { get; }
+
+    /// <summary>The planner's agent while the box is ticked, which a new task without an agent of its own takes, else null.</summary>
+    internal ExecutionSettings? Fallback => UsePlannerAgent ? _canvas.Workflow.Tasks.GetValueOrDefault(Proposal!.Planner)?.Execution : null;
+
+    /// <summary>What each client offers on this machine now.</summary>
+    internal IReadOnlyDictionary<ClientId, ClientStatus> ClientStatuses => _canvas.Clients.Current;
+
+    internal ClientStatus Status(ClientId client) => _canvas.Clients.Current[client];
 
     /// <summary>The proposal's attempt and turn, or the problem and its attempt, which a new turn replaces.</summary>
     internal object Identity { get; }
@@ -198,10 +219,19 @@ public sealed class ProposalViewModel : ObservableObject
         }
 
         var added = proposal.Nodes.Where(node => chosen.Contains(node.Id)).ToDictionary(node => node.Id);
+        var agents = Agents().ToDictionary(agent => agent.Id);
         foreach (var node in added.Values)
         {
+            // A new task shows the agent it takes, as its card will, or its type while it has none.
+            var agent = agents.GetValueOrDefault(node.Id);
+            var lines = agent?.GhostAgent;
             cards.Add(new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), $"New {node.Blueprint.Name}", node.Title, Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint)));
+                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), lines?.Line ?? $"New {node.Blueprint.Name}", node.Title,
+                Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint))
+            {
+                Detail = lines?.Second,
+                Note = agent?.GhostNote,
+            });
         }
 
         CanvasPoint? At(TaskId id) => layout.TryGetValue(id, out var position) ? position : workflow.Positions.TryGetValue(id, out position) ? position : null;
@@ -232,6 +262,13 @@ public sealed class ProposalViewModel : ObservableObject
             $"{Title(connect.Key.From)} → {Title(connect.Key.To)}{(connect.Kind == ConnectionKind.Context ? " (context)" : "")}")];
         OnPropertyChanged(nameof(Connections));
         OnPropertyChanged(nameof(ConnectionCount));
+        // The planner's own agent, which a task without one takes, may have changed with the workflow.
+        foreach (var agent in Agents())
+        {
+            agent.ShowSummary();
+        }
+
+        OnPropertyChanged(nameof(UsesFallback));
         _accept.NotifyCanExecuteChanged();
     }
 
@@ -240,6 +277,41 @@ public sealed class ProposalViewModel : ObservableObject
         Refresh();
         _canvas.ShowGhosts();
     }
+
+    /// <summary>Opens the pickers of one task's agent, closing any other's, or closes them when they are open.</summary>
+    internal void Edit(ProposalAgentViewModel agent)
+    {
+        var open = !agent.IsEditing;
+        foreach (var each in Agents())
+        {
+            each.IsEditing = open && ReferenceEquals(each, agent);
+        }
+    }
+
+    /// <summary>A task's agent, the box, or what the clients offer changed, so each task's agent and its ghost show again.</summary>
+    internal void OnAgentChanged()
+    {
+        foreach (var agent in Agents())
+        {
+            agent.Show();
+        }
+
+        Refresh();
+        _canvas.ShowGhosts();
+    }
+
+    /// <summary>Checks each planner's choice against what the clients offer now.</summary>
+    internal void OnClientsChanged()
+    {
+        foreach (var agent in Agents())
+        {
+            agent.Recheck();
+        }
+
+        OnAgentChanged();
+    }
+
+    private IEnumerable<ProposalAgentViewModel> Agents() => Items.Select(item => item.Agent).OfType<ProposalAgentViewModel>();
 
     private HashSet<TaskId> Chosen() => [.. Items.Where(item => item.IsChosen).Select(item => item.Id)];
 
@@ -256,9 +328,13 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
-    /// <summary>The one edit that accepts the chosen tasks, with the planner's agent as the fallback while the box is ticked.</summary>
+    /// <summary>
+    /// The one edit that accepts the chosen tasks, each new task with its own agent when it has one, and with the
+    /// planner's agent as the fallback while the box is ticked.
+    /// </summary>
     private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
-        workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null);
+        workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null,
+        Agents().Where(agent => agent.Chosen is not null).ToDictionary(agent => agent.Id, agent => agent.Chosen!));
 
     /// <summary>A fill whose task is gone reads as Implement.</summary>
     private ProposalItemViewModel FillItem(ProposedFill fill)

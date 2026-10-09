@@ -32,6 +32,30 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
     <Setter Property="Opacity" Value="0.85" />
   </Style>
+  <!-- A ghost's text sits where a card's does, and three lines, for an agent too long for one, fill the card evenly. -->
+  <Style Selector="StackPanel.ghostText">
+    <Setter Property="Margin" Value="0,14,0,0" />
+  </Style>
+  <Style Selector="StackPanel.ghostText.twoLines">
+    <Setter Property="Margin" Value="0,7,0,0" />
+  </Style>
+  <!-- Under a ghost card, from its tile's edge to its text's: the warning glyph and two lines at most. -->
+  <Style Selector="Grid.ghostNote">
+    <Setter Property="Margin" Value="22,6,22,0" />
+  </Style>
+  <Style Selector="Grid.ghostNote > PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Margin" Value="0,1,0,0" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
+  </Style>
+  <Style Selector="Grid.ghostNote > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxLines" Value="2" />
+  </Style>
   <Style Selector="TextBlock.cardTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />

@@ -710,22 +710,105 @@
                             <StackPanel AutomationProperties.AutomationId="Proposal">
                               <ItemsControl ItemsSource="{Binding Items}">
                                 <ItemsControl.ItemTemplate>
-                                  <!-- The tile says the kind and the ghost wires say the connections, so a row is its title. -->
+                                  <!-- The tile says the kind and the ghost wires say the connections, so a row is its title. A new
+                                       task's agent and the planner's reason follow under the title, and its pickers open under the row. -->
                                   <DataTemplate DataType="canvas:ProposalItemViewModel">
-                                    <inspector:InspectorRow Layout="Full" Label="{Binding Label}">
-                                      <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" ToolTip.Tip="{Binding Tip}"
-                                                AutomationProperties.AutomationId="ProposalItem"
-                                                AutomationProperties.Name="{Binding Label}">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                          <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Center" />
-                                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Classes="itemTitle" Text="{Binding Title}" />
-                                            <TextBlock Classes="note" Text="{Binding Note}"
-                                                       IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                          </StackPanel>
-                                        </Grid>
-                                      </CheckBox>
-                                    </inspector:InspectorRow>
+                                    <StackPanel AutomationProperties.AutomationId="ProposalEntry">
+                                      <inspector:InspectorRow Classes="firstLine" Layout="Full" Label="{Binding Label}">
+                                        <inspector:InspectorRow.Actions>
+                                          <Button Classes="glyph" Classes.open="{Binding Agent.IsEditing, FallbackValue=False}"
+                                                  IsVisible="{Binding HasAgent}" Command="{Binding Agent.EditCommand}"
+                                                  ToolTip.Tip="Change the agent"
+                                                  AutomationProperties.AutomationId="ProposalAgentEdit"
+                                                  AutomationProperties.Name="{Binding Agent.EditName}">
+                                            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" Width="14" Height="14" />
+                                          </Button>
+                                        </inspector:InspectorRow.Actions>
+                                        <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" ToolTip.Tip="{Binding Tip}"
+                                                  AutomationProperties.AutomationId="ProposalItem"
+                                                  AutomationProperties.Name="{Binding Label}">
+                                          <!-- The box sits in the middle of the check box's first 32 px, so the title line does too. -->
+                                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,7">
+                                            <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Top" />
+                                            <StackPanel Grid.Column="1" Spacing="4">
+                                              <TextBlock Classes="itemTitle" Text="{Binding Title}" MinHeight="18" VerticalAlignment="Center"
+                                                         AutomationProperties.AutomationId="ProposalItemTitle" />
+                                              <TextBlock Classes="note" Text="{Binding Note}" Margin="0,-4,0,0"
+                                                         IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                              <ItemsControl ItemsSource="{Binding Agent.Parts}" IsVisible="{Binding HasAgent}"
+                                                            AutomationProperties.AutomationId="ProposalAgent"
+                                                            AutomationProperties.Name="{Binding Agent.Label}">
+                                                <ItemsControl.ItemsPanel>
+                                                  <ItemsPanelTemplate>
+                                                    <WrapPanel Classes="chips" />
+                                                  </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                  <DataTemplate x:DataType="x:String">
+                                                    <Border Classes="chip">
+                                                      <TextBlock Text="{Binding}" />
+                                                    </Border>
+                                                  </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                              </ItemsControl>
+                                              <TextBlock Classes="caption" Text="{Binding Agent.Reason}" TextWrapping="Wrap"
+                                                         IsVisible="{Binding Agent.Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
+                                                         AutomationProperties.AutomationId="ProposalAgentReason" />
+                                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6"
+                                                    IsVisible="{Binding Agent.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
+                                                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
+                                                          VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Agent.Note}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                                           AutomationProperties.AutomationId="ProposalAgentNote" />
+                                              </Grid>
+                                            </StackPanel>
+                                          </Grid>
+                                        </CheckBox>
+                                      </inspector:InspectorRow>
+                                      <ContentControl Content="{Binding Agent.Editor, FallbackValue={x:Null}}">
+                                        <ContentControl.ContentTemplate>
+                                          <DataTemplate DataType="canvas:ProposalAgentViewModel">
+                                            <StackPanel Margin="0,0,0,6">
+                                              <inspector:InspectorRow Label="Client" Layout="Editor" Icon="{StaticResource IconAgent}">
+                                                <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}" SelectionChanged="OnProposalClientChosen"
+                                                          AutomationProperties.AutomationId="ProposalAgentClient"
+                                                          AutomationProperties.Name="Client">
+                                                  <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="canvas:ClientChoice">
+                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                                    </DataTemplate>
+                                                  </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                              </inspector:InspectorRow>
+                                              <inspector:InspectorRow Label="Model" Layout="Editor" Icon="{StaticResource IconModel}">
+                                                <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}" SelectionChanged="OnProposalModelChosen"
+                                                          PlaceholderText="Choose a model"
+                                                          AutomationProperties.AutomationId="ProposalAgentModel"
+                                                          AutomationProperties.Name="Model">
+                                                  <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="canvas:Choice">
+                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                                    </DataTemplate>
+                                                  </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                              </inspector:InspectorRow>
+                                              <inspector:InspectorRow Label="Reasoning" Layout="Editor" Icon="{StaticResource IconReasoning}" IsShown="{Binding HasReasoning}">
+                                                <ComboBox ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}" SelectionChanged="OnProposalReasoningChosen"
+                                                          PlaceholderText="Choose a level"
+                                                          AutomationProperties.AutomationId="ProposalAgentReasoning"
+                                                          AutomationProperties.Name="Reasoning">
+                                                  <ComboBox.ItemTemplate>
+                                                    <DataTemplate DataType="canvas:Choice">
+                                                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                                    </DataTemplate>
+                                                  </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                              </inspector:InspectorRow>
+                                            </StackPanel>
+                                          </DataTemplate>
+                                        </ContentControl.ContentTemplate>
+                                      </ContentControl>
+                                    </StackPanel>
                                   </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                               </ItemsControl>
@@ -751,12 +834,13 @@
                                   </ItemsControl>
                                 </StackPanel>
                               </inspector:InspectorRow>
-                              <inspector:InspectorRow Layout="Full" Label="New tasks use the planner's agent" IsShown="{Binding AddsTasks}">
+                              <!-- Only a new task without an agent of its own, from the person or the planner, needs the planner's. -->
+                              <inspector:InspectorRow Layout="Full" Label="Fall back to the planner's agent" IsShown="{Binding UsesFallback}">
                                 <CheckBox IsChecked="{Binding UsePlannerAgent}"
-                                          ToolTip.Tip="A new task whose type has no agent of its own takes the planner's client, model, and reasoning."
+                                          ToolTip.Tip="A new task without an agent that the planner chose and this machine runs, and whose type has none, takes the planner's client, model, and reasoning."
                                           AutomationProperties.AutomationId="ProposalUsePlannerAgent"
-                                          AutomationProperties.Name="New tasks use the planner's agent">
-                                  <TextBlock Text="New tasks use the planner's agent" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextStrongBrush}" />
+                                          AutomationProperties.Name="Fall back to the planner's agent">
+                                  <TextBlock Text="Fall back to the planner's agent" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextStrongBrush}" />
                                 </CheckBox>
                               </inspector:InspectorRow>
                               <inspector:InspectorRow Layout="Full" IsShown="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">

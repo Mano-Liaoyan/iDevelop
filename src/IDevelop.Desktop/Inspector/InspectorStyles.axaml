@@ -89,7 +89,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
-  <Style Selector="Button.glyph.revert">
+  <Style Selector="Button.glyph.revert, Button.glyph.open">
     <Setter Property="Foreground" Value="{DynamicResource AccentStrongBrush}" />
   </Style>
   <Style Selector="Border.infoGlyph">
@@ -212,6 +212,11 @@
         </inspector:InspectorGrid>
       </ControlTemplate>
     </Setter>
+  </Style>
+  <!-- A row of several lines, such as a proposed task with its agent, keeps its trailing buttons on its first 32 px line. -->
+  <Style Selector="inspector|InspectorRow.firstLine /template/ StackPanel#PART_Trail">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,4,0,0" />
   </Style>
   <Style Selector="inspector|InspectorRow /template/ PathIcon#PART_Icon">
     <Setter Property="Width" Value="16" />
