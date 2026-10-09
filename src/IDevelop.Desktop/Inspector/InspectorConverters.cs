@@ -15,8 +15,8 @@ public static class InspectorConverters
     public static readonly IValueConverter TitleCase = new FuncValueConverter<string?, string?>(text => text is null ? null
         : string.Join(' ', text.Split(' ').Select(word => word.Length == 0 ? word : $"{char.ToUpperInvariant(word[0])}{word[1..].ToLowerInvariant()}")));
 
-    /// <summary>A field of several lines takes its own line under its label, and a field of one line is an editor.</summary>
-    public static readonly IValueConverter StackedWhen = new FuncValueConverter<bool, RowLayout>(stacked => stacked ? RowLayout.Stacked : RowLayout.Editor);
+    /// <summary>A field of several lines takes its own line under its label, and a field of one line sits beside it.</summary>
+    public static readonly IValueConverter StackedWhen = new FuncValueConverter<bool, RowLayout>(stacked => stacked ? RowLayout.Stacked : RowLayout.Columns);
 
     public static readonly IValueConverter Icon = new FuncValueConverter<string?, Geometry?>(key =>
         key is not null && Application.Current!.TryGetResource(key, null, out var geometry) ? geometry as Geometry : null);

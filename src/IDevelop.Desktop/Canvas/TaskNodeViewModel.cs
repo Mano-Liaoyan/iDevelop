@@ -276,7 +276,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// Only the inspector shows it, so only the selected task reads the attempts that its last run continues. A task that
     /// the canvas's run owns shows the run's state instead, so its last attempt outside the run stays out of the way.
     /// </summary>
-    public AttemptViewModel? LastAttempt => _attempt is null || ShowsRunState ? null : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere);
+    public AttemptViewModel? LastAttempt => _attempt is null || ShowsRunState ? null
+        : new AttemptViewModel(_attempt, Earlier(_attempt), RunsElsewhere, _canvas.Clients.Current[_attempt.Requested.Client]);
 
     /// <summary>
     /// Runs the task in a workflow run, which then starts each task after it once all of that task's predecessors have

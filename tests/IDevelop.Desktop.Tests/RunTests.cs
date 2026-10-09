@@ -116,7 +116,7 @@ public sealed class RunTests : IDisposable
         Assert.Equal("Succeeded", shell.InView<TextBlock>("LastRunStatus").Text);
         Assert.Equal("DONE", shell.Find<TextBox>("LastRunResult").Text);
         var agent = shell.Find<ItemsControl>("LastRunConfiguration");
-        Assert.Equal(["Codex", "gpt-5.5", "high"], Shell.Texts(agent));
+        Assert.Equal(["Codex", "GPT-5.5", "high"], Shell.Texts(agent));
         Assert.Equal("Requested Codex · gpt-5.5 · high.", ToolTip.GetTip(agent));
         Assert.Equal(["DONE"], Shell.Texts(shell.InView<ItemsControl>("LastRunActivity")));
         shell.Click(shell.InView<ToggleButton>("ToolCallsToggle"));

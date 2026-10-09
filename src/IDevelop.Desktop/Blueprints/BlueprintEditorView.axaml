@@ -8,13 +8,15 @@
     <StyleInclude Source="/Inspector/InspectorStyles.axaml" />
   </UserControl.Styles>
   <StackPanel AutomationProperties.AutomationId="BlueprintEditor">
-    <TextBlock Classes="headerName" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
-    <TextBlock Classes="kindLine" Text="{Binding Caption}" TextWrapping="Wrap" Margin="0,2,0,10"
+    <!-- The heading, its caption, and the problem end at the value edge, before the trailing column, as paragraphs do. -->
+    <TextBlock Classes="headerName" Margin="0,0,52,0" Text="{Binding Heading, Converter={x:Static inspector:InspectorConverters.TitleCase}}" />
+    <TextBlock Classes="kindLine" Text="{Binding Caption}" Margin="0,2,52,10"
                AutomationProperties.AutomationId="BlueprintCaption" />
 
     <inspector:InspectorSection Key="BlueprintAbout" Title="Blueprint">
       <StackPanel>
-        <inspector:InspectorRow Layout="Editor" Label="Library" IsShown="{Binding IsNew}">
+        <!-- A segmented control takes its own line, as a connection's kind does, so neither choice is cut short. -->
+        <inspector:InspectorRow Label="Library" Layout="Stacked" IsShown="{Binding IsNew}">
           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="2">
             <UniformGrid Columns="2">
               <RadioButton Classes="segment" GroupName="BlueprintLibrary" Content="Project"
@@ -28,7 +30,7 @@
             </UniformGrid>
           </Border>
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Editor" Label="Name">
+        <inspector:InspectorRow Label="Name">
           <TextBox Text="{Binding Name}"
                    AutomationProperties.AutomationId="BlueprintName"
                    AutomationProperties.Name="Name" />
@@ -45,31 +47,27 @@
       </StackPanel>
     </inspector:InspectorSection>
 
+    <!-- Each field is a group of rows on the panel's columns, so its boxes end where every other box ends, and a hairline
+         parts it from the next. Remove ends the group's first row where the other rows' glyph buttons end. -->
     <inspector:InspectorSection Key="BlueprintFields" Title="Fields">
-      <StackPanel Spacing="8">
+      <StackPanel>
         <ItemsControl ItemsSource="{Binding Fields}" AutomationProperties.AutomationId="BlueprintFields">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Spacing="8" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="blueprints:FieldRowViewModel">
-              <Border Padding="8,6" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                      BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}">
+              <Border Classes="fieldGroup">
                 <StackPanel>
-                  <inspector:InspectorRow Layout="Editor" Label="Key">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                      <TextBox Text="{Binding Key}"
-                               AutomationProperties.AutomationId="FieldKey" AutomationProperties.Name="Key" />
-                      <Button Grid.Column="1" Classes="glyph" Command="{Binding RemoveCommand}"
+                  <inspector:InspectorRow Label="Key">
+                    <inspector:InspectorRow.Actions>
+                      <Button Classes="glyph" Command="{Binding RemoveCommand}"
                               ToolTip.Tip="Remove field"
                               AutomationProperties.AutomationId="RemoveField" AutomationProperties.Name="Remove field">
                         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDelete}" Width="14" Height="14" />
                       </Button>
-                    </Grid>
+                    </inspector:InspectorRow.Actions>
+                    <TextBox Text="{Binding Key}"
+                             AutomationProperties.AutomationId="FieldKey" AutomationProperties.Name="Key" />
                   </inspector:InspectorRow>
-                  <inspector:InspectorRow Layout="Editor" Label="Label">
+                  <inspector:InspectorRow Label="Label">
                     <TextBox Text="{Binding Label}"
                              AutomationProperties.AutomationId="FieldLabel" AutomationProperties.Name="Label" />
                   </inspector:InspectorRow>
@@ -91,13 +89,15 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-        <Button Classes="action" HorizontalAlignment="Left" Command="{Binding AddFieldCommand}"
-                AutomationProperties.AutomationId="AddBlueprintField" AutomationProperties.Name="Add field">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" Width="14" Height="14" />
-            <TextBlock Text="Add Field" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
+        <inspector:InspectorRow Layout="Buttons">
+          <Button Classes="action" HorizontalAlignment="Left" Command="{Binding AddFieldCommand}"
+                  AutomationProperties.AutomationId="AddBlueprintField" AutomationProperties.Name="Add field">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconAdd}" Width="14" Height="14" />
+              <TextBlock Text="Add Field" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </inspector:InspectorRow>
       </StackPanel>
     </inspector:InspectorSection>
 
@@ -122,20 +122,20 @@
 
     <inspector:InspectorSection Key="BlueprintDefaults" Title="Defaults" IsShown="{Binding HasTemplate}">
       <StackPanel>
-        <inspector:InspectorRow Layout="Editor" Label="Client">
+        <inspector:InspectorRow Label="Client">
           <ComboBox ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding Client}"
                     AutomationProperties.AutomationId="BlueprintClient"
                     AutomationProperties.Name="Client" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Editor" Label="Model" IsShown="{Binding HasClient}">
+        <inspector:InspectorRow Label="Model" IsShown="{Binding HasClient}">
           <TextBox Text="{Binding Model}" Watermark="The client's default"
                    AutomationProperties.AutomationId="BlueprintModel" AutomationProperties.Name="Model" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Editor" Label="Reasoning" IsShown="{Binding HasClient}">
+        <inspector:InspectorRow Label="Reasoning" IsShown="{Binding HasClient}">
           <TextBox Text="{Binding Reasoning}" Watermark="The model's default"
                    AutomationProperties.AutomationId="BlueprintReasoning" AutomationProperties.Name="Reasoning" />
         </inspector:InspectorRow>
-        <inspector:InspectorRow Layout="Editor" Label="Conversation" IsShown="{Binding IsAgent}">
+        <inspector:InspectorRow Label="Conversation" IsShown="{Binding IsAgent}">
           <ComboBox ItemsSource="{Binding ConversationChoices}" SelectedItem="{Binding Conversation}"
                     AutomationProperties.AutomationId="BlueprintConversation"
                     AutomationProperties.Name="Conversation" />
@@ -143,7 +143,7 @@
       </StackPanel>
     </inspector:InspectorSection>
 
-    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
+    <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" Margin="0,4,52,0" FontSize="12"
                Foreground="{DynamicResource DestructiveTextBrush}"
                IsVisible="{Binding Problem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                AutomationProperties.AutomationId="BlueprintProblem" />
