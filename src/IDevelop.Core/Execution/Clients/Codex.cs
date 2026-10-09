@@ -19,7 +19,25 @@ internal static class Codex
         Protocol = request => new CodexProtocol(request),
         Terminal = session => $"codex resume {session}",
         HasReadOnlyMode = true,
+        // skills/list lists the skills of every scope, the bundled system skills too, after the connection initializes.
+        Skills = new SkillSource(folder => new Probe(["app-server"])
+        {
+            Folder = folder,
+            Stdin = JsonSerializer.Serialize(new
+            {
+                id = InitializeRequest, method = "initialize",
+                @params = new { clientInfo = new { name = "idevelop", version = "1.0.0" }, capabilities = new { experimentalApi = false } },
+            }) + "\n",
+            Reply = line => IsResponse(line, InitializeRequest)
+                ? """{"method":"initialized"}""" + "\n" + JsonSerializer.Serialize(new { id = SkillsRequest, method = "skills/list", @params = new { cwds = new[] { folder } } }) + "\n"
+                : null,
+            DoneWhen = line => IsResponse(line, SkillsRequest),
+        }, ParseSkills),
     };
+
+    private const string InitializeRequest = "idevelop-init";
+
+    private const string SkillsRequest = "idevelop-skills";
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
         ["app-server", "-c", $"approval_policy={((NativePolicy.Codex)request.PolicyFor(ClientId.Codex).Native).ApprovalPolicy}", "-c", "features.default_mode_request_user_input=false"], "");
@@ -57,6 +75,34 @@ internal static class Codex
         {
             DefaultReasoning = model.String("default_reasoning_level") is { } level && levels.Contains(level) ? level : ReasoningLevels.Default(levels),
         };
+    }
+
+    private static bool IsResponse(string line, string id) => line.Contains($"\"id\":\"{id}\"", StringComparison.Ordinal);
+
+    /// <summary>A skill the person's configuration turned off is not loaded, so the listing leaves it out.</summary>
+    private static SkillListing ParseSkills(ProbeOutput output)
+    {
+        foreach (var line in TextLines.Lines(output.Stdout).Where(line => IsResponse(line, SkillsRequest)))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(line);
+                if (json.RootElement.Property("error") is { } error)
+                {
+                    return new SkillListing.Unavailable($"Codex did not list its skills: {error.String("message") ?? "it reported an error"}.");
+                }
+
+                return new SkillListing.Listed(SkillChoices.Distinct(json.RootElement.Property("result")?.Items("data")
+                    .SelectMany(entry => entry.Items("skills"))
+                    .Where(skill => skill.Bool("enabled") != false && skill.String("name") is not null)
+                    .Select(skill => new SkillOption(skill.String("name")!, skill.String("description") ?? "")) ?? []));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new SkillListing.Unavailable($"Codex did not list its skills. {Probes.Failure("codex app-server", output)}");
     }
 
     private static ReadinessProblem? SignInProblem(ProbeOutput output) =>

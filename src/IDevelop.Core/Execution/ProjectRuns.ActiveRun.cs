@@ -1040,6 +1040,7 @@ public sealed partial class ProjectRuns
                 Conversation = _conversation,
                 Tree = tree,
                 Consumed = [.. Record.Queued.Select(message => message.Id)],
+                MissingSkills = plan.LoggedMissingSkills,
             });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
             Record = record;

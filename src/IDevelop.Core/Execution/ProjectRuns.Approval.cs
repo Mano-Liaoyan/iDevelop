@@ -6,7 +6,7 @@ namespace IDevelop.Execution;
 public sealed partial class ProjectRuns
 {
     private RunApprovals Approvals => new(_projectFolder, TurnStore, GitEnvironment, _clients.Current, Latest, MaterializerClock ?? TimeProvider,
-        point => Probe?.Invoke(point), (task, turn) => MarkDoneCore(task, turn).Problem);
+        point => Probe?.Invoke(point), (task, turn) => MarkDoneCore(task, turn).Problem, SkillsOf);
 
     /// <summary>
     /// What Run Workflow shows for <paramref name="workflow"/> before anything runs. It records nothing; computing the work
@@ -19,7 +19,7 @@ public sealed partial class ProjectRuns
     /// Why <paramref name="task"/> could not start in a workflow run as it is configured now, as the preflight would name
     /// it, or null. A node's Run shows it before any click (#90).
     /// </summary>
-    internal StartProblem? CheckRun(TaskDefinition task) => RunApprovals.Gap(task, _projectFolder, _clients.Current);
+    internal StartProblem? CheckRun(TaskDefinition task) => RunApprovals.Gap(task, _projectFolder, _clients.Current, SkillsOf);
 
     /// <summary>
     /// The runs of <paramref name="workflow"/> recorded in the project, for <see cref="RunHistory"/>: what each task has from

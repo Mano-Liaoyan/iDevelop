@@ -1,3 +1,4 @@
+using System.Text.Json;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -71,5 +72,74 @@ public sealed class ProtocolLaunchTests
         var agy = Clients.Get(ClientId.Antigravity).Protocol(new LaunchRequest("m", null, "banana")).Start();
         Assert.Equal(["""{"event":"user","message":{"role":"user","content":"banana"}}""" + "\n"], agy.Writes.ToArray());
         Assert.True(agy.CloseInput);
+    }
+
+    private static readonly SkillOption Tdd = new("tdd", "Test first.") { Path = "/home/me/.pi/agent/skills/tdd/SKILL.md" };
+    private static readonly SkillOption ImageGen = new("imagegen", "Makes images.") { Path = "/home/me/.agents/skills/imagegen/SKILL.md" };
+
+    [Fact]
+    public void A_skill_choice_reaches_claude_code_as_its_initialize_allow_list_on_every_turn()
+    {
+        foreach (var session in new string?[] { null, "session-1" })
+        {
+            var request = new LaunchRequest("m", "high", "banana") { ResumeSession = session, Skills = new SkillLaunch([Tdd], [ImageGen]) };
+
+            Assert.Equal(["""{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize","skills":["tdd"]}}"""],
+                Clients.Get(ClientId.ClaudeCode).Protocol(request).Start().Writes.ToArray());
+            Assert.Equal(Clients.Get(ClientId.ClaudeCode).Launch(request with { Skills = null }).Arguments.ToArray(), Clients.Get(ClientId.ClaudeCode).Launch(request).Arguments.ToArray());
+        }
+
+        Assert.Equal(["""{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize","skills":[]}}"""],
+            Clients.Get(ClientId.ClaudeCode).Protocol(new LaunchRequest("m", "high", "banana") { Skills = new SkillLaunch([], [Tdd]) }).Start().Writes.ToArray());
+    }
+
+    [Fact]
+    public void A_skill_choice_reaches_codex_as_the_skills_it_turns_off_in_the_threads_configuration()
+    {
+        foreach (var (session, method) in new[] { ((string?)null, "thread/start"), ("session-1", "thread/resume") })
+        {
+            var request = new LaunchRequest("m", "high", "banana") { ResumeSession = session, Skills = new SkillLaunch([Tdd], [ImageGen]) };
+
+            using var thread = ThreadFrame(request);
+
+            Assert.Equal(method, thread.RootElement.GetProperty("method").GetString());
+            Assert.Equal("""{"skills.config":[{"name":"imagegen","enabled":false}]}""", thread.RootElement.GetProperty("params").GetProperty("config").GetRawText());
+            Assert.Equal(Codex, Clients.Get(ClientId.Codex).Launch(request).Arguments.ToArray());
+        }
+
+        using var all = ThreadFrame(new LaunchRequest("m", "high", "banana") { Skills = new SkillLaunch([Tdd, ImageGen], []) });
+        Assert.False(all.RootElement.GetProperty("params").TryGetProperty("config", out _));
+    }
+
+    [Fact]
+    public void A_skill_choice_reaches_pi_as_no_discovered_skills_and_each_chosen_skills_file()
+    {
+        var request = new LaunchRequest("m", "high", "banana") { ResumeSession = "session-1", Skills = new SkillLaunch([Tdd, ImageGen with { Name = "zz" }], [ImageGen]) };
+
+        Assert.Equal(["-p", "--mode", "json", "--model", "m", "--thinking", "high", "--no-skills", "--skill", Tdd.Path!, "--skill", ImageGen.Path!, "--session-id", "session-1"],
+            Clients.Get(ClientId.Pi).Launch(request).Arguments.ToArray());
+        Assert.Equal(["-p", "--mode", "json", "--model", "m", "--no-skills"],
+            Clients.Get(ClientId.Pi).Launch(new LaunchRequest("m", null, "banana") { Skills = new SkillLaunch([], [Tdd]) }).Arguments.ToArray());
+    }
+
+    [Fact]
+    public void Without_a_choice_no_client_is_told_anything_about_skills()
+    {
+        var request = new LaunchRequest("m", "high", "banana") { ResumeSession = "session-1" };
+
+        Assert.Equal(["""{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize"}}"""],
+            Clients.Get(ClientId.ClaudeCode).Protocol(request).Start().Writes.ToArray());
+        using var thread = ThreadFrame(request);
+        Assert.False(thread.RootElement.GetProperty("params").TryGetProperty("config", out _));
+        Assert.Equal(Pi, Clients.Get(ClientId.Pi).Launch(request).Arguments.ToArray());
+        var agy = Clients.Get(ClientId.Antigravity).Launch(request with { Skills = new SkillLaunch([Tdd], [ImageGen]) });
+        Assert.Equal(AgyEdit, agy.Arguments.ToArray());
+    }
+
+    private static JsonDocument ThreadFrame(LaunchRequest request)
+    {
+        var protocol = Clients.Get(ClientId.Codex).Protocol(request);
+        protocol.Start();
+        return JsonDocument.Parse(protocol.Read("""{"id":"init-1","result":{}}""").Writes[1]);
     }
 }

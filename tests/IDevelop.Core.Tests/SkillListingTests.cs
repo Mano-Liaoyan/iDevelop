@@ -1,0 +1,183 @@
+using System.Text.Json;
+using IDevelop.Execution;
+using IDevelop.TestSupport;
+using IDevelop.Workflows;
+using static IDevelop.TestSupport.FakeRule;
+
+namespace IDevelop.Core.Tests;
+
+/// <summary>
+/// A node's skill picker lists the skills its client loads on this machine (#93), as the client itself lists them without
+/// a model turn, in the project's folder: its personal, plugin, and project skills, and its built-in skills where the
+/// listing can tell them apart. The fake clients answer from fake skill folders, and only names and descriptions are read.
+/// </summary>
+public sealed class SkillListingTests : IDisposable
+{
+    private readonly TempFolder _temp = new();
+    private readonly FakeClients _fakes;
+    private readonly string _project;
+    private readonly string _personal;
+
+    public SkillListingTests()
+    {
+        _fakes = new FakeClients(_temp.Create("bin"));
+        _project = _temp.Create("project");
+        _personal = _temp.Create("home-skills");
+    }
+
+    public void Dispose() => _temp.Dispose();
+
+    [Fact]
+    public async Task Claude_code_lists_what_its_initialize_reports_in_the_project_and_leaves_out_its_own_commands()
+    {
+        Skill(_personal, "find-skills", "Finds skills to install.");
+        Skill(Path.Combine(_project, ".claude", "skills"), "verify-idevelop", "Drives the built app's real window.");
+        var folder = _temp.Path("listing-folder.txt");
+        var arguments = _temp.Path("listing-arguments.json");
+        _fakes.Install("claude", FakeAgents.ClaudeSignedIn,
+            On("-p").Lacking("--include-partial-messages").RecordWorkingDirectory(folder).RecordArguments(arguments)
+                .WaitForLine("initialize").ListSkills("claude", [".claude/skills", _personal], builtIn: ["compact", "simplify"]));
+        var directory = await _fakes.DiscoverAsync();
+
+        var listing = await ListedAsync(directory, ClientId.ClaudeCode, _project);
+
+        Assert.Equal(new SkillListing.Listed(
+        [
+            new SkillOption("find-skills", "Finds skills to install."),
+            new SkillOption("verify-idevelop", "Drives the built app's real window."),
+        ]), listing);
+        Assert.Equal(Path.GetFullPath(_project), File.ReadAllText(folder));
+        Assert.Equal(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"], Read<string[]>(arguments));
+        Assert.True(SkillChoices.CanChoose(ClientId.ClaudeCode));
+        Assert.False(SkillChoices.ListsBuiltIns(ClientId.ClaudeCode));
+    }
+
+    [Fact]
+    public async Task Codex_lists_its_skills_for_the_project_folder_without_the_ones_its_configuration_turned_off()
+    {
+        Skill(_personal, "imagegen", "Makes images.");
+        Skill(_personal, "openai-docs", "Reads OpenAI's documentation.");
+        Skill(Path.Combine(_project, ".agents", "skills"), "release", "Cuts a release.");
+        var arguments = _temp.Path("listing-arguments.json");
+        _fakes.Install("codex", FakeAgents.CodexModels, FakeAgents.CodexSignedIn,
+            On("app-server").Thread("skills/list").RecordArguments(arguments).ListSkills("codex", [".agents/skills", _personal], disabled: ["openai-docs"]));
+        var directory = await _fakes.DiscoverAsync();
+
+        var listing = await ListedAsync(directory, ClientId.Codex, _project);
+
+        Assert.Equal(new SkillListing.Listed([new SkillOption("imagegen", "Makes images."), new SkillOption("release", "Cuts a release.")]), listing);
+        Assert.Equal(["app-server"], Read<string[]>(arguments));
+        using var request = JsonDocument.Parse(File.ReadAllText(arguments + ".thread.json"));
+        Assert.Equal([Path.GetFullPath(_project)], request.RootElement.GetProperty("params").GetProperty("cwds").EnumerateArray().Select(cwd => cwd.GetString()));
+        Assert.True(SkillChoices.ListsBuiltIns(ClientId.Codex));
+    }
+
+    [Fact]
+    public async Task Pi_lists_its_skill_commands_with_their_files_and_not_its_prompt_templates()
+    {
+        Skill(_personal, "find-skills", "Finds skills to install.");
+        Skill(Path.Combine(_project, ".pi", "skills"), "deploy", "Deploys the site.");
+        _fakes.Install("pi", FakeAgents.PiRpc(_personal), FakeAgents.PiProvider("deepseek", "ready"), FakeAgents.PiProvider("openai-codex", "ready"));
+        var directory = await _fakes.DiscoverAsync();
+
+        var listing = Assert.IsType<SkillListing.Listed>(await ListedAsync(directory, ClientId.Pi, _project));
+
+        Assert.Equal(["deploy", "find-skills"], listing.Skills.Select(skill => skill.Name));
+        Assert.Equal(
+            [Path.Combine(Path.GetFullPath(_project), ".pi", "skills", "deploy", "SKILL.md"), Path.Combine(_personal, "find-skills", "SKILL.md")],
+            listing.Skills.Select(skill => skill.Path));
+        Assert.Equal("Finds skills to install.", listing.Skills[1].Description);
+    }
+
+    [Fact]
+    public async Task Antigravity_has_no_listing_and_a_client_that_is_not_ready_says_why()
+    {
+        _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));
+        var directory = new ClientDirectory(_fakes.Resolver);
+
+        Assert.Equal(new SkillListing.Checking(), directory.Skills(ClientId.ClaudeCode, _project));
+        Assert.Equal(new SkillListing.Unsupported(), directory.Skills(ClientId.Antigravity, _project));
+        Assert.False(SkillChoices.CanChoose(ClientId.Antigravity));
+
+        await directory.RefreshAsync();
+
+        Assert.Equal(new SkillListing.Unavailable("Claude Code is not signed in. Run claude in a terminal and sign in."), directory.Skills(ClientId.ClaudeCode, _project));
+        Assert.Equal(new SkillListing.Unavailable("No pi command was found on PATH."), directory.Skills(ClientId.Pi, _project));
+    }
+
+    [Fact]
+    public async Task A_folders_listing_lasts_until_the_clients_next_refresh()
+    {
+        _fakes.LaunchFolder = _temp.Create("launches");
+        Skill(Path.Combine(_project, ".claude", "skills"), "verify-idevelop", "Drives the built app's real window.");
+        FakeAgents.Install(_fakes, ClientId.ClaudeCode);
+        var directory = await _fakes.DiscoverAsync();
+        var other = _temp.Create("other");
+
+        await ListedAsync(directory, ClientId.ClaudeCode, _project);
+        await ListedAsync(directory, ClientId.ClaudeCode, _project);
+        Assert.Equal(1, Listings());
+
+        Assert.Equal(new SkillListing.Listed([]), await ListedAsync(directory, ClientId.ClaudeCode, other));
+        Assert.Equal(2, Listings());
+
+        Skill(Path.Combine(_project, ".claude", "skills"), "release", "Cuts a release.");
+        await directory.RefreshAsync();
+
+        Assert.Equal(["release", "verify-idevelop"],
+            Assert.IsType<SkillListing.Listed>(await ListedAsync(directory, ClientId.ClaudeCode, _project)).Skills.Select(skill => skill.Name));
+        Assert.Equal(3, Listings());
+    }
+
+    [Fact]
+    public async Task A_listing_the_client_refuses_says_why()
+    {
+        _fakes.Install("claude", FakeAgents.ClaudeSignedIn,
+            On("-p").Lacking("--include-partial-messages").WaitForLine("initialize")
+                .EchoId("""{"type":"control_response","response":{"subtype":"error","request_id":$id,"error":"settings are invalid"}}"""));
+        var directory = await _fakes.DiscoverAsync();
+
+        Assert.Equal(
+            new SkillListing.Unavailable("Claude Code did not list its skills: settings are invalid."),
+            await ListedAsync(directory, ClientId.ClaudeCode, _project));
+    }
+
+    private int Listings() => Directory.EnumerateFiles(_fakes.LaunchFolder!, "*.json")
+        .Count(file => Read<string[]>(file) is ["-p", _, _, _, _, "--verbose"]);
+
+    private static T Read<T>(string file) => JsonSerializer.Deserialize<T>(File.ReadAllBytes(file))!;
+
+    internal static void Skill(string folder, string name, string description)
+    {
+        var skill = Directory.CreateDirectory(Path.Combine(folder, name)).FullName;
+        File.WriteAllText(Path.Combine(skill, "SKILL.md"), $"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nInstructions iDevelop never reads.\n");
+    }
+
+    /// <summary>The listing once it is in, which the directory's change says.</summary>
+    internal static async Task<SkillListing> ListedAsync(ClientDirectory directory, ClientId client, string folder)
+    {
+        var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? sender, EventArgs e)
+        {
+            if (directory.Skills(client, folder) is not SkillListing.Checking)
+            {
+                listed.TrySetResult();
+            }
+        }
+
+        directory.Changed += OnChanged;
+        try
+        {
+            if (directory.Skills(client, folder) is SkillListing.Checking)
+            {
+                await listed.Task.WaitAsync(TimeSpan.FromSeconds(60));
+            }
+
+            return directory.Skills(client, folder);
+        }
+        finally
+        {
+            directory.Changed -= OnChanged;
+        }
+    }
+}

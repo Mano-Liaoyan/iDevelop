@@ -12,7 +12,9 @@ using System.Text.Json;
 // The rules file is {"rules": [{"when": ["auth", "status"], "has": ["--resume", "id"], "steps": [{"print": "..."}, {"exit": 0}]}]}.
 // Optional top-level "launches" names a folder for <pid>-<guid>.json argument markers, written before protocol input.
 // The first rule whose "when" is a prefix of the client arguments after any leading "-c key=value" pairs, as Git takes
-// them, and whose optional "has" appears among them in that order without gaps, runs its steps in order. Steps:
+// them, whose optional "has" appears among them in that order without gaps, and none of whose optional "lacks" appears,
+// runs its steps in order. An app-server whose third frame is skills/list matches a rule whose "thread" is
+// "skills/list", and answers nothing itself. Steps:
 //   recordArguments <file>        write the client arguments as a JSON array
 //   recordWorkingDirectory <file> write the current folder
 //   captureStdin <file>           copy stdin to the file until it closes
@@ -51,6 +53,14 @@ using System.Text.Json;
 //   choose [{"prompt": <text>, "steps": [...]}, ...]
 //                                 run the steps of the first option whose text starts the turn's prompt, so one client
 //                                 answers each task of a workflow differently. Exit 95 when no option matches
+//   answer [{"line": <pattern>, "steps": [...]}, ...]
+//                                 read stdin frames until one contains an option's pattern, and run that option's steps
+//                                 with the frame as the last matched one, so one RPC client answers each request in kind
+//   listSkills {"format": "claude" | "codex" | "pi", "folders": [...], "builtin": [...], "disabled": [...]}
+//                                 answer the last matched frame with the skills in the folders, as that client lists them:
+//                                 each subfolder with a SKILL.md, named and described by its front matter. A relative
+//                                 folder is in the current folder. Claude Code also lists the built-in commands, and
+//                                 Codex lists the disabled names as turned off
 //   exit <code>
 
 if (args is ["--sleep-forever"])
@@ -137,12 +147,19 @@ JsonElement? threadRequest = null;
 JsonElement? turnRequest = null;
 List<FileStream> held = [];
 List<PosixSignalRegistration> traps = [];
+var listing = false;
 if (appServer)
 {
     var initialize = ReadInput();
     stdout.WriteLine(JsonSerializer.Serialize(new { id = initialize.GetProperty("id"), result = new { } }));
     ReadInput();
     threadRequest = ReadInput();
+    // A skill listing asks for nothing but its answer, which the rule's steps give.
+    listing = threadRequest.Value.GetProperty("method").GetString() == "skills/list";
+    if (listing)
+    {
+        matchedLine = threadRequest;
+    }
 }
 else if (claudeStream)
 {
@@ -152,7 +169,8 @@ else if (claudeStream)
 }
 
 var rule = rules.RootElement.GetProperty("rules").EnumerateArray()
-    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments) && ThreadMatches(candidate))
+    .Where(candidate => Matches(candidate.GetProperty("when"), clientArguments) && Has(candidate, clientArguments) && Lacks(candidate, clientArguments)
+        && ThreadMatches(candidate))
     .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
 if (rule is not { } matched)
 {
@@ -160,7 +178,7 @@ if (rule is not { } matched)
     return 99;
 }
 
-if (threadRequest is { } thread)
+if (threadRequest is { } thread && !listing)
 {
     stdout.WriteLine(JsonSerializer.Serialize(new { id = thread.GetProperty("id"), result = new { thread = new { id = "" } } }));
     var turn = ReadInput();
@@ -394,6 +412,30 @@ int? Run(JsonElement steps)
                 }
 
                 break;
+            case "answer":
+                JsonElement? answered = null;
+                while (answered is null && ReadWireLine() is { } request)
+                {
+                    answered = value.EnumerateArray()
+                        .Where(candidate => request.Contains(candidate.GetProperty("line").GetString()!, StringComparison.Ordinal))
+                        .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
+                    matchedLine = answered is null ? matchedLine : JsonDocument.Parse(request).RootElement.Clone();
+                }
+
+                if (answered is not { } answer)
+                {
+                    return 96;
+                }
+
+                if (Run(answer.GetProperty("steps")) is { } answerCode)
+                {
+                    return answerCode;
+                }
+
+                break;
+            case "listSkills":
+                stdout.WriteLine(FakeSkills.Answer(value, matchedLine ?? throw new IOException("No input frame matched.")));
+                break;
             case "scripted":
                 var folder = value.GetString()!;
                 var counter = Path.Combine(folder, "count");
@@ -477,6 +519,9 @@ static bool Has(JsonElement rule, string[] arguments)
     string[] run = [.. has.EnumerateArray().Select(part => part.GetString()!)];
     return Enumerable.Range(0, Math.Max(0, arguments.Length - run.Length + 1)).Any(start => run.SequenceEqual(arguments[start..(start + run.Length)]));
 }
+
+static bool Lacks(JsonElement rule, string[] arguments) =>
+    !rule.TryGetProperty("lacks", out var lacks) || !lacks.EnumerateArray().Any(part => arguments.Contains(part.GetString()!));
 
 // The copy gets pipes whose other ends close at once, so it holds none of this process's pipes. A copy that writes its own
 // pid file is waited for, so this process exits only once the copy has done what it must do first.
@@ -599,4 +644,93 @@ internal static class NativePipes
     [DllImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(nint handle);
+}
+
+/// <summary>The skills in fake skill folders, answered as each client lists them. Only names and descriptions are read.</summary>
+internal static class FakeSkills
+{
+    public static string Answer(JsonElement options, JsonElement request)
+    {
+        var format = options.GetProperty("format").GetString();
+        var skills = Strings(options, "folders").SelectMany(Read).ToArray();
+        var disabled = Strings(options, "disabled").ToHashSet();
+        var id = request.TryGetProperty("id", out var rpcId) ? rpcId : request.GetProperty("request_id");
+        return format switch
+        {
+            "claude" => JsonSerializer.Serialize(new
+            {
+                type = "control_response",
+                response = new
+                {
+                    subtype = "success", request_id = id,
+                    response = new
+                    {
+                        commands = skills.Select(skill => (object)new { name = skill.Name, description = skill.Description, argumentHint = "" })
+                            .Concat(Strings(options, "builtin").Select(name => (object)new { name, description = $"Built-in {name}", argumentHint = "", builtin = true })),
+                        agents = Array.Empty<object>(), output_style = "default", available_output_styles = new[] { "default" }, models = Array.Empty<object>(),
+                    },
+                },
+            }),
+            "codex" => JsonSerializer.Serialize(new
+            {
+                id,
+                result = new
+                {
+                    data = new[]
+                    {
+                        new
+                        {
+                            cwd = Environment.CurrentDirectory,
+                            skills = skills.Select(skill => new
+                            {
+                                name = skill.Name, description = skill.Description, path = skill.Path, scope = skill.Scope,
+                                enabled = !disabled.Contains(skill.Name), pluginId = (string?)null,
+                            }),
+                            errors = Array.Empty<object>(),
+                        },
+                    },
+                },
+            }),
+            "pi" => JsonSerializer.Serialize(new
+            {
+                id, type = "response", command = "get_commands", success = true,
+                data = new
+                {
+                    commands = new object[] { new { name = "review", description = "A prompt template", source = "prompt" } }.Concat(skills.Select(skill => new
+                    {
+                        name = $"skill:{skill.Name}", description = skill.Description, source = "skill",
+                        sourceInfo = new { path = skill.Path, source = "local", scope = skill.Scope, origin = "top-level" },
+                    })),
+                },
+            }),
+            _ => throw new InvalidOperationException($"fake agent: unknown skill format {format}"),
+        };
+    }
+
+    private static IEnumerable<string> Strings(JsonElement options, string name) =>
+        options.TryGetProperty(name, out var values) ? values.EnumerateArray().Select(value => value.GetString()!) : [];
+
+    private static IEnumerable<(string Name, string Description, string Path, string Scope)> Read(string folder)
+    {
+        var full = Path.GetFullPath(folder);
+        if (!Directory.Exists(full))
+        {
+            yield break;
+        }
+
+        var scope = Path.IsPathRooted(folder) ? "user" : "project";
+        foreach (var skill in Directory.EnumerateDirectories(full).Order(StringComparer.Ordinal))
+        {
+            var file = Path.Combine(skill, "SKILL.md");
+            if (!File.Exists(file))
+            {
+                continue;
+            }
+
+            var front = File.ReadLines(file).SkipWhile(line => line.Trim() != "---").Skip(1).TakeWhile(line => line.Trim() != "---").ToArray();
+            string? Field(string key) => front.Where(line => line.StartsWith(key + ":", StringComparison.Ordinal))
+                .Select(line => line[(key.Length + 1)..].Trim()).FirstOrDefault();
+            yield return (Field("name") ?? Path.GetFileName(skill), Field("description") ?? "", file, scope);
+        }
+    }
 }

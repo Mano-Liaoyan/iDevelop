@@ -14,9 +14,25 @@ internal static class FakeAgents
     public static readonly FakeRule CodexSignedIn = On("login", "status").Print("Logged in using ChatGPT");
 
     // Pi's RPC mode keeps running after it answers and exits when its input ends, as the real one does.
-    public static readonly FakeRule PiModels = On("--mode", "rpc", "--no-session").Replay(Fixture.Path("pi-rpc-models.jsonl")).WaitForStdinEnd();
+    public static readonly FakeRule PiModels = PiRpc();
 
     public static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
+
+    /// <summary>
+    /// Claude Code's answer to the initialize request of its skill listing: the skills in its project folder and in
+    /// <paramref name="folders"/>, and the built-in commands that the listing leaves out. A turn has partial messages on.
+    /// </summary>
+    public static FakeRule ClaudeSkills(params string[] folders) =>
+        On("-p").Lacking("--include-partial-messages").WaitForLine("initialize").ListSkills("claude", [".claude/skills", .. folders], builtIn: ["compact", "simplify"]);
+
+    /// <summary>Codex's answer to skills/list: the skills in its project folders and in <paramref name="folders"/>.</summary>
+    public static FakeRule CodexSkills(params string[] folders) =>
+        On("app-server").Thread("skills/list").ListSkills("codex", [".agents/skills", ".codex/skills", .. folders]);
+
+    /// <summary>Pi's RPC mode, which answers the model list and the command list with the skills in its project folders and in <paramref name="folders"/>.</summary>
+    public static FakeRule PiRpc(params string[] folders) => On("--mode", "rpc", "--no-session").Answer(
+        ("get_available_models", On().Replay(Fixture.Path("pi-rpc-models.jsonl"))),
+        ("get_commands", On().ListSkills("pi", [".pi/skills", ".agents/skills", .. folders]))).WaitForStdinEnd();
 
     public static FakeRule PiProvider(string provider, string status) =>
         On("auth", "check", "--provider", provider, "--json").Print($$"""{"status":"{{status}}"}""");
@@ -24,8 +40,8 @@ internal static class FakeAgents
     /// <summary>One client as on the probing machine, plus the rules for its runs. Returns the shim's path.</summary>
     public static string Install(FakeClients fakes, ClientId client, params FakeRule[] runs) => client switch
     {
-        ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, .. runs]),
-        ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, .. runs]),
+        ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, ClaudeSkills(), .. runs]),
+        ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, CodexSkills(), .. runs]),
         ClientId.Pi => fakes.Install("pi", [PiModels, PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"), .. runs]),
         ClientId.Antigravity => fakes.Install("agy", [AgyModels, .. runs]),
     };

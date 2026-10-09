@@ -30,7 +30,17 @@ internal static class ClaudeCode
         Protocol = request => new ClaudeProtocol(request),
         Terminal = session => $"claude --resume {session}",
         HasReadOnlyMode = true,
+        // The initialize response lists every command the session would load, and marks Claude Code's own. Those are its
+        // built-in commands and its bundled skills together, so the listing leaves them all out.
+        Skills = new SkillSource(folder => new Probe(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
+        {
+            Folder = folder,
+            Stdin = JsonSerializer.Serialize(new { type = "control_request", request_id = SkillsRequest, request = new { subtype = "initialize" } }) + "\n",
+            DoneWhen = IsSkillsResponse,
+        }, ParseSkills) { ListsBuiltIns = false },
     };
+
+    private const string SkillsRequest = "idevelop-skills";
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
     [
@@ -41,6 +51,34 @@ internal static class ClaudeCode
         .. request.PolicyFor(ClientId.ClaudeCode).PermissionPrompts == PermissionPrompts.Host ? ["--permission-prompt-tool", "stdio"] : new[] { "--permission-prompts", "none" },
     ],
     "");
+
+    private static bool IsSkillsResponse(string line) =>
+        line.Contains("\"control_response\"", StringComparison.Ordinal) && line.Contains($"\"{SkillsRequest}\"", StringComparison.Ordinal);
+
+    private static SkillListing ParseSkills(ProbeOutput output)
+    {
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsSkillsResponse))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(line);
+                if (json.RootElement.Property("response") is not { } response || response.String("subtype") != "success")
+                {
+                    return new SkillListing.Unavailable(
+                        $"Claude Code did not list its skills: {json.RootElement.Property("response")?.String("error") ?? "it reported a failure"}.");
+                }
+
+                return new SkillListing.Listed(SkillChoices.Distinct(response.Property("response")?.Items("commands")
+                    .Where(command => command.Bool("builtin") != true && command.String("name") is not null)
+                    .Select(command => new SkillOption(command.String("name")!, command.String("description") ?? "")) ?? []));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new SkillListing.Unavailable($"Claude Code did not list its skills. {Probes.Failure("claude -p", output)}");
+    }
 
     private static ReadinessProblem? SignInProblem(ProbeOutput output)
     {

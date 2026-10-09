@@ -85,6 +85,7 @@ internal sealed class FakeClients : IDisposable
             {
                 ["when"] = new JsonArray([.. rule.When.Select(part => JsonValue.Create(part))]),
                 ["has"] = new JsonArray([.. rule.Has.Select(part => JsonValue.Create(part))]),
+                ["lacks"] = new JsonArray([.. rule.Lacks.Select(part => JsonValue.Create(part))]),
                 ["thread"] = rule.ThreadMethod,
                 ["threadId"] = rule.ThreadId,
                 ["beforeTurnResponse"] = new JsonArray([.. rule.BeforeTurnResponseSteps.Select(step => step.DeepClone())]),
@@ -129,11 +130,13 @@ internal sealed class FakeClients : IDisposable
 
 /// <summary>
 /// One rule of the fake agent: the steps it runs for client arguments that start with <see cref="When"/>, after any
-/// leading "-c key=value" pairs, and contain <see cref="Has"/> without gaps.
+/// leading "-c key=value" pairs, contain <see cref="Has"/> without gaps, and contain none of <see cref="Lacks"/>.
 /// </summary>
 internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<JsonNode> Steps)
 {
     public ImmutableArray<string> Has { get; init; } = [];
+
+    public ImmutableArray<string> Lacks { get; init; } = [];
 
     public string? ThreadMethod { get; init; }
 
@@ -148,6 +151,8 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     public static FakeRule On(params string[] argumentPrefix) => new([.. argumentPrefix], []);
 
     public FakeRule With(params string[] arguments) => this with { Has = [.. arguments] };
+
+    public FakeRule Lacking(params string[] arguments) => this with { Lacks = [.. arguments] };
 
     public FakeRule RecordArguments(string file) => Step("recordArguments", file);
 
@@ -221,6 +226,27 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
             ["prompt"] = option.Prompt,
             ["steps"] = new JsonArray([.. option.Steps.Steps.Select(step => step.DeepClone())]),
         })]));
+
+    /// <summary>Reads stdin frames until one contains an option's pattern, and runs that option's steps, so an RPC client answers each request in kind.</summary>
+    public FakeRule Answer(params (string Line, FakeRule Steps)[] options) => Step("answer", new JsonArray([.. options.Select(option =>
+        (JsonNode)new JsonObject
+        {
+            ["line"] = option.Line,
+            ["steps"] = new JsonArray([.. option.Steps.Steps.Select(step => step.DeepClone())]),
+        })]));
+
+    /// <summary>
+    /// Answers the last matched frame with the skills in <paramref name="folders"/>, as the client of <paramref name="format"/>
+    /// lists them. A relative folder is in the client's current folder.
+    /// </summary>
+    public FakeRule ListSkills(string format, IEnumerable<string> folders, IEnumerable<string>? builtIn = null, IEnumerable<string>? disabled = null) =>
+        Step("listSkills", new JsonObject
+        {
+            ["format"] = format,
+            ["folders"] = Strings([.. folders]),
+            ["builtin"] = Strings([.. builtIn ?? []]),
+            ["disabled"] = Strings([.. disabled ?? []]),
+        });
 
     /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
     public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();

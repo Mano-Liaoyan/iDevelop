@@ -376,7 +376,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             var settings = last is { Status: AttemptStatus.WaitingForInput } ? last.Requested : task.Execution;
-            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, ""), questions: _questions) is StartVerdict.Blocked blocked
+            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, ""), questions: _questions,
+                    skills: SkillsOf(settings)) is StartVerdict.Blocked blocked
                 ? new SendProblem.CannotStart(blocked.Problem)
                 : null;
         }
@@ -834,7 +835,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: _questions);
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: _questions,
+            skills: SkillsOf(task.Execution));
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -866,7 +868,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         var prompt = waiting.Status == AttemptStatus.WaitingForInput
             ? string.Join("\n\n", waiting.Queued.Select(item => item.Text).Append(message)) : message;
-        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, prompt), questions: _questions);
+        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, prompt), questions: _questions,
+            skills: SkillsOf(waiting.Requested));
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -904,6 +907,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Consumed = waiting.Status == AttemptStatus.WaitingForInput ? [.. record.Queued.Select(item => item.Id)] : default,
                 Replies = waiting.Status == AttemptStatus.WaitingForInput
                     ? [.. waiting.DeferredRequestIds.Select(id => new TurnRequestId(waiting.Turns.Count, id))] : default,
+                MissingSkills = plan.LoggedMissingSkills,
             };
             log.Append(turn);
             record = AttemptReducer.Apply(record, turn);
@@ -1005,6 +1009,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,
+                MissingSkills = plan.LoggedMissingSkills,
                 StandaloneCapture = continues is null
                     ? JsonSerializer.SerializeToElement(new StandaloneCapture(task, ""), RunJournal.Options) : null,
             };
@@ -1045,10 +1050,17 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
             _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
             _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(task.Id, subject) is { } problem => new StartVerdict.Blocked(problem),
-            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject, questions: _questions),
+            _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject, questions: _questions, skills: SkillsOf(task.Execution)),
         };
 
     private TaskDefinition? Resolve(TaskId task) => WorkflowOf(task)?.Tasks.GetValueOrDefault(task);
+
+    /// <summary>
+    /// The skills the client of <paramref name="settings"/> lists in the project, which a start needs only for a node with
+    /// a skill choice. Every turn of a run reads the project's listing, which is the one the person chose from.
+    /// </summary>
+    internal SkillListing? SkillsOf(ExecutionSettings? settings) =>
+        settings is { Skills: not null } chosen && SkillChoices.CanChoose(chosen.Client) ? _clients.Skills(chosen.Client, _projectFolder) : null;
 
     private SendProblem? SendTarget(TaskDefinition task, TurnKey? expected)
     {
