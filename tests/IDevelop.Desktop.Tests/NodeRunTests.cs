@@ -305,4 +305,15 @@ public sealed class NodeRunTests
         Assert.True(shell.InView<Button>("CancelRun").IsEffectivelyEnabled);
         Assert.Equal((1, 1), (f.Launches("A"), f.Launches("B")));
     }
+
+    [AvaloniaFact]
+    public void A_node_s_preview_lists_a_task_s_inputs_in_title_order()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "Zed", 105), Below(B, "Alpha"), At(C, "C", 405, 170), Dependency(A, C), Dependency(B, C));
+        var shell = f.Window();
+
+        OpenNodePreflight(shell, "Zed");
+
+        Assert.Equal(["After \"Alpha\", \"Zed\""], shell.TextsOf("PreflightInputs"));
+    }
 }
