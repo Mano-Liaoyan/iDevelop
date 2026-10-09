@@ -1,0 +1,36 @@
+# An expanded card unfolds in place and stays expanded on this machine
+
+A card on the canvas can expand. An expanded card unfolds in place to 320 px wide and as tall as its details, and the cards around it slide aside on screen while it stays open. A collapsed card's tooltip is a quick read-only peek of the same details. An expanded card has its own editable pickers for the client, the model, and the reasoning level, and it answers its agent the conversation's way. Expanded cards stay expanded after a restart, remembered for each workflow on this machine only. The owner chose this on 2026-10-09 in issue [#94](https://github.com/Mano-Liaoyan/iDevelop/issues/94), from three working prototypes: option A, unfold in place, with option B's hover peek. They asked for it because "each node on the canvas should show more content".
+
+The [product direction](../product-direction.md) says: "Expansion must preserve node positions and connections." This record refines that line. The workflow's saved positions are preserved. Expanding a card never changes them, never marks the workflow unsaved, and never writes its file. Only the view moves cards aside, and the cards slide back when the card closes.
+
+## How it works
+
+- **The disclosure.** A card's chevron sits on its last line. The state glyph sits on the title's line, in the same 16 px column it always had, so the title keeps its full width. The chevron points right while the card is collapsed and down while it is expanded, as the sidebar's rows do. Expand All and Collapse All act on the cards of the shown workflow only, and a card that is added later starts collapsed.
+- **The expanded card.** The 64 px header stays as [ADR 0019](0019-a-planner-chooses-each-new-task-s-agent.md) describes it: the tile, the title, the client or the status, then the model and level. The state's tint stays on the header. Under it, three sections sit under hairlines:
+  - **Now.** Its heading and text follow the task's state: the agent's latest message, its question or its last reply with an answer box, the result's first paragraph, why it stopped, the tasks a run holds it back for, or the task's first field. An approval's request and a planner's proposal point to the inspector, where the person answers them.
+  - **Agent.** The client, model, and reasoning pickers sit in that order, each a full-width row. While an attempt runs, the line "A change applies to the next run" sits under them.
+  - **Actions.** Open conversation is on the left. On the right is the task's own Run or Stop, while the task is the person's to start or stop.
+
+  Every section's glyphs share one 16 px column under the kind tile. Everything else starts after that column and ends 12 px from the card's edge, under the state glyph. Text wraps whole and is never cut short. No place for GitHub issues, pull requests, or comments is shown until those features exist.
+- **The peek.** A collapsed card's tooltip shows the title whole, the type and agent, the Now section's heading and text, and why the task cannot start, if it cannot. It takes no input. A renamed or expanded card shows none.
+- **Neighbours slide aside on screen only.** A column is the cards whose left edges lie within half a collapsed card of the column's first card. An expanded card pushes the cards below it in its column down, so each keeps its saved gap to the card above. A column that holds a wider card moves every later column right by the extra 80 px. The ports stay on the header's middle line, so a card that unfolds keeps its wires' rows, and wires route around each card where and as large as it shows.
+- **One way to answer.** The card reads its task through the same conversation session that the conversation view opens. That session goes through the run while a run shows the task. The answer box shares the conversation's draft, and Send or Ctrl+Enter sends it the conversation's way: a reply to a waiting attempt is its next turn, and a task that a run owns gets the reply through the run ([ADR 0010](0010-a-reply-is-saved-at-once-and-runs-when-the-slot-is-free.md)). Keys typed in the answer box, and on the pickers, stay with them and never reach the canvas's shortcuts.
+- **Remembered on this machine.** The window's session file, beside the theme preference, lists each open workflow's expanded cards. The next start expands them again. The workflow's file never holds them, so team synchronization will not share one person's view.
+
+## Considered options
+
+- **Option B: the graph never moves, and pinned notes stand in a margin lane right of the graph.** The notes sat far from their cards, and at a 900 px window a card and its note never showed together. Its peek joined option A.
+- **Option C: every expanded card is one size, with Now and Agent tabs, and the rows open like a spreadsheet's.** It hid the agent behind a tab, a long question had to scroll, and short states left empty space.
+- **Expanded cards that overlap their neighbours, as D0's prototype drew them.** The owner judges by alignment and calm, and an overlap hides the neighbours.
+- **A read-only agent line on the card, with changes left to the inspector.** The owner chose editable pickers.
+- **Remembering expansion in the workflow's file.** It is one person's view, and it would mark the workflow unsaved and travel with team synchronization.
+
+## Consequences
+
+- Expand All makes a graph much taller. The six-task sample fits a 1600×1000 window at about 63% zoom, where an expanded card's text is small.
+- At the 900×600 window the canvas is about 340 px wide, so one expanded card fills it.
+- The minimap still draws every card at its saved position and collapsed size. A new card's free spot, and the canvas's other placements, follow the saved positions, so the layout pushes a new card aside when it lands under an expanded one.
+- A drag moves a card's saved position by as far as the pointer moves the card from where it shows. The layout then places the card again from its new saved position, so a card dragged while a neighbour is expanded can settle a little away from where it was dropped.
+
+Source: issue [#94](https://github.com/Mano-Liaoyan/iDevelop/issues/94) and the owner's decisions of 2026-10-09.
