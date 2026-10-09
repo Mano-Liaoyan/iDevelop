@@ -112,23 +112,35 @@ internal sealed partial class RunStore
     /// against the approved revision and base: a planner's through <see cref="ReportReuse.ValidatePlanner"/>, any other
     /// report through E1's <see cref="ReportReuse.Validate"/>. One that fails approves nothing.
     /// </summary>
+    /// <param name="node">The node whose Run started the run, or null for Run Workflow, which runs every root (#90).</param>
     public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase,
-        ImmutableArray<ReportInclusion> include = default, OperationId confirmation = default) =>
-        Transact(workflow, run, operation, include.IsDefaultOrEmpty
-            ? Fingerprint("approve", new
+        ImmutableArray<ReportInclusion> include = default, OperationId confirmation = default, TaskId? node = null) =>
+        Transact(workflow, run, operation, (include.IsDefaultOrEmpty, node) switch
+        {
+            (true, null) => Fingerprint("approve", new
             {
                 revision = Revision.Canonical(revision.Snapshot),
                 revision.Id,
                 codeBase
-            })
-            : Fingerprint("approve", new
+            }),
+            (false, null) => Fingerprint("approve", new
             {
                 revision = Revision.Canonical(revision.Snapshot),
                 revision.Id,
                 codeBase,
                 include,
                 confirmation
-            }), (record, all) =>
+            }),
+            _ => Fingerprint("approve", new
+            {
+                revision = Revision.Canonical(revision.Snapshot),
+                revision.Id,
+                codeBase,
+                include = include.IsDefault ? [] : include,
+                confirmation,
+                node
+            }),
+        }, (record, all) =>
         {
             if (record is not null)
             {
@@ -140,7 +152,7 @@ internal sealed partial class RunStore
                 return new Mutation.Rejected(new(RunProblem.RunBusy));
             }
 
-            if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase));
+            if (include.IsDefaultOrEmpty) return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Node = node });
             // Both validators refuse an inclusion without the person's confirmation.
             if (include.Select(inclusion => inclusion.Task).Distinct().Count() != include.Length) return Refuse(RunProblem.InputConflict);
             var included = ImmutableArray.CreateBuilder<IncludedResult>();
@@ -151,7 +163,7 @@ internal sealed partial class RunStore
                 if (accepted.Rejection is { } rejection) return new Mutation.Rejected(rejection);
                 included.Add(accepted.Result!);
             }
-            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Included = included.ToImmutable() });
+            return new Mutation.Append(new RunEvent.Approved(run, revision, codeBase) { Included = included.ToImmutable(), Node = node });
         });
 
     /// <summary>The result an approval records for <paramref name="inclusion"/>, or why it cannot. Null for an unknown task.</summary>
@@ -913,6 +925,26 @@ internal sealed partial class RunStore
         }), (record, _) => record is null ? Missing() :
             record.Phase == RunPhase.StopRequested ? new Mutation.Existing(new RunEvent.StopRequested()) :
                 new Mutation.Append(new RunEvent.StopRequested()));
+
+    /// <summary>
+    /// Adds <paramref name="task"/> to a run that a node's Run started, as the person's Run of another node does while the
+    /// run is active (#90). Each of its dependency predecessors needs a current result, or it is refused with
+    /// <see cref="RunProblem.MissingDependencyResult"/> naming the first one without. A task that the run can already
+    /// start, or a repeat, records nothing more.
+    /// </summary>
+    public RunDecision Request(CoordinatorPermit permit, OperationId operation, TaskId task) =>
+        Transact(permit, operation, Fingerprint("request", new
+        {
+            task
+        }), (record, _) =>
+        {
+            if (record is null) return Missing();
+            if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
+            if (!record.Revision.Snapshot.Tasks.ContainsKey(task)) return new Mutation.Rejected(new(RunProblem.IdentityMismatch, Task: task));
+            if (RunScope.InFlow(record).Contains(task)) return new Mutation.Existing(new RunEvent.Requested(task));
+            if (RunScope.Missing(record, task) is { } missing) return new Mutation.Rejected(new(RunProblem.MissingDependencyResult, Task: missing));
+            return new Mutation.Append(new RunEvent.Requested(task));
+        });
 
     public RunDecision Settle(CoordinatorPermit permit, OperationId operation, RunOutcome outcome) =>
         Transact(permit, operation, Fingerprint("settle", new

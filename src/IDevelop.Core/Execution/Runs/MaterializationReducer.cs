@@ -14,7 +14,7 @@ internal static partial class RunReducer
         }
         if (record.Phase == RunPhase.StopRequested)
         {
-            return e is not (RunEvent.Reserved or RunEvent.Prepared or RunEvent.TurnClaimed or
+            return e is not (RunEvent.Reserved or RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.Requested or
                 RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Rebase });
         }
         return e switch

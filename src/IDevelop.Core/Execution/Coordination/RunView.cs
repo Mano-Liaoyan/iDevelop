@@ -75,6 +75,12 @@ internal enum TaskState
     /// <summary>The coordinator does not run this kind of node yet.</summary>
     Unsupported,
 
+    /// <summary>
+    /// In a run that a node's Run started, nobody ran it and no task before it is part of the run (#90). It starts only
+    /// when the person runs it while the run is active, once each of its dependency predecessors has a result.
+    /// </summary>
+    Unrequested,
+
     /// <summary>A person sent back its approval request. It holds its dependents until its inputs change.</summary>
     SentBack,
 }
@@ -103,8 +109,17 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     public UnresolvedReason? Unresolved { get; init; }
 
-    /// <summary>The tasks that hold back a <see cref="TaskState.Pending"/> task.</summary>
+    /// <summary>
+    /// The dependency predecessors that have not handed on a result yet, which a <see cref="TaskState.Pending"/> task waits
+    /// for and an <see cref="TaskState.Unrequested"/> one would.
+    /// </summary>
     public ImmutableSortedSet<TaskId> HeldBy { get; init; } = [];
+
+    /// <summary>
+    /// Nothing in the run can start it any more: it is <see cref="TaskState.Unrequested"/>, or a predecessor is. The run
+    /// completes once every other task is done.
+    /// </summary>
+    public bool Dormant { get; init; }
 
     /// <summary>An Approval node's newest request and its answer, or null before its first request.</summary>
     public GateView? Gate { get; init; }

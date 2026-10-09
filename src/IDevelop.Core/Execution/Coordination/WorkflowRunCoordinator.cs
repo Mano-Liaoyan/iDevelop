@@ -122,6 +122,19 @@ internal sealed partial class WorkflowRunCoordinator
         return decision is RunDecision.Rejected rejected ? new RunCommand.Refused(rejected.Reason) : Accepted;
     }, wait);
 
+    /// <summary>
+    /// Adds <paramref name="task"/> to a run that a node's Run started, as the person's Run of another node does while the
+    /// run is active (#90). The journal records it once under <paramref name="confirmation"/>, so a repeat or a retry after
+    /// a busy refusal adds it once, and a reopened run starts it after Resume. A task with a dependency predecessor that has
+    /// no current result is refused with <see cref="RunProblem.MissingDependencyResult"/>, which names that predecessor.
+    /// </summary>
+    public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, _ =>
+        _store.Request(_permit!, RunOperations.Request(confirmation, task), task) switch
+        {
+            RunDecision.Rejected rejected => new RunCommand.Refused(rejected.Reason),
+            _ => Accepted,
+        }, wait);
+
     /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
     public void Refresh() => Post(() => { });
 

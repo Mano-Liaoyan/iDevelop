@@ -28,9 +28,10 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
     private readonly TempFolder _temp = new();
     private readonly Dictionary<string, FakeRule[]> _turns = [];
 
-    public CoordinatorFixture(Workflow workflow, CommitId? runBase = null)
+    /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
+    public CoordinatorFixture(Workflow workflow, CommitId? runBase = null, TaskId? node = null)
     {
-        Preparation = new(workflow, runBase ?? PlanCommit);
+        Preparation = new(workflow, runBase ?? PlanCommit, node: node);
         Evidence = _temp.Create("evidence");
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
     }

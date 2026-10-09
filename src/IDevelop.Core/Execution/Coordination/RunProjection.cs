@@ -50,13 +50,22 @@ internal static class RunProjection
                 progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log) };
         }
         var plan = Schedule.Of(snapshot, progress, view => view.State == TaskState.Done);
+        // Only the tasks the person ran and those after them start (#90); Run Workflow runs every root.
+        var flow = RunScope.InFlow(record);
+        var dormant = RunScope.Dormant(snapshot, flow, task => !progress.ContainsKey(task));
+        var predecessors = RunScope.Predecessors(snapshot);
+        // The dependency predecessors that have not handed on a result, which the task waits for.
+        ImmutableSortedSet<TaskId> Holders(TaskId task) =>
+            [.. predecessors[task].Where(predecessor => progress.GetValueOrDefault(predecessor) is not { State: TaskState.Done })];
         var tasks = ImmutableSortedDictionary.CreateBuilder<TaskId, TaskView>();
         foreach (var (task, view) in progress) tasks[task] = view;
         foreach (var task in plan.Ready)
             // A review without a subject has nothing to review, so it never starts.
-            tasks[task] = new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ||
-                snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review && snapshot.SubjectOf(task) is not null ? TaskState.Ready : TaskState.Unsupported);
-        foreach (var (task, holders) in plan.Blocked) tasks[task] = new(task, TaskState.Pending) { HeldBy = [.. holders.Keys] };
+            tasks[task] = !flow.Contains(task) ? new(task, TaskState.Unrequested) { Dormant = dormant.Contains(task) }
+                : new(task, snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent or WorkSpec.Person ||
+                    snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review && snapshot.SubjectOf(task) is not null ? TaskState.Ready : TaskState.Unsupported);
+        foreach (var task in plan.Blocked.Keys)
+            tasks[task] = new(task, flow.Contains(task) ? TaskState.Pending : TaskState.Unrequested) { HeldBy = Holders(task), Dormant = dormant.Contains(task) };
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);
         return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built);
@@ -167,7 +176,7 @@ internal static class RunProjection
         if (!resumed) return RunStatus.Paused;
         var states = tasks.Values.Select(view => view.State).ToArray();
         if (states.Any(state => state is TaskState.Ready or TaskState.Starting or TaskState.Running or TaskState.Settling) ||
-            holds.Values.Any(hold => hold.Retried) || states.All(state => state == TaskState.Done))
+            holds.Values.Any(hold => hold.Retried) || tasks.Values.All(view => view.State == TaskState.Done || view.Dormant))
             return RunStatus.Running;
         if (states.Contains(TaskState.Waiting) &&
             !states.Any(state => state is TaskState.Failed or TaskState.Stale or TaskState.Blocked or TaskState.Uncertain or TaskState.Refused or

@@ -252,6 +252,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(CaptureDisposed), "captureDisposed")]
 [JsonDerivedType(typeof(GateRequested), "gateRequested")]
 [JsonDerivedType(typeof(GateSentBack), "gateSentBack")]
+[JsonDerivedType(typeof(Requested), "requested")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -296,6 +297,13 @@ internal abstract record RunEvent
         /// <summary>The reports the person included at confirmation, accepted with the approval. Null when none was.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ImmutableArray<IncludedResult>? Included { get; init; }
+
+        /// <summary>
+        /// The node whose Run started the run. Null for Run Workflow, which runs every root, and in older journals. A run
+        /// started from a node starts only that node and the tasks after it, each once its predecessors have results.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public TaskId? Node { get; init; }
     }
 
     internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent
@@ -339,6 +347,12 @@ internal abstract record RunEvent
 
     /// <summary>The person sent the request back with a reason. Its dependents stay held.</summary>
     internal sealed record GateSentBack(GateId Request, InputId Inputs, string Reason) : RunEvent;
+
+    /// <summary>
+    /// The person ran another node of a run that a node's Run started, which adds that node to the run. Its dependency
+    /// predecessors all had current results when it was recorded.
+    /// </summary>
+    internal sealed record Requested(TaskId Task) : RunEvent;
 }
 
 internal sealed record RunEntry(int Schema, long Sequence, OperationId Operation, Digest Command, DateTimeOffset At, RunEvent Event);
@@ -356,6 +370,9 @@ internal enum RunProblem
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
     IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending, SessionUnavailable,
+
+    /// <summary>The task is not part of a run that a node's Run started: nobody ran it, and no task before it is part of it.</summary>
+    NotRequested,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -416,6 +433,12 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public string? Repository { get; internal init; }
 
     public ImmutableDictionary<TaskId, string> TaskKeys { get; internal init; } = ImmutableDictionary<TaskId, string>.Empty;
+
+    /// <summary>
+    /// The nodes the person ran, for a run that a node's Run started, or null for a run of every root, as Run Workflow
+    /// starts and older journals record (#90). <see cref="RunScope"/> derives which tasks may start from it.
+    /// </summary>
+    public ImmutableSortedSet<TaskId>? Requested { get; internal init; }
 
     public ImmutableDictionary<OperationId, MaterializationPlan> Plans { get; internal init; } = ImmutableDictionary<OperationId, MaterializationPlan>.Empty;
 
