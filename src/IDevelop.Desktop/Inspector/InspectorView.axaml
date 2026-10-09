@@ -317,7 +317,8 @@
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding StartProblem}" Background="Transparent">
                           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
                                     VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                          <!-- The whole reason wraps, since Run stays off until the person acts on it. -->
+                          <TextBlock Grid.Column="1" Text="{Binding StartProblem}" TextWrapping="Wrap"
                                      FontSize="12" Foreground="{DynamicResource TextBrush}"
                                      AutomationProperties.AutomationId="StartProblem" />
                         </Grid>

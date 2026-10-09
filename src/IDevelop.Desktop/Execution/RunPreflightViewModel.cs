@@ -378,7 +378,8 @@ public sealed class RunPreflightViewModel : ObservableObject
         var agent = task.Kind == WorkKind.Person ? "Waits for your approval"
             : RunText.AgentLabel(task.Settings, task.Settings is { } settings ? _canvas.Clients.Current[settings.Client] : new ClientStatus.Checking());
         var inputs = task.Inputs.IsEmpty ? null
-            : $"After {string.Join(", ", task.Inputs.Select(input => input.Kind == ConnectionKind.Context ? $"{Title(_preview!, input.From)} (context)" : Title(_preview!, input.From)))}";
+            : $"After {string.Join(", ", task.Inputs.OrderBy(input => TitleOf(_preview!, input.From), StringComparer.CurrentCultureIgnoreCase).ThenBy(input => input.From)
+                .Select(input => input.Kind == ConnectionKind.Context ? $"{Title(_preview!, input.From)} (context)" : Title(_preview!, input.From)))}";
         return new PreflightTaskRow(node?.Kind ?? NodeKind.Implement, task.Title, agent, inputs);
     }
 
