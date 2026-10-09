@@ -170,7 +170,7 @@ public sealed class CarriedResultTests
         Select(shell, "C");
         // Said once, under Run.
         Assert.False(Shows(shell, "RunTaskDetail") || Shows(shell, "RunOwner"));
-        Assert.Equal(WorkflowRunText.Unbroken("Out of date because \"B\" changed. Run \"B\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("Out of date because\u200B \"B\" changed. Run \"B\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
     }
 
     [AvaloniaFact]
@@ -183,15 +183,24 @@ public sealed class CarriedResultTests
         RunNode(shell, "A");
         Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], Cards(shell));
 
-        shell.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.EditTitle(A, "Parse"));
+        shell.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.EditTitle(A, "Parse source"));
         shell.Render();
 
         Assert.Equal(["Out of date", "Out of date"], new[] { "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
         Select(shell, "B");
-        Assert.Equal(WorkflowRunText.Unbroken("Out of date because \"Parse\" changed. Run \"Parse\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal("Out of date because \"Parse source\" changed. Run \"Parse source\" first.", Plain(shell.InView<TextBlock>("StartProblem").Text));
         // B did not change: it is out of date because A is.
         Select(shell, "C");
-        Assert.Equal(WorkflowRunText.Unbroken("Out of date because \"B\" is out of date. Run \"B\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal("Out of date because \"B\" is out of date. Run \"B\" first.", Plain(shell.InView<TextBlock>("StartProblem").Text));
+
+        // In the narrowest inspector a line may end after "because", so "Out of date" never stands alone on the first one.
+        shell.SizeInspector(280);
+        Select(shell, "B");
+        var problem = shell.InView<TextBlock>("StartProblem");
+        Assert.Equal("Out of date because", Plain(problem.Text!.Substring(0, problem.TextLayout.TextLines[0].Length)).Trim());
+
+        // The text as it reads, with its non-breaking and zero-width spaces made plain.
+        static string Plain(string? text) => (text ?? "").Replace("\u200B", "").Replace('\u00A0', ' ');
     }
 
     [AvaloniaFact]

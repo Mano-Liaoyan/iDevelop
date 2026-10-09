@@ -82,7 +82,7 @@ internal abstract record TaskStanding
     {
         Succeeded => "Its result from an earlier run still\u00A0counts.",
         OutOfDate { Reason: OutOfDateReason.Changed } => "Out of date because it changed since it\u00A0ran.",
-        OutOfDate { Input: { } input, InputComplete: true } => $"Out of date because \"{title(input)}\" has a newer\u00A0result.",
+        OutOfDate { Input: { } input, InputComplete: true } => $"Out of date because{BreakAfter} \"{title(input)}\" has a newer\u00A0result.",
         OutOfDate { Input: not null } => null,
         OutOfDate => "Out of date because a task before it has a newer\u00A0result.",
         Ended ended => WorkflowRunText.Detail(ended.Task, title, active: false),
@@ -99,10 +99,10 @@ internal abstract record TaskStanding
     public string? RunsAfter(TaskId holder, TaskHistory? holderHistory, Func<TaskId, string> title) => (this, holderHistory) switch
     {
         (OutOfDate { Input: { } input }, TaskHistory.OutOfDate { Reason: OutOfDateReason.Changed }) when input == holder =>
-            $"Out of date because \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first.",
+            $"Out of date because{BreakAfter} \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first.",
         // The task before it did not change itself: a task before that one did, or has another result now.
         (OutOfDate { Input: { } input }, TaskHistory.OutOfDate) when input == holder =>
-            $"Out of date because \"{title(holder)}\" is out of date. Run \"{title(holder)}\"\u00A0first.",
+            $"Out of date because{BreakAfter} \"{title(holder)}\" is out of date. Run \"{title(holder)}\"\u00A0first.",
         (OutOfDate { Input: { } input, Reason: OutOfDateReason.InputReplaced }, TaskHistory.None) when input == holder =>
             $"Out of date because a later run of \"{title(holder)}\" ended without a result. Run \"{title(holder)}\"\u00A0first.",
         _ => null,
@@ -115,6 +115,13 @@ internal abstract record TaskStanding
     public string? Owner(string workflow, bool hasAgent) => this is Ended
         ? hasAgent ? $"A run of the \"{workflow}\" workflow ran this task last." : $"A run of the \"{workflow}\" workflow asked for this approval last."
         : null;
+
+    /// <summary>
+    /// A zero-width space after "because": a line may end there, though a word otherwise keeps the quoted title after it
+    /// company (<see cref="WorkflowRunText.Unbroken"/>), so a narrow inspector fills its first line rather than leaving
+    /// "Out of date" alone on it.
+    /// </summary>
+    private const string BreakAfter = "\u200B";
 
     /// <summary>What its card's tooltip adds, which the card may only count: the tasks it waits for, by name.</summary>
     public string? Tip(Func<TaskId, string> title) => this is Waits waits ? $"Waits for {Names(waits.Holders, title)}." : null;
