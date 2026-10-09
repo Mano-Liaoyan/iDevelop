@@ -44,6 +44,8 @@ internal sealed partial class WorkflowRunCoordinator
     private readonly Dictionary<TaskId, Live> _live = [];
     private readonly Dictionary<TaskId, TaskHold> _holds = [];
     private readonly Dictionary<TaskId, SettledTurn> _handles = [];
+    // Turns whose settlement stayed unresolved, which keep their task's lease until a recorded receipt lets them go.
+    private readonly Dictionary<TaskId, UnresolvedTurn> _unresolved = [];
     private readonly List<Task> _inflight = [];
 
     internal WorkflowRunCoordinator(ProjectRuns runs, RunStore store, Func<Materializer> materializer, RunAddress address, CoordinatorPermit? permit)

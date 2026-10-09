@@ -35,6 +35,7 @@ internal static class WorkflowRunText
         TaskState.Running => (NodeState.Running, "Running"),
         TaskState.Settling => (NodeState.Running, "Finishing"),
         TaskState.Waiting when task.Gate is not null => (NodeState.Waiting, "Waiting for approval"),
+        TaskState.Waiting when task.Fix is not null => (NodeState.Waiting, "Fix interrupted"),
         TaskState.Waiting when task.Status == AttemptStatus.InReview => (NodeState.InReview, "In review"),
         TaskState.Waiting when task.Status == AttemptStatus.WaitingForInput => (NodeState.Waiting, "Waiting for you"),
         TaskState.Waiting => (NodeState.Waiting, "Reply queued"),
@@ -46,14 +47,15 @@ internal static class WorkflowRunText
         {
             AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Cancelled } => (NodeState.Cancelled, "Cancelled"),
             AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Interrupted } => (NodeState.Interrupted, "Interrupted"),
-            AttemptEnd.Recovered => (NodeState.Interrupted, "Closed by recovery"),
+            AttemptEnd.Recovered { Outcome: RecoveryOutcome.NotStarted } => (NodeState.Cancelled, "Not started"),
+            AttemptEnd.Recovered => (NodeState.Interrupted, "Closed as stopped"),
             _ => (NodeState.Failed, "Failed"),
         },
         TaskState.Blocked => (NodeState.Failed, "Blocked"),
         TaskState.Uncertain => (NodeState.Interrupted, "Uncertain"),
         TaskState.Refused when task.Problem is { } problem && NodeStates.IsSetup(problem) => (NodeState.NeedsSetup, CardText.ShortReason(problem) ?? "Couldn't start"),
         TaskState.Refused => (NodeState.Failed, "Couldn't start"),
-        TaskState.Unsupported => (NodeState.Idle, "Not run by workflows yet"),
+        TaskState.Unsupported => (NodeState.Idle, "Nothing to review"),
         TaskState.SentBack => (NodeState.Failed, "Sent back"),
         _ => throw new UnreachableException(),
     };
@@ -64,13 +66,15 @@ internal static class WorkflowRunText
     {
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported when !active => null,
         TaskState.Pending when !task.HeldBy.IsEmpty => $"It starts once {Names(task.HeldBy, title)} {(task.HeldBy.Count == 1 ? "hands" : "hand")} on a result.",
-        TaskState.Blocked when task.Block is { } block => $"{Problem(block.Problem)} {block.Detail}".Trim(),
+        TaskState.Blocked when task.Block is { } block && block.Task != task.Task => $"The checkout of \"{title(block.Task)}\" holds it. {block.Detail}".Trim(),
+        TaskState.Blocked when task.Block is { } block => $"{RecoveryText.Problem(block)} {block.Detail}".Trim(),
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
+        TaskState.Failed when task.End is AttemptEnd.Recovered { Reason: var reason } => reason,
         TaskState.Stale => "A task before it handed on a newer result after this one finished.",
         TaskState.SentBack when task.Gate?.Reason is { } reason => $"Sent back: {reason}",
-        TaskState.Unsupported => "Workflow runs do not run this kind of node yet.",
+        TaskState.Unsupported => RunText.Describe(new StartProblem.NoSubject()),
         _ => null,
     };
 
@@ -80,12 +84,39 @@ internal static class WorkflowRunText
         var (state, label) = Of(task, title);
         return task.State switch
         {
-            TaskState.Waiting when task.Gate is not null || task.Status == AttemptStatus.WaitingForInput => new Attention.Waiting(label),
+            TaskState.Waiting when task.Gate is not null || task.Fix is not null || task.Status == AttemptStatus.WaitingForInput => new Attention.Waiting(label),
+            TaskState.Stale => new Attention.Problem($"{label}: {Detail(task, title)}"),
             TaskState.Failed when state == NodeState.Failed => new Attention.Problem(Detail(task, title) is { } why ? $"{label}: {why}" : label),
             TaskState.Blocked or TaskState.Uncertain or TaskState.SentBack or TaskState.Refused when state != NodeState.NeedsSetup =>
                 new Attention.Problem(Detail(task, title) is { } detail ? $"{label}: {detail}" : label),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// What a stopping run waits for: the person's closure of a turn whose client was never seen to exit, or the
+    /// settlement of one whose client exited, which only opening the project again tries once more.
+    /// </summary>
+    public static string Stopping(IEnumerable<TaskView> tasks, Func<TaskId, string> title) =>
+        tasks.FirstOrDefault(task => task.State == TaskState.Uncertain) switch
+        {
+            null => "Stopping. Finished work stays.",
+            { RootExited: true } settling => $"Stopping waits for \"{title(settling.Task)}\" to settle. Open the project again to retry.",
+            var uncertain => $"Stopping waits for you to close \"{title(uncertain.Task)}\" as stopped.",
+        };
+
+    /// <summary>
+    /// Why a run's review waits for Continue fix or Retry fix: closing iDevelop interrupted its fix round, or the round's
+    /// turn ended without a recorded end and a person closed it as stopped. Then what each choice can do, with the reason
+    /// Continue cannot go on when it cannot.
+    /// </summary>
+    /// <param name="end">How the fix attempt ended, or null when the run does not show it.</param>
+    public static string FixChoice(FixRecovery fix, string subject, AttemptEnd? end)
+    {
+        var what = end is AttemptEnd.Recovered
+            ? $"Fix round {fix.Round} of \"{subject}\" ended without a recorded end, and it was closed as stopped."
+            : $"Closing iDevelop interrupted fix round {fix.Round} of \"{subject}\".";
+        return fix.ContinueUnavailable is { } why ? $"{what} {why}" : $"{what} Continue the fix in its session, or retry it in a fresh one.";
     }
 
     /// <summary>One sentence for each reason the run refused a command.</summary>
@@ -124,7 +155,7 @@ internal static class WorkflowRunText
     /// <summary>Whether a refusal comes from a lock or a journal that another step holds for a moment, so trying again can succeed.</summary>
     public static bool Transient(RunRejection rejection) => rejection.Problem is RunProblem.JournalBusy or RunProblem.TaskBusy or RunProblem.RunBusy;
 
-    private static string Problem(MaterializationProblem problem) => problem switch
+    internal static string Problem(MaterializationProblem problem) => problem switch
     {
         MaterializationProblem.DirtyWorktree => "Files changed in the task's checkout after its turn ended.",
         MaterializationProblem.UncertainOwnership => "A branch moved that no task of the run moved.",

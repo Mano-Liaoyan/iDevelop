@@ -111,6 +111,15 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>On a review: the fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix.</summary>
     public FixRecovery? Fix { get; init; }
+
+    /// <summary>
+    /// While <see cref="TaskState.Uncertain"/>: the newest turn's root exit is recorded, so only its settlement is
+    /// unresolved, and a person cannot close the turn as stopped.
+    /// </summary>
+    public bool RootExited { get; init; }
+
+    /// <summary>The task's current result carries code of its own, which a rebase can replay. A report does not.</summary>
+    public bool CarriesCode { get; init; }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
