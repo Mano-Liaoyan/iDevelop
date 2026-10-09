@@ -1,0 +1,26 @@
+# An amendment adds tasks and fills only tasks whose start is not planned
+
+Editing the workflow document never changes an approved run. A run-owned planner's proposal changes the run only when the person accepts it through `WorkflowRunCoordinator.Amend`, which records an `Amended` event against the expected previous revision before the document follows. An amendment may only add tasks and connections and fill tasks that have not started, and a task counts as started once the plan of its start is recorded. That is earlier than [design v5](https://github.com/Mano-Liaoyan/iDevelop/issues/54#issuecomment-6065458422)'s "Reserved tasks count as started". It applies the [node model record](../handoffs/2026-10-04-node-model.md#planning-produces-graph-edits-the-person-approves)'s rule, at its line 124: "During a run, which workflow execution builds, an accepted proposal may only add nodes and fill nodes that have not started."
+
+## Blank required fields stay preflight gaps
+
+The same record says, at its line 123, that "The workflow is complete before it runs". So a blank required field stays a preflight gap, and a run is never approved on the promise that a planner will fill it later. A planner's slots are the tasks whose fields are all blank, so in a run a planner can fill only a slot whose fields are all optional, and such a slot may also start blank.
+
+## How it works
+
+- **A run-owned planner's handles.** Its slots are the empty tasks its dependency connections reach in its attempt's revision. Its types are the built-in blueprints, then the revision's other blueprints by key, which are the blueprints an amendment can resolve. The plan ID is the attempt's ID, and a continuation keeps the handles of the attempt it continues. The handles go into the prompt and the attempt's request, so every preparation, claim, and recovery renders the same prompt, and a closed turn's proposal can amend the run.
+- **Started means planned.** A task whose start has a recorded preparation plan, or that has an attempt, a result, or a gate request, keeps the revision its start uses. A fill for it drops out of the amendment, and an input for it, or any other change to its definition or incoming connections, is `StartedTaskChanged`. No amendment changes any existing task's blueprint, work, or set of required fields.
+- **A start that an amendment overtook is tried again.** A start refused with `RevisionConflict` after the run's revision moved holds its task only for the retry delay, so its next preparation plans at the amended revision. This is the one refusal besides the busy ones of [ADR 0004](0004-one-window-controls-a-run-and-only-its-resume-schedules.md) that runs again by itself.
+- **Repeats converge.** An acceptance with the same previous revision, planner turn, and choice (the chosen items and the fallback agent) returns the recorded amendment, under the same confirmation or a new one, whatever started since. Any other stale or unknown previous revision is `RevisionConflict`. Only the controlling window amends, and another gets `Unavailable`.
+- **The document follows the journal.** `AmendmentProjection` compares revisions, so layout never stands in the way. While the document holds any revision of the run's amendment chain, the edit from the newest one it holds to what the run executes applies. Otherwise the projection shows what differs and applies nothing. This widens design v5's "apply the batch only against its expected predecessor", so a document two amendments behind still follows. Undoing the applied edit in the document revokes nothing in the run.
+
+## Considered options
+
+- Counting a task as started at its reservation, as design v5 says. A fill accepted after the plan of a slot's start and before its reservation left that start refused with `RevisionConflict`, and the run never went on.
+
+## Consequences
+
+- Once a planner's result hands on, a slot it reaches may have its start planned before the person accepts the proposal. Its fill then drops out, and the slot runs as it was.
+- No ticket yet owns accepting a run planner's proposal in the app. E3g.1 shows proposals only from standalone attempts, so no app flow calls `Amend` yet. When one does, its proposal panel should show a fill as started once its slot's start is planned.
+
+Source: pull request [#78](https://github.com/Mano-Liaoyan/iDevelop/pull/78) (E3d.2), its Decisions 8 to 11, its review fixes, and its open question on started tasks, and pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its open question on run planners.

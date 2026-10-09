@@ -11,6 +11,6 @@ In a run, a message to a resting attempt is written to the attempt's log at once
 
 ## Consequences
 
-- A conversation opened in a second, read-only window keeps answering `Unavailable` after the controlling window closes, until it is opened again on the coordinator that now controls the run (E3g.1).
+- A conversation opened in a second, read-only window keeps answering `Unavailable` after the controlling window closes, until it is opened again on the coordinator that now controls the run. The app does that by itself: once its window takes control ([ADR 0004](0004-one-window-controls-a-run-and-only-its-resume-schedules.md)), the open conversation reopens on the new coordinator with its draft.
 
-Source: pull request [#76](https://github.com/Mano-Liaoyan/iDevelop/pull/76) (E3c.1), its Decisions 1 to 5 and its open question on read-only windows.
+Source: pull request [#76](https://github.com/Mano-Liaoyan/iDevelop/pull/76) (E3c.1), its Decisions 1 to 5 and its open question on read-only windows, and pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its follow-up from #76.
