@@ -70,12 +70,12 @@ internal static class Carrying
 
     /// <summary>
     /// Builds the results <paramref name="record"/> would carry for each of <see cref="Needed"/> that <paramref name="history"/>
-    /// has a current result of, under the event <paramref name="carrying"/>. With <paramref name="preview"/> it only merges
-    /// trees, so the run's base may be a tree, as a snapshot preview's is, and nothing it returns names a real commit. Without
-    /// it, it writes the commits the carried results name, which <see cref="Keep"/> then keeps. It records nothing.
+    /// has a current result of, under the event <paramref name="carrying"/>. It writes the commits the carried results name,
+    /// which <see cref="Keep"/> then keeps, so a preview merges exactly as the approval does, and nothing references
+    /// what a preview wrote. It records nothing.
     /// </summary>
     /// <param name="repository">The project's repository, or null where no result needs Git, as for reports.</param>
-    public static CarryBuild Build(GitRepository? repository, RunRecord record, RunHistory history, OperationId carrying, bool preview)
+    public static CarryBuild Build(GitRepository? repository, RunRecord record, RunHistory history, OperationId carrying)
     {
         var needed = Needed(record);
         if (needed.IsEmpty) return CarryBuild.Empty;
@@ -119,10 +119,10 @@ internal static class Carrying
                 refused[task] = new CarryRefusal.InputRefused(failed.Edge.From);
                 continue;
             }
-            switch (Replay(repository, working, source, task, carrying, preview, merges))
+            switch (Replay(repository, working, source, task, carrying, merges))
             {
                 case (IncludedResult item, var commits, null):
-                    if (!preview && RunReducer.CarriedProblem(working, item, carrying) is { } problem)
+                    if (RunReducer.CarriedProblem(working, item, carrying) is { } problem)
                     {
                         refused[task] = new CarryRefusal.Unavailable($"The carried result does not fit the run: {problem}.");
                         continue;
@@ -184,7 +184,7 @@ internal static class Carrying
 
     /// <summary>The result <paramref name="working"/> would carry for <paramref name="task"/> from <paramref name="source"/>, with the commits to keep, or why not.</summary>
     private static (IncludedResult? Item, ImmutableArray<(string, CommitId)> Kept, CarryRefusal? Refusal) Replay(GitRepository? repository, RunRecord working,
-        EarlierResult source, TaskId task, OperationId carrying, bool preview, bool merges)
+        EarlierResult source, TaskId task, OperationId carrying, bool merges)
     {
         var (resultId, inputsId) = RunReducer.CarriedIds(carrying, task);
         var snapshot = working.Revision.Snapshot;
@@ -203,10 +203,10 @@ internal static class Carrying
         if (commits.Length >= 2)
         {
             if (!merges) return (null, [], new CarryRefusal.Unavailable($"Joining carried results needs Git 2.43 or later. Installed: {repository?.Version}."));
-            var joined = Join(repository!, working, task, commits, preview);
+            var joined = Join(repository!, working, task, commits);
             if (joined.Refusal is { } refusal) return (null, [], refusal);
             join = new(RunReducer.CarriedJoinOperation(carrying, resultId), sources, joined.Commit, joined.Tree, RunLayout.CarriedJoin(working.Id, resultId));
-            if (!preview) kept.Add((join.Ref, join.Commit));
+            kept.Add((join.Ref, join.Commit));
         }
         InputRecord inputs;
         try
@@ -235,20 +235,16 @@ internal static class Carrying
                     case TreeMerge.Failed failed:
                         return (null, [], new CarryRefusal.Unavailable(failed.Detail));
                 }
-                if (preview) commit = new(tree.Hex);
-                else
-                {
-                    if (repository.CommitterTimestamps([newBase, owned.Commit]) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
-                        return (null, [], new CarryRefusal.Unavailable("Git could not read the commits to replay."));
-                    var recipe = new CommitRecipe(tree, [newBase], $"Carry an earlier result onto the run base\n\nIDP-Run: {working.Id.Value:D}\n" +
-                        $"IDP-Task: {task.Value:D}\nIDP-Carried-From: {owned.Commit.Hex}\n", Identity, Identity, times.Value.Max());
-                    if (repository.CreateCommit(recipe) is not GitRead<CommitId>.Read created)
-                        return (null, [], new CarryRefusal.Unavailable("Git could not write the replayed commit."));
-                    commit = created.Value;
-                }
+                if (repository.CommitterTimestamps([newBase, owned.Commit]) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
+                    return (null, [], new CarryRefusal.Unavailable("Git could not read the commits to replay."));
+                var recipe = new CommitRecipe(tree, [newBase], $"Carry an earlier result onto the run base\n\nIDP-Run: {working.Id.Value:D}\n" +
+                    $"IDP-Task: {task.Value:D}\nIDP-Carried-From: {owned.Commit.Hex}\n", Identity, Identity, times.Value.Max());
+                if (repository.CreateCommit(recipe) is not GitRead<CommitId>.Read created)
+                    return (null, [], new CarryRefusal.Unavailable("Git could not write the replayed commit."));
+                commit = created.Value;
             }
             var reference = RunLayout.CarriedCode(working.Id, resultId);
-            if (!preview) kept.Add((reference, commit));
+            kept.Add((reference, commit));
             code = new CodeOutput.Produced(new(task, owned.Attempt, newBase, commit, tree, reference));
         }
         else code = inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs.Id) : null;
@@ -262,31 +258,27 @@ internal static class Carrying
     }
 
     /// <summary>
-    /// The join of a carried task's code inputs on the run's base, merged as a run's own join merges them, one source after
-    /// another with the run base as the merge base. A preview merges trees only, so its commit names the joined tree.
+    /// The join of a carried task's code inputs, merged as a run's own join merges them (<see cref="MergeJoins"/>): one
+    /// source after another, with the merge base Git finds from their history, the run base as the attribute source, and a
+    /// commit for each step.
     /// </summary>
     private static (CommitId Commit, TreeId Tree, CarryRefusal? Refusal) Join(GitRepository repository, RunRecord working, TaskId task,
-        ImmutableArray<CommitId> parents, bool preview)
+        ImmutableArray<CommitId> parents)
     {
         var runBase = working.Base.Commit;
-        var timestamp = DateTimeOffset.MinValue;
-        if (!preview)
-        {
-            if (repository.CommitterTimestamps(parents) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
-                return (default, default, new CarryRefusal.Unavailable("Git could not read the commits to join."));
-            timestamp = times.Value.Max();
-        }
+        if (repository.CommitterTimestamps(parents) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
+            return (default, default, new CarryRefusal.Unavailable("Git could not read the commits to join."));
+        var timestamp = times.Value.Max();
         var accumulator = parents[0];
         TreeId tree = default;
         for (var step = 1; step < parents.Length; step++)
         {
-            switch (repository.MergeTrees(accumulator, parents[step], runBase, runBase))
+            switch (repository.MergeTrees(accumulator, parents[step], runBase))
             {
                 case TreeMerge.Clean clean:
                     tree = clean.Tree;
                     if (step == parents.Length - 1) break;
-                    if (preview) accumulator = new(tree.Hex);
-                    else if (repository.CreateCommit(Recipe(tree, [accumulator, parents[step]])) is GitRead<CommitId>.Read partial) accumulator = partial.Value;
+                    if (repository.CreateCommit(Recipe(tree, [accumulator, parents[step]])) is GitRead<CommitId>.Read partial) accumulator = partial.Value;
                     else return (default, default, new CarryRefusal.Unavailable("Git could not write the join."));
                     break;
                 case TreeMerge.Conflicted conflicted:
@@ -295,7 +287,6 @@ internal static class Carrying
                     return (default, default, new CarryRefusal.Unavailable(failed.Detail));
             }
         }
-        if (preview) return (new(tree.Hex), tree, null);
         return repository.CreateCommit(Recipe(tree, parents)) is GitRead<CommitId>.Read joined
             ? (joined.Value, tree, null)
             : (default, default, new CarryRefusal.Unavailable("Git could not write the join."));

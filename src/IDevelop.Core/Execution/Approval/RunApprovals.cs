@@ -82,6 +82,7 @@ internal sealed class RunApprovals
         {
             try { carried = Carried(repository, revision, found, started); }
             catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
+            catch (GitFailure failure) { gaps.Add(new PreflightGap.Git(failure.Problem, failure.Message)); }
             var offered = found is null ? [] : RunPreflight.Offered(found);
             if (RunScope.Predecessors(workflow)[started].Order()
                 .Where(predecessor => !carried.Any(item => item.Task == predecessor && item.Bases.Any(offered.Contains))).ToImmutableArray() is { IsEmpty: false } missing)
@@ -110,8 +111,8 @@ internal sealed class RunApprovals
         if (repository is null || found is null) return [];
         var history = RunHistory.Of(_store.Records(revision.Snapshot.Id), revision.Snapshot);
         var builds = RunPreflight.Offered(found).Select(choice => (choice, Carrying.Build(repository,
-            Seed(PreviewRun, revision, new(choice == BaseChoice.Head ? found.Head : new CommitId(found.WorkTree.Hex), choice), node),
-            history, PreviewConfirmation, preview: true))).ToArray();
+            Seed(PreviewRun, revision, new(choice == BaseChoice.Head ? found.Head : PreviewSnapshot(repository, found), choice), node),
+            history, PreviewConfirmation))).ToArray();
         var rows = ImmutableArray.CreateBuilder<PreflightCarried>();
         foreach (var task in builds.SelectMany(build => build.Item2.Carried.Select(item => item.Result.Task).Concat(build.Item2.Refused.Keys))
             .Distinct().Order())
@@ -123,6 +124,18 @@ internal sealed class RunApprovals
         }
         return rows.ToImmutable();
     }
+
+    /// <summary>
+    /// A commit of the work tree over HEAD, as the snapshot base the approval would make, so the preview replays results on
+    /// commits and merges as the approval will. Nothing references it, as nothing references the preview's tree.
+    /// </summary>
+    private static CommitId PreviewSnapshot(GitRepository repository, PreflightBase found)
+    {
+        var time = Value(repository.CommitterTimestamps([found.Head]))[0];
+        return Value(repository.CreateCommit(new(found.WorkTree, [found.Head], "iDevelop preview of a snapshot base\n", PreviewIdentity, PreviewIdentity, time)));
+    }
+
+    private const string PreviewIdentity = "iDevelop <idevelop@localhost>";
 
     /// <summary>A run of <paramref name="node"/> on <paramref name="codeBase"/> as its approval begins, before it carries anything.</summary>
     private static RunRecord Seed(RunId run, ApprovedRevision revision, RunBase codeBase, TaskId node) =>
@@ -355,7 +368,7 @@ internal sealed class RunApprovals
             if (chosen.Node is { } node)
             {
                 var history = RunHistory.Of(_store.Records(live.Workflow), chosen.Revision.Snapshot);
-                carried = Carrying.Build(repository, Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation, preview: false);
+                carried = Carrying.Build(repository, Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation);
                 _probe?.Invoke("approval.carry.built");
                 if (Carrying.Keep(repository, _project, chosen.Run, live.Workflow, carried, history) is { } failure)
                     return new RunApproval.Refused(ApprovalProblem.GitFailed, failure);

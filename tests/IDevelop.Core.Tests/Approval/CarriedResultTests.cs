@@ -303,6 +303,39 @@ public sealed class CarriedResultTests
         Assert.Equal(4, f.GitText("for-each-ref", "--format=%(refname)", RunLayout.CarriedPrefix(second)).Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_carried_join_of_results_that_share_an_input_merges_as_the_run_s_own_join_does(bool baseMoved)
+    {
+        // X → B → C ← D ← X, and C → A. B rewrites X's file and D adds its own, so their join merges cleanly only from X's
+        // result, the merge base Git finds in their history, not from the run's base.
+        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D), Agent(X)], (X, B), (X, D), (B, C), (D, C), (C, A)));
+        f.Answer(X, Writes(X, "f.txt", "x\n")).Answer(B, Writes(B, "f.txt", "b\n")).Answer(D, Writes(D, "d.txt", "d\n"))
+            .Answer(C, Copies(f, C, "f.txt", "d.txt"))
+            .Answer(A, Copies(f, A, "f.txt", "d.txt", "root.txt"), Copies(f, A, "f.txt", "d.txt", "root.txt"));
+        await f.Open();
+        var started = await Start(f, f.Preflight(), BaseChoice.Head, Command(1));
+        await Completed(started.Coordinator);
+        if (baseMoved)
+        {
+            f.Git.Write("root.txt", "root moved\n");
+            f.GitText("add", "root.txt");
+            f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
+        }
+
+        var preview = f.Runs.Preflight(f.Workflow, A);
+
+        Assert.Empty(preview.Gaps);
+        Assert.Equal([(B, true), (C, true), (D, true), (X, true)],
+            preview.Carried.OrderBy(row => Name(row.Task)).Select(row => (row.Task, row.Bases.Contains(BaseChoice.Head))));
+        Assert.All(preview.Carried, row => Assert.Null(row.Refusal));
+        var (second, _) = await RunNode(f, A, 2);
+        Assert.Equal([2, 1, 1, 1, 1], Launches(f, A, B, C, D, X));
+        Assert.Equal(("b\n", "d\n", baseMoved ? "root moved\n" : "root\n"), (Copied(f, A, "f.txt"), Copied(f, A, "d.txt"), Copied(f, A, "root.txt")));
+        Assert.IsType<CodeSelection.Joined>(f.Read(second).Inputs[f.Read(second).CurrentResults[C].Inputs].Code);
+    }
+
     [Fact]
     public async Task A_preview_whose_earlier_result_another_run_replaced_since_is_a_changed_preview()
     {

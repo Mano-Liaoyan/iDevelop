@@ -155,7 +155,7 @@ public sealed class CarriedRecoveryTests
         // What the crashed request had done: replayed, kept, and copied B's result, and recorded nothing.
         var record = f.Read(run);
         var history = RunHistory.Of(RunStore.Open(f.Project).Records(RunFixtures.W), record.Revision.Snapshot);
-        var crashed = Carrying.Build(f.Git.Open(), record with { Requested = [D, A] }, history, operation, preview: false);
+        var crashed = Carrying.Build(f.Git.Open(), record with { Requested = [D, A] }, history, operation);
         Assert.Null(Carrying.Keep(f.Git.Open(), f.Project, run, RunFixtures.W, crashed, history));
         Assert.DoesNotContain(f.Read(run).Receipts.Values, entry => entry.Event is RunEvent.Requested);
 

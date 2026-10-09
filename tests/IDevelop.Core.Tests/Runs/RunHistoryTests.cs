@@ -62,7 +62,7 @@ public sealed class RunHistoryTests
         // The second run starts from U, whose attempt fails. T's carried result counts as the same result as before.
         var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
         var operation = f.Op();
-        var carried = Carrying.Build(null, seed, History(f), operation, preview: false);
+        var carried = Carrying.Build(null, seed, History(f), operation);
         Assert.Equal([T], carried.Carried.Select(item => item.Result.Task));
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, OtherRun, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
             carried: carried.Carried));
@@ -197,7 +197,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
-            carried: Carrying.Build(null, seed, History(f), operation, preview: false).Carried));
+            carried: Carrying.Build(null, seed, History(f), operation).Carried));
         f.Complete(f.Reserve(U, run: Third), run: Third);
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
         f.ReleaseControl();
@@ -223,7 +223,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [D] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: D,
-            carried: Carrying.Build(null, seed, History(f), operation, preview: false).Carried));
+            carried: Carrying.Build(null, seed, History(f), operation).Carried));
         Settle(f, Third);
 
         Assert.Empty(History(f).WaitsFor(C).Holders);

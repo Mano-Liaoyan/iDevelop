@@ -167,7 +167,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is not RepositoryOpen.Opened opened)
                 return ([], new(RunProblem.StorageUnavailable));
             var history = RunHistory.Of(_store.Records(Address.Workflow), widened.Revision.Snapshot);
-            var build = Carrying.Build(opened.Repository, widened, history, operation, preview: false);
+            var build = Carrying.Build(opened.Repository, widened, history, operation);
             if (build.Carried.IsEmpty) return ([], null);
             return Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is null
                 ? (build.Carried, null) : ([], new(RunProblem.StorageUnavailable));
