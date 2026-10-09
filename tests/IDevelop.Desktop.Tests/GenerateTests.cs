@@ -292,6 +292,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.Header(shell.Node("Plan export")));
         shell.Click(shell.InView<Button>("RunTask"));
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        InspectorLayoutTests.AssertLaidOut(shell);
 
         Assert.False(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
         shell.Click(shell.InView<Button>("AcceptProposal"));
@@ -714,6 +715,9 @@ public sealed class GenerateTests : IDisposable
 
         var title = Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single();
         var edit = Shell.ById<Button>(entry, "ProposalAgentEdit").Single();
+        entry.BringIntoView();
+        shell.Render();
+        Assert.True(shell.Window.InputHitTest(shell.Center(title)) is Visual hit && box.IsVisualAncestorOf(hit), "the title is in view");
         shell.Click(Shell.ById<StackPanel>(entry, "ProposalAgent").Single());
         shell.Click(Shell.ById<TextBlock>(entry, "ProposalAgentReason").Single());
         // The empty end of the title's line, before the Change button, is no part of the box either.

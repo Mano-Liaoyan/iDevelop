@@ -336,9 +336,16 @@ public static class RunText
             : $"{text} Reported {Dotted(model, reasoning)}.";
     }
 
-    /// <summary>What ran, as short parts such as "Codex", "gpt-5.5", and "high": what the client reported, else what was requested.</summary>
-    public static IReadOnlyList<string> Agent(AttemptRecord attempt) =>
-        [.. new[] { Clients.Name(attempt.Requested.Client), attempt.ReportedModel ?? attempt.Requested.Model, attempt.ReportedReasoning ?? attempt.Requested.Reasoning }.OfType<string>()];
+    /// <summary>
+    /// What ran, as short parts such as "Codex", "GPT-5.5", and "high": what the client reported, else what was requested,
+    /// with the model's name as the client's catalog on this machine gives it, else its id.
+    /// </summary>
+    public static IReadOnlyList<string> Agent(AttemptRecord attempt, ClientStatus client)
+    {
+        var model = attempt.ReportedModel ?? attempt.Requested.Model;
+        var name = ExecutionChoices.OfferedModel(client, model)?.Name ?? model;
+        return [.. new[] { Clients.Name(attempt.Requested.Client), name, attempt.ReportedReasoning ?? attempt.Requested.Reasoning }.OfType<string>()];
+    }
 
     /// <summary>
     /// When something happened, as people say it in <paramref name="zone"/>: "Just now", "5 min ago", "Today 9:41 AM",

@@ -130,11 +130,20 @@ internal sealed partial class GitRepository
     internal static RepositoryOpen.Refused? CheckVersion(string text) => ParseVersion(text) is not { } version || version < new Version(2, 39, 0)
         ? new(MaterializationProblem.GitVersionUnsupported, text.TrimEnd('\r', '\n')) : null;
 
-    /// <summary>The persistent lock file is never deleted, so concurrent owners cannot lock different files at the same path.</summary>
-    public FileStream? TakeMutationLock()
+    /// <summary>How long a step waits for the mutation lock unless it names its own patience.</summary>
+    internal static readonly TimeSpan MutationPatience = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The repository's mutation lock, or null when another holder, in this process or another, keeps it for longer than
+    /// <paramref name="patience"/>, <see cref="MutationPatience"/> by default, or once <paramref name="halted"/> says the
+    /// caller stopped waiting. Waiters retry every 20 ms, so they take the lock in no fixed order. The persistent lock file
+    /// is never deleted, so concurrent owners cannot lock different files at the same path.
+    /// </summary>
+    public FileStream? TakeMutationLock(TimeSpan? patience = null, Func<bool>? halted = null)
     {
+        var limit = patience ?? MutationPatience;
         var folder = Directory.CreateDirectory(Path.Combine(CommonDirectory, "idevelop")).FullName;
-        var patience = Stopwatch.StartNew();
+        var waited = Stopwatch.StartNew();
         do
         {
             try
@@ -145,7 +154,7 @@ internal sealed partial class GitRepository
             {
                 Thread.Sleep(20);
             }
-        } while (patience.Elapsed < TimeSpan.FromSeconds(1));
+        } while (waited.Elapsed < limit && halted?.Invoke() != true);
         return null;
     }
 

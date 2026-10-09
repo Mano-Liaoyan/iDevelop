@@ -53,7 +53,7 @@ internal sealed partial class Materializer
             {
                 step = "join";
                 repository = OpenRepository();
-                held = repository.TakeMutationLock();
+                held = repository.TakeMutationLock(MutationPatience, Halted);
                 if (held is null) return new GatePreparation.Rejected(new(RunProblem.JournalBusy));
                 record = AllocateLayout(permit, operation, task, repository, record);
                 var joinRef = RunLayout.JoinBranch(record.RunKey!, record.TaskKeys[task]);

@@ -1,10 +1,13 @@
 <!-- The inspector's look: a pinned header, foldable Title Case sections, and rows on the panel's surface, all on the
      columns of InspectorGrid inside one 12 px inset. Godot's inspector gives the structure; the type sizes, radii, and
-     colors come from the app's tokens. -->
+     colors come from the app's tokens. Every row centres its glyph, label, short value, and trailing buttons on a first
+     line of InspectorGrid.LineHeight, and rows sit 4 px apart, so a list of kinds, a list of blueprints, and a list of
+     properties keep one rhythm. -->
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:execution="using:IDevelop.Desktop.Execution"
-        xmlns:inspector="using:IDevelop.Desktop.Inspector">
+        xmlns:inspector="using:IDevelop.Desktop.Inspector"
+        xmlns:theme="using:IDevelop.Desktop.Theme">
 
   <Style Selector="Border.inspectorHeader">
     <Setter Property="Padding" Value="12,12,12,8" />
@@ -16,18 +19,20 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="MinHeight" Value="28" />
-    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
+    <Setter Property="Padding" Value="5,3" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- The title as text, at the box's border and padding, so it ends in an ellipsis where the box would clip. -->
+  <!-- The title as text over the box, at the box's border and padding, so it wraps where the box wraps. The box sits 6 px
+       before the column, so the text starts where a connection's or a workflow's name starts. -->
   <Style Selector="TextBlock.headerTitle">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Margin" Value="7,0" />
+    <Setter Property="Margin" Value="6,0" />
   </Style>
   <Style Selector="Panel.headerTitle:focus-within > TextBlock.headerTitle">
     <Setter Property="IsVisible" Value="False" />
@@ -39,12 +44,19 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.headerName">
     <Setter Property="FontSize" Value="15" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <!-- A header's tile centres on a one-line title and its kind line, and stays there when a long title wraps. -->
+  <Style Selector="theme|KindTile.headerTile, Border.headerTile">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,7,0,0" />
   </Style>
   <!-- A tile for what has no kind, such as a connection or the workflow: neutral, so it never reads as a node kind. -->
   <Style Selector="Border.neutralTile">
@@ -66,7 +78,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <Style Selector="Border.filterBar TextBox">
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
 
   <Style Selector="Button.glyph">
@@ -102,6 +114,11 @@
     <Setter Property="Height" Value="14" />
     <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
   </Style>
+  <!-- The task header's help glyph keeps to the kind line, so every header is as tall: a 28 px title and an 18 px kind line. -->
+  <Style Selector="Border.infoGlyph.kindHelp">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
 
   <!-- Folded, a section's chevron points to the leading edge, as Apple's disclosure controls do. -->
   <Style Selector="inspector|InspectorSection">
@@ -113,7 +130,9 @@
               <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
               <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
-              <TextBlock Grid.Column="3" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right" />
+              <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
+              <inspector:InkAlignedText Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right"
+                                        Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
             </inspector:InspectorGrid>
           </Button>
           <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -168,30 +187,38 @@
   </Style>
 
   <!-- The label's look comes before the row styles that move it, which a later style of the same weight would undo. -->
+  <!-- A label too long for its column wraps rather than losing its end. -->
   <Style Selector="TextBlock.rowLabel">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Margin" Value="0,0,8,0" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
-  <!-- Rows: a glyph or tile, the label, the editor, and a trailing column for the revert and info glyphs or a row's
-       actions, so every editor lines up whether or not its row has them. -->
+  <!-- Rows: a glyph or tile, the label, the value, and a trailing column for the revert and info glyphs, a row's actions,
+       or a count, so every value lines up whether or not its row has them. The glyph, the label, and the trailing column
+       each take the first line's height and centre in it, a value of one line centres on it too, and a taller one grows
+       downward from it. -->
   <Style Selector="inspector|InspectorRow">
-    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Margin" Value="0,2" />
     <Setter Property="Template">
       <ControlTemplate>
         <inspector:InspectorGrid RowDefinitions="Auto,Auto">
-          <PathIcon Name="PART_Icon" Theme="{StaticResource Glyph}" Data="{TemplateBinding Icon}" AutomationProperties.AccessibilityView="Raw"
-                    IsVisible="{TemplateBinding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <ContentPresenter Name="PART_Lead" Content="{TemplateBinding Lead}" VerticalAlignment="Center" HorizontalAlignment="Center"
-                            AutomationProperties.AccessibilityView="Raw"
-                            IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <TextBlock Name="PART_Label" Grid.Column="2" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
+          <Panel Name="PART_LeadLine" VerticalAlignment="Top" Height="{x:Static inspector:InspectorGrid.LineHeight}">
+            <PathIcon Name="PART_Icon" Theme="{StaticResource Glyph}" Data="{TemplateBinding Icon}" AutomationProperties.AccessibilityView="Raw"
+                      IsVisible="{TemplateBinding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <ContentPresenter Name="PART_Lead" Content="{TemplateBinding Lead}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                              AutomationProperties.AccessibilityView="Raw"
+                              IsVisible="{TemplateBinding Lead, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </Panel>
+          <Panel Name="PART_LabelLine" Grid.Column="2" VerticalAlignment="Top" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}">
+            <TextBlock Name="PART_Label" Classes="rowLabel" Text="{TemplateBinding Label}" ToolTip.Tip="{TemplateBinding LabelTip}" />
+          </Panel>
           <ContentPresenter Name="PART_ContentPresenter" Grid.Column="3" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
-                            VerticalAlignment="Center" />
-          <StackPanel Name="PART_Trail" Grid.Column="4" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            VerticalAlignment="Top" VerticalContentAlignment="Center" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
+          <StackPanel Name="PART_Trail" Grid.Column="4" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Top"
+                      Height="{x:Static inspector:InspectorGrid.LineHeight}">
             <Button Classes="glyph revert"
                     Command="{TemplateBinding RevertCommand}" IsVisible="{TemplateBinding CanRevert}"
                     ToolTip.Tip="Revert to the blueprint's default"
@@ -207,48 +234,76 @@
                     AutomationProperties.HelpText="{TemplateBinding Info}">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" />
             </Border>
-            <ContentPresenter Content="{TemplateBinding Actions}" IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <ContentPresenter Content="{TemplateBinding Actions}" VerticalAlignment="Center"
+                              IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
         </inspector:InspectorGrid>
       </ControlTemplate>
     </Setter>
   </Style>
-  <!-- A row of several lines, such as a proposed task with its agent, keeps its trailing buttons on its first 32 px line. -->
-  <Style Selector="inspector|InspectorRow.firstLine /template/ StackPanel#PART_Trail">
-    <Setter Property="VerticalAlignment" Value="Top" />
-    <Setter Property="Margin" Value="0,4,0,0" />
-  </Style>
   <Style Selector="inspector|InspectorRow /template/ PathIcon#PART_Icon">
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
-  <!-- A label over its editor sits on the line's floor, so the gap stays 4 px when a revert or info glyph makes the line taller. -->
-  <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label, inspector|InspectorRow:editor:narrow /template/ TextBlock#PART_Label">
+  <Style Selector="inspector|InspectorRow /template/ Border.infoGlyph">
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <!-- A label over its value: a line of InspectorGrid.StackedLineHeight, as tall as the glyph buttons on it, whose text
+       sits on the line's floor 4 px above the value, and the value under it from the content edge to the value edge. In a
+       narrow panel every labelled row takes this shape, so its value starts where the stacked text boxes start. -->
+  <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LeadLine, inspector|InspectorRow:stacked /template/ StackPanel#PART_Trail">
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LabelLine">
     <Setter Property="Grid.ColumnSpan" Value="2" />
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label">
     <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="Margin" Value="0,0,0,4" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Row" Value="1" />
     <Setter Property="Grid.Column" Value="0" />
     <Setter Property="Grid.ColumnSpan" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
   </Style>
-  <Style Selector="inspector|InspectorRow:editor:narrow /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Grid.Row" Value="1" />
-    <Setter Property="Grid.Column" Value="2" />
-    <Setter Property="Grid.ColumnSpan" Value="2" />
-  </Style>
-  <Style Selector="inspector|InspectorRow:full /template/ TextBlock#PART_Label">
+  <!-- Content without a label, such as a paragraph or a box, ends at the value edge like any other value. Only a row of
+       buttons takes the trailing column too, since buttons are actions and the actions end at the panel's inset. -->
+  <Style Selector="inspector|InspectorRow:full /template/ Panel#PART_LeadLine, inspector|InspectorRow:full /template/ Panel#PART_LabelLine, inspector|InspectorRow:full /template/ StackPanel#PART_Trail,
+                   inspector|InspectorRow:buttons /template/ Panel#PART_LeadLine, inspector|InspectorRow:buttons /template/ Panel#PART_LabelLine, inspector|InspectorRow:buttons /template/ StackPanel#PART_Trail">
     <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <!-- A proposed task's row is full content with a Change button in the trailing column, at the action edge. Its first
+       line is the check box's 32 px, so the button's 28 px line sits 2 px down, centred on the title. -->
+  <Style Selector="inspector|InspectorRow.firstLine:full /template/ StackPanel#PART_Trail">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Margin" Value="0,2,0,0" />
   </Style>
   <Style Selector="inspector|InspectorRow:full /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Grid.Column" Value="0" />
     <Setter Property="Grid.ColumnSpan" Value="4" />
+    <Setter Property="MinHeight" Value="0" />
   </Style>
-  <Style Selector="inspector|InspectorRow:title /template/ TextBlock#PART_Label">
+  <Style Selector="inspector|InspectorRow:buttons /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Grid.Column" Value="0" />
+    <Setter Property="Grid.ColumnSpan" Value="5" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:title /template/ Panel#PART_LabelLine">
     <Setter Property="Grid.ColumnSpan" Value="2" />
+  </Style>
+  <!-- A row without a glyph or a tile, such as the blueprint editor's, starts its label at the content edge, where its
+       value starts once it sits under the label, and keeps the value column for a value beside it. -->
+  <Style Selector="inspector|InspectorRow:bare /template/ Panel#PART_LabelLine">
+    <Setter Property="Grid.Column" Value="0" />
+    <Setter Property="Grid.ColumnSpan" Value="3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:bare:stacked /template/ Panel#PART_LabelLine, inspector|InspectorRow:bare:title /template/ Panel#PART_LabelLine">
+    <Setter Property="Grid.ColumnSpan" Value="4" />
   </Style>
   <Style Selector="inspector|InspectorRow:title /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="IsVisible" Value="False" />
@@ -258,18 +313,26 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- How many nodes of a kind the workflow holds, at the end of its row. It draws through InkAlignedText, so its digits
+       end where the drawing of a blueprint's More glyph and of the filter glyph ends, a "1" as a "4". -->
+  <Style Selector="TextBlock.count">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="Margin" Value="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
+  </Style>
   <Style Selector="TextBlock.value">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
-  <!-- A one-line note, short enough to show whole, whose tooltip holds the full text where a paragraph used to be. -->
+  <!-- A short note, whose tooltip holds the full text where a paragraph used to be. It wraps rather than losing its end. -->
   <Style Selector="TextBlock.note">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    <Setter Property="MaxLines" Value="1" />
+    <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="inspector|InspectorRow CheckBox">
@@ -277,7 +340,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />
@@ -287,8 +350,19 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
   </Style>
+  <!-- A status in a row wraps rather than losing its end, such as which tasks a pending task waits for. -->
+  <Style Selector="inspector|InspectorRow Border.pill">
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="8,3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow Border.pill TextBlock">
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <!-- A row's buttons are a picker's height, with the side padding of a small button, so two of them share a line in the narrowest panel. -->
   <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
-    <Setter Property="Height" Value="28" />
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
+    <Setter Property="Padding" Value="10,0" />
     <Setter Property="FontSize" Value="13" />
   </Style>
 
@@ -306,14 +380,25 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
 
+  <!-- A group of rows, such as a blueprint's field, parted from the one before it by a hairline. The first needs none,
+       since its section's header sits above it. -->
+  <Style Selector="Border.fieldGroup">
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Border60Brush}" />
+    <Setter Property="Padding" Value="0,4" />
+  </Style>
+  <Style Selector="ContentPresenter:nth-child(1) > Border.fieldGroup">
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
   <!-- Short values side by side, such as the client, model, and reasoning of the last run. -->
   <Style Selector="WrapPanel.chips">
     <Setter Property="ItemSpacing" Value="4" />
     <Setter Property="LineSpacing" Value="4" />
   </Style>
+  <!-- A chip grows to a second line rather than losing the end of a long name. -->
   <Style Selector="Border.chip">
-    <Setter Property="Height" Value="22" />
-    <Setter Property="Padding" Value="7,0" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="7,3" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
@@ -321,7 +406,7 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <!-- A disclosure: a chevron and a count that show or hide detail most people never need. -->
@@ -358,7 +443,7 @@
   <Style Selector="TextBlock.activity">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
   <Style Selector="TextBlock.activity.tool">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
@@ -381,7 +466,7 @@
   <Style Selector="TextBlock.itemTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="TextBlock.groupHeading">

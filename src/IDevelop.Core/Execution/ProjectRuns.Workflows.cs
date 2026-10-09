@@ -14,6 +14,19 @@ public sealed partial class ProjectRuns
     internal TimeSpan CoordinatorRetry { get; set; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
+    /// How many client roots one run starts or runs at once in this window, <see cref="WorkflowRunCoordinator.ClientRootLimit"/>.
+    /// Tests lower it to see the order of starts.
+    /// </summary>
+    internal int ClientRoots { get; set; } = WorkflowRunCoordinator.ClientRootLimit;
+
+    /// <summary>
+    /// How long a run's own scheduled work in this window waits for the repository's mutation lock. A run's tasks prepare,
+    /// claim, and publish at the same time, and each retries the lock rather than being refused as busy. A person's command
+    /// keeps <see cref="GitRepository.MutationPatience"/>.
+    /// </summary>
+    internal TimeSpan MutationPatience { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// The coordinator of an approved run in this window. It takes the run's control, which fences any execution a lost
     /// owner left unresolved. While another window controls the run, it only reads it; opening the run again once that
     /// control is free returns a new coordinator that controls it. Opens of one run in a window are serialized, so they
@@ -48,7 +61,7 @@ public sealed partial class ProjectRuns
                     throw new InvalidOperationException();
             }
             WorkflowRunCoordinator coordinator;
-            try { coordinator = new(this, store, () => TurnMaterializer(store), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
+            try { coordinator = new(this, store, (patience, halted) => TurnMaterializer(store, patience, halted), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
             catch (InvalidOperationException)
             {
                 permit?.Dispose();

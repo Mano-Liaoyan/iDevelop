@@ -24,8 +24,9 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>
     /// Sends the person's message to <paramref name="task"/>'s agent. A running turn queues it, and Stop and send ends that
     /// turn first. A resting attempt records it in its log at once, and the coordinator then starts the attempt's next turn
-    /// with every queued message, when the run's client slot is free. The message is refused while a turn starts or settles,
-    /// so the queued text never changes between a next turn's prompt and its claim.
+    /// with every queued message, beside the run's other clients. Only a run at its bound of client roots makes it wait for
+    /// a free slot. The message is refused while a turn starts or settles, so the queued text never changes between a next
+    /// turn's prompt and its claim.
     /// </summary>
     internal Task<SendResult> Send(RunAddress address, TaskId task, TurnKey expected, string text, bool stopTurn, CancellationToken wait = default) =>
         Converse(address, (record, complete) => SendCore(record, task, expected, text, stopTurn, complete), Refusal, wait);
@@ -146,11 +147,16 @@ internal sealed partial class WorkflowRunCoordinator
         return goesOn ? string.Join("\n\n", log.Queued.Select(message => message.Text)) : null;
     }
 
-    /// <summary>Starts the next turn of the first resting attempt, in task order, that has text for its agent.</summary>
-    private bool Continue(RunRecord record, RunView view)
+    /// <summary>
+    /// Starts the next turn of each resting attempt that has text for its agent, in task order, up to
+    /// <paramref name="free"/> of them, and returns how many started.
+    /// </summary>
+    private int Continue(RunRecord record, RunView view, int free)
     {
+        var started = 0;
         foreach (var state in view.Tasks.Values)
         {
+            if (started >= free) break;
             var task = state.Task;
             // The view was projected before this decision's reconciliation, which may have taken up a waiting task's
             // held release since; work this window has on a task always goes first.
@@ -160,16 +166,16 @@ internal sealed partial class WorkflowRunCoordinator
             var next = resting.Next;
             _live[task] = new(LiveStage.Starting);
             _runs.Probe?.Invoke("coordinator.continue");
-            Background(() => _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, prompt)),
+            Background(() => _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, prompt), halted: Halted),
                 start => Started(task, start), error =>
                 {
                     _live.Remove(task);
                     _problem = error.Message;
                     HoldStart(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
                 });
-            return true;
+            started++;
         }
-        return false;
+        return started;
     }
 
     private void SendCore(RunRecord record, TaskId task, TurnKey expected, string text, bool stopTurn, Action<SendResult> complete)
@@ -315,7 +321,7 @@ internal sealed partial class WorkflowRunCoordinator
         // The turn's own operation, so a publication that this cannot finish converges with the one Resume finishes.
         var operation = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.MarkDone(), MarkDoneOperation(operation), operation),
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.MarkDone(), MarkDoneOperation(operation), operation, scheduled: false),
             closing => Closed(task, closing, "The task was marked done.", complete), error =>
             {
                 _live.Remove(task);
@@ -358,7 +364,7 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var turn = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.Cancel(), CancelOperation(turn), turn),
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.Cancel(), CancelOperation(turn), turn, scheduled: false),
             closing => Closed(task, closing, "The cancellation was recorded.", complete), error =>
             {
                 _live.Remove(task);
@@ -384,13 +390,14 @@ internal sealed partial class WorkflowRunCoordinator
     /// turn's operation, and lets go of the closure's lease. When the journal refuses a closure whose request already
     /// reached the log, the closure is pending: the run finishes it from the log (<see cref="FinishClosing"/>).
     /// </summary>
-    private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn)
+    /// <param name="scheduled">The run finishes a closure whose request is in the log, rather than the person's command itself.</param>
+    private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn, bool scheduled)
     {
-        var closing = await _runs.CloseResting(_permit!, operation, attempt, end).ConfigureAwait(false);
+        var closing = await _runs.CloseResting(_permit!, operation, attempt, end, scheduled: scheduled, halted: Halted).ConfigureAwait(false);
         switch (closing)
         {
             case RestingClose.Closed closed:
-                if (end is RestingEnd.MarkDone && Finish(closed.Attempt.Lease, task, attempt, turn) is { } refusal)
+                if (end is RestingEnd.MarkDone && Finish(closed.Attempt.Lease, task, attempt, turn, scheduled ? Scheduled() : Commanded()) is { } refusal)
                 {
                     // The closure is recorded. Its publication is finished later, under a lease of its own.
                     closed.Attempt.Lease.Dispose();
@@ -452,7 +459,7 @@ internal sealed partial class WorkflowRunCoordinator
             _ => OperationIds.Derive(turn, "conversation/conclude"),
         };
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, attempt, pending.End, operation, turn), closing =>
+        Background(() => CloseResting(task, attempt, pending.End, operation, turn, scheduled: true), closing =>
         {
             _live.Remove(task);
             switch (closing)

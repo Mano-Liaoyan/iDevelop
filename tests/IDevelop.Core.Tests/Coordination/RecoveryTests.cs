@@ -150,7 +150,8 @@ public sealed class RecoveryTests
             .WaitForFile(Path.Combine(f.Evidence, "never")).Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.\n"))).Answer(X, Reports(X));
         await f.Open();
         await f.Resume();
-        await f.Until(view => view.Tasks[A].State == TaskState.Running);
+        // X runs beside A and finishes before the window closes, so only A's turn is interrupted.
+        await f.Until(view => view.Tasks[A].State == TaskState.Running && view.Tasks[X].State == TaskState.Done);
         await TurnFixture.WaitUntilAsync(() => f.Launches(A) == 1);
         await f.Reopen();
         var paused = await f.UntilStatus(RunStatus.Paused);

@@ -1,6 +1,6 @@
-# A reply is saved at once and runs when the run's slot is free
+# A reply is saved at once and runs when a client slot is free
 
-In a run, a message to a resting attempt is written to the attempt's log at once, which is its durable acknowledgement, and the attempt's next turn starts when the run's one client slot is free. These continuations take the slot before any ready task, in task order, because a person waits on them. A standalone reply starts its turn in the same step, but a run's reply may have to wait for another task's client.
+In a run, a message to a resting attempt is written to the attempt's log at once, which is its durable acknowledgement, and the attempt's next turn starts with the run's next decision, beside the clients that already run. Only a run at its bound of client roots makes the turn wait for a free slot ([ADR 0018](0018-every-ready-task-of-a-run-starts-at-once.md)). Then these continuations take the free slots before any ready task, in task order, because a person waits on them. A standalone reply starts its turn in the same step. Before 2026-10-09 a run had one client slot, so a run's reply waited for another task's client.
 
 ## How it works
 

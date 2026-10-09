@@ -28,6 +28,16 @@ internal sealed partial class Materializer
         _probe = probe;
     }
 
+    /// <summary>
+    /// How long a step waits for the repository's mutation lock while another step holds it. A run's own scheduled work
+    /// waits longer, because its tasks prepare, claim, and publish at the same time (ADR 0018); a person's command keeps
+    /// the default, so a busy repository is reported to the person at once.
+    /// </summary>
+    internal TimeSpan MutationPatience { get; set; } = GitRepository.MutationPatience;
+
+    /// <summary>Whether the step's owner stopped, such as a halted coordinator or a closing project, so a wait for the lock ends.</summary>
+    internal Func<bool>? Halted { get; set; }
+
     public static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins = null) =>
         Open(projectFolder, store, joins, TimeProvider.System, null, null);
 
@@ -52,7 +62,7 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var repository = OpenRepository();
-            using var held = repository.TakeMutationLock();
+            using var held = repository.TakeMutationLock(MutationPatience, Halted);
             if (held is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             var record = Read(workflow, run);
             if (record.Phase != RunPhase.Approved) return new Preparation.Rejected(new(RunProblem.RunStopped));

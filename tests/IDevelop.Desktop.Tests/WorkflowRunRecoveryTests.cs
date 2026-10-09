@@ -74,6 +74,7 @@ public sealed class WorkflowRunRecoveryTests
         Assert.StartsWith("Process ", shell.Text("RecoveryClient"));
         Assert.False(Shows(shell, "RecoveryHandRepair"));
         Assert.False(Shows(shell, "CloseAsStopped"));
+        InspectorLayoutTests.AssertLaidOut(shell);
 
         shell.Click(shell.InView<Button>("PreserveCheckout"));
         shell.WaitUntil(() => Shows(shell, "RestoreCheckout"), "the restoration is previewed", () => $"Notice: {Notice(shell)}");
@@ -86,6 +87,7 @@ public sealed class WorkflowRunRecoveryTests
         Assert.Equal("The checkout differs from its recorded baseline.", shell.TextsOf("RecoveryBlockDetail")[1]);
         Assert.StartsWith("What the checkout holds now stays retained under refs/idp/", shell.Text("RestoreRetained"));
         Assert.False(Shows(shell, "PreserveCheckout"));
+        InspectorLayoutTests.AssertLaidOut(shell);
         Assert.Equal(0, f.Launches("B"));
 
         shell.Click(shell.InView<Button>("RestoreCheckout"));
@@ -357,7 +359,7 @@ public sealed class WorkflowRunRecoveryTests
         Thread.Sleep(300);
         shell.Render();
         Assert.Equal(("Stopping", "Uncertain"), (shell.RunStatus, shell.CardText("A", "CardStatus")));
-        Assert.Equal("Stopping waits for you to close \"A\" as stopped.", shell.Text("RunActivity"));
+        Assert.Equal("Stopping waits for you to close\u00A0\"A\" as stopped.", shell.Text("RunActivity"));
         Assert.Equal(RunPhase.StopRequested, f.Record().Phase);
         shell.Click(shell.InCard<Button>("A", "CardAttention"));
         shell.Click(shell.InView<TextBox>("RecoveryReason"));

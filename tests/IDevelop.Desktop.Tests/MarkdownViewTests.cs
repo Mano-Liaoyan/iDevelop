@@ -53,6 +53,36 @@ public sealed class MarkdownViewTests
     }
 
     [AvaloniaFact]
+    public void A_view_that_fits_its_code_indents_json_and_wraps_long_lines_instead_of_scrolling()
+    {
+        const string json = """{"status": "verdict", "verdict": "approve", "findings": [{"id": "1", "text": "The adapter subtracts where it should add, so every stored total is off by twice the second value."}]}""";
+        var view = new MarkdownView { FitsCode = true, Markdown = $"I read the change.\n\n```idevelop\n{json}\n```" };
+        var window = new Window { Width = 240, Height = 900, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(view.GetVisualDescendants().OfType<ScrollViewer>());
+        var code = view.GetVisualDescendants().OfType<SelectableTextBlock>().Single(text => text.Classes.Contains("mdCodeText"));
+        Assert.StartsWith("{\n  \"status\": \"verdict\",\n", code.Text);
+        Assert.Contains("\"text\": \"The adapter subtracts where it should add", code.Text);
+        Assert.True(code.Bounds.Width <= 240, $"The code is {code.Bounds.Width} px wide.");
+        Assert.True(code.TextLayout.TextLines.Count > code.Text!.Split('\n').Length, "The longest line wraps.");
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_view_keeps_code_that_is_not_json_as_it_is()
+    {
+        var view = new MarkdownView { FitsCode = true, Markdown = "```\n{ not json\n```" };
+        var window = new Window { Width = 240, Height = 900, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("{ not json", view.GetVisualDescendants().OfType<SelectableTextBlock>().Single(text => text.Classes.Contains("mdCodeText")).Text);
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void Headings_lists_quotes_code_and_tables_render_as_their_text()
     {
         var (window, view) = Show("# Plan\n\nSome *emphasis* and **strong** and `code`.\n\n1. First\n2. Second\n\n> Quoted\n\n```csharp\nvar x = 1;\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n");

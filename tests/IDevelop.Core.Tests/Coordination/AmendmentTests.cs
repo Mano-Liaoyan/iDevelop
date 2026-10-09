@@ -79,6 +79,8 @@ public sealed class AmendmentTests
     {
         await using var f = Fixture();
         await f.Open();
+        // One root at a time, so B prepares after the planner's turn, and holding B's preparation holds nothing of A's.
+        f.Runs.ClientRoots = 1;
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();
@@ -140,6 +142,8 @@ public sealed class AmendmentTests
     {
         await using var f = Fixture();
         await f.Open();
+        // One root at a time, so B prepares after the planner's turn, and holding B's preparation holds nothing of A's.
+        f.Runs.ClientRoots = 1;
         var original = f.Read().Revision.Id;
         var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();

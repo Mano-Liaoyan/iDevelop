@@ -32,7 +32,7 @@ internal sealed partial class Materializer
             if (record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == prepared.Location.Owner))
                 return new RetryReset.Rejected(new(RunProblem.UnresolvedOwnership));
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience, Halted);
             if (mutation is null) return new RetryReset.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             if (record.UnresolvedClaims.Any(key => record.Preparations[key].Location.Owner == prepared.Location.Owner))

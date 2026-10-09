@@ -155,13 +155,40 @@ public sealed class RunConversationTests
     }
 
     [Fact]
-    public async Task A_reply_waits_for_the_run_s_slot_and_survives_a_restart()
+    public async Task A_reply_starts_its_turn_at_once_while_other_tasks_run()
+    {
+        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Chat),
+            RunConversationFixture.Agent(C, ConversationMode.Autonomous, readOnly: true), RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)]));
+        f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done.")).Route("Use the fixture", A)
+            .Answer(C, f.Says(C, 1, "C ready.\n", "session-C", gate: f.Gate("go")))
+            .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("go")));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[C].State == TaskState.Running && view.Tasks[X].State == TaskState.Running);
+        using (var session = f.Session(A))
+            Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
+
+        // The reply's turn runs and ends while both other clients still run.
+        var answered = await f.UntilWaiting(A, 2);
+        Assert.Equal((TaskState.Running, TaskState.Running), (answered.Tasks[C].State, answered.Tasks[X].State));
+        Assert.Equal((2, 1, 1), (f.Launches(A), f.Launches(C), f.Launches(X)));
+        Assert.Equal("Use the fixture", f.Prompt(A, 2));
+        var replied = f.Log(A).Events.OfType<AttemptEvent.Launched>().Last().At;
+        f.Open("go");
+        await f.Until(view => view.Tasks[C].State == TaskState.Done && view.Tasks[X].State == TaskState.Done);
+        Assert.True(replied < f.Log(C).Events.OfType<AttemptEvent.Exited>().Single().At && replied < f.Log(X).Events.OfType<AttemptEvent.Exited>().Single().At,
+            "The reply's turn launched after another client exited.");
+    }
+
+    [Fact]
+    public async Task At_the_bound_a_reply_waits_for_a_free_slot_and_survives_a_restart()
     {
         await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Chat),
             RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)]));
         f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done.")).Route("Use the fixture", A)
             .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("x")));
         await f.Open();
+        f.Runs.ClientRoots = 1;
         await f.Resume();
         await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[X].State == TaskState.Running);
         using (var session = f.Session(A))
@@ -183,7 +210,7 @@ public sealed class RunConversationTests
     }
 
     [Fact]
-    public async Task A_reply_takes_the_slot_before_a_task_that_has_not_started()
+    public async Task At_the_bound_a_reply_takes_the_free_slot_before_a_task_that_has_not_started()
     {
         await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Chat),
             RunConversationFixture.Agent(C, ConversationMode.Autonomous, readOnly: true), RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)]));
@@ -191,6 +218,7 @@ public sealed class RunConversationTests
             .Answer(C, f.Says(C, 1, "C ready.\n", "session-C", gate: f.Gate("c")))
             .Answer(X, f.Says(X, 1, "X ready.\n", "session-X"));
         await f.Open();
+        f.Runs.ClientRoots = 1;
         await f.Resume();
         await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[C].State == TaskState.Running);
         using var session = f.Session(A);
@@ -313,6 +341,8 @@ public sealed class RunConversationTests
             f.Answer(A, f.Says(A, 1, "Which fixture?"), f.Says(A, 2, "Done.")).Route("Use the fixture", A)
                 .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("x")));
             await f.Open();
+            // At one root at a time, the reply waits while X runs.
+            f.Runs.ClientRoots = 1;
             await f.Resume();
             await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[X].State == TaskState.Running);
             using var session = f.Session(A);
@@ -408,6 +438,8 @@ public sealed class RunConversationTests
                 .Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.\n")), f.Says(A, 2, "Done.")).Route("Use the fixture", A)
             .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("x")));
         await f.Open();
+        // At one root at a time, a reply waits while X runs.
+        f.Runs.ClientRoots = 1;
         await f.Resume();
         await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[X].State == TaskState.Running);
         using (var session = f.Session(A))
@@ -673,6 +705,8 @@ public sealed class RunConversationTests
             .Answer(B, f.Says(B, 1, "Which file?", session: "session-b"), f.Says(B, 2, "Done B.", session: "session-b", gate: "b-2"))
             .Route("Use the fixture", A).Route("Use b.txt", B);
         await f.Open();
+        // At one root at a time, B's running turn keeps A waiting.
+        f.Runs.ClientRoots = 1;
         await f.Resume();
         await f.UntilWaiting(A, 1);
         await f.UntilWaiting(B, 1);
@@ -684,7 +718,7 @@ public sealed class RunConversationTests
         };
         Assert.IsType<SendResult.Queued>(await f.Coordinator.Send(f.Address, A, new TurnKey(f.Attempt(A), 1), "Use the fixture", false).WaitAsync(Bound));
         await f.Until(view => view.Tasks[A].State == TaskState.Refused);
-        // B takes the slot meanwhile, and once A's task is free the person writes to A again.
+        // B takes the run's one slot meanwhile, and once A's task is free the person writes to A again.
         Assert.IsType<SendResult.Queued>(await f.Coordinator.Send(f.Address, B, new TurnKey(f.Attempt(B), 1), "Use b.txt", false).WaitAsync(Bound));
         await f.Until(view => view.Tasks[B].State == TaskState.Running);
         held!.Dispose();

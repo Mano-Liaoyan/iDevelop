@@ -69,7 +69,7 @@ internal sealed partial class WorkflowRunCoordinator
             _live[task] = new(LiveStage.Settling);
             // A blocked request shows through its recorded block. A refused one holds the node as a refused start does, so
             // not once the run is stopping. One whose inputs moved holds nothing, so the next decision reads them again.
-            Background(() => _materializer().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).AsTask(), prepared =>
+            Background(() => Scheduled().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).AsTask(), prepared =>
             {
                 _live.Remove(task);
                 if (prepared is GatePreparation.Rejected rejected)

@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -25,6 +28,8 @@ public sealed class MarkdownView : StackPanel
 {
     public static readonly StyledProperty<string?> MarkdownProperty = AvaloniaProperty.Register<MarkdownView, string?>(nameof(Markdown));
 
+    public static readonly StyledProperty<bool> FitsCodeProperty = AvaloniaProperty.Register<MarkdownView, bool>(nameof(FitsCode));
+
     // Measured headlessly at each limit, 1,000 table cells or 500 links lay out in about 165 ms, and 20,000 characters of
     // nested brackets in about 530 ms. A code block costs about ten paragraphs, and 1,000 paragraphs or 100 code blocks
     // lay out in about 120 ms.
@@ -51,6 +56,16 @@ public sealed class MarkdownView : StackPanel
         set => SetValue(MarkdownProperty, value);
     }
 
+    /// <summary>
+    /// Whether a code block wraps its lines to the view's width instead of scrolling sideways, and shows a block that holds
+    /// one JSON value indented, as a card too narrow to scroll in needs, such as what an approval hands on.
+    /// </summary>
+    public bool FitsCode
+    {
+        get => GetValue(FitsCodeProperty);
+        set => SetValue(FitsCodeProperty, value);
+    }
+
     /// <summary>How many blocks were built since the view was created, which shows that unchanged blocks are reused.</summary>
     internal int BlocksBuilt { get; private set; }
 
@@ -59,6 +74,13 @@ public sealed class MarkdownView : StackPanel
         base.OnPropertyChanged(change);
         if (change.Property == MarkdownProperty)
         {
+            Render();
+        }
+        else if (change.Property == FitsCodeProperty)
+        {
+            // Every code block changes its shape, so no block is reused.
+            _sources.Clear();
+            Children.Clear();
             Render();
         }
     }
@@ -201,8 +223,8 @@ public sealed class MarkdownView : StackPanel
     {
         HeadingBlock heading => Text(heading.Inline, $"h{Math.Min(heading.Level, 4)}"),
         ParagraphBlock paragraph => Text(paragraph.Inline, null),
-        FencedCodeBlock fenced => Code(fenced.Lines.ToString(), fenced.Info),
-        CodeBlock code => Code(code.Lines.ToString(), null),
+        FencedCodeBlock fenced => Code(fenced.Lines.ToString(), fenced.Info, FitsCode),
+        CodeBlock code => Code(code.Lines.ToString(), null, FitsCode),
         ListBlock list => List(list, text),
         QuoteBlock quote => new Border { Classes = { "mdQuote" }, Child = Container(quote, text) },
         Table table => TableGrid(table),
@@ -275,7 +297,7 @@ public sealed class MarkdownView : StackPanel
         };
     }
 
-    private static Border Code(string code, string? language)
+    private static Border Code(string code, string? language, bool fits)
     {
         var source = code.TrimEnd('\n', '\r');
         var copy = new Button { Classes = { "icon", "mdCopy" }, Content = new PathIcon { Theme = Glyph(), Data = Icon("IconCopy") } };
@@ -294,18 +316,45 @@ public sealed class MarkdownView : StackPanel
         header.Children.Add(new TextBlock { Classes = { "mdCodeLanguage" }, Text = string.IsNullOrWhiteSpace(language) ? "Code" : language.Trim() });
         Grid.SetColumn(copy, 1);
         header.Children.Add(copy);
-        var body = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = source },
-        };
+        Control body = fits && Fits(source)
+            ? new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = Indented(source) ?? source, TextWrapping = TextWrapping.Wrap }
+            : new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = new SelectableTextBlock { Classes = { "mdMono", "mdCodeText" }, Text = source },
+            };
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto") };
         Grid.SetRow(body, 1);
         layout.Children.Add(header);
         layout.Children.Add(body);
         return new Border { Classes = { "mdCode" }, Child = layout };
     }
+
+    // A run with no break opportunity takes time that grows with its square to wrap, so a block with a very long one
+    // scrolls sideways even where it should fit.
+    private static bool Fits(string source) => source.Split((char[])[' ', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries).All(run => run.Length <= 1_000);
+
+    /// <summary>The source indented, when it is one JSON object or array, such as a reviewer's verdict, else null.</summary>
+    private static string? Indented(string source)
+    {
+        var trimmed = source.Trim();
+        if (trimmed is not ['{', .., '}'] and not ['[', .., ']'])
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(trimmed)?.ToJsonString(IndentedJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     // A long run with no break opportunity takes time that grows with its square to wrap, so it runs past the edge instead.
     private static SelectableTextBlock Plain(string source) => new() { Classes = { "md", "mdMono" }, Text = source, TextWrapping = TextWrapping.WrapWithOverflow };

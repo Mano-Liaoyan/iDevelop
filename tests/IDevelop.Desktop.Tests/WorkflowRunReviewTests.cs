@@ -72,6 +72,7 @@ public sealed class WorkflowRunReviewTests
         Assert.Equal("calc.txt", shell.Find<TextBox>("RebaseCandidatePaths").Text);
         Assert.False(shell.Find<TextBlock>("RebaseUnavailable").IsEffectivelyVisible);
         Assert.Equal("a - b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
+        InspectorLayoutTests.AssertLaidOut(shell);
 
         shell.Click(shell.InView<Button>("ApproveRebase"));
 

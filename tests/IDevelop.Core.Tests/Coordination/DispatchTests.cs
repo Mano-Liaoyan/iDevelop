@@ -7,7 +7,7 @@ using RunFixtures = IDevelop.Core.Tests.Runs.RunFixtures;
 
 namespace IDevelop.Core.Tests.Coordination;
 
-/// <summary>Deterministic dispatch along dependency connections, with one client slot per run (E3b).</summary>
+/// <summary>Dispatch along dependency connections (E3b). Every ready task starts at once (#89), so only dependencies order the claims.</summary>
 public sealed class DispatchTests
 {
     private static FakeRule Fails(TaskId task) => FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-" + Name(task))).Exit(1);
@@ -18,6 +18,14 @@ public sealed class DispatchTests
         var record = f.Read();
         return [.. record.Receipts.Values.Where(entry => entry.Event is RunEvent.TurnClaimed).OrderBy(entry => entry.Sequence)
             .Select(entry => record.Attempts[((RunEvent.TurnClaimed)entry.Event).Key.Attempt].Task)];
+    }
+
+    /// <summary>Asserts that each task was claimed once and after each task it depends on.</summary>
+    private static void ClaimedAfter(TaskId[] order, params (TaskId Before, TaskId After)[] dependencies)
+    {
+        Assert.Equal(order.Length, order.Distinct().Count());
+        foreach (var (before, after) in dependencies)
+            Assert.True(Array.IndexOf(order, before) < Array.IndexOf(order, after), $"{Name(after)} was claimed before {Name(before)}.");
     }
 
     [Fact]
@@ -38,7 +46,8 @@ public sealed class DispatchTests
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
         Assert.Equal(3, f.TotalLaunches);
         Assert.Equal([1, 1, 1], new[] { f.Claims(A), f.Claims(B), f.Claims(X) });
-        Assert.Equal([A, X, B], ClaimOrder(f));
+        Assert.Equal(3, ClaimOrder(f).Length);
+        ClaimedAfter(ClaimOrder(f), (A, B));
         Assert.StartsWith("Build B.", f.Prompt(B));
         Assert.Contains("A ready.\n", f.Prompt(B));
         Assert.Equal("A\n", f.ResultFile(B, "a.txt"));
@@ -75,36 +84,12 @@ public sealed class DispatchTests
     }
 
     [Fact]
-    public async Task One_client_root_runs_at_a_time()
-    {
-        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(X, readOnly: true)]));
-        var gate = Path.Combine(f.Evidence, "gate");
-        f.Answer(A, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-A")).Write("a.txt", "A\n").WaitForFile(gate)
-            .Print(FakeAgents.ReplyLines(ClientId.Codex, "A ready.\n"))).Answer(X, Reports(X));
-        await f.Open();
-        await f.Resume();
-        var running = await f.Until(view => view.Tasks[A].State == TaskState.Running);
-        Assert.Equal(1, running.Slots);
-        Assert.Equal(TaskState.Ready, running.Tasks[X].State);
-        await TurnFixture.WaitUntilAsync(() => f.Launches(A) == 1);
-        f.Coordinator.Refresh();
-        Assert.Equal(TaskState.Ready, (await f.Until(view => view.Tasks[A].State == TaskState.Running)).Tasks[X].State);
-        Assert.Equal(0, f.Launches(X));
-        File.WriteAllText(gate, "open");
-        await f.UntilStatus(RunStatus.Completed);
-        Assert.Equal(1, f.Launches(X));
-        var record = f.Read();
-        var exited = record.Receipts.Values.Single(entry => entry.Event is RunEvent.RootExitObserved exit && record.Attempts[exit.Launch.Attempt].Task == A).Sequence;
-        var claimed = record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claim && record.Attempts[claim.Key.Attempt].Task == X).Sequence;
-        Assert.True(claimed > exited, "X was claimed before A's root exit was recorded.");
-    }
-
-    [Fact]
-    public async Task Root_exit_frees_the_slot_while_cleanup_is_pending()
+    public async Task At_the_bound_a_root_exit_frees_its_slot_while_cleanup_is_pending()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(X, readOnly: true)]));
         f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(X, Reports(X));
         await f.Open();
+        f.Runs.ClientRoots = 1;
         using (var cleanup = new TurnFixture.ProbeBarrier("runner.cleanup.inside"))
         {
             f.Runs.Probe = cleanup.Probe;
@@ -135,7 +120,8 @@ public sealed class DispatchTests
         await f.Open();
         await f.Resume();
         await f.UntilStatus(RunStatus.Completed);
-        Assert.Equal([A, X, B, C, D], ClaimOrder(f));
+        Assert.Equal(5, ClaimOrder(f).Length);
+        ClaimedAfter(ClaimOrder(f), (A, B), (A, C), (B, D), (C, D));
         Assert.Equal(("B\n", (string?)null), (f.ResultFile(B, "b.txt"), f.ResultFile(B, "c.txt")));
         Assert.Equal(("C\n", (string?)null), (f.ResultFile(C, "c.txt"), f.ResultFile(C, "b.txt")));
         Assert.Equal(["approved\n", "A\n", "B\n", "C\n"], new[] { "plan", "a", "b", "c" }.Select(name => File.ReadAllText(Path.Combine(f.Evidence, $"d-{name}.txt"))));
