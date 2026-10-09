@@ -114,7 +114,8 @@ public sealed class WorkflowRunTests
 
         shell.WaitForCard("A", "Running");
         Assert.True(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal(("Running", "0 of 2 done", "Running \"A\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        // A title stays on one line with the word before it.
+        Assert.Equal(("Running", "0 of 2 done", "Running\u00A0\"A\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal("Waits for \"A\"", shell.CardText("B", "CardStatus"));
         Assert.False(shell.Find<Button>("RunWorkflow").IsEffectivelyVisible);
         Assert.True(shell.Find<Button>("StopWorkflow").IsEffectivelyVisible);
@@ -416,7 +417,7 @@ public sealed class WorkflowRunTests
         }
 
         shell.WaitUntil(() => shell.RunStatus == "3 running", "the bar counts three running tasks", () => $"It shows {shell.RunStatus}.");
-        Assert.Equal(("3 running", "0 of 3 done", "Running \"A\", \"B\", and \"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        Assert.Equal(("3 running", "0 of 3 done", "Running\u00A0\"A\", \"B\", and\u00A0\"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal("Workflow run: 3 running, 0 of 3 done", shell.WorkflowRun!.Summary);
         Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
         Assert.True(shell.WorkflowShows("seed", "Workflow", "WorkflowRunning"));
@@ -424,7 +425,7 @@ public sealed class WorkflowRunTests
         f.Open("a");
         shell.WaitForCard("A", "Succeeded");
         shell.WaitUntil(() => shell.RunStatus == "2 running", "the bar counts the two still running", () => $"It shows {shell.RunStatus}.");
-        Assert.Equal(("2 running", "1 of 3 done", "Running \"B\" and \"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        Assert.Equal(("2 running", "1 of 3 done", "Running\u00A0\"B\" and\u00A0\"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal(["Running", "Running"], new[] { "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
 
         f.Open("bc");

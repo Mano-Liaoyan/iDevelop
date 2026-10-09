@@ -14,7 +14,7 @@ internal sealed partial class Materializer
         try
         {
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock(MutationPatience);
+            using var mutation = repository.TakeMutationLock(MutationPatience, Halted);
             if (mutation is null) return new ClaimCheck.Rejected(new(RunProblem.JournalBusy));
             var record = Read(permit.Workflow, permit.Run);
             if (!record.Preparations.TryGetValue(launch, out var prepared)) return new ClaimCheck.Rejected(new(RunProblem.InvalidClaim));

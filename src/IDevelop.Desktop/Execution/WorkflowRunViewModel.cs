@@ -66,7 +66,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
 
     public bool IsControlled => View.Controlled;
 
-    /// <summary>The run's status, which counts the tasks that run while there are several: "3 running".</summary>
+    /// <summary>The run's status, which counts the tasks whose clients run while there are several: "3 running".</summary>
     public string StatusLabel => WorkflowRunText.Status(View);
 
     public StatusTone Tone => WorkflowRunText.Tone(View.Status);
@@ -82,9 +82,9 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The bar's second line: the run's problem, else what goes on now, else what the person can do. Null for a run that
-    /// says all in its status.
+    /// says all in its status. A line wraps only between the titles it names, never inside one.
     /// </summary>
-    public string? Activity => Problem ?? Now();
+    public string? Activity => WorkflowRunText.Unbroken(Problem ?? Now());
 
     /// <summary>A client of the run starts, runs, or settles in this window.</summary>
     public bool HasActivity => IsActive && View.Tasks.Values.Any(WorkflowRunText.Busy);

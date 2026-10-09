@@ -118,9 +118,24 @@ public sealed class WorkflowRunTextTests
         RunView Run(RunStatus status, IEnumerable<TaskView> tasks) => new(new("/project", new WorkflowId(Guid.NewGuid()), new RunId(Guid.NewGuid())),
             status == RunStatus.Stopping ? RunPhase.StopRequested : RunPhase.Approved, status, true, true, 0,
             tasks.ToImmutableSortedDictionary(task => task.Task, task => task));
-        Assert.Equal("Running", WorkflowRunText.Status(Run(RunStatus.Running, one)));
-        Assert.Equal("4 running", WorkflowRunText.Status(Run(RunStatus.Running, mixed)));
+        // The pill counts only the tasks whose client runs, and names what goes on when none does.
+        Assert.Equal("2 running", WorkflowRunText.Status(Run(RunStatus.Running, mixed)));
+        Assert.Equal("Running", WorkflowRunText.Status(Run(RunStatus.Running, [.. mixed.Skip(1)])));
+        Assert.Equal("Starting", WorkflowRunText.Status(Run(RunStatus.Running, one)));
+        Assert.Equal("Finishing", WorkflowRunText.Status(Run(RunStatus.Running, [mixed[1]])));
+        Assert.Equal("Running", WorkflowRunText.Status(Run(RunStatus.Running, [new TaskView(Task, TaskState.Ready)])));
         Assert.Equal("Stopping", WorkflowRunText.Status(Run(RunStatus.Stopping, mixed)));
+    }
+
+    [Fact]
+    public void A_line_of_titles_wraps_only_between_titles()
+    {
+        const string nb = "\u00A0";
+        Assert.Equal($"Running{nb}\"Parse{nb}input\", \"Render{nb}view\", and{nb}\"UI\u2011kit\"{nb}· Starting{nb}\"Docs/\u2060API\"",
+            WorkflowRunText.Unbroken("Running \"Parse input\", \"Render view\", and \"UI-kit\" · Starting \"Docs/API\""));
+        Assert.Equal($"\"Long{nb}title\" waits for you.", WorkflowRunText.Unbroken("\"Long title\" waits for you."));
+        Assert.Equal("Stopped. Finished work stays.", WorkflowRunText.Unbroken("Stopped. Finished work stays."));
+        Assert.Null(WorkflowRunText.Unbroken(null));
     }
 
     [Fact]

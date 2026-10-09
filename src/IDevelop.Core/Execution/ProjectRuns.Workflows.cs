@@ -20,8 +20,9 @@ public sealed partial class ProjectRuns
     internal int ClientRoots { get; set; } = WorkflowRunCoordinator.ClientRootLimit;
 
     /// <summary>
-    /// How long a step of this window's runs waits for the repository's mutation lock. A run's tasks prepare, claim, and
-    /// publish at the same time, and each waits its turn for the lock rather than being refused as busy.
+    /// How long a run's own scheduled work in this window waits for the repository's mutation lock. A run's tasks prepare,
+    /// claim, and publish at the same time, and each retries the lock rather than being refused as busy. A person's command
+    /// keeps <see cref="GitRepository.MutationPatience"/>.
     /// </summary>
     internal TimeSpan MutationPatience { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -60,7 +61,7 @@ public sealed partial class ProjectRuns
                     throw new InvalidOperationException();
             }
             WorkflowRunCoordinator coordinator;
-            try { coordinator = new(this, store, () => TurnMaterializer(store), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
+            try { coordinator = new(this, store, (patience, halted) => TurnMaterializer(store, patience, halted), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
             catch (InvalidOperationException)
             {
                 permit?.Dispose();
