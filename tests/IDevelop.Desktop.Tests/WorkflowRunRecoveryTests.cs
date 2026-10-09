@@ -80,6 +80,10 @@ public sealed class WorkflowRunRecoveryTests
         Assert.Equal("late\n", File.ReadAllText(Path.Combine(f.Checkout(A), "result.txt")));
         Assert.Equal("Restore puts the checkout back to the result it handed on.", shell.Text("RestoreTarget"));
         Assert.Equal(["result.txt gets its recorded content back"], shell.TextsOf("RestoreMove"));
+        // The preservation found the checkout off its baseline and recorded that too, so the section lists both blocks.
+        shell.WaitUntil(() => shell.TextsOf("RecoveryBlockDetail").Length == 2, "the section lists every block",
+            () => $"Blocks: [{string.Join("|", shell.TextsOf("RecoveryBlockDetail"))}]");
+        Assert.Equal("The checkout differs from its recorded baseline.", shell.TextsOf("RecoveryBlockDetail")[1]);
         Assert.StartsWith("What the checkout holds now stays retained under refs/idp/", shell.Text("RestoreRetained"));
         Assert.False(Shows(shell, "PreserveCheckout"));
         Assert.Equal(0, f.Launches("B"));
