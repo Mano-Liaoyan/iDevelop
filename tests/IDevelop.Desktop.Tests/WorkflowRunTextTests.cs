@@ -36,6 +36,18 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
+    public void A_task_held_by_another_task_s_block_names_that_task()
+    {
+        MaterializationBlock Block(TaskId owner) => new(new(Guid.NewGuid()), owner, new(Guid.NewGuid()), MaterializationProblem.DirtyWorktree, null, [],
+            "The checkout changed after its result was accepted.") { Scope = new BlockScope.Checkout(["result.txt"]) };
+
+        Assert.Equal("The checkout of \"A\" holds it. The checkout changed after its result was accepted.",
+            WorkflowRunText.Detail(new TaskView(Task, TaskState.Blocked) { Block = Block(TestTasks.Design) }, Title));
+        Assert.Equal("Files changed in the task's checkout after its turn ended. The checkout changed after its result was accepted.",
+            WorkflowRunText.Detail(new TaskView(Task, TaskState.Blocked) { Block = Block(Task) }, Title));
+    }
+
+    [Fact]
     public void An_interrupted_fix_and_a_stale_result_ask_for_the_person()
     {
         var fix = new TaskView(Task, TaskState.Waiting) { Status = AttemptStatus.InReview, Fix = new FixRecovery(new(Guid.NewGuid()), 1, null) };
