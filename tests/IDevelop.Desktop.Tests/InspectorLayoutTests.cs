@@ -574,6 +574,10 @@ public sealed class InspectorLayoutTests : IDisposable
     /// <summary>The window's x of the first pixel right of <paramref name="control"/>'s rightmost drawn pixel.</summary>
     internal static double InkRight(Shell shell, Control control)
     {
+        // A click presses a button, which Fluent scales down and eases back, so a section's header and its count move for a
+        // few frames after its fold. The pixels are read once nothing above the control is still scaled.
+        shell.WaitUntil(() => control.GetVisualAncestors().Append(control).All(visual => visual.RenderTransform is null || visual.RenderTransform.Value.IsIdentity),
+            "nothing above it is still scaled");
         var bounds = shell.Bounds(control);
         var rows = shell.PixelRows(new Rect(Math.Floor(bounds.X), Math.Floor(bounds.Y), Math.Ceiling(bounds.Width), Math.Ceiling(bounds.Height)));
         var background = rows[0][0];

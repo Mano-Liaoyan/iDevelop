@@ -13,12 +13,20 @@ public sealed class InkAlignedText : TextBlock
 {
     protected override Type StyleKeyOverride => typeof(TextBlock);
 
-    // The text draws shifted right by the space its last glyph keeps clear on its right.
     protected override void RenderTextLayout(DrawingContext context, Point origin) =>
-        base.RenderTextLayout(context, origin + new Point(InkGap(), 0));
+        base.RenderTextLayout(context, origin + new Point(InkGap(origin.X), 0));
 
-    private double InkGap() =>
-        TextLayout.TextLines.LastOrDefault()?.TextRuns.OfType<ShapedTextRun>().LastOrDefault()?.GlyphRun is { InkBounds.Width: > 0 } run
-            ? Math.Max(0, run.Bounds.Width - run.InkBounds.Right)
-            : 0;
+    // How far the text's drawing ends before the box's right edge: the space its last glyph keeps clear on its right, and
+    // the part of a pixel that layout rounding added to the box's width.
+    private double InkGap(double left)
+    {
+        if (TextLayout.TextLines.LastOrDefault() is not { } line
+            || line.TextRuns.OfType<ShapedTextRun>().LastOrDefault()?.GlyphRun is not { InkBounds.Width: > 0 } run)
+        {
+            return 0;
+        }
+
+        var inkRight = left + line.Start + line.WidthIncludingTrailingWhitespace - (run.Bounds.Width - run.InkBounds.Right);
+        return Math.Max(0, Bounds.Width - Padding.Right - inkRight);
+    }
 }

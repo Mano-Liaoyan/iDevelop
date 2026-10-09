@@ -84,7 +84,7 @@ public sealed class NodeRunTests
         var shell = f.Window();
         Select(shell, "C");
 
-        var reason = Whole("Runs after \"A\" and \"B\". Run them first.");
+        var reason = Whole("Runs after \"A\" and \"B\". Run them\u00A0first.");
         Assert.Equal(reason, shell.InView<TextBlock>("StartProblem").Text);
         var run = shell.InView<Button>("RunTask");
         Assert.Equal((true, false, reason), (run.IsEffectivelyVisible, run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
@@ -198,7 +198,7 @@ public sealed class NodeRunTests
         Apply(shell, At(D, "E", 405, 330));
         Select(shell, "E");
 
-        var reason = Whole("Added after this run started. Run it once the run finishes.");
+        var reason = Whole("Added after this run started. Run it once the run\u00A0finishes.");
         var run = shell.InView<Button>("RunTask");
         Assert.Equal((reason, false, reason), (shell.InView<TextBlock>("StartProblem").Text, run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
         f.Open("a");
@@ -220,7 +220,7 @@ public sealed class NodeRunTests
         Apply(shell, new WorkflowEdit.SetExecution(B, WorkflowRunFixture.Codex));
         Select(shell, "B");
 
-        var reason = Whole("This run uses \"B\" as it was when the run started, and it had no agent then. Run it once the run finishes.");
+        var reason = Whole("This run uses \"B\" as it was when the run started, and it had no agent then. Run it once the run\u00A0finishes.");
         var run = shell.InView<Button>("RunTask");
         Assert.Equal((reason, false, reason), (shell.InView<TextBlock>("StartProblem").Text, run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
         Assert.False(shell.Find<TextBlock>("RunOwner").IsEffectivelyVisible);
@@ -243,7 +243,7 @@ public sealed class NodeRunTests
         StartNodeRun(shell, "A");
 
         Select(shell, "D");
-        Assert.Equal(Whole("Runs after \"B\". Run \"B\" first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(Whole("Runs after \"B\". Run \"B\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
         Assert.False(shell.Find<TextBlock>("RunOwner").IsEffectivelyVisible);
         Select(shell, "C");
         Assert.Equal(Whole("A run of the \"Workflow\" workflow owns this task. It has not started it yet."), shell.Text("RunOwner"));
