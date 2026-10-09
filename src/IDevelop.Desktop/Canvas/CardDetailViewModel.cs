@@ -18,8 +18,9 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
 {
     private static readonly string[] Shown =
     [
-        nameof(Now), nameof(Heading), nameof(Text), nameof(HasText), nameof(Meta), nameof(Kind), nameof(IsMessage), nameof(IsAnswerable),
-        nameof(IsApproval), nameof(IsResult), nameof(IsStopped), nameof(IsWaits), nameof(IsTask), nameof(IsProposal), nameof(Waits),
+        nameof(Now), nameof(Heading), nameof(Text), nameof(HasText), nameof(ShowsBodyText), nameof(HasWaitsNote), nameof(Meta), nameof(Kind), nameof(IsMessage), nameof(IsAnswerable),
+        nameof(IsApproval), nameof(IsResult), nameof(IsOutOfDate), nameof(IsStopped), nameof(IsWaits), nameof(IsTask), nameof(IsProposal), nameof(Waits),
+        nameof(RunNote), nameof(HasRunNote), nameof(Problem), nameof(HasProblem),
         nameof(AnswerNote), nameof(Latest), nameof(IsProblem), nameof(IsQuietStop), nameof(IsInspectorRequest), nameof(IsCallout), nameof(NeedsInspector), nameof(AnswerWatermark),
     ];
 
@@ -60,6 +61,11 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
 
     public bool HasText => !string.IsNullOrEmpty(_now.Text);
 
+    /// <summary>The text sits under the heading, except a waiting task's, which goes under the tasks it waits for.</summary>
+    public bool ShowsBodyText => HasText && !IsWaits;
+
+    public bool HasWaitsNote => HasText && IsWaits;
+
     public string? Meta => _now.Meta;
 
     public bool IsMessage => Kind == CardNowKind.Message;
@@ -70,6 +76,9 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     public bool IsApproval => Kind == CardNowKind.Approval;
 
     public bool IsResult => Kind == CardNowKind.Result;
+
+    /// <summary>Its result from an earlier run no longer counts, which the warning colour of its state marks (#90).</summary>
+    public bool IsOutOfDate => Kind == CardNowKind.OutOfDate;
 
     public bool IsStopped => Kind == CardNowKind.Stopped;
 
@@ -106,8 +115,18 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
 
     public string AnswerWatermark => Kind == CardNowKind.Question ? "Answer the agent" : "Reply to the agent";
 
-    /// <summary>The tasks a run holds this one back for, while it does.</summary>
+    /// <summary>The tasks it waits for, in the active run or between runs.</summary>
     public IReadOnlyList<CardWait> Waits => _node.Waits;
+
+    /// <summary>Under the expanded card's Run: why Run would start nothing, unless the first section says it already.</summary>
+    public string? RunNote => _node.ShowsCardRun && _node.RunRefusal is { } refusal && refusal != Text ? refusal : null;
+
+    public bool HasRunNote => RunNote is not null;
+
+    /// <summary>The peek's last line: why the task cannot start, unless the first section says it already.</summary>
+    public string? Problem => _node.PeekProblem is { } problem && problem != Text ? problem : null;
+
+    public bool HasProblem => Problem is not null;
 
     /// <summary>The attempt the card shows, as the conversation reads it.</summary>
     public AttemptRecord? Latest => _snapshot?.Latest;
@@ -162,9 +181,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     private CardNow Read()
     {
         _snapshot = _session?.Snapshot;
-        return CardNow.Of(_node.State, _node.Role, _node.HasAgent, _snapshot?.Latest, _node.StatusLabel, _node.RunDetail,
-            _node.Waits.Count > 0, _node.Proposal is { HasItems: true } ? _node.Subtitle : null, _node.ReviewSummary,
-            _node.Fields.Count > 0 ? _node.Fields[0].Spec.Label : "Task", _node.Fields.Count > 0 ? _node.Fields[0].Text : null);
+        return CardNow.Of(_node.CardFacts(_snapshot?.Latest));
     }
 
     // A session tells of each change, often several at once and off the UI thread, so the card reads once per batch.

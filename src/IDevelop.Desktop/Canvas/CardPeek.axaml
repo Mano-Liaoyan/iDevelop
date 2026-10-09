@@ -23,7 +23,7 @@
                    IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       </Grid>
       <TextBlock Text="{Binding Text}" FontSize="12" LineHeight="17" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"
-                 IsVisible="{Binding HasText}" />
+                 IsVisible="{Binding ShowsBodyText}" />
       <ItemsControl ItemsSource="{Binding Waits}" IsVisible="{Binding IsWaits}">
         <ItemsControl.ItemTemplate>
           <DataTemplate DataType="canvas:CardWait">
@@ -37,8 +37,11 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}"
+                 IsVisible="{Binding HasWaitsNote}" />
     </StackPanel>
-    <TextBlock Text="{Binding PeekProblem}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource TextMutedBrush}"
-               IsVisible="{Binding PeekProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <TextBlock Text="{Binding Detail.Problem, FallbackValue={x:Null}}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+               Foreground="{DynamicResource TextMutedBrush}"
+               IsVisible="{Binding Detail.HasProblem, FallbackValue=False}" />
   </StackPanel>
 </UserControl>

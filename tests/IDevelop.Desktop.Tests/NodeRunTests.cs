@@ -112,6 +112,9 @@ public sealed class NodeRunTests
         Assert.Equal(["Running", "Not started", "Waits for 2 tasks"], new[] { "A", "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
         Select(shell, "C");
         Assert.Equal(Whole("It starts once \"A\" and \"B\" hand on a result. \"B\" runs only when you run\u00A0it."), shell.Text("RunTaskDetail"));
+        // C's peek lists what it waits for, and under that which of them only the person runs.
+        Assert.Equal(["A", "B", Whole("\"B\" runs only when you run\u00A0it.")],
+            shell.PeekTexts("C")!.Where(text => text is "A" or "B" || text.Contains("runs only")));
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Select(shell, "B");
         Assert.Equal("Not started", shell.InView<TextBlock>("RunTaskStatus").Text);
@@ -331,7 +334,8 @@ public sealed class NodeRunTests
         shell.WaitForCard("B", "Running");
 
         Assert.Equal(("Waits for 1 task", "Waits for \"B\""), (shell.CardText("C", "CardStatus"), shell.CardText("D", "CardStatus")));
-        Assert.Contains($"It starts once \"{longTitle}\" hands on a result.", (string?)ToolTip.GetTip(shell.InCard<Panel>("C", "TaskCard")));
+        // The card's peek lists the task it waits for by its whole name.
+        Assert.Contains(longTitle, shell.PeekTexts("C")!);
         string[] cut = [.. shell.Nodes().SelectMany(node => node.GetVisualDescendants().OfType<TextBlock>())
             .Where(text => text.IsEffectivelyVisible && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
             .Select(text => text.Text ?? "")];

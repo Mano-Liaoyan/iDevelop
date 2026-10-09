@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -168,7 +169,7 @@ public sealed class CardExpansionTests : IDisposable
         f.Answer("A", f.Says("Which file?"));
         var shell = f.Window();
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.Nodes.Single().RunCommand.Execute(null);
+        canvas.Nodes.Single().RunOnItsOwn();
         shell.WaitForCard("A", "Waiting for you");
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
         var zoom = canvas.ViewportZoom;
@@ -205,7 +206,7 @@ public sealed class CardExpansionTests : IDisposable
         f.Answer("A", f.Says("Which file?"), f.Says("Done.", "session-1")).Route("Use the fixture", "A");
         var shell = f.Window();
         var canvas = shell.Window.ViewModel.Canvas!;
-        canvas.Nodes.Single().RunCommand.Execute(null);
+        canvas.Nodes.Single().RunOnItsOwn();
         shell.WaitForCard("A", "Waiting for you");
         shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
         Assert.Equal(("The agent replied", "Which file?"), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
@@ -277,7 +278,8 @@ public sealed class CardExpansionTests : IDisposable
         Assert.Equal(
             ["Docs", "Implement · Codex · gpt-5.5 · high", "Instructions",
              "Write the workflow file through a temporary file and a rename, so a crash never leaves half a file.",
-             "iDevelop is still checking Codex."],
+             // Run starts nothing before Design has a result, which the peek says last.
+             WorkflowRunText.Unbroken("Runs after \"Design\". Run \"Design\"\u00A0first.")],
             Shell.Texts(peek));
 
         shell.Window.MouseMove(new Point(5, 5));

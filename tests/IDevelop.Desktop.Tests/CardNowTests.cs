@@ -9,7 +9,11 @@ public sealed class CardNowTests
 {
     private static CardNow Of(NodeState state, AttemptRecord? latest = null, string status = "", string? detail = null, bool waits = false,
         NodeRole role = NodeRole.None, bool hasAgent = true, string? proposal = null, string? review = null, string? field = "Draft the format.") =>
-        CardNow.Of(state, role, hasAgent, latest, status, detail, waits, proposal, review, "Instructions", field);
+        CardNow.Of(new CardFacts(state, status)
+        {
+            Latest = latest, Detail = detail, Waits = waits, Role = role, HasAgent = hasAgent, Proposal = proposal, Review = review,
+            FieldLabel = "Instructions", FieldText = field,
+        });
 
     [Fact]
     public void A_running_task_shows_the_agents_latest_message_and_counts_its_tool_calls()
@@ -54,6 +58,47 @@ public sealed class CardNowTests
         Assert.Equal(CardNowKind.Approval, Of(NodeState.Waiting, hasAgent: false).Kind);
         Assert.Equal((CardNowKind.Proposal, "Proposal · 3 tasks. Review the tasks in the inspector, then accept or dismiss them."),
             (proposal.Kind, proposal.Text));
+    }
+
+    [Fact]
+    public void Between_runs_a_result_that_still_counts_shows_the_earlier_runs_report_and_says_where_it_comes_from()
+    {
+        var earlier = CardNow.Of(new CardFacts(NodeState.Succeeded, "Succeeded")
+        {
+            FromEarlierRun = true, EarlierReport = "# Report\n\nOne JSON file per workflow.\n\n## Decisions\n\nStable keys.",
+            Detail = "Its result from an earlier run still counts.",
+        });
+        var carried = CardNow.Of(new CardFacts(NodeState.Succeeded, "Succeeded") { FromEarlierRun = true });
+
+        Assert.Equal((CardNowKind.Result, "Result", "One JSON file per workflow.", "From an earlier run"), (earlier.Kind, earlier.Heading, earlier.Text, earlier.Meta));
+        // A run that took the result from an earlier run has no report of it to show, so it says where the result comes from.
+        Assert.Equal(("Its result from an earlier run still counts.", "From an earlier run"), (carried.Text, carried.Meta));
+    }
+
+    [Fact]
+    public void An_out_of_date_result_says_why_once_and_names_what_to_run_first_when_Run_does()
+    {
+        var changed = CardNow.Of(new CardFacts(NodeState.OutOfDate, "Out of date")
+        {
+            Detail = "Out of date because it changed since it ran.", Refusal = null,
+        });
+        var input = CardNow.Of(new CardFacts(NodeState.OutOfDate, "Out of date")
+        {
+            Refusal = "Out of date because \"B\" changed. Run \"B\" first.",
+        });
+
+        Assert.Equal((CardNowKind.OutOfDate, "Out of date", "Out of date because it changed since it ran."), (changed.Kind, changed.Heading, changed.Text));
+        Assert.Equal("Out of date because \"B\" changed. Run \"B\" first.", input.Text);
+    }
+
+    [Fact]
+    public void A_task_whose_newest_run_ended_it_says_how_and_a_waiting_one_which_tasks_only_the_person_runs()
+    {
+        var ended = CardNow.Of(new CardFacts(NodeState.Failed, "Failed") { Owner = "A run of the \"W\" workflow ran this task last." });
+        var waits = CardNow.Of(new CardFacts(NodeState.Idle, "Waits for 2 tasks") { Waits = true, WaitsNote = "\"B\" runs only when you run it." });
+
+        Assert.Equal((CardNowKind.Stopped, "Failed", "A run of the \"W\" workflow ran this task last."), (ended.Kind, ended.Heading, ended.Text));
+        Assert.Equal((CardNowKind.Waits, "Starts after", "\"B\" runs only when you run it."), (waits.Kind, waits.Heading, waits.Text));
     }
 
     [Fact]
