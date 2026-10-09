@@ -51,7 +51,7 @@ public partial class MainWindow : Window
         Columns.SizeChanged += (_, _) => LimitPanels();
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        CanvasArea.SizeChanged += (_, e) => OnCanvasAreaSized(e);
+        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
         MainArea.SizeChanged += (_, _) => LimitDock();
         DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
@@ -108,6 +108,10 @@ public partial class MainWindow : Window
         {
             dock.Height = new GridLength(DockHeight);
             LimitDock();
+            // Once the dock has its height, the canvas above it moves its cards out from under its floating controls, if
+            // the cards in view before would end up under them. Resizing later never moves the person's view.
+            var shown = CanvasView?.CardsInView() ?? [];
+            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(shown), DispatcherPriority.Background);
         }
     }
 
@@ -125,16 +129,6 @@ public partial class MainWindow : Window
         dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
     }
 
-    // When the canvas gets smaller under its floating controls while the conversation is docked, as when it docks, it
-    // brings the cards that it cut or covered back into view, clear of the controls.
-    private void OnCanvasAreaSized(SizeChangedEventArgs e)
-    {
-        TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
-        if (ViewModel.DockedConversation is not null && (e.NewSize.Height < e.PreviousSize.Height || e.NewSize.Width < e.PreviousSize.Width))
-        {
-            Dispatcher.UIThread.Post(() => CanvasView?.FitIfHidden(), DispatcherPriority.Background);
-        }
-    }
 
     public MainWindowViewModel ViewModel { get; }
 

@@ -142,31 +142,43 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // The least room a fit keeps its cards in before it gives up a margin.
     private const double MinFitRoom = 16;
 
-    /// <summary>
-    /// Fits the view when a card or a proposal's ghost card shows only in part, under a control that floats over the canvas,
-    /// such as the run bar, or past the canvas's edge, so that every card shows whole and clear of the controls. Cards
-    /// wholly out of view, where the person panned, leave the view as it is. The window asks for this when the canvas gets
-    /// smaller under its controls.
-    /// </summary>
-    internal void FitIfHidden()
+    /// <summary>The boxes, in canvas units, of the cards and of an open proposal's ghost cards that show in the view now.</summary>
+    internal Rect[] CardsInView()
     {
-        if (TopLevel.GetTopLevel(this) is not MainWindow window || !IsEffectivelyVisible)
+        var view = new Rect(Editor.ViewportLocation, Editor.ViewportSize);
+        return [.. Cards().Where(view.Intersects)];
+    }
+
+    /// <summary>
+    /// Fits the view when one of <paramref name="shown"/>, the cards that showed before the canvas got smaller, now sits under
+    /// a control that floats over the canvas, such as the run bar. A card cut at the canvas's edge leaves the view as it is.
+    /// </summary>
+    internal void FitIfCovered(IReadOnlyCollection<Rect> shown)
+    {
+        if (shown.Count == 0 || TopLevel.GetTopLevel(this) is not MainWindow window || !IsEffectivelyVisible || Editor.ViewportZoom <= 0)
         {
             return;
         }
 
-        Rect In(Visual visual) => visual.TranslatePoint(default, this) is { } at ? new Rect(at, visual.Bounds.Size) : default;
-        var view = new Rect(Bounds.Size);
+        // Each control's box in canvas units.
+        Rect InCanvas(Visual control) => control.TranslatePoint(default, Editor) is { } at
+            ? new Rect(Editor.ViewportLocation + (Vector)at / Editor.ViewportZoom, control.Bounds.Size / Editor.ViewportZoom)
+            : default;
         var controls = window.TopBar.Children.Concat(BottomBar.Children).Concat(RunBars.Children)
             .Where(control => control.IsEffectivelyVisible && control != RunBars && control.Bounds.Width > 0)
-            .Select(In).ToArray();
-        var cards = Editor.GetVisualDescendants().OfType<ItemContainer>().Select(card => new Rect(In(card).Position, card.Bounds.Size * Editor.ViewportZoom))
-            .Concat(Editor.GetVisualDescendants().OfType<DecoratorContainer>().Where(ghost => ghost.DataContext is GhostCardViewModel)
-                .Select(ghost => new Rect(In(ghost).Position, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight) * Editor.ViewportZoom)));
-        if (cards.Any(card => card.Intersects(view) && (!view.Contains(card) || controls.Any(control => control.Intersects(card)))))
+            .Select(InCanvas).ToArray();
+        if (shown.Any(card => controls.Any(control => control.Intersects(card))))
         {
             FitToView();
         }
+    }
+
+    /// <summary>The cards and an open proposal's ghost cards, in canvas units.</summary>
+    private IEnumerable<Rect> Cards()
+    {
+        var size = new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight);
+        return _viewModel is not { } canvas ? []
+            : canvas.Nodes.Select(node => new Rect(node.Location, size)).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);

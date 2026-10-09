@@ -109,10 +109,10 @@ public sealed class CanvasChromeTests : IDisposable
         FanOut.Run(shell);
         FanOut.Generate(shell);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        Resize(shell, 900, 600, 320);
+
         shell.Click(shell.Find<Button>("ConversationLayout"));
         Assert.NotNull(shell.Window.ViewModel.DockedConversation);
-
-        Resize(shell, 900, 600, 320);
 
         // The conversation keeps a few lines of its transcript, its header on two lines, and its buttons in their boxes.
         var transcript = shell.Bounds(shell.Find<Control>("TranscriptScroller"));
@@ -176,17 +176,34 @@ public sealed class CanvasChromeTests : IDisposable
         var cards = Cards(shell);
         Assert.Equal(7, cards.Length);
         Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
+    }
 
-        // The window then narrows, which cuts the cards at the canvas's edge, and gets as short as it can, so the canvas fits
-        // them again each time.
-        foreach (var (width, height) in new[] { (900.0, 1000.0), (900.0, 600.0) })
-        {
-            Resize(shell, width, height);
-            var canvas = shell.Bounds(shell.Editor);
-            var (top, bottom) = Rows(shell);
-            Assert.All(Cards(shell), card => Assert.True(canvas.Contains(card) && card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5,
-                $"At {width}x{height}, the card at {card} is not whole between {top} and {bottom} in {canvas}."));
-        }
+    [AvaloniaFact]
+    public void Docking_keeps_the_persons_zoom_and_pan_when_no_card_in_view_would_hide_and_resizing_never_moves_them()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Window();
+        FanOut.Run(shell);
+        Resize(shell, 1600, 1000, 320);
+        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        // Zoomed in on "Design the API" in the upper middle, with the other two cards just showing at the canvas's right edge.
+        shell.Editor.ViewportZoom = 1.5;
+        shell.Editor.ViewportLocation = new Point(-220, 90);
+        shell.Render();
+        var view = (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation);
+
+        shell.Click(shell.Find<Button>("ConversationLayout"));
+        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+
+        // Narrowing the window by 10 px, which cuts the two cards at the edge further, and dragging the splitters move nothing.
+        Resize(shell, 1590, 1000);
+        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        var inspector = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 3);
+        shell.Drag(shell.Center(inspector), shell.Center(inspector) - new Vector(40, 0));
+        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
+        shell.Drag(shell.Center(shell.Window.DockSplitter), shell.Center(shell.Window.DockSplitter) - new Vector(0, 30));
+        Assert.True(shell.Window.MainArea.RowDefinitions[2].ActualHeight > 400, "The dock's splitter did not move.");
+        Assert.Equal(view, (shell.Editor.ViewportZoom, shell.Editor.ViewportLocation));
     }
 
     [AvaloniaFact]

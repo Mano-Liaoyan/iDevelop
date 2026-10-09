@@ -16,10 +16,10 @@
        takes the rest. The window keeps the docked conversation tall enough for a few lines of the transcript. -->
   <Grid x:Name="Rows" RowDefinitions="Auto,Auto,Auto,*,Auto">
     <Border Classes="conversationHeader">
-      <!-- The status and the attempt picker sit beside the title while it keeps 160 px after its glyph. Otherwise the picker
-           moves under the title, from its start, and the status gives way, since the picker's choice names the attempt's
-           status, so the header keeps two lines. The layout and close buttons stay at the first line's end. A long attempt
-           wraps inside its picker. -->
+      <!-- The status and the attempt picker sit beside the title while it keeps 160 px after its glyph. Otherwise they move
+           under the title, from its start. While the picker shows the latest attempt, whose status its choice names, the
+           status gives way, so the header keeps two lines. The layout and close buttons stay at the first line's end. A long
+           attempt wraps inside its picker. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="10" ItemsAlignment="Start" SpillIndent="26">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Foreground="{DynamicResource TextMutedBrush}" />
@@ -63,7 +63,14 @@
                 AutomationProperties.Name="Close conversation">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
         </Button>
-        <Border Classes="pill" VerticalAlignment="Center" theme:SpillRow.BesideOnly="True">
+        <!-- The status names the latest attempt, as the picker's choice does while it shows that attempt. -->
+        <Border Classes="pill" VerticalAlignment="Center">
+          <theme:SpillRow.BesideOnly>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!!Attempts.Count" />
+              <Binding Path="!IsHistorical" />
+            </MultiBinding>
+          </theme:SpillRow.BesideOnly>
           <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
         </Border>
         <ComboBox MinWidth="200" MaxWidth="400" VerticalAlignment="Center"
