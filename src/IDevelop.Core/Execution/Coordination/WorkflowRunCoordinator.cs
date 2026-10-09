@@ -138,9 +138,12 @@ internal sealed partial class WorkflowRunCoordinator
     public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, record =>
     {
         var operation = RunOperations.Request(confirmation, task);
+        // A repeat finds the request recorded, with what it carried.
+        if (record.Receipts.TryGetValue(operation, out var receipt))
+            return receipt.Event is RunEvent.Requested { Task: var recorded } && recorded == task ? Accepted : new RunCommand.Refused(new(RunProblem.OperationConflict));
         ImmutableArray<IncludedResult> carried = [];
-        if (record.Requested is { } nodes && record.Phase == RunPhase.Approved && !record.Receipts.ContainsKey(operation) &&
-            !RunScope.InFlow(record).Contains(task) && !record.Results.Any(result => result.Task == task))
+        if (record.Requested is { } nodes && record.Phase == RunPhase.Approved && !RunScope.InFlow(record).Contains(task) &&
+            !record.Results.Any(result => result.Task == task))
         {
             switch (Carry(record with { Requested = nodes.Add(task) }, operation))
             {
