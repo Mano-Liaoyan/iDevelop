@@ -35,8 +35,7 @@ public sealed class UpdatedInputsViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>What reviewing does, before the first preview.</summary>
-    public string Intro => "A task before this one handed on a newer result after this one finished. Review updated inputs replays this task's change " +
-        "onto the newer inputs as one commit, which you approve. No agent runs.";
+    public string Intro => "Review updated inputs replays this task's change onto the newer inputs as one commit, which you approve. No agent runs.";
 
     /// <summary>Builds the rebase's preview. It records nothing.</summary>
     public ICommand ReviewCommand => _review;
