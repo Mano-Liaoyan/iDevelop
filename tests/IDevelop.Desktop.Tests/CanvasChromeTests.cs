@@ -177,13 +177,16 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal(7, cards.Length);
         Assert.All(cards, card => Assert.All(controls, control => Assert.False(control.Intersects(card), $"The card at {card} is under {control}.")));
 
-        // The window then narrows to its smallest, which cuts the cards at the canvas's edge, so the canvas fits them again.
-        Resize(shell, 900, 600);
-
-        var canvas = shell.Bounds(shell.Editor);
-        var (top, bottom) = Rows(shell);
-        Assert.All(Cards(shell), card => Assert.True(canvas.Contains(card) && card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5,
-            $"The card at {card} is not whole between {top} and {bottom} in {canvas}."));
+        // The window then narrows, which cuts the cards at the canvas's edge, and gets as short as it can, so the canvas fits
+        // them again each time.
+        foreach (var (width, height) in new[] { (900.0, 1000.0), (900.0, 600.0) })
+        {
+            Resize(shell, width, height);
+            var canvas = shell.Bounds(shell.Editor);
+            var (top, bottom) = Rows(shell);
+            Assert.All(Cards(shell), card => Assert.True(canvas.Contains(card) && card.Top >= top - 0.5 && card.Bottom <= bottom + 0.5,
+                $"At {width}x{height}, the card at {card} is not whole between {top} and {bottom} in {canvas}."));
+        }
     }
 
     [AvaloniaFact]
