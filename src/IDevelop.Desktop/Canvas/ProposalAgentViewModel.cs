@@ -14,7 +14,7 @@ namespace IDevelop.Desktop.Canvas;
 /// </summary>
 public sealed class ProposalAgentViewModel : ObservableObject
 {
-    private static readonly string[] Summary = [nameof(Label), nameof(Parts), nameof(Reason), nameof(Note)];
+    private static readonly string[] Summary = [nameof(Label), nameof(Client), nameof(Model), nameof(Reason), nameof(Note)];
 
     // A new list clears its picker's selection, so each list is raised before its selection.
     private static readonly string[] Pickers =
@@ -22,9 +22,6 @@ public sealed class ProposalAgentViewModel : ObservableObject
         nameof(ClientChoices), nameof(SelectedClient), nameof(ModelChoices), nameof(SelectedModel), nameof(ReasoningChoices),
         nameof(SelectedReasoning), nameof(HasReasoning),
     ];
-
-    // About what a card's 11 px line holds beside its tile.
-    private const int GhostLine = 32;
 
     private readonly ProposalViewModel _proposal;
     private readonly ProposedNode _node;
@@ -43,13 +40,11 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// <summary>"Codex · GPT-5.5 · high", or "No agent".</summary>
     public string Label => RunText.AgentLabel(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
-    /// <summary>
-    /// The client, then the model with its level, as two chips, which wrap whole in a narrow inspector and never leave a
-    /// level on a line of its own.
-    /// </summary>
-    public IReadOnlyList<string> Parts => Settings is { } settings
-        ? [Clients.Name(settings.Client), .. ModelAndLevel(settings) is { } rest ? [rest] : Array.Empty<string>()]
-        : ["No agent"];
+    /// <summary>The agent's first line, as a card shows it: the client, or "No agent".</summary>
+    public string Client => Lines.Client;
+
+    /// <summary>The agent's second line, as a card shows it: the model and its level, or null.</summary>
+    public string? Model => Lines.Model;
 
     /// <summary>The planner's reason for a choice the task takes, or what the person's own choice replaced.</summary>
     public string? Reason => _changed is not null
@@ -70,20 +65,10 @@ public sealed class ProposalAgentViewModel : ObservableObject
     }}" : null;
 
     /// <summary>
-    /// The agent on the task's ghost card: the whole label on one line when a card's line holds it, else the client over
-    /// the model and level, so the card never cuts the level off. Null while the task has no agent.
+    /// The tab under the task's ghost card, such as "Pi isn't ready", or null. The card's own lines show the agent the
+    /// task takes instead, and the review row says the rest.
     /// </summary>
-    internal (string Line, string? Second)? GhostAgent => Settings is not { } settings ? null
-        : Label.Length <= GhostLine ? (Label, null)
-        : (Clients.Name(settings.Client), ModelAndLevel(settings));
-
-    /// <summary>The note under the task's ghost card, such as "Pi isn't ready · planner's agent", or null.</summary>
-    public string? GhostNote => Unusable is { } unusable ? $"{unusable.Brief} · {Fallback switch
-    {
-        FallbackTo.Type => "type's agent",
-        FallbackTo.Planner => "planner's agent",
-        FallbackTo.None => "no agent",
-    }}" : null;
+    public string? GhostNote => Unusable?.Brief;
 
     /// <summary>Whether the pickers show under the task's row. One task's at a time.</summary>
     public bool IsEditing
@@ -138,6 +123,8 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     /// <summary>The task has no agent of its own and its type has none, so the proposal's box decides its agent.</summary>
     internal bool NeedsFallback => Chosen is null && _node.Blueprint.Defaults.Execution is null;
+
+    private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
     private bool ReadOnly => _node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
 
@@ -195,13 +182,6 @@ public sealed class ProposalAgentViewModel : ObservableObject
     }
 
     private AgentCheck Check() => AgentCheck.Of(_node.Agent, _node.Blueprint, _proposal.ClientStatuses);
-
-    private string? ModelName(ExecutionSettings settings) =>
-        settings.Model is { } id ? ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), id)?.Name ?? id : null;
-
-    /// <summary>"Claude Haiku 4.5 · low", the agent after its client, or null when it names neither.</summary>
-    private string? ModelAndLevel(ExecutionSettings settings) =>
-        string.Join(" · ", new[] { ModelName(settings), settings.Reasoning }.OfType<string>()) is { Length: > 0 } rest ? rest : null;
 
     private void Change(ExecutionSettings settings)
     {

@@ -708,6 +708,14 @@
                         <ContentControl.ContentTemplate>
                           <DataTemplate DataType="canvas:ProposalViewModel">
                             <StackPanel AutomationProperties.AutomationId="Proposal">
+                              <inspector:InspectorRow Layout="Full" IsShown="{Binding CheckingNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14"
+                                            VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource TextMutedBrush}" />
+                                  <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CheckingNote}" TextWrapping="Wrap"
+                                             AutomationProperties.AutomationId="ProposalCheckingNote" />
+                                </Grid>
+                              </inspector:InspectorRow>
                               <ItemsControl ItemsSource="{Binding Items}">
                                 <ItemsControl.ItemTemplate>
                                   <!-- The tile says the kind and the ghost wires say the connections, so a row is its title. A new
@@ -724,46 +732,44 @@
                                             <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconEdit}" Width="14" Height="14" />
                                           </Button>
                                         </inspector:InspectorRow.Actions>
-                                        <CheckBox IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" ToolTip.Tip="{Binding Tip}"
-                                                  AutomationProperties.AutomationId="ProposalItem"
-                                                  AutomationProperties.Name="{Binding Label}">
-                                          <!-- The box sits in the middle of the check box's first 32 px, so the title line does too. -->
-                                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,7">
-                                            <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Top" />
-                                            <StackPanel Grid.Column="1" Spacing="4">
-                                              <TextBlock Classes="itemTitle" Text="{Binding Title}" MinHeight="18" VerticalAlignment="Center"
-                                                         AutomationProperties.AutomationId="ProposalItemTitle" />
-                                              <TextBlock Classes="note" Text="{Binding Note}" Margin="0,-4,0,0"
-                                                         IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                              <ItemsControl ItemsSource="{Binding Agent.Parts}" IsVisible="{Binding HasAgent}"
-                                                            AutomationProperties.AutomationId="ProposalAgent"
-                                                            AutomationProperties.Name="{Binding Agent.Label}">
-                                                <ItemsControl.ItemsPanel>
-                                                  <ItemsPanelTemplate>
-                                                    <WrapPanel Classes="chips" />
-                                                  </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                  <DataTemplate x:DataType="x:String">
-                                                    <Border Classes="chip">
-                                                      <TextBlock Text="{Binding}" />
-                                                    </Border>
-                                                  </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                              </ItemsControl>
-                                              <TextBlock Classes="caption" Text="{Binding Agent.Reason}" TextWrapping="Wrap"
-                                                         IsVisible="{Binding Agent.Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
-                                                         AutomationProperties.AutomationId="ProposalAgentReason" />
-                                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6"
-                                                    IsVisible="{Binding Agent.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-                                                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
-                                                          VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Agent.Note}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
-                                                           AutomationProperties.AutomationId="ProposalAgentNote" />
-                                              </Grid>
+                                        <StackPanel>
+                                          <!-- The box takes the tile and the title only, so a click on the agent or the reason ticks nothing. -->
+                                          <CheckBox HorizontalAlignment="Left" Padding="8,0,0,0"
+                                                    IsChecked="{Binding IsChosen}" IsEnabled="{Binding CanChoose}" ToolTip.Tip="{Binding Tip}"
+                                                    AutomationProperties.AutomationId="ProposalItem"
+                                                    AutomationProperties.Name="{Binding Label}">
+                                            <!-- The box sits in the middle of the check box's first 32 px, so the title line does too. -->
+                                            <Grid ColumnDefinitions="18,*" ColumnSpacing="8" Margin="0,7">
+                                              <theme:KindTile Kind="{Binding Kind}" TileSize="18" VerticalAlignment="Top" />
+                                              <StackPanel Grid.Column="1">
+                                                <TextBlock Classes="itemTitle" Text="{Binding Title}" MinHeight="18" TextWrapping="Wrap"
+                                                           AutomationProperties.AutomationId="ProposalItemTitle" />
+                                                <TextBlock Classes="note" Text="{Binding Note}"
+                                                           IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                              </StackPanel>
+                                            </Grid>
+                                          </CheckBox>
+                                          <!-- Under the title, outside the box: the box's 20 px, its 8 px padding, the tile's 18 px, and the 8 px gap. -->
+                                          <StackPanel Margin="54,-3,0,0" Spacing="4" IsVisible="{Binding HasAgent}">
+                                            <!-- The agent on a card's two lines, the client and then the model and level, so every row reads alike. -->
+                                            <StackPanel AutomationProperties.AutomationId="ProposalAgent"
+                                                        AutomationProperties.Name="{Binding Agent.Label}">
+                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Client}" />
+                                              <TextBlock Classes="agentLine" Text="{Binding Agent.Model}"
+                                                         IsVisible="{Binding Agent.Model, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
                                             </StackPanel>
-                                          </Grid>
-                                        </CheckBox>
+                                            <TextBlock Classes="caption" Text="{Binding Agent.Reason}" TextWrapping="Wrap"
+                                                       IsVisible="{Binding Agent.Reason, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
+                                                       AutomationProperties.AutomationId="ProposalAgentReason" />
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6"
+                                                  IsVisible="{Binding Agent.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
+                                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" Width="14" Height="14"
+                                                        VerticalAlignment="Top" Margin="0,1,0,0" Foreground="{DynamicResource StateWarningStrongBrush}" />
+                                              <TextBlock Grid.Column="1" Text="{Binding Agent.Note}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                                         AutomationProperties.AutomationId="ProposalAgentNote" />
+                                            </Grid>
+                                          </StackPanel>
+                                        </StackPanel>
                                       </inspector:InspectorRow>
                                       <ContentControl Content="{Binding Agent.Editor, FallbackValue={x:Null}}">
                                         <ContentControl.ContentTemplate>
@@ -851,9 +857,10 @@
                           </DataTemplate>
                         </ContentControl.ContentTemplate>
                       </ContentControl>
-                      <!-- A waiting Chat planner ends its conversation by accepting, so Accept and Finish leads there. -->
+                      <!-- A waiting Chat planner ends its conversation by accepting, so Accept and Finish leads there. The
+                           buttons share one line when they fit, else Accept and Finish takes its own line above the others. -->
                       <inspector:InspectorRow Layout="Full">
-                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                        <inspector:ActionRow AutomationProperties.AutomationId="ProposalActions">
                           <Button Classes="primary" Command="{Binding AcceptAndFinishCommand}" IsVisible="{Binding ShowsAcceptAndFinish}"
                                   ToolTip.Tip="Adds and fills the chosen tasks, then marks the planner done"
                                   AutomationProperties.AutomationId="ProposalAcceptFinish"
@@ -876,7 +883,7 @@
                                   AutomationProperties.Name="Dismiss">
                             <TextBlock Text="Dismiss" />
                           </Button>
-                        </WrapPanel>
+                        </inspector:ActionRow>
                       </inspector:InspectorRow>
                     </StackPanel>
                   </inspector:InspectorSection>

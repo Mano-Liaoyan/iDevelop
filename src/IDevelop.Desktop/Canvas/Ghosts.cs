@@ -10,15 +10,13 @@ namespace IDevelop.Desktop.Canvas;
 public abstract record Ghost(Point Location);
 
 /// <summary>
-/// A dashed card for a task that a proposal adds, or fills in place of the empty card. <see cref="Detail"/> is a second
-/// line under <see cref="Label"/>, for an agent too long for one, and <see cref="Note"/> says why the planner's choice
-/// of agent falls back, under the card.
+/// A dashed card for a task that a proposal adds, or fills in place of the empty card, with a card's three lines: the
+/// title, <see cref="Label"/>, and <see cref="Detail"/>, the model and level. <see cref="Note"/> says why the planner's
+/// choice of agent falls back, in a tab under the card.
 /// </summary>
 public sealed record GhostCardViewModel(Point Location, string Label, string Title, string Preview, NodeKind Kind) : Ghost(Location)
 {
     public string? Detail { get; init; }
-
-    public bool HasDetail => !string.IsNullOrEmpty(Detail);
 
     public string? Note { get; init; }
 

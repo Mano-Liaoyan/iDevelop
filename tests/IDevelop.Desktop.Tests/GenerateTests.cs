@@ -463,8 +463,9 @@ public sealed class GenerateTests : IDisposable
         Assert.Equal(
             ["Codex · GPT-6.1-Sol · xhigh Export API", "Claude Code · Claude Haiku 4.5 · low Export button", "Codex · GPT-6.1-Sol · high Export tests"],
             Ghosts(shell));
-        Assert.Equal(new string?[] { null, null, "Pi isn't installed · planner's agent" }, GhostNotes(shell));
-        Assert.Equal([["Codex · GPT-6.1-Sol · xhigh"], ["Claude Code", "Claude Haiku 4.5 · low"], ["Codex · GPT-6.1-Sol · high"]], GhostLines(shell));
+        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
+        // Every card has the client on one line and the model and level on the next, whatever their length.
+        Assert.Equal([["Codex", "GPT-6.1-Sol · xhigh"], ["Claude Code", "Claude Haiku 4.5 · low"], ["Codex", "GPT-6.1-Sol · high"]], GhostLines(shell));
     }
 
     [AvaloniaFact]
@@ -502,7 +503,7 @@ public sealed class GenerateTests : IDisposable
             },
             added);
         shell.ShowTasks();
-        Assert.Equal("Claude Code · Claude Haiku 4.5 · low", shell.CardText("Export button", "CardAgent"));
+        Assert.Equal("Claude Code · Claude Haiku 4.5 · low", shell.CardAgent("Export button"));
     }
 
     [AvaloniaFact]
@@ -513,7 +514,7 @@ public sealed class GenerateTests : IDisposable
 
         shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
 
-        Assert.Equal(new string?[] { null, null, "Pi isn't installed · no agent" }, GhostNotes(shell));
+        Assert.Equal(new string?[] { null, null, "Pi isn't installed" }, GhostNotes(shell));
         Assert.Equal("New Implement Export tests", Ghosts(shell)[2]);
         Assert.Equal(
             "The planner chose Pi, which isn't installed. Choose the task's agent before it runs.",
@@ -560,10 +561,124 @@ public sealed class GenerateTests : IDisposable
         shell.WaitUntil(() => shell.Find<Button>("RefreshAgents").IsEffectivelyEnabled, "the check ends");
         shell.Render();
 
-        Assert.Equal("Pi · DeepSeek V4.1 Flash (deepseek) · low Export tests", Ghosts(shell)[2]);
+        Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low Export tests", Ghosts(shell)[2]);
         Assert.Equal(new string?[] { null, null, null }, GhostNotes(shell));
-        Assert.Equal(("Export tests", "Pi · DeepSeek V4.1 Flash (deepseek) · low", "Fast and cheap.", null), Review(shell)[2]);
+        Assert.Equal(("Export tests", "Pi · deepseek · DeepSeek V4.1 Flash · low", "Fast and cheap.", null), Review(shell)[2]);
         Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_Pi_model_keeps_its_level_whole_on_its_ghost_card_and_its_row_at_every_inspector_width()
+    {
+        Install(_fakes, ClientId.Pi);
+        var shell = GeneratedChoosing();
+
+        Assert.Equal(["Pi · deepseek", "DeepSeek V4.1 Flash · low"], GhostLines(shell)[2]);
+        foreach (var width in new[] { 280.0, 320, 520 })
+        {
+            shell.SizeInspector(width);
+            Assert.Equal("Pi · deepseek · DeepSeek V4.1 Flash · low", Review(shell)[2].Agent);
+            var texts = GhostCards(shell).Concat<Visual>(ById<StackPanel>(shell, "ProposalAgent"))
+                .SelectMany(root => root.GetVisualDescendants().OfType<TextBlock>()).Where(text => text.IsEffectivelyVisible);
+            Assert.All(texts, text => Assert.False(text.TextLayout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" is cut short at {width} px."));
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_agent_each_row_shows_is_the_agent_Accept_writes_for_a_type_with_an_agent_of_its_own()
+    {
+        var implement = BuiltInBlueprints.Implement;
+        var project = _temp.Create("seed");
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("careful", 1), "Careful", implement.Work, implement.Fields,
+            new NodeSettings(Haiku, ConversationMode.Autonomous)) { DerivedFrom = implement.Key });
+        const string reply = """
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "chosen", "type": "type-6", "title": "Chosen", "fields": {"instructions": "A."},
+                      "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low", "reason": "Routine."}},
+                     {"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}},
+                     {"id": "unusable", "type": "type-6", "title": "Unusable", "fields": {"instructions": "C."},
+                      "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low"}},
+                     {"id": "plain", "type": "type-1", "title": "Plain", "fields": {"instructions": "D."}}]}
+            ```
+            """;
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        var shown = Review(shell).ToDictionary(row => row.Title, row => row.Agent);
+        var ghosts = Ghosts(shell);
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        string[] titles = ["Chosen", "Own", "Unusable", "Plain"];
+        Assert.Equal(titles.Select(title => shown[title]), titles.Select(shell.CardAgent));
+        Assert.Equal(ghosts.Order(), titles.Select(title => $"{shell.CardAgent(title)} {title}").Order());
+    }
+
+    [AvaloniaFact]
+    public void A_client_still_being_checked_when_the_planner_starts_is_named_in_the_review()
+    {
+        var gate = Path.Combine(_temp.Create("gate"), "agy");
+        _fakes.Install("agy", FakeRule.On("models").WaitForFile(gate).Replay(Fixture.Path("agy-models.txt")));
+        var prompt = Path.Combine(_temp.Create("evidence"), "prompt.txt");
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).CaptureStdin(prompt).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, Reply)));
+        var clients = new ClientDirectory(_fakes.Resolver);
+        var codexReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        clients.Changed += (_, _) =>
+        {
+            if (clients.Current[ClientId.Codex] is ClientStatus.Ready)
+            {
+                codexReady.TrySetResult();
+            }
+        };
+        var refresh = clients.RefreshAsync();
+        try
+        {
+            Assert.True(codexReady.Task.Wait(TimeSpan.FromSeconds(60)), "Codex is ready");
+            var shell = Shell.Open(_temp.Create("seed"), clients);
+            Submit(shell, Prompt);
+            shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+
+            Assert.IsType<ClientStatus.Checking>(clients.Current[ClientId.Antigravity]);
+            Assert.DoesNotContain("antigravity", File.ReadAllText(prompt));
+            Assert.Equal(
+                "Antigravity CLI was still being checked when the planner started, so the planner didn't consider it.",
+                shell.InView<TextBlock>("ProposalCheckingNote").Text);
+        }
+        finally
+        {
+            File.WriteAllText(gate, "");
+            refresh.Wait(TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [AvaloniaFact]
+    public void Without_a_client_still_being_checked_the_review_has_no_such_note()
+    {
+        var shell = GeneratedChoosing();
+
+        Assert.False(shell.Find<TextBlock>("ProposalCheckingNote").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_click_on_a_tasks_agent_or_reason_leaves_its_box_as_it_was()
+    {
+        var shell = GeneratedChoosing();
+        var entry = ById<StackPanel>(shell, "ProposalEntry").First();
+        var box = Shell.ById<CheckBox>(entry, "ProposalItem").Single();
+
+        var title = Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single();
+        var edit = Shell.ById<Button>(entry, "ProposalAgentEdit").Single();
+        shell.Click(Shell.ById<StackPanel>(entry, "ProposalAgent").Single());
+        shell.Click(Shell.ById<TextBlock>(entry, "ProposalAgentReason").Single());
+        // The empty end of the title's line, before the Change button, is no part of the box either.
+        shell.Click(new Point(shell.Bounds(edit).Left - 24, shell.Center(title).Y));
+        Assert.True(box.IsChecked);
+
+        shell.Click(title);
+        Assert.False(box.IsChecked);
     }
 
     [AvaloniaFact]
@@ -653,21 +768,15 @@ public sealed class GenerateTests : IDisposable
     private static (string Title, string? Agent, string? Reason, string? Note)[] Review(Shell shell) =>
         [.. ById<StackPanel>(shell, "ProposalEntry").Select(entry => (
             Shell.TextOf(Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single()),
-            Chips(entry),
+            AgentLines(entry),
             Visible(entry, "ProposalAgentReason"),
             Visible(entry, "ProposalAgentNote")))];
 
-    /// <summary>The agent's chips, which read as its name: the client, the model, and the level.</summary>
-    private static string? Chips(Visual entry)
-    {
-        if (Shell.ById<ItemsControl>(entry, "ProposalAgent").SingleOrDefault(chips => chips.IsEffectivelyVisible) is not { } chips)
-        {
-            return null;
-        }
-
-        Assert.Equal(AutomationProperties.GetName(chips), string.Join(" · ", Shell.Texts(chips)));
-        return AutomationProperties.GetName(chips);
-    }
+    /// <summary>A proposed task's agent on its row: the client's line, then the model and level's, joined as one label.</summary>
+    private static string? AgentLines(Visual entry) =>
+        Shell.ById<StackPanel>(entry, "ProposalAgent").SingleOrDefault(agent => agent.IsEffectivelyVisible) is { } agent
+            ? string.Join(" · ", Shell.Texts(agent))
+            : null;
 
     private static string? Visible(Visual root, string automationId) =>
         Shell.ById<TextBlock>(root, automationId).SingleOrDefault(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))?.Text;

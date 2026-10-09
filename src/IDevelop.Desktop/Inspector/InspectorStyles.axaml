@@ -282,6 +282,11 @@
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />
   </Style>
+  <!-- A button that an action row widens keeps its label in the middle. -->
+  <Style Selector="inspector|ActionRow > Button">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
   <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
     <Setter Property="Height" Value="28" />
     <Setter Property="FontSize" Value="13" />
@@ -367,6 +372,12 @@
     <Setter Property="ItemsSource" Value="{Binding Activity}" />
   </Style>
 
+  <!-- A proposed task's agent under its title: plain secondary text that wraps rather than cuts a name off. -->
+  <Style Selector="TextBlock.agentLine">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
   <Style Selector="TextBlock.itemTitle">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />

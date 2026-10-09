@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Nodes;
@@ -149,6 +150,16 @@ public sealed class ProposalViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Which clients this window was still checking when it started the planner, so the planner did not consider them,
+    /// such as "Pi was still being checked when the planner started, so the planner didn't consider it." Null for none.
+    /// </summary>
+    public string? CheckingNote => Proposal is { } proposal && _canvas.CheckingAtStart(proposal.Planner) is { IsEmpty: false } checking
+        ? checking.Length == 1
+            ? $"{IDevelop.Execution.Clients.Name(checking[0])} was still being checked when the planner started, so the planner didn't consider it."
+            : $"{Names(checking)} were still being checked when the planner started, so the planner didn't consider them."
+        : null;
+
     /// <summary>Each connection that Accept adds now, as its two tasks' titles, as of the last <see cref="Refresh"/>.</summary>
     public IReadOnlyList<string> Connections => _connections;
 
@@ -215,21 +226,25 @@ public sealed class ProposalViewModel : ObservableObject
             var slot = workflow.Tasks[fill.Slot];
             cards.Add(new GhostCardViewModel(
                 WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
-                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint)));
+                Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint))
+            {
+                // A fill keeps its task's agent, whose model the card's second line shows, as the task's own card does.
+                Detail = RunText.AgentLines(slot.Execution, slot.Execution is { } execution ? Status(execution.Client) : new ClientStatus.Checking()).Model,
+            });
         }
 
         var added = proposal.Nodes.Where(node => chosen.Contains(node.Id)).ToDictionary(node => node.Id);
         var agents = Agents().ToDictionary(agent => agent.Id);
         foreach (var node in added.Values)
         {
-            // A new task shows the agent it takes, as its card will, or its type while it has none.
+            // A new task shows the agent it takes on the lines its card will, or its type while it has none.
             var agent = agents.GetValueOrDefault(node.Id);
-            var lines = agent?.GhostAgent;
+            var hasAgent = agent?.Settings is not null;
             cards.Add(new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), lines?.Line ?? $"New {node.Blueprint.Name}", node.Title,
+                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), hasAgent ? agent!.Client : $"New {node.Blueprint.Name}", node.Title,
                 Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint))
             {
-                Detail = lines?.Second,
+                Detail = hasAgent ? agent!.Model : null,
                 Note = agent?.GhostNote,
             });
         }
@@ -370,4 +385,11 @@ public sealed class ProposalViewModel : ObservableObject
     };
 
     private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    /// <summary>"Pi and Antigravity CLI", or "Claude Code, Pi, and Antigravity CLI".</summary>
+    private static string Names(IReadOnlyList<ClientId> clients)
+    {
+        var names = clients.Select(IDevelop.Execution.Clients.Name).ToArray();
+        return names.Length < 3 ? string.Join(" and ", names) : $"{string.Join(", ", names[..^1])}, and {names[^1]}";
+    }
 }

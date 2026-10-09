@@ -68,7 +68,7 @@
            A proposal's tasks draw as dashed cards over the empty cards they fill, and its connections as dashed wires.
            A wire dropped on empty canvas stays as the line it was while the Add popover is open. -->
       <nodify:NodifyEditor.DataTemplates>
-        <!-- A note under the card says why the planner's choice of agent falls back. It stays in the gutter between rows. -->
+        <!-- A ghost has a card's three lines. A tab hanging from it says why the planner's choice of agent falls back. -->
         <DataTemplate DataType="canvas:GhostCardViewModel">
           <StackPanel Width="{x:Static canvas:WorkflowCanvasViewModel.TaskCardWidth}"
                       AutomationProperties.AutomationId="GhostCard"
@@ -79,20 +79,22 @@
                          theme:StyleClass.Kind="{Binding Kind}" />
               <Grid Margin="22,0" ColumnDefinitions="32,*" ColumnSpacing="12">
                 <theme:KindTile Kind="{Binding Kind}" TileSize="32" Opacity="0.55" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Classes="ghostText" Classes.twoLines="{Binding HasDetail}">
+                <StackPanel Grid.Column="1" Classes="cardText">
                   <TextBlock Classes="cardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostTitle" />
-                  <TextBlock Classes="cardStatus" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Classes="cardAgent" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostLabel" />
-                  <TextBlock Classes="cardStatus" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasDetail}"
+                  <TextBlock Classes="cardAgent" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
                              AutomationProperties.AutomationId="GhostDetail" />
                 </StackPanel>
               </Grid>
             </Panel>
-            <Grid Classes="ghostNote" ColumnDefinitions="Auto,*" ColumnSpacing="6" IsVisible="{Binding HasNote}">
-              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" />
-              <TextBlock Grid.Column="1" Text="{Binding Note}" AutomationProperties.AutomationId="GhostNote" />
-            </Grid>
+            <Border Classes="ghostNote" IsVisible="{Binding HasNote}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStateNeedsSetup}" />
+                <TextBlock Text="{Binding Note}" AutomationProperties.AutomationId="GhostNote" />
+              </StackPanel>
+            </Border>
           </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="canvas:GhostWireViewModel">
