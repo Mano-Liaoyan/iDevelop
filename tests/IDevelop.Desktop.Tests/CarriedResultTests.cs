@@ -80,7 +80,7 @@ public sealed class CarriedResultTests
         // Said once: the status names what it waits for, and the line under Run what to run first. The run never started
         // C, so it has no conversation with it.
         Assert.False(Shows(shell, "RunTaskDetail") || Shows(shell, "RunOwner") || Shows(shell, "RunConversationNote"));
-        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
         // A card whose task nothing more is said of than that it has not started shows its agent, as outside any run.
         Assert.True(shell.InCard<TextBlock>("A", "CardAgent").IsEffectivelyVisible);
         shell.Window.Close();
@@ -101,7 +101,7 @@ public sealed class CarriedResultTests
         Assert.False(Shows(reopened, "RunConversationNote"));
         Assert.Equal("Its result from an earlier run still\u00A0counts.", reopened.Text("RunTaskDetail"));
         Select(reopened, "C");
-        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), reopened.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\"\u00A0first."), reopened.InView<TextBlock>("StartProblem").Text);
     }
 
     [AvaloniaFact]
@@ -245,7 +245,7 @@ public sealed class CarriedResultTests
         shell.WaitForCard("D", "Running");
 
         Select(shell, "C");
-        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\"\u00A0first."), shell.InView<TextBlock>("StartProblem").Text);
         Select(shell, "A");
         shell.Click(shell.InView<Button>("RunTask"));
 
