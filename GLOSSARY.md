@@ -53,7 +53,7 @@ _Avoid_: output, success
 A task's newest result. It supersedes the one before, which stays recorded.
 
 **Result origin**:
-What produced a result: an executed attempt, a reused standalone report, an approved rebase, or a person's gate approval. Only an executed result comes from a client in the run.
+What produced a result: an executed attempt, a standalone report that the run approval included, an approved rebase, or a person's gate approval. Only an executed result comes from a client in the run.
 
 **Stale result**:
 A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one needs attention, while an Approval node takes a new gate request instead.
@@ -63,6 +63,20 @@ _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate requ
 A person-approved replay of a stale result's recorded change onto its current inputs, as one new commit, with no client run. Its result has the rebased origin.
 _Avoid_: git rebase, which iDevelop does not run
 
+### Reviews
+
+**Interrupted fix**:
+A review's fix round that closing iDevelop interrupted, or that a crash or a kill lost and the person then closed as stopped. It never starts again by itself and waits for the person's Continue fix or Retry fix.
+_Avoid_: failed fix
+
+**Continue fix**:
+The person's choice to go on with an interrupted fix: a Continue in the fix's own client session, on the checkout as the fix left it.
+_Avoid_: Resume, which never chooses a fix
+
+**Retry fix**:
+The person's choice to redo an interrupted fix round: a Retry in a fresh client session, after the round's unfinished work is salvaged and the checkout reset.
+_Avoid_: Retry alone, which names a new attempt of any task
+
 ### Blocks
 
 **Block**:
@@ -70,6 +84,14 @@ A durable record, with evidence, that holds a task back until a recorded recheck
 
 **Drift**:
 A change to a task's checkout after its result was accepted or its baseline was recorded. It becomes a block and never changes the accepted result.
+
+**Preserve and restore**:
+A person's repair of a drift or capture block: Preserve retains the checkout as it is now, and Restore moves it back to its recorded baseline after a preview. It never moves shared refs or the stash, and it never gives a rejected capture a result.
+_Avoid_: git restore, which iDevelop does not run
+
+**Close as stopped**:
+A person's confirmed closure of an uncertain turn with no recorded root exit, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
+_Avoid_: Stop, Stop Workflow
 
 **Publishing attempt**:
 The attempt whose checkout a task's current result keeps, where that task's drift is recorded and looked for.
@@ -89,6 +111,10 @@ The durable note a run approval writes before any other side effect, so a crash 
 **Snapshot base**:
 A commit of the person's uncommitted work over HEAD, which a run can start from instead of HEAD while their branch, index, and files stay as they were.
 
+**Inclusion**:
+A run approval's adoption of a report that a task produced on its own before the run, such as a planner's, as that task's result, so the run never runs the task. It brings no code, ownership, or client session into the run.
+_Avoid_: import
+
 **Gate request**:
 An Approval node's durable request for a person's answer on one fixed set of inputs. It creates no attempt, and only superseded inputs give the node a new one.
 _Avoid_: approval attempt
@@ -96,3 +122,13 @@ _Avoid_: approval attempt
 **Send back**:
 A person's answer that refuses a gate request with a reason. It holds the node's dependents and is final for that request.
 _Avoid_: reject, deny
+
+### Planning
+
+**Slot**:
+A task after a planner whose fields are all blank, which the planner's proposal may fill.
+_Avoid_: client slot, which is a run's place for a running client
+
+**Amendment**:
+A recorded change to an approved run's workflow, from a run planner's proposal that the person accepted. It only adds tasks and connections and fills tasks that have not started, and a task counts as started once the plan of its start is recorded. An edit of the workflow document changes no run.
+_Avoid_: edit, which changes only the document

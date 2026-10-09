@@ -1,6 +1,6 @@
 # Unix workflow turns lead their own session and process group
 
-On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. [Design v5](https://github.com/Mano-Liaoyan/iDevelop/issues/54#issuecomment-6065458422) named `POSIX_SPAWN_SETPGROUP` with group 0. The coordinator added the new session so that a client has no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
+On Linux and macOS, a workflow turn's client root starts through iDevelop's own `posix_spawn` launcher with `POSIX_SPAWN_SETSID`, so it leads a new session and a process group whose ID is its own before the command runs, and cleanup and Stop signal that group. [Design v5](https://github.com/Mano-Liaoyan/iDevelop/issues/54#issuecomment-6065458422) named `POSIX_SPAWN_SETPGROUP` with group 0. The new session was added during the 2026-10-08 implementation run, so that a client has no controlling terminal: when iDevelop runs in a terminal, a client that reads the terminal fails at once, as under a desktop launch, instead of stopping on `SIGTTIN` or `SIGTTOU`.
 
 ## The launch
 
@@ -31,4 +31,4 @@ When the launcher is unavailable, for example on glibc older than 2.29 or macOS 
 - After a group's last member exits, the system would have to reuse its ID within one 20 ms poll for a signal to reach a stranger.
 - Nothing on macOS has run. Its `POSIX_SPAWN_SETSID` value, 0x400, comes from XNU's `bsd/sys/spawn.h`, and a stopped root there is untested.
 
-Source: pull request [#70](https://github.com/Mano-Liaoyan/iDevelop/pull/70) (E3a.4), its Decisions 1, 2, 4, 5, and 7, the last of them the coordinator's.
+Source: pull request [#70](https://github.com/Mano-Liaoyan/iDevelop/pull/70) (E3a.4), its Decisions 1, 2, 4, 5, and 7, the last of them decided during the 2026-10-08 implementation run.
