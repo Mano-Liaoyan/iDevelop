@@ -39,13 +39,13 @@ internal enum TaskState
     /// <summary>A dependency predecessor has not handed on yet.</summary>
     Pending,
 
-    /// <summary>It starts when a client slot is free, or after Resume while the run is paused.</summary>
+    /// <summary>It starts with the run's next decision, after Resume while the run is paused, or once a client slot is free at the run's bound.</summary>
     Ready,
 
-    /// <summary>Its turn is being prepared, checked, claimed, and launched. It holds the run's client slot.</summary>
+    /// <summary>Its turn is being prepared, checked, claimed, and launched. It holds one of the run's client slots.</summary>
     Starting,
 
-    /// <summary>Its client's root process runs. It holds the run's client slot.</summary>
+    /// <summary>Its client's root process runs. It holds one of the run's client slots.</summary>
     Running,
 
     /// <summary>Its root exited, and settlement, publication, or the turn's disposition is not finished.</summary>
@@ -123,7 +123,7 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
-/// <param name="Slots">Client roots this window is starting or running for the run. At most one.</param>
+/// <param name="Slots">Client roots this window is starting or running for the run, at most <see cref="ProjectRuns.ClientRoots"/>.</param>
 internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Status, bool Controlled, bool Resumed, int Slots,
     ImmutableSortedDictionary<TaskId, TaskView> Tasks)
 {

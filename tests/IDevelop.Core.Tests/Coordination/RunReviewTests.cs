@@ -10,7 +10,7 @@ namespace IDevelop.Core.Tests.Coordination;
 
 /// <summary>
 /// Reviews in a workflow run (E3c.2): the reviewer's turns and the subject's fix rounds go through the run's coordinator,
-/// one client root at a time. One fake Codex answers every turn, and the start of each prompt picks the task's script.
+/// beside the run's other clients. One fake Codex answers every turn, and the start of each prompt picks the task's script.
 /// </summary>
 public sealed class RunReviewTests
 {
@@ -88,6 +88,29 @@ public sealed class RunReviewTests
             .Print(FakeAgents.SessionLine(ClientId.Codex, "session-r"))
             .Copy("calc.txt", Path.Combine(f.Evidence, $"review-{turn}.calc.txt"));
         return (gate is null ? rule : rule.WaitForFile(f.Gate(gate))).Print(FakeAgents.ReplyLines(ClientId.Codex, Verdict(verdict)));
+    }
+
+    [Fact]
+    public async Task A_review_s_turns_and_its_fix_round_start_while_another_task_runs()
+    {
+        await using var f = new RunConversationFixture(Graph([RunConversationFixture.Agent(A, ConversationMode.Autonomous), Reviewer(R),
+            RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true)], (A, R)));
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
+            .Answer(X, f.Says(X, 1, "X ready.\n", "session-X", gate: f.Gate("x")));
+        await f.Open();
+        await f.Resume();
+
+        // The reviewer's first turn, the fix round, and the reviewer's second turn all run while X's client still runs.
+        var agreed = await f.Until(view => view.Tasks[R].State == TaskState.Done);
+        Assert.Equal(TaskState.Running, agreed.Tasks[X].State);
+        Assert.Equal((2, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(X)));
+        Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Evidence, "review-2.calc.txt")));
+        f.Open("x");
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(1, f.Launches(X));
     }
 
     [Fact]
@@ -514,15 +537,15 @@ public sealed class RunReviewTests
         long Claim(TaskId task, int turn = 1, int? round = null) => record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claimed &&
             claimed.Key.Turn == turn && record.Attempts[claimed.Key.Attempt].Task == task &&
             (round is null ? record.Attempts[claimed.Key.Attempt].Cause is not AttemptCause.ReviewFix : record.ReviewOf(claimed.Key.Attempt)?.Round == round)).Sequence;
-        // Once A is done, the review's first turn and D are both ready, and they start in task order.
-        Assert.True(Claim(R) < Claim(D));
+        // Once A is done, the review's first turn and D are both ready, and both start at once, so D consumes A's first result.
+        Assert.True(Claim(D) < Claim(A, round: 1));
         Assert.True(Claim(A, round: 1) < Claim(R, turn: 2));
         Assert.Equal((TaskState.Stale, TaskState.Done, TaskState.Done), (stuck.Tasks[D].State, stuck.Tasks[R].State, stuck.Tasks[A].State));
         Assert.Equal((2, 2, 1, 1), (f.Launches(A), f.Launches(R), f.Launches(B), f.Launches(D)));
     }
 
     [Fact]
-    public async Task Continuing_review_work_waits_behind_a_ready_task()
+    public async Task At_the_bound_continuing_review_work_waits_behind_a_ready_task()
     {
         // X waits for the person, and D waits for X, so D becomes ready while the run is paused, beside a chosen fix.
         var workflow = Runs.RunFixtures.Connect(Reviewed()
@@ -542,6 +565,8 @@ public sealed class RunReviewTests
         await TurnFixture.WaitUntilAsync(() => File.Exists(Path.Combine(f.Evidence, "fix-1-wrote")));
         await f.Until(view => view.Tasks[X].State == TaskState.Waiting);
         await f.Reopen();
+        // With one root at a time, the order of starts decides which waits.
+        f.Runs.ClientRoots = 1;
         var paused = await f.Until(view => view.Tasks[R].Fix is not null);
         Assert.Equal((RunStatus.Paused, TaskState.Pending), (paused.Status, paused.Tasks[D].State));
 

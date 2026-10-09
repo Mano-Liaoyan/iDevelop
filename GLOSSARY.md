@@ -41,7 +41,7 @@ A new attempt of a task with a fresh client session, started only by a person. A
 _Avoid_: Resume, rerun
 
 **Client slot**:
-A run's single place for a starting or running client. Waiting, gates, settlement, publication, and cleanup take none.
+A run's place for one task's starting or running client root. A run starts every ready task at once, up to a safety bound of 32 slots. Waiting, gates, settlement, publication, and cleanup take none.
 
 ### Results
 

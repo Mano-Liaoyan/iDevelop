@@ -6,9 +6,9 @@ namespace IDevelop.Execution;
 /// <summary>
 /// Reviews in the run (E3c.2). A review's reviewer turns and its subject's fix rounds use the same launch authority as
 /// every other turn, and its next step comes from <see cref="ReviewWork"/> over the run's records. A conclusion takes no
-/// client slot. A reviewer turn or a fix round takes the slot after conversation continuations and ready tasks, so
-/// continuing review work goes to the queue's tail. A fix round that closing iDevelop interrupted waits for the person's
-/// Continue fix or Retry fix.
+/// client slot. A reviewer turn or a fix round starts beside the run's other clients; only at the run's bound of client
+/// roots does it come after conversation continuations and ready tasks, so continuing review work goes to the tail. A fix
+/// round that closing iDevelop interrupted waits for the person's Continue fix or Retry fix.
 /// </summary>
 internal sealed partial class WorkflowRunCoordinator
 {
@@ -88,31 +88,36 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Starts the next reviewer turn or fix round of the first resting review, in task order, that has one. A reserved fix
-    /// that was never claimed resumes with its recorded cause.
+    /// Starts the next reviewer turn or fix round of each resting review that has one, in task order, up to
+    /// <paramref name="free"/> of them. A reserved fix that was never claimed resumes with its recorded cause. A subject
+    /// takes one fix round at a time, so a second review of it waits.
     /// </summary>
-    private bool AdvanceReviews(RunRecord record, RunView view)
+    private void AdvanceReviews(RunRecord record, RunView view, int free)
     {
+        var started = 0;
         foreach (var state in view.Tasks.Values)
         {
+            if (started >= free) return;
             if (Reviewing(record, state) is not { } review || _live.ContainsKey(review.Subject) || _holds.ContainsKey(review.Subject)) continue;
             if (RunProjection.LatestAttempts(record).GetValueOrDefault(review.Subject) is { } newest && record.ReviewOf(newest) is { } link &&
                 link.Attempt == review.Attempt && !record.Claims.Keys.Any(key => key.Attempt == newest) && !record.Closures.ContainsKey(newest))
             {
                 StartFix(record, review, newest);
-                return true;
+                started++;
+                continue;
             }
             switch (RunReviews.Step(record, review.Log, Log, null))
             {
                 case NodeStep.RunTurn:
                     StartReviewTurn(record, review);
-                    return true;
+                    started++;
+                    break;
                 case NodeStep.FixRound:
                     StartFixRound(record, review);
-                    return true;
+                    started++;
+                    break;
             }
         }
-        return false;
     }
 
     private void Conclude(RunRecord record, RestingReview review, string? failure)
@@ -123,11 +128,11 @@ internal sealed partial class WorkflowRunCoordinator
         Background(async () =>
         {
             var closing = await _runs.CloseResting(_permit!, OperationIds.Derive(operation, "review/conclude"), review.Attempt,
-                new RestingEnd.Conclude(failure)).ConfigureAwait(false);
+                new RestingEnd.Conclude(failure), scheduled: true, halted: Halted).ConfigureAwait(false);
             switch (closing)
             {
                 case RestingClose.Closed closed:
-                    if (failure is null && Finish(closed.Attempt.Lease, task, review.Attempt, operation) is { } refusal)
+                    if (failure is null && Finish(closed.Attempt.Lease, task, review.Attempt, operation, Scheduled()) is { } refusal)
                     {
                         // The closure is recorded. Its report's acceptance is finished later, under a lease of its own.
                         closed.Attempt.Lease.Dispose();
@@ -156,7 +161,7 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.review-turn");
         Background(() => RunReviews.Step(record, review.Log, Log, Address.Project) is NodeStep.RunTurn turn
-                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report })
+                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report }, halted: Halted)
                 : Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim))),
             start => Started(task, start, record.Revision.Id), error => StartFaulted(task, error));
     }
@@ -172,7 +177,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.FixRound fix)
                 return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
-            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt));
+            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt), halted: Halted);
         }, start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
@@ -184,7 +189,7 @@ internal sealed partial class WorkflowRunCoordinator
         _live[subject] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.fix");
         Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
-                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project))),
+                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project)), halted: Halted),
             start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
@@ -199,7 +204,8 @@ internal sealed partial class WorkflowRunCoordinator
     /// Continue fix: after closing iDevelop interrupted the review's fix round, the round goes on in the fix's session from
     /// the files it left. Two matching observations preserve the checkout and become the new attempt's recovery baseline,
     /// which its claim checks again; they never stand in for the interrupted turn's success. The attempt is reserved at once
-    /// and starts when the run's client slot is free. Repeating the confirmation returns the same attempt.
+    /// and starts beside the run's other clients, or once a slot is free at the run's bound. Repeating the confirmation
+    /// returns the same attempt.
     /// </summary>
     internal Task<FixReply> ContinueFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default) =>
         Recover(address, review, FixChoice.Continue, confirmation, wait);
@@ -302,7 +308,7 @@ internal sealed partial class WorkflowRunCoordinator
     {
         if (_permit!.TakeTask(review.Subject) is not LeaseTake.Taken taken) return new FixReply.Refused(new(RunProblem.TaskBusy));
         using var lease = taken.Lease;
-        var materializer = _materializer();
+        var materializer = Commanded();
         FixReply Refused(RunRejection reason) => new FixReply.Refused(reason);
         if (cause is AttemptCause.Continue)
         {

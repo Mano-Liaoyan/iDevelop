@@ -15,7 +15,12 @@ public sealed class WorkflowRunTests
     private static readonly TaskId A = TestTasks.Design;
     private static readonly TaskId B = TestTasks.Build;
 
+    private static readonly TaskId C = TestTasks.Review;
+
     private static WorkflowRunFixture Chain() => new(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
+
+    /// <summary>Three tasks that depend on nothing, so the run starts all three at once.</summary>
+    private static WorkflowRunFixture Three() => new(Task(A, "A", 105), Task(B, "B", 405), Task(C, "C", 705));
 
     [AvaloniaFact]
     public void Run_Workflow_opens_a_preflight_of_the_whole_workflow_without_a_selection_and_Cancel_starts_nothing()
@@ -109,7 +114,8 @@ public sealed class WorkflowRunTests
 
         shell.WaitForCard("A", "Running");
         Assert.True(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal(("Running", "0 of 2 done", "Running \"A\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        // A title stays on one line with the word before it.
+        Assert.Equal(("Running", "0 of 2 done", "Running\u00A0\"A\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal("Waits for \"A\"", shell.CardText("B", "CardStatus"));
         Assert.False(shell.Find<Button>("RunWorkflow").IsEffectivelyVisible);
         Assert.True(shell.Find<Button>("StopWorkflow").IsEffectivelyVisible);
@@ -389,5 +395,56 @@ public sealed class WorkflowRunTests
         Assert.Equal("Stopped. Finished work stays.", shell.Text("RunActivity"));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
         Assert.True(shell.Find<Button>("RunWorkflow").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Ready_tasks_run_at_once_and_the_bar_counts_those_still_running()
+    {
+        using var f = Three();
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready.", gate: "bc")).Answer("C", f.Says("C ready.", gate: "bc"));
+        var shell = f.Window();
+
+        shell.StartRun();
+
+        foreach (var title in new[] { "A", "B", "C" })
+        {
+            shell.WaitForCard(title, "Running");
+        }
+
+        shell.WaitUntil(() => shell.RunStatus == "3 running", "the bar counts three running tasks", () => $"It shows {shell.RunStatus}.");
+        Assert.Equal(("3 running", "0 of 3 done", "Running\u00A0\"A\", \"B\", and\u00A0\"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        Assert.Equal("Workflow run: 3 running, 0 of 3 done", shell.WorkflowRun!.Summary);
+        Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
+        Assert.True(shell.WorkflowShows("seed", "Workflow", "WorkflowRunning"));
+
+        f.Open("a");
+        shell.WaitForCard("A", "Succeeded");
+        shell.WaitUntil(() => shell.RunStatus == "2 running", "the bar counts the two still running", () => $"It shows {shell.RunStatus}.");
+        Assert.Equal(("2 running", "1 of 3 done", "Running\u00A0\"B\" and\u00A0\"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
+        Assert.Equal(["Running", "Running"], new[] { "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
+
+        f.Open("bc");
+        shell.WaitForStatus("Completed");
+        Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], new[] { "A", "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
+        Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
+    }
+
+    [AvaloniaFact]
+    public void Stop_Workflow_stops_every_running_task()
+    {
+        using var f = Three();
+        f.Answer("A", f.Says("A ready.", gate: "never")).Answer("B", f.Says("B ready.", gate: "never")).Answer("C", f.Says("C ready.", gate: "never"));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitUntil(() => shell.RunStatus == "3 running" && new[] { "A", "B", "C" }.All(title => shell.CardText(title, "CardStatus") == "Running"),
+            "all three run", () => $"It shows {shell.RunStatus}.");
+
+        shell.Click(shell.Find<Button>("StopWorkflow"));
+
+        shell.WaitForStatus("Stopped");
+        Assert.Equal(["Cancelled", "Cancelled", "Cancelled"], new[] { "A", "B", "C" }.Select(title => shell.CardText(title, "CardStatus")));
+        Assert.Equal("Stopped. Finished work stays.", shell.Text("RunActivity"));
+        Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
+        Assert.False(shell.WorkflowShows("seed", "Workflow", "WorkflowRunning"));
     }
 }

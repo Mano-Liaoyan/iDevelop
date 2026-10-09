@@ -14,7 +14,7 @@ internal sealed partial class WorkflowRunCoordinator
             mark: false, () =>
             {
                 if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RebasePreviewRead.Rejected(new(RunProblem.TaskBusy));
-                using (taken.Lease) return _materializer().PreviewRebase(taken.Lease);
+                using (taken.Lease) return Commanded().PreviewRebase(taken.Lease);
             }, preview => preview, wait);
 
     /// <summary>
@@ -25,7 +25,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     public Task<Rebasing> ApproveRebase(RunAddress address, TaskId task, Digest preview, OperationId command, CancellationToken wait = default) =>
         Request(address, task, message => new Rebasing.Unavailable(message), reason => new Rebasing.Rejected(reason), mark: true,
-            () => Rebase(task, command, preview), outcome =>
+            () => Rebase(task, command, preview, scheduled: false), outcome =>
             {
                 Held(task, outcome);
                 return outcome;
@@ -72,13 +72,14 @@ internal sealed partial class WorkflowRunCoordinator
         return done.Task.WaitAsync(wait);
     }
 
-    private Rebasing Rebase(TaskId task, OperationId approval, Digest preview)
+    /// <param name="scheduled">The run finishes an approval a person made earlier, rather than the person's command itself.</param>
+    private Rebasing Rebase(TaskId task, OperationId approval, Digest preview, bool scheduled)
     {
         if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new Rebasing.Rejected(new(RunProblem.TaskBusy));
         using (taken.Lease)
         {
             _runs.Probe?.Invoke("coordinator.rebase.before");
-            return _materializer().Rebase(taken.Lease, approval, preview);
+            return (scheduled ? Scheduled() : Commanded()).Rebase(taken.Lease, approval, preview);
         }
     }
 
@@ -111,7 +112,7 @@ internal sealed partial class WorkflowRunCoordinator
             var task = pending.Task;
             if (_live.ContainsKey(task) || _holds.ContainsKey(task)) continue;
             _live[task] = new(LiveStage.Settling);
-            Offload(() => Rebase(task, pending.Approval, pending.Preview), outcome =>
+            Offload(() => Rebase(task, pending.Approval, pending.Preview, scheduled: true), outcome =>
             {
                 _live.Remove(task);
                 Held(task, outcome);

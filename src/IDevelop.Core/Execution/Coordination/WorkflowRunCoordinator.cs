@@ -6,9 +6,9 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// Runs one approved workflow run in this window: it schedules the run's tasks along their dependency connections, one
-/// client root at a time, and gives each settled turn its disposition through E3a. It holds the run's
-/// <see cref="CoordinatorPermit"/>, so a second window only reads the run.
+/// Runs one approved workflow run in this window: it schedules the run's tasks along their dependency connections,
+/// starts every task that is ready at once, each with its own client root, and gives each settled turn its disposition
+/// through E3a. It holds the run's <see cref="CoordinatorPermit"/>, so a second window only reads the run.
 /// <para>
 /// Every decision happens on one loop, after a durable reread of the journal. Preparation, launch, settlement,
 /// publication, closure, and reconciliation run outside it as work items that post their outcome back. Only the loop
@@ -19,11 +19,18 @@ internal sealed partial class WorkflowRunCoordinator
 {
     internal const string ElsewhereMessage = "This run is controlled by another iDevelop window.";
     internal const string StoppedReason = "The workflow was stopped before this task started.";
+
+    /// <summary>
+    /// A safety bound on the client roots one run starts or runs at once, far above any workflow a person draws, so in
+    /// practice every ready task starts at once. It is no setting (ADR 0018).
+    /// </summary>
+    internal const int ClientRootLimit = 32;
+
     private static readonly RunCommand Accepted = new RunCommand.Accepted();
 
     private readonly ProjectRuns _runs;
     private readonly RunStore _store;
-    private readonly Func<Materializer> _materializer;
+    private readonly Func<TimeSpan, Func<bool>?, Materializer> _materializer;
     private readonly CoordinatorPermit? _permit;
     private readonly Channel<Action> _inbox = Channel.CreateUnbounded<Action>(new() { SingleReader = true });
     private readonly Task _loop;
@@ -48,7 +55,9 @@ internal sealed partial class WorkflowRunCoordinator
     private readonly Dictionary<TaskId, UnresolvedTurn> _unresolved = [];
     private readonly List<Task> _inflight = [];
 
-    internal WorkflowRunCoordinator(ProjectRuns runs, RunStore store, Func<Materializer> materializer, RunAddress address, CoordinatorPermit? permit)
+    /// <param name="materializer">A materializer whose steps wait the given time for the repository's lock and stop waiting once the given check says so.</param>
+    internal WorkflowRunCoordinator(ProjectRuns runs, RunStore store, Func<TimeSpan, Func<bool>?, Materializer> materializer, RunAddress address,
+        CoordinatorPermit? permit)
     {
         _runs = runs;
         _store = store;
@@ -321,7 +330,19 @@ internal sealed partial class WorkflowRunCoordinator
 
     private void Offload<T>(Func<T> work, Action<T> done, Action<Exception> failed) => Background(() => Task.FromResult(work()), done, failed);
 
-    /// <summary>This window's work for a task. Starting and Running hold the run's one client slot.</summary>
+    /// <summary>Whether this window stopped scheduling the run, which ends its steps' waits for the repository's lock.</summary>
+    private bool Halted() => _halting;
+
+    /// <summary>
+    /// A materializer for the run's own scheduled work, which waits as long as the run allows for the repository's lock,
+    /// because the run's tasks prepare, claim, and publish at the same time (ADR 0018).
+    /// </summary>
+    private Materializer Scheduled() => _materializer(_runs.MutationPatience, Halted);
+
+    /// <summary>A materializer for a person's command, which reports a busy repository after the usual short wait.</summary>
+    private Materializer Commanded() => _materializer(GitRepository.MutationPatience, Halted);
+
+    /// <summary>This window's work for a task. Starting and Running each hold one of the run's client slots.</summary>
     private sealed record Live(LiveStage Stage, RunningTurn? Turn = null, bool Cancelled = false);
 
     private ImmutableArray<TaskId> Slotted => [.. _live.Where(pair => pair.Value.Stage is LiveStage.Starting or LiveStage.Running).Select(pair => pair.Key)];

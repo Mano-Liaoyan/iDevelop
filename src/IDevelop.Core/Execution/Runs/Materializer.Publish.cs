@@ -54,7 +54,7 @@ internal sealed partial class Materializer
             step = "repository";
             var repository = OpenRepository();
             _probe?.Invoke("publish.lock.before");
-            using var mutation = repository.TakeMutationLock();
+            using var mutation = repository.TakeMutationLock(MutationPatience, Halted);
             if (mutation is null) return new Publication.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             captureId = PublicationCapture(record, launch, closure.Evidence, logged.Record.Result, folder);

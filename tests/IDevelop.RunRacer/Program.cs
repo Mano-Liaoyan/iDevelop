@@ -83,6 +83,35 @@ internal static class Program
                 runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 return 6;
             }
+            case "run-crash":
+            {
+                // A window that controls the run and resumes it, and exits as a crash does once the given number of its
+                // tasks' clients run at the same time.
+                var clients = new ClientDirectory(CommandResolver.Create([args[4]], OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []));
+                clients.RefreshAsync().GetAwaiter().GetResult();
+                var runs = ProjectRuns.Open(project, clients);
+                runs.MaterializerClock = TimeProvider.System;
+                if (runs.OpenRun(workflow, run) is not RunOpen.Opened { Coordinator: { Controlled: true } coordinator })
+                {
+                    Console.WriteLine("Unavailable");
+                    runs.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    return 2;
+                }
+                Console.WriteLine("Opened");
+                Console.Out.Flush();
+                if (coordinator.Resume(coordinator.Address).GetAwaiter().GetResult() is not RunCommand.Accepted) return 4;
+                var expected = int.Parse(args[6]);
+                var limit = Stopwatch.StartNew();
+                while (RunLaunches(args[5]) < expected || coordinator.View.Tasks.Values.Count(task => task.State == TaskState.Running) < expected)
+                {
+                    if (limit.Elapsed >= TimeSpan.FromSeconds(30)) throw new TimeoutException("The fake clients did not all run.");
+                    Thread.Sleep(5);
+                }
+                Console.WriteLine("Running:" + expected);
+                Console.Out.Flush();
+                Environment.Exit(73);
+                return 73;
+            }
             case "close-crash":
             {
                 var operation = new OperationId(Guid.Parse(args[4]));

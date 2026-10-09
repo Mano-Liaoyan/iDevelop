@@ -57,7 +57,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     public Task<Preservation> Preserve(RunAddress address, TaskId task, AttemptId attempt, OperationId command, CancellationToken wait = default) =>
         Request(address, task, message => new Preservation.Unavailable(message), reason => new Preservation.Rejected(reason), mark: true,
-            held => Leased(held, task, async lease => await _materializer().Preserve(lease, command, attempt).ConfigureAwait(false),
+            held => Leased(held, task, async lease => await Commanded().Preserve(lease, command, attempt).ConfigureAwait(false),
                 reason => new Preservation.Rejected(reason)),
             preserved => preserved, wait);
 
@@ -70,7 +70,7 @@ internal sealed partial class WorkflowRunCoordinator
     public Task<RestorePreviewRead> PreviewRestore(RunAddress address, TaskId task, AttemptId attempt, OperationId preservation,
         CancellationToken wait = default) =>
         Request(address, task, message => new RestorePreviewRead.Unavailable(message), reason => new RestorePreviewRead.Rejected(reason), mark: false,
-            held => Leased(held, task, lease => Task.FromResult(_materializer().PreviewRestore(lease, attempt, preservation)),
+            held => Leased(held, task, lease => Task.FromResult(Commanded().PreviewRestore(lease, attempt, preservation)),
                 reason => new RestorePreviewRead.Rejected(reason)),
             preview => preview, wait);
 
@@ -83,7 +83,7 @@ internal sealed partial class WorkflowRunCoordinator
     public Task<Restoration> Restore(RunAddress address, TaskId task, AttemptId attempt, OperationId preservation, Digest preview,
         OperationId command, CancellationToken wait = default) =>
         Request(address, task, message => new Restoration.Unavailable(message), reason => new Restoration.Rejected(reason), mark: true,
-            held => Leased(held, task, lease => Task.FromResult(_materializer().Restore(lease, OperationIds.Derive(command, "restore"), attempt,
+            held => Leased(held, task, lease => Task.FromResult(Commanded().Restore(lease, OperationIds.Derive(command, "restore"), attempt,
                 preservation, command, preview)), reason => new Restoration.Rejected(reason)),
             // The journal records what the restore resolved and any block it met, and the next decision reads both.
             restored => restored, wait);
