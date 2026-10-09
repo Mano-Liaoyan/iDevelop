@@ -85,6 +85,14 @@ A durable record, with evidence, that holds a task back until a recorded recheck
 **Drift**:
 A change to a task's checkout after its result was accepted or its baseline was recorded. It becomes a block and never changes the accepted result.
 
+**Preserve and restore**:
+A person's repair of a drift or capture block: Preserve retains the checkout as it is now, and Restore moves it back to its recorded baseline after a preview. It never moves shared refs or the stash, and it never gives a rejected capture a result.
+_Avoid_: git restore, which iDevelop does not run
+
+**Close as stopped**:
+A person's confirmed closure of a turn whose end was never recorded, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
+_Avoid_: Stop, Stop Workflow
+
 **Publishing attempt**:
 The attempt whose checkout a task's current result keeps, where that task's drift is recorded and looked for.
 

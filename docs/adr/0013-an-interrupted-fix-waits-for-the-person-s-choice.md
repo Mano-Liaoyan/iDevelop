@@ -18,6 +18,7 @@ A review's fix round that closing iDevelop interrupted never starts again by its
 
 ## Consequences
 
-- A standalone review shows Continue fix and Retry fix in its inspector. A run's review offers the choice through `TaskView.Fix`, which E3g.2's recovery panel shows.
+- A standalone review shows Continue fix and Retry fix in its inspector. A run's review reads "Fix interrupted", counts as waiting, and offers the same buttons and text through the run, with one confirmation per round and choice. A review that a run owns no longer shows the standalone choice.
+- A fix round that a crash or a kill lost is first closed as stopped ([ADR 0005](0005-stop-confirms-unstarted-work-and-a-run-never-settles-failed.md)), and then offers the choice, with Continue fix when the fix has a session.
 
-Source: pull request [#79](https://github.com/Mano-Liaoyan/iDevelop/pull/79) (E3c.2), its Decisions 1, 2, 5, and 8, and its review round 1 (P1-1, P1-2, and P2-1).
+Source: pull request [#79](https://github.com/Mano-Liaoyan/iDevelop/pull/79) (E3c.2), its Decisions 1, 2, 5, and 8, and its review round 1 (P1-1, P1-2, and P2-1), and pull request [#81](https://github.com/Mano-Liaoyan/iDevelop/pull/81) (E3g.2), its Decision 7.

@@ -4,7 +4,7 @@ Run Workflow sits beside Generate and needs no selected node. While a workflow's
 
 ## How it works
 
-- **No new visual language.** Each `TaskState` maps onto an existing `NodeState` and pill tone, with its own subtitle. Pending, Ready, and Unsupported read as Idle. Stale and Uncertain read as Interrupted. Blocked, SentBack, and a Refused start that needs no setup read as Failed. A settled run shows the tasks it never started as "Not started".
+- **No new visual language.** Each `TaskState` maps onto an existing `NodeState` and pill tone, with its own subtitle. Pending, Ready, and Unsupported read as Idle. Stale and Uncertain read as Interrupted. Blocked, SentBack, and a Refused start that needs no setup read as Failed. A settled run shows the tasks it never started as "Not started", as it does an attempt that Stop closed before its claim. A review without a subject, the only Unsupported task, reads "Nothing to review".
 - **A run-owned task stands aside.** While the active run owns a task, the task's own Run, Cancel, and inline composer hide, and the card says which run owns it. Its conversation opens through the run, with `ProjectRuns.OpenConversation(coordinator, task)`. After the run settles, the cards keep the run's view until the task runs on its own again or the person dismisses the run.
 - **The strip over the conversation** reuses the conversation's banner style and the run bar's pill. It hides in the dock layout, where the canvas's own run bar is in view. After a takeover by this window, Resume works from it without closing the conversation.
 - **Switching stops nothing.** A project keeps its workflows' runs while it is open. Project and workflow rows show the running dot while a run's client works, and a waiting dot while a task waits for the person.
@@ -13,4 +13,4 @@ Run Workflow sits beside Generate and needs no selected node. While a workflow's
 
 - Floating the run bar above the conversation. It would cover the conversation's composer.
 
-Source: pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its Decisions 2, 3, 8, and 10, the last of them the coordinator's, and its retained-project activity.
+Source: pull request [#80](https://github.com/Mano-Liaoyan/iDevelop/pull/80) (E3g.1), its Decisions 2, 3, 8, and 10, the last of them the coordinator's, and its retained-project activity, and pull request [#81](https://github.com/Mano-Liaoyan/iDevelop/pull/81) (E3g.2), its Decision 8.
