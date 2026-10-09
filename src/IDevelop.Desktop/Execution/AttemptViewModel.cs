@@ -9,7 +9,8 @@ namespace IDevelop.Desktop.Execution;
 /// new instance.
 /// </summary>
 /// <param name="earlier">The attempts whose session this one continues, oldest first.</param>
-public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<AttemptRecord> earlier, bool elsewhere)
+/// <param name="client">What this machine knows of the client that ran, which names its models as the pickers do.</param>
+public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<AttemptRecord> earlier, bool elsewhere, ClientStatus client)
 {
     private const int ActivityShown = 8;
 
@@ -19,8 +20,8 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     public string Configuration => RunText.Configuration(record);
 
-    /// <summary>What ran, in short parts. <see cref="Configuration"/> says it in full.</summary>
-    public IReadOnlyList<string> Agent => RunText.Agent(record);
+    /// <summary>What ran, in short parts, with the model's name as its picker shows it. <see cref="Configuration"/> says it in full.</summary>
+    public IReadOnlyList<string> Agent => RunText.Agent(record, client);
 
     public string Timing => RunText.Timing(record);
 
