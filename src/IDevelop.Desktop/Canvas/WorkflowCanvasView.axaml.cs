@@ -106,17 +106,55 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
     /// <summary>
     /// <see cref="ViewInset"/>, with its top below everything that floats along the canvas's top edge, which the window
-    /// lays out over the canvas, and its bottom above the run bars while one shows.
+    /// lays out over the canvas, and its bottom above the run bars while one shows. On a canvas too short for those margins,
+    /// as with a long status above the docked conversation, the cards fit in whatever room the controls leave, and with no
+    /// room left, in the whole canvas.
     /// </summary>
     private Thickness FitInset()
     {
-        var top = TopLevel.GetTopLevel(this) is MainWindow { TopBar: { IsVisible: true } bar } && bar.TranslatePoint(new Point(0, bar.Bounds.Height), this) is { } below
-            ? Math.Max(ViewInset.Top, below.Y + CardMargin)
-            : ViewInset.Top;
-        var bottom = RunBars.Bounds.Height > 0 && RunBars.TranslatePoint(default, this) is { } bars
-            ? Math.Max(ViewInset.Bottom, Bounds.Height - bars.Y + CardMargin)
-            : ViewInset.Bottom;
-        return new Thickness(ViewInset.Left, top, ViewInset.Right, bottom);
+        var height = Editor.Bounds.Height;
+        var chrome = TopLevel.GetTopLevel(this) is MainWindow { TopBar: { IsVisible: true } bar } && bar.TranslatePoint(new Point(0, bar.Bounds.Height), this) is { } below
+            ? below.Y
+            : ViewInset.Top - CardMargin;
+        var bars = RunBars.Bounds.Height > 0 && RunBars.TranslatePoint(default, this) is { } top ? Bounds.Height - top.Y : 0;
+        var (above, under) = (Math.Max(ViewInset.Top, chrome + CardMargin), Math.Max(ViewInset.Bottom, bars + CardMargin));
+        if (height - above - under < MinFitRoom)
+        {
+            (above, under) = (chrome, bars);
+        }
+
+        if (height - above - under < MinFitRoom)
+        {
+            (above, under) = (0, 0);
+        }
+
+        return new Thickness(ViewInset.Left, above, ViewInset.Right, under);
+    }
+
+    // The least height a fit keeps its cards in before it gives up a margin.
+    private const double MinFitRoom = 16;
+
+    /// <summary>
+    /// Fits the view when a card sits under a control that floats over the canvas, such as the run bar, so that every card
+    /// shows clear of them. The window asks for this when the canvas gets shorter under its controls.
+    /// </summary>
+    internal void FitIfCovered()
+    {
+        if (TopLevel.GetTopLevel(this) is not MainWindow window || !IsEffectivelyVisible)
+        {
+            return;
+        }
+
+        Rect In(Visual visual) => visual.TranslatePoint(default, this) is { } at ? new Rect(at, visual.Bounds.Size) : default;
+        var controls = window.TopBar.Children.Concat(BottomBar.Children).Concat(RunBars.Children)
+            .Where(control => control.IsEffectivelyVisible && control != RunBars && control.Bounds.Width > 0)
+            .Select(In).ToArray();
+        var cards = Editor.GetVisualDescendants().OfType<ItemContainer>()
+            .Select(card => new Rect(In(card).Position, card.Bounds.Size * Editor.ViewportZoom));
+        if (cards.Any(card => controls.Any(control => control.Intersects(card))))
+        {
+            FitToView();
+        }
     }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);

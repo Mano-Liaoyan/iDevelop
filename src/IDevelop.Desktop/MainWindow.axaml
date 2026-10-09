@@ -359,27 +359,26 @@
             <Border Classes="breadcrumb" canvas:CanvasTopBar.Slot="Leading" HorizontalAlignment="Left"
                     IsVisible="{Binding Canvas, Converter={x:Static ObjectConverters.IsNotNull}}"
                     AutomationProperties.AutomationId="Breadcrumb">
-              <!-- Docked from the right first, so the commands keep their width, then the workflow's name, and the
-                   project's name takes what is left. -->
-              <DockPanel>
-                <Border DockPanel.Dock="Right" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
-                  <StackPanel Orientation="Horizontal">
-                    <Panel Classes="wideOnly" VerticalAlignment="Center">
-                      <TextBlock Text="Unsaved changes" Margin="10,0,2,0"
-                                 FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
-                                 IsVisible="{Binding HasUnsavedChanges}"
-                                 AutomationProperties.AutomationId="UnsavedChanges" />
-                    </Panel>
-                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
-                            Command="{Binding SaveCommand}"
-                            ToolTip.Tip="Save"
-                            AutomationProperties.AutomationId="Save"
-                            AutomationProperties.Name="Save">
-                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
-                    </Button>
-                  </StackPanel>
-                </Border>
-                <Border DockPanel.Dock="Right" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+              <!-- The names come first and give up width first, the project's before the workflow's, while Undo, Redo, and
+                   Save keep theirs at the end, in that order for the keyboard too. -->
+              <theme:SpillRow Spacing="0">
+                <DockPanel Margin="0,0,10,0">
+                  <PathIcon DockPanel.Dock="Left" Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="10,0,6,0"
+                            Foreground="{DynamicResource TextMutedBrush}" />
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding WorkflowName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                               ToolTip.Tip="{Binding WorkflowName}"
+                               AutomationProperties.AutomationId="BreadcrumbWorkflow" />
+                    <PathIcon DockPanel.Dock="Right" Classes="wideOnly" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Margin="10,0,8,0"
+                              Foreground="{DynamicResource TextFaintBrush}" />
+                    <TextBlock Classes="wideOnly" Text="{Binding ProjectName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                               FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                               ToolTip.Tip="{Binding ProjectName}"
+                               AutomationProperties.AutomationId="BreadcrumbProject" />
+                  </DockPanel>
+                </DockPanel>
+                <Border theme:SpillRow.Pinned="True" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
                   <StackPanel Orientation="Horizontal">
                     <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
                             Command="{Binding UndoCommand}"
@@ -397,21 +396,24 @@
                     </Button>
                   </StackPanel>
                 </Border>
-                <PathIcon DockPanel.Dock="Left" Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="10,0,6,0"
-                          Foreground="{DynamicResource TextMutedBrush}" />
-                <DockPanel Margin="0,0,10,0">
-                  <TextBlock DockPanel.Dock="Right" Text="{Binding WorkflowName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                             FontSize="12" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
-                             ToolTip.Tip="{Binding WorkflowName}"
-                             AutomationProperties.AutomationId="BreadcrumbWorkflow" />
-                  <PathIcon DockPanel.Dock="Right" Classes="wideOnly" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" Width="12" Height="12" Margin="10,0,8,0"
-                            Foreground="{DynamicResource TextFaintBrush}" />
-                  <TextBlock Classes="wideOnly" Text="{Binding ProjectName}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                             FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                             ToolTip.Tip="{Binding ProjectName}"
-                             AutomationProperties.AutomationId="BreadcrumbProject" />
-                </DockPanel>
-              </DockPanel>
+                <Border theme:SpillRow.Pinned="True" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource Border80Brush}">
+                  <StackPanel Orientation="Horizontal">
+                    <Panel Classes="wideOnly" VerticalAlignment="Center">
+                      <TextBlock Text="Unsaved changes" Margin="10,0,2,0"
+                                 FontSize="12" Foreground="{DynamicResource TextFaintBrush}"
+                                 IsVisible="{Binding HasUnsavedChanges}"
+                                 AutomationProperties.AutomationId="UnsavedChanges" />
+                    </Panel>
+                    <Button Classes="ghost" CornerRadius="0" VerticalAlignment="Stretch"
+                            Command="{Binding SaveCommand}"
+                            ToolTip.Tip="Save"
+                            AutomationProperties.AutomationId="Save"
+                            AutomationProperties.Name="Save">
+                      <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSaveAs}" />
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </theme:SpillRow>
             </Border>
 
             <Button Classes="ghost" Padding="0" canvas:CanvasTopBar.Slot="Center"
@@ -489,7 +491,7 @@
                       IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <Border Grid.Row="2" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border80Brush}"
                 IsVisible="{Binding DockedConversation, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <ContentControl Content="{Binding DockedConversation}">
+          <ContentControl x:Name="DockedHost" Content="{Binding DockedConversation}">
             <ContentControl.DataTemplates>
               <DataTemplate DataType="conversation:ConversationViewModel">
                 <conversation:ConversationView />

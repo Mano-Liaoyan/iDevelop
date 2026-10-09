@@ -45,19 +45,17 @@ public sealed class CanvasTopBar : Panel
     /// <summary>Whether the centre control sits in the first row, rather than under the trailing controls, at the last layout.</summary>
     public bool IsInRow { get; private set; }
 
-    protected override Size MeasureOverride(Size availableSize) => Plan(availableSize.Width, arrange: false);
+    // What the last measure decided: each shown child's top left, its left edge given back from the right edge where
+    // it keeps to that edge.
+    private readonly List<(Control Child, double Left, bool FromRight, double Top)> _placements = [];
 
-    protected override Size ArrangeOverride(Size finalSize)
+    protected override Size MeasureOverride(Size availableSize)
     {
-        Plan(finalSize.Width, arrange: true);
-        return finalSize;
-    }
-
-    private Size Plan(double width, bool arrange)
-    {
+        _placements.Clear();
         var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
         Control? In(ChromeSlot slot) => Children.FirstOrDefault(child => child.IsVisible && GetSlot(child) == slot);
         var (leading, trailing, center, below) = (In(ChromeSlot.Leading), In(ChromeSlot.Trailing), In(ChromeSlot.Center), In(ChromeSlot.Below));
+        var width = availableSize.Width;
         var open = double.IsInfinity(width);
 
         trailing?.Measure(infinite);
@@ -75,7 +73,6 @@ public sealed class CanvasTopBar : Panel
         var centerWidth = center?.DesiredSize.Width ?? 0;
         var (first, last) = (leading is null ? 0 : leadingWidth + CanvasChrome.Spacing,
             width - (trailingWidth > 0 ? trailingWidth + CanvasChrome.Spacing : 0) - centerWidth);
-        var centerLeft = Math.Clamp((width - centerWidth) / 2, first, Math.Max(first, last));
         IsInRow = center is not null && first <= last;
         var under = center is not null && !IsInRow;
 
@@ -84,25 +81,40 @@ public sealed class CanvasTopBar : Panel
         below?.Measure(new Size(belowRoom, double.PositiveInfinity));
         var second = Math.Max(below?.DesiredSize.Height ?? 0, under ? center!.DesiredSize.Height : 0);
 
-        if (arrange)
+        Centered(leading, 0, false, rowHeight);
+        Centered(trailing, trailingWidth, true, rowHeight);
+        if (IsInRow)
         {
-            Centered(leading, 0, rowHeight);
-            Centered(trailing, width - trailingWidth, rowHeight);
-            if (IsInRow)
-            {
-                Centered(center, centerLeft, rowHeight);
-            }
-            else if (under)
-            {
-                center!.Arrange(new Rect(new Point(width - centerWidth, rowHeight + LineSpacing), center.DesiredSize));
-            }
+            Centered(center, Math.Clamp((width - centerWidth) / 2, first, Math.Max(first, last)), false, rowHeight);
+        }
+        else if (under)
+        {
+            _placements.Add((center!, centerWidth, true, rowHeight + LineSpacing));
+        }
 
-            below?.Arrange(new Rect(new Point(0, rowHeight + LineSpacing), below.DesiredSize));
+        if (below is not null)
+        {
+            _placements.Add((below, 0, false, rowHeight + LineSpacing));
         }
 
         return new Size(width, rowHeight + (second > 0 ? LineSpacing + second : 0));
     }
 
-    private static void Centered(Control? child, double left, double rowHeight) =>
-        child?.Arrange(new Rect(new Point(left, (rowHeight - child.DesiredSize.Height) / 2), child.DesiredSize));
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        foreach (var (child, left, fromRight, top) in _placements)
+        {
+            child.Arrange(new Rect(new Point(fromRight ? finalSize.Width - left : left, top), child.DesiredSize));
+        }
+
+        return finalSize;
+    }
+
+    private void Centered(Control? child, double left, bool fromRight, double rowHeight)
+    {
+        if (child is not null)
+        {
+            _placements.Add((child, left, fromRight, (rowHeight - child.DesiredSize.Height) / 2));
+        }
+    }
 }

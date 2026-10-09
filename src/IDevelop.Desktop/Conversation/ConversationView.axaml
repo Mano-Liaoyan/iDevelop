@@ -12,21 +12,38 @@
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Escape" Command="{Binding $parent[local:MainWindow].ViewModel.CloseConversationCommand, FallbackValue={x:Null}}" />
   </UserControl.KeyBindings>
-  <DockPanel>
-    <Border DockPanel.Dock="Top" Classes="conversationHeader">
-      <!-- The status and the attempt picker sit beside the title while it keeps 160 px after its glyph, and otherwise under
-           the title, from its start. The layout and close buttons stay at the first line's end. A long attempt wraps inside
-           its picker. -->
+  <!-- The header, the run's strip, the client's limitations, and the composer take the height they need, and the transcript
+       takes the rest. The window keeps the docked conversation tall enough for a few lines of the transcript. -->
+  <Grid x:Name="Rows" RowDefinitions="Auto,Auto,Auto,*,Auto">
+    <Border Classes="conversationHeader">
+      <!-- The status and the attempt picker sit beside the title while it keeps 160 px after its glyph. Otherwise the picker
+           moves under the title, from its start, and the status gives way, since the picker's choice names the attempt's
+           status, so the header keeps two lines. The layout and close buttons stay at the first line's end. A long attempt
+           wraps inside its picker. -->
       <theme:SpillRow MinLeadWidth="186" Spacing="10" ItemsAlignment="Start" SpillIndent="26">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" Foreground="{DynamicResource TextMutedBrush}" />
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
             <TextBlock Classes="conversationTitle" Text="{Binding Title}"
                        AutomationProperties.AutomationId="ConversationTitle" />
+            <!-- The canvas's breadcrumb shows above the dock, so the docked header leaves it out. -->
             <TextBlock Classes="caption" Text="{Binding Breadcrumb}" TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding !$parent[local:MainWindow].ViewModel.IsConversationDocked, FallbackValue=True}"
                        AutomationProperties.AutomationId="ConversationBreadcrumb" />
           </StackPanel>
         </Grid>
+        <Border theme:SpillRow.Pinned="True" Classes="limitsGlyph" ToolTip.Tip="{Binding Limitations}"
+                AutomationProperties.AccessibilityView="Control"
+                AutomationProperties.AutomationId="ClientLimitationsInfo"
+                AutomationProperties.Name="{Binding Limitations}">
+          <Border.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="Limitations" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+              <Binding Path="$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="False" />
+            </MultiBinding>
+          </Border.IsVisible>
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" />
+        </Border>
         <Button theme:SpillRow.Pinned="True" Classes="icon"
                 Command="{Binding $parent[local:MainWindow].ViewModel.ToggleConversationLayoutCommand, FallbackValue={x:Null}}"
                 ToolTip.Tip="{Binding $parent[local:MainWindow].ViewModel.ConversationLayoutLabel, FallbackValue={x:Null}}"
@@ -46,7 +63,7 @@
                 AutomationProperties.Name="Close conversation">
           <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconDismiss}" />
         </Button>
-        <Border Classes="pill" VerticalAlignment="Center">
+        <Border Classes="pill" VerticalAlignment="Center" theme:SpillRow.BesideOnly="True">
           <TextBlock Text="{Binding StatusLabel}" AutomationProperties.AutomationId="ConversationStatus" />
         </Border>
         <ComboBox MinWidth="200" MaxWidth="400" VerticalAlignment="Center"
@@ -66,7 +83,7 @@
 
     <!-- While the conversation takes the canvas's place, it repeats the run bar: the run's status, Resume, and Stop Workflow.
          The dock leaves the canvas and its run bar in view, so it shows nothing here. -->
-    <Border DockPanel.Dock="Top" Classes="limitations"
+    <Border Grid.Row="1" Classes="limitations"
             AutomationProperties.AutomationId="ConversationRun"
             AutomationProperties.Name="{Binding Run.Summary, FallbackValue='Workflow run'}">
       <Border.IsVisible>
@@ -119,8 +136,14 @@
       </theme:SpillRow>
     </Border>
 
-    <Border DockPanel.Dock="Top" Classes="limitations"
-            IsVisible="{Binding Limitations, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+    <!-- In the dock, where height is short, the limitations sit behind the header's info glyph instead. -->
+    <Border Grid.Row="2" Classes="limitations">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="Limitations" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+          <Binding Path="!$parent[local:MainWindow].ViewModel.IsConversationDocked" FallbackValue="True" />
+        </MultiBinding>
+      </Border.IsVisible>
       <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" HorizontalAlignment="Center" MaxWidth="760">
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconInfo}" Width="14" Height="14" Foreground="{DynamicResource TextMutedBrush}" />
         <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Limitations}" TextWrapping="Wrap"
@@ -128,7 +151,7 @@
       </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Classes="composer">
+    <Border Grid.Row="4" Classes="composer">
       <StackPanel Spacing="6">
         <theme:SpillRow MinLeadWidth="200" Spacing="8" IsVisible="{Binding IsHistorical}" Margin="4,0,0,0">
           <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap"
@@ -197,7 +220,7 @@
       </StackPanel>
     </Border>
 
-    <Panel>
+    <Panel Grid.Row="3">
       <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled"
                     AutomationProperties.AutomationId="TranscriptScroller">
         <StackPanel>
@@ -394,5 +417,5 @@
         </StackPanel>
       </Button>
     </Panel>
-  </DockPanel>
+  </Grid>
 </UserControl>

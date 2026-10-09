@@ -113,7 +113,9 @@ public sealed class ConversationLayoutTests
 
     private static void AssertWholeAndApart(Shell shell, string at, Rect area, double inset, double gap, params (string Name, Control Control)[] controls)
     {
-        var shown = controls.Where(control => control.Control.IsEffectivelyVisible).Select(control => (control.Name, Box: shell.Bounds(control.Control), control.Control)).ToArray();
+        // A control that gives way when its row spills keeps no room.
+        var shown = controls.Where(control => control.Control.IsEffectivelyVisible && control.Control.Bounds.Width > 0)
+            .Select(control => (control.Name, Box: shell.Bounds(control.Control), control.Control)).ToArray();
         var room = new Rect(area.Left + inset, area.Top, area.Width - 2 * inset, area.Height);
         foreach (var (name, box, control) in shown)
         {

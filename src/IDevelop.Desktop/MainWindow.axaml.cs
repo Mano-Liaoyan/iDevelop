@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
@@ -50,8 +51,9 @@ public partial class MainWindow : Window
         Columns.SizeChanged += (_, _) => LimitPanels();
         Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
         Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
-        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+        CanvasArea.SizeChanged += (_, e) => OnCanvasAreaSized(e);
         MainArea.SizeChanged += (_, _) => LimitDock();
+        DockedHost.AddHandler(ConversationView.RequiredHeightChangedEvent, (_, _) => LimitDock());
     }
 
     // The largest widths the sidebar's and the inspector's columns declare for themselves.
@@ -83,11 +85,11 @@ public partial class MainWindow : Window
     }
 
     // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
-    // space back when it closes. It never leaves the canvas above it less than CanvasMinHeight, which its splitter also
-    // keeps to, so the canvas's floating controls leave room for its cards.
+    // space back when it closes. It is never shorter than the conversation needs for its header, its composer, and a few
+    // lines of transcript, and while it can be, it leaves the canvas above it CanvasMinHeight. Its splitter keeps to both.
     private const double DockHeight = 400;
 
-    /// <summary>The canvas's least height above the docked conversation.</summary>
+    /// <summary>The canvas's least height above the docked conversation, while the conversation keeps what it needs.</summary>
     internal const double CanvasMinHeight = 280;
 
     private bool _docked;
@@ -104,7 +106,6 @@ public partial class MainWindow : Window
         }
         else
         {
-            dock.MinHeight = 160;
             dock.Height = new GridLength(DockHeight);
             LimitDock();
         }
@@ -112,10 +113,26 @@ public partial class MainWindow : Window
 
     private void LimitDock()
     {
-        if (ViewModel.DockedConversation is not null && MainArea.Bounds.Height > 0)
+        if (ViewModel.DockedConversation is null || MainArea.Bounds.Height <= 0)
         {
-            var dock = MainArea.RowDefinitions[2];
-            dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
+            return;
+        }
+
+        var dock = MainArea.RowDefinitions[2];
+        // The dock's border adds its top line to what the conversation needs.
+        var needed = DockedHost.Presenter?.Child is ConversationView { RequiredHeight: > 0 } view ? view.RequiredHeight + 1 : 160;
+        dock.MinHeight = Math.Max(160, needed);
+        dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
+    }
+
+    // When the canvas gets shorter under its floating controls, as the conversation docks, it moves its cards out from
+    // under them.
+    private void OnCanvasAreaSized(SizeChangedEventArgs e)
+    {
+        TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+        if (ViewModel.DockedConversation is not null && e.NewSize.Height < e.PreviousSize.Height)
+        {
+            Dispatcher.UIThread.Post(() => CanvasView?.FitIfCovered(), DispatcherPriority.Background);
         }
     }
 

@@ -5,6 +5,8 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Theme;
 using IDevelop.TestSupport;
 using Nodify;
 using static IDevelop.Desktop.Tests.AppTempFolder;
@@ -100,27 +102,101 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_docked_conversation_leaves_the_canvas_280_px_whose_two_rows_stay_apart_in_the_smallest_window()
+    public void The_docked_conversation_keeps_a_few_lines_of_transcript_and_the_canvas_keeps_its_cards_clear_in_the_smallest_window()
     {
         using var f = FanOut.Fixture();
         var shell = f.Window();
         FanOut.Run(shell);
+        FanOut.Generate(shell);
         shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
         shell.Click(shell.Find<Button>("ConversationLayout"));
         Assert.NotNull(shell.Window.ViewModel.DockedConversation);
 
         Resize(shell, 900, 600, 320);
 
-        var canvas = shell.Bounds(shell.Editor);
-        Assert.Equal(MainWindow.CanvasMinHeight, canvas.Height, 0.5);
+        // The conversation keeps a few lines of its transcript, its header on two lines, and its buttons in their boxes.
+        var transcript = shell.Bounds(shell.Find<Control>("TranscriptScroller"));
+        Assert.True(transcript.Height >= ConversationView.MinTranscriptHeight - 0.5, $"The transcript is {transcript.Height} px tall.");
+        var header = Shell.Around(shell.Find<TextBlock>("ConversationTitle"), "conversationHeader");
+        Assert.All(header.GetVisualDescendants().OfType<SpillRow>(), row => Assert.True(row.IsMeasureValid && row.IsArrangeValid));
+        var lines = Lines(header.GetVisualDescendants().OfType<Control>()
+            .Where(control => AutomationProperties.GetAutomationId(control) is "ConversationTitle" or "ConversationStatus" or "AttemptPicker"
+                or "ConversationLayout" or "CloseConversation" or "ClientLimitationsInfo")
+            .Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0)
+            .Select(control => shell.Bounds(control)));
+        Assert.True(lines <= 2, $"The docked header has {lines} lines.");
+        // The canvas's breadcrumb above names the project and the workflow, and the client's limitations sit behind a glyph.
+        Assert.False(shell.Find<Control>("ConversationBreadcrumb").IsEffectivelyVisible);
+        Assert.False(shell.Find<Control>("ClientLimitations").IsEffectivelyVisible);
+        var info = shell.Find<Control>("ClientLimitationsInfo");
+        Assert.True(info.IsEffectivelyVisible);
+        var limitations = shell.Window.ViewModel.DockedConversation!.Limitations;
+        Assert.Equal((limitations, limitations), (AutomationProperties.GetName(info), ToolTip.GetTip(info)));
+        var box = shell.Bounds(Shell.Around(shell.Find<TextBox>("ConversationComposer"), "composer")).Deflate(1);
+        foreach (var id in new[] { "ConversationComposer", "ComposerHint", "ConversationMarkDone", "ConversationCancel", "ConversationSend" })
+        {
+            Assert.True(box.Contains(shell.Bounds(shell.Find<Control>(id))), $"{id} at {shell.Bounds(shell.Find<Control>(id))} leaves the composer's box {box}.");
+        }
+
+        // The canvas above keeps its two rows apart and its cards clear of them.
         AssertTopRow(shell, "the dock", "Breadcrumb", "NextWaiting", "GenerateWorkflow");
         AssertBottomRow(shell, "the dock");
         var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
-        var bottom = new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), shell.Find<Control>("WorkflowRunBar") }.Min(control => shell.Bounds(control).Top);
-        Assert.True(bottom - top >= 24, $"The top row ends at {top} and the bottom row starts at {bottom}.");
+        var controls = new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), shell.Find<Control>("WorkflowRunBar") }.Select(shell.Bounds).ToArray();
+        Assert.True(controls.Min(control => control.Top) - top >= 12, $"The top row ends at {top} and the bottom row starts at {controls.Min(control => control.Top)}.");
+        foreach (var node in shell.Nodes())
+        {
+            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
+            Assert.All(controls, control => Assert.False(control.Intersects(card), $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is under {control}."));
+        }
 
         Resize(shell, 1600, 1000);
         Assert.Equal(400, shell.Window.MainArea.RowDefinitions[2].ActualHeight, 0.5);
+        Assert.True(shell.Bounds(shell.Editor).Height >= MainWindow.CanvasMinHeight);
+    }
+
+    [AvaloniaFact]
+    public void Fit_to_view_uses_the_room_a_long_status_leaves_on_the_docked_canvas()
+    {
+        using var f = FanOut.Fixture();
+        var shell = f.Window();
+        FanOut.Run(shell);
+        shell.Pan(shell.InEditor(260, 700), new Vector(-100, 0));
+        shell.Drag(shell.Center(shell.Output("Write docs")), shell.Center(shell.Input("Design the API")));
+        Assert.StartsWith("That would create a cycle", shell.Status);
+        shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+        shell.Click(shell.Find<Button>("ConversationLayout"));
+        Resize(shell, 900, 600, 320);
+        var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow", "Status" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
+        var bar = shell.Bounds(shell.Find<Control>("WorkflowRunBar"));
+        Assert.True(bar.Top - top < 48 + 2 * 24, $"The status leaves {bar.Top - top} px, room for the margins too.");
+        shell.Editor.ViewportLocation = new Point(-2000, -2000);
+        shell.Render();
+
+        shell.Click(shell.Find<Button>("FitToScreen"));
+
+        foreach (var node in shell.Nodes())
+        {
+            var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
+            Assert.True(card.Top >= top - 0.5 && card.Bottom <= bar.Top + 0.5, $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is not between {top} and {bar.Top}");
+        }
+    }
+
+    /// <summary>How many lines the boxes take: boxes whose heights overlap share a line.</summary>
+    private static int Lines(IEnumerable<Rect> boxes)
+    {
+        var (lines, bottom) = (0, double.NegativeInfinity);
+        foreach (var box in boxes.OrderBy(box => box.Top))
+        {
+            if (box.Top >= bottom)
+            {
+                lines++;
+            }
+
+            bottom = Math.Max(bottom, box.Bottom);
+        }
+
+        return lines;
     }
 
     [AvaloniaTheory]
@@ -147,7 +223,7 @@ public sealed class CanvasChromeTests : IDisposable
         foreach (var node in shell.Nodes())
         {
             var card = shell.Bounds(node).WithWidth(node.Bounds.Width * shell.Editor.ViewportZoom).WithHeight(node.Bounds.Height * shell.Editor.ViewportZoom);
-            Assert.True(card.Top >= top + 12 && card.Bottom <= bar.Top - 12, $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is not between {top} and {bar.Top}");
+            Assert.True(card.Top >= top + 24 - 0.5 && card.Bottom <= bar.Top - 24 + 0.5, $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is not 24 px inside {top} and {bar.Top}");
         }
     }
 
@@ -177,6 +253,24 @@ public sealed class CanvasChromeTests : IDisposable
             Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.OutputPortCenter) == from);
             Assert.Contains(ports, port => Shell.Rounded(port + WorkflowCanvasViewModel.InputPortCenter) == to);
         }
+    }
+
+    [AvaloniaFact]
+    public void Tab_moves_through_the_breadcrumbs_buttons_in_the_order_they_show()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(TestTasks.Design, "Design", 105, 90)));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        canvas.PlaceInView(IDevelop.Workflows.BuiltInBlueprints.Implement);
+        canvas.PlaceInView(IDevelop.Workflows.BuiltInBlueprints.Implement);
+        shell.Window.ViewModel.UndoCommand.Execute(null);
+        shell.Render();
+        var (undo, redo, save) = (shell.Find<Button>("Undo"), shell.Find<Button>("Redo"), shell.Find<Button>("Save"));
+        Assert.True(undo.IsEffectivelyEnabled && redo.IsEffectivelyEnabled && save.IsEffectivelyEnabled);
+        Assert.True(shell.Bounds(undo).Right <= shell.Bounds(redo).Left && shell.Bounds(redo).Right <= shell.Bounds(save).Left);
+
+        Assert.Same(redo, KeyboardNavigationHandler.GetNext(undo, NavigationDirection.Next));
+        Assert.Same(save, KeyboardNavigationHandler.GetNext(redo, NavigationDirection.Next));
+        Assert.Same(redo, KeyboardNavigationHandler.GetNext(save, NavigationDirection.Previous));
     }
 
     [AvaloniaFact]

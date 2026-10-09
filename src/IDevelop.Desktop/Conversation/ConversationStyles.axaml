@@ -118,6 +118,15 @@
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
+  <!-- The client's limitations behind a glyph in the docked header, as large as the header's buttons. -->
+  <Style Selector="Border.limitsGlyph">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.limitsGlyph > PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
   <Style Selector="Border.limitations">
     <Setter Property="Padding" Value="16,6" />
     <Setter Property="Background" Value="{DynamicResource SurfaceMuted60Brush}" />
