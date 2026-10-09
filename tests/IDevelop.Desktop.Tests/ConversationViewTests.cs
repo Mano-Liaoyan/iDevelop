@@ -118,6 +118,21 @@ public sealed class ConversationViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Only_idevelops_own_prompt_folds_the_artifact_instructions_that_end_it()
+    {
+        const string instructions = "Declare artifacts in .idp/outbox/019aa000-0000-7000-8000-00000000000a/manifest.json using " +
+            "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}. Artifact paths are relative to that folder.";
+        _pager.Rows.AddRange([
+            Said("p0", MessageAuthor.Application, "# Design\n\nDraft it.\n\n" + instructions, MessageState.Submitted),
+            Said("p1", MessageAuthor.Person, "Try again.\n\n" + instructions, MessageState.Submitted)]);
+        var model = Open();
+
+        var (prompt, person) = (Assert.IsType<MessageItemViewModel>(model.Items[0]), Assert.IsType<MessageItemViewModel>(model.Items[1]));
+        Assert.Equal(("# Design\n\nDraft it.", instructions), (prompt.Text, prompt.Instructions));
+        Assert.Equal(("Try again.\n\n" + instructions, (string?)null), (person.Text, person.Instructions));
+    }
+
+    [AvaloniaFact]
     public void A_streaming_message_grows_in_place_and_completes_with_the_same_row()
     {
         _pager.Rows.AddRange([Said("p1", MessageAuthor.Person, "Write the plan."), Said("m1", MessageAuthor.Agent, "Hel", MessageState.Streaming)]);

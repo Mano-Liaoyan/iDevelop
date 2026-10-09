@@ -32,8 +32,11 @@ public sealed class ArtifactInstructionsTests
             ArtifactInstructions.Split("# Write docs\n\nDocument the export.\n\nReport: the design is ready.\n\n" + Recorded));
         Assert.Equal(("Inspect", Recorded), ArtifactInstructions.Split("Inspect\n\n" + Recorded));
         Assert.Equal(("Use the fixture.", null), ArtifactInstructions.Split("Use the fixture."));
-        // Text that only mentions the outbox stays the task's own.
+        // Text that only mentions the outbox stays the task's own, and so does a paragraph like the instructions that does
+        // not end the prompt.
         Assert.Equal(("Read .idp/outbox/ first. Declare artifacts in the manifest.", null),
             ArtifactInstructions.Split("Read .idp/outbox/ first. Declare artifacts in the manifest."));
+        Assert.Equal(("Quote: \n\n" + Recorded + "\n\nThen go on.", null), ArtifactInstructions.Split("Quote: \n\n" + Recorded + "\n\nThen go on."));
+        Assert.Equal(("Inspect\n\n" + Recorded, Recorded), ArtifactInstructions.Split("Inspect\n\n" + Recorded + "\n\n" + Recorded));
     }
 }

@@ -26,15 +26,13 @@ internal static class ArtifactInstructions
     }
 
     /// <summary>
-    /// The prompt without its artifact paragraphs, and the last of them. A paragraph counts when it opens as
-    /// <see cref="For"/> does, with an outbox under <c>.idp/outbox/</c>.
+    /// The prompt without the artifact paragraph that ends it, and that paragraph, which opens as <see cref="For"/> does
+    /// with an outbox under <c>.idp/outbox/</c>. A paragraph like it anywhere else stays in the text.
     /// </summary>
     public static (string Text, string? Instructions) Split(string prompt)
     {
-        var paragraphs = prompt.Split("\n\n");
-        var instructions = paragraphs.LastOrDefault(paragraph => paragraph.StartsWith(Marker, StringComparison.Ordinal));
-        return instructions is null
-            ? (prompt, null)
-            : (string.Join("\n\n", paragraphs.Where(paragraph => !paragraph.StartsWith(Marker, StringComparison.Ordinal))), instructions);
+        var start = prompt.LastIndexOf("\n\n", StringComparison.Ordinal);
+        var last = start < 0 ? prompt : prompt[(start + 2)..];
+        return last.StartsWith(Marker, StringComparison.Ordinal) && start >= 0 ? (prompt[..start], last) : (prompt, null);
     }
 }

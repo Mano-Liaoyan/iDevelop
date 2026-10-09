@@ -58,17 +58,18 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     /// <summary>
     /// The source the message shows. An agent's result block leaves the prose, and <see cref="ResultNote"/> says what it
-    /// held. A prompt's artifact instructions leave it for <see cref="Instructions"/>.
+    /// held. The artifact instructions that end iDevelop's own prompt leave it for <see cref="Instructions"/>.
     /// </summary>
-    public string Text => IsAgent
-        ? _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text) : _message.Text
-        : ArtifactInstructions.Split(_message.Text).Text;
+    public string Text => IsAgent && _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text)
+        : IsApplication ? ArtifactInstructions.Split(_message.Text).Text
+        : _message.Text;
 
     /// <summary>
     /// iDevelop's own instructions to the agent at the end of a run task's prompt: where to declare its artifacts. They
-    /// fold into a one-line note that opens on a click, so the task's own text reads first.
+    /// fold into a one-line note that opens on a click, so the task's own text reads first. A person's message keeps all
+    /// of its text.
     /// </summary>
-    public string? Instructions => IsAgent ? null : ArtifactInstructions.Split(_message.Text).Instructions;
+    public string? Instructions => IsApplication ? ArtifactInstructions.Split(_message.Text).Instructions : null;
 
     public bool HasInstructions => Instructions is not null;
 
