@@ -84,8 +84,8 @@ internal sealed class RunHistory
 
     /// <summary>
     /// What <paramref name="task"/> waits for between runs, from its newest settled run that could start it, when that run
-    /// did not: the dependency predecessors in <paramref name="workflow"/> that had no current result in that run and have
-    /// none from a later run since. Empty when the task has a result of its own, ran there, or waits for nothing.
+    /// did not: the dependency predecessors in the workflow that had no current result in that run and have none from a
+    /// later run since. Empty when the task has a result of its own or waits for nothing.
     /// </summary>
     /// <returns>The predecessors it waits for, and whether that run is the workflow's newest settled run.</returns>
     public (ImmutableSortedSet<TaskId> Holders, bool Latest) WaitsFor(TaskId task)
@@ -95,7 +95,6 @@ internal sealed class RunHistory
         {
             var record = _runs[index];
             if (!RunScope.InFlow(record).Contains(task)) continue;
-            if (Touches(record, task)) return ([], false);
             var results = record.CurrentResults;
             var stale = record.StaleResults;
             ImmutableSortedSet<TaskId> holders = [.. RunScope.Predecessors(_workflow)[task].Where(predecessor =>

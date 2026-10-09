@@ -204,6 +204,32 @@ public sealed class RunHistoryTests
         Assert.Empty(History(f).WaitsFor(C).Holders);
     }
 
+    [Fact]
+    public void A_predecessor_that_a_later_run_carried_ends_the_wait_of_a_task_that_run_could_not_start()
+    {
+        // T → C ← U, and U → E ← D. U ran first. The second run starts from T and does not carry U, as when U's code
+        // conflicted then, so C waits for U. The third starts from D and carries U, which ends C's wait.
+        var e = new TaskId(Guid.Parse("00000000-0000-0000-0000-000000000006"));
+        var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C), Task(D), Task(e)), T, C), U, C), U, e), D, e);
+        using var f = new RunFixtures(workflow);
+        f.Approve(node: U);
+        f.Complete(f.Reserve(U));
+        Settle(f, Run);
+        f.Approve(run: OtherRun, node: T);
+        f.Complete(f.Reserve(T, run: OtherRun), run: OtherRun);
+        Settle(f, OtherRun);
+        Assert.Equal([U], History(f).WaitsFor(C).Holders);
+
+        var operation = f.Op();
+        var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [D] };
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: D,
+            carried: Carrying.Build(null, seed, History(f), operation, preview: false).Carried));
+        Settle(f, Third);
+
+        Assert.Empty(History(f).WaitsFor(C).Holders);
+        Assert.Equal(Third, History(f).CurrentOf(U)!.Run.Id);
+    }
+
     private static (OutOfDateReason, TaskId?) Reason(TaskHistory history) =>
         Assert.IsType<TaskHistory.OutOfDate>(history) is var outOfDate ? (outOfDate.Reason, outOfDate.Input) : default;
 }

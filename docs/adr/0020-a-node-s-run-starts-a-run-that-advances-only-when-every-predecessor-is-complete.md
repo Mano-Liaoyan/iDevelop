@@ -25,3 +25,5 @@ A node's Run starts a workflow run of that node, with the same preflight, approv
 - An older build refuses every node run's journal, not only one with a `requested` event: its journal reader allows no unknown member, so the `node` of the `approved` event already fails it closed. It also ignores an approval intent that names a node. Older journals read as before.
 
 Source: issue [#90](https://github.com/Mano-Liaoyan/iDevelop/issues/90), decided by the owner and the coordinator on 2026-10-09, and pull request [#102](https://github.com/Mano-Liaoyan/iDevelop/pull/102), its Decisions 1 to 8.
+
+[ADR 0021](0021-a-node-s-run-carries-the-current-results-of-earlier-runs.md) carries the current results of earlier runs into a node's run, which ends the first consequence above.

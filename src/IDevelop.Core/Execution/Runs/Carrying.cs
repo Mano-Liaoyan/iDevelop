@@ -97,11 +97,8 @@ internal static class Carrying
                     if (history.Root(record, own.Id) != history.Root(source.Run, binding.Result)) refused[task] = new CarryRefusal.InputRuns(input);
                 }
                 else if (flow.Contains(input)) refused[task] = new CarryRefusal.InputRuns(input);
-                else
-                {
-                    Visit(input);
-                    if (refused.ContainsKey(input)) refused[task] = new CarryRefusal.InputRefused(input);
-                }
+                // A task whose input cannot be carried is refused below, once the input's own replay is known too.
+                else Visit(input);
                 if (refused.ContainsKey(task)) return;
             }
             order.Add(task);
