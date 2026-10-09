@@ -78,6 +78,10 @@ public sealed class CardExpansionTests : IDisposable
         Assert.Equal((new Point(740, 150), new Point(1040, 150)), (shell.Node("Ship").Location, shell.Node("Notes").Location));
         Assert.Equal(new Point(60, 210), shell.Node("Design").Location);
         Assert.Empty(Overlaps(shell));
+        // The canvas's check for cards under its floating controls measures each card where and as large as it shows.
+        var view = shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().Single();
+        Assert.Contains(new Rect(docs.Bounds.Position, docs.Bounds.Size), view.CardsInView());
+        Assert.Contains(new Rect(shell.Node("Checks").Location, shell.Node("Checks").Bounds.Size), view.CardsInView());
 
         // The workflow keeps its positions, so nothing is unsaved and the file is as it was.
         Assert.Equal(new CanvasPoint(360, 330), canvas.Workflow.Positions[Checks]);

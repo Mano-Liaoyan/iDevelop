@@ -429,6 +429,8 @@ public sealed class CanvasChromeTests : IDisposable
         var canvas = shell.Bounds(shell.Editor);
         var minimap = Shell.Around(shell.Find<Minimap>("Minimap"), "floating");
         Assert.Equal(canvas.Width >= CanvasChrome.CompactWidth && canvas.Height >= CanvasChrome.MinimapMinHeight, minimap.IsEffectivelyVisible);
+        // Expand All sits with the zoom controls while the minimap shows, which is taller, so the row keeps its height (ADR 0024).
+        Assert.Equal(minimap.IsEffectivelyVisible && shell.Window.ViewModel.Canvas is { IsEmpty: false }, shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
         var boxes = new[] { ("Zoom", Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), ("Minimap", minimap), ("WorkflowRunBar", shell.Find<Control>("WorkflowRunBar")) }
             .Where(pair => pair.Item2.IsEffectivelyVisible)
             .Select(pair => (Id: pair.Item1, Box: shell.Bounds(pair.Item2))).ToArray();
