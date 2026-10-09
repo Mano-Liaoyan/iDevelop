@@ -4,13 +4,15 @@ When a workflow run cannot go on by itself, the task that holds it shows what th
 
 ## Sub-features
 
-- `recover-evidence` shows `RecoveryPaths`, `RecoveryRefs`, `RecoveryClient`, `RecoveryTurnEnd`, `RecoveryCaptures`, and `RecoveryCleanup` for a blocked or uncertain task.
+- `recover-evidence` shows `RecoveryAttempt`, every block in `RecoveryBlocks` with all the paths and refs it names, `RecoveryClient`, `RecoveryTurnEnd`, `RecoveryCaptures` with `RecoveryCapturePaths`, and `RecoveryCleanup` for a blocked or uncertain task.
+- `recover-refs` says in `RecoveryRefRepair` where each shared ref a block names pointed and points, and that the person puts it back before Restore can clear the block. `RestoreRest` counts the blocks Restore only checks again apart from the ones it clears.
+- `recover-unaccepted` says in `RecoveryNoSuccess` that no restore can give an attempt a result when its turn-end capture was not accepted.
 - `recover-owner` shows on a task held by another task's block which task holds the checkout, and `RecoveryShowOwner` selects that task.
 - `recover-restore` retains the checkout with `PreserveCheckout`, previews `RestoreTarget`, each `RestoreMove`, `RestoreRest`, and `RestoreRetained`, and `RestoreCheckout` puts it back so the run goes on.
 - `recover-hand` shows `RecoveryHandRepair` on macOS, where Restore cannot move files or remove `index.lock`, and shows Restore's refusal in `RecoveryNotice`.
-- `recover-close` closes an uncertain turn with `RecoveryReason` and `CloseAsStopped`, and warns in `RecoveryStillRuns` while its process still runs.
+- `recover-close` closes an uncertain turn with `RecoveryReason` and `CloseAsStopped`, and warns in `RecoveryStillRuns` while its process still runs. A turn whose client exited but whose settlement failed offers no closure: `RecoveryUnsettled` says what retries it.
 - `recover-stopping` keeps a stopped run `Stopping` while a turn is uncertain, says so in `RunActivity`, and settles it once the turn is closed.
-- `recover-rebase` previews a stale task's rebase with `ReviewUpdatedInputs`, shows `RebaseUpdated`, `RebaseChanges`, `RebaseReport`, and `RebaseCandidate`, and records it with `ApproveRebase`.
+- `recover-rebase` previews a stale task's rebase with `ReviewUpdatedInputs`, shows `RebaseUpdated`, `RebaseChanges`, `RebaseReport`, `RebaseCandidate`, and `RebaseCandidatePaths`, and records it with `ApproveRebase`. A stale report shows `RebaseUnavailable` instead.
 - `recover-fix` offers a run's interrupted review fix round through `ContinueFix` and `RetryFix`, and starts nothing before the person chooses.
 
 ## How to get to it (user POV)
