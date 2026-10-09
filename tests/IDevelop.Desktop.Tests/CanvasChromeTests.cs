@@ -218,11 +218,13 @@ public sealed class CanvasChromeTests : IDisposable
     }
 
     /// <summary>
-    /// A fit keeps the cards and the proposal's ghost cards 24 px clear of both rows of floating controls, and on the docked
-    /// canvas of the smallest window, which has no room for those margins, right against them.
+    /// A fit keeps the cards and the proposal's ghost cards 24 px clear of both rows of floating controls, also below the
+    /// waiting pill under the buttons of a compact canvas, and on the docked canvas of the smallest window, which has no
+    /// room for those margins, right against them.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(1600, 600, 280, false, 24)]
+    [InlineData(900, 700, 320, true, 24)]
     [InlineData(900, 600, 320, true, 0)]
     public void Fit_to_view_keeps_the_cards_clear_of_the_top_row_and_the_bottom_row(double width, double height, double inspector, bool docked, double margin)
     {
