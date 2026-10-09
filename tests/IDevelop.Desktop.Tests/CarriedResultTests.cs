@@ -73,7 +73,7 @@ public sealed class CarriedResultTests
         Assert.Equal(["Not started", "Succeeded", "Waits for \"A\""], Cards(shell));
         Select(shell, "C");
         Assert.Equal("Waits for \"A\"", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal(WorkflowRunText.Unbroken("It starts once \"A\" hands on a result. \"A\" runs only when you run it."), shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("It starts once \"A\" hands on a result. \"A\" runs only when you run\u00A0it."), shell.Text("RunTaskDetail"));
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), shell.InView<TextBlock>("StartProblem").Text);
         shell.Window.Close();
         shell.Render();
@@ -89,7 +89,7 @@ public sealed class CarriedResultTests
         Select(reopened, "B");
         Assert.Equal("Succeeded", reopened.InView<TextBlock>("RunTaskStatus").Text);
         Assert.Equal(WorkflowRunText.Unbroken("Its result from the last run of the \"Workflow\" workflow still counts."), reopened.Text("RunOwner"));
-        Assert.Equal(WorkflowRunText.Unbroken("When you run a task after it, the run uses this result instead of running it again."), reopened.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("When you run a task after it, the run uses this result instead of running it\u00A0again."), reopened.Text("RunTaskDetail"));
         Select(reopened, "C");
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), reopened.InView<TextBlock>("StartProblem").Text);
     }
@@ -111,6 +111,7 @@ public sealed class CarriedResultTests
         Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], Cards(shell));
         Select(shell, "B");
         Assert.Equal("Succeeded", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.Equal(WorkflowRunText.Unbroken("The last run of the \"Workflow\" workflow used this task's result from an earlier run."), shell.Text("RunOwner"));
 
         // A new model for B is a new definition: its result no longer counts, nor does C's, which used it.
         var canvas = shell.Window.ViewModel.Canvas!;
@@ -119,9 +120,9 @@ public sealed class CarriedResultTests
 
         Assert.Equal(["Succeeded", "Out of date", "Out of date"], Cards(shell));
         Assert.Equal("Out of date", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal(WorkflowRunText.Unbroken("It changed since it ran, or so did the connections into it. Run it again to bring it up to date."), shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("It changed since it ran, or so did the connections into it. Run it again to bring it up\u00A0to\u00A0date."), shell.Text("RunTaskDetail"));
         Select(shell, "C");
-        Assert.Equal(WorkflowRunText.Unbroken("The result of \"B\" that it used is out of date. Run it again to bring it up to date."), shell.Text("RunTaskDetail"));
+        Assert.Equal(WorkflowRunText.Unbroken("The result of \"B\" that it used is out of date. Run it again to bring it up\u00A0to\u00A0date."), shell.Text("RunTaskDetail"));
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"B\". Run \"B\" first."), shell.InView<TextBlock>("StartProblem").Text);
     }
 

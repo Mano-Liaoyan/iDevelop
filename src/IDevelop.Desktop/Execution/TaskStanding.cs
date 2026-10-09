@@ -65,18 +65,21 @@ internal abstract record TaskStanding
         _ => throw new InvalidOperationException(),
     };
 
-    /// <summary>Why it stands there, in a sentence or two, or null when its label says enough.</summary>
+    /// <summary>
+    /// Why it stands there, in a sentence or two, or null when its label says enough. The last words of a sentence stay
+    /// together, so no line ends with a single word.
+    /// </summary>
     public string? Detail(Func<TaskId, string> title) => this switch
     {
-        Succeeded => "When you run a task after it, the run uses this result instead of running it again.",
-        OutOfDate { Reason: OutOfDateReason.Changed } => "It changed since it ran, or so did the connections into it. Run it again to bring it up to date.",
+        Succeeded => "When you run a task after it, the run uses this result instead of running it\u00A0again.",
+        OutOfDate { Reason: OutOfDateReason.Changed } => "It changed since it ran, or so did the connections into it. Run it again to bring it up\u00A0to\u00A0date.",
         OutOfDate { Reason: OutOfDateReason.InputReplaced, Input: { } input } =>
-            $"\"{title(input)}\" has a newer result than the one it used. Run it again to bring it up to date.",
+            $"\"{title(input)}\" has a newer result than the one it used. Run it again to bring it up\u00A0to\u00A0date.",
         OutOfDate { Reason: OutOfDateReason.InputOutOfDate, Input: { } input } =>
-            $"The result of \"{title(input)}\" that it used is out of date. Run it again to bring it up to date.",
-        OutOfDate => "A task before it has a newer result than the one it used. Run it again to bring it up to date.",
+            $"The result of \"{title(input)}\" that it used is out of date. Run it again to bring it up\u00A0to\u00A0date.",
+        OutOfDate => "A task before it has a newer result than the one it used. Run it again to bring it up\u00A0to\u00A0date.",
         Waits waits => $"It starts once {Names(waits.Holders, title)} {(waits.Holders.Count == 1 ? "hands" : "hand")} on a result. " +
-            $"{Names(waits.Holders, title)} {(waits.Holders.Count == 1 ? "runs" : "run")} only when you run {(waits.Holders.Count == 1 ? "it" : "them")}.",
+            $"{Names(waits.Holders, title)} {(waits.Holders.Count == 1 ? "runs" : "run")} only when you run\u00A0{(waits.Holders.Count == 1 ? "it" : "them")}.",
         _ => null,
     };
 

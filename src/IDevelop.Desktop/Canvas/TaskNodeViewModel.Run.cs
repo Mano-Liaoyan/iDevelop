@@ -133,6 +133,10 @@ public sealed partial class TaskNodeViewModel
 
     private string RunOwnedProblem => (_runActive, HasAgent) switch
     {
+        // The run took the task's result from an earlier run and runs it no more (#90).
+        (true, _) when RunTask is { Carried: true } =>
+            $"A run of the \"{RunWorkflowName}\" workflow uses this task's result from an earlier run instead of running it again.",
+        (false, _) when RunTask is { Carried: true } => $"The last run of the \"{RunWorkflowName}\" workflow used this task's result from an earlier run.",
         (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run this task to add it to that run.",
         // A task the run has not started yet has no conversation to talk to.
         (true, true) when _canvas.Run is { View.Phase: RunPhase.StopRequested } && NotStarted =>
