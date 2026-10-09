@@ -331,7 +331,15 @@ internal sealed class AttemptLog : IDisposable
             var root = json.RootElement;
             var name = root.String("client") ?? throw new JsonException("The settings name no client.");
             var client = Clients.ParseWireName(name) ?? throw new JsonException($"The settings name unknown client \"{name}\".");
-            return new ExecutionSettings(client) { Model = root.String("model"), Reasoning = root.String("reasoning") };
+            return new ExecutionSettings(client)
+            {
+                Model = root.String("model"),
+                Reasoning = root.String("reasoning"),
+                // An older log has no choice, which means every skill the client loads.
+                Skills = root.Property("skills") is { ValueKind: JsonValueKind.Array } skills
+                    ? [.. skills.EnumerateArray().Select(skill => skill.GetString() ?? throw new JsonException("The settings name a null skill."))]
+                    : null,
+            };
         }
 
         public override void Write(Utf8JsonWriter writer, ExecutionSettings settings, JsonSerializerOptions options)
@@ -340,6 +348,17 @@ internal sealed class AttemptLog : IDisposable
             writer.WriteString("client", Clients.WireName(settings.Client));
             writer.WriteString("model", settings.Model);
             writer.WriteString("reasoning", settings.Reasoning);
+            if (settings.Skills is { } skills)
+            {
+                writer.WriteStartArray("skills");
+                foreach (var skill in skills)
+                {
+                    writer.WriteStringValue(skill);
+                }
+
+                writer.WriteEndArray();
+            }
+
             writer.WriteEndObject();
         }
     }
