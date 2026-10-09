@@ -250,8 +250,11 @@ internal sealed partial class WorkflowRunCoordinator
                     ? new FixReply.Reserved(chosen.Id) : Refused(RunProblem.ReplacementConflict));
                 return;
             }
-            // Another choice already reserved the round's replacement, which is still open.
-            if (latest.GetValueOrDefault(owner) is { } newest && Replaces(record.Attempts[newest]) && !record.Closures.ContainsKey(newest))
+            // Another choice already replaced the round's fix. While that replacement is open, and once it has ended
+            // other than by an interruption that offers the choice again, this choice has nothing left to replace. The
+            // replacement and the reviewer's next turn run by now, so the task would otherwise only look busy.
+            if (latest.GetValueOrDefault(owner) is { } newest && Replaces(record.Attempts[newest]) &&
+                (!record.Closures.ContainsKey(newest) || !OffersChoice(record, reviewer, newest)))
             {
                 complete(Refused(RunProblem.ReplacementConflict));
                 return;
@@ -291,6 +294,14 @@ internal sealed partial class WorkflowRunCoordinator
             complete(new FixReply.Refused(new(RunProblem.StorageUnavailable, Task: task)));
         });
     }
+
+    /// <summary>
+    /// Whether the review, resting between its reviewer's turns, offers Continue fix or Retry fix for <paramref name="fix"/>,
+    /// as after closing iDevelop interrupted it. A reviewer turn that runs offers no choice.
+    /// </summary>
+    private bool OffersChoice(RunRecord record, AttemptId review, AttemptId fix) =>
+        Log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer && RunReviews.Recovery(record, reviewer, Log) is { } recovery &&
+        recovery.Fix == fix;
 
     private static OperationId? Confirmation(AttemptCause cause) => cause switch
     {
