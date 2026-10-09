@@ -14,7 +14,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
+        nameof(RunTask), nameof(ShowsRunState), nameof(ShowsRunConversation), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
         nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
@@ -45,6 +45,12 @@ public sealed partial class TaskNodeViewModel
     /// runs (#90).
     /// </summary>
     public bool ShowsRunState => RunTask is not null || Standing is not null;
+
+    /// <summary>
+    /// The task's conversation in the inspector opens the canvas's run's conversation with it: a run holds the task and
+    /// talked to it there, rather than carrying its result from an earlier run (#90).
+    /// </summary>
+    public bool ShowsRunConversation => RunTask is { Carried: false };
 
     /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
     public bool IsRunOwned => RunTask is not null && _runActive;

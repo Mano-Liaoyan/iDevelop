@@ -183,16 +183,14 @@ public sealed class RunHistoryTests
         Settle(f, Run);
 
         var history = History(f);
-        Assert.Equal([U], history.WaitsFor(C).Holders);
-        Assert.True(history.WaitsFor(C).Latest);
-        Assert.Empty(history.WaitsFor(U).Holders);
-        Assert.Empty(history.WaitsFor(T).Holders);
+        Assert.Equal([U], history.WaitsFor(C));
+        Assert.Empty(history.WaitsFor(U));
+        Assert.Empty(history.WaitsFor(T));
         // A later run of D, which cannot start C, leaves C waiting, now from a run before the newest.
         f.Approve(run: OtherRun, node: D);
         f.Complete(f.Reserve(D, run: OtherRun), run: OtherRun);
         Settle(f, OtherRun);
-        Assert.Equal([U], History(f).WaitsFor(C).Holders);
-        Assert.False(History(f).WaitsFor(C).Latest);
+        Assert.Equal([U], History(f).WaitsFor(C));
         // A run of U carries T's result for C, and C, though it was stopped before it started, waits for nothing more.
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
@@ -201,7 +199,7 @@ public sealed class RunHistoryTests
         f.Complete(f.Reserve(U, run: Third), run: Third);
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
         f.ReleaseControl();
-        Assert.Empty(History(f).WaitsFor(C).Holders);
+        Assert.Empty(History(f).WaitsFor(C));
     }
 
     [Fact]
@@ -218,7 +216,7 @@ public sealed class RunHistoryTests
         f.Approve(run: OtherRun, node: T);
         f.Complete(f.Reserve(T, run: OtherRun), run: OtherRun);
         Settle(f, OtherRun);
-        Assert.Equal([U], History(f).WaitsFor(C).Holders);
+        Assert.Equal([U], History(f).WaitsFor(C));
 
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [D] };
@@ -226,7 +224,7 @@ public sealed class RunHistoryTests
             carried: Carrying.Build(null, seed, History(f), operation).Carried));
         Settle(f, Third);
 
-        Assert.Empty(History(f).WaitsFor(C).Holders);
+        Assert.Empty(History(f).WaitsFor(C));
         Assert.Equal(Third, History(f).CurrentOf(U)!.Run.Id);
     }
 

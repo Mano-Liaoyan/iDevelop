@@ -87,10 +87,9 @@ internal sealed class RunHistory
     /// did not: the dependency predecessors in the workflow that had no current result in that run and have none from a
     /// later run since. Empty when the task has a result of its own or waits for nothing.
     /// </summary>
-    /// <returns>The predecessors it waits for, and whether that run is the workflow's newest settled run.</returns>
-    public (ImmutableSortedSet<TaskId> Holders, bool Latest) WaitsFor(TaskId task)
+    public ImmutableSortedSet<TaskId> WaitsFor(TaskId task)
     {
-        if (Judge(task) is not TaskHistory.None) return ([], false);
+        if (Judge(task) is not TaskHistory.None) return [];
         for (var index = _runs.Length - 1; index >= 0; index--)
         {
             var record = _runs[index];
@@ -100,9 +99,9 @@ internal sealed class RunHistory
             ImmutableSortedSet<TaskId> holders = [.. RunScope.Predecessors(_workflow)[task].Where(predecessor =>
                 !(results.TryGetValue(predecessor, out var result) && !stale.Contains(result.Id)) &&
                 !(CurrentOf(predecessor) is { } later && Position(later.Run.Id) > index))];
-            return (holders, index == _runs.Length - 1);
+            return holders;
         }
-        return ([], false);
+        return [];
     }
 
     /// <summary>The result <paramref name="result"/> stands for: an earlier run's result for one that was carried from it, itself otherwise.</summary>

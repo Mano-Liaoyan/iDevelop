@@ -986,7 +986,7 @@
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
                           <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunState" />
+                            <Binding Path="ShowsRunConversation" />
                             <Binding Path="HasAgent" />
                           </MultiBinding>
                         </inspector:InspectorRow.IsShown>

@@ -95,6 +95,8 @@ public sealed class CarriedResultTests
         Select(reopened, "B");
         Assert.Equal("Succeeded", reopened.InView<TextBlock>("RunTaskStatus").Text);
         Assert.False(Shows(reopened, "RunOwner"));
+        // No run is on the canvas, so Open conversation opens the task's own conversation and no run's.
+        Assert.False(Shows(reopened, "RunConversationNote"));
         Assert.Equal("Its result from an earlier run still\u00A0counts.", reopened.Text("RunTaskDetail"));
         Select(reopened, "C");
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), reopened.InView<TextBlock>("StartProblem").Text);
@@ -118,6 +120,10 @@ public sealed class CarriedResultTests
         Select(shell, "B");
         Assert.Equal("Succeeded", shell.InView<TextBlock>("RunTaskStatus").Text);
         Assert.Equal(WorkflowRunText.Unbroken("The last run of the \"Workflow\" workflow used this task's result from an earlier run."), shell.Text("RunOwner"));
+        // The run carried B's result and never talked to it, so no run conversation is offered for it.
+        Assert.False(Shows(shell, "RunConversationNote"));
+        // The run bar counts the tasks it ran apart from the one it carried.
+        Assert.Equal("2 of 2 done · 1 from an earlier run", shell.Text("RunProgress"));
 
         // A new model for B is a new definition: its result no longer counts, nor does C's, which used it.
         var canvas = shell.Window.ViewModel.Canvas!;
@@ -217,6 +223,51 @@ public sealed class CarriedResultTests
         shell.WaitForStatus("Completed");
         Assert.Equal((1, 1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C"), f.Launches("D")));
         Assert.Null(shell.Preflight);
+    }
+
+    [AvaloniaFact]
+    public void An_earlier_result_never_names_a_run_that_did_not_produce_it()
+    {
+        var d = new TaskId(Guid.Parse("019a9d2e-5d11-7a22-b3c4-5d6e7f809a44"));
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), At(B, "B", 105, 250), At(C, "C", 405, 170), At(d, "D", 105, 400),
+            Dependency(A, C), Dependency(B, C));
+        f.Answer("B", f.Writes("out-b.txt", "B\n", "B ready.")).Answer("D", f.Says("D ready."));
+        var shell = f.Window();
+        RunNode(shell, "B");
+
+        RunNode(shell, "D");
+
+        Select(shell, "B");
+        Assert.Equal("Succeeded", shell.InView<TextBlock>("RunTaskStatus").Text);
+        Assert.False(Shows(shell, "RunOwner"));
+        Assert.Equal("Its result from an earlier run still\u00A0counts.", shell.Text("RunTaskDetail"));
+        Assert.DoesNotContain(shell.TextsOf("RunOwner").Concat(shell.TextsOf("RunTaskDetail")), text => text.Contains("last run", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void A_task_whose_input_s_later_run_ended_without_a_result_says_so_once()
+    {
+        using var f = Join();
+        f.Answer("B", f.Writes("out-b.txt", "B\n", "B ready."),
+            FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Exit(1));
+        var shell = f.Window();
+        RunNode(shell, "B");
+        RunNode(shell, "A");
+
+        // B runs again and fails, so C's result, which used B's first one, is out of date, and B has none to run after. A
+        // failed task keeps its run open until the person stops it.
+        OpenPreflight(shell, "B");
+        var earlier = shell.WorkflowRun?.Address;
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitUntil(() => shell.WorkflowRun?.Address != earlier && shell.CardText("B", "CardStatus") == "Failed", "B fails again");
+        shell.Click(shell.Find<Button>("StopWorkflow"));
+        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false, View.PinsReleased: true }, "the run stops", () => shell.RunStatus);
+
+        Assert.Equal(["Succeeded", "Failed", "Out of date"], Cards(shell));
+        Select(shell, "C");
+        Assert.False(Shows(shell, "RunTaskDetail") || Shows(shell, "RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("Out of date because a later run of \"B\" ended without a result. Run \"B\"\u00A0first."),
+            shell.InView<TextBlock>("StartProblem").Text);
     }
 
     [AvaloniaFact]

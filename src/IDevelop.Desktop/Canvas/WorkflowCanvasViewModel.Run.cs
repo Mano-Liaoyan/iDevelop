@@ -204,7 +204,7 @@ public sealed partial class WorkflowCanvasViewModel
     /// because its one such predecessor is out of date says that once instead (#90).
     /// </summary>
     private string? RunsAfter(TaskNodeViewModel node, TaskId[] incomplete) =>
-        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only] is TaskHistory.OutOfDate, TitleOf) is { } outOfDate ? outOfDate
+        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only], TitleOf) is { } outOfDate ? outOfDate
         : WorkflowRunText.RunsAfter(incomplete, TitleOf);
 
     /// <summary>The predecessors among <paramref name="predecessors"/> that have no current result from an earlier run (#90).</summary>

@@ -98,9 +98,24 @@ internal static class WorkflowRunText
     /// "2 of 5 done" over the tasks the run can reach, or null for a run without any. Run Workflow reaches every task; a run
     /// that a node's Run started reaches the nodes the person ran and the tasks after them, not a task nobody ran (#90).
     /// </summary>
-    public static string? Progress(RunView view) => view.Tasks.Values.Count(task => task.State != TaskState.Unrequested) is var reached and > 0
-        ? $"{view.Tasks.Values.Count(task => task.State == TaskState.Done)} of {reached} done"
-        : null;
+    /// <remarks>
+    /// A task whose result the run carried from an earlier run did not run in it, so it counts apart (#90): "2 of 2 done ·
+    /// 1 from an earlier run".
+    /// </remarks>
+    public static string? Progress(RunView view)
+    {
+        var tasks = view.Tasks.Values;
+        var reached = tasks.Count(task => task.State != TaskState.Unrequested && !task.Carried);
+        var carried = tasks.Count(task => task.Carried);
+        var ran = reached > 0 ? $"{tasks.Count(task => task.State == TaskState.Done && !task.Carried)} of {reached} done" : null;
+        var earlier = carried switch
+        {
+            0 => null,
+            1 => "1 from an earlier run",
+            _ => $"{carried} from earlier runs",
+        };
+        return ran is null ? earlier : earlier is null ? ran : $"{ran} · {earlier}";
+    }
 
     /// <summary>
     /// What a completed run's tasks still wait for: each task of the run that waits for a task nobody ran, as

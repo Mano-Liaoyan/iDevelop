@@ -28,10 +28,9 @@ internal abstract record TaskStanding
     /// It has no result, and its newest run that could start it did not, because <paramref name="Holders"/>, dependency
     /// predecessors of it, had no result there and have none since. Running them starts it once the last one finishes.
     /// </summary>
-    /// <param name="Latest">The run that could start it and did not is the workflow's newest settled run.</param>
-    internal sealed record Waits(ImmutableSortedSet<TaskId> Holders, bool Latest) : TaskStanding
+    internal sealed record Waits(ImmutableSortedSet<TaskId> Holders) : TaskStanding
     {
-        public bool Equals(Waits? other) => other is not null && Holders.SequenceEqual(other.Holders) && Latest == other.Latest;
+        public bool Equals(Waits? other) => other is not null && Holders.SequenceEqual(other.Holders);
 
         public override int GetHashCode() => Holders.Count;
     }
@@ -50,8 +49,8 @@ internal abstract record TaskStanding
         }
 
         // A task no run could start yet waits for nothing: it shows as it always did.
-        var (holders, latest) = history.WaitsFor(task);
-        return holders.IsEmpty ? null : new Waits(holders, latest);
+        var holders = history.WaitsFor(task);
+        return holders.IsEmpty ? null : new Waits(holders);
     }
 
     /// <summary>The state its card's ring and glyph show, and its subtitle.</summary>
@@ -79,13 +78,19 @@ internal abstract record TaskStanding
     };
 
     /// <summary>
-    /// Run's refusal when this task is out of date because <paramref name="holder"/>, the one task it runs after, is out of
-    /// date too: one sentence, as in "Out of date because "B" changed. Run "B" first.", or null.
+    /// Run's refusal when this task is out of date because of <paramref name="holder"/>, the one task it runs after that has
+    /// no current result: one sentence, as in "Out of date because "B" changed. Run "B" first." when B is out of date too,
+    /// or "Out of date because a later run of "B" ended without a result. Run "B" first." when B's newest run left it none.
+    /// Null otherwise.
     /// </summary>
-    public string? RunsAfter(TaskId holder, bool holderOutOfDate, Func<TaskId, string> title) =>
-        this is OutOfDate { Input: { } input } && input == holder && holderOutOfDate
-            ? $"Out of date because \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first."
-            : null;
+    public string? RunsAfter(TaskId holder, TaskHistory? holderHistory, Func<TaskId, string> title) => (this, holderHistory) switch
+    {
+        (OutOfDate { Input: { } input }, TaskHistory.OutOfDate) when input == holder =>
+            $"Out of date because \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first.",
+        (OutOfDate { Input: { } input, Reason: OutOfDateReason.InputReplaced }, TaskHistory.None) when input == holder =>
+            $"Out of date because a later run of \"{title(holder)}\" ended without a result. Run \"{title(holder)}\"\u00A0first.",
+        _ => null,
+    };
 
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {
