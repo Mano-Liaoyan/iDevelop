@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Execution;
@@ -20,9 +22,24 @@ internal static class WorkflowRunText
         _ => throw new UnreachableException(),
     };
 
-    /// <summary>The run's status on its pill: "3 running" while several of its tasks' clients work, else the run's own label.</summary>
-    public static string Status(RunView view) =>
-        view.Status == RunStatus.Running && view.Tasks.Values.Count(Busy) is var busy and > 1 ? $"{busy} running" : view.Label;
+    /// <summary>
+    /// The run's status on its pill. While the run goes on, it counts only the tasks whose client runs: "3 running", or
+    /// "Running" for one. With none running, it says "Starting" or "Finishing" while a task's client starts or finishes,
+    /// and otherwise the run's own label.
+    /// </summary>
+    public static string Status(RunView view)
+    {
+        if (view.Status != RunStatus.Running) return view.Label;
+        var tasks = view.Tasks.Values;
+        return tasks.Count(task => task.State == TaskState.Running) switch
+        {
+            > 1 and var running => $"{running} running",
+            1 => "Running",
+            _ when tasks.Any(task => task.State == TaskState.Starting) => "Starting",
+            _ when tasks.Any(task => task.State == TaskState.Settling) => "Finishing",
+            _ => view.Label,
+        };
+    }
 
     /// <summary>Whether the task's client starts, runs, or finishes, which its card shows with the running ring.</summary>
     public static bool Busy(TaskView task) => task.State is TaskState.Starting or TaskState.Running or TaskState.Settling;
@@ -41,6 +58,41 @@ internal static class WorkflowRunText
             .ToArray();
         return groups.Length == 0 ? null : string.Join(" · ", groups);
     }
+
+    /// <summary>
+    /// <paramref name="text"/> with each quoted title kept on one line beside the word before it, so a line wraps only
+    /// between items: after a comma or a middle dot. Spaces and hyphens inside quotes, a space between a word and an opening
+    /// quote, and a space before a middle dot become non-breaking, and a slash inside quotes joins the next character.
+    /// </summary>
+    [return: NotNullIfNotNull(nameof(text))]
+    public static string? Unbroken(string? text)
+    {
+        if (text is null) return null;
+        var unbroken = new StringBuilder(text.Length);
+        var quoted = false;
+        for (var at = 0; at < text.Length; at++)
+        {
+            var character = text[at];
+            if (character == '"') quoted = !quoted;
+            else if (quoted && character is ' ' or '-' or '/')
+            {
+                unbroken.Append(character switch { ' ' => NoBreakSpace, '-' => NoBreakHyphen, _ => "/" + WordJoiner });
+                continue;
+            }
+            else if (!quoted && character == ' ' && at + 1 < text.Length &&
+                (text[at + 1] == '"' && at > 0 && char.IsLetter(text[at - 1]) || text[at + 1] == '·'))
+            {
+                unbroken.Append(NoBreakSpace);
+                continue;
+            }
+            unbroken.Append(character);
+        }
+        return unbroken.ToString();
+    }
+
+    private const string NoBreakSpace = "\u00A0";
+    private const string NoBreakHyphen = "\u2011";
+    private const string WordJoiner = "\u2060";
 
     /// <summary>"2 of 5 done", or null for a run without tasks.</summary>
     public static string? Progress(RunView view) => view.Tasks.Count == 0 ? null

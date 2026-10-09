@@ -82,8 +82,9 @@
         </Border>
         <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Run.Progress, FallbackValue=''}" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="ConversationRunProgress" />
+        <!-- As on the run bar, several running tasks' titles wrap to a second line, between titles, before they are cut. -->
         <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Run.Activity, FallbackValue=''}" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
+                   TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity, FallbackValue=''}"
                    AutomationProperties.AutomationId="ConversationRunActivity" />
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
           <Button Classes="ghost" Height="28"
