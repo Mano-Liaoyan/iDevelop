@@ -531,6 +531,10 @@
                               <TextBlock Text="{Binding CleanupText}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13"
                                          Foreground="{DynamicResource TextBrush}" AutomationProperties.AutomationId="RecoveryCleanup" />
                             </inspector:InspectorRow>
+                            <inspector:InspectorRow Layout="Full" IsShown="{Binding NoSuccessNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding NoSuccessNote}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                         AutomationProperties.AutomationId="RecoveryNoSuccess" />
+                            </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding HandRepairNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Classes="caption" Text="{Binding HandRepairNote}" TextWrapping="Wrap"
                                          AutomationProperties.AutomationId="RecoveryHandRepair" />

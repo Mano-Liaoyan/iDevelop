@@ -99,6 +99,15 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
 
     public string? HandRepairNote => CanRestore && HandRepair ? RecoveryText.HandRepair : null;
 
+    /// <summary>
+    /// The attempt's newest turn-end capture was not accepted, or never taken, so restoring its checkout cannot give it a
+    /// result: only a new attempt can.
+    /// </summary>
+    public bool CaptureRejected => _view.State == TaskState.Blocked && !IsElsewhere &&
+        _evidence?.Dispositions.LastOrDefault()?.Disposition is CaptureDisposition.Diverged or CaptureDisposition.Failed;
+
+    public string? NoSuccessNote => CaptureRejected ? RecoveryText.NoSuccess : null;
+
     /// <summary>Preserve shows until a preview waits for Restore.</summary>
     public bool ShowsPreserve => CanRestore && _preview is null;
 
@@ -342,6 +351,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         {
             Notice = _evidence is { Blocks.IsEmpty: false } still
                 ? $"Restore finished, but {(still.Blocks.Length == 1 ? "1 block still holds" : $"{still.Blocks.Length} blocks still hold")} this task. Each one says what it needs."
+                : CaptureRejected ? "Restored the checkout. This attempt still has no result, because its turn-end capture was not accepted."
                 : "Restored. The tasks this block held go on.";
         }
     }
@@ -395,7 +405,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
             nameof(IsUncertain), nameof(IsElsewhere), nameof(OwnerNote), nameof(ShowOwnerLabel), nameof(AttemptText), nameof(Blocks), nameof(ClientText),
             nameof(TurnEndText), nameof(CapturesText), nameof(CapturePaths), nameof(CleanupText), nameof(CanRestore), nameof(NoActionNote), nameof(HandRepairNote),
             nameof(ShowsPreserve), nameof(HasPreview), nameof(PreviewTarget), nameof(PreviewMoves), nameof(PreviewRest), nameof(Retained), nameof(StillRuns),
-            nameof(CanClose), nameof(UnsettledNote),
+            nameof(CanClose), nameof(UnsettledNote), nameof(CaptureRejected), nameof(NoSuccessNote),
         })
         {
             OnPropertyChanged(property);

@@ -44,8 +44,8 @@ internal sealed partial class WorkflowRunCoordinator
             RootNow = root is { } identity && (launch is not { } claimed || !record.RootExits.ContainsKey(claimed)) ? ProcessCheck.Check(identity) : null,
             Exit = launch is { } exited ? record.RootExits.GetValueOrDefault(exited) : null,
             Captures = captures,
-            Dispositions = [.. captures.Select(observation => observation.Capture).Distinct()
-                .Select(capture => record.Dispositions.GetValueOrDefault(capture)).OfType<RunEvent.CaptureDisposed>()],
+            // A capture recovery found missing has a disposition but no observation, so dispositions go by the turn.
+            Dispositions = launch is { } disposed ? [.. record.Dispositions.Values.Where(disposition => disposition.Launch == disposed)] : [],
             Cleanup = events.OfType<AttemptEvent.CleanedUp>().LastOrDefault(),
         };
     }

@@ -67,7 +67,7 @@ internal static class WorkflowRunText
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported when !active => null,
         TaskState.Pending when !task.HeldBy.IsEmpty => $"It starts once {Names(task.HeldBy, title)} {(task.HeldBy.Count == 1 ? "hands" : "hand")} on a result.",
         TaskState.Blocked when task.Block is { } block && block.Task != task.Task => $"The checkout of \"{title(block.Task)}\" holds it. {block.Detail}".Trim(),
-        TaskState.Blocked when task.Block is { } block => $"{Problem(block.Problem)} {block.Detail}".Trim(),
+        TaskState.Blocked when task.Block is { } block => $"{RecoveryText.Problem(block)} {block.Detail}".Trim(),
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",

@@ -212,7 +212,9 @@ public sealed class RecoveryCommandTests
         // The capture's block keeps the preparation's snapshot and each observation's, not a publication's before and after.
         Assert.DoesNotContain(stuck.Tasks[A].Block!.Evidence, file => file.RelativePath.EndsWith("refs-before.json", StringComparison.Ordinal));
 
-        Assert.Equal([new SharedRefDrift("refs/stash", null, PlanCommit, Known: true)], f.Coordinator.Evidence(A)!.Refs.ToArray());
+        var evidence = f.Coordinator.Evidence(A)!;
+        Assert.Equal([new SharedRefDrift("refs/stash", null, PlanCommit, Known: true)], evidence.Refs.ToArray());
+        Assert.Equal(["refs/stash"], Assert.IsType<CaptureDisposition.Diverged>(Assert.Single(evidence.Dispositions).Disposition).Refs.ToArray());
     }
 
     [Fact]

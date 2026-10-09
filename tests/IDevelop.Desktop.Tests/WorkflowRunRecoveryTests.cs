@@ -250,6 +250,44 @@ public sealed class WorkflowRunRecoveryTests
     }
 
     [AvaloniaFact]
+    public void A_stash_moved_during_the_turn_says_no_restore_gives_the_attempt_a_result()
+    {
+        using var f = Chain();
+        f.Answer("A", f.Writes("result.txt", "done\n", "A ready.")).Answer("B", f.Says("B ready."));
+        var head = f.Run("rev-parse", "HEAD").Trim();
+        var moved = 0;
+        f.Probe = point =>
+        {
+            if (point == "journal.root-exit.before" && Interlocked.Exchange(ref moved, 1) == 0)
+            {
+                f.Run("update-ref", "refs/stash", head);
+            }
+        };
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("A", "Blocked");
+        shell.Click(shell.Header(shell.Node("A")));
+        shell.WaitUntil(() => Shows(shell, "RecoveryNoSuccess"), "the section reads the capture's evidence");
+
+        Assert.StartsWith("A shared ref changed that no task of the run changed.", shell.Text("RunTaskDetail"));
+        Assert.Equal(RecoveryText.NoSuccess, shell.Text("RecoveryNoSuccess"));
+        Assert.Equal("2 captures. They show shared refs that no task of the run moved:", shell.Text("RecoveryCaptures"));
+        Assert.Equal("refs/stash", shell.Find<TextBox>("RecoveryCapturePaths").Text);
+        Assert.StartsWith($"refs/stash pointed at nothing when the turn started and pointed at {head[..12]} when this was found.", shell.Text("RecoveryRefRepair"));
+
+        // Even with the stash back, the attempt's capture stays unaccepted, so the restore gives it no result.
+        f.Run("update-ref", "-d", "refs/stash");
+        shell.Click(shell.InView<Button>("PreserveCheckout"));
+        shell.WaitUntil(() => Shows(shell, "RestoreCheckout"), "the restoration is previewed", () => $"Notice: {Notice(shell)}");
+        shell.Click(shell.InView<Button>("RestoreCheckout"));
+        shell.WaitUntil(() => Notice(shell) is { Length: > 0 }, "the restore says what it did");
+        Assert.Equal("Restored the checkout. This attempt still has no result, because its turn-end capture was not accepted.", Notice(shell));
+        shell.WaitForCard("A", "Blocked");
+        Assert.Equal(0, f.Launches("B"));
+        Assert.Empty(f.Record().Results);
+    }
+
+    [AvaloniaFact]
     public void A_restart_after_a_crash_shows_the_unresolved_turn_and_Close_as_stopped_settles_it()
     {
         using var f = Chain();

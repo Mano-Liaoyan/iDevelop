@@ -102,7 +102,7 @@ internal static class RecoveryText
     {
         if (evidence.Captures.IsEmpty)
         {
-            return "No turn-end capture was recorded.";
+            return evidence.Dispositions.LastOrDefault()?.Disposition is CaptureDisposition.Failed { Detail: var detail } ? detail : "No turn-end capture was recorded.";
         }
 
         var count = evidence.Captures.Length == 1 ? "1 capture" : $"{evidence.Captures.Length} captures";
@@ -113,6 +113,7 @@ internal static class RecoveryText
             CaptureDisposition.Diverged { Paths.IsEmpty: false } => $"{count}{recovery}. They differ in these paths:",
             CaptureDisposition.Diverged { Refs.IsEmpty: false } => $"{count}{recovery}. They show shared refs that no task of the run moved:",
             CaptureDisposition.Diverged => $"{count}{recovery}. They were not accepted.",
+            CaptureDisposition.Failed failed => $"{count}{recovery}. They were not accepted: {failed.Detail}",
             _ => $"{count}{recovery}, not yet compared.",
         };
     }
@@ -211,6 +212,10 @@ internal static class RecoveryText
 
         return string.Join(" ", parts);
     }
+
+    /// <summary>Why no restore can make an attempt succeed whose turn-end capture was not accepted, and what would.</summary>
+    public const string NoSuccess = "Its turn-end capture was not accepted, so no restore can make this attempt succeed. Restore only puts the " +
+        "checkout back. Running the task again with Retry would, and the app does not offer Retry yet. Stop Workflow ends the run, and finished work stays.";
 
     /// <summary>The note that macOS gives Restore no file identity, so the person moves files by hand there.</summary>
     public const string HandRepair = "On macOS, Restore cannot move files or remove index.lock, because iDevelop cannot read file identities there. " +
