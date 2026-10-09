@@ -6,7 +6,7 @@ The [product direction](../product-direction.md) says: "Expansion must preserve 
 
 ## How it works
 
-- **The disclosure.** A card's chevron sits on its last line. The state glyph sits on the title's line, in the same 16 px column it always had, so the title keeps its full width. The chevron points right while the card is collapsed and down while it is expanded, as the sidebar's rows do. Expand All and Collapse All act on the cards of the shown workflow only, and a card that is added later starts collapsed.
+- **The disclosure.** A card's chevron sits on its last line. The state glyph sits on the title's line, in the same 16 px column it always had, so the title keeps its full width. The chevron points right while the card is collapsed and down while it is expanded, as the sidebar's rows do. Expand All and Collapse All act on the cards of the shown workflow only, and a card that is added later starts collapsed. It is one glyph button on top of the zoom controls, since it changes only this machine's view, and its tooltip's first line names it. It shows with the minimap, which is taller than the four buttons, so the bottom row keeps its height, and the top row keeps its room for the breadcrumb's names ([ADR 0023](0023-the-canvas-keeps-336-px-and-its-controls-follow-its-own-size.md)). A compact or short canvas leaves it out: there one expanded card fills the canvas, and each card's chevron still expands it.
 - **The expanded card.** The 64 px header stays as [ADR 0019](0019-a-planner-chooses-each-new-task-s-agent.md) describes it: the tile, the title, the client or the status, then the model and level. The state's tint stays on the header. Under it, three sections sit under hairlines:
   - **Now.** Its heading and text follow the task's state, as the card's status line names it:
     - Running: the agent's latest message.
@@ -33,12 +33,13 @@ The [product direction](../product-direction.md) says: "Expansion must preserve 
 - **Option C: every expanded card is one size, with Now and Agent tabs, and the rows open like a spreadsheet's.** It hid the agent behind a tab, a long question had to scroll, and short states left empty space.
 - **Expanded cards that overlap their neighbours, as D0's prototype drew them.** The owner judges by alignment and calm, and an overlap hides the neighbours.
 - **A read-only agent line on the card, with changes left to the inspector.** The owner chose editable pickers.
+- **Expand All beside Run Workflow and Generate in the top row.** Even as a glyph it cut the breadcrumb's workflow name at the 900×600 window, and with an open proposal at the 1280×800 window, which ADR 0023's rules forbid.
 - **Remembering expansion in the workflow's file.** It is one person's view, and it would mark the workflow unsaved and travel with team synchronization.
 
 ## Consequences
 
 - Expand All makes a graph much taller. The six-task sample fits a 1600×1000 window at about 63% zoom, where an expanded card's text is small.
-- At the 900×600 window the canvas is about 340 px wide, so one expanded card fills it.
+- At the 900×600 window the canvas is about 340 px wide, so one expanded card fills it, and Expand All is not offered there.
 - The minimap still draws every card at its saved position and collapsed size. A new card's free spot, and the canvas's other placements, follow the saved positions, so the layout pushes a new card aside when it lands under an expanded one.
 - A drag moves a card's saved position by as far as the pointer moves the card from where it shows. The layout then places the card again from its new saved position, so a card dragged while a neighbour is expanded can settle a little away from where it was dropped.
 
