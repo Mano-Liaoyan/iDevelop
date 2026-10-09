@@ -7,7 +7,8 @@ namespace IDevelop.Desktop.Execution;
 
 /// <summary>
 /// Where a task stands between runs, from the runs of its workflow that settled (#90): its result still counts, it is out
-/// of date, or it waits for tasks before it that have none. Its card keeps it after the run and after a restart.
+/// of date, its newest run ended it without a result, or it waits for tasks before it that have none. Its card keeps it
+/// after the run and after a restart.
 /// </summary>
 internal abstract record TaskStanding
 {
@@ -23,6 +24,13 @@ internal abstract record TaskStanding
         /// <summary>The task it took a result from has a current result itself, so this task can run again at once.</summary>
         public bool InputComplete { get; init; }
     }
+
+    /// <summary>
+    /// Its newest run that ran it ended without a result, as <paramref name="Task"/>, its view in that run, shows: failed,
+    /// cancelled, closed when the run stopped, or blocked. The card and the inspector show it as that run showed it.
+    /// </summary>
+    /// <param name="At">When that run settled.</param>
+    internal sealed record Ended(TaskView Task, DateTimeOffset At) : TaskStanding;
 
     /// <summary>
     /// It has no result, and its newest run that could start it did not, because <paramref name="Holders"/>, dependency
@@ -48,6 +56,8 @@ internal abstract record TaskStanding
                 };
         }
 
+        if (history.Ended(task) is { } ended) return new Ended(ended.Task, ended.At);
+
         // A task no run could start yet waits for nothing: it shows as it always did.
         var holders = history.WaitsFor(task);
         return holders.IsEmpty ? null : new Waits(holders);
@@ -58,6 +68,7 @@ internal abstract record TaskStanding
     {
         Succeeded => (NodeState.Succeeded, "Succeeded"),
         OutOfDate => (NodeState.OutOfDate, "Out of date"),
+        Ended ended => WorkflowRunText.Of(ended.Task, title, active: false),
         Waits waits => (NodeState.Idle, waits.Holders.Count == 1 ? $"Waits for \"{title(waits.Holders.Min)}\"" : $"Waits for {waits.Holders.Count} tasks"),
         _ => throw new InvalidOperationException(),
     };
@@ -74,6 +85,7 @@ internal abstract record TaskStanding
         OutOfDate { Input: { } input, InputComplete: true } => $"Out of date because \"{title(input)}\" has a newer\u00A0result.",
         OutOfDate { Input: not null } => null,
         OutOfDate => "Out of date because a task before it has a newer\u00A0result.",
+        Ended ended => WorkflowRunText.Detail(ended.Task, title, active: false),
         _ => null,
     };
 
@@ -91,6 +103,14 @@ internal abstract record TaskStanding
             $"Out of date because a later run of \"{title(holder)}\" ended without a result. Run \"{title(holder)}\"\u00A0first.",
         _ => null,
     };
+
+    /// <summary>
+    /// Which run left it where it stands, for one whose newest run ended it without a result, as that run's line said:
+    /// "A run of the "W" workflow ran this task last." Null otherwise, since its status and detail say it.
+    /// </summary>
+    public string? Owner(string workflow, bool hasAgent) => this is Ended
+        ? hasAgent ? $"A run of the \"{workflow}\" workflow ran this task last." : $"A run of the \"{workflow}\" workflow asked for this approval last."
+        : null;
 
     /// <summary>What its card's tooltip adds, which the card may only count: the tasks it waits for, by name.</summary>
     public string? Tip(Func<TaskId, string> title) => this is Waits waits ? $"Waits for {Names(waits.Holders, title)}." : null;

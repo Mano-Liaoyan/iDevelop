@@ -306,6 +306,58 @@ public sealed class CarriedResultTests
     }
 
     [AvaloniaFact]
+    public void A_task_whose_newest_run_ended_without_a_result_shows_that_end_after_a_restart_as_before()
+    {
+        using var f = Join();
+        // B ran on its own once before. In the run B fails, and the run stops A while it runs.
+        f.Answer("A", f.Says("A ready.", gate: "a"))
+            .Answer("B", f.Says("B on its own."), FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Exit(1));
+        var shell = f.Window();
+        shell.RunOnItsOwn("B");
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "B").LastAttempt is { StatusLabel: "Succeeded" },
+            "B's own run ends");
+        shell.StartRun();
+        shell.WaitUntil(() => shell.CardText("B", "CardStatus") == "Failed" && shell.CardText("A", "CardStatus") == "Running", "B fails while A runs",
+            () => string.Join(", ", Cards(shell)));
+        shell.Click(shell.Find<Button>("StopWorkflow"));
+        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false, View.PinsReleased: true }, "the run stops", () => shell.RunStatus);
+        Assert.Equal(["Cancelled", "Failed", "Waits for 2 tasks"], Cards(shell));
+        var before = Seen(shell);
+        shell.Window.Close();
+        shell.Render();
+
+        var reopened = f.Window();
+        reopened.WaitUntil(() => reopened.CardText("B", "CardStatus") == "Failed", "the reopened window reads the stopped run",
+            () => string.Join(", ", Cards(reopened)));
+        Assert.Null(reopened.WorkflowRun);
+        Assert.Equal(before, Seen(reopened));
+        Assert.False(reopened.InCard<TextBlock>("A", "CardAgent").IsEffectivelyVisible || reopened.InCard<TextBlock>("B", "CardAgent").IsEffectivelyVisible);
+
+        // What each card and its inspector show: the card's status and state, and the inspector's status, detail, and owner line.
+        static string[] Seen(Shell shell) => [.. new[] { "A", "B", "C" }.Select(title =>
+        {
+            Select(shell, title);
+            var node = (TaskNodeViewModel)shell.Node(title).DataContext!;
+            return string.Join(" | ", shell.CardText(title, "CardStatus"), node.State, shell.InView<TextBlock>("RunTaskStatus").Text,
+                Shows(shell, "RunTaskDetail") ? shell.Text("RunTaskDetail") : "-", Shows(shell, "RunOwner") ? shell.Text("RunOwner") : "-");
+        })];
+    }
+
+    [Fact]
+    public void A_task_its_newest_run_closed_as_stopped_shows_it_and_says_why_as_that_run_did()
+    {
+        var view = new TaskView(A, TaskState.Failed)
+        {
+            End = new AttemptEnd.Recovered(RecoveryOutcome.Stopped, new OperationId(Guid.NewGuid()), "You closed its turn as stopped."),
+        };
+        var ended = new TaskStanding.Ended(view, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal((NodeState.Interrupted, "Closed as stopped"), ended.Card(_ => "A"));
+        Assert.Equal("You closed its turn as stopped.", ended.Detail(_ => "A"));
+        Assert.Equal("A run of the \"W\" workflow ran this task last.", ended.Owner("W", hasAgent: true));
+    }
+
+    [AvaloniaFact]
     public void Run_Workflow_lists_no_earlier_result_and_runs_every_task_again()
     {
         using var f = Join();

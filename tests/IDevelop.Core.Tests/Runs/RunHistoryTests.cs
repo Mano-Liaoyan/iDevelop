@@ -228,6 +228,42 @@ public sealed class RunHistoryTests
         Assert.Equal(Third, History(f).CurrentOf(U)!.Run.Id);
     }
 
+    [Fact]
+    public void A_task_its_newest_run_ended_without_a_result_shows_that_end_until_a_newer_run_holds_it()
+    {
+        using var f = new RunFixtures(Chain());
+        f.Approve(node: T);
+        f.Complete(f.Reserve(T));
+        Fail(f, U, Run);
+        Settle(f, Run);
+
+        var history = History(f);
+        var ended = history.Ended(U)!;
+        Assert.Equal((Run, TaskState.Failed), (ended.Run.Id, ended.Task.State));
+        Assert.Equal(TerminalAttemptOutcome.Failed, Assert.IsType<AttemptEnd.Logged>(ended.Task.End).Outcome);
+        // A task with a result, or one no run started, did not end that way.
+        Assert.Null(history.Ended(T));
+        Assert.Null(history.Ended(C));
+
+        // A newer run from T, whose attempt fails, holds U without starting it: U now waits for T, and T ended there.
+        f.Approve(run: OtherRun, node: T);
+        Fail(f, T, OtherRun);
+        Settle(f, OtherRun);
+
+        history = History(f);
+        Assert.Null(history.Ended(U));
+        Assert.Equal([T], history.WaitsFor(U));
+        Assert.Equal((OtherRun, TaskState.Failed), (history.Ended(T)!.Run.Id, history.Ended(T)!.Task.State));
+
+        static void Fail(RunFixtures f, TaskId task, RunId run)
+        {
+            var failed = f.Reserve(task, run: run);
+            f.Claim(failed, run);
+            Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.PermitFor(run), f.Op(), failed.Attempt.Id, TerminalAttemptOutcome.Failed,
+                f.WriteLog(failed, TerminalAttemptOutcome.Failed, run: run)));
+        }
+    }
+
     private static (OutOfDateReason, TaskId?) Reason(TaskHistory history) =>
         Assert.IsType<TaskHistory.OutOfDate>(history) is var outOfDate ? (outOfDate.Reason, outOfDate.Input) : default;
 }

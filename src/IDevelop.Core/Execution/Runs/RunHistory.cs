@@ -16,6 +16,16 @@ internal sealed record EarlierResult(RunRecord Run, ResultRecord Result)
     }).Select(entry => entry.At).DefaultIfEmpty(DateTimeOffset.MinValue).First();
 }
 
+/// <summary>
+/// How a task's newest settled run that ran it left it when it left it no result (#90): <paramref name="Task"/> is the
+/// task's view in <paramref name="Run"/>, such as failed, cancelled, closed when the run stopped, or blocked.
+/// </summary>
+internal sealed record EndedTask(RunRecord Run, TaskView Task)
+{
+    /// <summary>When the run settled.</summary>
+    public DateTimeOffset At => Run.Receipts.Values.Select(entry => entry.At).DefaultIfEmpty(DateTimeOffset.MinValue).Max();
+}
+
 /// <summary>Why a task's result from an earlier run no longer counts as complete (#90).</summary>
 internal enum OutOfDateReason
 {
@@ -102,6 +112,24 @@ internal sealed class RunHistory
             return holders;
         }
         return [];
+    }
+
+    /// <summary>
+    /// How the task's newest settled run that held it left it, when that run started it and left it no result, or null: the
+    /// task has a result, no run started it, or a newer run held it without starting it, so what it waits for says more.
+    /// </summary>
+    public EndedTask? Ended(TaskId task)
+    {
+        // A run that left the task a result shows it done or stale, never ended.
+        for (var index = _runs.Length - 1; index >= 0; index--)
+        {
+            var record = _runs[index];
+            if (Touches(record, task))
+                return RunProjection.Settled(record, task) is { State: TaskState.Failed or TaskState.Blocked or TaskState.Uncertain or TaskState.SentBack } view
+                    ? new EndedTask(record, view) : null;
+            if (RunScope.InFlow(record).Contains(task)) return null;
+        }
+        return null;
     }
 
     /// <summary>The result <paramref name="result"/> stands for: an earlier run's result for one that was carried from it, itself otherwise.</summary>

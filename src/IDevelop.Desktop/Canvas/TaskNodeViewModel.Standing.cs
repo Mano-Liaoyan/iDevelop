@@ -5,7 +5,7 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// The node between runs (#90): where its task stands after the runs of its workflow that settled, as Succeeded, Out of
-/// date, or Waits for the tasks before it. The card and the inspector keep it after a run and after a restart, while no
+/// date, how its newest run ended it without a result, or Waits for the tasks before it. The card and the inspector keep it after a run and after a restart, while no
 /// run says more about the task and the task has not run on its own since.
 /// </summary>
 public sealed partial class TaskNodeViewModel
@@ -54,6 +54,7 @@ public sealed partial class TaskNodeViewModel
     {
         TaskStanding.Succeeded succeeded => attempt.RequestedAt > succeeded.At,
         TaskStanding.OutOfDate outOfDate => attempt.RequestedAt > outOfDate.At,
+        TaskStanding.Ended ended => attempt.RequestedAt > ended.At,
         _ => true,
     };
 

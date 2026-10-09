@@ -71,6 +71,15 @@ internal static class RunProjection
         return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built) { Snapshot = snapshot };
     }
 
+    /// <summary>
+    /// The task's view in a run that settled, as the run's own projection shows a task it started, or null when the run
+    /// did not start it (#90). A settled run has no live turns, holds, or resting attempts to read.
+    /// </summary>
+    public static TaskView? Settled(RunRecord record, TaskId task) => record.Revision.Snapshot.Tasks.ContainsKey(task)
+        ? Started(record, task, LatestAttempts(record).TryGetValue(task, out var attempt) ? attempt : null, record.CurrentResults.GetValueOrDefault(task),
+            _ => null, ImmutableDictionary<TaskId, LiveStage>.Empty, ImmutableDictionary<TaskId, TaskHold>.Empty)
+        : null;
+
     /// <summary>Each task's newest attempt in this run, in reservation order.</summary>
     public static ImmutableDictionary<TaskId, AttemptId> LatestAttempts(RunRecord record) => record.Receipts.Values
         .Where(entry => entry.Event is RunEvent.Reserved).OrderBy(entry => entry.Sequence)
