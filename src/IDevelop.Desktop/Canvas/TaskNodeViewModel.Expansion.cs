@@ -129,6 +129,9 @@ public sealed partial class TaskNodeViewModel
     public bool ShowsNextRunNote => HasAgent && State is NodeState.Running or NodeState.RunningElsewhere or NodeState.Stopping or NodeState.Waiting
         or NodeState.InReview;
 
+    /// <summary>The run needs the person's choice in the inspector, as the card's attention glyph also shows.</summary>
+    internal bool AnswersInInspector => NeedsRunPanel;
+
     /// <summary>One more surface shows the details: the expanded card, or the open peek.</summary>
     internal void HoldDetail()
     {

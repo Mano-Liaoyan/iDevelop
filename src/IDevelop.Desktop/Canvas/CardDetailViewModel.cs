@@ -85,8 +85,11 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     /// <summary>What needs the person, or a problem, sits in a box of its state's tint.</summary>
     public bool IsCallout => IsAnswerable || IsProblem;
 
-    /// <summary>An approval's request and a planner's proposal are answered in the inspector, which the card offers to show.</summary>
-    public bool NeedsInspector => Kind is CardNowKind.Approval or CardNowKind.Proposal;
+    /// <summary>
+    /// An approval's request, a planner's proposal, and a run's recovery choices are answered in the inspector, which the
+    /// card offers to show.
+    /// </summary>
+    public bool NeedsInspector => Kind is CardNowKind.Approval or CardNowKind.Proposal || _node.AnswersInInspector;
 
     /// <summary>The person's words to the agent, which the conversation's composer shares.</summary>
     public string Draft

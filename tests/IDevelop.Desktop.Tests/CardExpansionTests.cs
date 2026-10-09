@@ -124,7 +124,14 @@ public sealed class CardExpansionTests : IDisposable
     [AvaloniaFact]
     public void A_cards_ports_stay_on_its_header_line_so_its_wires_keep_their_rows_when_it_unfolds()
     {
-        var shell = Shell.Open(Diamond());
+        // Design's context wire to Archive, below and right of Docs, would pass under the collapsed Docs, through its body.
+        var archive = new TaskId(Guid.Parse("019a9d2e-6150-7000-8000-000000000088"));
+        var project = Diamond();
+        var document = Projects.WorkflowDocument.OpenProject(project).Single();
+        document.Apply(TaskAt(archive, "Archive", 660, 420, Codex, "Keep the old format readable."));
+        document.Apply(new Connect(new ConnectionKey(Design, archive), ConnectionKind.Context));
+        document.Save();
+        var shell = Shell.Open(project);
         var docs = shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "Docs");
         shell.Render();
         var (input, output) = (docs.Input.Anchor, docs.Output.Anchor);
