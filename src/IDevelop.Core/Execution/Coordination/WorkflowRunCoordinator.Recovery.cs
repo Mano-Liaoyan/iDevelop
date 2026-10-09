@@ -53,12 +53,7 @@ internal sealed partial class WorkflowRunCoordinator
         Request(address, task, message => new Preservation.Unavailable(message), reason => new Preservation.Rejected(reason), mark: true,
             () => Leased(task, async lease => await _materializer().Preserve(lease, command, attempt).ConfigureAwait(false),
                 reason => new Preservation.Rejected(reason)),
-            outcome =>
-            {
-                // A receipt is a disposition of a turn whose settlement stayed unresolved, so that turn lets go of the task.
-                if (outcome is Preservation.Preserved && _unresolved.Remove(task, out var turn)) turn.Release();
-                return outcome;
-            }, wait);
+            preserved => preserved, wait);
 
     /// <summary>
     /// What restoring <paramref name="task"/>'s checkout from the preservation <paramref name="preservation"/> would move:
@@ -82,13 +77,8 @@ internal sealed partial class WorkflowRunCoordinator
         Request(address, task, message => new Restoration.Unavailable(message), reason => new Restoration.Rejected(reason), mark: true,
             () => Leased(task, lease => Task.FromResult(_materializer().Restore(lease, OperationIds.Derive(command, "restore"), attempt,
                 preservation, command, preview)), reason => new Restoration.Rejected(reason)),
-            outcome =>
-            {
-                // A resolved block no longer holds the task; one the restore returned holds it until the journal says otherwise.
-                if (outcome is Restoration.Blocked blocked) Hold(task, new TaskHold.Blocked(blocked.Block));
-                else if (outcome is Restoration.Restored) _holds.Remove(task);
-                return outcome;
-            }, wait);
+            // The journal records what the restore repaired and any block it met, and the next decision reads both.
+            restored => restored, wait);
 
     /// <summary>
     /// Closes <paramref name="attempt"/>, whose turn's execution is unresolved, as stopped, on the person's confirmation

@@ -4,6 +4,7 @@ using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
+using static IDevelop.Desktop.Tests.AppTempFolder;
 using static IDevelop.Desktop.Tests.WorkflowRunFixture;
 
 namespace IDevelop.Desktop.Tests;
@@ -160,6 +161,31 @@ public sealed class WorkflowRunRecoveryTests
         {
             RecoveryViewModel.HandRepair = handRepair;
         }
+    }
+
+    [AvaloniaFact]
+    public void A_block_that_restoring_cannot_clear_offers_no_Preserve_and_says_how_the_run_ends()
+    {
+        var c = TestTasks.Review;
+        var d = new TaskId(Guid.Parse("019a9d2e-5d10-7a00-8000-000000000044"));
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), TaskAt(c, "C", 405, 300, WorkflowRunFixture.Codex, "Build C."),
+            TaskAt(d, "D", 105, 300, WorkflowRunFixture.Codex, "Build D."), Dependency(A, B), Dependency(A, c), Dependency(B, d), Dependency(c, d));
+        // B and C change one file each their own way, so D's inputs cannot join.
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Writes("settings.txt", "B\n", "B ready.")).Answer("C", f.Writes("settings.txt", "C\n", "C ready."))
+            .Answer("D", f.Says("D ready."));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("D", "Blocked");
+        shell.WaitForStatus("Needs attention");
+
+        shell.Click(shell.Header(shell.Node("D")));
+
+        Assert.StartsWith("The results it joins conflict.", shell.Text("RunTaskDetail"));
+        Assert.Equal("settings.txt", shell.Text("RecoveryPaths"));
+        Assert.Equal("Preserve and restore cannot clear this block. Stop Workflow ends the run, and finished work stays.", shell.Text("RecoveryNoAction"));
+        Assert.False(Shows(shell, "PreserveCheckout"));
+        Assert.False(Shows(shell, "CloseAsStopped"));
+        Assert.Equal(0, f.Launches("D"));
     }
 
     [AvaloniaFact]

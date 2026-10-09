@@ -152,6 +152,24 @@ public sealed class RecoveryCommandTests
     }
 
     [Fact]
+    public async Task A_waiting_attempt_is_not_closed_as_stopped()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat), Agent(B)], (A, B)));
+        f.Answer(A, Reports(A)).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        var sequence = f.Read().Sequence;
+
+        Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RunCommand.Refused>(
+            await f.Coordinator.ConfirmStopped(f.Address, A, waiting.Tasks[A].Attempt!.Value, "Stopped by hand.", f.Preparation.Op()).WaitAsync(Bound)).Reason.Problem);
+
+        Assert.Equal(sequence, f.Read().Sequence);
+        Assert.Empty(f.Read().Closures);
+        Assert.Equal(TaskState.Waiting, (await f.Decided()).Tasks[A].State);
+    }
+
+    [Fact]
     public async Task A_turn_unresolved_by_a_crash_closes_once_on_the_person_s_confirmation_and_launches_nothing()
     {
         await using var f = new CoordinatorFixture(Chain());

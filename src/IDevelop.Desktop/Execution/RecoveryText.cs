@@ -9,8 +9,11 @@ namespace IDevelop.Desktop.Execution;
 /// </summary>
 internal static class RecoveryText
 {
-    /// <summary>What the block names in the checkout: paths, the branch, HEAD, and the index lock. Null for a block with no checkout scope.</summary>
-    public static string? Paths(MaterializationBlock block) => block.Scope switch
+    /// <summary>
+    /// The paths a conflict names, or what the block names in the checkout: paths, the branch, HEAD, and the index lock.
+    /// Null for a block with neither.
+    /// </summary>
+    public static string? Paths(MaterializationBlock block) => block.Conflict is { Paths.IsEmpty: false } conflict ? List(conflict.Paths) : block.Scope switch
     {
         BlockScope.Checkout { Paths.IsEmpty: true, Branch: false, Head: false, IndexLock: false } => "The whole checkout",
         BlockScope.Checkout checkout => string.Join(", ", new[]
