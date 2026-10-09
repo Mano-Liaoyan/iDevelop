@@ -239,7 +239,7 @@ public sealed class AgentChoiceTests
         var pi = new ProposedAgent("pi", "deepseek-flash", "high", null);
 
         Assert.Equal(
-            new AgentCheck.Unusable("The planner chose Pi, which has no read-only mode, and a Plan only reads.", "Pi can't run read-only"),
+            new AgentCheck.Unusable("The planner chose Pi, which has no read-only mode for a Plan.", "Pi can't run read-only"),
             AgentCheck.Of(pi, BuiltInBlueprints.Plan, Machine));
         Assert.IsType<AgentCheck.Unusable>(AgentCheck.Of(pi, BuiltInBlueprints.Review, Machine));
         Assert.IsType<AgentCheck.Usable>(AgentCheck.Of(new ProposedAgent("claude-code", "claude-opus-5-5", "high", null), BuiltInBlueprints.Review, Machine));
