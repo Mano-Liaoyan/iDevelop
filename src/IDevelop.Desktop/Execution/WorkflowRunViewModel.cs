@@ -65,7 +65,8 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
 
     public bool IsControlled => View.Controlled;
 
-    public string StatusLabel => View.Label;
+    /// <summary>The run's status, which counts the tasks that run while there are several: "3 running".</summary>
+    public string StatusLabel => WorkflowRunText.Status(View);
 
     public StatusTone Tone => WorkflowRunText.Tone(View.Status);
 
@@ -85,7 +86,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     public string? Activity => Problem ?? Now();
 
     /// <summary>A client of the run starts, runs, or settles in this window.</summary>
-    public bool HasActivity => IsActive && View.Tasks.Values.Any(task => task.State is TaskState.Starting or TaskState.Running or TaskState.Settling);
+    public bool HasActivity => IsActive && View.Tasks.Values.Any(WorkflowRunText.Busy);
 
     /// <summary>A task of the run waits for the person: a reply, a question, or an approval.</summary>
     public bool IsWaitingForPerson => IsActive && View.Tasks.Values.Any(task => task.State == TaskState.Waiting &&
@@ -199,14 +200,9 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
                 return "Every task has a current result.";
         }
 
-        if (tasks.FirstOrDefault(task => task.State is TaskState.Running or TaskState.Starting or TaskState.Settling) is { } busy)
+        if (WorkflowRunText.Working(tasks, _title) is { } working)
         {
-            return busy.State switch
-            {
-                TaskState.Starting => $"Starting {Named(busy)}",
-                TaskState.Running => $"Running {Named(busy)}",
-                _ => $"Finishing {Named(busy)}",
-            };
+            return working;
         }
 
         if (tasks.FirstOrDefault(task => task.State == TaskState.Waiting && task.Gate is { Status: GateStatus.Waiting }) is { } gate)

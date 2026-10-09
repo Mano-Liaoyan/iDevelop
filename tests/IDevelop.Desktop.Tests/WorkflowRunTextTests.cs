@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
@@ -91,5 +92,45 @@ public sealed class WorkflowRunTextTests
         Assert.Equal(string.Join("\n", paths) + "\nthe task's branch", RecoveryText.Paths(block));
         Assert.Equal(string.Join("\n", paths), RecoveryText.CandidatePaths(new RebaseCandidate.Clean(new(new string('1', 40)), new(new string('2', 40)), [.. paths])));
         Assert.Equal(string.Join("\n", paths), RecoveryText.Refs(block with { Scope = new BlockScope.Refs([.. paths]) }));
+    }
+
+    [Fact]
+    public void Several_busy_tasks_show_by_what_they_do_and_the_pill_counts_them()
+    {
+        var titles = new Dictionary<TaskId, string>();
+        TaskView Busy(string title, TaskState state)
+        {
+            var task = new TaskId(Guid.NewGuid());
+            titles[task] = title;
+            return new TaskView(task, state);
+        }
+
+        string Titled(TaskId task) => titles[task];
+        var one = new[] { Busy("Solo", TaskState.Starting) };
+        var mixed = new[] { Busy("Parse", TaskState.Running), Busy("Docs", TaskState.Settling), Busy("API", TaskState.Running), Busy("UI", TaskState.Starting) };
+        var many = new[] { "Delta", "Alpha", "Echo", "Bravo", "Charlie" }.Select(title => Busy(title, TaskState.Running)).ToArray();
+
+        Assert.Equal("Starting \"Solo\"", WorkflowRunText.Working(one, Titled));
+        Assert.Equal("Running \"API\" and \"Parse\" · Starting \"UI\" · Finishing \"Docs\"", WorkflowRunText.Working(mixed, Titled));
+        Assert.Equal("Running \"Alpha\", \"Bravo\", and 3 more", WorkflowRunText.Working(many, Titled));
+        Assert.Null(WorkflowRunText.Working([new TaskView(Task, TaskState.Waiting)], Title));
+
+        RunView Run(RunStatus status, IEnumerable<TaskView> tasks) => new(new("/project", new WorkflowId(Guid.NewGuid()), new RunId(Guid.NewGuid())),
+            status == RunStatus.Stopping ? RunPhase.StopRequested : RunPhase.Approved, status, true, true, 0,
+            tasks.ToImmutableSortedDictionary(task => task.Task, task => task));
+        Assert.Equal("Running", WorkflowRunText.Status(Run(RunStatus.Running, one)));
+        Assert.Equal("4 running", WorkflowRunText.Status(Run(RunStatus.Running, mixed)));
+        Assert.Equal("Stopping", WorkflowRunText.Status(Run(RunStatus.Stopping, mixed)));
+    }
+
+    [Fact]
+    public void A_task_that_waits_for_several_counts_them_on_its_card_and_names_them_in_its_detail()
+    {
+        var one = new TaskView(Task, TaskState.Pending) { HeldBy = [TestTasks.Design] };
+        var two = new TaskView(TestTasks.Review, TaskState.Pending) { HeldBy = [TestTasks.Design, Task] };
+
+        Assert.Equal((NodeState.Idle, "Waits for \"A\""), WorkflowRunText.Of(one, Title));
+        Assert.Equal((NodeState.Idle, "Waits for 2 tasks"), WorkflowRunText.Of(two, Title));
+        Assert.Equal("It starts once \"A\" and \"B\" hand on a result.", WorkflowRunText.Detail(two, Title));
     }
 }

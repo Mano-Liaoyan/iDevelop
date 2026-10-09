@@ -184,8 +184,9 @@
                   <TextBlock Classes="caption" Text="{Binding Run.Progress}" VerticalAlignment="Center"
                              AutomationProperties.AutomationId="RunProgress" />
                 </StackPanel>
+                <!-- Several running tasks' titles wrap to a second line before they are cut. -->
                 <TextBlock Classes="caption" Text="{Binding Run.Activity}" MaxWidth="360" HorizontalAlignment="Left"
-                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity}"
+                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Run.Activity}"
                            IsVisible="{Binding Run.Activity, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}"
                            AutomationProperties.AutomationId="RunActivity" />
               </StackPanel>

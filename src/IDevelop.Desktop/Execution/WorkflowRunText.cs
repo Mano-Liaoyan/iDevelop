@@ -20,6 +20,28 @@ internal static class WorkflowRunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>The run's status on its pill: "3 running" while several of its tasks' clients work, else the run's own label.</summary>
+    public static string Status(RunView view) =>
+        view.Status == RunStatus.Running && view.Tasks.Values.Count(Busy) is var busy and > 1 ? $"{busy} running" : view.Label;
+
+    /// <summary>Whether the task's client starts, runs, or finishes, which its card shows with the running ring.</summary>
+    public static bool Busy(TaskView task) => task.State is TaskState.Starting or TaskState.Running or TaskState.Settling;
+
+    /// <summary>
+    /// What the run's busy tasks do, by title, as in Running "A" and "B" · Starting "C". Null while none is busy.
+    /// </summary>
+    public static string? Working(IEnumerable<TaskView> tasks, Func<TaskId, string> title)
+    {
+        var busy = tasks.Where(Busy).Select(task => (task.State, Title: title(task.Task), task.Task))
+            .OrderBy(task => task.Title, StringComparer.CurrentCultureIgnoreCase).ThenBy(task => task.Task).ToArray();
+        var groups = new[] { (TaskState.Running, "Running"), (TaskState.Starting, "Starting"), (TaskState.Settling, "Finishing") }
+            .Select(group => (Verb: group.Item2, Titles: busy.Where(task => task.State == group.Item1).Select(task => task.Title).ToArray()))
+            .Where(group => group.Titles.Length > 0)
+            .Select(group => $"{group.Verb} {Listed(group.Titles)}")
+            .ToArray();
+        return groups.Length == 0 ? null : string.Join(" · ", groups);
+    }
+
     /// <summary>"2 of 5 done", or null for a run without tasks.</summary>
     public static string? Progress(RunView view) => view.Tasks.Count == 0 ? null
         : $"{view.Tasks.Values.Count(task => task.State == TaskState.Done)} of {view.Tasks.Count} done";
@@ -29,7 +51,13 @@ internal static class WorkflowRunText
     public static (NodeState State, string Label) Of(TaskView task, Func<TaskId, string> title, bool active = true) => task.State switch
     {
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported when !active => (NodeState.Idle, "Not started"),
-        TaskState.Pending => (NodeState.Idle, task.HeldBy.IsEmpty ? "Pending" : $"Waits for {Names(task.HeldBy, title)}"),
+        // A card fits one title; the inspector's detail names every task it waits for.
+        TaskState.Pending => (NodeState.Idle, task.HeldBy.Count switch
+        {
+            0 => "Pending",
+            1 => $"Waits for \"{title(task.HeldBy.Min)}\"",
+            var count => $"Waits for {count} tasks",
+        }),
         TaskState.Ready => (NodeState.Idle, "Ready"),
         TaskState.Starting => (NodeState.Running, "Starting"),
         TaskState.Running => (NodeState.Running, "Running"),
@@ -165,6 +193,19 @@ internal static class WorkflowRunText
         MaterializationProblem.InputUnavailable => "An input it needs is unavailable.",
         _ => $"{problem}.",
     };
+
+    /// <summary>Up to three quoted titles in full, and the first two and a count beyond that.</summary>
+    private static string Listed(string[] titles)
+    {
+        var names = titles.Select(title => $"\"{title}\"").ToArray();
+        return names.Length switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            3 => $"{names[0]}, {names[1]}, and {names[2]}",
+            _ => $"{names[0]}, {names[1]}, and {names.Length - 2} more",
+        };
+    }
 
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {
