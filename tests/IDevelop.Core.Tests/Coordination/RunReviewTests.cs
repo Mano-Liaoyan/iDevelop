@@ -319,6 +319,31 @@ public sealed class RunReviewTests
     }
 
     [Fact]
+    public async Task A_late_choice_after_the_replacement_ran_hears_that_the_round_was_replaced()
+    {
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Interrupting(f),
+                Writes(f, A, 3, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve, gate: "agree"))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await Interrupt(f);
+        var first = Assert.IsType<FixReply.Reserved>(await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
+        // The replacement ran and closed, and the reviewer's next turn runs, so the review and its subject are both busy.
+        await f.Until(view => view.Tasks[R].State == TaskState.Running && f.Read().Closures.ContainsKey(first.Attempt));
+
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        Assert.Equal(RunProblem.ReplacementConflict, Assert.IsType<FixReply.Refused>(
+            await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
+        f.Open("agree");
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal((1, 0), (Count(f, cause => cause is AttemptCause.Continue), Count(f, cause => cause is AttemptCause.Retry)));
+        Assert.Equal((3, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
+    }
+
+    [Fact]
     public async Task Continue_fix_over_a_changing_checkout_blocks_and_starts_nothing()
     {
         await using var f = new RunConversationFixture(Reviewed());
