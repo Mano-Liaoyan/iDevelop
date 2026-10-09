@@ -22,4 +22,4 @@ A workflow run starts every task that is ready at once, each with its own client
 - Several clients of one provider may run at once under one account and meet its rate limits. No real client has run this way yet, and such a check needs the owner's approval.
 - A step that waits for the repository lock can hold its start for up to 30 seconds before it is refused and tried again.
 
-Source: issue [#89](https://github.com/Mano-Liaoyan/iDevelop/issues/89), decided by the owner on 2026-10-09.
+Source: issue [#89](https://github.com/Mano-Liaoyan/iDevelop/issues/89), decided by the owner on 2026-10-09, and pull request [#96](https://github.com/Mano-Liaoyan/iDevelop/pull/96), its Decisions 1 to 5.
