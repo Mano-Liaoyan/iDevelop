@@ -189,6 +189,30 @@ public sealed class CarriedResultTests
     }
 
     [Fact]
+    public async Task A_base_on_which_a_predecessor_of_the_node_cannot_be_carried_cannot_be_chosen()
+    {
+        await using var f = JoinAnswers(new ApprovalFixture(Join()));
+        await f.Open();
+        await RunNode(f, B, 1);
+        await RunNode(f, A, 2);
+        // Uncommitted work that conflicts with B's code: B's result applies on HEAD, and not on a snapshot of that work.
+        f.Git.Write("out-b.txt", "other\n");
+
+        var preview = f.Runs.Preflight(f.Workflow, C);
+
+        Assert.Empty(preview.Gaps);
+        var b = preview.Carried.Single(row => row.Task == B);
+        Assert.Equal<BaseChoice>([BaseChoice.Head], b.Bases);
+        Assert.Equal(new CarryRefusal.Conflict(["out-b.txt"]), b.Refusal);
+        Assert.Equal<BaseChoice>([BaseChoice.Head], preview.Choices);
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Snapshot, Command(3))).WaitAsync(Bound));
+        Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
+        var (third, _) = await RunNode(f, C, 4);
+        Assert.Equal([1, 1, 2], Launches(f, A, B, C));
+        Assert.Equal(BaseChoice.Head, f.Read(third).Base.Choice);
+    }
+
+    [Fact]
     public async Task A_report_from_an_earlier_run_is_carried_as_it_is_with_no_code_to_replay()
     {
         await using var f = JoinAnswers(new ApprovalFixture(Join(readOnlyB: true)));

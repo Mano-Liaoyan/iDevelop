@@ -152,6 +152,27 @@ public sealed class CarriedJournalTests
     }
 
     [Fact]
+    public void A_result_that_took_another_result_of_a_task_than_the_run_has_is_not_carried()
+    {
+        // X ⇢ Q (context) → Z. The first run runs everything. The second runs X again, so Q's result, which took X's first
+        // result, cannot be carried when the person adds Z to it.
+        var (x, q, z) = (T, U, C);
+        var workflow = Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C)), x, q, ConnectionKind.Context), q, z);
+        using var f = new RunFixtures(workflow);
+        f.Approve();
+        foreach (var task in new[] { x, q, z }) f.Complete(f.Reserve(task));
+        Settle(f, Run);
+        f.Approve(run: OtherRun, node: x);
+        f.Complete(f.Reserve(x, run: OtherRun), run: OtherRun);
+        var record = f.Read(OtherRun);
+
+        var build = Carrying.Build(null, record with { Requested = [x, z] }, History(f), f.Op(), preview: false);
+
+        Assert.Empty(build.Carried);
+        Assert.Equal(new CarryRefusal.InputRuns(x), build.Refused[q]);
+    }
+
+    [Fact]
     public void A_request_carries_what_the_tasks_it_adds_need_once_and_a_task_with_a_result_is_not_requested()
     {
         using var f = new RunFixtures(Chain());

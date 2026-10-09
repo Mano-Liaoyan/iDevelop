@@ -162,6 +162,24 @@ public sealed class CarriedResultTests
     }
 
     [AvaloniaFact]
+    public void A_task_whose_earlier_run_of_its_own_failed_shows_no_problem_once_a_later_workflow_run_succeeded()
+    {
+        using var f = Join();
+        f.Answer("B", FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Exit(1), f.Writes("out-b.txt", "B\n", "B ready."));
+        var shell = f.Window();
+        shell.RunOnItsOwn("B");
+        shell.WaitForCard("B", "Failed");
+        Assert.True(shell.InCard<Button>("B", "CardAttention").IsEffectivelyVisible);
+        RunNode(shell, "B");
+
+        shell.Click(shell.Find<Button>("DismissRun"));
+        shell.Render();
+
+        Assert.Equal("Succeeded", shell.CardText("B", "CardStatus"));
+        Assert.False(shell.InCard<Button>("B", "CardAttention").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void A_node_run_while_a_run_is_active_counts_an_earlier_result_and_its_run_carries_it()
     {
         var d = new TaskId(Guid.Parse("019a9d2e-5d11-7a22-b3c4-5d6e7f809a44"));

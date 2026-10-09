@@ -1012,7 +1012,6 @@ internal sealed partial class RunStore
             if (record.Phase != RunPhase.Approved) return Refuse(RunProblem.RunStopped);
             if (!record.Revision.Snapshot.Tasks.ContainsKey(task)) return new Mutation.Rejected(new(RunProblem.IdentityMismatch, Task: task));
             if (RunScope.InFlow(record).Contains(task)) return new Mutation.Existing(new RunEvent.Requested(task));
-            if (record.Results.Any(result => result.Task == task)) return new Mutation.Rejected(new(RunProblem.StartConflict, Task: task));
             if (CarriedProblem(all, record.Revision.Snapshot, carried) is { } stale) return new Mutation.Rejected(stale);
             var widened = record;
             foreach (var item in carried.IsDefault ? [] : carried) widened = RunReducer.WithCarried(widened, item);
