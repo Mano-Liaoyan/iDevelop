@@ -88,9 +88,12 @@
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" IsVisible="{Binding IsMessage}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateWaiting}" IsVisible="{Binding IsAnswerable}"
                     Foreground="{DynamicResource StateWaitingStrongBrush}" />
-          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding NeedsInspector}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding IsInspectorRequest}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconDescription}" IsVisible="{Binding IsResult}" />
-          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateFailed}" IsVisible="{Binding IsStopped}" />
+          <!-- A failure or an interruption marks its heading in its state's colour; another ending stays neutral. -->
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateFailed}" IsVisible="{Binding IsProblem}"
+                    Foreground="{DynamicResource StateFailedStrongBrush}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding IsQuietStop}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" IsVisible="{Binding IsWaits}" />
           <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconBrief}" IsVisible="{Binding IsTask}" />
         </Panel>

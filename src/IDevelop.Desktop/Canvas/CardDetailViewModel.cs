@@ -20,7 +20,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     [
         nameof(Now), nameof(Heading), nameof(Text), nameof(HasText), nameof(Meta), nameof(Kind), nameof(IsMessage), nameof(IsAnswerable),
         nameof(IsApproval), nameof(IsResult), nameof(IsStopped), nameof(IsWaits), nameof(IsTask), nameof(IsProposal), nameof(Waits),
-        nameof(AnswerNote), nameof(Latest), nameof(IsProblem), nameof(IsCallout), nameof(NeedsInspector), nameof(AnswerWatermark),
+        nameof(AnswerNote), nameof(Latest), nameof(IsProblem), nameof(IsQuietStop), nameof(IsInspectorRequest), nameof(IsCallout), nameof(NeedsInspector), nameof(AnswerWatermark),
     ];
 
     private readonly TaskNodeViewModel _node;
@@ -82,6 +82,12 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     /// <summary>The task stopped on a failure or an interruption, which its state's tint marks.</summary>
     public bool IsProblem => IsStopped && _node.State is NodeState.Failed or NodeState.Interrupted;
 
+    /// <summary>An approval's request or a planner's proposal, which the person answers in the inspector.</summary>
+    public bool IsInspectorRequest => Kind is CardNowKind.Approval or CardNowKind.Proposal;
+
+    /// <summary>The task ended in another way, such as cancelled, or the run holds it for a reason of its own.</summary>
+    public bool IsQuietStop => IsStopped && !IsProblem;
+
     /// <summary>What needs the person, or a problem, sits in a box of its state's tint.</summary>
     public bool IsCallout => IsAnswerable || IsProblem;
 
@@ -89,7 +95,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     /// An approval's request, a planner's proposal, and a run's recovery choices are answered in the inspector, which the
     /// card offers to show.
     /// </summary>
-    public bool NeedsInspector => Kind is CardNowKind.Approval or CardNowKind.Proposal || _node.AnswersInInspector;
+    public bool NeedsInspector => IsInspectorRequest || _node.AnswersInInspector;
 
     /// <summary>The person's words to the agent, which the conversation's composer shares.</summary>
     public string Draft
