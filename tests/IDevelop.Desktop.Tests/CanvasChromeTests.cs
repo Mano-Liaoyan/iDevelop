@@ -150,6 +150,9 @@ public sealed class CanvasChromeTests : IDisposable
             Assert.All(controls, control => Assert.False(control.Intersects(card), $"{((TaskNodeViewModel)node.DataContext!).Title} at {card} is under {control}."));
         }
 
+        // A taller window gives the canvas its 280 px before the dock grows to its default.
+        Resize(shell, 900, 660);
+        Assert.Equal(MainWindow.CanvasMinHeight, shell.Bounds(shell.Editor).Height, 0.5);
         Resize(shell, 1600, 1000);
         Assert.Equal(400, shell.Window.MainArea.RowDefinitions[2].ActualHeight, 0.5);
         Assert.True(shell.Bounds(shell.Editor).Height >= MainWindow.CanvasMinHeight);
