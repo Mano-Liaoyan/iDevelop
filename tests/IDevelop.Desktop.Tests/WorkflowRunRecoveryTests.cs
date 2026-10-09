@@ -273,7 +273,8 @@ public sealed class WorkflowRunRecoveryTests
         Assert.Equal(RecoveryText.NoSuccess, shell.Text("RecoveryNoSuccess"));
         Assert.Equal("2 captures. They show shared refs that no task of the run moved:", shell.Text("RecoveryCaptures"));
         Assert.Equal("refs/stash", shell.Find<TextBox>("RecoveryCapturePaths").Text);
-        Assert.StartsWith($"refs/stash pointed at nothing when the turn started and pointed at {head[..12]} when this was found.", shell.Text("RecoveryRefRepair"));
+        Assert.Equal($"refs/stash pointed at nothing when the turn started and pointed at {head[..12]} when this was found. iDevelop does not move " +
+            "these refs. Put them back outside iDevelop if you need them as they were; this attempt cannot succeed either way.", shell.Text("RecoveryRefRepair"));
 
         // Even with the stash back, the attempt's capture stays unaccepted, so the restore gives it no result.
         f.Run("update-ref", "-d", "refs/stash");

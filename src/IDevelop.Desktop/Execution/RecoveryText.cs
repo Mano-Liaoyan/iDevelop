@@ -47,15 +47,18 @@ internal static class RecoveryText
     /// What the person does about a shared ref that changed: put it back where the turn found it, outside iDevelop, then
     /// preserve and restore, so Restore checks it again. Null for a block without refs.
     /// </summary>
-    public static string? RefRepair(MaterializationBlock block, IEnumerable<SharedRefDrift> drifts)
+    /// <param name="clears">Restore can clear the block once the refs are back. It cannot for an attempt whose capture was not accepted.</param>
+    public static string? RefRepair(MaterializationBlock block, IEnumerable<SharedRefDrift> drifts, bool clears = true)
     {
         if (block.Scope is not BlockScope.Refs { Names: var names }) return null;
         var known = drifts.Where(drift => drift.Known && names.Contains(drift.Name)).ToDictionary(drift => drift.Name);
         var each = names.Select(name => known.TryGetValue(name, out var drift)
             ? $"{name} pointed at {Commit(drift.Recorded)} when the turn started and pointed at {Commit(drift.Observed)} when this was found."
             : $"{name} changed while the turn ran.");
-        return string.Join(" ", each) + " iDevelop does not move these refs. Put each one back outside iDevelop, then preserve and restore so " +
-            "iDevelop checks them again. The block clears once they are back.";
+        return string.Join(" ", each) + (clears
+            ? " iDevelop does not move these refs. Put each one back outside iDevelop, then preserve and restore so iDevelop checks them again. " +
+                "The block clears once they are back."
+            : " iDevelop does not move these refs. Put them back outside iDevelop if you need them as they were; this attempt cannot succeed either way.");
     }
 
     /// <summary>"Initial attempt, turn 2" or "Fix round 1", with the attempt's short id.</summary>

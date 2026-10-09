@@ -75,7 +75,7 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
     public IReadOnlyList<RecoveryBlock> Blocks => IsElsewhere ? [] :
         [.. (_evidence is { } evidence ? evidence.Blocks : Block is { } shown ? [shown] : []).Select(block => new RecoveryBlock(
             RecoveryText.Problem(block), block.Detail, RecoveryText.Paths(block), RecoveryText.Refs(block),
-            RecoveryText.RefRepair(block, _evidence?.Refs ?? []), block.Attempt is { } attempt ? attempt.Value.ToString("D")[..8] : null))];
+            RecoveryText.RefRepair(block, _evidence?.Refs ?? [], clears: !CaptureRejected), block.Attempt is { } attempt ? attempt.Value.ToString("D")[..8] : null))];
 
     /// <summary>The newest turn's client process, and whether it still runs.</summary>
     public string? ClientText => _evidence is { } evidence && !IsElsewhere ? RecoveryText.Client(evidence) : null;
