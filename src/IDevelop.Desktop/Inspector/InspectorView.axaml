@@ -270,7 +270,7 @@
                               <TextBlock Text="Run" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                          <Button Classes="action" Command="{Binding CancelCommand}"
+                          <Button Classes="action" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCancelButton}"
                                   AutomationProperties.AutomationId="CancelRun"
                                   AutomationProperties.Name="Cancel run">
                             <StackPanel Orientation="Horizontal" Spacing="6">

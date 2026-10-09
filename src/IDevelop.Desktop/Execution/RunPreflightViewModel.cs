@@ -60,13 +60,15 @@ public sealed class PreflightInclusionRow : ObservableObject
 }
 
 /// <summary>
-/// Run Workflow's preflight: what the run would approve and how it would start, for the whole workflow, without a selected
-/// node. It reads the project off the UI thread and records nothing. Start confirms what it shows; repeating Start, or
-/// starting again after a refusal, confirms with the same command, so the sheet approves one run at most.
+/// The preflight of Run Workflow, for the whole workflow without a selected node, or of a node's Run, for that node and the
+/// tasks after it (#90): what the run would approve and how it would start. It reads the project off the UI thread and
+/// records nothing. Start confirms what it shows; repeating Start, or starting again after a refusal, confirms with the
+/// same command, so the sheet approves one run at most.
 /// </summary>
 public sealed class RunPreflightViewModel : ObservableObject
 {
     private readonly WorkflowCanvasViewModel _canvas;
+    private readonly TaskId? _node;
     private readonly OperationId _command = new(Guid.NewGuid());
     private readonly RelayCommand _start;
     private readonly RelayCommand _showActive;
@@ -79,9 +81,11 @@ public sealed class RunPreflightViewModel : ObservableObject
     private string? _notice;
     private RunId? _active;
 
-    internal RunPreflightViewModel(WorkflowCanvasViewModel canvas)
+    /// <param name="node">The node whose Run opened the sheet, or null for Run Workflow.</param>
+    internal RunPreflightViewModel(WorkflowCanvasViewModel canvas, TaskId? node = null)
     {
         _canvas = canvas;
+        _node = node;
         _start = new RelayCommand(() => _ = StartAsync(), () => CanStart);
         _showActive = new RelayCommand(ShowActive, () => _active is not null && !_starting && !_opening);
         CancelCommand = new RelayCommand(canvas.ClosePreflight);
@@ -89,6 +93,12 @@ public sealed class RunPreflightViewModel : ObservableObject
     }
 
     public string WorkflowName => _canvas.Name;
+
+    /// <summary>"Run Workflow", or "Run "Parse input"" for a node's Run.</summary>
+    public string Heading => _node is { } node ? $"Run \"{_canvas.Workflow.Tasks.GetValueOrDefault(node)?.Title ?? "a removed task"}\"" : "Run Workflow";
+
+    /// <summary>The node whose Run opened the sheet, or null for Run Workflow.</summary>
+    internal TaskId? Node => _node;
 
     /// <summary>The project is being read, so nothing else shows yet.</summary>
     public bool IsChecking => _checking;
@@ -189,7 +199,7 @@ public sealed class RunPreflightViewModel : ObservableObject
         RunPreflight preview;
         try
         {
-            preview = await Task.Run(() => runs.Preflight(workflow));
+            preview = await Task.Run(() => runs.Preflight(workflow, _node));
         }
         catch (ObjectDisposedException)
         {
@@ -403,6 +413,7 @@ public sealed class RunPreflightViewModel : ObservableObject
                     ? $"Workflow runs need the project folder to be a Git repository's root. {git.Detail}" : git.Detail, null),
                 PreflightGap.Submodules submodules => new($"Git could not read the project's submodules. {submodules.Detail}", null),
                 PreflightGap.Records records => new($"A run record of this workflow could not be read. {records.Detail}", null),
+                PreflightGap.After after => new($"{Title(preview, after.Id)}: {WorkflowRunText.RunsAfter(after.Predecessors, TaskTitle)}", ShowNode(after.Id)),
                 _ => new(gap.ToString(), null),
             };
         }
@@ -416,6 +427,9 @@ public sealed class RunPreflightViewModel : ObservableObject
             _canvas.Inspect(node);
         })
         : null;
+
+    /// <summary>A task by the title the workflow gives it now, for a task the node's preview does not list.</summary>
+    private string TaskTitle(TaskId task) => _canvas.Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
 
     private static string Title(RunPreflight preview, TaskId task) =>
         preview.Tasks.FirstOrDefault(row => row.Task == task)?.Title is { Length: > 0 } title ? $"\"{title}\"" : "A task";

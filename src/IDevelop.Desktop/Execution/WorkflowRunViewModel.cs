@@ -18,6 +18,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     private readonly RelayCommand _stop;
     private readonly RelayCommand _resume;
     private readonly OperationId _stopCommand = new(Guid.NewGuid());
+    private readonly Dictionary<TaskId, OperationId> _joins = [];
     private Timer? _control;
     private int _asking;
     private bool _busy;
@@ -111,6 +112,17 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
 
     internal Task<RunCommand> StopAsync() => Command(() => Coordinator.Stop(Address, _stopCommand));
 
+    /// <summary>
+    /// Adds <paramref name="task"/> to the run, as a node's Run does while the run is active (#90). One confirmation per task
+    /// in this view model, so a repeat or a retry after a busy refusal adds it once.
+    /// </summary>
+    internal Task<RunCommand> JoinAsync(TaskId task)
+    {
+        var confirmation = _joins.TryGetValue(task, out var known) ? known : _joins[task] = new OperationId(Guid.NewGuid());
+        return Retrying(() => Coordinator.Request(Address, task, confirmation),
+            outcome => outcome is RunCommand.Refused refused && WorkflowRunText.Transient(refused.Reason));
+    }
+
     internal Task<RunCommand> ResumeAsync() => Command(() => Coordinator.Resume(Address));
 
     public void Dispose()
@@ -197,7 +209,8 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
             case RunStatus.Stopped:
                 return "Stopped. Finished work stays.";
             case RunStatus.Completed:
-                return "Every task has a current result.";
+                // A run that a node's Run started completes once nothing more can start, which can leave tasks it never ran (#90).
+                return tasks.All(task => task.State == TaskState.Done) ? "Every task has a current result." : "Every task it ran has a current result.";
         }
 
         if (WorkflowRunText.Working(tasks, _title) is { } working)

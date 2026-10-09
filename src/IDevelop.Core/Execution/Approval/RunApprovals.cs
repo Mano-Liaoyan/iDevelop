@@ -88,11 +88,14 @@ internal sealed class RunApprovals
     }
 
     /// <summary>Why the task could not start as configured, as a single start would say, or null.</summary>
-    private StartProblem? Gap(TaskDefinition task)
+    private StartProblem? Gap(TaskDefinition task) => Gap(task, _project, _clients);
+
+    /// <summary>Why <paramref name="task"/> could not start in a run as configured, as the preflight names it, or null.</summary>
+    internal static StartProblem? Gap(TaskDefinition task, string project, IReadOnlyDictionary<ClientId, ClientStatus> clients)
     {
         if (task.Blueprint.Work is WorkSpec.Person) return null;
         // A run renders the prompt from the node and its inputs, so this checks the agent and its settings, then the fields.
-        if (StartCheck.Evaluate(task, _project, _clients, new Resumption(null, "Preflight")) is StartVerdict.Blocked blocked) return blocked.Problem;
+        if (StartCheck.Evaluate(task, project, clients, new Resumption(null, "Preflight")) is StartVerdict.Blocked blocked) return blocked.Problem;
         return task.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(task.Field(field.Key))) is { } missing
             ? new StartProblem.FieldMissing(missing.Label) : null;
     }

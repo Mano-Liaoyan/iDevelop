@@ -14,7 +14,7 @@ public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RunDependents =
     [
-        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
+        nameof(RunTask), nameof(ShowsRunState), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
         nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
@@ -39,6 +39,12 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
     public bool IsRunOwned => RunTask is not null && _runActive;
 
+    /// <summary>
+    /// The canvas's active run started from another node and has not taken this task in, so its Run adds the task to that
+    /// run (#90).
+    /// </summary>
+    public bool JoinsRun => IsRunOwned && RunTask is { State: TaskState.Unrequested } && _canvas.Run is { View.Phase: RunPhase.Approved };
+
     /// <summary>Which run owns the task, or ran it last, while the inspector shows the run's state.</summary>
     public string? RunOwner => ShowsRunState ? RunOwnedProblem : null;
 
@@ -49,7 +55,7 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
     public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
-        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive) : null;
+        : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null;
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
     public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
@@ -106,6 +112,7 @@ public sealed partial class TaskNodeViewModel
 
     private string RunOwnedProblem => (_runActive, HasAgent) switch
     {
+        (true, true) when JoinsRun => $"A run of the \"{RunWorkflowName}\" workflow is active. Run adds this task to it.",
         (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
         (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate?.Status switch
         {
@@ -114,7 +121,7 @@ public sealed partial class TaskNodeViewModel
             GateStatus.SentBack => "You sent its request back. It asks again once its inputs change.",
             _ => "It asks for your approval once the tasks before it hand on.",
         }),
-        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last. Run it on its own to show its own result again.",
+        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last.",
         (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval last.",
     };
 

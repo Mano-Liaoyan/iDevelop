@@ -96,7 +96,7 @@ public sealed class NodeMenuTests : IDisposable
         FakeAgents.Install(fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
         var shell = Shell.Open(DesignThenBuild(), fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Id == Design).State == NodeState.Succeeded, "the run succeeds");
 
         shell.RightClick(shell.Header(shell.Node("Design")));

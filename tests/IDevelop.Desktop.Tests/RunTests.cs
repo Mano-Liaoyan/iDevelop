@@ -59,7 +59,7 @@ public sealed class RunTests : IDisposable
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         Assert.Equal("Running", shell.CardText("Say hi", "CardStatus"));
         return (shell, folder, clients);
     }
@@ -91,7 +91,7 @@ public sealed class RunTests : IDisposable
         // The pointer rests on the card, so its neutral ring shows at full strength.
         Assert.Equal(("Not run", Color.Parse("#E5E5E5")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
 
         Assert.Equal(("Running", Color.Parse("#564ADE")), (shell.CardText("Say hi", "CardStatus"), CardRing(shell)));
         Assert.Equal((false, true), (shell.Find<Button>("RunTask").IsEffectivelyEnabled, shell.Find<Button>("CancelRun").IsEffectivelyEnabled));
@@ -161,9 +161,9 @@ public sealed class RunTests : IDisposable
         var clients = _fakes.DiscoverAsync().Result;
         var shell = Shell.Open(folder, clients);
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.Click(shell.Header(shell.Node("Review")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
 
         Assert.Equal(["Running", "Running"], new[] { "Say hi", "Review" }.Select(title => shell.CardText(title, "CardStatus")));
         Assert.Equal("Review and 1 more", shell.Find<TextBlock>("RunBarTask").Text);
@@ -239,20 +239,20 @@ public sealed class RunTests : IDisposable
         var clients = _fakes.DiscoverAsync().Result;
         var first = Shell.Open(folder, clients);
         first.Click(first.Header(first.Node("Say hi")));
-        first.Click(first.InView<Button>("RunTask"));
+        first.RunOnItsOwn();
         var second = Shell.Open(folder, clients);
         second.Click(second.Header(second.Node("Say hi")));
 
         Assert.Equal(("Running in another window", "Running in another window"), (second.CardText("Say hi", "CardStatus"), second.InView<TextBlock>("LastRunStatus").Text));
         Assert.Equal((true, false), (second.Find<Button>("RunTask").IsEffectivelyEnabled, second.Find<Button>("CancelRun").IsEffectivelyEnabled));
-        second.Click(second.InView<Button>("RunTask"));
+        second.RunOnItsOwn();
         Assert.Equal("\"Say hi\" is already running.", second.Status);
 
         first.Click(first.Find<Button>("RunBarCancel"));
         first.WaitUntil(() => first.CardText("Say hi", "CardStatus") == "Cancelled", "the first window's run is cancelled");
         first.Click(first.Header(first.Node("Review")));
-        first.Click(first.InView<Button>("RunTask"));
-        second.Click(second.InView<Button>("RunTask"));
+        first.RunOnItsOwn();
+        second.RunOnItsOwn();
 
         Assert.Equal(["Running", "Running in another window"], new[] { "Say hi", "Review" }.Select(title => second.CardText(title, "CardStatus")));
 
@@ -272,7 +272,7 @@ public sealed class RunTests : IDisposable
         shell.Window.Width = width;
         shell.Window.Height = height;
         shell.Click(shell.Header(shell.Node("Say hi")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
 
         var bar = shell.Bounds(shell.Find<Control>("RunBar"));
         Assert.Equal(new Size(width, height), shell.Window.ClientSize);

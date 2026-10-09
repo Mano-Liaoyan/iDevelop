@@ -212,7 +212,7 @@ public sealed class InspectorTests : IDisposable
         shell.Click(shell.Header(shell.Node("Say hi")));
         Assert.False(shell.Section("Activity").IsEffectivelyVisible);
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the run succeeds");
 
         Assert.Equal("Succeeded", shell.Find<TextBlock>("LastRunStatus").Text);
@@ -236,7 +236,7 @@ public sealed class InspectorTests : IDisposable
 
         var runs = shell.Window.ViewModel.Canvas!.Runs;
         var first = runs.Latest[Design].Id;
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => runs.Latest[Design] is { Status: AttemptStatus.Succeeded } next && next.Id != first, "the next run succeeds");
         shell.Render();
 
@@ -252,7 +252,7 @@ public sealed class InspectorTests : IDisposable
         foreach (var title in new[] { "Two", "One" })
         {
             shell.Click(shell.Header(shell.Node(title)));
-            shell.Click(shell.InView<Button>("RunTask"));
+            shell.RunOnItsOwn();
             shell.WaitUntil(() => shell.CardText(title, "CardStatus") == "Succeeded", $"{title} succeeds");
         }
 
@@ -488,7 +488,7 @@ public sealed class InspectorTests : IDisposable
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design export")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         shell.WaitUntil(() => shell.Find<TextBlock>("LastRunStatus").Text == "Waiting for you", "the planner waits");
         return shell;

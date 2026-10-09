@@ -15,6 +15,12 @@ public sealed partial class ProjectRuns
     internal RunPreflight Preflight(Workflow workflow, TaskId? node = null) => Approvals.Inspect(workflow, node);
 
     /// <summary>
+    /// Why <paramref name="task"/> could not start in a workflow run as it is configured now, as the preflight would name
+    /// it, or null. A node's Run shows it before any click (#90).
+    /// </summary>
+    internal StartProblem? CheckRun(TaskDefinition task) => RunApprovals.Gap(task, _projectFolder, _clients.Current);
+
+    /// <summary>
     /// The workflow's run that is approved or stopping, which a window shows when it opens the project, or null. A run
     /// record that cannot be read counts as none here; the preflight names it as a gap.
     /// </summary>

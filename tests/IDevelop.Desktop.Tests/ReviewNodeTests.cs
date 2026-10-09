@@ -68,7 +68,7 @@ public sealed class ReviewNodeTests : IDisposable
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
 
         shell.Click(shell.Header(shell.Node("Add numbers")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Succeeded", "the subject succeeds");
         shell.Click(shell.Header(shell.Node("Review add")));
 
@@ -79,7 +79,7 @@ public sealed class ReviewNodeTests : IDisposable
         Assert.False(shell.Find<ComboBox>("TaskConversation").IsEffectivelyVisible);
         Assert.Equal("Guide the Review", shell.Find<TextBlock>("ComposerHeading").Text);
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Running", "the reviewer reads");
         Assert.Equal("The reviewer reads the change.", shell.Find<TextBlock>("ReviewSummary").Text);
         var underReview = shell.InCard<Border>("Add numbers", "CardUnderReview");

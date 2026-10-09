@@ -2,6 +2,7 @@ using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
+using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -117,6 +118,69 @@ public sealed partial class WorkflowCanvasViewModel
     {
         Preflight ??= new RunPreflightViewModel(this);
         _runWorkflow?.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// A node's Run (#90). It runs the node in a workflow run, as Run Workflow runs every root: without an active run it
+    /// opens the node's preflight, and in the canvas's active run it adds the node, which starts once each task before it
+    /// has a result. Each task after it starts by itself once all of its own predecessors have results. A node whose
+    /// predecessors have no results, or that could not start as configured, starts nothing, and the notice says why.
+    /// </summary>
+    internal void RunNode(TaskNodeViewModel node)
+    {
+        if (RunsAfter(node.Id) is { } after)
+        {
+            Notice(after);
+            return;
+        }
+
+        if (Runs.CheckRun(node.Definition) is { } problem)
+        {
+            Notice(RunText.Describe(problem));
+            return;
+        }
+
+        if (Run is { IsActive: true } run)
+        {
+            if (run.View.Tasks.GetValueOrDefault(node.Id) is { State: TaskState.Unrequested })
+            {
+                _ = JoinRunAsync(run, node);
+            }
+
+            return;
+        }
+
+        if (Preflight is null && Sheet is null)
+        {
+            Preflight = new RunPreflightViewModel(this, node.Id);
+            _runWorkflow?.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>
+    /// "Runs after "A". Run "A" first." for a node whose dependency predecessors have no results yet, or null. In the
+    /// canvas's active run that means a result in the run; a new run has none yet, so every predecessor counts (#90).
+    /// </summary>
+    internal string? RunsAfter(TaskId task)
+    {
+        IReadOnlyCollection<TaskId> waiting = Run is { IsActive: true } run && run.View.Tasks.GetValueOrDefault(task) is { } view
+            ? view.State == TaskState.Unrequested ? view.HeldBy : []
+            : [.. Workflow.Connections.Where(connection => connection.Key.To == task && connection.Value.Blocks()).Select(connection => connection.Key.From).Order()];
+        return WorkflowRunText.RunsAfter(waiting, id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task");
+    }
+
+    /// <summary>Adds the node to the active run, once per run, and says why when the run refuses.</summary>
+    private async Task JoinRunAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
+    {
+        var outcome = await run.JoinAsync(node.Id);
+        Notice(outcome switch
+        {
+            RunCommand.Unavailable unavailable => unavailable.Message,
+            RunCommand.Refused { Reason: { Problem: RunProblem.MissingDependencyResult, Task: { } missing } } =>
+                WorkflowRunText.RunsAfter([missing], id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task"),
+            RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
+            _ => null,
+        });
     }
 
     private void OnRunViewChanged(object? sender, EventArgs e) => ShowRun();

@@ -59,7 +59,7 @@ public sealed class ConversationTests : IDisposable
     {
         Install(_fakes, ClientId.Codex, Answers("Wrote banana."), Asks().WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Which fruit?")));
         var shell = OpenSayHi();
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Find<Button>("StopAndSend").IsEffectivelyVisible && string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
 
         var composer = ControlAutomationPeer.CreatePeerForElement(shell.InView<TextBox>("Composer"));
@@ -86,7 +86,7 @@ public sealed class ConversationTests : IDisposable
     {
         Install(_fakes, ClientId.Codex, Answers("Using an apple."), Asks().Hang());
         var shell = OpenSayHi();
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Find<Button>("StopAndSend").IsEffectivelyVisible && string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Stop. Use an apple.");
@@ -105,7 +105,7 @@ public sealed class ConversationTests : IDisposable
     {
         Install(_fakes, ClientId.Codex, Answers("Tried again."), Asks().WaitForFile(_gate).Stderr("error: model not found").Exit(1));
         var shell = OpenSayHi();
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Find<Button>("StopAndSend").IsEffectivelyVisible && string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("Try again.");
@@ -126,7 +126,7 @@ public sealed class ConversationTests : IDisposable
     {
         Install(_fakes, ClientId.Codex, Answers("Added a test."), Asks().Print(ReplyLines(ClientId.Codex, "Wrote hello.txt.")));
         var shell = OpenSayHi();
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the first run succeeds");
         Assert.Equal("Wrote hello.txt.", shell.Find<TextBox>("LastRunResult").Text);
         shell.Click(shell.InView<TextBox>("Composer"));
@@ -152,7 +152,7 @@ public sealed class ConversationTests : IDisposable
             Resuming(ClientId.Codex, Session).Print(SessionLine(ClientId.Codex, Session)).WaitForFile(_gate).Print(ReplyLines(ClientId.Codex, "Wrote banana into answer.txt.")),
             Asks().Print(ReplyLines(ClientId.Codex, "Which fruit should go into answer.txt?")));
         var shell = OpenSayHi();
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Succeeded", "the question is asked");
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("banana");
@@ -199,7 +199,7 @@ public sealed class ConversationTests : IDisposable
             copied.Add(text);
             return Task.CompletedTask;
         };
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => string.IsNullOrEmpty(shell.Find<TextBlock>("SendProblem").Text), "the session is reported");
         Assert.False(shell.Find<Button>("OpenInTerminal").IsEffectivelyEnabled);
         File.WriteAllText(_gate, "");
@@ -225,7 +225,7 @@ public sealed class ConversationTests : IDisposable
         var shell = OpenSayHi(ConversationMode.Chat);
         // What Avalonia's Windows clipboard throws while another program holds the clipboard.
         shell.Window.Copy = _ => Task.FromException(new TimeoutException("Timeout opening clipboard."));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
 
         Invoke(shell.InView<Button>("OpenInTerminal"));
@@ -246,13 +246,14 @@ public sealed class ConversationTests : IDisposable
         var shell = OpenSayHi(ConversationMode.MayAsk);
         Assert.Equal("May ask", shell.Find<ComboBox>("TaskConversation").SelectedItem!.ToString());
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
 
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
         Assert.Equal("Which fruit?", shell.InView<TextBlock>("PendingQuestion").Text);
         Assert.Equal("1 task waits for you", shell.Find<TextBlock>("WaitingCount").Text);
         Assert.True(shell.Find<Button>("NextWaiting").IsVisible);
-        Assert.Equal("\"Say hi\" is waiting for you. Reply, mark it done, or cancel it first.", shell.InView<TextBlock>("StartProblem").Text);
+        // Its Run starts a workflow run in a checkout of its own, which this conversation keeps out of (#90).
+        Assert.False(shell.Find<TextBlock>("StartProblem").IsEffectivelyVisible);
 
         shell.Click(shell.InView<TextBox>("Composer"));
         shell.Type("banana");
@@ -269,7 +270,7 @@ public sealed class ConversationTests : IDisposable
     {
         Install(_fakes, ClientId.Codex, Asks().Print(ReplyLines(ClientId.Codex, "Here is a plan.")));
         var shell = OpenSayHi(ConversationMode.Chat);
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Say hi", "CardStatus") == "Waiting for you", "the task waits");
         Assert.Equal("The agent replied. Write back, or mark the task done.", shell.InView<TextBlock>("PendingQuestion").Text);
 
