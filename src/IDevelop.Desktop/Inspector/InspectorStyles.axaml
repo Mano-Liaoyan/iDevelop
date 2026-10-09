@@ -130,9 +130,9 @@
               <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
               <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
-              <!-- The count's closing parenthesis keeps about 2 px clear on its right, so the text ends 2 px past where a
-                   count's digits end, and its ink ends where the glyphs' ink ends. -->
-              <TextBlock Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right" Margin="0,0,4,0" />
+              <!-- The count's drawing ends where the glyphs' drawing ends, whatever its last character keeps clear. -->
+              <inspector:InkAlignedText Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right"
+                                        Margin="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
             </inspector:InspectorGrid>
           </Button>
           <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -307,8 +307,8 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- How many nodes of a kind the workflow holds, at the end of its row, its digits ending where the drawing of a
-       blueprint's More glyph and of the filter glyph ends. -->
+  <!-- How many nodes of a kind the workflow holds, at the end of its row. It draws through InkAlignedText, so its digits
+       end where the drawing of a blueprint's More glyph and of the filter glyph ends, a "1" as a "4". -->
   <Style Selector="TextBlock.count">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />

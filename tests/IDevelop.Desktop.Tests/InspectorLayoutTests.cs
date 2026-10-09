@@ -180,16 +180,24 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(520)]
     public void The_counts_digits_end_where_the_drawn_more_and_filter_glyphs_end(double width)
     {
-        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90)));
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90), TaskAt(Build, "Build", 465, 90),
+            new WorkflowEdit.PlaceNode(TaskId.New(), BuiltInBlueprints.Plan, new CanvasPoint(105, 290)) { Title = "Plan" }));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.SizeInspector(width);
 
-        var count = InkRight(shell, Shell.ById<TextBlock>(shell.Window, "KindCount").First(text => text.IsEffectivelyVisible));
+        var counts = Shell.ById<TextBlock>(shell.Window, "KindCount").Where(text => text.IsEffectivelyVisible).ToArray();
+        Assert.Equal(["2", "1"], counts.Select(count => count.Text));
         var more = InkRight(shell, Shell.ById<Button>(shell.Window, "BlueprintMore").First(button => button.IsEffectivelyVisible));
         var filter = InkRight(shell, shell.Find<Button>("InspectorTools"));
+        Assert.True(Math.Abs(more - filter) <= 1, $"The ink ends at {more} for More and {filter} for the filter button.");
 
-        Assert.True(Math.Abs(count - more) <= 1 && Math.Abs(count - filter) <= 1 && Math.Abs(more - filter) <= 1,
-            $"The ink ends at {count} for the count, {more} for More, and {filter} for the filter button.");
+        // A "1" keeps more of its advance clear than a "2", so each count ends by its own drawing.
+        foreach (var count in counts)
+        {
+            var ink = InkRight(shell, count);
+            Assert.True(Math.Abs(ink - more) <= 1 && Math.Abs(ink - filter) <= 1,
+                $"The ink ends at {ink} for the count \"{count.Text}\", {more} for More, and {filter} for the filter button.");
+        }
     }
 
     [AvaloniaFact]
@@ -206,6 +214,24 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal("(1)", badge.Text);
         var (ink, filter) = (InkRight(shell, badge), InkRight(shell, shell.Find<Button>("InspectorTools")));
         Assert.True(Math.Abs(ink - filter) <= 1, $"The count's ink ends at {ink}, and the filter glyph's at {filter}.");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(400, false)]
+    [InlineData(160, true)]
+    public void A_kind_line_that_does_not_fit_puts_the_version_under_the_type_without_the_dot(double width, bool broken)
+    {
+        var (type, dot, version) = (new TextBlock { Text = "Implement with the team's checklist" }, new TextBlock { Text = " · ", ClipToBounds = true },
+            new TextBlock { Text = "Project, version 2" });
+        var line = new SeparatedLine { Children = { type, dot, version } };
+        var window = new Window { Width = width, Height = 200, Content = new Border { Width = width, Child = line, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left } };
+        window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(broken, version.Bounds.Top >= type.Bounds.Bottom);
+        Assert.Equal(broken ? 0 : dot.DesiredSize.Width, dot.Bounds.Width);
+        Assert.Equal(broken ? 0 : type.Bounds.Width + dot.Bounds.Width, version.Bounds.Left, 0.5);
+        window.Close();
     }
 
     [AvaloniaFact]
@@ -358,11 +384,15 @@ public sealed class InspectorLayoutTests : IDisposable
         _ => null,
     };
 
-    [AvaloniaFact]
-    public void The_filter_stays_put_whether_a_task_a_connection_or_nothing_is_selected()
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void The_filter_stays_put_whether_a_task_a_connection_or_nothing_is_selected(double width)
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex), TaskAt(Build, "Build", 465, 90),
             new WorkflowEdit.Connect(new ConnectionKey(Design, Build), ConnectionKind.Dependency)));
+        shell.SizeInspector(width);
         var filter = shell.Find<TextBox>("InspectorFilter");
         var empty = shell.Bounds(filter).Top;
 
@@ -526,6 +556,8 @@ public sealed class InspectorLayoutTests : IDisposable
                     && control.FindAncestorOfType<TextBox>() is null && control.FindAncestorOfType<ComboBox>() is null).ToArray();
             Assert.All(shown, control => Assert.True(shell.Bounds(control).Right <= right - Inset + 0.5,
                 $"At {size} px, a {control.GetType().Name} ends {right - shell.Bounds(control).Right} px from the edge."));
+            // A card grows with what it holds, so the panel's own scroll is the only one.
+            Assert.DoesNotContain(shown, control => control is ScrollViewer);
             Assert.All(shown.Where(Paragraph), text => Assert.True(shell.Bounds(text).Right <= right - Inset - InspectorGrid.TrailWidth + 0.5,
                     $"At {size} px, \"{((TextBlock)text).Text}\" ends {right - shell.Bounds(text).Right} px from the edge."));
         }

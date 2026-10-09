@@ -36,6 +36,9 @@ public sealed class InspectorGrid : Grid
     /// </summary>
     public const double GlyphInkInset = 6;
 
+    /// <summary>The trailing column's width as a grid length, for a header's own grid, whose title stops before it.</summary>
+    public static GridLength TrailColumn { get; } = new(TrailWidth);
+
     /// <summary>A trailing count's margin, which ends its digits <see cref="GlyphInkInset"/> before the action edge.</summary>
     public static Thickness GlyphInkMargin { get; } = new(0, 0, GlyphInkInset, 0);
 
