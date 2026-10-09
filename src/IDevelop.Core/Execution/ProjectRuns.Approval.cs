@@ -11,7 +11,8 @@ public sealed partial class ProjectRuns
     /// What Run Workflow shows for <paramref name="workflow"/> before anything runs. It records nothing; computing the work
     /// tree's tree leaves only unreferenced loose objects in Git's object database, as <see cref="RunPreflight"/> says.
     /// </summary>
-    internal RunPreflight Preflight(Workflow workflow) => Approvals.Inspect(workflow);
+    /// <param name="node">The node whose Run asks for the run, or null for Run Workflow, which runs every root (#90).</param>
+    internal RunPreflight Preflight(Workflow workflow, TaskId? node = null) => Approvals.Inspect(workflow, node);
 
     /// <summary>
     /// The workflow's run that is approved or stopping, which a window shows when it opens the project, or null. A run
