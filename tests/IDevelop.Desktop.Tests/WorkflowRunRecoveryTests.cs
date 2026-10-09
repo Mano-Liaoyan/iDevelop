@@ -186,6 +186,15 @@ public sealed class WorkflowRunRecoveryTests
         Assert.False(Shows(shell, "PreserveCheckout"));
         Assert.False(Shows(shell, "CloseAsStopped"));
         Assert.Equal(0, f.Launches("D"));
+        // The join's block names no attempt here; one that does is still not a block Preserve and restore clears.
+        var conflict = shell.Window.ViewModel.Canvas!.SelectedNode!.RunTask!.Block! with { Attempt = new AttemptId(Guid.NewGuid()) };
+        using var panel = new RecoveryViewModel(shell.WorkflowRun!, new TaskView(d, TaskState.Blocked) { Block = conflict }, _ => "D", _ => { });
+        Assert.Equal((false, false), (panel.CanRestore, panel.ShowsPreserve));
+        Assert.NotNull(panel.NoActionNote);
+        // A preservation records blocks of its own on the same checkout, and the section stays with its preview.
+        var view = new TaskView(d, TaskState.Blocked) { Block = conflict };
+        Assert.True(panel.Shows(shell.WorkflowRun!, view with { Block = conflict with { Operation = new OperationId(Guid.NewGuid()) } }));
+        Assert.False(panel.Shows(shell.WorkflowRun!, view with { Block = conflict with { Attempt = new AttemptId(Guid.NewGuid()) } }));
     }
 
     [AvaloniaFact]
