@@ -189,6 +189,7 @@ public sealed partial class TaskNodeViewModel
         }
 
         _detailHooked = true;
+        _canvas.EnsureDetailTimer();
         PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(State) or nameof(StatusLabel) or nameof(LastAttempt) or nameof(RunTask) or nameof(IsWaiting)
@@ -254,6 +255,9 @@ public sealed partial class WorkflowCanvasViewModel
         }
     });
 
+    // The prototype reads a shown card's attempt again each second, so a running task's latest message stays current.
+    internal void EnsureDetailTimer() => _detailTimer ??= StartDetailTimer();
+
     private Avalonia.Threading.DispatcherTimer StartDetailTimer()
     {
         var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -278,8 +282,7 @@ public sealed partial class WorkflowCanvasViewModel
 
     internal void OnExpansionChanged()
     {
-        // The prototype reads an expanded card's attempt again each second, so a running task's latest message stays current.
-        _detailTimer ??= StartDetailTimer();
+        EnsureDetailTimer();
         OnPropertyChanged(nameof(AnyExpanded));
         OnPropertyChanged(nameof(ExpandAllLabel));
         ExpansionChanged?.Invoke(this, EventArgs.Empty);
@@ -328,7 +331,7 @@ public sealed partial class TaskNodeViewModel
     public bool IsLaterTab => _tab == "later";
 
     /// <summary>Option C's body is one height in every state, so every expanded card is the same size.</summary>
-    public const double FixedBodyHeight = 226;
+    public const double FixedBodyHeight = 236;
 
     public double DetailViewportHeight => IsOptionC ? FixedBodyHeight : double.NaN;
 
@@ -379,12 +382,25 @@ public sealed partial class TaskNodeViewModel
     internal WorkflowCanvasViewModel Canvas => _canvas;
 
     private Proto.CardPeek? _peek;
+    private bool _tipHooked;
 
     /// <summary>Option B's card tooltip is the read-only peek; every other option keeps the plain tooltip.</summary>
     public object? CardTipOrPeek
     {
         get
         {
+            if (!_tipHooked)
+            {
+                _tipHooked = true;
+                PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(CardTip))
+                    {
+                        OnPropertyChanged(nameof(CardTipOrPeek));
+                    }
+                };
+            }
+
             if (!IsOptionB || IsRenaming || IsExpanded)
             {
                 return CardTip;

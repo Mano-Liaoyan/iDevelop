@@ -10,11 +10,6 @@
              x:Class="IDevelop.Desktop.Proto.CardDetail"
              x:DataType="canvas:TaskNodeViewModel">
   <UserControl.Styles>
-    <Style Selector=":is(Control).tabHidden">
-      <Setter Property="MaxHeight" Value="0" />
-      <Setter Property="Margin" Value="0" />
-      <Setter Property="ClipToBounds" Value="True" />
-    </Style>
     <Style Selector="Border.hairline">
       <Setter Property="Height" Value="1" />
       <Setter Property="Background" Value="{DynamicResource Border60Brush}" />
@@ -90,6 +85,12 @@
       <Setter Property="Height" Value="28" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <!-- Last, so it wins over the section's own margin. -->
+    <Style Selector=":is(Control).tabHidden">
+      <Setter Property="MaxHeight" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="ClipToBounds" Value="True" />
     </Style>
   </UserControl.Styles>
 

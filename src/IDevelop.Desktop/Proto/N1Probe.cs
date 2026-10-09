@@ -124,6 +124,8 @@ internal sealed class N1Probe
                 break;
             case "hover":
                 return Hover(Node(arg));
+            case "where":
+                return Where(arg);
             case "peek":
                 OpenPeek(arg == "none" ? null : Node(arg));
                 break;
@@ -161,6 +163,17 @@ internal sealed class N1Probe
         }
 
         return "ok " + line;
+    }
+
+    // The window-pixel center of a control in a card, found by its automation id: "where <id> <card title>".
+    private string Where(string arg)
+    {
+        var parts = arg.Split(' ', 2);
+        var node = Node(parts[1]);
+        var control = _window.GetVisualDescendants().OfType<Control>()
+            .First(c => Avalonia.Automation.AutomationProperties.GetAutomationId(c) == parts[0] && c.IsEffectivelyVisible && ReferenceEquals(c.DataContext, node));
+        var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), _window) ?? default;
+        return $"at {point.X:0} {point.Y:0} {string.Join(',', Canvas.Nodes.Select(n => $"{n.Title[..6]}={n.Location.X:0}/{n.Location.Y:0}"))} add={Canvas.AddNode is not null} zoom={Canvas.ViewportZoom:0.00} unsaved={Canvas.Document.HasUnsavedChanges}";
     }
 
     // Where the pointer rests on the card, in window pixels: on its title, so a script can move the real pointer there.

@@ -74,8 +74,9 @@ public sealed class ConnectionViewModel : ObservableObject
         Rect[] cards =
         [
             .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DisplayRect),
-            From.DisplayRect,
-            To.DisplayRect,
+            // The wire's own two cards stand where their ports are, as before; only their size follows the card.
+            new Rect(From.Output.Anchor - new Vector(From.MeasuredSize.Width - 10, 32), From.MeasuredSize),
+            new Rect(To.Input.Anchor - new Vector(10, 32), To.MeasuredSize),
             .. Proto.N1Notes.Obstacles(_canvas),
         ];
         var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);

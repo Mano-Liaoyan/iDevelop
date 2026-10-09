@@ -19,6 +19,9 @@ internal static class N1Notes
     private const double LaneGap = 48;
     private const double NoteGap = 16;
 
+    // How far a lane may run below the graph's top before the next note starts a new lane.
+    private const double MaxLane = 900;
+
     private static readonly Dictionary<TaskNodeViewModel, Size> Sizes = [];
 
     public static void Measured(TaskNodeViewModel node, Size size)
@@ -43,14 +46,24 @@ internal static class N1Notes
             return;
         }
 
-        // The cards' containers have 10 px gutters, so the lane starts LaneGap from the last card's visible edge.
+        // The cards' containers have 10 px gutters, so the lane starts LaneGap from the last card's visible edge. A lane
+        // that would run far below the graph wraps into a next lane, so Expand All gives a block of notes, not a tower.
         var lane = canvas.Nodes.Max(node => node.DisplayRect.Right) - 10 + LaneGap;
+        var top = canvas.Nodes.Min(node => node.DisplayLocation.Y);
+        var limit = Math.Max(canvas.Nodes.Max(node => node.DisplayRect.Bottom), top + MaxLane);
         var bottom = double.NegativeInfinity;
         foreach (var node in canvas.Nodes.Where(node => node.IsExpanded).OrderBy(node => node.DisplayLocation.Y).ThenBy(node => node.DisplayLocation.X))
         {
+            var height = Sizes.GetValueOrDefault(node, new Size(Width, 200)).Height;
             var y = Math.Max(node.DisplayLocation.Y, bottom + NoteGap);
+            if (y + height > limit && bottom > double.NegativeInfinity)
+            {
+                lane += Width + NoteGap;
+                y = top;
+            }
+
             placed.Add(new MarginNote(new Point(lane, y), node));
-            bottom = y + Sizes.GetValueOrDefault(node, new Size(Width, 200)).Height;
+            bottom = y + height;
         }
 
         // A note that keeps its place keeps its control, so it keeps its size and its focus.
