@@ -409,7 +409,7 @@ public sealed class RunPreflightViewModel : ObservableObject
         var task = Title(preview, row.Task);
         if (row.Bases.Contains(Choice))
         {
-            return new($"Uses {task}'s result from an earlier run.", true);
+            return new(WorkflowRunText.Unbroken($"Uses {task}'s result from an earlier run."), true);
         }
 
         var why = row.Refusal switch
@@ -421,7 +421,7 @@ public sealed class RunPreflightViewModel : ObservableObject
             CarryRefusal.Unavailable unavailable => unavailable.Detail.TrimEnd('.'),
             _ => "this base does not offer it",
         };
-        return new($"Can't use {task}'s result from an earlier run: {why}. The tasks after it wait until it runs again.", false);
+        return new(WorkflowRunText.Unbroken($"Can't use {task}'s result from an earlier run: {why}. The tasks after it wait until it runs again."), false);
     }
 
     private static string In(IReadOnlyList<string> paths) => paths.Count == 0 ? "" : $" in {List(paths)}";

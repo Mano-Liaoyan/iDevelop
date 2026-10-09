@@ -157,8 +157,9 @@ internal sealed class RunHistory
         record.Gates.Values.Any(gate => gate.Request.Task == task) || record.Results.Any(result => result.Task == task);
 
     /// <summary>
-    /// The task's current result, as the run's own projection would show it done: an attempt reserved after it, such as a
-    /// failed retry, replaced it, and an unresolved block on it holds it. A stale result is returned, so it can say why.
+    /// The task's current result, as the run's own projection would show it done, or null: an attempt reserved after it,
+    /// such as a failed retry, replaced it, or an unresolved block on it holds it. A stale result is returned, so it can say
+    /// which input it is out of date for.
     /// </summary>
     private static ResultRecord? Done(RunRecord record, TaskId task)
     {
@@ -173,14 +174,10 @@ internal sealed class RunHistory
     private TaskHistory Counts(TaskId task, EarlierResult earlier)
     {
         var (record, result) = (earlier.Run, earlier.Result);
-        if (record.StaleResults.Contains(result.Id))
-        {
-            var stale = record.StaleResults;
-            var input = record.Inputs[result.Inputs].Bindings.OfType<InputBinding.Provided>().FirstOrDefault(binding => stale.Contains(binding.Result));
-            return new TaskHistory.OutOfDate(earlier, OutOfDateReason.InputReplaced, input?.Edge.From);
-        }
         if (!RunReducer.SameTask(record.Revisions[result.Revision].Snapshot, _workflow, task))
             return new TaskHistory.OutOfDate(earlier, OutOfDateReason.Changed, null);
+        // A result that was stale in its own run took a result its producer replaced, or one that is stale in turn, so
+        // the same check covers it.
         foreach (var binding in record.Inputs[result.Inputs].Bindings.OfType<InputBinding.Provided>())
         {
             var producer = binding.Edge.From;

@@ -83,6 +83,9 @@ public sealed class CarriedResultTests
             () => string.Join(", ", Cards(reopened)));
         Assert.Null(reopened.WorkflowRun);
         Assert.Equal([agent, "Succeeded", "Waits for \"A\""], Cards(reopened));
+        // A waiting card's subtitle is what it waits for, not its agent.
+        Assert.True(reopened.InCard<TextBlock>("C", "CardStatus").IsEffectivelyVisible);
+        Assert.False(reopened.InCard<TextBlock>("C", "CardAgent").IsEffectivelyVisible);
         Select(reopened, "B");
         Assert.Equal("Succeeded", reopened.InView<TextBlock>("RunTaskStatus").Text);
         Assert.Equal(WorkflowRunText.Unbroken("Its result from the last run of the \"Workflow\" workflow still counts."), reopened.Text("RunOwner"));
@@ -100,7 +103,7 @@ public sealed class CarriedResultTests
 
         OpenPreflight(shell, "A");
 
-        Assert.Equal(["Uses \"B\"'s result from an earlier run."], shell.TextsOf("PreflightCarriedResult"));
+        Assert.Equal([WorkflowRunText.Unbroken("Uses \"B\"'s result from an earlier run.")], shell.TextsOf("PreflightCarriedResult"));
         Assert.Equal(["A", "C"], shell.TextsOf("PreflightTask"));
         Start(shell, "A");
         Assert.Equal("Completed", shell.RunStatus);
@@ -134,7 +137,7 @@ public sealed class CarriedResultTests
 
         OpenPreflight(shell, "A");
 
-        Assert.Equal(["Can't use \"B\"'s result from an earlier run: its code conflicts with this base in out-b.txt. The tasks after it wait until it runs again."],
+        Assert.Equal([WorkflowRunText.Unbroken("Can't use \"B\"'s result from an earlier run: its code conflicts with this base in out-b.txt. The tasks after it wait until it runs again.")],
             shell.TextsOf("PreflightCarriedResult"));
         Start(shell, "A");
         Assert.Equal((1, 1, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
