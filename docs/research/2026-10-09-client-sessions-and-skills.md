@@ -4,9 +4,9 @@ Research for [#92](https://github.com/Mano-Liaoyan/iDevelop/issues/92) (keep one
 
 ## Scope and method
 
-The questions are what each client's session resume does, whether a client can keep one live process across turns, how each client finds skills, and whether a launch can choose them. This note records facts and their sources. It decides nothing. The choices it leaves to the owner are listed [at the end](#choices-for-the-owner).
+The questions are what each client's session resume does, whether a client can keep one live process across turns, how each client finds skills, and whether a launch can choose them. This note records facts and their sources. The research decides nothing. The choices it leaves to the owner are listed [at the end](#choices-for-the-owner), followed by the [owner's decisions](#owners-decisions-2026-10-09).
 
-No real client ran with a prompt for this note, because that needs the owner's approval. The sources are:
+The research ran no real client with a prompt, because that needs the owner's approval. The owner then approved the short probes in [Probe results](#probe-results-2026-10-09). The research's sources are:
 
 - each installed client's `--help` and version output;
 - the documentation and changelogs that the clients ship;
@@ -120,7 +120,7 @@ Every client's resume already continues its own session. None of them copies the
 
 - `--session-id <id>` opens the session with that id in the current project, or creates it ([`docs/cli.md`, v1.1.0](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/cli.md)). Sessions are JSONL files under `~/.pi/agent/sessions/--<cwd>--/` ([`docs/session-format.md`](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/session-format.md)).
 - The lookup searches only the folder for the current working directory, unless `--session-dir` names another. When it finds nothing, Pi prints "No project session found with id '…'; creating a new session with that id" to stderr and starts an empty session under the same id ([`src/main.ts`, v1.1.0](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/src/main.ts)).
-- iDevelop passes no `--session-dir`. A Pi turn that runs in another folder than the session's first turn therefore keeps the id and loses the history, and no probe would catch it by comparing ids. That is inferred from the code, not observed.
+- iDevelop passes no `--session-dir`. A Pi turn that runs in another folder than the session's first turn therefore keeps the id and loses the history, and no probe would catch it by comparing ids. The research inferred this from the code; the [probe](#probe-results-2026-10-09) then observed it.
 - Forks are explicit: `--fork <path|id>`, and `/fork` or `/clone` inside a session ([`docs/cli.md`](https://github.com/earendil-works/pi/blob/v1.1.0/packages/coding-agent/docs/cli.md)).
 
 **RPC mode is a documented long-lived process.**
@@ -160,7 +160,7 @@ All four clients can keep one process across turns. Keeping one would be an addi
 - **Stop and send** stays in the process for Claude Code (`interrupt`), Codex (`turn/interrupt`), and Pi (`abort`). Antigravity CLI must be stopped and resumed in a new process.
 - **Settings changed between turns** need a client channel. Codex takes overrides on `turn/start`. Claude Code has `set_model` and `set_permission_mode`; changing its effort in a live process is unverified. Pi's RPC `set_model` can change the user's default model, which iDevelop never sends ([agent-clients.md](../agent-clients.md#pi-101)). Antigravity CLI has no such channel. So a settings change, the "Settings changed" marker in the conversation view, would have to restart the process with a resume.
 - **Read-only and policy changes** also need a restart. Antigravity CLI cannot turn a resumed session read-only at all ([agent-clients.md](../agent-clients.md#sessions)).
-- **Pi's folder.** Pass `--session-dir`, or the session file path through `--session`, whether or not turns stay one process per turn. Otherwise a turn that runs in another folder silently starts a new session.
+- **Pi's folder.** A turn that runs in another folder than the session's first turn silently starts a new session, whether or not turns stay one process per turn. The research suggested `--session-dir` or `--session <path>` as the fix. The [probe](#probe-results-2026-10-09) found that `--session-dir` does not carry a session to another folder, and that `--session <path>` keeps the history but runs Pi in the session's own folder.
 
 **Records this would change.** These are product decisions for the owner:
 
@@ -286,11 +286,149 @@ Each item below needs the owner's approval to run a real client.
 
 ## Choices for the owner
 
-These are product decisions, and this note makes none of them:
+These are product decisions, and the research made none of them:
 
 1. Whether "one live session" means a client process kept alive while a node waits, which changes the records listed in [What one live session per attempt would need](#what-one-live-session-per-attempt-would-need), or one continuous attempt and conversation over the existing per-turn resume.
 2. Whether an idle live process holds the run's client slot and the task's run lock, and how long it may stay idle before iDevelop closes it and falls back to resume.
 3. Whether a node's skill choice is stored per client, and what an Antigravity CLI node offers while no per-run control is confirmed.
+
+## Probe results (2026-10-09)
+
+On 2026-10-09 the owner approved two short turns per client in an empty scratch folder, with trivial questions, no code edits, and the owner's installed clients and accounts, plus one extra Pi turn from another folder. Each client ran in its own new scratch folder after `git init`. A Node driver reproduced iDevelop's arguments and stdin protocol ([argument shapes](#argument-shapes)). It removed the environment variables of the Claude Code session that drove it, which iDevelop's own process would not have. Every turn was a new process.
+
+- Turn 1, a new session: "Remember the word lantern. Reply with OK only."
+- Turn 2, a new process that resumes turn 1's session id, as `LaunchPlan.Resuming` does: "What word did I ask you to remember? Reply with the word only."
+
+Each client got its cheapest model and lowest level. Where a client has a read-only launch, the probe used it, as iDevelop does for read-only nodes and reviews, so that no turn could edit the folder:
+
+| Client | Version | Model and level | Policy |
+| --- | --- | --- | --- |
+| Claude Code | 2.1.295 | `claude-haiku-4-5`, effort `low` | `--permission-mode plan`, `--permission-prompts none` |
+| Codex | 0.160.1 | `gpt-5.6-luna`, effort `low` | Sandbox `read-only`, approvals `never` |
+| Pi | 1.1.0 | `openai-codex/gpt-5.6-luna`, thinking `minimal`, which Pi's level map sends as `low` | None. Pi has no read-only mode. |
+| Antigravity CLI | 1.3.2 | `gemini-3.6-flash`, effort `low` | `--mode plan` |
+
+The probe read the session stores only for file names, ids, entry types, counts, and which fields held the probe's word. Ids below are shortened to their last 12 characters. The scratch folders were deleted afterwards. The clients' own session records stay in their stores.
+
+### Claude Code
+
+| Turn 2 | Same id | Remembered | New or forked session | Exit codes |
+| --- | --- | --- | --- | --- |
+| `--resume <id>` | Yes, `…076979351298` | Yes, "lantern", but see the auto-memory note | Neither. One transcript holds both turns. | 0, 0 |
+
+- `~/.claude/projects/<scratch folder>/` holds one transcript, `<id>.jsonl`. All 55 of its entries carry the same `sessionId`. Turn 2's entries chain through `parentUuid` back to turn 1's first message, so the resumed request carried turn 1's history.
+- Turn 1 wrote files outside the project despite plan mode. The model saved the word with Claude Code's auto-memory: three tool calls (Write, Read, Write) created `remember_lantern.md` and `MEMORY.md` in the `memory/` folder beside the transcript. The result listed no permission denials.
+- Turn 2 then received a new `instructions` attachment that holds that `MEMORY.md`. The word therefore reached turn 2 through both the history and the memory index, so the answer alone does not prove the resume; the transcript chain does. A clean recall test needs auto-memory off for the run. Which switch does that for one `-p` run was not checked.
+- Turn 2 was one request. It read 25,144 prompt tokens from the cache and wrote 581, so this `-p --resume` read the prompt cache.
+
+### Codex
+
+| Turn 2 | Same id | Remembered | New or forked session | Exit codes |
+| --- | --- | --- | --- | --- |
+| `thread/resume` with `excludeTurns: true` | Yes, `…d4cbbf19c5c2` | Yes, "lantern" | Neither. One rollout file holds both turns. | 0, 0 |
+
+- The only new rollout file, `~/.codex/sessions/2026/10/09/rollout-…-<id>.jsonl`, has one `session_meta`, two `turn_context`, two `task_started`, and two `task_complete` entries. This is the app-server path that iDevelop uses, which the 2026-10-04 probe did not cover.
+- Each app-server exited with 0 as soon as the driver closed stdin at `turn/completed`. Each whole process, model call included, took 2 to 3 seconds. The 45-second watchdog in [Codex 0.160.1](#codex-01601-app-server) is therefore an upper bound, not a delay every turn pays.
+- Neither turn ran a command, and nothing appeared in the scratch folder.
+
+### Pi
+
+| Turn 2 | Same id | Remembered | New or forked session | Exit codes |
+| --- | --- | --- | --- | --- |
+| `--session-id <id>` in the same folder | Yes, `…b2462362dc0b` | Yes, "lantern" | Neither. One file holds both turns. | 0, 0 |
+| `--session-id <id>` from another folder (the extra turn) | Yes, the same id | No, "Unknown" | New: an empty session under the same id | 0 |
+
+- The other-folder turn printed "No project session found with id '…'; creating a new session with that id" on stderr, exited 0, and reported the same id in its `session` event. iDevelop compares ids, so it could not see the loss.
+- Pi now holds two files with that id, one in each folder's `~/.pi/agent/sessions/--<folder>--/`. In the other folder the model ran one read-only `ls -la && find` in the empty folder, then answered "Unknown".
+
+The session-folder check used RPC `get_state`, which sends no prompt and calls no model. Pi saves a new session only once it has a conversation, so the check wrote no session file.
+
+| Launched from | Session flags | Session found | Messages | Not-found warning | Pi's working folder |
+| --- | --- | --- | --- | --- | --- |
+| The other folder | `--session-id <id> --session-dir <the first folder's session folder>` | No: a new, unsaved session with the same id | 0 | Yes | Not checked |
+| The first folder (control) | The same | Yes | 5, both turns | No | Not checked |
+| The other folder | `--session <a copy of the session file>` | Yes, the same id | 5, both turns | No | The first folder, from `pwd` through RPC `bash` |
+
+- `--session-dir` cannot carry a session to another folder. With an explicit session folder that is not the current folder's default, `SessionManager.findById` matches only a session whose header `cwd` is the current folder (`findById` and `sessionCwdMatches` in `dist/core/session-manager.js`). `PI_CODING_AGENT_SESSION_DIR` reaches the same code.
+- `--session <path>` opens the file, and Pi then works in the folder that the session header records, not the folder the process started in. The runtime is built with `sessionManager.getCwd()` (`dist/main.js`). If that folder no longer exists, `-p` mode exits with "Stored session working directory does not exist" (`dist/core/session-cwd.js`; read in the code, not run).
+- The `session` event of `-p --mode json` carries `id` and `cwd`, not the file path. The file is `<timestamp>_<id>.jsonl` in the default session folder for that `cwd`.
+- Inferred from these results and the code: a resumed Pi turn keeps its history and id only when Pi works in the folder where the session started, either by starting there with `--session-id` or through `--session <path>`. Pi's only route to the same history in another folder is `--fork`, which gives a new id.
+
+### Antigravity CLI
+
+| Turn 2 | Same id | Remembered | New or forked session | Exit codes |
+| --- | --- | --- | --- | --- |
+| `--conversation <id>` | Yes, `…0942b32bccd5` | Yes, "lantern" | Neither. One conversation file holds both turns. | 0, 0 |
+
+- `~/.gemini/antigravity-cli/conversations/<id>.db` was the only new conversation file. Read for table row counts only, it holds one `trajectory_meta` row, five `steps`, two `gen_metadata` rows, one per turn, and no `parent_references`. A `brain/<id>/` folder also belongs to the conversation.
+- Neither turn ran a tool.
+
+### Argument shapes
+
+Each process ran in its client's scratch folder. `<prompt>` is the turn's question, and brackets mark turn 2's addition.
+
+Claude Code:
+
+```text
+claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --model claude-haiku-4-5 --effort low --permission-mode plan [--resume <session-id>] --permission-prompts none
+stdin:  {"type":"control_request","request_id":"init-1","request":{"subtype":"initialize"}}
+then, after the successful control_response:
+        {"type":"user","message":{"role":"user","content":"<prompt>"},"parent_tool_use_id":null}
+stdin closed at the result event
+```
+
+Codex:
+
+```text
+codex app-server -c approval_policy=never -c features.default_mode_request_user_input=false
+stdin:  {"id":"init-1","method":"initialize","params":{"clientInfo":{"name":"idevelop","version":"1.0.0"},"capabilities":{"experimentalApi":false}}}
+then:   {"method":"initialized"}
+        {"id":"thread-1","method":"thread/start","params":{"model":"gpt-5.6-luna","approvalPolicy":"never","approvalsReviewer":"user","sandbox":"read-only","cwd":"<scratch folder>"}}
+        turn 2 sends "thread/resume" with the same params plus "threadId":"<thread-id>","excludeTurns":true
+then:   {"id":"turn-1","method":"turn/start","params":{"threadId":"<thread-id>","input":[{"type":"text","text":"<prompt>","text_elements":[]}],"effort":"low"}}
+stdin closed at turn/completed
+```
+
+Pi:
+
+```text
+pi -p --mode json --model openai-codex/gpt-5.6-luna --thinking minimal [--session-id <session-id>]
+stdin:  <prompt>, then closed
+session-folder check, with no prompt:
+pi --mode rpc --model openai-codex/gpt-5.6-luna --thinking minimal <session flags>
+stdin:  {"id":"state","type":"get_state"}
+        and for --session <path>: {"id":"pwd","type":"bash","command":"pwd","excludeFromContext":true}
+```
+
+Antigravity CLI:
+
+```text
+agy --input-format stream-json --output-format stream-json --model gemini-3.6-flash --effort low --mode plan --print= [--conversation <conversation-id>]
+stdin:  {"event":"user","message":{"role":"user","content":"<prompt>"}}, then closed
+```
+
+### What the probe settles
+
+Of the [facts only a real-client probe can settle](#facts-only-a-real-client-probe-can-settle):
+
+- For every client, the session store holds one session, not a copy, when turn 2 runs in the same folder.
+- Codex: app-server `thread/resume` continues the thread in a new process.
+- Pi: `--session-id` from another folder starts an empty session. `--session-dir` does not fix it, and `--session <path>` keeps the history but works in the session's own folder.
+- Antigravity CLI 1.3.2: `--conversation` keeps the id across processes.
+- Claude Code: a `-p --resume` read the prompt cache on its first request.
+
+The live-process, mid-turn input, stop, and skill questions stay open.
+
+### Where the probe differs from the research
+
+- Pi: `--session-dir` is not a fix. [What one live session per attempt would need](#what-one-live-session-per-attempt-would-need) now says so.
+- Codex: the app-server exited as soon as stdin closed. The 45-second watchdog did not delay these turns.
+- Claude Code: plan mode did not stop the auto-memory writes to `~/.claude/projects/<folder>/memory/`, and a resumed turn received a memory note written after the session started. The research did not cover auto-memory.
+
+## Owner's decisions (2026-10-09)
+
+- [#92](https://github.com/Mano-Liaoyan/iDevelop/issues/92): keep resuming the same session for each message, with no long-lived idle processes. Fix Pi. Show a continued session as one conversation, with no "New attempt" divider when the session is the same.
+- [#93](https://github.com/Mano-Liaoyan/iDevelop/issues/93): the skill picker lists the node client's installed skills. Claude Code and Pi use an allow-list, Codex a deny-list, and Antigravity is disabled with the note "Antigravity CLI uses all of its installed skills; it can't limit them per task."
 
 ## Sources
 
@@ -302,6 +440,7 @@ Local, on 2026-10-09:
 - `pi --help` and the `@earendil-works/pi-coding-agent` 1.1.0 package's `docs/`, `dist/`, and `CHANGELOG.md`.
 - `agy --help` and `agy changelog`, Antigravity CLI 1.3.2, and its built-in `agy-customizations` skill docs.
 - The keys and ids of session files under `~/.claude/projects/`, `~/.codex/sessions/`, `~/.pi/agent/sessions/`, and `~/.gemini/antigravity-cli/conversations/`. No contents were read.
+- The probe's own runs and session files, read as [Probe results](#probe-results-2026-10-09) describes, and Pi 1.1.0's `dist/main.js`, `dist/core/session-manager.js`, and `dist/core/session-cwd.js`.
 
 Online:
 
