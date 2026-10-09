@@ -45,10 +45,10 @@
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
                 <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. -->
                   <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="28" />
-                    <RowDefinition Height="Auto" MinHeight="18" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
                   </Grid.RowDefinitions>
                   <theme:KindTile Grid.RowSpan="2" Classes="headerTile" Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="32" />
                   <!-- Until the box has focus, a text block over it shows the title, wrapped as the box wraps it, so the header
@@ -100,10 +100,10 @@
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
                 <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. -->
                   <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="28" />
-                    <RowDefinition Height="Auto" MinHeight="18" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
                   </Grid.RowDefinitions>
                   <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconLink}" />
@@ -118,10 +118,10 @@
             <Border Classes="inspectorHeader" AutomationProperties.AutomationId="InspectorHeader">
               <inspector:InspectorGrid>
                 <Grid Grid.ColumnSpan="4" ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                  <!-- A 28 px title line and an 18 px kind line, so every header is as tall until a long title wraps. -->
+                  <!-- A title line and a kind line of fixed heights, so every header is as tall until a long title wraps. -->
                   <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" MinHeight="28" />
-                    <RowDefinition Height="Auto" MinHeight="18" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.LineHeight}" />
+                    <RowDefinition Height="Auto" MinHeight="{x:Static inspector:InspectorGrid.SubtitleHeight}" />
                   </Grid.RowDefinitions>
                   <Border Grid.RowSpan="2" Classes="neutralTile headerTile">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
@@ -282,7 +282,7 @@
                                    AutomationProperties.AutomationId="RunTaskDetail" />
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsCancel}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="primary" Command="{Binding RunCommand}" IsVisible="{Binding ShowsRunControls}"
                                   AutomationProperties.AutomationId="RunTask"
                                   AutomationProperties.Name="Run">
@@ -299,10 +299,10 @@
                               <TextBlock Text="Cancel" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                        </StackPanel>
+                        </WrapPanel>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsFixChoice}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                           <Button Classes="primary" Command="{Binding ContinueFixCommand}"
                                   AutomationProperties.AutomationId="ContinueFix"
                                   AutomationProperties.Name="Continue fix">
@@ -319,7 +319,7 @@
                               <TextBlock Text="Retry fix" VerticalAlignment="Center" />
                             </StackPanel>
                           </Button>
-                        </StackPanel>
+                        </WrapPanel>
                       </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
@@ -441,7 +441,7 @@
                                        AutomationProperties.Name="Reason to send back" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Buttons" IsShown="{Binding IsWaiting}">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
+                              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                                 <Button Classes="primary" Command="{Binding ApproveCommand}"
                                         AutomationProperties.AutomationId="ApproveGate"
                                         AutomationProperties.Name="Approve">
@@ -458,7 +458,7 @@
                                     <TextBlock Text="Send back" VerticalAlignment="Center" />
                                   </StackPanel>
                                 </Button>
-                              </StackPanel>
+                              </WrapPanel>
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap"
@@ -706,7 +706,7 @@
                                        AutomationProperties.Name="Files the rebase changes" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Buttons" IsShown="{Binding HasPreview}">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
+                              <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                                 <Button Classes="primary" Command="{Binding ApproveCommand}" IsVisible="{Binding CanApprove}"
                                         AutomationProperties.AutomationId="ApproveRebase"
                                         AutomationProperties.Name="Approve rebase">
@@ -723,7 +723,7 @@
                                     <TextBlock Text="Review again" VerticalAlignment="Center" />
                                   </StackPanel>
                                 </Button>
-                              </StackPanel>
+                              </WrapPanel>
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding Notice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Classes="caption" Text="{Binding Notice}" TextWrapping="Wrap"

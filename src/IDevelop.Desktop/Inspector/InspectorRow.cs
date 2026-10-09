@@ -172,7 +172,8 @@ public sealed class InspectorRow : InspectorPart
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == LayoutProperty || change.Property == InspectorGrid.IsNarrowProperty)
+        if (change.Property == LayoutProperty || change.Property == InspectorGrid.IsNarrowProperty
+            || change.Property == IconProperty || change.Property == LeadProperty)
         {
             UpdateShape();
         }
@@ -195,5 +196,6 @@ public sealed class InspectorRow : InspectorPart
         PseudoClasses.Set(":full", Layout == RowLayout.Full);
         PseudoClasses.Set(":buttons", Layout == RowLayout.Buttons);
         PseudoClasses.Set(":title", Layout == RowLayout.Title);
+        PseudoClasses.Set(":bare", Icon is null && Lead is null);
     }
 }

@@ -19,7 +19,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <Setter Property="Padding" Value="5,3" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="TextWrapping" Value="Wrap" />
@@ -78,7 +78,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Border80Brush}" />
   </Style>
   <Style Selector="Border.filterBar TextBox">
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
 
   <Style Selector="Button.glyph">
@@ -130,7 +130,9 @@
               <PathIcon Name="PART_Chevron" Theme="{StaticResource Glyph}" Width="12" Height="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
               <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Classes="sectionTitle" Text="{TemplateBinding Title}"
                          AutomationProperties.AutomationId="{TemplateBinding TitleId}" />
-              <TextBlock Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right" />
+              <!-- The count's closing parenthesis keeps about 2 px clear on its right, so the text ends 2 px past where a
+                   count's digits end, and its ink ends where the glyphs' ink ends. -->
+              <TextBlock Grid.Column="4" Classes="sectionBadge" Text="{TemplateBinding Badge}" HorizontalAlignment="Right" Margin="0,0,4,0" />
             </inspector:InspectorGrid>
           </Button>
           <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
@@ -249,15 +251,15 @@
   <Style Selector="inspector|InspectorRow /template/ Border.infoGlyph">
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
-  <!-- A label over its value: a 24 px line, as tall as the glyph buttons on it, whose text sits on the line's floor 4 px
-       above the value, and the value under it from the content edge to the value edge. In a narrow panel every labelled
-       row takes this shape, so its value starts where the stacked text boxes start. -->
+  <!-- A label over its value: a line of InspectorGrid.StackedLineHeight, as tall as the glyph buttons on it, whose text
+       sits on the line's floor 4 px above the value, and the value under it from the content edge to the value edge. In a
+       narrow panel every labelled row takes this shape, so its value starts where the stacked text boxes start. -->
   <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LeadLine, inspector|InspectorRow:stacked /template/ StackPanel#PART_Trail">
-    <Setter Property="Height" Value="24" />
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ Panel#PART_LabelLine">
     <Setter Property="Grid.ColumnSpan" Value="2" />
-    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.StackedLineHeight}" />
   </Style>
   <Style Selector="inspector|InspectorRow:stacked /template/ TextBlock#PART_Label">
     <Setter Property="VerticalAlignment" Value="Bottom" />
@@ -288,6 +290,15 @@
   <Style Selector="inspector|InspectorRow:title /template/ Panel#PART_LabelLine">
     <Setter Property="Grid.ColumnSpan" Value="2" />
   </Style>
+  <!-- A row without a glyph or a tile, such as the blueprint editor's, starts its label at the content edge, where its
+       value starts once it sits under the label, and keeps the value column for a value beside it. -->
+  <Style Selector="inspector|InspectorRow:bare /template/ Panel#PART_LabelLine">
+    <Setter Property="Grid.Column" Value="0" />
+    <Setter Property="Grid.ColumnSpan" Value="3" />
+  </Style>
+  <Style Selector="inspector|InspectorRow:bare:stacked /template/ Panel#PART_LabelLine, inspector|InspectorRow:bare:title /template/ Panel#PART_LabelLine">
+    <Setter Property="Grid.ColumnSpan" Value="4" />
+  </Style>
   <Style Selector="inspector|InspectorRow:title /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="IsVisible" Value="False" />
   </Style>
@@ -296,12 +307,14 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
   </Style>
-  <!-- How many nodes of a kind the workflow holds, at the end of its row where a blueprint's buttons end. -->
+  <!-- How many nodes of a kind the workflow holds, at the end of its row, its digits ending where the drawing of a
+       blueprint's More glyph and of the filter glyph ends. -->
   <Style Selector="TextBlock.count">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="Margin" Value="{x:Static inspector:InspectorGrid.GlyphInkMargin}" />
   </Style>
   <Style Selector="TextBlock.value">
     <Setter Property="FontSize" Value="13" />
@@ -321,7 +334,7 @@
   </Style>
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
   </Style>
   <Style Selector="inspector|InspectorRow TextBox.multiline">
     <Setter Property="MinHeight" Value="72" />
@@ -337,7 +350,7 @@
   </Style>
   <!-- A row's buttons are a picker's height, with the side padding of a small button, so two of them share a line in the narrowest panel. -->
   <Style Selector="inspector|InspectorRow Button.action, inspector|InspectorRow Button.primary, inspector|InspectorRow Button.destructive">
-    <Setter Property="Height" Value="28" />
+    <Setter Property="Height" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
     <Setter Property="Padding" Value="10,0" />
     <Setter Property="FontSize" Value="13" />
   </Style>

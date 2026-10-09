@@ -113,9 +113,6 @@ public sealed class InspectorTests : IDisposable
         Assert.Equal("(1)", shell.Section("Agent").Badge);
         Assert.Contains("(1)", Shell.Texts(shell.Section("Agent")));
         Assert.False(shell.Find<ComboBox>("TaskClient").IsEffectivelyVisible);
-        // The count ends where the header's More and the filter button end.
-        var badge = shell.Section("Agent").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Classes.Contains("sectionBadge"));
-        Assert.Equal(shell.Bounds(shell.Find<Button>("InspectorTools")).Right, shell.Bounds(badge).Right, 1.5);
 
         shell.Click(shell.Header(shell.Node("Build")));
 

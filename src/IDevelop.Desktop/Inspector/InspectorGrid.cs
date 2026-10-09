@@ -7,7 +7,8 @@ namespace IDevelop.Desktop.Inspector;
 /// The inspector's one set of columns, which the header, the filter, each section header, and every row share: a field's
 /// glyph or a kind tile, a gap, the label, the value, and two 24 px slots for a row's glyph buttons or a count. The label
 /// column keeps one width, so values start at one place at every width and stay beside their labels in a wide panel. The
-/// panel has two right edges: glyph buttons and counts end at the panel's inset, and boxes end before the trailing column.
+/// panel has two right edges: glyph buttons and rows of buttons end at the panel's inset, and boxes and paragraphs end
+/// before the trailing column. A count ends where the glyphs' drawing ends, <see cref="GlyphInkInset"/> inside the first.
 /// </summary>
 public sealed class InspectorGrid : Grid
 {
@@ -19,6 +20,24 @@ public sealed class InspectorGrid : Grid
 
     /// <summary>The height of a row's first line, a picker's height. A row's glyph, label, buttons, and a short value centre on it.</summary>
     public const double LineHeight = 28;
+
+    /// <summary>
+    /// The height of a label's line over its value, a glyph button's height, so the label sits 4 px above the value rather
+    /// than floating in a picker-tall line.
+    /// </summary>
+    public const double StackedLineHeight = 24;
+
+    /// <summary>The height of the line under a header's title, such as "Implement · Built-in, version 1".</summary>
+    public const double SubtitleHeight = 18;
+
+    /// <summary>
+    /// How far a 16 px glyph's drawing ends before its 24 px button's edge: 4 px of the button and the 2 px its 16 unit frame
+    /// keeps clear. A count ends this far before the action edge, so its digits end where the glyphs' ink ends.
+    /// </summary>
+    public const double GlyphInkInset = 6;
+
+    /// <summary>A trailing count's margin, which ends its digits <see cref="GlyphInkInset"/> before the action edge.</summary>
+    public static Thickness GlyphInkMargin { get; } = new(0, 0, GlyphInkInset, 0);
 
     /// <summary>
     /// The inspector width under which every value moves under its label, the 320 px default among them. From this width
