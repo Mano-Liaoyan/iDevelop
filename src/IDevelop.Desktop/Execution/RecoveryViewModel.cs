@@ -310,6 +310,9 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         }
 
         var (coordinator, address, task) = (_run.Coordinator, _run.Address, Owner);
+        // Whether the attempt can still have a result is known before the restore; afterwards the run may already have
+        // recorded its publication's block again.
+        var unaccepted = CaptureRejected;
         Busy(true);
         Notice = null;
         Restoration restored;
@@ -349,9 +352,9 @@ public sealed class RecoveryViewModel : ObservableObject, IDisposable
         // whether the task goes on.
         if (restored is Restoration.Restored && !_disposed)
         {
-            Notice = _evidence is { Blocks.IsEmpty: false } still
-                ? $"Restore finished, but {(still.Blocks.Length == 1 ? "1 block still holds" : $"{still.Blocks.Length} blocks still hold")} this task. Each one says what it needs."
-                : CaptureRejected ? "Restored the checkout. This attempt still has no result, because its turn-end capture was not accepted."
+            Notice = unaccepted ? "Restored the checkout. This attempt still has no result, because its turn-end capture was not accepted."
+                : _evidence is { Blocks.IsEmpty: false } still
+                    ? $"Restore finished, but {(still.Blocks.Length == 1 ? "1 block still holds" : $"{still.Blocks.Length} blocks still hold")} this task. Each one says what it needs."
                 : "Restored. The tasks this block held go on.";
         }
     }
