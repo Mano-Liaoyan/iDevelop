@@ -627,6 +627,40 @@ public sealed class GenerateTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_persons_choice_on_a_row_wins_over_its_blueprints_own_agent_and_Accept_writes_it()
+    {
+        var implement = BuiltInBlueprints.Implement;
+        var project = _temp.Create("seed");
+        BlueprintLibrary.Project(project).Save(new Blueprint(new BlueprintKey("careful", 1), "Careful", implement.Work, implement.Fields,
+            new NodeSettings(Haiku, ConversationMode.Autonomous)) { DerivedFrom = implement.Key });
+        const string reply = """
+            ```idevelop
+            {"status": "proposal",
+             "add": [{"id": "own", "type": "type-6", "title": "Own", "fields": {"instructions": "B."}}]}
+            ```
+            """;
+        Install(_fakes, ClientId.ClaudeCode);
+        Install(_fakes, ClientId.Codex, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply)));
+        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        SubmitOnCodex(shell);
+        shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        Assert.Equal(("Own", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null), Assert.Single(Review(shell)));
+
+        shell.Click(EditButton(shell, "Own"));
+        shell.Pick("ProposalAgentClient", "Codex");
+
+        Assert.Equal(
+            ("Own", "Codex · GPT-6.1-Sol · low", "Your choice. The blueprint sets Claude Code · Claude Haiku 4.5 · low.", null),
+            Assert.Single(Review(shell)));
+        Assert.Equal(["Codex · GPT-6.1-Sol · low Own"], Ghosts(shell));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        Assert.Equal(
+            new ExecutionSettings(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" },
+            shell.Window.ViewModel.Canvas!.Workflow.Tasks.Values.Single(task => task.Title == "Own").Execution);
+        Assert.Equal("Codex · GPT-6.1-Sol · low", shell.CardAgent("Own"));
+    }
+
+    [AvaloniaFact]
     public void A_client_still_being_checked_when_the_planner_starts_is_named_in_the_review()
     {
         var gate = Path.Combine(_temp.Create("gate"), "agy");
