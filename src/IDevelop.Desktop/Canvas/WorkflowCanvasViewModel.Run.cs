@@ -2,6 +2,7 @@ using System.Windows.Input;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
+using IDevelop.Workflows;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -34,7 +35,10 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Opens the preflight of the whole workflow. No node needs to be selected.</summary>
     public ICommand RunWorkflowCommand => _runWorkflow ??= new RelayCommand(OpenPreflight, () => Preflight is null && Sheet is null);
 
-    /// <summary>Hides a run that has settled, so the cards show their tasks' own runs again. The run's records stay.</summary>
+    /// <summary>
+    /// Hides a run that has settled, so the cards show their tasks' own runs again, or where each task stands between runs
+    /// (#90). The run's records stay.
+    /// </summary>
     public ICommand DismissRunCommand => _dismissRun ??= new RelayCommand(DismissRun);
 
     /// <summary>Run Workflow shows until a run of this workflow is active; then the run's own controls take its place.</summary>
@@ -63,6 +67,7 @@ public sealed partial class WorkflowCanvasViewModel
         run.Replaced += OnRunReplaced;
         Run = run;
         ShowRun(adopted: true);
+        ReadSettledRun();
         RunRouteChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -119,7 +124,139 @@ public sealed partial class WorkflowCanvasViewModel
         _runWorkflow?.NotifyCanExecuteChanged();
     }
 
-    private void OnRunViewChanged(object? sender, EventArgs e) => ShowRun();
+    /// <summary>
+    /// A node's Run (#90). It runs the node in a workflow run, as Run Workflow runs every root: without an active run it
+    /// opens the node's preflight, and in the canvas's active run it adds the node, which starts once each task before it
+    /// has a result. Each task after it starts by itself once all of its own predecessors have results. A node that
+    /// <see cref="RunRefusal"/> refuses starts nothing, and the notice says why.
+    /// </summary>
+    internal void RunNode(TaskNodeViewModel node)
+    {
+        if (RunRefusal(node) is { } refusal)
+        {
+            Notice(refusal);
+            return;
+        }
+
+        if (Run is { IsActive: true } run)
+        {
+            if (run.View.Tasks.GetValueOrDefault(node.Id) is { State: TaskState.Unrequested })
+            {
+                _ = JoinRunAsync(run, node);
+            }
+
+            return;
+        }
+
+        OpenNodePreflight(node.Id);
+    }
+
+    /// <summary>
+    /// Why a node's Run would start nothing now, or null (#90). In the canvas's active run: a node added after the run
+    /// started, a node whose predecessors have no results in the run, or a node that the run's approved version of it
+    /// keeps from starting. Without one: the node's predecessors, since a new run has no results yet, or what keeps the node
+    /// from starting in a run as configured. Null too for a node the active run already holds, whose Run does not show.
+    /// </summary>
+    internal string? RunRefusal(TaskNodeViewModel node)
+    {
+        if (Run is not { IsActive: true } run)
+        {
+            return NewRunRefusal(node);
+        }
+
+        if (run.View.Tasks.GetValueOrDefault(node.Id) is not { } view || run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is not { } approved)
+        {
+            return "Added after this run started. Run it once the run\u00A0finishes.";
+        }
+
+        if (view.State != TaskState.Unrequested)
+        {
+            return null;
+        }
+
+        // A predecessor whose earlier run left it a result that still counts is complete: the run carries that result.
+        if (RunsAfter(node, Incomplete(view.HeldBy)) is { } after)
+        {
+            return after;
+        }
+
+        // The run starts the task as it approved it, so that version decides, not the document's.
+        return Runs.CheckRun(approved) is not { } problem ? null
+            : SameDefinition(approved, node.Definition) ? RunText.Describe(problem)
+            : WorkflowRunText.AsApproved(node.Title, problem);
+    }
+
+    /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>
+    internal bool RunsAsApproved(TaskNodeViewModel node) => Run is { IsActive: true } run &&
+        run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is { } approved && !SameDefinition(approved, node.Definition);
+
+    /// <summary>
+    /// Why a new run of the node would start nothing: each predecessor without a current result from an earlier run, since a
+    /// new run has no results of its own yet, or its configuration.
+    /// </summary>
+    private string? NewRunRefusal(TaskNodeViewModel node) =>
+        RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
+            .Select(connection => connection.Key.From)]))
+        ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
+
+    /// <summary>
+    /// "Runs after "A". Run "A" first." for the predecessors without a current result, or null. A task that is out of date
+    /// because its one such predecessor is out of date says that once instead (#90).
+    /// </summary>
+    private string? RunsAfter(TaskNodeViewModel node, TaskId[] incomplete) =>
+        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only], TitleOf) is { } outOfDate ? outOfDate
+        : WorkflowRunText.RunsAfter(incomplete, TitleOf);
+
+    /// <summary>The predecessors among <paramref name="predecessors"/> that have no current result from an earlier run (#90).</summary>
+    private TaskId[] Incomplete(IEnumerable<TaskId> predecessors) => [.. predecessors.Where(predecessor => History?.CurrentOf(predecessor) is null)];
+
+    private static bool SameDefinition(TaskDefinition approved, TaskDefinition current) =>
+        ReferenceEquals(approved, current) || Revision.CanonicalTask(approved) == Revision.CanonicalTask(current);
+
+    private string TitleOf(TaskId task) => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
+
+    private void OpenNodePreflight(TaskId node)
+    {
+        if (Preflight is null && Sheet is null)
+        {
+            Preflight = new RunPreflightViewModel(this, node);
+            _runWorkflow?.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>
+    /// Adds the node to the active run, once per run, and says why when the run refuses. A run that completed meanwhile
+    /// takes nothing more, so the Run then opens a new run's preflight, as it does without an active run.
+    /// </summary>
+    internal async Task JoinRunAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
+    {
+        var outcome = await run.JoinAsync(node.Id);
+        if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RunStopped } && run.Coordinator.View.Phase == RunPhase.Completed)
+        {
+            var refusal = NewRunRefusal(node);
+            Notice(refusal);
+            if (refusal is null)
+            {
+                OpenNodePreflight(node.Id);
+            }
+
+            return;
+        }
+
+        Notice(outcome switch
+        {
+            RunCommand.Unavailable unavailable => unavailable.Message,
+            RunCommand.Refused { Reason: { Problem: RunProblem.MissingDependencyResult, Task: { } missing } } => WorkflowRunText.RunsAfter([missing], TitleOf),
+            RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
+            _ => null,
+        });
+    }
+
+    private void OnRunViewChanged(object? sender, EventArgs e)
+    {
+        ShowRun();
+        ReadSettledRun();
+    }
 
     private void OnRunReplaced(object? sender, EventArgs e)
     {

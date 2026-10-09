@@ -145,7 +145,7 @@
   <Style Selector="Border.stateStroke.state-failed">
     <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
   </Style>
-  <Style Selector="Border.stateStroke.state-interrupted">
+  <Style Selector="Border.stateStroke.state-interrupted, Border.stateStroke.state-outofdate">
     <Setter Property="BorderBrush" Value="{DynamicResource StateWarningStrokeBrush}" />
   </Style>
   <Style Selector="Border.stateStroke.state-cancelled">
@@ -161,7 +161,7 @@
   <Style Selector="Border.stateTint.state-failed">
     <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
   </Style>
-  <Style Selector="Border.stateTint.state-interrupted">
+  <Style Selector="Border.stateTint.state-interrupted, Border.stateTint.state-outofdate">
     <Setter Property="Background" Value="{DynamicResource StateWarning10Brush}" />
   </Style>
 
@@ -198,7 +198,10 @@
   <Style Selector="PathIcon.stateIcon.state-cancelled">
     <Setter Property="Data" Value="{StaticResource IconStateCancelled}" />
   </Style>
-  <Style Selector="PathIcon.stateIcon.state-needssetup, PathIcon.stateIcon.state-interrupted">
+  <Style Selector="PathIcon.stateIcon.state-outofdate">
+    <Setter Property="Data" Value="{StaticResource IconStateOutOfDate}" />
+  </Style>
+  <Style Selector="PathIcon.stateIcon.state-needssetup, PathIcon.stateIcon.state-interrupted, PathIcon.stateIcon.state-outofdate">
     <Setter Property="Foreground" Value="{DynamicResource StateWarningStrongBrush}" />
   </Style>
   <Style Selector="PathIcon.stateIcon.state-waiting">

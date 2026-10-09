@@ -28,6 +28,23 @@ internal sealed partial class Shell
         return WorkflowRun!;
     }
 
+    /// <summary>
+    /// Runs the task on its own in the project folder, as Generate Workflow runs its planner. A node's Run starts a workflow
+    /// run instead (#90), so a test of a task's own run, its conversation, or its result starts the run here.
+    /// </summary>
+    public void RunOnItsOwn(string title)
+    {
+        Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == title).RunOnItsOwn();
+        Render();
+    }
+
+    /// <summary>Runs the inspected task on its own, as <see cref="RunOnItsOwn(string)"/> does.</summary>
+    public void RunOnItsOwn()
+    {
+        Window.ViewModel.Canvas!.SelectedNode!.RunOnItsOwn();
+        Render();
+    }
+
     public string RunStatus => Find<TextBlock>("RunStatus").Text ?? "";
 
     public string Text(string automationId) => Find<TextBlock>(automationId).Text ?? "";

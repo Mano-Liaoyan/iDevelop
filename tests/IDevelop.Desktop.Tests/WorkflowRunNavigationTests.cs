@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using IDevelop.Desktop.Conversation;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -86,7 +87,7 @@ public sealed class WorkflowRunNavigationTests
         shell.StartRun();
         shell.WaitForCard("A", "Running");
         shell.Click(shell.Header(shell.Node("Approve")));
-        Assert.Equal("A run of the \"Workflow\" workflow owns this approval. It asks for your approval once the tasks before it hand on.",
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow owns this approval. It asks for your approval once the tasks before it hand on."),
             shell.Text("RunOwner"));
         Assert.False(shell.Section("Approval").IsEffectivelyVisible);
         f.Open("a");
@@ -97,7 +98,7 @@ public sealed class WorkflowRunNavigationTests
         shell.Click(shell.InCard<Button>("Approve", "CardAttention"));
         Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.Equal(("Waiting for approval", "1 of this run"), (shell.InView<TextBlock>("RunTaskStatus").Text, shell.Text("GateRequest")));
-        Assert.Equal("A run of the \"Workflow\" workflow owns this approval. Answer its request below, or stop the run.", shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow owns this approval. Answer its request below, or stop the run."), shell.Text("RunOwner"));
         Assert.False(shell.Find<TextBlock>("RunConversationNote").IsEffectivelyVisible);
         shell.WaitUntil(() => shell.Find<MarkdownView>("GateReport").Markdown is { Length: > 0 }, "the panel reads what approving hands on",
             () => "It has no report yet.");

@@ -51,6 +51,9 @@ internal static class RunOperations
     /// <summary>The amendment the person's acceptance of a proposal records.</summary>
     public static OperationId Amend(OperationId confirmation) => OperationIds.Derive(confirmation, "amend");
 
+    /// <summary>The person's Run of <paramref name="task"/> in an active run, which adds it to the run once (#90).</summary>
+    public static OperationId Request(OperationId confirmation, TaskId task) => OperationIds.Derive(confirmation, "request/" + task.Value.ToString("D"));
+
     public static OperationId ReleasePins(RunId run) => OperationIds.Derive(Root(run), "release-pins");
 
     /// <summary>The operation of the run's recorded stop, which every stop step derives from, whichever command recorded it.</summary>

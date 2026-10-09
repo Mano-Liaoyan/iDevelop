@@ -361,13 +361,16 @@ public sealed class WorkflowRunRecoveryTests
         Assert.Equal(("Stopping", "Uncertain"), (shell.RunStatus, shell.CardText("A", "CardStatus")));
         Assert.Equal("Stopping waits for you to close\u00A0\"A\" as stopped.", shell.Text("RunActivity"));
         Assert.Equal(RunPhase.StopRequested, f.Record().Phase);
+        // A task the stopping run never started has no conversation to talk to (#90).
+        shell.Click(shell.Header(shell.Node("B")));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow is stopping and will not start this task."), shell.Text("RunOwner"));
         shell.Click(shell.InCard<Button>("A", "CardAttention"));
         shell.Click(shell.InView<TextBox>("RecoveryReason"));
         shell.Type("Nothing runs any more.");
         shell.Click(shell.InView<Button>("CloseAsStopped"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Closed as stopped", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Closed as stopped", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
     }
 
@@ -395,7 +398,7 @@ public sealed class WorkflowRunRecoveryTests
         claim.Set();
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Not started", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Not started", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((0, 0), (f.Launches("A"), f.Launches("B")));
     }
 
@@ -440,7 +443,7 @@ public sealed class WorkflowRunRecoveryTests
         shell.Click(shell.Find<Button>("StopWorkflow"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Cancelled", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Cancelled", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
         Assert.False(shell.Has<Button>("NextWaiting") && shell.Find<Button>("NextWaiting").IsEffectivelyVisible);
     }

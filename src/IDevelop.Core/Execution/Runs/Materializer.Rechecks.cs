@@ -47,6 +47,8 @@ internal sealed partial class Materializer
         var owners = new List<(TaskId Task, AttemptId Attempt, PreparedExecution Prepared, ImmutableDictionary<string, ComponentBaseline> Baseline)>();
         foreach (var owner in RunReducer.CodeOwners(inputs))
         {
+            // A result carried from an earlier run has no checkout in this run, only its kept commit (#90).
+            if (record.CurrentResults.GetValueOrDefault(owner) is { Origin: ResultOrigin.Carried }) continue;
             if (RunReducer.PublishingAttempt(record, owner) is not { } published || !record.Preparations.TryGetValue(new(published, 1), out var prepared))
                 return new ClaimCheck.Rejected(new(RunProblem.UnresolvedOwnership));
             var fold = CheckoutBaseline.Fold(record, prepared.Location.Owner, commit => Value(repository.ReadCommit(commit)).Tree);

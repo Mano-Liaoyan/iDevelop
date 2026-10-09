@@ -216,7 +216,7 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, alpha, _) = OpenBoth(clients);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         Assert.Equal(("Running", "Design"), (shell.CardText("Design", "CardStatus"), shell.Find<TextBlock>("RunBarTask").Text));
 
         shell.Click(shell.WorkflowRow("alpha", "Release"));
@@ -476,7 +476,7 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, alpha, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         var window = shell.Window.ViewModel;
         var closing = window.Projects[0];
         // What the window lists and shows at the moment the runner reports the task stopped.
@@ -510,7 +510,7 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         Control[] inputs = [shell.WorkflowRow("beta", "Build"), shell.Editor, shell.Find<Button>("RunTask")];
 
         shell.Window.Close();
@@ -675,7 +675,7 @@ public sealed class WorkspaceTests : IDisposable
         var (shell, _, _) = OpenBoth(_fakes.DiscoverAsync().Result);
         shell.Click(shell.WorkflowRow("alpha", "Build"));
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.Click(shell.WorkflowRow("alpha", "Release"));
         shell.AddNode();
 

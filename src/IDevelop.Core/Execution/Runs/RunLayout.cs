@@ -56,6 +56,18 @@ internal static class RunLayout
 
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 
+    /// <summary>
+    /// Where a run keeps the commits of the results it carried from earlier runs (#90), from before its journal names them.
+    /// <c>carried</c> is never a run key, because run keys are hexadecimal, so no ownership snapshot reads these refs.
+    /// </summary>
+    public static string CarriedPrefix(RunId run) => $"refs/idp/carried/{run}/";
+
+    /// <summary>The ref that keeps a carried result's code, replayed onto the run's base.</summary>
+    public static string CarriedCode(RunId run, ResultId result) => $"{CarriedPrefix(run)}{result.Value:D}/code";
+
+    /// <summary>The ref that keeps the join of a carried result's inputs, when it took code from several tasks.</summary>
+    public static string CarriedJoin(RunId run, ResultId result) => $"{CarriedPrefix(run)}{result.Value:D}/join";
+
     public static string Outbox(AttemptId attempt) => $".idp/outbox/{attempt.Value:D}";
 
     public static string InputFolder(InputId input) => $".idp/inputs/{input.Value:D}";

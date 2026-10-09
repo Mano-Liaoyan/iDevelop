@@ -42,7 +42,10 @@ public sealed class NodeMenuTests : IDisposable
     [AvaloniaFact]
     public void One_node_offers_every_action_in_order_with_icons_and_hints_and_delete_last_in_red()
     {
-        var shell = Shell.Open(DesignThenBuild());
+        // Run shows only for a node that can start, so Design's agent is ready.
+        var fakes = new FakeClients(_temp.Create("bin"));
+        FakeAgents.Install(fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
+        var shell = Shell.Open(DesignThenBuild(), fakes.DiscoverAsync().Result);
 
         shell.RightClick(shell.Header(shell.Node("Design")));
 
@@ -96,7 +99,7 @@ public sealed class NodeMenuTests : IDisposable
         FakeAgents.Install(fakes, ClientId.Codex, On("exec", "--json").Replay(Fixture.Path("codex-success.jsonl")));
         var shell = Shell.Open(DesignThenBuild(), fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Id == Design).State == NodeState.Succeeded, "the run succeeds");
 
         shell.RightClick(shell.Header(shell.Node("Design")));
@@ -173,7 +176,8 @@ public sealed class NodeMenuTests : IDisposable
 
         Assert.Equal(ClientId.ClaudeCode, Workflow(shell).Tasks[Build].Execution?.Client);
         shell.RightClick(shell.Header(shell.Node("Build")));
-        Assert.Equal("Run", shell.MenuHeaders()[0]);
+        // Build runs after Design, which has no result, so the menu offers no Run in place of Choose Agent (#90).
+        Assert.Equal("Rename", shell.MenuHeaders()[0]);
     }
 
     [AvaloniaFact]

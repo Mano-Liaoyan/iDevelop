@@ -53,6 +53,41 @@ public sealed class ProjectionTests
     }
 
     [Fact]
+    public void A_waiting_task_names_the_predecessors_it_waits_for_itself_not_the_tasks_before_them()
+    {
+        // T → U → C: C waits for U, which waits for T.
+        using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C)), T, U), U, C));
+        f.Approve();
+
+        var view = View(f);
+
+        Assert.Equal([T], view.Tasks[U].HeldBy.ToArray());
+        Assert.Equal([U], view.Tasks[C].HeldBy.ToArray());
+        f.Complete(f.Reserve(T));
+        Assert.Equal([U], View(f).Tasks[C].HeldBy.ToArray());
+    }
+
+    [Fact]
+    public void A_node_run_projects_the_tasks_nobody_ran_and_those_it_can_no_longer_start()
+    {
+        // T → U and a root C, run from T: C is not part of the run, and nothing in it can start C.
+        using var f = new RunFixtures(Connect(FixtureWorkflow(Task(), Task(U), Task(C)), T, U));
+        f.Approve(node: T);
+
+        var start = View(f);
+        Assert.Equal([TaskState.Ready, TaskState.Pending, TaskState.Unrequested], new[] { T, U, C }.Select(task => start.Tasks[task].State));
+        Assert.Equal([false, false, true], new[] { T, U, C }.Select(task => start.Tasks[task].Dormant));
+        Assert.Equal(RunStatus.Running, start.Status);
+
+        f.Complete(f.Reserve(T));
+        f.Complete(f.Reserve(U));
+        var done = View(f);
+        Assert.Equal([TaskState.Done, TaskState.Done, TaskState.Unrequested], new[] { T, U, C }.Select(task => done.Tasks[task].State));
+        // Nothing more can start, so the run is about to complete rather than needing attention.
+        Assert.Equal(RunStatus.Running, done.Status);
+    }
+
+    [Fact]
     public void Each_durable_stage_of_an_attempt_projects_its_own_state()
     {
         using var f = new RunFixtures(Graph());

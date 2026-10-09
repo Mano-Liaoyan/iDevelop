@@ -72,6 +72,9 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>The open conversation, which the main area or the dock shows, or null.</summary>
+    /// <summary>The shown conversation goes through the canvas's run, rather than the task's own attempts.</summary>
+    internal bool ConversationGoesThroughRun => Conversation is not null && _conversationRoute is not null;
+
     public ConversationViewModel? Conversation
     {
         get => _conversation;
@@ -233,11 +236,12 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The run whose coordinator the task's conversation goes through: the canvas's run while it shows the task, else null
-    /// for the task's own attempts.
+    /// The run whose coordinator the task's conversation goes through: the canvas's run while it holds a conversation with
+    /// the task, else null for the task's own attempts. A run that carried the task's result, or never started it, did not
+    /// talk to it (#90).
     /// </summary>
     private static WorkflowRunCoordinator? Route(ConversationTarget target) =>
-        target.Canvas.Run is { } run && target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { ShowsRunState: true } ? run.Coordinator : null;
+        target.Canvas.Run is { } run && target.Canvas.Nodes.FirstOrDefault(node => node.Id == target.Task) is { ShowsRunConversation: true } ? run.Coordinator : null;
 
     private void ShowConversation(ConversationTarget target)
     {

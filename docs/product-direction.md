@@ -27,6 +27,7 @@ The user wants these capabilities:
 - Make the node editor work like n8n, Unreal Engine Blueprints, and Godot, with a UI in Apple's design style, as recorded in [The node editor follows Apple's design](#the-node-editor-follows-apples-design).
 - Give nodes types that users define and save as blueprints, as recorded in [Nodes have types that users define](#nodes-have-types-that-users-define).
 - Provide Run Workflow without requiring a selected starting node. Start successors automatically after all required predecessors finish, and deliver predecessor content explicitly.
+- Run any single node. When it finishes, each node directly after it starts automatically once all of that node's predecessors are complete, and nothing starts merely because it comes later. The user asked for this on 2026-10-09 in issue #90. A result from an earlier run counts as complete while it is still current, and when the project's code changed since, while its changes apply cleanly on today's code; on a conflict, its task must run again. The user decided this the same day.
 - Keep multiple projects open, with multiple workflows per project. Workflow rows initially hide their node references.
 - Preserve the current compact canvas. New and generated nodes start collapsed. Each node and the canvas provide expansion controls. Expanded nodes expose frequent execution settings, agent interaction, attention requests, and result links.
 - Provide a chat-quality agent view with Markdown and conversation history. Keep the inspector as the complete settings editor and improve its Godot-inspired alignment, grouping, and field icons.
@@ -282,7 +283,7 @@ On 2026-10-04 the user ordered phases 3, 4, and 5, set the completion condition 
 
 ### Single-task execution is done
 
-Each task node carries an execution configuration: the agent client, the model, and the reasoning setting that the chosen client and model support. Running a task starts its configured client in the project folder, and the inspector and the card show the result when it finishes. Running a task ignores its connections. The card's agent label, its status pill, and status-colored cards joined the PlanWeave look with this phase.
+Each task node carries an execution configuration: the agent client, the model, and the reasoning setting that the chosen client and model support. Running a task starts its configured client in the project folder, and the inspector and the card show the result when it finishes. Running a task ignores its connections. Since 2026-10-09 a node's Run starts a workflow run instead, which follows its connections (issue #90). The card's agent label, its status pill, and status-colored cards joined the PlanWeave look with this phase.
 
 On 2026-10-04 the user accepted the four proposed cases, so the phase covers six:
 

@@ -16,6 +16,12 @@ internal sealed record RunPreflight(string Project, ApprovedRevision Revision, P
 {
     public WorkflowId Workflow => Revision.Snapshot.Id;
 
+    /// <summary>
+    /// The node whose Run asks for the run, or null for Run Workflow (#90). Its preview lists, checks, and offers only that
+    /// node and the tasks after it, since only those can start.
+    /// </summary>
+    public TaskId? Node { get; init; }
+
     public WorktreePolicy Worktrees { get; } = new(".worktrees", "idp/");
 
     /// <summary>What keeps the workflow from being approved now. Empty when it can be.</summary>
@@ -37,7 +43,23 @@ internal sealed record RunPreflight(string Project, ApprovedRevision Revision, P
     /// The bases the person can choose: HEAD when the project has a commit, and a snapshot of the uncommitted work when the
     /// work tree differs from HEAD outside iDevelop's data and nothing is unmerged.
     /// </summary>
-    public ImmutableArray<BaseChoice> Choices => Base is not { } found || !Gaps.IsEmpty ? [] : Offered(found);
+    public ImmutableArray<BaseChoice> Choices => Base is not { } found || !Gaps.IsEmpty ? [] : [.. Offered(found).Where(Starts)];
+
+    /// <summary>
+    /// The results of earlier runs that a node's run would carry for the tasks it does not run, and the needed ones it could
+    /// not carry, each with the bases it applies on (#90). Empty for Run Workflow, which carries nothing.
+    /// </summary>
+    public ImmutableArray<PreflightCarried> Carried { get; init; } = [];
+
+    /// <summary>The results the run would carry on <paramref name="choice"/>.</summary>
+    public IEnumerable<PreflightCarried> CarriedOn(BaseChoice choice) => Carried.Where(carried => carried.Bases.Contains(choice));
+
+    /// <summary>
+    /// Whether a run from <paramref name="choice"/> could start its node: each dependency predecessor of the node has a
+    /// result the run carries on that base. Run Workflow's roots need nothing.
+    /// </summary>
+    public bool Starts(BaseChoice choice) => Node is not { } node ||
+        RunScope.Predecessors(Revision.Snapshot)[node].All(predecessor => CarriedOn(choice).Any(carried => carried.Task == predecessor));
 
     internal static ImmutableArray<BaseChoice> Offered(PreflightBase found) =>
         found.Changed.IsEmpty || !found.Unmerged.IsEmpty ? [BaseChoice.Head] : [BaseChoice.Head, BaseChoice.Snapshot];
@@ -75,6 +97,20 @@ internal sealed record PreflightInput(TaskId From, ConnectionKind Kind);
 
 /// <summary>Each task runs in its own full checkout under <paramref name="Checkouts"/>, on a branch under <paramref name="Branches"/>.</summary>
 internal sealed record WorktreePolicy(string Checkouts, string Branches);
+
+/// <summary>
+/// A task's result from the earlier run <paramref name="Run"/> that a node's run would take instead of running the task
+/// (#90), on each of <paramref name="Bases"/>. <paramref name="Refusal"/> says why it would not on the other bases, such as
+/// code that conflicts with them. <paramref name="Code"/> is true when it brings code of its own, which the run replays
+/// onto its base.
+/// </summary>
+internal sealed record PreflightCarried(TaskId Task, RunId Run, ResultId Result, ImmutableArray<BaseChoice> Bases, CarryRefusal? Refusal, bool Code)
+{
+    public bool Equals(PreflightCarried? other) => other is not null && Task == other.Task && Run == other.Run && Result == other.Result &&
+        Bases.SequenceEqual(other.Bases) && Equals(Refusal, other.Refusal) && Code == other.Code;
+
+    public override int GetHashCode() => HashCode.Combine(Task, Run, Result);
+}
 
 /// <summary>A standalone attempt's report that the run could reuse for <paramref name="Task"/> on each of <paramref name="Bases"/>.</summary>
 internal sealed record PreflightReport(TaskId Task, AttemptId Source, string Report, ImmutableArray<BaseChoice> Bases)
@@ -121,4 +157,15 @@ internal abstract record PreflightGap
 
     /// <summary>A run record of the workflow could not be read, so no run can be approved until it is repaired.</summary>
     internal sealed record Records(string Detail) : PreflightGap;
+
+    /// <summary>
+    /// The node runs only after these dependency predecessors have results, and none of them has a current result from an
+    /// earlier run that the run could carry on any base it offers (#90). The person runs them first.
+    /// </summary>
+    internal sealed record After(TaskId Id, ImmutableArray<TaskId> Predecessors) : PreflightGap
+    {
+        public bool Equals(After? other) => other is not null && Id == other.Id && Predecessors.SequenceEqual(other.Predecessors);
+
+        public override int GetHashCode() => HashCode.Combine(Id, Predecessors.Length);
+    }
 }

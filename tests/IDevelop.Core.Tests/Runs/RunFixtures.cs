@@ -128,8 +128,9 @@ internal sealed class RunFixtures : IDisposable
 
     public RunRecord Read(RunId? run = null) => Assert.IsType<RunRead.Loaded>(Store.Read(W, run ?? Run)).Record;
 
-    public void Approve(CommitId? codeBase = null, RunId? run = null) => Assert.IsType<RunDecision.Created>(
-        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head)));
+    /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
+    public void Approve(CommitId? codeBase = null, RunId? run = null, TaskId? node = null) => Assert.IsType<RunDecision.Created>(
+        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head), node: node));
 
     public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null) =>
         Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(Lease(task ?? T, run ?? Run), Op(),
@@ -170,7 +171,7 @@ internal sealed class RunFixtures : IDisposable
     public void Claim(RunEvent.Reserved reservation, RunId? run = null, RunLease? lease = null)
     {
         Prepare(reservation, run);
-        Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
+        Assert.IsType<RunDecision.Granted>(Store.Claim(lease ?? Lease(reservation.Attempt.Task, run), Op(), new(reservation.Attempt.Id, 1), reservation.Inputs, Prompt));
     }
 
     public LogCheckpoint WriteLog(RunEvent.Reserved reservation, TerminalAttemptOutcome outcome = TerminalAttemptOutcome.Succeeded,

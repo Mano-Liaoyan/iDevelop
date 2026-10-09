@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -146,21 +147,22 @@ public sealed class WorkflowRunTests
 
         shell.Click(shell.Find<Button>("DismissRun"));
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        Assert.Equal(["Not run", "Not run"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
+        // The cards keep where each task stands between runs (#90).
+        Assert.Equal(["Succeeded", "Succeeded"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
     }
 
     [AvaloniaFact]
-    public void While_a_run_owns_a_task_its_own_Run_stands_aside_and_after_the_run_its_own_run_shows_again()
+    public void While_a_run_owns_a_task_its_Run_stands_aside_and_after_the_run_Run_starts_a_new_run_of_it()
     {
         using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
-        f.Answer("A", f.Says("A ready.", gate: "a"), f.Says("A again.")).Answer("B", f.Says("B ready."));
+        f.Answer("A", f.Says("A ready.", gate: "a"), f.Says("A again.")).Answer("B", f.Says("B ready."), f.Says("B again."));
         var shell = f.Window();
         shell.StartRun();
         shell.WaitForCard("A", "Running");
         shell.Click(shell.Header(shell.Node("A")));
 
         Assert.Equal("Running", shell.InView<TextBlock>("RunTaskStatus").Text);
-        Assert.Equal("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run.", shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run."), shell.Text("RunOwner"));
         Assert.False(shell.Find<Button>("RunTask").IsEffectivelyVisible);
         Assert.False(shell.Find<Button>("CancelRun").IsEffectivelyVisible);
         Assert.False(shell.Find<TextBlock>("StartProblem").IsEffectivelyVisible);
@@ -168,14 +170,19 @@ public sealed class WorkflowRunTests
 
         f.Open("a");
         shell.WaitForStatus("Completed");
-        Assert.Equal("A run of the \"Workflow\" workflow ran this task last. Run it on its own to show its own result again.", shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow ran this task last."), shell.Text("RunOwner"));
         Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
         shell.Click(shell.InView<Button>("RunTask"));
 
-        shell.WaitUntil(() => shell.Has<TextBlock>("LastRunStatus") && shell.Find<TextBlock>("LastRunStatus").Text == "Succeeded", "A's own run succeeds");
-        Assert.False(shell.Find<TextBlock>("RunTaskStatus").IsEffectivelyVisible);
+        // A node's Run starts a workflow run of that node, through its own preflight (#90).
+        shell.WaitUntil(() => shell.Preflight is { IsReady: true }, "A's preflight reads the project");
+        Assert.Equal("Run \"A\"", shell.Preflight!.Heading);
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitUntil(() => f.Launches("B") == 2 && shell.RunStatus == "Completed", "the new run of A and the task after it completes",
+            () => $"It shows {shell.RunStatus}.");
         Assert.Equal(("Succeeded", "Succeeded"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
-        Assert.Equal(2, f.Launches("A"));
+        Assert.Equal((2, 2), (f.Launches("A"), f.Launches("B")));
+        Assert.Equal(2, f.RunFolders().Length);
     }
 
     [AvaloniaFact]
@@ -219,7 +226,7 @@ public sealed class WorkflowRunTests
         f.Answer("Plan", f.Says(proposal)).Answer("Export API", f.Says("API ready."));
         var shell = f.Window();
         shell.Click(shell.Header(shell.Node("Plan")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<Button>("AcceptProposal") && shell.Find<Button>("AcceptProposal").IsEffectivelyEnabled, "the plan's proposal shows");
         // The planned task takes the planner's agent, as Generate's planner gives it.
         shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
@@ -404,7 +411,7 @@ public sealed class WorkflowRunTests
         shell.Click(shell.Find<Button>("StopWorkflow"));
 
         shell.WaitForStatus("Stopped");
-        Assert.Equal(("Cancelled", "Not started"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(("Cancelled", "Waits for \"A\""), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
         Assert.Equal("Stopped. Finished work stays.", shell.Text("RunActivity"));
         Assert.Equal((1, 0), (f.Launches("A"), f.Launches("B")));
         Assert.True(shell.Find<Button>("RunWorkflow").IsEffectivelyVisible);

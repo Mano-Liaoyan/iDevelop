@@ -290,7 +290,7 @@ public sealed class GenerateTests : IDisposable
         });
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Plan export")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         InspectorLayoutTests.AssertLaidOut(shell);
 

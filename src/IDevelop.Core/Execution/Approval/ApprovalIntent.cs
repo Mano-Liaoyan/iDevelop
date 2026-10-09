@@ -24,10 +24,14 @@ internal sealed record ApprovalIntent(int Schema, RunId Run, OperationId Operati
     /// <summary>The reports the confirmation included, by task. A waiting planner among them is marked done before the approval.</summary>
     public ImmutableArray<ReportInclusion> Inclusions { get; init; } = [];
 
+    /// <summary>The node whose Run asked for the run, or null for Run Workflow (#90).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TaskId? Node { get; init; }
+
     /// <summary>Whether the intent approves what <paramref name="live"/> shows with <paramref name="choice"/> and <paramref name="inclusions"/>.</summary>
     public bool Matches(RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions) => live.Base is { } found &&
         Revision.Id == live.Revision.Id && Choice == choice && Head == found.Head && (choice == BaseChoice.Head || Snapshot == found.WorkTree) &&
-        Inclusions.SequenceEqual(inclusions);
+        Inclusions.SequenceEqual(inclusions) && Node == live.Node;
 
     /// <summary>The snapshot commit: the confirmed tree over HEAD, by iDevelop, at the intent's time.</summary>
     public CommitRecipe SnapshotRecipe() => new(Snapshot ?? throw new InvalidOperationException("The intent has no snapshot."), [Head],
@@ -137,8 +141,15 @@ internal sealed class ApprovalIntents
     /// </summary>
     public void Remove(RunId run, GitRepository? repository)
     {
-        if (repository is not null) ApprovalPin.Release(repository, run);
+        if (repository is not null)
+        {
+            ApprovalPin.Release(repository, run);
+            Carrying.Release(repository, run);
+        }
         var folder = Path.Combine(_folder, run.ToString());
+        // The artifacts it copied for the results it would have carried (#90) go with it; a run with a journal keeps them.
+        var copied = Path.Combine(folder, "results");
+        if (!File.Exists(Path.Combine(folder, "events.jsonl")) && Directory.Exists(copied)) Directory.Delete(copied, recursive: true);
         File.Delete(Path.Combine(folder, FileName));
         if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);
     }

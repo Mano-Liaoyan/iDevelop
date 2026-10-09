@@ -133,7 +133,7 @@ public sealed class WorkflowRunReviewTests
 
         shell.WaitForCard("Review", "Fix interrupted");
         shell.Click(shell.InCard<Button>("Review", "CardAttention"));
-        Assert.Equal("Fix round 1 of \"A\" ended without a recorded end, and it was closed as stopped. Continue the fix in its session, or retry it in a fresh one.",
+        Assert.Equal(WorkflowRunText.Unbroken("Fix round 1 of \"A\" ended without a recorded end, and it was closed as stopped. Continue the fix in its session, or retry it in a fresh one."),
             shell.Text("RunTaskDetail"));
         shell.Click(shell.InView<Button>("ContinueFix"));
 
@@ -154,7 +154,7 @@ public sealed class WorkflowRunReviewTests
             .Route("Your earlier session could not continue", "A");
         var shell = Interrupted(f);
 
-        Assert.Equal("Closing iDevelop interrupted fix round 1 of \"A\". The fix reported no session, so it cannot go on. Retry fix starts the round in a fresh session.",
+        Assert.Equal(WorkflowRunText.Unbroken("Closing iDevelop interrupted fix round 1 of \"A\". The fix reported no session, so it cannot go on. Retry fix starts the round in a fresh session."),
             shell.Text("RunTaskDetail"));
         Assert.Equal((false, true), (shell.InView<Button>("ContinueFix").IsEffectivelyEnabled, shell.Find<Button>("RetryFix").IsEffectivelyEnabled));
     }
@@ -188,7 +188,7 @@ public sealed class WorkflowRunReviewTests
         f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), Interrupting(f), f.Writes("calc.txt", "a + b\n", Answers(Fixed)));
         var shell = Interrupted(f);
 
-        Assert.Equal("Closing iDevelop interrupted fix round 1 of \"A\". Continue the fix in its session, or retry it in a fresh one.",
+        Assert.Equal(WorkflowRunText.Unbroken("Closing iDevelop interrupted fix round 1 of \"A\". Continue the fix in its session, or retry it in a fresh one."),
             shell.Text("RunTaskDetail"));
         Assert.True(shell.InView<Button>("ContinueFix").IsEffectivelyEnabled);
         Assert.True(shell.InView<Button>("RetryFix").IsEffectivelyEnabled);

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -11,7 +12,25 @@ public sealed partial class ProjectRuns
     /// What Run Workflow shows for <paramref name="workflow"/> before anything runs. It records nothing; computing the work
     /// tree's tree leaves only unreferenced loose objects in Git's object database, as <see cref="RunPreflight"/> says.
     /// </summary>
-    internal RunPreflight Preflight(Workflow workflow) => Approvals.Inspect(workflow);
+    /// <param name="node">The node whose Run asks for the run, or null for Run Workflow, which runs every root (#90).</param>
+    internal RunPreflight Preflight(Workflow workflow, TaskId? node = null) => Approvals.Inspect(workflow, node);
+
+    /// <summary>
+    /// Why <paramref name="task"/> could not start in a workflow run as it is configured now, as the preflight would name
+    /// it, or null. A node's Run shows it before any click (#90).
+    /// </summary>
+    internal StartProblem? CheckRun(TaskDefinition task) => RunApprovals.Gap(task, _projectFolder, _clients.Current);
+
+    /// <summary>
+    /// The runs of <paramref name="workflow"/> recorded in the project, for <see cref="RunHistory"/>: what each task has from
+    /// the runs that settled, which its card keeps between runs and after a restart (#90). Empty when a run record cannot be
+    /// read; the preflight names that as a gap.
+    /// </summary>
+    internal ImmutableArray<RunRecord> EarlierRuns(WorkflowId workflow)
+    {
+        try { return TurnStore.Records(workflow); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return []; }
+    }
 
     /// <summary>
     /// The workflow's run that is approved or stopping, which a window shows when it opens the project, or null. A run

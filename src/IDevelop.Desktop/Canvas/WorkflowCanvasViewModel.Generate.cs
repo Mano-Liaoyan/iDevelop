@@ -129,7 +129,7 @@ public sealed partial class WorkflowCanvasViewModel
         _generated.Add(node.Id);
         _latestGenerated = node.Id;
         node.PropertyChanged += OnGeneratedChanged;
-        node.RunCommand.Execute(null);
+        node.RunOnItsOwn();
         ShowGenerateProgress();
     }
 

@@ -57,7 +57,7 @@ public sealed class MinimapTests : IDisposable
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Design")));
 
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Design", "CardStatus") == "Failed", "the run fails");
 
         var failed = Ring(Item(shell, "Design"));
@@ -89,7 +89,7 @@ public sealed class MinimapTests : IDisposable
             _fakes.DiscoverAsync().Result);
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
         shell.Click(shell.Header(shell.Node("Plan export")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
 
         Assert.Equal(["Plan export", "Ghost Backend API", "Ghost Review the API"], Titles(shell));

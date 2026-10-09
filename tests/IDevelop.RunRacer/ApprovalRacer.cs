@@ -1,5 +1,6 @@
 using IDevelop.Execution;
 using IDevelop.Projects;
+using IDevelop.Workflows;
 
 namespace IDevelop.RunRacer;
 
@@ -8,7 +9,8 @@ internal static class ApprovalRacer
 {
     /// <param name="args">
     /// The mode, the project, the workflow file, the fake clients' folder, the confirmation, the base, the crash point, and
-    /// optionally <c>include</c>, which includes every planner the preview offers on the base.
+    /// optionally <c>include</c>, which includes every planner the preview offers on the base, and <c>node:&lt;task&gt;</c>,
+    /// which confirms that node's Run instead of Run Workflow.
     /// </param>
     public static int Crash(string[] args)
     {
@@ -25,13 +27,15 @@ internal static class ApprovalRacer
             Console.Out.Flush();
             Environment.Exit(73);
         };
-        var preview = runs.Preflight(workflow);
+        var node = args.Skip(7).FirstOrDefault(arg => arg.StartsWith("node:", StringComparison.Ordinal)) is { } named
+            ? new TaskId(Guid.Parse(named["node:".Length..])) : (TaskId?)null;
+        var preview = runs.Preflight(workflow, node);
         Console.WriteLine("Previewed");
         Console.Out.Flush();
         var choice = Enum.Parse<BaseChoice>(args[5]);
         var confirmation = new RunConfirmation(preview, choice, new OperationId(Guid.Parse(args[4])))
         {
-            Include = args.Length > 7 && args[7] == "include"
+            Include = args.Skip(7).Contains("include")
                 ? [.. preview.Planners.Where(planner => planner.Bases.Contains(choice)).Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))]
                 : [],
         };

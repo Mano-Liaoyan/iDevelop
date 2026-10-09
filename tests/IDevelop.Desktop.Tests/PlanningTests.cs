@@ -136,7 +136,7 @@ public sealed class PlanningTests : IDisposable
         var canvas = shell.Window.ViewModel.Canvas!;
         canvas.Edit(new WorkflowEdit.Batch([new WorkflowEdit.SetExecution(Backend, Codex), new WorkflowEdit.SetField(Backend, "instructions", "Say hi.")]));
         shell.Click(shell.Header(shell.Node("Backend")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.CardText("Backend", "CardStatus") == "Succeeded", "the drawn task runs");
         shell.Click(shell.Header(shell.Node("Design export")));
 
@@ -190,7 +190,7 @@ public sealed class PlanningTests : IDisposable
             new WorkflowEdit.Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency));
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design export")));
-        shell.Click(shell.InView<Button>("RunTask"));
+        shell.RunOnItsOwn();
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         return shell;
     }

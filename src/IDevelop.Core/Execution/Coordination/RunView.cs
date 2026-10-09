@@ -75,6 +75,12 @@ internal enum TaskState
     /// <summary>The coordinator does not run this kind of node yet.</summary>
     Unsupported,
 
+    /// <summary>
+    /// In a run that a node's Run started, nobody ran it and no task before it is part of the run (#90). It starts only
+    /// when the person runs it while the run is active, once each of its dependency predecessors has a result.
+    /// </summary>
+    Unrequested,
+
     /// <summary>A person sent back its approval request. It holds its dependents until its inputs change.</summary>
     SentBack,
 }
@@ -103,8 +109,17 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     public UnresolvedReason? Unresolved { get; init; }
 
-    /// <summary>The tasks that hold back a <see cref="TaskState.Pending"/> task.</summary>
+    /// <summary>
+    /// The dependency predecessors that have not handed on a result yet, which a <see cref="TaskState.Pending"/> task waits
+    /// for and an <see cref="TaskState.Unrequested"/> one would.
+    /// </summary>
     public ImmutableSortedSet<TaskId> HeldBy { get; init; } = [];
+
+    /// <summary>
+    /// Nothing in the run can start it any more: it is <see cref="TaskState.Unrequested"/>, or a predecessor is. The run
+    /// completes once every other task is done.
+    /// </summary>
+    public bool Dormant { get; init; }
 
     /// <summary>An Approval node's newest request and its answer, or null before its first request.</summary>
     public GateView? Gate { get; init; }
@@ -120,6 +135,9 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>The task's current result carries code of its own, which a rebase can replay. A report does not.</summary>
     public bool CarriesCode { get; init; }
+
+    /// <summary>The task's current result comes from an earlier run, which this run carried instead of running the task (#90).</summary>
+    public bool Carried { get; init; }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
@@ -135,6 +153,12 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
 
     /// <summary>Counts this window's decisions, so a reader can wait for one after its own signal.</summary>
     public long Decision { get; init; }
+
+    /// <summary>
+    /// The workflow as the run's current revision approved it, which its tasks run as, whatever the document holds now.
+    /// Null only for a view made before the journal could be read.
+    /// </summary>
+    public Workflow? Snapshot { get; init; }
 
     public string Label => Status switch
     {
