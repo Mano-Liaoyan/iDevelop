@@ -12,17 +12,15 @@ namespace IDevelop.Desktop.Canvas;
 
 public partial class WorkflowCanvasView : UserControl, ICanvasView
 {
-    // The run bar sits in the bottom row between the zoom controls and the minimap, as PlanWeave's does, when it fits
-    // there. On a narrower canvas it sits above them.
-    private static readonly Thickness BetweenCorners = new(54, 12, 224, 12);
-    private static readonly Thickness AboveCorners = new(12, 12, 12, 174);
-    private const double RunBarWidth = 380;
-
     /// <summary>
-    /// The margin a fitted or first view keeps around its cards. The breadcrumb, the waiting pill, and Generate float
-    /// over the canvas's top 48 px, so the top margin starts below them.
+    /// The margin a fitted or first view keeps around its cards. The breadcrumb, Run Workflow, and Generate float over the
+    /// canvas's top 48 px, so the top margin starts below them. A fitted view also keeps the cards below the waiting pill
+    /// and above the run bars, as <see cref="FitInset"/> measures.
     /// </summary>
-    private static readonly Thickness ViewInset = new(24, 72, 24, 24);
+    private static readonly Thickness ViewInset = new(CardMargin, 72, CardMargin, CardMargin);
+
+    /// <summary>How far a fitted view keeps its cards from the canvas's edges and from what floats over it.</summary>
+    private const double CardMargin = 24;
 
     private WorkflowCanvasViewModel? _viewModel;
     private Point? _windowAnchor;
@@ -62,8 +60,12 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         // NodifyAvalonia 6.6.0 zooms the minimap by the wheel delta's length, which drops its direction and is
         // about 0.2% per notch, so the minimap's wheel zooms here before Nodify sees it.
         Minimap.AddHandler(PointerWheelChangedEvent, OnMinimapWheel, RoutingStrategies.Tunnel);
-        SizeChanged += (_, e) => RunBars.Margin =
-            e.NewSize.Width - BetweenCorners.Left - BetweenCorners.Right >= RunBarWidth ? BetweenCorners : AboveCorners;
+        // A compact canvas shows its run bars' buttons as glyphs, and a compact or short one has no room for the minimap.
+        SizeChanged += (_, e) =>
+        {
+            Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+            MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(e.NewSize);
+        };
     }
 
     /// <inheritdoc />
@@ -92,7 +94,7 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     public void FitToView()
     {
         var extent = Editor.ItemsExtent;
-        var room = new Rect(Editor.Bounds.Size).Deflate(ViewInset);
+        var room = new Rect(Editor.Bounds.Size).Deflate(FitInset());
         if (extent.Width <= 0 || extent.Height <= 0 || room.Width <= 0 || room.Height <= 0)
         {
             return;
@@ -100,6 +102,21 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
 
         Editor.ViewportZoom = Math.Min(room.Width / extent.Width, room.Height / extent.Height);
         Editor.ViewportLocation = extent.Center - (Vector)room.Center / Editor.ViewportZoom;
+    }
+
+    /// <summary>
+    /// <see cref="ViewInset"/>, with its top below everything that floats along the canvas's top edge, which the window
+    /// lays out over the canvas, and its bottom above the run bars while one shows.
+    /// </summary>
+    private Thickness FitInset()
+    {
+        var top = TopLevel.GetTopLevel(this) is MainWindow { TopBar: { IsVisible: true } bar } && bar.TranslatePoint(new Point(0, bar.Bounds.Height), this) is { } below
+            ? Math.Max(ViewInset.Top, below.Y + CardMargin)
+            : ViewInset.Top;
+        var bottom = RunBars.Bounds.Height > 0 && RunBars.TranslatePoint(default, this) is { } bars
+            ? Math.Max(ViewInset.Bottom, Bounds.Height - bars.Y + CardMargin)
+            : ViewInset.Bottom;
+        return new Thickness(ViewInset.Left, top, ViewInset.Right, bottom);
     }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);

@@ -552,4 +552,19 @@
       </ControlTemplate>
     </Setter>
   </Style>
+
+  <!-- A compact canvas, below 640 px, marks its chrome compact. A glyph button shows only its glyph there, in a 32 px
+       square, and its tooltip's first line names it. A wideOnly part hides there, and a compactOnly part shows only there.
+       These come last, so they win over the button styles above. -->
+  <Style Selector=".compact Button.glyph">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector=".compact Button.glyph TextBlock.label, .compact :is(Control).wideOnly, :is(Control).compactOnly">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector=".compact :is(Control).compactOnly">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
 </Styles>

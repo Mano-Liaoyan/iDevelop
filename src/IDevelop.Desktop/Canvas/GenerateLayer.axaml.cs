@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Nodify;
 
@@ -53,14 +52,6 @@ public partial class GenerateLayer : UserControl
         if (_editor is not null && DataContext is WorkflowCanvasViewModel canvas)
         {
             canvas.ViewportSize = _editor.ViewportSize;
-        }
-    }
-
-    private void OnGenerate(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is WorkflowCanvasViewModel canvas && canvas.ShowGenerate() is { } planner)
-        {
-            this.FindAncestorOfType<WorkflowCanvasView>()?.BringIntoViewIfHidden(planner);
         }
     }
 }

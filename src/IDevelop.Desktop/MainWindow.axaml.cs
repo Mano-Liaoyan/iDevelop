@@ -45,11 +45,50 @@ public partial class MainWindow : Window
                 SizeDock();
             }
         };
+        _sidebarMax = Columns.ColumnDefinitions[0].MaxWidth;
+        _inspectorMax = Columns.ColumnDefinitions[4].MaxWidth;
+        Columns.SizeChanged += (_, _) => LimitPanels();
+        Columns.ColumnDefinitions[0].PropertyChanged += OnPanelColumnChanged;
+        Columns.ColumnDefinitions[4].PropertyChanged += OnPanelColumnChanged;
+        CanvasArea.SizeChanged += (_, e) => TopBar.Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
+        MainArea.SizeChanged += (_, _) => LimitDock();
+    }
+
+    // The largest widths the sidebar's and the inspector's columns declare for themselves.
+    private readonly double _sidebarMax;
+    private readonly double _inspectorMax;
+
+    private void OnPanelColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == ColumnDefinition.WidthProperty)
+        {
+            LimitPanels();
+        }
+    }
+
+    // Each panel keeps the width it was given, which its column's largest width caps while the window is too narrow for it.
+    private void LimitPanels()
+    {
+        var (sidebar, inspector) = (Columns.ColumnDefinitions[0], Columns.ColumnDefinitions[4]);
+        var room = Columns.Bounds.Width - Columns.ColumnDefinitions[1].Width.Value - Columns.ColumnDefinitions[3].Width.Value - PanelWidths.CanvasMinWidth;
+        if (room <= 0)
+        {
+            return;
+        }
+
+        var (sidebarMax, inspectorMax) = PanelWidths.Limits(room,
+            new(sidebar.Width.Value, sidebar.MinWidth, _sidebarMax), new(inspector.Width.Value, inspector.MinWidth, _inspectorMax));
+        sidebar.MaxWidth = sidebarMax;
+        inspector.MaxWidth = inspectorMax;
     }
 
     // The dock opens at its default height, keeps the height the person drags it to while it stays open, and gives the
-    // space back when it closes.
+    // space back when it closes. It never leaves the canvas above it less than CanvasMinHeight, which its splitter also
+    // keeps to, so the canvas's floating controls leave room for its cards.
     private const double DockHeight = 400;
+
+    /// <summary>The canvas's least height above the docked conversation.</summary>
+    internal const double CanvasMinHeight = 280;
 
     private bool _docked;
 
@@ -59,6 +98,7 @@ public partial class MainWindow : Window
         if (ViewModel.DockedConversation is null)
         {
             dock.MinHeight = 0;
+            dock.MaxHeight = double.PositiveInfinity;
             dock.Height = GridLength.Auto;
             MainArea.RowDefinitions[0].Height = GridLength.Star;
         }
@@ -66,6 +106,16 @@ public partial class MainWindow : Window
         {
             dock.MinHeight = 160;
             dock.Height = new GridLength(DockHeight);
+            LimitDock();
+        }
+    }
+
+    private void LimitDock()
+    {
+        if (ViewModel.DockedConversation is not null && MainArea.Bounds.Height > 0)
+        {
+            var dock = MainArea.RowDefinitions[2];
+            dock.MaxHeight = Math.Max(dock.MinHeight, MainArea.Bounds.Height - MainArea.RowDefinitions[1].ActualHeight - CanvasMinHeight);
         }
     }
 
@@ -160,6 +210,14 @@ public partial class MainWindow : Window
     }
 
     private WorkflowCanvasView? CanvasView => CanvasHost.Presenter?.Child as WorkflowCanvasView;
+
+    private void OnGenerate(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel.Canvas?.ShowGenerate() is { } planner)
+        {
+            CanvasView?.BringIntoViewIfHidden(planner);
+        }
+    }
 
     private void OnAddNode(object? sender, RoutedEventArgs e) =>
         CanvasView?.OpenAddInView(AddNode.TranslatePoint(new Point(0, AddNode.Bounds.Height + 4), this) ?? default);

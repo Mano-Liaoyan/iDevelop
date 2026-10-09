@@ -276,8 +276,10 @@ public sealed class RunTests : IDisposable
 
         var bar = shell.Bounds(shell.Find<Control>("RunBar"));
         Assert.Equal(new Size(width, height), shell.Window.ClientSize);
+        // The minimap hides on a compact canvas.
         Assert.All(
-            [shell.Bounds(Shell.Around(shell.Find<Button>("ZoomIn"), "floating")), shell.Bounds(Shell.Around(shell.Find<Minimap>("Minimap"), "floating"))],
+            new[] { Shell.Around(shell.Find<Button>("ZoomIn"), "floating"), Shell.Around(shell.Find<Minimap>("Minimap"), "floating") }
+                .Where(control => control.IsEffectivelyVisible).Select(shell.Bounds),
             other => Assert.False(bar.Intersects(other), $"The run bar at {bar} covers {other}"));
         Assert.True(shell.Bounds(shell.Editor).Contains(bar), $"The run bar at {bar} leaves the canvas");
         var (title, cancel) = (shell.Bounds(shell.Find<TextBlock>("RunBarTask")), shell.Bounds(shell.Find<Button>("RunBarCancel")));
