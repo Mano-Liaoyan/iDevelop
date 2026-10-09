@@ -19,6 +19,19 @@ public sealed class WorkflowRunTests
 
     private static WorkflowRunFixture Chain() => new(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
 
+    /// <summary>Whether the client of each task titled in <paramref name="titles"/> has read its first turn, which counts its launch.</summary>
+    private static bool EachReadItsTurn(WorkflowRunFixture f, params string[] titles)
+    {
+        try
+        {
+            return titles.All(title => f.Launches(title) == 1);
+        }
+        catch (Exception error) when (error is IOException or FormatException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Three tasks that depend on nothing, so the run starts all three at once.</summary>
     private static WorkflowRunFixture Three() => new(Task(A, "A", 105), Task(B, "B", 405), Task(C, "C", 705));
 
@@ -414,7 +427,8 @@ public sealed class WorkflowRunTests
         shell.WaitUntil(() => shell.RunStatus == "3 running", "the bar counts three running tasks", () => $"It shows {shell.RunStatus}.");
         Assert.Equal(("3 running", "0 of 3 done", "Running\u00A0\"A\", \"B\", and\u00A0\"C\""), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal("Workflow run: 3 running, 0 of 3 done", shell.WorkflowRun!.Summary);
-        Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
+        // A card runs once its client's process starts, which is before the client reads its turn and counts its launch.
+        shell.WaitUntil(() => EachReadItsTurn(f, "A", "B", "C"), "each client reads its turn");
         Assert.True(shell.WorkflowShows("seed", "Workflow", "WorkflowRunning"));
 
         f.Open("a");
@@ -438,6 +452,7 @@ public sealed class WorkflowRunTests
         shell.StartRun();
         shell.WaitUntil(() => shell.RunStatus == "3 running" && new[] { "A", "B", "C" }.All(title => shell.CardText(title, "CardStatus") == "Running"),
             "all three run", () => $"It shows {shell.RunStatus}.");
+        shell.WaitUntil(() => EachReadItsTurn(f, "A", "B", "C"), "each client reads its turn");
 
         shell.Click(shell.Find<Button>("StopWorkflow"));
 
