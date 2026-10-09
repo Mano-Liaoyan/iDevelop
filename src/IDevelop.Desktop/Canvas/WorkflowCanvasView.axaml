@@ -113,7 +113,8 @@
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
                       x:DataType="canvas:TaskNodeViewModel">
-          <Setter Property="Location" Value="{Binding Location}" />
+          <!-- Where the card shows: its saved position, moved aside on screen while other cards are expanded (ADR 0024). -->
+          <Setter Property="Location" Value="{Binding DisplayLocation}" />
           <Setter Property="BorderThickness" Value="0" />
           <Setter Property="SelectedBorderThickness" Value="0" />
           <!-- The selection ring and the shadow are drawn outside the card's box. -->

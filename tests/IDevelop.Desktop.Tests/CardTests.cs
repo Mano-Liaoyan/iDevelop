@@ -105,7 +105,7 @@ public sealed class CardTests : IDisposable
 
         Assert.Equal(["Design", "Codex", "GPT-5.5 · high"], Shell.Texts(shell.Node("Design")));
         Assert.False(shell.CardGlyph("Design").IsEffectivelyVisible);
-        Assert.Equal("Design\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(shell.InCard<Panel>("Design", "TaskCard")));
+        Assert.Equal(["Design", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it."], shell.PeekTexts("Design")!);
     }
 
     [AvaloniaFact]
@@ -148,7 +148,7 @@ public sealed class CardTests : IDisposable
         Assert.Equal((false, null), (ToolTip.GetIsOpen(card), ToolTip.GetTip(card)));
         shell.Type("Parser");
         shell.Press(Key.Enter);
-        Assert.Equal("Parser\nImplement · Codex · GPT-5.5 · high\nDraft it.", ToolTip.GetTip(card));
+        Assert.Equal(["Parser", "Implement · Codex · GPT-5.5 · high", "Instructions", "Draft it."], shell.PeekTexts("Parser")!);
     }
 
     [AvaloniaFact]

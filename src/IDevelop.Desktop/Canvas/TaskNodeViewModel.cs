@@ -90,6 +90,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeInspector();
         InitializeConversation();
         InitializeRun();
+        InitializeExpansion();
     }
 
     public TaskId Id => _task.Id;
@@ -600,6 +601,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeConversation();
 
     partial void InitializeRun();
+
+    partial void InitializeExpansion();
 
     private void SetExecution(ExecutionSettings? settings)
     {

@@ -1,0 +1,233 @@
+<!-- An expanded card's body under its 64 px header (#94, ADR 0024): what goes on now, the agent that runs it next, and the
+     card's actions, each section under a hairline. Every section's glyphs sit in one 16 px column 12 px in from the card's
+     edge, under the kind tile, and everything else starts 8 px after that column and ends 12 px in from the other edge,
+     under the state glyph. Text wraps whole, and nothing is cut short. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Canvas.CardDetail"
+             x:DataType="canvas:TaskNodeViewModel"
+             AutomationProperties.AutomationId="CardDetail">
+  <UserControl.Styles>
+    <Style Selector="Border.cardRule">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource Border60Brush}" />
+    </Style>
+    <Style Selector="StackPanel.cardSection">
+      <Setter Property="Margin" Value="12,10,12,12" />
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+    <Style Selector="PathIcon.cardGlyph">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cardHeading">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cardMeta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="TextBlock.cardBody">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="LineHeight" Value="17" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+    <!-- What needs the person, or why the task stopped, sits in its state's tint. -->
+    <Style Selector="Border.cardCallout.callout">
+      <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="10,8,10,10" />
+    </Style>
+    <Style Selector="Border.cardCallout.callout.waiting">
+      <Setter Property="Background" Value="{DynamicResource StateWaiting10Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateWaitingStrokeBrush}" />
+    </Style>
+    <Style Selector="Border.cardCallout.callout.failed">
+      <Setter Property="Background" Value="{DynamicResource StateFailed10Brush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StateFailedStrokeBrush}" />
+    </Style>
+    <Style Selector="ComboBox.cardPicker">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,4,0,4" />
+    </Style>
+    <Style Selector="Button.cardAction">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
+      <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.cardAction PathIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel>
+    <!-- What goes on now: one section whose content follows the task's state. -->
+    <Border Classes="cardRule" />
+    <StackPanel Classes="cardSection" DataContext="{Binding Detail}" x:DataType="canvas:CardDetailViewModel">
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" MinHeight="18">
+        <Panel>
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconChat}" IsVisible="{Binding IsMessage}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateWaiting}" IsVisible="{Binding IsAnswerable}"
+                    Foreground="{DynamicResource StateWaitingStrongBrush}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" IsVisible="{Binding NeedsInspector}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconDescription}" IsVisible="{Binding IsResult}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconStateFailed}" IsVisible="{Binding IsStopped}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconWireDependency}" IsVisible="{Binding IsWaits}" />
+          <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconBrief}" IsVisible="{Binding IsTask}" />
+        </Panel>
+        <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBlock Classes="cardHeading" Text="{Binding Heading}" AutomationProperties.AutomationId="CardNowHeading" />
+          <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding Meta}"
+                     IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     AutomationProperties.AutomationId="CardNowMeta" />
+        </Grid>
+      </Grid>
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
+        <Border Grid.Column="1" Classes="cardCallout" Classes.callout="{Binding IsCallout}" Classes.waiting="{Binding IsAnswerable}"
+                Classes.failed="{Binding IsProblem}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="cardBody" Text="{Binding Text}" IsVisible="{Binding HasText}"
+                       Foreground="{DynamicResource TextStrongBrush}"
+                       AutomationProperties.AutomationId="CardNowText" />
+            <ItemsControl ItemsSource="{Binding Waits}" IsVisible="{Binding IsWaits}" AutomationProperties.AutomationId="CardWaits">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="canvas:CardWait">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" MinHeight="22">
+                    <theme:KindTile Kind="{Binding Kind}" TileSize="16" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="cardBody" Text="{Binding Title}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Classes="cardMeta" Text="{Binding Status}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!-- The person's words to the agent, which the conversation's composer shares as its draft. -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsAnswerable}">
+              <TextBox Text="{Binding Draft}" Watermark="{Binding AnswerWatermark}" TextWrapping="Wrap" AcceptsReturn="True"
+                       FontSize="12" MinHeight="52" Padding="8,6"
+                       AutomationProperties.AutomationId="CardAnswer" AutomationProperties.Name="Answer the agent">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Classes="cardMeta" Text="{Binding AnswerNote}" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="CardAnswerNote" />
+                <Button Grid.Column="1" Classes="primary" Height="28" Padding="10,0" FontSize="12" Command="{Binding SendCommand}"
+                        AutomationProperties.AutomationId="CardSend" AutomationProperties.Name="Send the answer">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconSend}" Width="14" Height="14" />
+                    <TextBlock Text="Send" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </StackPanel>
+
+    <!-- The agent that runs the task next. A change describes the next attempt, never the one that runs. -->
+    <Border Classes="cardRule" IsVisible="{Binding HasAgent}" />
+    <StackPanel Classes="cardSection" IsVisible="{Binding HasAgent}">
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
+        <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconAgent}" ToolTip.Tip="Client" />
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ClientChoices}" SelectedItem="{Binding SelectedClient, Mode=OneWay}"
+                  SelectionChanged="OnClientChosen"
+                  AutomationProperties.AutomationId="CardPickClient" AutomationProperties.Name="Client">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="canvas:ClientChoice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding HasClient}">
+        <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconModel}" ToolTip.Tip="Model" />
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModel, Mode=OneWay}"
+                  SelectionChanged="OnModelChosen" PlaceholderText="Choose a model"
+                  AutomationProperties.AutomationId="CardPickModel" AutomationProperties.Name="Model">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="canvas:Choice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding HasReasoning}">
+        <PathIcon Classes="cardGlyph" Theme="{StaticResource Glyph}" Data="{StaticResource IconReasoning}" ToolTip.Tip="Reasoning" />
+        <ComboBox Grid.Column="1" Classes="cardPicker" ItemsSource="{Binding ReasoningChoices}" SelectedItem="{Binding SelectedReasoning, Mode=OneWay}"
+                  SelectionChanged="OnReasoningChosen" PlaceholderText="Choose a level"
+                  AutomationProperties.AutomationId="CardPickReasoning" AutomationProperties.Name="Reasoning">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="canvas:Choice">
+              <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding ShowsNextRunNote}">
+        <TextBlock Grid.Column="1" Classes="cardMeta" Text="A change applies to the next run." TextWrapping="Wrap"
+                   AutomationProperties.AutomationId="CardNextRunNote" />
+      </Grid>
+    </StackPanel>
+
+    <!-- The actions: the conversation on the content edge, and the task's own Run or Stop on the other. -->
+    <Border Classes="cardRule" />
+    <Grid Margin="12,8,12,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button Classes="cardAction" Command="{Binding OpenConversationCommand}" IsVisible="{Binding HasAgent}"
+                AutomationProperties.AutomationId="CardOpenConversation" AutomationProperties.Name="Open conversation">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconConversation}" />
+            <TextBlock Text="Open conversation" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="cardAction" Command="{Binding SelectCommand}" IsVisible="{Binding Detail.NeedsInspector, FallbackValue=False}"
+                AutomationProperties.AutomationId="CardShowInspector" AutomationProperties.Name="Show in the inspector">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStatus}" />
+            <TextBlock Text="Inspector" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+      <Button Grid.Column="2" Classes="cardAction" Command="{Binding RunCommand}" IsVisible="{Binding ShowsCardRun}"
+              AutomationProperties.AutomationId="CardRun" AutomationProperties.Name="Run">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRun}" />
+          <TextBlock Text="Run" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <Button Grid.Column="2" Classes="cardAction" Command="{Binding CancelCommand}" IsVisible="{Binding ShowsCardStop}"
+              AutomationProperties.AutomationId="CardStop" AutomationProperties.Name="Stop">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
+          <TextBlock Text="Stop" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </Grid>
+  </StackPanel>
+</UserControl>

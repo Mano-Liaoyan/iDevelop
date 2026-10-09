@@ -341,6 +341,8 @@ public sealed class MainWindowViewModel : ObservableObject
             foreach (var canvas in canvases)
             {
                 canvas.IsExpanded = session.Expanded.Any(saved => saved.Is(canvas.Project.Folder, canvas.Workflow.Id));
+                canvas.RestoreExpandedCards(session.Cards.Where(saved => saved.Workflow.Is(canvas.Project.Folder, canvas.Workflow.Id))
+                    .SelectMany(saved => saved.Tasks));
             }
 
             var selected = session.Selected is { } choice
@@ -449,7 +451,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         switch (e.PropertyName)
         {
-            case nameof(WorkflowCanvasViewModel.IsExpanded):
+            case nameof(WorkflowCanvasViewModel.IsExpanded) or nameof(WorkflowCanvasViewModel.ExpandedCards):
                 Persist();
                 break;
             case nameof(WorkflowCanvasViewModel.Sheet) or nameof(WorkflowCanvasViewModel.Preflight) when canvas == Canvas:
@@ -509,7 +511,11 @@ public sealed class MainWindowViewModel : ObservableObject
         var session = new WorkspaceSession(
             [.. Projects.Select(project => project.Folder), .. Unopened.Select(unopened => unopened.Folder)],
             Canvas is { } canvas ? new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id) : null,
-            [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))]);
+            [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.IsExpanded).Select(canvas => new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id))])
+        {
+            Cards = [.. Projects.SelectMany(project => project.Workflows).Where(canvas => canvas.AnyCardExpanded)
+                .Select(canvas => new WorkflowCards(new WorkflowRef(canvas.Project.Folder, canvas.Workflow.Id), canvas.ExpandedCards))],
+        };
         try
         {
             session.Write(file);

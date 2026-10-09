@@ -1,0 +1,44 @@
+<!-- A collapsed card's tooltip (#94, ADR 0024): a quick read-only look at what the expanded card would show first. The
+     title and the agent, then what goes on now under its heading. A tooltip takes no input, so answering, the links, and
+     the agent's pickers stay on the expanded card. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:canvas="using:IDevelop.Desktop.Canvas"
+             xmlns:theme="using:IDevelop.Desktop.Theme"
+             x:Class="IDevelop.Desktop.Canvas.CardPeek"
+             x:DataType="canvas:TaskNodeViewModel"
+             Width="{x:Static canvas:CardPeek.PeekWidth}"
+             AutomationProperties.AutomationId="CardPeek">
+  <StackPanel Spacing="2">
+    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+               Foreground="{DynamicResource TextStrongBrush}" />
+    <TextBlock Text="{Binding PeekAgent}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" />
+    <Border Height="1" Margin="0,6" Background="{DynamicResource Border60Brush}" />
+    <StackPanel Spacing="4" DataContext="{Binding Detail}" x:DataType="canvas:CardDetailViewModel">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBlock Text="{Binding Heading}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextStrongBrush}" />
+        <TextBlock Grid.Column="1" Text="{Binding Meta}" FontSize="11" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextMutedBrush}"
+                   IsVisible="{Binding Meta, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </Grid>
+      <TextBlock Text="{Binding Text}" FontSize="12" LineHeight="17" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"
+                 IsVisible="{Binding HasText}" />
+      <ItemsControl ItemsSource="{Binding Waits}" IsVisible="{Binding IsWaits}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="canvas:CardWait">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" MinHeight="22">
+              <theme:KindTile Kind="{Binding Kind}" TileSize="16" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                         Foreground="{DynamicResource TextBrush}" />
+              <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="11" VerticalAlignment="Center"
+                         Foreground="{DynamicResource TextMutedBrush}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+    <TextBlock Text="{Binding PeekProblem}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource TextMutedBrush}"
+               IsVisible="{Binding PeekProblem, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+  </StackPanel>
+</UserControl>

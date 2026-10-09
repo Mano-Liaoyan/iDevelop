@@ -312,7 +312,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // Nodify's own key gestures never fire, so the canvas's shortcuts are read here. A box's keys stay its own.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_viewModel is { } canvas && e.Source is not TextBox)
+        // A key typed in a text box, or on an expanded card's answer box and pickers, stays with it (ADR 0024).
+        if (_viewModel is { } canvas && e.Source is not TextBox && !(e.Source is Visual source && source.FindAncestorOfType<CardDetail>(includeSelf: true) is not null))
         {
             e.Handled = Shortcut(canvas, e.Key, e.KeyModifiers);
         }
