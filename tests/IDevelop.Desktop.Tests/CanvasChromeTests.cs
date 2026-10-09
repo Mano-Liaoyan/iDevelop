@@ -24,7 +24,7 @@ public sealed class CanvasChromeTests : IDisposable
     private static readonly (double Width, double Height, double Inspector)[] Sizes =
     [
         (900, 600, 280), (900, 600, 320), (900, 600, 520),
-        (1280, 800, 280), (1280, 800, 520),
+        (1280, 800, 280), (1280, 800, 380), (1280, 800, 520),
         (1600, 1000, 280), (1600, 1000, 320), (1600, 1000, 520),
     ];
 
@@ -123,15 +123,23 @@ public sealed class CanvasChromeTests : IDisposable
         Assert.Equal(400, shell.Window.MainArea.RowDefinitions[2].ActualHeight, 0.5);
     }
 
-    [AvaloniaFact]
-    public void Fit_to_view_keeps_the_cards_below_the_top_row_and_above_the_run_bar_in_the_smallest_window()
+    [AvaloniaTheory]
+    [InlineData(1600, 600, 280, false)]
+    [InlineData(900, 600, 320, true)]
+    public void Fit_to_view_keeps_the_cards_below_the_top_row_and_above_the_run_bar(double width, double height, double inspector, bool docked)
     {
         using var f = FanOut.Fixture();
         var shell = f.Window();
         FanOut.Run(shell);
         FanOut.Generate(shell);
-        Resize(shell, 900, 600, 320);
+        if (docked)
+        {
+            // The docked conversation leaves a short, compact canvas, where the pill sits under the buttons.
+            shell.Click(shell.InCard<Button>("Write docs", "CardAttention"));
+            shell.Click(shell.Find<Button>("ConversationLayout"));
+        }
 
+        Resize(shell, width, height, inspector);
         shell.Click(shell.Find<Button>("FitToScreen"));
 
         var top = new[] { "Breadcrumb", "NextWaiting", "GenerateWorkflow" }.Max(id => shell.Bounds(shell.Find<Control>(id)).Bottom);
