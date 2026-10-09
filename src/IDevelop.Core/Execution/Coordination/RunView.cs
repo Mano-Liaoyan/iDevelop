@@ -151,6 +151,12 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
     /// <summary>Counts this window's decisions, so a reader can wait for one after its own signal.</summary>
     public long Decision { get; init; }
 
+    /// <summary>
+    /// The workflow as the run's current revision approved it, which its tasks run as, whatever the document holds now.
+    /// Null only for a view made before the journal could be read.
+    /// </summary>
+    public Workflow? Snapshot { get; init; }
+
     public string Label => Status switch
     {
         RunStatus.Paused => "Paused",

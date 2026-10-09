@@ -208,6 +208,17 @@ internal static class WorkflowRunText
         _ => $"Runs after {Names(predecessors, title)}. Run them first.",
     };
 
+    /// <summary>
+    /// Why a run's approved version of a task keeps it from starting although the document's version could: "This run uses
+    /// "B" as it was when the run started, and it had no agent then. Run it once the run finishes."
+    /// </summary>
+    public static string AsApproved(string title, StartProblem problem) => $"This run uses \"{title}\" as it was when the run started, and " + problem switch
+    {
+        StartProblem.NoAgent => "it had no agent then.",
+        StartProblem.FieldMissing missing => $"its {missing.Label} field was empty then.",
+        _ => "it could not start as it was then.",
+    } + " Run it once the run finishes.";
+
     /// <summary>What a task of the run needs from the person, which its card's glyph shows, or null.</summary>
     public static Attention? Needs(TaskView task, Func<TaskId, string> title)
     {

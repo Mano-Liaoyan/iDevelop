@@ -68,7 +68,7 @@ internal static class RunProjection
             tasks[task] = new(task, flow.Contains(task) ? TaskState.Pending : TaskState.Unrequested) { HeldBy = Holders(task), Dormant = dormant.Contains(task) };
         var built = tasks.ToImmutable();
         var slots = live.Values.Count(stage => stage is LiveStage.Starting or LiveStage.Running);
-        return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built);
+        return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built) { Snapshot = snapshot };
     }
 
     /// <summary>Each task's newest attempt in this run, in reservation order.</summary>

@@ -246,7 +246,13 @@
                           </Grid>
                         </Border>
                       </inspector:InspectorRow>
-                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ShowsRunState}">
+                      <inspector:InspectorRow Layout="Full">
+                        <inspector:InspectorRow.IsShown>
+                          <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="ShowsRunState" />
+                            <Binding Path="RunOwner" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                          </MultiBinding>
+                        </inspector:InspectorRow.IsShown>
                         <TextBlock Text="{Binding RunOwner}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                                    AutomationProperties.AutomationId="RunOwner" />
                       </inspector:InspectorRow>

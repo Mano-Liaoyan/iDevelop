@@ -123,20 +123,14 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>
     /// A node's Run (#90). It runs the node in a workflow run, as Run Workflow runs every root: without an active run it
     /// opens the node's preflight, and in the canvas's active run it adds the node, which starts once each task before it
-    /// has a result. Each task after it starts by itself once all of its own predecessors have results. A node whose
-    /// predecessors have no results, or that could not start as configured, starts nothing, and the notice says why.
+    /// has a result. Each task after it starts by itself once all of its own predecessors have results. A node that
+    /// <see cref="RunRefusal"/> refuses starts nothing, and the notice says why.
     /// </summary>
     internal void RunNode(TaskNodeViewModel node)
     {
-        if (RunsAfter(node.Id) is { } after)
+        if (RunRefusal(node) is { } refusal)
         {
-            Notice(after);
-            return;
-        }
-
-        if (Runs.CheckRun(node.Definition) is { } problem)
-        {
-            Notice(RunText.Describe(problem));
+            Notice(refusal);
             return;
         }
 
@@ -150,34 +144,90 @@ public sealed partial class WorkflowCanvasViewModel
             return;
         }
 
+        OpenNodePreflight(node.Id);
+    }
+
+    /// <summary>
+    /// Why a node's Run would start nothing now, or null (#90). In the canvas's active run: a node added after the run
+    /// started, a node whose predecessors have no results in the run, or a node that the run's approved version of it
+    /// keeps from starting. Without one: the node's predecessors, since a new run has no results yet, or what keeps the node
+    /// from starting in a run as configured. Null too for a node the active run already holds, whose Run does not show.
+    /// </summary>
+    internal string? RunRefusal(TaskNodeViewModel node)
+    {
+        if (Run is not { IsActive: true } run)
+        {
+            return NewRunRefusal(node);
+        }
+
+        if (run.View.Tasks.GetValueOrDefault(node.Id) is not { } view || run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is not { } approved)
+        {
+            return "Added after this run started. Run it once the run finishes.";
+        }
+
+        if (view.State != TaskState.Unrequested)
+        {
+            return null;
+        }
+
+        if (WorkflowRunText.RunsAfter(view.HeldBy, TitleOf) is { } after)
+        {
+            return after;
+        }
+
+        // The run starts the task as it approved it, so that version decides, not the document's.
+        return Runs.CheckRun(approved) is not { } problem ? null
+            : SameDefinition(approved, node.Definition) ? RunText.Describe(problem)
+            : WorkflowRunText.AsApproved(node.Title, problem);
+    }
+
+    /// <summary>Whether the canvas's active run runs the task as the document now holds it, or as it was when the run started.</summary>
+    internal bool RunsAsApproved(TaskNodeViewModel node) => Run is { IsActive: true } run &&
+        run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is { } approved && !SameDefinition(approved, node.Definition);
+
+    /// <summary>Why a new run of the node would start nothing: every predecessor, since a new run has no results yet, or its configuration.</summary>
+    private string? NewRunRefusal(TaskNodeViewModel node) =>
+        WorkflowRunText.RunsAfter([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
+            .Select(connection => connection.Key.From)], TitleOf)
+        ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
+
+    private static bool SameDefinition(TaskDefinition approved, TaskDefinition current) =>
+        ReferenceEquals(approved, current) || Revision.CanonicalTask(approved) == Revision.CanonicalTask(current);
+
+    private string TitleOf(TaskId task) => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task";
+
+    private void OpenNodePreflight(TaskId node)
+    {
         if (Preflight is null && Sheet is null)
         {
-            Preflight = new RunPreflightViewModel(this, node.Id);
+            Preflight = new RunPreflightViewModel(this, node);
             _runWorkflow?.NotifyCanExecuteChanged();
         }
     }
 
     /// <summary>
-    /// "Runs after "A". Run "A" first." for a node whose dependency predecessors have no results yet, or null. In the
-    /// canvas's active run that means a result in the run; a new run has none yet, so every predecessor counts (#90).
+    /// Adds the node to the active run, once per run, and says why when the run refuses. A run that completed meanwhile
+    /// takes nothing more, so the Run then opens a new run's preflight, as it does without an active run.
     /// </summary>
-    internal string? RunsAfter(TaskId task)
-    {
-        IReadOnlyCollection<TaskId> waiting = Run is { IsActive: true } run && run.View.Tasks.GetValueOrDefault(task) is { } view
-            ? view.State == TaskState.Unrequested ? view.HeldBy : []
-            : [.. Workflow.Connections.Where(connection => connection.Key.To == task && connection.Value.Blocks()).Select(connection => connection.Key.From).Order()];
-        return WorkflowRunText.RunsAfter(waiting, id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task");
-    }
-
-    /// <summary>Adds the node to the active run, once per run, and says why when the run refuses.</summary>
-    private async Task JoinRunAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
+    internal async Task JoinRunAsync(WorkflowRunViewModel run, TaskNodeViewModel node)
     {
         var outcome = await run.JoinAsync(node.Id);
+        if (outcome is RunCommand.Refused { Reason.Problem: RunProblem.RunStopped } && run.Coordinator.View.Phase == RunPhase.Completed)
+        {
+            var refusal = NewRunRefusal(node);
+            Notice(refusal);
+            if (refusal is null)
+            {
+                OpenNodePreflight(node.Id);
+            }
+
+            return;
+        }
+
         Notice(outcome switch
         {
             RunCommand.Unavailable unavailable => unavailable.Message,
-            RunCommand.Refused { Reason: { Problem: RunProblem.MissingDependencyResult, Task: { } missing } } =>
-                WorkflowRunText.RunsAfter([missing], id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task"),
+            RunCommand.Refused { Reason: { Problem: RunProblem.MissingDependencyResult, Task: { } missing } } => WorkflowRunText.RunsAfter([missing], TitleOf),
             RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
             _ => null,
         });

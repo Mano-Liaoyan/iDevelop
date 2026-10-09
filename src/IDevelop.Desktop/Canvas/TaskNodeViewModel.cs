@@ -268,8 +268,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     /// yet, or what keeps it from starting in a workflow run as configured (#90). Null when Run can start it, or when Run
     /// does not show because this window runs the task or the canvas's run already holds it.
     /// </summary>
-    public string? RunRefusal => RunsHere || IsRunOwned && !JoinsRun ? null
-        : WorkflowRunText.Unbroken(_canvas.RunsAfter(Id) ?? (_canvas.Runs.CheckRun(_task) is { } problem ? RunText.Describe(problem) : null));
+    public string? RunRefusal => RunsHere || IsRunOwned && !JoinsRun ? null : WorkflowRunText.Unbroken(_canvas.RunRefusal(this));
 
     /// <summary>
     /// Only the inspector shows it, so only the selected task reads the attempts that its last run continues. A task that
@@ -385,6 +384,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
             OnPropertyChanged(nameof(StartProblem));
             OnPropertyChanged(nameof(RunRefusal));
+            OnPropertyChanged(nameof(RunOwner));
             _run.NotifyCanExecuteChanged();
             OnConversationChanged();
         }
@@ -443,6 +443,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         // A changed connection can change the tasks this one runs after.
         OnPropertyChanged(nameof(StartProblem));
         OnPropertyChanged(nameof(RunRefusal));
+        OnPropertyChanged(nameof(RunOwner));
         _run.NotifyCanExecuteChanged();
 
         ShowState();

@@ -171,4 +171,138 @@ public sealed class NodeRunTests
         Assert.Equal(("Completed", "1 of 2 done", Whole("\"C\" waits for \"B\".")), (shell.RunStatus, shell.Text("RunProgress"), shell.Text("RunActivity")));
         Assert.Equal((1, 0, 0, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C"), f.Launches("D")));
     }
+
+    /// <summary>Starts a run of <paramref name="title"/> from its Run and waits until its card runs.</summary>
+    private static void StartNodeRun(Shell shell, string title)
+    {
+        OpenNodePreflight(shell, title);
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitForCard(title, "Running");
+    }
+
+    private static void Apply(Shell shell, WorkflowEdit edit)
+    {
+        Assert.IsType<EditResult.Applied>(shell.Window.ViewModel.Canvas!.Document.Apply(edit));
+        shell.Render();
+    }
+
+    [AvaloniaFact]
+    public void A_node_added_while_a_node_run_is_active_keeps_Run_off_until_the_run_finishes()
+    {
+        using var f = Join();
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("E", f.Says("E ready."));
+        var shell = f.Window();
+        StartNodeRun(shell, "A");
+
+        Apply(shell, At(D, "E", 405, 330));
+        Select(shell, "E");
+
+        var reason = Whole("Added after this run started. Run it once the run finishes.");
+        var run = shell.InView<Button>("RunTask");
+        Assert.Equal((reason, false, reason), (shell.InView<TextBlock>("StartProblem").Text, run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
+        f.Open("a");
+        shell.WaitForStatus("Completed");
+        Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
+        Assert.Equal(0, f.Launches("E"));
+    }
+
+    [AvaloniaFact]
+    public void A_run_uses_its_tasks_as_they_were_when_it_started_and_will_not_add_one_that_could_not_start_then()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), AppTempFolder.TaskAt(B, "B", 105, 250, null, "Build B."), At(C, "C", 405, 170),
+            Dependency(A, C), Dependency(B, C));
+        f.Answer("A", f.Says("A ready.", gate: "a")).Answer("B", f.Says("B ready.")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+        StartNodeRun(shell, "A");
+
+        // B had no agent when the run started; the person gives it one now.
+        Apply(shell, new WorkflowEdit.SetExecution(B, WorkflowRunFixture.Codex));
+        Select(shell, "B");
+
+        var reason = Whole("This run uses \"B\" as it was when the run started, and it had no agent then. Run it once the run finishes.");
+        var run = shell.InView<Button>("RunTask");
+        Assert.Equal((reason, false, reason), (shell.InView<TextBlock>("StartProblem").Text, run.IsEffectivelyEnabled, ToolTip.GetTip(run)));
+        Assert.False(shell.Find<TextBlock>("RunOwner").IsEffectivelyVisible);
+        Apply(shell, new WorkflowEdit.SetField(A, "instructions", "Build A again."));
+        Select(shell, "A");
+        Assert.Equal(Whole("A run of the \"Workflow\" workflow owns this task. Talk to it through its conversation, or stop the run. " +
+            "The run uses this task as it was when the run started."), shell.Text("RunOwner"));
+        f.Open("a");
+        shell.WaitForStatus("Completed");
+        Assert.Equal((1, 0, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
+    }
+
+    [AvaloniaFact]
+    public void A_task_after_a_root_nobody_ran_shows_only_why_its_Run_is_off_and_a_waiting_task_has_not_started()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Below(B, "B"), At(C, "C", 405, 170), Below2(D, "D"),
+            Dependency(A, C), Dependency(B, C), Dependency(B, D));
+        f.Answer("A", f.Says("A ready.", gate: "a"));
+        var shell = f.Window();
+        StartNodeRun(shell, "A");
+
+        Select(shell, "D");
+        Assert.Equal(Whole("Runs after \"B\". Run \"B\" first."), shell.InView<TextBlock>("StartProblem").Text);
+        Assert.False(shell.Find<TextBlock>("RunOwner").IsEffectivelyVisible);
+        Select(shell, "C");
+        Assert.Equal(Whole("A run of the \"Workflow\" workflow owns this task. It has not started it yet."), shell.Text("RunOwner"));
+        f.Open("a");
+        shell.WaitForStatus("Completed");
+    }
+
+    [AvaloniaFact]
+    public void A_Run_that_meets_a_run_that_just_completed_opens_a_new_run_s_preflight()
+    {
+        using var f = Join();
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        StartNodeRun(shell, "A");
+        shell.WaitForStatus("Completed");
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        // As a click on B's Run whose request reaches the run just after it completed.
+        canvas.JoinRunAsync(shell.WorkflowRun!, canvas.Nodes.Single(node => node.Title == "B")).Wait(TimeSpan.FromSeconds(30));
+        shell.WaitUntil(() => shell.Preflight is { IsReady: true }, "B's preflight reads the project", () => $"Notice: {shell.Status}");
+
+        Assert.Equal(("Run \"B\"", ""), (shell.Preflight!.Heading, shell.Status));
+    }
+
+    [AvaloniaFact]
+    public void A_task_s_own_later_attempt_shows_again_in_place_of_the_settled_run_s_state()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
+        f.Answer("A", f.Says("A ready."), f.Says("A again.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        StartNodeRun(shell, "A");
+        shell.WaitForStatus("Completed");
+        Select(shell, "A");
+        Assert.Equal("Succeeded", shell.InView<TextBlock>("RunTaskStatus").Text);
+
+        shell.RunOnItsOwn("A");
+
+        shell.WaitUntil(() => shell.Has<TextBlock>("LastRunStatus") && shell.Find<TextBlock>("LastRunStatus").Text == "Succeeded", "A's own run succeeds");
+        Assert.False(shell.Find<TextBlock>("RunTaskStatus").IsEffectivelyVisible);
+        Assert.Equal(("Succeeded", "Succeeded"), (shell.CardText("A", "CardStatus"), shell.CardText("B", "CardStatus")));
+        Assert.Equal(2, f.Launches("A"));
+    }
+
+    [AvaloniaFact]
+    public void A_conversation_of_its_own_that_waits_stays_counted_and_cancellable_after_a_node_run_settles()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105, ConversationMode.Chat), Below(B, "B"));
+        f.Answer("A", f.Says("Here is a plan.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        Select(shell, "A");
+        shell.RunOnItsOwn("A");
+        shell.WaitForCard("A", "Waiting for you");
+        Assert.Equal(1, shell.Window.ViewModel.Canvas!.WaitingCount);
+
+        StartNodeRun(shell, "B");
+        shell.WaitForStatus("Completed");
+
+        Assert.Equal(("Waiting for you", 1), (shell.CardText("A", "CardStatus"), shell.Window.ViewModel.Canvas!.WaitingCount));
+        Select(shell, "A");
+        Assert.True(shell.InView<Button>("CancelRun").IsEffectivelyEnabled);
+        Assert.Equal((1, 1), (f.Launches("A"), f.Launches("B")));
+    }
 }
