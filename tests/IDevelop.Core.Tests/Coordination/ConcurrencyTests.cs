@@ -16,11 +16,18 @@ public sealed class ConcurrencyTests
     private static string Started(CoordinatorFixture f, TaskId task) => Path.Combine(f.Evidence, $"{Name(task)}.started");
 
     /// <summary>A turn that marks its start, waits until each of <paramref name="others"/> has started, then writes and answers.</summary>
-    private static FakeRule Meets(CoordinatorFixture f, TaskId task, params TaskId[] others)
+    private static FakeRule Meets(CoordinatorFixture f, TaskId task, params TaskId[] others) =>
+        Meeting(f, task, others).Write($"{Name(task).ToLowerInvariant()}.txt", $"{Name(task)}\n").Print(FakeAgents.ReplyLines(ClientId.Codex, $"{Name(task)} ready.\n"));
+
+    /// <summary>As <see cref="Meets"/>, for a read-only task: it writes nothing.</summary>
+    private static FakeRule MeetsReading(CoordinatorFixture f, TaskId task, params TaskId[] others) =>
+        Meeting(f, task, others).Print(FakeAgents.ReplyLines(ClientId.Codex, $"{Name(task)} ready.\n"));
+
+    private static FakeRule Meeting(CoordinatorFixture f, TaskId task, TaskId[] others)
     {
         var rule = FakeRule.On().RecordArguments(Started(f, task)).Print(FakeAgents.SessionLine(ClientId.Codex, "session-" + Name(task)));
         foreach (var other in others) rule = rule.WaitForFile(Started(f, other));
-        return rule.Write($"{Name(task).ToLowerInvariant()}.txt", $"{Name(task)}\n").Print(FakeAgents.ReplyLines(ClientId.Codex, $"{Name(task)} ready.\n"));
+        return rule;
     }
 
     /// <summary>A turn that writes a partial file and waits for <paramref name="gate"/> before it answers.</summary>
@@ -104,7 +111,7 @@ public sealed class ConcurrencyTests
     public async Task A_diamond_runs_its_branches_together_and_its_join_waits_for_both()
     {
         await using var f = new CoordinatorFixture(Diamond());
-        f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Meets(f, B, C)).Answer(C, Meets(f, C, B)).Answer(X, Reports(X))
+        f.Answer(A, Meets(f, A, X)).Answer(B, Meets(f, B, C)).Answer(C, Meets(f, C, B)).Answer(X, MeetsReading(f, X, A))
             .Answer(D, FakeRule.On()
                 .Print(FakeAgents.SessionLine(ClientId.Codex, "session-D"))
                 .Copy("b.txt", Path.Combine(f.Evidence, "d-b.txt"))
@@ -283,6 +290,72 @@ public sealed class ConcurrencyTests
         Assert.Equal(["B\n", "C\n"], new[] { "b", "c" }.Select(name => File.ReadAllText(Path.Combine(f.Evidence, $"d-{name}.txt"))));
         Assert.Equal((string?)"A\n", f.ResultFile(D, "a.txt"));
         Assert.Equal([1, 1, 1, 1], new[] { A, B, C, D }.Select(f.Launches));
+    }
+
+    [Fact]
+    public async Task A_person_s_command_hears_of_a_busy_repository_after_the_short_wait()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        var turn = new TurnKey(waiting.Tasks[A].Attempt!.Value, 1);
+        ConversationCommandResult busy;
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        using (var held = f.Preparation.Git.Open().TakeMutationLock())
+        {
+            Assert.NotNull(held);
+            busy = await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound);
+            waited.Stop();
+        }
+
+        // The run's own steps wait up to 30 seconds for the lock; a person's Mark done reports the busy repository instead.
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(10), $"Mark done waited {waited.Elapsed}.");
+        Assert.Equal((CommandOutcome.Refused, WorkflowRunCoordinator.BusyMessage), (busy.Outcome, busy.Detail));
+        Assert.Equal(CommandOutcome.Applied, (await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound)).Outcome);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
+
+        // The coordinator's own commands for a person, such as the rebase preview, wait as briefly.
+        RebasePreviewRead preview;
+        waited.Restart();
+        using (var held = f.Preparation.Git.Open().TakeMutationLock())
+        {
+            Assert.NotNull(held);
+            preview = await f.Coordinator.ReviewUpdatedInputs(f.Address, A).WaitAsync(Bound);
+            waited.Stop();
+        }
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(10), $"The preview waited {waited.Elapsed}.");
+        Assert.Equal(RunProblem.JournalBusy, Assert.IsType<RebasePreviewRead.Rejected>(preview).Reason.Problem);
+    }
+
+    [Fact]
+    public async Task Closing_the_project_ends_a_start_s_wait_for_the_repository()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        var looked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runs.Probe = point => { if (point == "runner.lookup") looked.TrySetResult(); };
+        TimeSpan closing;
+        using (var held = f.Preparation.Git.Open().TakeMutationLock())
+        {
+            Assert.NotNull(held);
+            await f.Resume();
+            await looked.Task.WaitAsync(Bound);
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            await f.Close();
+            closing = timer.Elapsed;
+        }
+
+        // The halted start stops waiting for the lock, so closing need not wait out the project's 5-second leave timeout.
+        Assert.True(closing < TimeSpan.FromSeconds(3), $"Closing took {closing}.");
+        Assert.Empty(f.Read().Attempts);
+        await f.OpenAgain();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(1, f.Launches(A));
     }
 
     [Fact]

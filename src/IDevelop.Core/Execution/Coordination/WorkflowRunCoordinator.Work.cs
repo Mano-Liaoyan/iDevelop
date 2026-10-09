@@ -81,7 +81,7 @@ internal sealed partial class WorkflowRunCoordinator
         var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
+        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause)), halted: Halted),
             start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);
@@ -222,7 +222,7 @@ internal sealed partial class WorkflowRunCoordinator
             _runs.Probe?.Invoke("coordinator.close-attempt.before");
             if (_store.CloseAttempt(_permit!, RunOperations.CloseAttempt(operation), launch.Attempt, ended, turn.Log) is RunDecision.Rejected rejected)
                 return new Release.Held(rejected.Reason);
-            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation) is { } refusal)
+            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation, Scheduled()) is { } refusal)
                 return new Release.Held(refusal);
         }
         _runs.Probe?.Invoke("coordinator.release.before");
@@ -230,14 +230,14 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>Publishes a successfully closed writer's frozen capture, or accepts a read-only attempt's report.</summary>
-    private RunRejection? Finish(RunLease lease, TaskId task, AttemptId attempt, OperationId operation)
+    private RunRejection? Finish(RunLease lease, TaskId task, AttemptId attempt, OperationId operation, Materializer materializer)
     {
         if (Record() is not { } record) return new(RunProblem.StorageUnavailable);
         var definition = record.Revisions[record.Attempts[attempt].Revision].Snapshot.Tasks[task];
         if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
         {
             _runs.Probe?.Invoke("coordinator.publish.before");
-            return _materializer().Publish(lease, RunOperations.Publish(operation), attempt) is Publication.Rejected rejected ? rejected.Reason : null;
+            return materializer.Publish(lease, RunOperations.Publish(operation), attempt) is Publication.Rejected rejected ? rejected.Reason : null;
         }
         if (record.Closures.GetValueOrDefault(attempt) is not AttemptEnd.Logged closure) return new(RunProblem.OutcomeMismatch);
         var evidence = AttemptEvidence.Read(_store.AttemptFolder(Address.Workflow, Address.Run, task, attempt), closure.Evidence);
@@ -302,7 +302,7 @@ internal sealed partial class WorkflowRunCoordinator
         Offload(() =>
         {
             if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RunRejection(RunProblem.TaskBusy);
-            using (taken.Lease) return Finish(taken.Lease, task, attempt, operation);
+            using (taken.Lease) return Finish(taken.Lease, task, attempt, operation, Scheduled());
         }, refusal =>
         {
             _live.Remove(task);
@@ -347,7 +347,8 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Settling);
         Background(async () =>
         {
-            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel()).ConfigureAwait(false);
+            var closing = await _runs.CloseResting(_permit!, RunOperations.Cancel(stop, attempt), attempt, new RestingEnd.Cancel(), scheduled: true,
+                halted: Halted).ConfigureAwait(false);
             return closing switch
             {
                 RestingClose.Closed closed => closed.Attempt.Release() is Release.Held held ? new TaskHold.Refused(held.Reason, null, Transient(held.Reason.Problem)) : null,
@@ -406,7 +407,7 @@ internal sealed partial class WorkflowRunCoordinator
     {
         if (_pinsReleasing) return;
         _pinsReleasing = true;
-        Offload(() => _materializer().ReleasePins(_permit!, RunOperations.ReleasePins(Address.Run)), release =>
+        Offload(() => Scheduled().ReleasePins(_permit!, RunOperations.ReleasePins(Address.Run)), release =>
         {
             if (release is PinRelease.Released) _pinsReleased = true;
             else _problem = $"The run's retention pins were not released: {release}.";

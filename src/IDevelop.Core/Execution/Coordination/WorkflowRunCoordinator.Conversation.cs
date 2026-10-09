@@ -166,7 +166,7 @@ internal sealed partial class WorkflowRunCoordinator
             var next = resting.Next;
             _live[task] = new(LiveStage.Starting);
             _runs.Probe?.Invoke("coordinator.continue");
-            Background(() => _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, prompt)),
+            Background(() => _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, prompt), halted: Halted),
                 start => Started(task, start), error =>
                 {
                     _live.Remove(task);
@@ -321,7 +321,7 @@ internal sealed partial class WorkflowRunCoordinator
         // The turn's own operation, so a publication that this cannot finish converges with the one Resume finishes.
         var operation = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.MarkDone(), MarkDoneOperation(operation), operation),
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.MarkDone(), MarkDoneOperation(operation), operation, scheduled: false),
             closing => Closed(task, closing, "The task was marked done.", complete), error =>
             {
                 _live.Remove(task);
@@ -364,7 +364,7 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var turn = RunOperations.Turn(record, resting.Last);
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.Cancel(), CancelOperation(turn), turn),
+        Background(() => CloseResting(task, resting.Attempt, new RestingEnd.Cancel(), CancelOperation(turn), turn, scheduled: false),
             closing => Closed(task, closing, "The cancellation was recorded.", complete), error =>
             {
                 _live.Remove(task);
@@ -390,13 +390,14 @@ internal sealed partial class WorkflowRunCoordinator
     /// turn's operation, and lets go of the closure's lease. When the journal refuses a closure whose request already
     /// reached the log, the closure is pending: the run finishes it from the log (<see cref="FinishClosing"/>).
     /// </summary>
-    private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn)
+    /// <param name="scheduled">The run finishes a closure whose request is in the log, rather than the person's command itself.</param>
+    private async Task<Closing> CloseResting(TaskId task, AttemptId attempt, RestingEnd end, OperationId operation, OperationId turn, bool scheduled)
     {
-        var closing = await _runs.CloseResting(_permit!, operation, attempt, end).ConfigureAwait(false);
+        var closing = await _runs.CloseResting(_permit!, operation, attempt, end, scheduled: scheduled, halted: Halted).ConfigureAwait(false);
         switch (closing)
         {
             case RestingClose.Closed closed:
-                if (end is RestingEnd.MarkDone && Finish(closed.Attempt.Lease, task, attempt, turn) is { } refusal)
+                if (end is RestingEnd.MarkDone && Finish(closed.Attempt.Lease, task, attempt, turn, scheduled ? Scheduled() : Commanded()) is { } refusal)
                 {
                     // The closure is recorded. Its publication is finished later, under a lease of its own.
                     closed.Attempt.Lease.Dispose();
@@ -458,7 +459,7 @@ internal sealed partial class WorkflowRunCoordinator
             _ => OperationIds.Derive(turn, "conversation/conclude"),
         };
         _live[task] = new(LiveStage.Settling);
-        Background(() => CloseResting(task, attempt, pending.End, operation, turn), closing =>
+        Background(() => CloseResting(task, attempt, pending.End, operation, turn, scheduled: true), closing =>
         {
             _live.Remove(task);
             switch (closing)

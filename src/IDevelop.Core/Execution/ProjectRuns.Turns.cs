@@ -22,14 +22,20 @@ public sealed partial class ProjectRuns
     internal Func<string, ulong?>? Volumes { get; set; }
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
-    private Materializer TurnMaterializer(RunStore store)
+    /// <summary>
+    /// A materializer whose steps wait <paramref name="patience"/> for the repository's mutation lock, and stop waiting once
+    /// the project closes or <paramref name="halted"/> says their owner halted.
+    /// </summary>
+    internal Materializer TurnMaterializer(RunStore store, TimeSpan patience, Func<bool>? halted = null)
     {
         var materializer = MergeJoins.Open(_projectFolder, store, MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point), Volumes);
-        materializer.MutationPatience = MutationPatience;
+        materializer.MutationPatience = patience;
+        materializer.Halted = () => Closing || halted?.Invoke() == true;
         return materializer;
     }
 
-    internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default)
+    /// <param name="halted">Whether the run's coordinator halted, which ends the start's wait for the repository's lock.</param>
+    internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default, Func<bool>? halted = null)
     {
         Task<TurnStart>? command = null;
         LaunchKey? existing = null;
@@ -58,7 +64,7 @@ public sealed partial class ProjectRuns
             }
             if (command is null && existing is null)
             {
-                command = Task.Run(() => StartTurnCore(permit, intent));
+                command = Task.Run(() => StartTurnCore(permit, intent, halted));
                 _commands.Add(key, new(intent, command));
             }
         }
@@ -97,12 +103,12 @@ public sealed partial class ProjectRuns
         return new(launch, snapshot.Running, snapshot.Outcome);
     }
 
-    private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent)
+    private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent, Func<bool>? halted)
     {
         if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
         var store = TurnStore;
-        var materializer = TurnMaterializer(store);
+        var materializer = TurnMaterializer(store, MutationPatience, halted);
         RunLease? lease = null;
         AttemptLog? log = null;
         TurnOwner? owner = null;
@@ -319,7 +325,7 @@ public sealed partial class ProjectRuns
             taken.Lease.Dispose();
             return new Reconciliation.Refused(new(RunProblem.InvalidClaim));
         }
-        var owner = new TurnOwner(this, store, TurnMaterializer(store), taken.Lease,
+        var owner = new TurnOwner(this, store, TurnMaterializer(store, MutationPatience), taken.Lease,
             new(record.Repository!, permit.Workflow, permit.Run, task, launch), operation, record.Preparations[launch], null,
             record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot.Tasks[task], adopted: true);
         bool closing;

@@ -128,11 +128,11 @@ internal sealed partial class WorkflowRunCoordinator
         Background(async () =>
         {
             var closing = await _runs.CloseResting(_permit!, OperationIds.Derive(operation, "review/conclude"), review.Attempt,
-                new RestingEnd.Conclude(failure)).ConfigureAwait(false);
+                new RestingEnd.Conclude(failure), scheduled: true, halted: Halted).ConfigureAwait(false);
             switch (closing)
             {
                 case RestingClose.Closed closed:
-                    if (failure is null && Finish(closed.Attempt.Lease, task, review.Attempt, operation) is { } refusal)
+                    if (failure is null && Finish(closed.Attempt.Lease, task, review.Attempt, operation, Scheduled()) is { } refusal)
                     {
                         // The closure is recorded. Its report's acceptance is finished later, under a lease of its own.
                         closed.Attempt.Lease.Dispose();
@@ -161,7 +161,7 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.review-turn");
         Background(() => RunReviews.Step(record, review.Log, Log, Address.Project) is NodeStep.RunTurn turn
-                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report })
+                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report }, halted: Halted)
                 : Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim))),
             start => Started(task, start, record.Revision.Id), error => StartFaulted(task, error));
     }
@@ -177,7 +177,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.FixRound fix)
                 return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
-            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt));
+            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt), halted: Halted);
         }, start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
@@ -189,7 +189,7 @@ internal sealed partial class WorkflowRunCoordinator
         _live[subject] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.fix");
         Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
-                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project))),
+                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project)), halted: Halted),
             start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
@@ -308,7 +308,7 @@ internal sealed partial class WorkflowRunCoordinator
     {
         if (_permit!.TakeTask(review.Subject) is not LeaseTake.Taken taken) return new FixReply.Refused(new(RunProblem.TaskBusy));
         using var lease = taken.Lease;
-        var materializer = _materializer();
+        var materializer = Commanded();
         FixReply Refused(RunRejection reason) => new FixReply.Refused(reason);
         if (cause is AttemptCause.Continue)
         {
