@@ -118,6 +118,13 @@ internal static class WorkflowRunText
         return waiting.Length == 0 ? null : string.Join(" · ", waiting) + ".";
     }
 
+    /// <summary>
+    /// The run says no more of the task than that it has not started: nobody ran it in the active run, or a settled run
+    /// never started it. Its card then shows its agent line, as a card outside any run does (#90).
+    /// </summary>
+    public static bool NotStarted(TaskView task, bool active) => task.State == TaskState.Unrequested ||
+        !active && task.State is TaskState.Pending or TaskState.Ready or TaskState.Unsupported;
+
     /// <summary>A task of the run as its card shows it: the node state for its ring and glyph, and its subtitle.</summary>
     /// <param name="active">The run is approved or stopping. A task that a settled run never started shows as not started.</param>
     public static (NodeState State, string Label) Of(TaskView task, Func<TaskId, string> title, bool active = true) => task.State switch

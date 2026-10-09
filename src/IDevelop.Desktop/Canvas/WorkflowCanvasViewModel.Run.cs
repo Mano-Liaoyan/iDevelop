@@ -175,7 +175,7 @@ public sealed partial class WorkflowCanvasViewModel
         }
 
         // A predecessor whose earlier run left it a result that still counts is complete: the run carries that result.
-        if (WorkflowRunText.RunsAfter(Incomplete(view.HeldBy), TitleOf) is { } after)
+        if (RunsAfter(node, Incomplete(view.HeldBy)) is { } after)
         {
             return after;
         }
@@ -195,9 +195,17 @@ public sealed partial class WorkflowCanvasViewModel
     /// new run has no results of its own yet, or its configuration.
     /// </summary>
     private string? NewRunRefusal(TaskNodeViewModel node) =>
-        WorkflowRunText.RunsAfter(Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
-            .Select(connection => connection.Key.From)]), TitleOf)
+        RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
+            .Select(connection => connection.Key.From)]))
         ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
+
+    /// <summary>
+    /// "Runs after "A". Run "A" first." for the predecessors without a current result, or null. A task that is out of date
+    /// because its one such predecessor is out of date says that once instead (#90).
+    /// </summary>
+    private string? RunsAfter(TaskNodeViewModel node, TaskId[] incomplete) =>
+        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only] is TaskHistory.OutOfDate, TitleOf) is { } outOfDate ? outOfDate
+        : WorkflowRunText.RunsAfter(incomplete, TitleOf);
 
     /// <summary>The predecessors among <paramref name="predecessors"/> that have no current result from an earlier run (#90).</summary>
     private TaskId[] Incomplete(IEnumerable<TaskId> predecessors) => [.. predecessors.Where(predecessor => History?.CurrentOf(predecessor) is null)];

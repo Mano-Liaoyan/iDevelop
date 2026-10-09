@@ -62,7 +62,8 @@ public sealed partial class TaskNodeViewModel
     /// unless the active run can take the task in, which says so (#90).
     /// </summary>
     public string? RunOwner => !ShowsRunState || JoinsRun && RunRefusal is not null ? null
-        : Standing is { } standing && !IsRunOwned ? WorkflowRunText.Unbroken(standing.Owner(_canvas.Name))
+        // Where the task stands between runs says it in its status and detail.
+        : Standing is not null && !IsRunOwned ? null
         : WorkflowRunText.Unbroken(_canvas.RunsAsApproved(this) ? $"{RunOwnedProblem} The run uses this task as it was when the run started." : RunOwnedProblem);
 
     /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval", or between runs.</summary>
@@ -348,6 +349,7 @@ public sealed partial class TaskNodeViewModel
         NodeState.Succeeded => StatusTone.Complete,
         NodeState.Failed or NodeState.Interrupted or NodeState.NeedsSetup => StatusTone.Problem,
         NodeState.Waiting => StatusTone.Waiting,
+        NodeState.OutOfDate => StatusTone.Warning,
         NodeState.Idle or NodeState.Cancelled => StatusTone.Neutral,
         _ => StatusTone.Neutral,
     };

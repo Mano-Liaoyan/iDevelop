@@ -47,8 +47,7 @@ public sealed partial class TaskNodeViewModel
     /// The run shows the task only as not started: nobody ran it in the active run, or a settled run never started it. Then
     /// where the task stands between runs says more.
     /// </summary>
-    private bool RunSaysNothing(TaskView run) => run.State == TaskState.Unrequested ||
-        !_runActive && run.State is TaskState.Pending or TaskState.Ready or TaskState.Unsupported;
+    private bool RunSaysNothing(TaskView run) => WorkflowRunText.NotStarted(run, _runActive);
 
     /// <summary>The task ran on its own after the run that left it where it stands, so that attempt shows instead.</summary>
     private bool RanOnItsOwnSince(TaskStanding standing) => _attempt is { } attempt && standing switch

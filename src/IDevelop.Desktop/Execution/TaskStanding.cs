@@ -18,7 +18,11 @@ internal abstract record TaskStanding
     internal sealed record Succeeded(DateTimeOffset At) : TaskStanding;
 
     /// <summary>Its newest result no longer counts, for <paramref name="Reason"/>.</summary>
-    internal sealed record OutOfDate(OutOfDateReason Reason, TaskId? Input, DateTimeOffset At) : TaskStanding;
+    internal sealed record OutOfDate(OutOfDateReason Reason, TaskId? Input, DateTimeOffset At) : TaskStanding
+    {
+        /// <summary>The task it took a result from has a current result itself, so this task can run again at once.</summary>
+        public bool InputComplete { get; init; }
+    }
 
     /// <summary>
     /// It has no result, and its newest run that could start it did not, because <paramref name="Holders"/>, dependency
@@ -38,7 +42,11 @@ internal abstract record TaskStanding
         switch (history[task])
         {
             case TaskHistory.Current current: return new Succeeded(current.Result.At);
-            case TaskHistory.OutOfDate outOfDate: return new OutOfDate(outOfDate.Reason, outOfDate.Input, outOfDate.Result.At);
+            case TaskHistory.OutOfDate outOfDate:
+                return new OutOfDate(outOfDate.Reason, outOfDate.Input, outOfDate.Result.At)
+                {
+                    InputComplete = outOfDate.Input is { } input && history.CurrentOf(input) is not null,
+                };
         }
 
         // A task no run could start yet waits for nothing: it shows as it always did.
@@ -50,38 +58,34 @@ internal abstract record TaskStanding
     public (NodeState State, string Label) Card(Func<TaskId, string> title) => this switch
     {
         Succeeded => (NodeState.Succeeded, "Succeeded"),
-        OutOfDate => (NodeState.Interrupted, "Out of date"),
+        OutOfDate => (NodeState.OutOfDate, "Out of date"),
         Waits waits => (NodeState.Idle, waits.Holders.Count == 1 ? $"Waits for \"{title(waits.Holders.Min)}\"" : $"Waits for {waits.Holders.Count} tasks"),
         _ => throw new InvalidOperationException(),
     };
 
-    /// <summary>Which run left it where it stands, for the inspector.</summary>
-    public string Owner(string workflow) => this switch
-    {
-        Succeeded => $"Its result from the last run of the \"{workflow}\" workflow still counts.",
-        OutOfDate => $"Its result from the last run of the \"{workflow}\" workflow no longer counts.",
-        Waits { Latest: true } => $"The last run of the \"{workflow}\" workflow did not start this task.",
-        Waits => $"The last run of the \"{workflow}\" workflow that could start this task did not start it.",
-        _ => throw new InvalidOperationException(),
-    };
-
     /// <summary>
-    /// Why it stands there, in a sentence or two, or null when its label says enough. The last words of a sentence stay
-    /// together, so no line ends with a single word.
+    /// Why it stands there, in one sentence, or null when its label and the line under Run say enough: a task that waits,
+    /// or one whose input has no current result, which Run's refusal names. The last words stay together, so no line ends
+    /// with a single word.
     /// </summary>
     public string? Detail(Func<TaskId, string> title) => this switch
     {
-        Succeeded => "When you run a task after it, the run uses this result instead of running it\u00A0again.",
-        OutOfDate { Reason: OutOfDateReason.Changed } => "It changed since it ran, or so did the connections into it. Run it again to bring it up\u00A0to\u00A0date.",
-        OutOfDate { Reason: OutOfDateReason.InputReplaced, Input: { } input } =>
-            $"\"{title(input)}\" has a newer result than the one it used. Run it again to bring it up\u00A0to\u00A0date.",
-        OutOfDate { Reason: OutOfDateReason.InputOutOfDate, Input: { } input } =>
-            $"The result of \"{title(input)}\" that it used is out of date. Run it again to bring it up\u00A0to\u00A0date.",
-        OutOfDate => "A task before it has a newer result than the one it used. Run it again to bring it up\u00A0to\u00A0date.",
-        Waits waits => $"It starts once {Names(waits.Holders, title)} {(waits.Holders.Count == 1 ? "hands" : "hand")} on a result. " +
-            $"{Names(waits.Holders, title)} {(waits.Holders.Count == 1 ? "runs" : "run")} only when you run\u00A0{(waits.Holders.Count == 1 ? "it" : "them")}.",
+        Succeeded => "Its result from an earlier run still\u00A0counts.",
+        OutOfDate { Reason: OutOfDateReason.Changed } => "Out of date because it changed since it\u00A0ran.",
+        OutOfDate { Input: { } input, InputComplete: true } => $"Out of date because \"{title(input)}\" has a newer\u00A0result.",
+        OutOfDate { Input: not null } => null,
+        OutOfDate => "Out of date because a task before it has a newer\u00A0result.",
         _ => null,
     };
+
+    /// <summary>
+    /// Run's refusal when this task is out of date because <paramref name="holder"/>, the one task it runs after, is out of
+    /// date too: one sentence, as in "Out of date because "B" changed. Run "B" first.", or null.
+    /// </summary>
+    public string? RunsAfter(TaskId holder, bool holderOutOfDate, Func<TaskId, string> title) =>
+        this is OutOfDate { Input: { } input } && input == holder && holderOutOfDate
+            ? $"Out of date because \"{title(holder)}\" changed. Run \"{title(holder)}\"\u00A0first."
+            : null;
 
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {

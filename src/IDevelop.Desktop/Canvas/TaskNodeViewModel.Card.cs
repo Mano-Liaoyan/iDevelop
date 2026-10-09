@@ -35,8 +35,13 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>An idle node's subtitle is its agent. Every other node's is its status.</summary>
-    public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None && RunTask is null && Standing is null;
+    /// <summary>
+    /// One rule for every card: its subtitle is its agent while nothing about its task needs saying, which is while it is
+    /// idle and neither a run nor where it stands between runs says more than that it has not started. Every other card's
+    /// subtitle is its status (#90).
+    /// </summary>
+    public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None && Standing is null &&
+        (RunTask is not { } run || WorkflowRunText.NotStarted(run, _runActive));
 
     /// <summary>The subtitle when it is not the agent: the proposal, else a missing setting, else the run's status.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count)

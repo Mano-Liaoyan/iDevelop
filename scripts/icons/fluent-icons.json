@@ -12,6 +12,7 @@
     { "key": "IconStateWaiting", "asset": "Chat Bubbles Question", "file": "ic_fluent_chat_bubbles_question_16_filled.svg" },
     { "key": "IconStateInReview", "asset": "Arrow Repeat All", "file": "ic_fluent_arrow_repeat_all_16_filled.svg" },
     { "key": "IconStateInterrupted", "asset": "Pause Circle", "file": "ic_fluent_pause_circle_16_filled.svg" },
+    { "key": "IconStateOutOfDate", "asset": "Arrow Sync Circle", "file": "ic_fluent_arrow_sync_circle_16_filled.svg" },
     { "key": "IconStateCancelled", "asset": "Dismiss Circle", "file": "ic_fluent_dismiss_circle_16_filled.svg" },
     { "key": "IconStateNeedsSetup", "asset": "Warning", "file": "ic_fluent_warning_16_filled.svg" },
     { "key": "IconStateRunning", "asset": "Spinner iOS", "file": "ic_fluent_spinner_ios_16_regular.svg" },
