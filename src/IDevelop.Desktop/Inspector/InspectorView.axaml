@@ -285,7 +285,8 @@
                                 Classes.running="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                                 Classes.complete="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                                 Classes.problem="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
-                                Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}">
+                                Classes.waiting="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}"
+                                Classes.warning="{Binding RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Warning}}">
                           <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding RunStatusLabel}">
                             <PathIcon Theme="{StaticResource Glyph}" IsVisible="{Binding RunHasGlyph}" />
                             <TextBlock Grid.Column="1" Text="{Binding RunStatusLabel}"
@@ -1076,7 +1077,7 @@
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
                           <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="ShowsRunState" />
+                            <Binding Path="ShowsRunConversation" />
                             <Binding Path="HasAgent" />
                           </MultiBinding>
                         </inspector:InspectorRow.IsShown>

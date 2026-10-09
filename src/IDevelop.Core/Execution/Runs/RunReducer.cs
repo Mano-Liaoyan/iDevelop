@@ -66,10 +66,18 @@ internal static partial class RunReducer
             if (approved.Node is { } requested)
             {
                 if (!approved.Revision.Snapshot.Tasks.ContainsKey(requested)) return Reject(RunProblem.IdentityMismatch, requested);
-                // A node runs only after every task before it has a result, which at approval only an included report can be.
-                if (RunScope.Missing(record, requested) is { } missing) return Reject(RunProblem.MissingDependencyResult, missing);
                 record = record with { Requested = [requested] };
             }
+
+            // Run Workflow runs every task, so it carries nothing from earlier runs (#90).
+            if (approved.Carried is not null && approved.Node is null) return Reject(RunProblem.UnsupportedResult);
+            var carried = Carry(record, approved.Carried, entry.Operation);
+            if (carried.Problem is { } carriedProblem) return Reject(carriedProblem, carried.Task);
+            record = carried.Record;
+
+            // A node runs only after every task before it has a result, which at approval only an included report or a
+            // result carried from an earlier run can be.
+            if (approved.Node is { } node && RunScope.Missing(record, node) is { } missing) return Reject(RunProblem.MissingDependencyResult, missing);
         }
         else
         {
@@ -421,9 +429,13 @@ internal static partial class RunReducer
                 case RunEvent.Requested requested:
                     if (record.Requested is not { } nodes) return Reject(RunProblem.StartConflict, requested.Task);
                     if (!record.Revision.Snapshot.Tasks.ContainsKey(requested.Task)) return Reject(RunProblem.IdentityMismatch, requested.Task);
-                    if (RunScope.InFlow(record).Contains(requested.Task)) return Reject(RunProblem.StartConflict, requested.Task);
-                    if (RunScope.Missing(record, requested.Task) is { } missing) return Reject(RunProblem.MissingDependencyResult, missing);
-                    record = record with { Requested = nodes.Add(requested.Task) };
+                    // A task the run already has a result of, such as one it carried, is not run again in it.
+                    if (RunScope.InFlow(record).Contains(requested.Task) || record.Results.Any(result => result.Task == requested.Task))
+                        return Reject(RunProblem.StartConflict, requested.Task);
+                    var widened = Carry(record with { Requested = nodes.Add(requested.Task) }, requested.Carried, entry.Operation);
+                    if (widened.Problem is { } widenedProblem) return Reject(widenedProblem, widened.Task);
+                    if (RunScope.Missing(widened.Record, requested.Task) is { } missing) return Reject(RunProblem.MissingDependencyResult, missing);
+                    record = widened.Record;
                     break;
                 case RunEvent.GateSentBack sent:
                     var sentBack = SendBack(record, entry, sent);
@@ -749,7 +761,7 @@ internal static partial class RunValidation
         return entry.Event switch
         {
             RunEvent.Approved approved => approved.Run.Value == Guid.Empty || !Base(approved.Base) || approved.Node?.Value == Guid.Empty ||
-                approved.Included is { } included && (included.IsDefaultOrEmpty || !included.All(item => Result(item.Result) && Input(item.Inputs)))
+                approved.Included is { } included && !Results(included) || approved.Carried is { } carried && !Results(carried)
                 ? RunProblem.InvalidData : Snapshot(approved.Revision),
             RunEvent.Amended amended => !Revision.IsHash(amended.Previous.Sha256) || amended.Confirmation.Value == Guid.Empty ||
                 amended.Origin is AmendmentOrigin.Planner planner && (planner.Attempt.Value == Guid.Empty || planner.Turn < 1)
@@ -778,10 +790,14 @@ internal static partial class RunValidation
                 RunProblem.ConfirmationRequired : null,
             RunEvent.Settled settled => !Enum.IsDefined(settled.Outcome) ? RunProblem.InvalidData : null,
             RunEvent.StopRequested => null,
-            RunEvent.Requested requested => requested.Task.Value == Guid.Empty ? RunProblem.InvalidData : null,
+            RunEvent.Requested requested => requested.Task.Value == Guid.Empty || requested.Carried is { } carried && !Results(carried)
+                ? RunProblem.InvalidData : null,
             _ => Materialization(entry.Event),
         };
     }
+
+    private static bool Results(ImmutableArray<IncludedResult> results) =>
+        !results.IsDefaultOrEmpty && results.All(item => Result(item.Result) && Input(item.Inputs));
 
     private static RunProblem? Snapshot(ApprovedRevision revision)
     {
@@ -844,6 +860,7 @@ internal static partial class RunValidation
             ResultOrigin.Rebased rebased => rebased.Source.Value != Guid.Empty && rebased.Plan.Value != Guid.Empty &&
                 rebased.Source == result.Supersedes,
             ResultOrigin.Human human => human.Request.Value != Guid.Empty,
+            ResultOrigin.Carried carried => carried.Run.Value != Guid.Empty && carried.Result.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&
                 Revision.IsHash(reused.Evidence.Inputs.Sha256) && Revision.IsHash(reused.Evidence.CodeTree.Sha256) &&
                 reused.Evidence.Confirmation.Value != Guid.Empty &&

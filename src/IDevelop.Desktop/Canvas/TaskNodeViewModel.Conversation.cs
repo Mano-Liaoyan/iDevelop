@@ -13,7 +13,7 @@ public sealed partial class TaskNodeViewModel
     private RelayCommand _openConversation = null!;
 
     /// <summary>The oldest open question, a wait for the person, or a failure. Opening the conversation leaves it.</summary>
-    public Attention? Attention => RunTask is { } run ? WorkflowRunText.Needs(run, TitleOf) : HasAgent ? Attention.Of(_attempt) : null;
+    public Attention? Attention => Standing is not null ? null : RunTask is { } run ? WorkflowRunText.Needs(run, TitleOf) : HasAgent ? Attention.Of(_attempt) : null;
 
     public bool HasAttention => Attention is not null;
 

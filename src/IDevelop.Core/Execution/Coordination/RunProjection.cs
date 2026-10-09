@@ -71,6 +71,15 @@ internal static class RunProjection
         return new(address, record.Phase, Status(record.Phase, controlled, resumed, built, holds), controlled, resumed, slots, built) { Snapshot = snapshot };
     }
 
+    /// <summary>
+    /// The task's view in a run that settled, as the run's own projection shows a task it started, or null when the run
+    /// did not start it (#90). A settled run has no live turns, holds, or resting attempts to read.
+    /// </summary>
+    public static TaskView? Settled(RunRecord record, TaskId task) => record.Revision.Snapshot.Tasks.ContainsKey(task)
+        ? Started(record, task, LatestAttempts(record).TryGetValue(task, out var attempt) ? attempt : null, record.CurrentResults.GetValueOrDefault(task),
+            _ => null, ImmutableDictionary<TaskId, LiveStage>.Empty, ImmutableDictionary<TaskId, TaskHold>.Empty)
+        : null;
+
     /// <summary>Each task's newest attempt in this run, in reservation order.</summary>
     public static ImmutableDictionary<TaskId, AttemptId> LatestAttempts(RunRecord record) => record.Receipts.Values
         .Where(entry => entry.Event is RunEvent.Reserved).OrderBy(entry => entry.Sequence)
@@ -124,7 +133,11 @@ internal static class RunProjection
         if (current is not null)
         {
             var state = block is not null ? TaskState.Blocked : record.StaleResults.Contains(current.Id) ? TaskState.Stale : TaskState.Done;
-            return new(task, state) { Attempt = attempt, Result = current.Id, Block = block, CarriesCode = current.Code is CodeOutput.Produced };
+            return new(task, state)
+            {
+                Attempt = attempt, Result = current.Id, Block = block, CarriesCode = current.Code is CodeOutput.Produced,
+                Carried = current.Origin is ResultOrigin.Carried,
+            };
         }
         return Attempted(record, task, attempt, log, hold, block) is { } view ? view with { Result = result?.Id } : null;
     }
@@ -153,7 +166,7 @@ internal static class RunProjection
     }
 
     /// <summary>Whether <paramref name="attempt"/> was reserved after <paramref name="result"/> was accepted, without publishing it.</summary>
-    private static bool Replaced(RunRecord record, ResultRecord result, AttemptId? attempt)
+    internal static bool Replaced(RunRecord record, ResultRecord result, AttemptId? attempt)
     {
         if (attempt is not { } id || result.Origin is ResultOrigin.Executed executed && executed.Attempt == id) return false;
         long Sequence(Func<RunEvent, bool> match) => record.Receipts.Values.Where(entry => match(entry.Event)).Select(entry => entry.Sequence).DefaultIfEmpty(0).Max();

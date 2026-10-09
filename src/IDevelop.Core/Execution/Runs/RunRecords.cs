@@ -186,6 +186,7 @@ internal sealed record ReportInclusion(TaskId Task, AttemptId Source, int Turn);
 [JsonDerivedType(typeof(Included), "included")]
 [JsonDerivedType(typeof(Rebased), "rebased")]
 [JsonDerivedType(typeof(Human), "human")]
+[JsonDerivedType(typeof(Carried), "carried")]
 internal abstract record ResultOrigin
 {
     private ResultOrigin() { }
@@ -205,6 +206,13 @@ internal abstract record ResultOrigin
 
     /// <summary>A person approved this Approval node's request. No client ran.</summary>
     internal sealed record Human(GateId Request) : ResultOrigin;
+
+    /// <summary>
+    /// The current result <paramref name="Result"/> of the earlier run <paramref name="Run"/>, which a run that a node's Run
+    /// started takes as the result of a task it does not run (#90). Its code is replayed onto this run's base, and its report
+    /// and artifacts are copied. No client ran in this run.
+    /// </summary>
+    internal sealed record Carried(RunId Run, ResultId Result) : ResultOrigin;
 }
 
 /// <summary>A result the approval itself records, with its empty inputs.</summary>
@@ -304,6 +312,13 @@ internal abstract record RunEvent
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public TaskId? Node { get; init; }
+
+        /// <summary>
+        /// The results of earlier runs that a node's run takes for the tasks it does not run, each <see cref="ResultOrigin.Carried"/>,
+        /// in the order their inputs need them. Null when it carries none, and always for Run Workflow (#90).
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ImmutableArray<IncludedResult>? Carried { get; init; }
     }
 
     internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent
@@ -352,7 +367,12 @@ internal abstract record RunEvent
     /// The person ran another node of a run that a node's Run started, which adds that node to the run. Its dependency
     /// predecessors all had current results when it was recorded.
     /// </summary>
-    internal sealed record Requested(TaskId Task) : RunEvent;
+    internal sealed record Requested(TaskId Task) : RunEvent
+    {
+        /// <summary>The results of earlier runs that the tasks it adds need, carried as an approval carries them. Null when none.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ImmutableArray<IncludedResult>? Carried { get; init; }
+    }
 }
 
 internal sealed record RunEntry(int Schema, long Sequence, OperationId Operation, Digest Command, DateTimeOffset At, RunEvent Event);

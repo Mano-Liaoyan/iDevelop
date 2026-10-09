@@ -3,7 +3,8 @@ using IDevelop.Execution;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>Where a node's run stands, which its ring, tint, glyph, and subtitle show.</summary>
-public enum NodeState { Idle, NeedsSetup, Running, RunningElsewhere, Stopping, Waiting, InReview, Succeeded, Failed, Interrupted, Cancelled }
+/// <remarks><see cref="OutOfDate"/>: a result from an earlier run no longer counts, so the task needs to run again (#90).</remarks>
+public enum NodeState { Idle, NeedsSetup, Running, RunningElsewhere, Stopping, Waiting, InReview, Succeeded, Failed, Interrupted, Cancelled, OutOfDate }
 
 /// <summary>What the node is to another node, drawn over its state: a review's subject, or a planner with an open proposal.</summary>
 public enum NodeRole { None, UnderReview, Proposing }

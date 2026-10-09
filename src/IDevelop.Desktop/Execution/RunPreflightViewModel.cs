@@ -17,6 +17,12 @@ public sealed record PreflightGapRow(string Text, ICommand? ShowCommand)
 }
 
 /// <summary>
+/// A result from an earlier run that a node's run uses instead of running its task again (#90), or one it cannot use on
+/// the chosen base and why.
+/// </summary>
+public sealed record PreflightCarriedRow(string Text, bool IsUsed);
+
+/// <summary>
 /// An earlier report that the run can include instead of running its task again: a root planner's plan, or another root
 /// task's report. Listing it includes nothing; the person checks it.
 /// </summary>
@@ -122,6 +128,7 @@ public sealed class RunPreflightViewModel : ObservableObject
             if (SetProperty(ref _useSnapshot, value))
             {
                 OnPropertyChanged(nameof(UseHead));
+                OnPropertyChanged(nameof(Carried));
                 foreach (var row in Inclusions)
                 {
                     row.OnChoiceChanged();
@@ -166,6 +173,15 @@ public sealed class RunPreflightViewModel : ObservableObject
     public IReadOnlyList<PreflightInclusionRow> Inclusions { get; private set; } = [];
 
     public bool HasInclusions => Inclusions.Count > 0;
+
+    /// <summary>
+    /// The results of earlier runs a node's run uses for the tasks before it that it does not run, on the chosen base, and
+    /// the ones it cannot use there (#90). Run Workflow uses none.
+    /// </summary>
+    public IReadOnlyList<PreflightCarriedRow> Carried => _preview is { } preview ? [.. preview.Carried.Select(row => CarriedRow(preview, row))] : [];
+
+    /// <summary>The sheet lists earlier results: ones the run uses, or reports it can include.</summary>
+    public bool HasEarlierResults => Carried.Count > 0 || HasInclusions;
 
     /// <summary>Why the last Start started nothing, or what changed since the preview, or null.</summary>
     public string? Notice
@@ -231,6 +247,7 @@ public sealed class RunPreflightViewModel : ObservableObject
         {
             nameof(IsChecking), nameof(IsReady), nameof(Tasks), nameof(Gaps), nameof(HasGaps), nameof(OffersSnapshot), nameof(UseSnapshot), nameof(UseHead),
             nameof(HeadLabel), nameof(ChangedNote), nameof(IgnoredNote), nameof(SubmodulesNote), nameof(WorktreeNote), nameof(Inclusions), nameof(HasInclusions),
+            nameof(Carried), nameof(HasEarlierResults),
             nameof(CanStart), nameof(ShowsActive),
         })
         {
@@ -383,6 +400,32 @@ public sealed class RunPreflightViewModel : ObservableObject
                 $"Reuse {Title(preview, report.Task)}'s earlier report instead of running it again", Excerpt(report.Report), null, report.Bases, () => Choice);
         }
     }
+
+    /// <summary>
+    /// "Uses "B"'s result from an earlier run." for a result the run carries on the chosen base, else why it cannot, after
+    /// which the tasks after it wait until it runs again (#90).
+    /// </summary>
+    private PreflightCarriedRow CarriedRow(RunPreflight preview, PreflightCarried row)
+    {
+        var task = Title(preview, row.Task);
+        if (row.Bases.Contains(Choice))
+        {
+            return new(WorkflowRunText.Unbroken($"Uses {task}'s result from an earlier\u00A0run."), true);
+        }
+
+        var why = row.Refusal switch
+        {
+            CarryRefusal.Conflict conflict => $"its code conflicts with this base{In(conflict.Paths)}",
+            CarryRefusal.JoinConflict join => $"the results it used conflict with each other on this base{In(join.Paths)}",
+            CarryRefusal.InputRuns runs => $"it used a result of {Title(preview, runs.Input)}, which this run runs again",
+            CarryRefusal.InputRefused refused => $"it used a result of {Title(preview, refused.Input)}, which this run cannot use either",
+            CarryRefusal.Unavailable unavailable => unavailable.Detail.TrimEnd('.'),
+            _ => "this base does not offer it",
+        };
+        return new(WorkflowRunText.Unbroken($"Can't use {task}'s result from an earlier run: {why}. The tasks after it wait until it runs\u00A0again."), false);
+    }
+
+    private static string In(IReadOnlyList<string> paths) => paths.Count == 0 ? "" : $" in {List(paths)}";
 
     /// <summary>The report's first three lines that have text.</summary>
     private static string? Excerpt(string? report)

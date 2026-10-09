@@ -90,6 +90,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeInspector();
         InitializeConversation();
         InitializeRun();
+        InitializeStanding();
     }
 
     public TaskId Id => _task.Id;
@@ -257,7 +258,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         ? IsReview ? RunText.ReviewerNote(settings.Client) : RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
         : null;
 
-    public string StatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : RunText.StatusLabel(_attempt, RunsElsewhere);
+    public string StatusLabel => Standing is { } standing ? standing.Card(TitleOf).Label
+        : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : RunText.StatusLabel(_attempt, RunsElsewhere);
 
     /// <summary>
     /// Why this task cannot start now, shown under the Run button before any click: a fix round of its own that closing
@@ -622,7 +624,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     private void ShowState()
     {
-        State = RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).State : NodeStates.Of(_attempt, RunsElsewhere, _problem);
+        State = Standing is { } standing ? standing.Card(TitleOf).State
+            : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).State : NodeStates.Of(_attempt, RunsElsewhere, _problem);
         Role = NodeStates.RoleOf(RunTask is null ? _problem : null, _proposal is { HasItems: true });
     }
 
@@ -635,6 +638,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeConversation();
 
     partial void InitializeRun();
+
+    partial void InitializeStanding();
 
     private void SetExecution(ExecutionSettings? settings)
     {

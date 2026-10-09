@@ -35,7 +35,10 @@ public sealed partial class WorkflowCanvasViewModel
     /// <summary>Opens the preflight of the whole workflow. No node needs to be selected.</summary>
     public ICommand RunWorkflowCommand => _runWorkflow ??= new RelayCommand(OpenPreflight, () => Preflight is null && Sheet is null);
 
-    /// <summary>Hides a run that has settled, so the cards show their tasks' own runs again. The run's records stay.</summary>
+    /// <summary>
+    /// Hides a run that has settled, so the cards show their tasks' own runs again, or where each task stands between runs
+    /// (#90). The run's records stay.
+    /// </summary>
     public ICommand DismissRunCommand => _dismissRun ??= new RelayCommand(DismissRun);
 
     /// <summary>Run Workflow shows until a run of this workflow is active; then the run's own controls take its place.</summary>
@@ -64,6 +67,7 @@ public sealed partial class WorkflowCanvasViewModel
         run.Replaced += OnRunReplaced;
         Run = run;
         ShowRun(adopted: true);
+        ReadSettledRun();
         RunRouteChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -170,7 +174,8 @@ public sealed partial class WorkflowCanvasViewModel
             return null;
         }
 
-        if (WorkflowRunText.RunsAfter(view.HeldBy, TitleOf) is { } after)
+        // A predecessor whose earlier run left it a result that still counts is complete: the run carries that result.
+        if (RunsAfter(node, Incomplete(view.HeldBy)) is { } after)
         {
             return after;
         }
@@ -185,11 +190,25 @@ public sealed partial class WorkflowCanvasViewModel
     internal bool RunsAsApproved(TaskNodeViewModel node) => Run is { IsActive: true } run &&
         run.View.Snapshot?.Tasks.GetValueOrDefault(node.Id) is { } approved && !SameDefinition(approved, node.Definition);
 
-    /// <summary>Why a new run of the node would start nothing: every predecessor, since a new run has no results yet, or its configuration.</summary>
+    /// <summary>
+    /// Why a new run of the node would start nothing: each predecessor without a current result from an earlier run, since a
+    /// new run has no results of its own yet, or its configuration.
+    /// </summary>
     private string? NewRunRefusal(TaskNodeViewModel node) =>
-        WorkflowRunText.RunsAfter([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
-            .Select(connection => connection.Key.From)], TitleOf)
+        RunsAfter(node, Incomplete([.. Workflow.Connections.Where(connection => connection.Key.To == node.Id && connection.Value.Blocks())
+            .Select(connection => connection.Key.From)]))
         ?? (Runs.CheckRun(node.Definition) is { } problem ? RunText.Describe(problem) : null);
+
+    /// <summary>
+    /// "Runs after "A". Run "A" first." for the predecessors without a current result, or null. A task that is out of date
+    /// because its one such predecessor is out of date says that once instead (#90).
+    /// </summary>
+    private string? RunsAfter(TaskNodeViewModel node, TaskId[] incomplete) =>
+        incomplete is [var only] && node.Standing?.RunsAfter(only, History?[only], TitleOf) is { } outOfDate ? outOfDate
+        : WorkflowRunText.RunsAfter(incomplete, TitleOf);
+
+    /// <summary>The predecessors among <paramref name="predecessors"/> that have no current result from an earlier run (#90).</summary>
+    private TaskId[] Incomplete(IEnumerable<TaskId> predecessors) => [.. predecessors.Where(predecessor => History?.CurrentOf(predecessor) is null)];
 
     private static bool SameDefinition(TaskDefinition approved, TaskDefinition current) =>
         ReferenceEquals(approved, current) || Revision.CanonicalTask(approved) == Revision.CanonicalTask(current);
@@ -233,7 +252,11 @@ public sealed partial class WorkflowCanvasViewModel
         });
     }
 
-    private void OnRunViewChanged(object? sender, EventArgs e) => ShowRun();
+    private void OnRunViewChanged(object? sender, EventArgs e)
+    {
+        ShowRun();
+        ReadSettledRun();
+    }
 
     private void OnRunReplaced(object? sender, EventArgs e)
     {
