@@ -86,7 +86,7 @@ public sealed class AgentChoiceTests
                       "agent": {"client": "...", "model": "...", "reasoning": "...", "reason": "..."}}],
             """, contract);
         Assert.Contains(
-            "- \"agent\" chooses who carries out a task you add: a client and one of its models from the agents below, one of that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" for a model without levels. A slot keeps its own agent.\n",
+            "- \"agent\" chooses who carries out a task you add: a client and one of its models from the agents below, one of that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" for a model without levels. A slot, and a type with its own agent, keep theirs.\n",
             contract);
         Assert.Contains(
             "- Fit each choice to its task. Design, architecture, planning, and review need careful judgment, so give them a strong reasoning model at a high level. Small or mechanical edits need a fast model at a low level, and ordinary implementation needs something between. Choose for each task on its own, so that tasks of different weight do not all get the same agent.\n",
@@ -114,7 +114,7 @@ public sealed class AgentChoiceTests
         Assert.Contains("- type-4: Review. ", contract);
         Assert.Matches(@"- type-4: Review\. [^\n]* Reads only, so it needs a client with a read-only mode\.\n", contract);
         Assert.Matches(@"- type-5: Approval\. [^\n]* Takes no agent\.\n", contract);
-        Assert.Contains(" Its own agent is claude-code, claude-haiku-4-5. Leave out \"agent\" to keep it.\n", contract);
+        Assert.Contains(" It has its own agent, claude-code, claude-haiku-4-5, so leave out \"agent\".\n", contract);
         Assert.Matches(@"- type-1: Implement\. [^\n]*\(Acceptance criteria\)\.\n", contract);
     }
 
@@ -253,36 +253,60 @@ public sealed class AgentChoiceTests
     }
 
     [Fact]
-    public void Accepting_gives_each_new_task_its_chosen_agent_before_the_fallback_and_its_types_own()
+    public void Accepting_gives_each_new_task_its_types_own_agent_before_the_planners_choice_and_the_planners_before_the_fallback()
     {
         var workflow = ArchitectWithTwoSlots();
-        var proposal = Ready("""
-            {"status": "proposal",
-             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
-             "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
-            """);
-        var chosen = new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "xhigh" };
-        var agents = new Dictionary<TaskId, ExecutionSettings>
-        {
-            [Id(proposal, "build")] = chosen,
-            [Id(proposal, "sign")] = chosen,
-            [Id(proposal, "careful")] = chosen,
-            [Backend] = chosen,
-        };
+        var proposal = AllKinds();
+        var planned = new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "xhigh" };
+        var agents = new[] { "build", "sign", "careful" }.ToDictionary(name => Id(proposal, name), _ => planned);
+        agents[Backend] = planned;
 
-        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, agents));
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, planned: agents));
 
         Assert.Equal(
             [
-                ("build", chosen, ConversationMode.Autonomous),
+                ("build", planned, ConversationMode.Autonomous),
                 ("check", Sol, ConversationMode.Autonomous),
                 ("sign", null, ConversationMode.Autonomous),
-                ("careful", chosen, ConversationMode.MayAsk),
+                ("careful", Haiku, ConversationMode.MayAsk),
                 ("slot-1", null, ConversationMode.Autonomous),
             ],
-            proposal.Nodes.Select(node => (node.Name, node.Id)).Append((Name: "slot-1", Id: Backend))
-                .Select(task => (task.Name, accepted.Tasks[task.Id].Execution, accepted.Tasks[task.Id].Conversation)));
+            Agents(proposal, accepted));
     }
+
+    [Fact]
+    public void The_persons_choice_wins_over_a_types_own_agent_and_the_planners()
+    {
+        var workflow = ArchitectWithTwoSlots();
+        var proposal = AllKinds();
+        var planned = new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "xhigh" };
+        var mine = new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" };
+        var both = new[] { "build", "careful" }.ToDictionary(name => Id(proposal, name), _ => planned);
+        var changed = new[] { "build", "careful", "sign" }.ToDictionary(name => Id(proposal, name), _ => mine);
+
+        var accepted = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, both, changed));
+
+        Assert.Equal(
+            [
+                ("build", mine, ConversationMode.Autonomous),
+                ("check", Sol, ConversationMode.Autonomous),
+                ("sign", null, ConversationMode.Autonomous),
+                ("careful", mine, ConversationMode.MayAsk),
+                ("slot-1", null, ConversationMode.Autonomous),
+            ],
+            Agents(proposal, accepted));
+    }
+
+    /// <summary>A proposal that fills slot-1 and adds an Implement, a Review, an Approval, and a <see cref="Careful"/> node.</summary>
+    private static Proposal AllKinds() => Ready("""
+        {"status": "proposal",
+         "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
+         "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
+        """);
+
+    private static (string Task, ExecutionSettings? Execution, ConversationMode Conversation)[] Agents(Proposal proposal, Workflow accepted) =>
+        [.. proposal.Nodes.Select(node => (node.Name, node.Id)).Append((Name: "slot-1", Id: Backend))
+            .Select(task => (task.Name, accepted.Tasks[task.Id].Execution, accepted.Tasks[task.Id].Conversation))];
 
     /// <summary>A planner's context on <paramref name="clients"/>, with the built-ins and <see cref="Careful"/> as its types.</summary>
     private static PlanningContext Planning(IReadOnlyDictionary<ClientId, ClientStatus> clients) =>

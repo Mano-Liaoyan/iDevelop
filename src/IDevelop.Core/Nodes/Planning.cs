@@ -146,7 +146,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
         "- Write each field under its key, and leave out a field you have nothing for.\n" +
         "- \"agent\" chooses who carries out a task you add: a client and one of its models from the agents below, one of " +
         "that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" " +
-        "for a model without levels. A slot keeps its own agent.\n" +
+        "for a model without levels. A slot, and a type with its own agent, keep theirs.\n" +
         "- Fit each choice to its task. Design, architecture, planning, and review need careful judgment, so give them a " +
         "strong reasoning model at a high level. Small or mechanical edits need a fast model at a low level, and ordinary " +
         "implementation needs something between. Choose for each task on its own, so that tasks of different weight do not " +
@@ -164,7 +164,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
             ? " Reads only, so it needs a client with a read-only mode."
             : "";
         var own = type.Defaults.Execution is { } execution
-            ? $" Its own agent is {string.Join(", ", new[] { Clients.WireName(execution.Client), execution.Model, execution.Reasoning }.OfType<string>())}. Leave out \"agent\" to keep it."
+            ? $" It has its own agent, {string.Join(", ", new[] { Clients.WireName(execution.Client), execution.Model, execution.Reasoning }.OfType<string>())}, so leave out \"agent\"."
             : "";
         return readOnly + own;
     }

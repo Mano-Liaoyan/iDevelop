@@ -609,6 +609,15 @@ public sealed class GenerateTests : IDisposable
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
         var shown = Review(shell).ToDictionary(row => row.Title, row => row.Agent);
         var ghosts = Ghosts(shell);
+        // The blueprint's own agent wins over the planner's choice, usable or not, and the row says so.
+        Assert.Equal(
+            [
+                ("Chosen", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Own", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Unusable", "Claude Code · Claude Haiku 4.5 · low", "Set by the blueprint", null),
+                ("Plain", "Codex · GPT-6.1-Sol · high", null, null),
+            ],
+            Review(shell));
 
         shell.Click(shell.InView<Button>("AcceptProposal"));
 

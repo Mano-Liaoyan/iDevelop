@@ -46,23 +46,25 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// <summary>The agent's second line, as a card shows it: the model and its level, or null.</summary>
     public string? Model => Lines.Model;
 
-    /// <summary>The planner's reason for a choice the task takes, or what the person's own choice replaced.</summary>
+    /// <summary>
+    /// Why the task takes its agent: "Set by the blueprint" for a type with an agent of its own, the planner's reason for
+    /// its choice, or what the person's own choice replaced.
+    /// </summary>
     public string? Reason => _changed is not null
-        ? _check switch
+        ? Own is { } own ? $"Your choice. The blueprint sets {RunText.AgentLabel(own, _proposal.Status(own.Client))}."
+        : _check switch
         {
             AgentCheck.Usable usable => $"Your choice. The planner chose {RunText.AgentLabel(usable.Settings, _proposal.Status(usable.Settings.Client))}.",
             AgentCheck.Unusable unusable => $"Your choice. {unusable.Problem}",
             _ => "Your choice.",
         }
+        : Own is not null ? "Set by the blueprint"
         : _check is AgentCheck.Usable ? _node.Agent?.Reason : null;
 
     /// <summary>Why the planner's choice falls back, and to what, or null.</summary>
-    public string? Note => Unusable is { } unusable ? $"{unusable.Problem} {Fallback switch
-    {
-        FallbackTo.Type => "The task keeps its type's agent instead.",
-        FallbackTo.Planner => "The task takes the planner's agent instead.",
-        FallbackTo.None => "Choose the task's agent before it runs.",
-    }}" : null;
+    public string? Note => Unusable is { } unusable
+        ? $"{unusable.Problem} {(_proposal.Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
+        : null;
 
     /// <summary>
     /// The tab under the task's ghost card, such as "Pi isn't ready", or null. The card's own lines show the agent the
@@ -115,24 +117,30 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     internal TaskId Id => _node.Id;
 
-    /// <summary>The agent the task takes in place of its type's and the planner's: the person's, else the planner's that this machine runs.</summary>
-    internal ExecutionSettings? Chosen => _changed ?? (_check as AgentCheck.Usable)?.Settings;
+    /// <summary>The planner's choice that this machine can run, which the task takes only when its type has no agent of its own.</summary>
+    internal ExecutionSettings? Planned => (_check as AgentCheck.Usable)?.Settings;
 
-    /// <summary>What accepting gives the task, as <see cref="Proposal.Accept"/> decides it.</summary>
-    internal ExecutionSettings? Settings => Chosen ?? _node.Blueprint.Defaults.Execution ?? _proposal.Fallback;
+    /// <summary>The person's choice in the review, which wins over everything.</summary>
+    internal ExecutionSettings? Changed => _changed;
 
-    /// <summary>The task has no agent of its own and its type has none, so the proposal's box decides its agent.</summary>
-    internal bool NeedsFallback => Chosen is null && _node.Blueprint.Defaults.Execution is null;
+    /// <summary>
+    /// What accepting gives the task, as <see cref="Proposal.Accept"/> decides it: the person's choice, else its type's own
+    /// agent, else the planner's choice, else the planner's agent while the box is ticked.
+    /// </summary>
+    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? _proposal.Fallback;
+
+    /// <summary>The task has no agent of its own, its type has none, and the planner gave none it can use, so the box decides.</summary>
+    internal bool NeedsFallback => _changed is null && Own is null && Planned is null;
 
     private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
     private bool ReadOnly => _node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
 
-    private AgentCheck.Unusable? Unusable => _changed is null ? _check as AgentCheck.Unusable : null;
+    /// <summary>The agent the task's blueprint saves, which wins over the planner's choice.</summary>
+    private ExecutionSettings? Own => _node.Blueprint.Defaults.Execution;
 
-    private FallbackTo Fallback => _node.Blueprint.Defaults.Execution is not null ? FallbackTo.Type
-        : _proposal.Fallback is not null ? FallbackTo.Planner
-        : FallbackTo.None;
+    /// <summary>A planner's choice that falls back: one the machine cannot run, for a type without an agent of its own.</summary>
+    private AgentCheck.Unusable? Unusable => _changed is null && Own is null ? _check as AgentCheck.Unusable : null;
 
     internal void ChooseClient(ClientChoice choice)
     {
@@ -188,6 +196,4 @@ public sealed class ProposalAgentViewModel : ObservableObject
         _changed = settings;
         _proposal.OnAgentChanged();
     }
-
-    private enum FallbackTo { Type, Planner, None }
 }

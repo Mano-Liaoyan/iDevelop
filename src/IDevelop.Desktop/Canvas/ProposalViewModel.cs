@@ -344,12 +344,13 @@ public sealed class ProposalViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The one edit that accepts the chosen tasks, each new task with its own agent when it has one, and with the
-    /// planner's agent as the fallback while the box is ticked.
+    /// The one edit that accepts the chosen tasks, each new task with the person's choice, else its type's own agent,
+    /// else the planner's usable choice, else the planner's agent while the box is ticked, as each row shows.
     /// </summary>
     private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
         workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null,
-        Agents().Where(agent => agent.Chosen is not null).ToDictionary(agent => agent.Id, agent => agent.Chosen!));
+        Agents().Where(agent => agent.Planned is not null).ToDictionary(agent => agent.Id, agent => agent.Planned!),
+        Agents().Where(agent => agent.Changed is not null).ToDictionary(agent => agent.Id, agent => agent.Changed!));
 
     /// <summary>A fill whose task is gone reads as Implement.</summary>
     private ProposalItemViewModel FillItem(ProposedFill fill)

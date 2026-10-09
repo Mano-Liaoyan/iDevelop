@@ -140,18 +140,21 @@ public sealed record Proposal(
     /// </summary>
     /// <param name="started">Whether a task has an attempt.</param>
     /// <param name="fallback">
-    /// The agent that a new Agent or Review node takes when <paramref name="agents"/> gives it none and its blueprint has
-    /// no default agent, with the blueprint's default conversation mode. Null keeps every blueprint's defaults. A fill never
-    /// changes its node's agent.
+    /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
+    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. Null leaves
+    /// such a node without an agent. A fill never changes its node's agent.
     /// </param>
-    /// <param name="agents">
-    /// The agent each new Agent or Review node takes in place of its blueprint's and the fallback, with the blueprint's
-    /// default conversation mode: the planner's choice that this machine can run, or the person's. A node that takes no
-    /// agent, and a fill, ignore theirs.
+    /// <param name="planned">
+    /// The planner's choice for each new Agent or Review node, one this machine can run. A node takes it only when its
+    /// blueprint has no agent of its own, so a blueprint's saved agent wins, as the person chose it.
+    /// </param>
+    /// <param name="changed">
+    /// The person's choice for each new Agent or Review node in the review, which wins over everything. A node that takes
+    /// no agent, and a fill, ignore theirs.
     /// </param>
     public WorkflowEdit.Batch Accept(
         Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started, ExecutionSettings? fallback = null,
-        IReadOnlyDictionary<TaskId, ExecutionSettings>? agents = null)
+        IReadOnlyDictionary<TaskId, ExecutionSettings>? planned = null, IReadOnlyDictionary<TaskId, ExecutionSettings>? changed = null)
     {
         var layout = Layout(workflow);
         var placed = Nodes.Where(node => workflow.Tasks.ContainsKey(node.Id)).Select(node => node.Id).ToHashSet();
@@ -166,7 +169,7 @@ public sealed record Proposal(
                 {
                     Title = node.Title,
                     Fields = node.Fields.ToImmutableDictionary(),
-                    Settings = SettingsFor(node.Blueprint, agents?.GetValueOrDefault(node.Id), fallback),
+                    Settings = SettingsFor(node.Blueprint, changed?.GetValueOrDefault(node.Id), planned?.GetValueOrDefault(node.Id), fallback),
                 }),
             .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(Fill),
             .. Connections
@@ -218,15 +221,13 @@ public sealed record Proposal(
     }
 
     /// <summary>
-    /// A new node's settings when <paramref name="chosen"/> gives it an agent, or <paramref name="fallback"/> does for a
-    /// blueprint without a default agent, or null to keep its blueprint's defaults.
+    /// A new node's agent, first found of: the person's choice, its blueprint's own agent, the planner's choice, and the
+    /// fallback. Null keeps the blueprint's defaults, as for a blueprint with an agent of its own or a node that takes none.
     /// </summary>
-    private static NodeSettings? SettingsFor(Blueprint blueprint, ExecutionSettings? chosen, ExecutionSettings? fallback) => blueprint.Work.Kind switch
-    {
-        WorkKind.Person => null,
-        WorkKind.Agent or WorkKind.Review when chosen is not null => blueprint.Defaults with { Execution = chosen },
-        WorkKind.Agent or WorkKind.Review => fallback is null || blueprint.Defaults.Execution is not null ? null : blueprint.Defaults with { Execution = fallback },
-    };
+    private static NodeSettings? SettingsFor(Blueprint blueprint, ExecutionSettings? changed, ExecutionSettings? planned, ExecutionSettings? fallback) =>
+        blueprint.Work.Kind == WorkKind.Person ? null
+        : (changed ?? (blueprint.Defaults.Execution is null ? planned ?? fallback : null)) is { } agent ? blueprint.Defaults with { Execution = agent }
+        : null;
 
     private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill) =>
     [
