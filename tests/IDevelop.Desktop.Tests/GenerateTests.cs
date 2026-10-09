@@ -274,6 +274,7 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.Header(shell.Node("Plan export")));
         shell.Click(shell.InView<Button>("RunTask"));
         shell.WaitUntil(() => shell.Has<StackPanel>("Proposal"), "the proposal shows");
+        InspectorLayoutTests.AssertLaidOut(shell);
 
         Assert.False(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
         shell.Click(shell.InView<Button>("AcceptProposal"));

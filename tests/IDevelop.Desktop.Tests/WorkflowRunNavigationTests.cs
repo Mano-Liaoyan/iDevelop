@@ -103,6 +103,7 @@ public sealed class WorkflowRunNavigationTests
             () => "It has no report yet.");
         Assert.Equal("## A (dependency)\n\nA ready.", shell.Find<MarkdownView>("GateReport").Markdown?.TrimEnd());
         Assert.Equal(["A (dependency)", "A ready."], ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateReport")));
+        InspectorLayoutTests.AssertLaidOut(shell);
 
         shell.Click(shell.InView<Button>("ApproveGate"));
 
