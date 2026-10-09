@@ -48,7 +48,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// level on a line of its own.
     /// </summary>
     public IReadOnlyList<string> Parts => Settings is { } settings
-        ? [Clients.Name(settings.Client), .. string.Join(" · ", new[] { ModelName(settings), settings.Reasoning }.OfType<string>()) is { Length: > 0 } rest ? [rest] : Array.Empty<string>()]
+        ? [Clients.Name(settings.Client), .. ModelAndLevel(settings) is { } rest ? [rest] : Array.Empty<string>()]
         : ["No agent"];
 
     /// <summary>The planner's reason for a choice the task takes, or what the person's own choice replaced.</summary>
@@ -75,7 +75,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// </summary>
     internal (string Line, string? Second)? GhostAgent => Settings is not { } settings ? null
         : Label.Length <= GhostLine ? (Label, null)
-        : (Clients.Name(settings.Client), string.Join(" · ", new[] { ModelName(settings), settings.Reasoning }.OfType<string>()) is { Length: > 0 } rest ? rest : null);
+        : (Clients.Name(settings.Client), ModelAndLevel(settings));
 
     /// <summary>The note under the task's ghost card, such as "Pi isn't ready · planner's agent", or null.</summary>
     public string? GhostNote => Unusable is { } unusable ? $"{unusable.Brief} · {Fallback switch
@@ -198,6 +198,10 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     private string? ModelName(ExecutionSettings settings) =>
         settings.Model is { } id ? ExecutionChoices.OfferedModel(_proposal.Status(settings.Client), id)?.Name ?? id : null;
+
+    /// <summary>"Claude Haiku 4.5 · low", the agent after its client, or null when it names neither.</summary>
+    private string? ModelAndLevel(ExecutionSettings settings) =>
+        string.Join(" · ", new[] { ModelName(settings), settings.Reasoning }.OfType<string>()) is { Length: > 0 } rest ? rest : null;
 
     private void Change(ExecutionSettings settings)
     {
