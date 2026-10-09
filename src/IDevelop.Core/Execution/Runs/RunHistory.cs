@@ -82,6 +82,30 @@ internal sealed class RunHistory
     /// <summary>The task's result that counts as complete, or null.</summary>
     public EarlierResult? CurrentOf(TaskId task) => Judge(task) is TaskHistory.Current current ? current.Result : null;
 
+    /// <summary>
+    /// What <paramref name="task"/> waits for between runs, from its newest settled run that could start it, when that run
+    /// did not: the dependency predecessors in <paramref name="workflow"/> that had no current result in that run and have
+    /// none from a later run since. Empty when the task has a result of its own, ran there, or waits for nothing.
+    /// </summary>
+    /// <returns>The predecessors it waits for, and whether that run is the workflow's newest settled run.</returns>
+    public (ImmutableSortedSet<TaskId> Holders, bool Latest) WaitsFor(TaskId task)
+    {
+        if (Judge(task) is not TaskHistory.None) return ([], false);
+        for (var index = _runs.Length - 1; index >= 0; index--)
+        {
+            var record = _runs[index];
+            if (!RunScope.InFlow(record).Contains(task)) continue;
+            if (Touches(record, task)) return ([], false);
+            var results = record.CurrentResults;
+            var stale = record.StaleResults;
+            ImmutableSortedSet<TaskId> holders = [.. RunScope.Predecessors(_workflow)[task].Where(predecessor =>
+                !(results.TryGetValue(predecessor, out var result) && !stale.Contains(result.Id)) &&
+                !(CurrentOf(predecessor) is { } later && Position(later.Run.Id) > index))];
+            return (holders, index == _runs.Length - 1);
+        }
+        return ([], false);
+    }
+
     /// <summary>The result <paramref name="result"/> stands for: an earlier run's result for one that was carried from it, itself otherwise.</summary>
     public (RunId Run, ResultId Result) Root(RunRecord run, ResultId result)
     {
@@ -92,6 +116,13 @@ internal sealed class RunHistory
             (run, result) = (source, carried.Result);
         }
         return (run.Id, result);
+    }
+
+    private int Position(RunId run)
+    {
+        for (var index = 0; index < _runs.Length; index++)
+            if (_runs[index].Id == run) return index;
+        return -1;
     }
 
     private static DateTimeOffset Approval(RunRecord record) =>

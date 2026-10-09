@@ -11,7 +11,7 @@ One approved execution of a workflow, from its approval until it settles Complet
 _Avoid_: job, execution
 
 **Node run**:
-A run that a node's Run started. It runs that node and any node the person runs while it is active, and each task after them once all of that task's dependency predecessors have results in the run. It completes once nothing more can start.
+A run that a node's Run started. It runs that node and any node the person runs while it is active, and each task after them once all of that task's dependency predecessors have results in the run, which may be results it carried from earlier runs. It completes once nothing more can start.
 _Avoid_: partial run, run from here
 
 **Standalone run**:
@@ -57,7 +57,15 @@ _Avoid_: output, success
 A task's newest result. It supersedes the one before, which stays recorded.
 
 **Result origin**:
-What produced a result: an executed attempt, a standalone report that the run approval included, an approved rebase, or a person's gate approval. Only an executed result comes from a client in the run.
+What produced a result: an executed attempt, a standalone report that the run approval included, an approved rebase, a person's gate approval, or an earlier run whose result a node run carried. Only an executed result comes from a client in the run.
+
+**Earlier result**:
+A task's result from a run of its workflow that has settled. It still counts as complete while it was its run's current, non-stale result, no later run ran the task, the task and the connections into it are unchanged, and each result it took counts the same way. Otherwise it is out of date.
+_Avoid_: old result, cached result
+
+**Carried result**:
+An earlier result that a node run takes for a task it does not run, recorded in its own journal with its code replayed onto the run's base, its report, and its artifacts. One whose code conflicts with the base is not carried, and its task must run again. Run Workflow carries nothing.
+_Avoid_: imported result, reused result, which names a standalone report a run reuses
 
 **Stale result**:
 A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one needs attention, while an Approval node takes a new gate request instead.

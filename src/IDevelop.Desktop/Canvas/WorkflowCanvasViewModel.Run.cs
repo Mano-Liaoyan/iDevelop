@@ -64,6 +64,7 @@ public sealed partial class WorkflowCanvasViewModel
         run.Replaced += OnRunReplaced;
         Run = run;
         ShowRun(adopted: true);
+        ReadSettledRun();
         RunRouteChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -159,14 +160,16 @@ public sealed partial class WorkflowCanvasViewModel
 
     /// <summary>
     /// "Runs after "A". Run "A" first." for a node whose dependency predecessors have no results yet, or null. In the
-    /// canvas's active run that means a result in the run; a new run has none yet, so every predecessor counts (#90).
+    /// canvas's active run that means a result in the run, and otherwise in a new run (#90). Either way a predecessor whose
+    /// earlier run left it a result that still counts is complete, because the run carries that result.
     /// </summary>
     internal string? RunsAfter(TaskId task)
     {
         IReadOnlyCollection<TaskId> waiting = Run is { IsActive: true } run && run.View.Tasks.GetValueOrDefault(task) is { } view
             ? view.State == TaskState.Unrequested ? view.HeldBy : []
             : [.. Workflow.Connections.Where(connection => connection.Key.To == task && connection.Value.Blocks()).Select(connection => connection.Key.From).Order()];
-        return WorkflowRunText.RunsAfter(waiting, id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task");
+        return WorkflowRunText.RunsAfter([.. waiting.Where(predecessor => History?.CurrentOf(predecessor) is null)],
+            id => Workflow.Tasks.GetValueOrDefault(id)?.Title ?? "a removed task");
     }
 
     /// <summary>Adds the node to the active run, once per run, and says why when the run refuses.</summary>
@@ -183,7 +186,11 @@ public sealed partial class WorkflowCanvasViewModel
         });
     }
 
-    private void OnRunViewChanged(object? sender, EventArgs e) => ShowRun();
+    private void OnRunViewChanged(object? sender, EventArgs e)
+    {
+        ShowRun();
+        ReadSettledRun();
+    }
 
     private void OnRunReplaced(object? sender, EventArgs e)
     {

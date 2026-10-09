@@ -514,6 +514,8 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         // The project's runner already follows this change, so the checks see it. A move changes no reason not to start.
         if (!ReferenceEquals(previous?.Tasks, current.Tasks) || connectionsChanged)
         {
+            // An edit of a task or of the connections into it can put an earlier result out of date (#90).
+            ShowHistory();
             RecheckProblems(Changed(previous, current));
         }
     }

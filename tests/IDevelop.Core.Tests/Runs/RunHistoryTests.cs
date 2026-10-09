@@ -148,6 +148,37 @@ public sealed class RunHistoryTests
         Assert.Equal(t.Id, Current(History(f), T).Result.Result.Id);
     }
 
+    [Fact]
+    public void A_task_its_newest_run_could_start_and_did_not_waits_for_the_predecessors_without_a_result_until_a_later_run_has_one()
+    {
+        // T → C ← U: the first run starts from T, so C waits for U, and U waits for nothing, since no run could start it.
+        using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C), Task(D)), T, C), U, C));
+        f.Approve(node: T);
+        f.Complete(f.Reserve(T));
+        Settle(f, Run);
+
+        var history = History(f);
+        Assert.Equal([U], history.WaitsFor(C).Holders);
+        Assert.True(history.WaitsFor(C).Latest);
+        Assert.Empty(history.WaitsFor(U).Holders);
+        Assert.Empty(history.WaitsFor(T).Holders);
+        // A later run of D, which cannot start C, leaves C waiting, now from a run before the newest.
+        f.Approve(run: OtherRun, node: D);
+        f.Complete(f.Reserve(D, run: OtherRun), run: OtherRun);
+        Settle(f, OtherRun);
+        Assert.Equal([U], History(f).WaitsFor(C).Holders);
+        Assert.False(History(f).WaitsFor(C).Latest);
+        // A run of U carries T's result for C, and C, though it was stopped before it started, waits for nothing more.
+        var operation = f.Op();
+        var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
+            carried: Carrying.Build(null, seed, History(f), operation, preview: false).Carried));
+        f.Complete(f.Reserve(U, run: Third), run: Third);
+        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
+        f.ReleaseControl();
+        Assert.Empty(History(f).WaitsFor(C).Holders);
+    }
+
     private static (OutOfDateReason, TaskId?) Reason(TaskHistory history) =>
         Assert.IsType<TaskHistory.OutOfDate>(history) is var outOfDate ? (outOfDate.Reason, outOfDate.Input) : default;
 }

@@ -110,6 +110,7 @@ public sealed class ProjectViewModel : ObservableObject
         };
         Workflows.Add(canvas);
         ShowActiveRun(canvas);
+        canvas.ReadHistory();
         return canvas;
     }
 

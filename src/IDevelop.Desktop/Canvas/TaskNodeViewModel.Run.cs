@@ -33,8 +33,11 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The run's view of the task while the canvas's run shows it, or null.</summary>
     internal TaskView? RunTask => _runTask is not null && (_runActive || _attempt?.Id == _runBaseline) ? _runTask : null;
 
-    /// <summary>The card, the inspector, and the conversation show the task as the canvas's run sees it.</summary>
-    public bool ShowsRunState => RunTask is not null;
+    /// <summary>
+    /// The card, the inspector, and the conversation show the task as the canvas's run sees it, or where it stands between
+    /// runs (#90).
+    /// </summary>
+    public bool ShowsRunState => RunTask is not null || Standing is not null;
 
     /// <summary>The canvas's active run owns the task, so its own Run, Cancel, and composer stand aside.</summary>
     public bool IsRunOwned => RunTask is not null && _runActive;
@@ -45,20 +48,27 @@ public sealed partial class TaskNodeViewModel
     /// </summary>
     public bool JoinsRun => IsRunOwned && RunTask is { State: TaskState.Unrequested } && _canvas.Run is { View.Phase: RunPhase.Approved };
 
-    /// <summary>Which run owns the task, or ran it last, while the inspector shows the run's state.</summary>
-    public string? RunOwner => ShowsRunState ? RunOwnedProblem : null;
+    /// <summary>
+    /// Which run owns the task, or ran it last, while the inspector shows the run's state. The active run that can take the
+    /// task in says so before where the task stands between runs.
+    /// </summary>
+    public string? RunOwner => Standing is { } standing && !IsRunOwned ? standing.Owner(_canvas.Name) : ShowsRunState ? RunOwnedProblem : null;
 
-    /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval".</summary>
-    public string? RunStatusLabel => RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : null;
+    /// <summary>The task's state in the run, such as "Waits for "A"" or "Waiting for approval", or between runs.</summary>
+    public string? RunStatusLabel => Standing is { } standing ? standing.Card(TitleOf).Label
+        : RunTask is { } run ? WorkflowRunText.Of(run, TitleOf, _runActive).Label : null;
 
-    public StatusTone RunTone => RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
+    public StatusTone RunTone => Standing is { } standing ? Tone(standing.Card(TitleOf).State)
+        : RunTask is { } run ? Tone(WorkflowRunText.Of(run, TitleOf, _runActive).State) : StatusTone.Neutral;
 
-    /// <summary>Why the task stands where it does in the run, or null when its status says enough.</summary>
+    /// <summary>Why the task stands where it does in the run, or between runs, or null when its status says enough.</summary>
     public string? RunDetail => RunFix is { } fix ? FixDetail(fix)
+        : Standing is { } standing ? standing.Detail(TitleOf)
         : RunTask is { } run ? WorkflowRunText.Detail(run, TitleOf, _runActive, _canvas.Run?.View.Tasks) : null;
 
     /// <summary>The run's status pill has a glyph, except for a task that has not started, which has nothing to mark.</summary>
-    public bool RunHasGlyph => RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
+    public bool RunHasGlyph => Standing is { } standing ? standing.Card(TitleOf).State != NodeState.Idle
+        : RunTask is { } run && WorkflowRunText.Of(run, TitleOf, _runActive).State != NodeState.Idle;
 
     /// <summary>An Approval node's request in the run, with Approve and Send back, or null.</summary>
     public GateViewModel? Gate
@@ -169,6 +179,7 @@ public sealed partial class TaskNodeViewModel
     private void OnRunChanged()
     {
         _shownRun = RunTask;
+        _shownStanding = Standing;
         ShowGate();
         ShowPanels();
         foreach (var property in RunDependents)

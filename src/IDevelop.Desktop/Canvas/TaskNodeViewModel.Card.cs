@@ -36,7 +36,7 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>An idle node's subtitle is its agent. Every other node's is its status.</summary>
-    public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None && RunTask is null;
+    public bool ShowsAgent => State == NodeState.Idle && Role == NodeRole.None && RunTask is null && Standing is null;
 
     /// <summary>The subtitle when it is not the agent: the proposal, else a missing setting, else the run's status.</summary>
     public string Subtitle => Role == NodeRole.Proposing && Proposal is { } proposal ? CardText.Proposal(proposal.Items.Count)
