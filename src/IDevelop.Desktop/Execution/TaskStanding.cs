@@ -92,9 +92,13 @@ internal abstract record TaskStanding
         _ => null,
     };
 
+    /// <summary>What its card's tooltip adds, which the card may only count: the tasks it waits for, by name.</summary>
+    public string? Tip(Func<TaskId, string> title) => this is Waits waits ? $"Waits for {Names(waits.Holders, title)}." : null;
+
     private static string Names(IEnumerable<TaskId> tasks, Func<TaskId, string> title)
     {
-        var names = tasks.Select(task => $"\"{title(task)}\"").ToArray();
+        var names = tasks.Select(task => (Title: title(task), Task: task)).OrderBy(task => task.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(task => task.Task).Select(task => $"\"{task.Title}\"").ToArray();
         return names.Length switch
         {
             1 => names[0],

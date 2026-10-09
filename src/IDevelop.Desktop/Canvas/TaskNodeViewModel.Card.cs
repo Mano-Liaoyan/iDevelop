@@ -51,9 +51,11 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// The first line's texts when it is not the client, the fullest first, of which the card shows the first that fits
-    /// whole: a task of the run that waits for one task names it, and counts it when its title is too long (#90).
+    /// whole: a task of the run, or one between runs, that waits for one task names it, and counts it when its title is too
+    /// long (#90).
     /// </summary>
-    public IReadOnlyList<string> SubtitleChoices => RunTask is { State: TaskState.Pending, HeldBy.Count: 1 } && Subtitle == StatusLabel
+    public IReadOnlyList<string> SubtitleChoices => Subtitle == StatusLabel &&
+        (Standing is TaskStanding.Waits { Holders.Count: 1 } || Standing is null && RunTask is { State: TaskState.Pending, HeldBy.Count: 1 })
         ? [Subtitle, "Waits for 1 task"]
         : [Subtitle];
 
@@ -73,8 +75,8 @@ public sealed partial class TaskNodeViewModel
     {
         Title,
         HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName,
-        // What a task of the run waits for, by name, which the card may only count.
-        RunTask is { State: TaskState.Pending } ? RunDetail?.Replace('\u00A0', ' ') : null,
+        // What a task of the run, or one between runs, waits for, by name, which the card may only count.
+        Standing is { } standing ? standing.Tip(TitleOf) : RunTask is { State: TaskState.Pending } ? RunDetail?.Replace('\u00A0', ' ') : null,
         ReviewSummary,
         FirstFieldLines(),
         Problem is { } problem ? RunText.Describe(problem) : null,

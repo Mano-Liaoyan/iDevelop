@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
@@ -101,6 +102,36 @@ public sealed class CarriedResultTests
         Assert.Equal("Its result from an earlier run still\u00A0counts.", reopened.Text("RunTaskDetail"));
         Select(reopened, "C");
         Assert.Equal(WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\" first."), reopened.InView<TextBlock>("StartProblem").Text);
+    }
+
+    [AvaloniaFact]
+    public void A_card_between_runs_counts_the_task_it_waits_for_when_its_name_does_not_fit_and_its_tooltip_names_it()
+    {
+        const string longTitle = "Render the settings view for every user";
+        using var f = new WorkflowRunFixture(Task(A, longTitle, 105), At(B, "B", 105, 250), At(C, "C", 405, 170), Dependency(A, C), Dependency(B, C));
+        f.Answer(longTitle, f.Says("Rendered.")).Answer("B", f.Says("B ready.")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+
+        RunNode(shell, "B");
+        AssertCounted(shell);
+        shell.Window.Close();
+        shell.Render();
+
+        var reopened = f.Window();
+        reopened.WaitUntil(() => reopened.CardText("B", "CardStatus") == "Succeeded", "the reopened window reads the earlier run",
+            () => reopened.CardText("C", "CardStatus"));
+        AssertCounted(reopened);
+
+        static void AssertCounted(Shell shell)
+        {
+            shell.Render();
+            Assert.Equal("Waits for 1 task", shell.CardText("C", "CardStatus"));
+            Assert.Contains($"Waits for \"{longTitle}\".", (string?)ToolTip.GetTip(shell.InCard<Panel>("C", "TaskCard")));
+            string[] cut = [.. shell.Nodes().SelectMany(node => node.GetVisualDescendants().OfType<TextBlock>())
+                .Where(text => text.IsEffectivelyVisible && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
+                .Select(text => text.Text ?? "")];
+            Assert.Equal([longTitle], cut);
+        }
     }
 
     [AvaloniaFact]
