@@ -81,7 +81,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _stopAndSend = new RelayCommand(() => _ = SendAsync(stopTurn: true), () => CanSend && ShowsStopAndSend);
         _cancel = new RelayCommand(() => _ = RunAsync(turn => _session.CancelAsync(turn, CancellationToken.None)), () => ShowsCancel && !_busy);
         _markDone = new RelayCommand(() => _ = RunAsync(turn => _session.MarkDoneAsync(turn, CancellationToken.None)), () => ShowsMarkDone && !_busy);
-        _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && !_busy);
+        _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && _snapshot.Actions.Terminal.Enabled && !_busy);
         _loadEarlier = new RelayCommand(() =>
         {
             _earlier = true;
@@ -190,7 +190,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public bool ShowsMarkDone => !IsHistorical && _snapshot.Actions.MarkDone.Enabled;
 
-    public bool ShowsTerminal => !IsHistorical && _snapshot.Actions.Terminal.Enabled;
+    public bool ShowsTerminal => !IsHistorical && (_snapshot.Actions.Terminal.Enabled || _snapshot.Actions.Terminal.ShowsWhenUnavailable);
+
+    /// <summary>Why Open in terminal is disabled while it stays in view, or null while it works.</summary>
+    public string? TerminalNote => ShowsTerminal && !_snapshot.Actions.Terminal.Enabled ? _snapshot.Actions.Terminal.Reason : null;
 
     public ICommand SendCommand => _send;
 
@@ -638,6 +641,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowsCancel));
         OnPropertyChanged(nameof(ShowsMarkDone));
         OnPropertyChanged(nameof(ShowsTerminal));
+        OnPropertyChanged(nameof(TerminalNote));
         NotifyCommands();
     }
 

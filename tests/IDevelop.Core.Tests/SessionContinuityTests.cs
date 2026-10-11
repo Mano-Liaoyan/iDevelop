@@ -112,7 +112,7 @@ public sealed class SessionContinuityTests : IDisposable
         var actions = session.Snapshot.Actions;
 
         Assert.Equal(new TerminalResult.Refused(new TerminalProblem.Blocked(new StartProblem.SessionFolderMoved(ClientId.Pi))), runs.OpenInTerminal(SayHiId));
-        Assert.Equal((false, false), (actions.Terminal.Enabled, actions.Send.Enabled));
+        Assert.Equal((false, true, false), (actions.Terminal.Enabled, actions.Terminal.ShowsWhenUnavailable, actions.Send.Enabled));
         Assert.Equal(actions.Send.Reason, actions.Terminal.Reason);
         Assert.StartsWith("Pi can't continue this conversation after the project folder moved", actions.Terminal.Reason, StringComparison.Ordinal);
         Assert.Empty(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, waiting)).OfType<AttemptEvent.HandedToTerminal>());
@@ -131,6 +131,7 @@ public sealed class SessionContinuityTests : IDisposable
         using var session = runs.OpenConversation(SayHiId);
 
         Assert.True(session.Snapshot.Actions.Terminal.Enabled, session.Snapshot.Actions.Terminal.Reason);
+        Assert.False(session.Snapshot.Actions.Terminal.ShowsWhenUnavailable);
         Assert.IsType<TerminalResult.HandedOff>(runs.OpenInTerminal(SayHiId));
     }
 

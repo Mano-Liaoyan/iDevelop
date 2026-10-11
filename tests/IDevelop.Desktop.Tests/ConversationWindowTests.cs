@@ -117,12 +117,22 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Render();
 
+        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.";
         Assert.Equal(!moved, shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
         if (moved)
         {
-            Assert.Equal("Pi can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.",
-                shell.InView<TextBlock>("SendProblem").Text);
+            Assert.Equal(note, shell.InView<TextBlock>("SendProblem").Text);
         }
+
+        Invoke(shell.InView<Button>("OpenConversation"));
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Idle.IsCompleted && Conversation(shell).Items.Count > 0,
+            "the conversation shows its history");
+        shell.Render();
+        var terminal = shell.Find<Button>("ConversationTerminal");
+
+        Assert.Equal((true, !moved), (terminal.IsEffectivelyVisible, terminal.IsEffectivelyEnabled));
+        Assert.Equal(moved ? note : null, ToolTip.GetTip(terminal));
+        Assert.Equal(moved, shell.Find<TextBlock>("ComposerHint").Text == note);
     }
 
     [AvaloniaFact]

@@ -122,5 +122,6 @@ public class ConversationChainTests
         Assert.Equal(["# Implement atomic save\n", "Which fruit?", "banana", "Noted."],
             page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Message>().Select(message => message.Text));
         Assert.Equal([First, B], (await session.ListAttemptsAsync(default)).Select(attempt => attempt.Id));
+        Assert.Equal((false, false), (session.Snapshot.Actions.Terminal.Enabled, session.Snapshot.Actions.Terminal.ShowsWhenUnavailable));
     }
 }

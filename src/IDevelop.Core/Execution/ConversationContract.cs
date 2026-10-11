@@ -131,7 +131,11 @@ public abstract record HistoryResult
     public sealed record Unavailable(string Reason) : HistoryResult;
 }
 
-public sealed record ActionAvailability(bool Enabled, string Reason);
+public sealed record ActionAvailability(bool Enabled, string Reason)
+{
+    /// <summary>The action stays in view while it is unavailable, so the person sees it disabled with its reason.</summary>
+    public bool ShowsWhenUnavailable { get; init; }
+}
 
 public sealed record ConversationActions(
     ActionAvailability Send, ActionAvailability StopAndSend,

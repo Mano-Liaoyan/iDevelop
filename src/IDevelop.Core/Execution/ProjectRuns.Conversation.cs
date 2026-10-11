@@ -57,7 +57,9 @@ public sealed partial class ProjectRuns
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
                         Availability(unavailable is null && waiting && record?.SessionId is not null && !moved,
                             unavailable ?? (moved ? StartReason(new StartProblem.SessionFolderMoved(record!.Requested.Client))
-                                : "The task must finish teardown and wait with a session."), "Open this session in a terminal."));
+                                : "The task must finish teardown and wait with a session."), "Open this session in a terminal.")
+                        // A Pi conversation whose folder moved keeps Open in terminal in view, disabled with the composer's note (#92).
+                        with { ShowsWhenUnavailable = unavailable is null && moved });
                     return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), published?.LogRevision ?? 0,
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }

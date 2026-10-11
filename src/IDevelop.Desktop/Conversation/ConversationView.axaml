@@ -188,6 +188,7 @@
                      Text="{Binding ComposerHint}"
                      AutomationProperties.AutomationId="ComposerHint" />
           <Button Classes="action" Command="{Binding OpenInTerminalCommand}" IsVisible="{Binding ShowsTerminal}"
+                  ToolTip.Tip="{Binding TerminalNote}" ToolTip.ShowOnDisabled="True"
                   AutomationProperties.AutomationId="ConversationTerminal"
                   AutomationProperties.Name="Open in terminal">
             <TextBlock Text="Open in terminal" />
