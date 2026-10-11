@@ -102,6 +102,29 @@ public sealed class ConversationWindowTests : IDisposable
         Assert.Equal(["New attempt"], Markers());
     }
 
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_waiting_Pi_conversation_whose_project_folder_moved_disables_Open_in_terminal_with_the_composer_s_note(bool moved)
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var project = Project(TaskAt(TestTasks.Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
+        var folder = moved ? Path.Combine(Path.GetDirectoryName(project)!, "before-the-move") : project;
+        WriteAttempt(project, Requested(A, TestTasks.Design, 0, Prompt) with { Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = folder },
+            Launched(1), At(2, new AgentEvent.SessionStarted("s-1")), At(3, new AgentEvent.Succeeded("Which fruit?")), Exited(4));
+        var shell = Shell.Open(project);
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Render();
+
+        Assert.Equal(!moved, shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
+        if (moved)
+        {
+            Assert.Equal("Pi can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.",
+                shell.InView<TextBlock>("SendProblem").Text);
+        }
+    }
+
     [AvaloniaFact]
     public void A_failed_card_opens_its_conversation_from_its_attention_glyph()
     {

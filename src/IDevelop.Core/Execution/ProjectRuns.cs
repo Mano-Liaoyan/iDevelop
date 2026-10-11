@@ -949,6 +949,13 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         return from is not null;
     }
 
+    /// <summary>
+    /// Whether the attempt's client finds its session only in the folder where it ran, and this project's folder is not
+    /// that folder any more, because it moved or was renamed. Pi then cannot continue the conversation (#92).
+    /// </summary>
+    internal bool SessionFolderMoved(AttemptRecord attempt) => Clients.Get(attempt.Requested.Client).SessionsPerFolder
+        && attempt.SessionFolder is { } folder && !StartCheck.SameFolder(folder, _projectFolder);
+
     /// <summary>Appends the hand-off to the task's latest attempt. Called under the gate with the task's lock.</summary>
     private TerminalResult HandOff(TaskId task)
     {
@@ -960,6 +967,11 @@ public sealed partial class ProjectRuns : IAsyncDisposable
         if (last.SessionId is not { } session)
         {
             return new TerminalResult.Refused(new TerminalProblem.NoSession(last.Requested.Client));
+        }
+
+        if (SessionFolderMoved(last))
+        {
+            return new TerminalResult.Refused(new TerminalProblem.Blocked(new StartProblem.SessionFolderMoved(last.Requested.Client)));
         }
 
         if (last.Status != AttemptStatus.WaitingForInput)

@@ -46,6 +46,7 @@ public sealed partial class ProjectRuns
                     var active = _owner._active.GetValueOrDefault(Task);
                     var running = active is not null && record is { Status: AttemptStatus.Running, Stopping: false };
                     var waiting = active is null && record is { Status: AttemptStatus.WaitingForInput };
+                    var moved = record is not null && _owner.SessionFolderMoved(record);
                     var actions = new ConversationActions(
                         Availability(sendReason is null, sendReason, "Send a message."),
                         Availability(sendReason is null && running && record?.Subject is null,
@@ -54,8 +55,9 @@ public sealed partial class ProjectRuns
                             unavailable ?? "There is no owned run to cancel.", "Cancel this attempt."),
                         Availability(unavailable is null && task is not null && waiting,
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
-                        Availability(unavailable is null && waiting && record?.SessionId is not null,
-                            unavailable ?? "The task must finish teardown and wait with a session.", "Open this session in a terminal."));
+                        Availability(unavailable is null && waiting && record?.SessionId is not null && !moved,
+                            unavailable ?? (moved ? StartReason(new StartProblem.SessionFolderMoved(record!.Requested.Client))
+                                : "The task must finish teardown and wait with a session."), "Open this session in a terminal."));
                     return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), published?.LogRevision ?? 0,
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }
