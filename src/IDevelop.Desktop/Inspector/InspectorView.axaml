@@ -1135,6 +1135,11 @@
                                   AutomationProperties.Name="Mark done">
                             <TextBlock Text="Mark done" />
                           </Button>
+                          <Button Classes="action" Command="{Binding NewConversationCommand}" IsVisible="{Binding CanStartNewConversation}"
+                                  AutomationProperties.AutomationId="StartNewConversation"
+                                  AutomationProperties.Name="Start a new conversation">
+                            <TextBlock Text="Start a new conversation" />
+                          </Button>
                           <Button Classes="action" Command="{Binding OpenInTerminalCommand}"
                                   AutomationProperties.AutomationId="OpenInTerminal"
                                   AutomationProperties.Name="Open in terminal">

@@ -83,7 +83,8 @@ public sealed partial class ProjectRuns
                         unavailable ?? WorkflowRunCoordinator.NothingToCancelMessage, "Cancel this attempt."),
                     Availability(unavailable is null && resting && latest?.Status == AttemptStatus.WaitingForInput,
                         unavailable ?? WorkflowRunCoordinator.NotWaitingMessage, "Mark this task done."),
-                    Availability(false, unavailable ?? "A workflow run owns this task's session.", ""));
+                    Availability(false, unavailable ?? "A workflow run owns this task's session.", ""),
+                    Availability(false, unavailable ?? "A workflow run owns this task. Retry starts a new attempt.", ""));
                 return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), logRevision,
                     latest is null ? null : new TurnKey(latest.Id, latest.Turns.Count), latest, Capabilities(latest), actions);
             }
@@ -164,6 +165,10 @@ public sealed partial class ProjectRuns
             return Unavailable ? AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, ClosedOwner))
                 : _run.Cancel(Address, Task, expected, ct);
         }
+
+        public Task<ConversationCommandResult> StartNewConversationAsync(CancellationToken ct) => ct.IsCancellationRequested
+            ? AsyncTask.FromCanceled<ConversationCommandResult>(ct)
+            : AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "A workflow run owns this task. Retry starts a new attempt."));
 
         public Task<ConversationCommandResult> MarkDoneAsync(TurnKey expected, CancellationToken ct)
         {

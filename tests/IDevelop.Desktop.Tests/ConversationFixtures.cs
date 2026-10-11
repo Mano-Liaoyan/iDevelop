@@ -55,7 +55,7 @@ internal static class ConversationFixtures
 
     public static ConversationActions Actions(bool send = true, bool stopAndSend = false, bool cancel = false) =>
         new(send ? On() : Off("Run this task first."), stopAndSend ? On() : Off("Stop and send requires a running agent turn."),
-            cancel ? On() : Off("There is no owned run to cancel."), Off("Not waiting."), Off("Not waiting."));
+            cancel ? On() : Off("There is no owned run to cancel."), Off("Not waiting."), Off("Not waiting."), Off("The conversation can continue."));
 
     /// <summary>The text a markdown block shows, with its runs and links in order.</summary>
     public static string Shown(TextBlock text) => text.Inlines is { Count: > 0 } inlines ? string.Concat(inlines.Select(Shown)) : text.Text ?? "";

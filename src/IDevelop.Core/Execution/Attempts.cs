@@ -145,6 +145,13 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool ReadOnly { get; init; }
 
+        /// <summary>
+        /// The prompt is the person's message, which started a new conversation in a fresh session after the earlier one
+        /// could not continue.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool PersonPrompt { get; init; }
+
         /// <summary>Set on a review's attempt: the node whose change it reviews.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public TaskId? Subject { get; init; }
@@ -277,7 +284,7 @@ public sealed record AttemptRecord
         ReadOnly = requested.ReadOnly;
         Subject = requested.Subject;
         Fix = requested.Fix;
-        Turns = [new TurnRecord(1, requested.Continues is null ? null : requested.Prompt, TurnOutcome.Running, null) { StartTree = requested.Tree }];
+        Turns = [new TurnRecord(1, requested.Continues is null && !requested.PersonPrompt ? null : requested.Prompt, TurnOutcome.Running, null) { StartTree = requested.Tree }];
     }
 
     public AttemptId Id { get; }

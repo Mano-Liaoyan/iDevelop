@@ -91,7 +91,7 @@ internal static class ConversationHistory
                 case AttemptEvent.Requested requested when before is null:
                     opening = record.Conversation;
                     Marker("attempt", $"Attempt {record.Id}\n{Settings(record.Requested, record.Conversation)}");
-                    Message(requested.Continues is null || requested.Fix is not null || requested.Subject is not null
+                    Message(!requested.PersonPrompt && (requested.Continues is null || requested.Fix is not null || requested.Subject is not null)
                         ? MessageAuthor.Application : MessageAuthor.Person, requested.Prompt, MessageState.Submitted, "prompt");
                     break;
                 case AttemptEvent.MessageQueued queued:

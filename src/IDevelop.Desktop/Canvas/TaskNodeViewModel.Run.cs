@@ -16,7 +16,7 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(RunTask), nameof(ShowsRunState), nameof(ShowsRunConversation), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
-        nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
+        nameof(CanStartNewConversation), nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
     ];
 
     private TaskView? _runTask;
@@ -225,6 +225,7 @@ public sealed partial class TaskNodeViewModel
         _send.NotifyCanExecuteChanged();
         _stopAndSend.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();
+        _newConversation.NotifyCanExecuteChanged();
         _continueFix.NotifyCanExecuteChanged();
         _retryFix.NotifyCanExecuteChanged();
     }

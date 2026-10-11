@@ -187,6 +187,11 @@
           <TextBlock Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" Margin="4,0,0,0"
                      Text="{Binding ComposerHint}"
                      AutomationProperties.AutomationId="ComposerHint" />
+          <Button Classes="action" Command="{Binding NewConversationCommand}" IsVisible="{Binding ShowsNewConversation}"
+                  AutomationProperties.AutomationId="ConversationNewConversation"
+                  AutomationProperties.Name="Start a new conversation">
+            <TextBlock Text="Start a new conversation" />
+          </Button>
           <Button Classes="action" Command="{Binding OpenInTerminalCommand}" IsVisible="{Binding ShowsTerminal}"
                   ToolTip.Tip="{Binding TerminalNote}" ToolTip.ShowOnDisabled="True"
                   AutomationProperties.AutomationId="ConversationTerminal"

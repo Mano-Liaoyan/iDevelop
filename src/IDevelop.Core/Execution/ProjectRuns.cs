@@ -38,6 +38,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// <summary>Why a review's next step could not start, by review. Cleared once a step starts.</summary>
     private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
 
+    /// <summary>The tasks whose next message starts a new conversation, as the person chose.</summary>
+    private ImmutableHashSet<TaskId> _newConversations = [];
+
     private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings,
         ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> logRevisions, HostQuestions questions)
     {
@@ -317,9 +320,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     taken.Lock.Dispose();
                     return new SendResult.Refused(lockedTarget);
                 case LockTake.Taken taken:
-                    (result, run) = Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
-                        ? Answer(task, text, waiting, taken.Lock, tree)
-                        : Continue(task, text, taken.Lock, tree);
+                    (result, run) = _newConversations.Contains(task.Id) ? StartNewConversation(task, text, taken.Lock, tree)
+                        : Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
+                            ? Answer(task, text, waiting, taken.Lock, tree)
+                            : Continue(task, text, taken.Lock, tree);
                     break;
                 default:
                     throw new UnreachableException();
@@ -368,6 +372,12 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             if (last is not { Status: AttemptStatus.WaitingForInput } && ReviewOf(task.Id) is { } review)
             {
                 return new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle));
+            }
+
+            if (_newConversations.Contains(task.Id))
+            {
+                return StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(null, ""), questions: _questions) is StartVerdict.Blocked fresh
+                    ? new SendProblem.CannotStart(fresh.Problem) : null;
             }
 
             if (!TryContinue(task, last, out var from, out var problem))
@@ -852,6 +862,91 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     }
 
     /// <summary>
+    /// Whether the task's conversation cannot continue, because its client reported no session or Pi's folder moved, so
+    /// the person may start a new conversation (#92).
+    /// </summary>
+    public bool CanStartNewConversation(TaskDefinition task)
+    {
+        lock (_gate)
+        {
+            return CheckSend(task) is SendProblem.NoSession or SendProblem.CannotStart { Problem: StartProblem.SessionFolderMoved };
+        }
+    }
+
+    /// <summary>
+    /// Makes the task's next message start a new conversation in a fresh session, while its conversation cannot continue.
+    /// False when it can continue, or when the person already chose this.
+    /// </summary>
+    public bool StartNewConversation(TaskDefinition task)
+    {
+        lock (_gate)
+        {
+            if (!CanStartNewConversation(task))
+            {
+                return false;
+            }
+
+            _newConversations = _newConversations.Add(task.Id);
+        }
+
+        NotifyChanged(task.Id);
+        return true;
+    }
+
+    /// <summary>Whether the person chose Start a new conversation for the task, which its next message does.</summary>
+    public bool StartsNewConversation(TaskId task)
+    {
+        lock (_gate)
+        {
+            return _newConversations.Contains(task);
+        }
+    }
+
+    /// <summary>
+    /// Starts a new conversation with the message as its first prompt, in a fresh session. A waiting attempt that could not
+    /// go on is cancelled first. Called under the gate with the task's lock, which it releases on a refusal.
+    /// </summary>
+    private (SendResult Result, ActiveRun? Run) StartNewConversation(TaskDefinition task, string message, StandaloneLease held, string? tree)
+    {
+        if (ReviewOf(task.Id) is { } review)
+        {
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle))), null);
+        }
+
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(null, message), questions: _questions);
+        if (verdict is StartVerdict.Blocked blocked)
+        {
+            held.Dispose();
+            return (new SendResult.Refused(new SendProblem.CannotStart(blocked.Problem)), null);
+        }
+
+        if (Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting)
+        {
+            var cancel = new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow());
+            try
+            {
+                using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task.Id, waiting.Id));
+                log.Append(cancel);
+                SetPublished(task.Id, new PublishedAttempt(AttemptReducer.Apply(waiting, cancel), log.LineCount));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                held.Dispose();
+                return (new SendResult.Refused(new SendProblem.CannotStart(CannotRecord(e))), null);
+            }
+        }
+
+        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, continues: null, tree, personPrompt: true);
+        return result switch
+        {
+            StartResult.Started started => (new SendResult.Continued(started.Attempt), run),
+            StartResult.Refused refused => (new SendResult.Refused(new SendProblem.CannotStart(refused.Problem)), null),
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    /// <summary>
     /// Starts the next turn of the task's waiting attempt with the message, under the same log and with the model and
     /// reasoning the attempt started with. Called under the gate with the task's lock, which it releases unless the turn runs.
     /// </summary>
@@ -1001,7 +1096,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private (StartResult Result, ActiveRun? Run) RecordAndLaunch(
         TaskDefinition task, LaunchPlan plan, StandaloneLease held, Continuation? continues, string? tree, PlanningHandles? planning = null,
-        TaskId? subject = null, ReviewLink? fix = null)
+        TaskId? subject = null, ReviewLink? fix = null, bool personPrompt = false)
     {
         AttemptLog log;
         AttemptEvent.Requested requested;
@@ -1019,6 +1114,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,
+                PersonPrompt = personPrompt,
                 StandaloneCapture = continues is null
                     ? JsonSerializer.SerializeToElement(new StandaloneCapture(task, ""), RunJournal.Options) : null,
             };
@@ -1032,6 +1128,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         var (record, process) = LaunchTurn(plan, AttemptReducer.Start(requested), log);
         _started.Add(record.Id);
+        // A new attempt is the new conversation the person chose, or makes that choice moot.
+        _newConversations = _newConversations.Remove(task.Id);
         ActiveRun? run = null;
         if (process is null)
         {

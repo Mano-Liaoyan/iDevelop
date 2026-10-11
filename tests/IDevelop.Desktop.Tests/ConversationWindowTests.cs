@@ -117,7 +117,7 @@ public sealed class ConversationWindowTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         shell.Render();
 
-        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.";
+        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation.";
         Assert.Equal(!moved, shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
         if (moved)
         {

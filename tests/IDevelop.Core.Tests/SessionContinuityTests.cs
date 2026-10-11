@@ -219,6 +219,73 @@ public sealed class SessionContinuityTests : IDisposable
         Assert.Equal((true, false, Original), (exited.LostSession, continued.Resumed, continued.SessionId));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task After_the_project_moved_Start_a_new_conversation_lets_the_next_Pi_message_start_a_fresh_session(bool waiting)
+    {
+        const string renewed = "01a1225d-7777-74d8-8b83-b2462362dc0b";
+        Install(_fakes, ClientId.Pi,
+            Resuming(ClientId.Pi, Original).RecordArguments(Evidence("resumed.json")).Print(SessionLine(ClientId.Pi, Original)).Print(ReplyLines(ClientId.Pi, "Unknown")),
+            Fresh(ClientId.Pi).RecordArguments(Evidence("fresh.json")).CaptureStdin(Evidence("fresh.txt"))
+                .Print(SessionLine(ClientId.Pi, renewed)).Print(ReplyLines(ClientId.Pi, "Started over.")));
+        var old = Path.Combine(Path.GetDirectoryName(_project)!, "old-project");
+        var earlier = waiting ? PlantWaiting(old) : PlantSettled(old);
+        var task = waiting ? SayHi() with { Conversation = ConversationMode.Chat } : SayHi();
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(task, new CanvasPoint(0, 0))));
+        using var session = runs.OpenConversation(SayHiId);
+        Assert.Equal((Moved.Problem, true), (runs.CheckSend(task), runs.CanStartNewConversation(task)));
+        Assert.Equal((true, false), (session.Snapshot.Actions.NewConversation.Enabled, session.Snapshot.Actions.StartsNewConversation));
+
+        Assert.Equal(CommandOutcome.Applied, (await session.StartNewConversationAsync(default)).Outcome);
+
+        Assert.Equal((null, false, true), (runs.CheckSend(task), runs.CanStartNewConversation(task), runs.StartsNewConversation(SayHiId)));
+        Assert.Equal((true, false, true), (session.Snapshot.Actions.Send.Enabled, session.Snapshot.Actions.NewConversation.Enabled,
+            session.Snapshot.Actions.StartsNewConversation));
+        var fresh = await Settled(runs, async () => Assert.IsType<SendResult.Continued>(await runs.SendAsync(task, "Start over: which word?", stopTurn: false)).Attempt.Id);
+
+        Assert.False(File.Exists(Evidence("resumed.json")), "Pi resumed the old session.");
+        Assert.Equal(PiTurn, Recorded("fresh.json"));
+        Assert.Equal("Start over: which word?", File.ReadAllText(Evidence("fresh.txt")));
+        var requested = Assert.IsType<AttemptEvent.Requested>(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, fresh.Id))[0]);
+        Assert.Equal((null, true, _project), (requested.Continues, requested.PersonPrompt, requested.WorkingFolder));
+        Assert.Equal((renewed, (bool?)null, false), (fresh.SessionId, fresh.Resumed, runs.StartsNewConversation(SayHiId)));
+        Assert.Equal("Start over: which word?", fresh.Turns[0].Message);
+        var earlierRecord = AttemptReducer.Replay(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, earlier)))!;
+        Assert.Equal(waiting ? AttemptStatus.Cancelled : AttemptStatus.Succeeded, earlierRecord.Status);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(fresh.Id, new HistoryQuery.Latest(), 50, default));
+        Assert.Equal([(MessageAuthor.Person, "Start over: which word?"), (MessageAuthor.Agent, "Started over.")],
+            page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Message>().Select(message => (message.Author, message.Text)).Take(2));
+    }
+
+    [Fact]
+    public async Task A_conversation_whose_client_reported_no_session_offers_a_new_one_and_one_that_can_go_on_does_not()
+    {
+        Install(_fakes, ClientId.Pi);
+        var failed = AttemptId.New();
+        using (var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"),
+            new AttemptEvent.Requested(T0, failed, SayHiId, "Say hi", Pi, "# Say hi\n", "pi", ["-p"]) { WorkingFolder = _project }))
+        {
+            log.Append(new AttemptEvent.Launched(T0.AddSeconds(1), 4242, T0.AddSeconds(1)));
+            log.Append(new AttemptEvent.Agent(T0.AddSeconds(2), new AgentEvent.Failed("No API key.")));
+            log.Append(new AttemptEvent.Exited(T0.AddSeconds(3), 1, ""));
+        }
+
+        await using (var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync()))
+        {
+            Assert.Equal((new SendProblem.NoSession(ClientId.Pi), true), (runs.CheckSend(SayHi()), runs.CanStartNewConversation(SayHi())));
+            Assert.True(runs.StartNewConversation(SayHi()));
+            Assert.Null(runs.CheckSend(SayHi()));
+        }
+
+        PlantSettled(_project);
+        await using var reopened = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        Assert.Equal(((SendProblem?)null, false), (reopened.CheckSend(SayHi()), reopened.CanStartNewConversation(SayHi())));
+        Assert.False(reopened.StartNewConversation(SayHi()));
+        Assert.False(reopened.StartsNewConversation(SayHiId));
+    }
+
     [Fact]
     public async Task Every_other_client_resumes_its_session_by_id_after_the_project_moved()
     {
@@ -283,6 +350,19 @@ public sealed class SessionContinuityTests : IDisposable
         var recorded = $"\"workingFolder\":{JsonSerializer.Serialize(checkout)}";
         Assert.Contains(recorded, text, StringComparison.Ordinal);
         File.WriteAllText(events, text.Replace(recorded, $"\"workingFolder\":{JsonSerializer.Serialize(checkout + "-before-the-move")}", StringComparison.Ordinal));
+    }
+
+    /// <summary>Writes a settled attempt of Pi whose session ran in <paramref name="folder"/>.</summary>
+    private AttemptId PlantSettled(string folder)
+    {
+        var settled = AttemptId.New();
+        using var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"),
+            new AttemptEvent.Requested(T0.AddMinutes(1), settled, SayHiId, "Say hi", Pi, "# Say hi\n", "pi", ["-p"]) { WorkingFolder = folder });
+        log.Append(new AttemptEvent.Launched(T0.AddMinutes(1).AddSeconds(1), 4242, T0.AddMinutes(1).AddSeconds(1)));
+        log.Append(new AttemptEvent.Agent(T0.AddMinutes(1).AddSeconds(2), new AgentEvent.SessionStarted(Original)));
+        log.Append(new AttemptEvent.Agent(T0.AddMinutes(1).AddSeconds(3), new AgentEvent.Succeeded("Drafted.")));
+        log.Append(new AttemptEvent.Exited(T0.AddMinutes(1).AddSeconds(4), 0, ""));
+        return settled;
     }
 
     /// <summary>Writes a Chat attempt, of Pi unless <paramref name="settings"/> say otherwise, that waits for the person, whose session ran in <paramref name="folder"/>.</summary>
