@@ -159,7 +159,8 @@
       </Grid>
     </StackPanel>
 
-    <!-- The agent that runs the task next. A change describes the next attempt, never the one that runs. -->
+    <!-- The agent that runs the task next. A change describes the next attempt, never the one that runs, and the line under
+         the pickers names the agent the running attempt started with once the pickers name another. -->
     <Border Classes="cardRule" IsVisible="{Binding HasAgent}" />
     <StackPanel Classes="cardSection" IsVisible="{Binding HasAgent}">
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8">
@@ -199,8 +200,8 @@
         </ComboBox>
       </Grid>
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding ShowsNextRunNote}">
-        <TextBlock Grid.Column="1" Classes="cardMeta" Text="A change applies to the next run." TextWrapping="Wrap"
-                   AutomationProperties.AutomationId="CardNextRunNote" />
+        <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding Detail.NextRunNote, FallbackValue='A change applies to the next run.'}"
+                   TextWrapping="Wrap" AutomationProperties.AutomationId="CardNextRunNote" />
       </Grid>
     </StackPanel>
 

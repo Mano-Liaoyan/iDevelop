@@ -241,6 +241,26 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void While_a_task_runs_a_change_on_its_cards_pickers_is_for_the_next_run_and_the_card_names_the_agent_that_runs_now()
+    {
+        using var f = new WorkflowRunFixture(Task(Design, "A", 105));
+        f.Answer("A", f.Says("A ready.", gate: "go"));
+        var shell = f.Window();
+        shell.RunOnItsOwn("A");
+        shell.WaitForCard("A", "Running");
+        shell.Click(shell.InCard<ToggleButton>("A", "CardExpand"));
+        Assert.Equal("A change applies to the next run.", shell.CardText("A", "CardNextRunNote"));
+
+        shell.Pick(shell.InCard<ComboBox>("A", "CardPickModel"), "GPT-6-Sol");
+
+        Assert.Equal("GPT-6-Sol · high", shell.CardText("A", "CardModel"));
+        Assert.Equal("This run uses Codex · GPT-5.5 · high. A change applies to the next run.", shell.CardText("A", "CardNextRunNote"));
+        f.Open("go");
+        shell.WaitForCard("A", "Succeeded");
+        Assert.False(shell.InCard<TextBlock>("A", "CardNextRunNote").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void A_waiting_cards_list_counts_what_a_listed_task_waits_for_so_the_listed_title_keeps_one_line()
     {
         const string first = "Design the workflow file format";

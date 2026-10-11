@@ -18,7 +18,7 @@ public sealed partial class TaskNodeViewModel
     private static readonly string[] DetailInputs =
     [
         nameof(State), nameof(Role), nameof(StatusLabel), nameof(RunDetail), nameof(Proposal), nameof(Preview), nameof(ReviewSummary),
-        nameof(StartProblem), nameof(RunRefusal), nameof(RunOwner), nameof(LastAttempt), nameof(ShowsCardRun),
+        nameof(StartProblem), nameof(RunRefusal), nameof(RunOwner), nameof(LastAttempt), nameof(ShowsCardRun), nameof(AgentLabel),
     ];
 
     private bool _isExpanded;
@@ -166,6 +166,14 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The agent pickers describe the next attempt while one runs, which the card says under them.</summary>
     public bool ShowsNextRunNote => HasAgent && State is NodeState.Running or NodeState.RunningElsewhere or NodeState.Stopping or NodeState.Waiting
         or NodeState.InReview;
+
+    /// <summary>
+    /// The agent an attempt started with, such as "Codex · GPT-5.5 · high", once the pickers no longer name it, else null. A
+    /// change on the pickers is for the next run, so the card still says what runs now.
+    /// </summary>
+    internal string? StartedAgent(AttemptRecord? attempt) => attempt is { Requested: var started } && started != _task.Execution
+        ? RunText.AgentLabel(started, _canvas.Clients.Current[started.Client])
+        : null;
 
     /// <summary>The run needs the person's choice in the inspector, as the card's attention glyph also shows.</summary>
     internal bool AnswersInInspector => NeedsRunPanel;

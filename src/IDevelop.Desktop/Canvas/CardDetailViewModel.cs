@@ -22,6 +22,7 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
         nameof(IsApproval), nameof(IsResult), nameof(IsOutOfDate), nameof(IsStopped), nameof(IsWaits), nameof(IsTask), nameof(IsProposal), nameof(Waits),
         nameof(RunNote), nameof(HasRunNote), nameof(Problem), nameof(HasProblem),
         nameof(AnswerNote), nameof(Latest), nameof(IsProblem), nameof(IsQuietStop), nameof(IsInspectorRequest), nameof(IsCallout), nameof(NeedsInspector), nameof(AnswerWatermark),
+        nameof(NextRunNote),
     ];
 
     private readonly TaskNodeViewModel _node;
@@ -127,6 +128,14 @@ public sealed class CardDetailViewModel : ObservableObject, IDisposable
     public string? Problem => _node.PeekProblem is { } problem && problem != Text ? problem : null;
 
     public bool HasProblem => Problem is not null;
+
+    /// <summary>
+    /// Under the agent pickers while an attempt runs or waits: a change applies to the next run, and once the pickers name
+    /// another agent, the agent the attempt runs with.
+    /// </summary>
+    public string NextRunNote => _node.StartedAgent(_snapshot?.Latest) is { } started
+        ? $"This run uses {started}. A change applies to the next run."
+        : "A change applies to the next run.";
 
     /// <summary>The attempt the card shows, as the conversation reads it.</summary>
     public AttemptRecord? Latest => _snapshot?.Latest;
