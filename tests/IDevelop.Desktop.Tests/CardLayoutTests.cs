@@ -52,6 +52,22 @@ public sealed class CardLayoutTests
         Vector[] offsets = CardLayout.Offsets([Card(360, 90, 200, wide: true), Card(360 + half - 1, 400), Card(360 + half, 400)]);
 
         Assert.Equal(new Vector(0, 200 - 64), offsets[1]);
-        Assert.Equal(new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth, 0), offsets[2]);
+        // The card just outside the column moves right with its own column. It still lies under the wider card, so it also
+        // moves down by what that card grew, as a card of the column does.
+        Assert.Equal(new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth, 200 - 64), offsets[2]);
+    }
+
+    [Fact]
+    public void A_card_below_an_expanded_card_but_outside_its_column_moves_down_keeping_its_saved_gap_instead_of_covering_it()
+    {
+        // Stairs: B starts 200 px right of A, in the next column, and 96 px below A's top, so B lies partly under A. C follows
+        // B in its column, and D, further right, never lies under A. E stands beside A, as high as A, so it never goes under A.
+        Vector[] offsets = CardLayout.Offsets([Card(60, 90, 340, wide: true), Card(260, 250), Card(260, 370), Card(700, 250), Card(260, 90)]);
+
+        var extra = WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth;
+        var grew = 340 - WorkflowCanvasViewModel.TaskCardHeight;
+        Assert.Equal(
+            [new Vector(0, 0), new Vector(extra, grew), new Vector(extra, grew), new Vector(extra, 0), new Vector(extra, 0)],
+            offsets);
     }
 }
