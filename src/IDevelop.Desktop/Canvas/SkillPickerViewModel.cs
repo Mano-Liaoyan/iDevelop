@@ -75,16 +75,17 @@ public sealed class SkillPickerViewModel : ObservableObject
     };
 
     /// <summary>
-    /// The one line under the open list that says what the listing leaves out: an older Claude Code's built-in skills, or
-    /// the project's own skills while the folder is not trusted in Pi (#93, owner decision 2026-10-11).
+    /// The lines under the open list: what the listing leaves out, an older Claude Code's built-in skills or the project's
+    /// own skills while the folder is not trusted in Pi, then what a choice leaves to the client anyway, as Claude Code's
+    /// subagents (#93, owner decisions 2026-10-11).
     /// </summary>
-    public string? ListFooter => !ShowsList ? null : Listing switch
-    {
-        SkillListing.Listed { LeavesOutBuiltIns: true } => $"{ClientName} doesn't list its built-in skills, so a choice leaves them out.",
-        SkillListing.Listed { ProjectNotTrusted: true } =>
-            $"This project's skills appear after the folder is trusted in {ClientName}. Check agents again once it is.",
-        _ => null,
-    };
+    public string? ListFooter => !ShowsList || Listing is not SkillListing.Listed listed ? null
+        : string.Join(" ", new[]
+        {
+            listed.LeavesOutBuiltIns ? $"{ClientName} doesn't list its built-in skills, so a choice leaves them out." : null,
+            listed.ProjectNotTrusted ? $"This project's skills appear after the folder is trusted in {ClientName}. Check agents again once it is." : null,
+            SkillChoices.Beyond(Settings!.Client),
+        }.OfType<string>()) is { Length: > 0 } footer ? footer : null;
 
     /// <summary>
     /// The note under the picker: that Antigravity CLI uses all of its skills, the chosen skills that are not installed,

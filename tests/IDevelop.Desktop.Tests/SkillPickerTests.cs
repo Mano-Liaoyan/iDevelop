@@ -54,7 +54,8 @@ public sealed class SkillPickerTests : IDisposable
         // simplify is one of Claude Code's bundled skills.
         Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
         Assert.Equal("Finds skills to install.", ToolTip.GetTip(Choice(shell, "find-skills")));
-        Assert.False(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
+        // The owner decided on 2026-10-11 that Claude Code's subagents keep every skill, and the picker says so.
+        Assert.Equal("Claude Code's subagents can still use every skill.", shell.Find<TextBlock>("SkillListFooter").Text);
 
         shell.Click(Choice(shell, "find-skills"));
 
@@ -96,7 +97,8 @@ public sealed class SkillPickerTests : IDisposable
         OpenList(shell);
 
         Assert.Equal([("verify-idevelop", true)], Ticks(shell));
-        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out.", shell.Find<TextBlock>("SkillListFooter").Text);
+        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out. Claude Code's subagents can still use every skill.",
+            shell.Find<TextBlock>("SkillListFooter").Text);
         Assert.True(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
     }
 
@@ -139,6 +141,7 @@ public sealed class SkillPickerTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         OpenList(shell);
         Assert.Equal([("imagegen", true), ("release", true)], Ticks(shell));
+        Assert.False(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
 
         shell.Click(shell.Header(shell.Node("Build")));
         OpenList(shell);

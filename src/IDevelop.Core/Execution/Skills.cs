@@ -70,6 +70,12 @@ public sealed record SkillEntry(string Name, string Description, bool Chosen, bo
 /// <summary>The rules that the skill picker and the start share. None of them is a graph rule.</summary>
 public static class SkillChoices
 {
+    /// <summary>
+    /// What a choice leaves to the client anyway, which the picker says: Claude Code's subagents take their skills from their
+    /// own definitions, so they can still use every skill (probe and owner decision, 2026-10-11). Null for another client.
+    /// </summary>
+    public static string? Beyond(ClientId client) => client == ClientId.ClaudeCode ? "Claude Code's subagents can still use every skill." : null;
+
     /// <summary>Whether the client can limit a task's skills. Antigravity CLI cannot.</summary>
     public static bool CanChoose(ClientId client) => Clients.Get(client).Skills is not null;
 
