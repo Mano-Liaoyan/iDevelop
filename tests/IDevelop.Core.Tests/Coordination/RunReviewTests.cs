@@ -157,6 +157,7 @@ public sealed class RunReviewTests
         Assert.Single(record.Attempts.Values, attempt => attempt.Task == R);
         Assert.Equal(("session-1", "session-1"), (f.Resumed(A, 2), f.Resumed(A, 3)));
         Assert.Equal(("session-r", "session-r"), (f.Resumed(R, 2), f.Resumed(R, 3)));
+        Assert.True(f.Log(A).Record!.Resumed);
 
         Assert.StartsWith("Review the change.", f.Prompt(R, 1));
         Assert.Contains("+a - b", f.Prompt(R, 1));

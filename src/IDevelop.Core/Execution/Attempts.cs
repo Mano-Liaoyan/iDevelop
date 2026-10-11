@@ -247,6 +247,7 @@ public sealed record AttemptRecord
         Requested = requested.Settings;
         RequestedAt = requested.At;
         Continues = requested.Continues?.Attempt;
+        Resuming = requested.Continues;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Planning = requested.Planning;
         ReadOnly = requested.ReadOnly;
@@ -277,6 +278,13 @@ public sealed record AttemptRecord
 
     /// <summary>The attempt whose session this one resumes. Its session id is <see cref="SessionId"/>, only once the reducer found it plain.</summary>
     public AttemptId? Continues { get; }
+
+    /// <summary>
+    /// For an attempt that <see cref="Continues"/> another: true once its first turn's client reported the continued session,
+    /// so the attempt goes on with that conversation. False once the client reported another session, or the first turn
+    /// ended without reporting one. Null before then, and for an attempt that continues nothing.
+    /// </summary>
+    public bool? Resumed { get; internal init; }
 
     /// <summary>Every turn ran in the client's read-only mode.</summary>
     public bool ReadOnly { get; }
@@ -338,6 +346,9 @@ public sealed record AttemptRecord
 
     internal ProcessIdentity? Process { get; init; }
 
+    /// <summary>The continuation this attempt's first turn launched with.</summary>
+    internal Continuation? Resuming { get; }
+
     internal bool CancelRequested { get; init; }
 
     internal string? InterruptReason { get; init; }
@@ -392,6 +403,11 @@ internal static partial class AttemptReducer
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e)
     {
         var next = ApplyEvent(record, e);
+        if (next is { Resuming: not null, Resumed: null } && next.Turns[0].Outcome != TurnOutcome.Running)
+        {
+            next = next with { Resumed = false };
+        }
+
         return e is not AttemptEvent.CleanedUp && record.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview
             ? next with { AppliedEvents = record.AppliedEvents + 1 }
             : next;
@@ -526,7 +542,12 @@ internal static partial class AttemptReducer
 
     private static AttemptRecord ApplyAgent(AttemptRecord record, AgentEvent e, DateTimeOffset at) => e switch
     {
-        AgentEvent.SessionStarted session when PlainSessionId().IsMatch(session.SessionId) => record with { SessionId = session.SessionId },
+        AgentEvent.SessionStarted session when PlainSessionId().IsMatch(session.SessionId) => record with
+        {
+            SessionId = session.SessionId,
+            // Only the first turn decides: Apply settles the flag when that turn ends.
+            Resumed = record.Resumed ?? (record.Resuming is { } continues ? session.SessionId == continues.Session : null),
+        },
         AgentEvent.SessionStarted => Log(record, at, $"iDevelop ignored the session id {Clients.Name(record.Requested.Client)} reported, because it is not a plain id."),
         AgentEvent.Reported reported => record with
         {
