@@ -87,11 +87,13 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
         text.Append(" Nothing comes after the block. The person accepts the tasks they want from it:\n\n");
         text.Append("```idevelop\n");
         text.Append("{\"status\": \"proposal\",\n");
-        text.Append(" \"fill\": [{\"slot\": \"slot-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"}}],\n");
         text.Append(agents
-            ? " \"add\": [{\"id\": \"new-1\", \"type\": \"type-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"},\n" +
+            ? " \"fill\": [{\"slot\": \"slot-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"},\n" +
+              "           \"agent\": {\"client\": \"...\", \"model\": \"...\", \"reasoning\": \"...\", \"reason\": \"...\"}}],\n" +
+              " \"add\": [{\"id\": \"new-1\", \"type\": \"type-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"},\n" +
               "          \"agent\": {\"client\": \"...\", \"model\": \"...\", \"reasoning\": \"...\", \"reason\": \"...\"}}],\n"
-            : " \"add\": [{\"id\": \"new-1\", \"type\": \"type-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"}}],\n");
+            : " \"fill\": [{\"slot\": \"slot-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"}}],\n" +
+              " \"add\": [{\"id\": \"new-1\", \"type\": \"type-1\", \"title\": \"...\", \"fields\": {\"key\": \"...\"}}],\n");
         text.Append(" \"connect\": [{\"from\": \"planner\", \"to\": \"new-1\"}]}\n");
         text.Append("```\n\n");
         text.Append("- \"fill\" gives work to an empty task that the person drew after you, by its slot.\n");
@@ -107,7 +109,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
         foreach (var (slot, index) in Slots.Select((slot, index) => (slot, index)))
         {
             var title = string.IsNullOrWhiteSpace(slot.Title) ? "untitled" : $"\"{slot.Title.Trim()}\"";
-            text.Append($"- {Slot(index)}: {title}, type {slot.Blueprint.Name}. Fields: {FieldList(slot.Blueprint)}.\n");
+            text.Append($"- {Slot(index)}: {title}, type {slot.Blueprint.Name}. Fields: {FieldList(slot.Blueprint)}.{(agents ? AgentNote(slot.Blueprint, slot.Execution) : "")}\n");
         }
 
         text.Append("\nTypes you may add:\n");
@@ -119,7 +121,7 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
         foreach (var (type, index) in Types.Select((type, index) => (type, index)))
         {
             var description = string.IsNullOrWhiteSpace(type.Description) ? "" : $" {type.Description.Trim()}";
-            text.Append($"- {Type(index)}: {type.Name}.{description} Fields: {FieldList(type)}.{(agents ? AgentNote(type) : "")}\n");
+            text.Append($"- {Type(index)}: {type.Name}.{description} Fields: {FieldList(type)}.{(agents ? AgentNote(type, type.Defaults.Execution) : "")}\n");
         }
 
         if (agents)
@@ -144,16 +146,19 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     // Kept free of model names, so the guidance reads the same on every machine and only the list of agents follows it.
     private const string Choosing =
         "- Write each field under its key, and leave out a field you have nothing for.\n" +
-        "- \"agent\" chooses who carries out a task you add: a client and one of its models from the agents below, one of " +
-        "that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" " +
-        "for a model without levels. A slot, and a type with its own agent, keep theirs.\n" +
+        "- \"agent\" chooses who carries out a task you add or fill: a client and one of its models from the agents below, one " +
+        "of that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" " +
+        "for a model without levels. A slot or a type with its own agent keeps it.\n" +
         "- Fit each choice to its task. Design, architecture, planning, and review need careful judgment, so give them a " +
         "strong reasoning model at a high level. Small or mechanical edits need a fast model at a low level, and ordinary " +
         "implementation needs something between. Choose for each task on its own, so that tasks of different weight do not " +
         "all get the same agent.\n\n";
 
-    /// <summary>What a type's line says about its agent, after its fields, when the planner chooses agents.</summary>
-    private static string AgentNote(Blueprint type)
+    /// <summary>
+    /// What a slot's or a type's line says about its agent, after its fields, when the planner chooses agents.
+    /// <paramref name="own"/> is the slot's agent, or the type's saved one, which the task keeps.
+    /// </summary>
+    private static string AgentNote(Blueprint type, ExecutionSettings? own)
     {
         if (type.Work is WorkSpec.Person)
         {
@@ -163,10 +168,10 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
         var readOnly = type.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review
             ? " Reads only, so it needs a client with a read-only mode."
             : "";
-        var own = type.Defaults.Execution is { } execution
+        var kept = own is { } execution
             ? $" It has its own agent, {string.Join(", ", new[] { Clients.WireName(execution.Client), execution.Model, execution.Reasoning }.OfType<string>())}, so leave out \"agent\"."
             : "";
-        return readOnly + own;
+        return readOnly + kept;
     }
 
     private static string FieldList(Blueprint blueprint) => blueprint.Fields.IsEmpty
