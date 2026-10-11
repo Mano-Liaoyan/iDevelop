@@ -41,6 +41,39 @@ public sealed class InspectorLayoutTests : IDisposable
     [InlineData(280)]
     [InlineData(320)]
     [InlineData(520)]
+    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width)
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        Install(_fakes, ClientId.Pi);
+        var project = _temp.Seed(TaskAt(Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
+        // A waiting Pi conversation whose folder moved shows every button: Send, Mark done, Start a new conversation, and
+        // Open in terminal.
+        ConversationFixtures.WriteAttempt(project, ConversationFixtures.Requested(ConversationFixtures.A, Design, 0, "# Design") with
+            {
+                Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = Path.Combine(Path.GetDirectoryName(project)!, "before-the-move"),
+            },
+            ConversationFixtures.Launched(1), ConversationFixtures.At(2, new AgentEvent.SessionStarted("s-1")),
+            ConversationFixtures.At(3, new AgentEvent.Succeeded("Which fruit?")), ConversationFixtures.Exited(4));
+        var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.WaitUntil(() => shell.Find<Button>("StartNewConversation").IsEffectivelyVisible, "the inspector offers a new conversation");
+        var inspector = shell.Find<Control>("Inspector");
+        var box = shell.InView<TextBox>("Composer");
+        shell.Render();
+        double Right(Control control) => control.TranslatePoint(new Point(control.Bounds.Width, 0), inspector)!.Value.X;
+
+        var buttons = new[] { "SendMessage", "MarkDone", "StartNewConversation", "OpenInTerminal" }.Select(shell.Find<Button>).ToArray();
+
+        Assert.All(buttons, button => Assert.True(button.IsEffectivelyVisible, AutomationProperties.GetAutomationId(button)));
+        Assert.All(buttons, button => Assert.True(Right(button) <= Right(box) + 0.5,
+            $"{AutomationProperties.GetAutomationId(button)} ends at {Right(button):F1}, past the box's {Right(box):F1}, at {width} px."));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
     public void The_workflow_the_task_and_the_connection_views_share_two_right_edges(double width)
     {
         Install(_fakes, ClientId.Codex);
