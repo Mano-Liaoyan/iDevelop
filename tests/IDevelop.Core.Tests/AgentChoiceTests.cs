@@ -16,6 +16,8 @@ public sealed class AgentChoiceTests
     private static readonly TaskId Architect = TestTasks.Design;
     private static readonly TaskId Backend = TestTasks.Build;
     private static readonly TaskId Frontend = TestTasks.Review;
+    private static readonly TaskId Checked = new(Guid.Parse("019a9d2e-6200-7000-8000-000000000091"));
+    private static readonly TaskId Signed = new(Guid.Parse("019a9d2e-6200-7000-8000-000000000092"));
     private static readonly Guid Plan = Guid.Parse("019a9d2e-6100-7000-8000-000000000091");
     private static readonly ExecutionSettings Sol = new(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high" };
     private static readonly ExecutionSettings Haiku = new(ClientId.ClaudeCode) { Model = "claude-haiku-4-5" };
@@ -82,11 +84,13 @@ public sealed class AgentChoiceTests
         var contract = Planning(Machine).Contract(ConversationMode.Autonomous);
 
         Assert.Contains("""
+             "fill": [{"slot": "slot-1", "title": "...", "fields": {"key": "..."},
+                       "agent": {"client": "...", "model": "...", "reasoning": "...", "reason": "..."}}],
              "add": [{"id": "new-1", "type": "type-1", "title": "...", "fields": {"key": "..."},
                       "agent": {"client": "...", "model": "...", "reasoning": "...", "reason": "..."}}],
             """, contract);
         Assert.Contains(
-            "- \"agent\" chooses who carries out a task you add: a client and one of its models from the agents below, one of that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" for a model without levels. A slot, and a type with its own agent, keep theirs.\n",
+            "- \"agent\" chooses who carries out a task you add or fill: a client and one of its models from the agents below, one of that model's reasoning levels, and a one-line reason that the person reads before accepting. Leave out \"reasoning\" for a model without levels. A slot or a type with its own agent keeps it.\n",
             contract);
         Assert.Contains(
             "- Fit each choice to its task. Design, architecture, planning, and review need careful judgment, so give them a strong reasoning model at a high level. Small or mechanical edits need a fast model at a low level, and ordinary implementation needs something between. Choose for each task on its own, so that tasks of different weight do not all get the same agent.\n",
@@ -116,6 +120,30 @@ public sealed class AgentChoiceTests
         Assert.Matches(@"- type-5: Approval\. [^\n]* Takes no agent\.\n", contract);
         Assert.Contains(" It has its own agent, claude-code, claude-haiku-4-5, so leave out \"agent\".\n", contract);
         Assert.Matches(@"- type-1: Implement\. [^\n]*\(Acceptance criteria\)\.\n", contract);
+    }
+
+    [Fact]
+    public void Each_slot_says_whether_it_only_reads_takes_no_agent_or_has_an_agent_of_its_own()
+    {
+        var slots = new PlanningContext(
+            [
+                TestNodes.Implement(Backend, "Backend"),
+                TestNodes.Implement(Frontend, "Frontend", execution: Sol),
+                new TaskDefinition(Checked, BuiltInBlueprints.Review) { Title = "Check", Execution = null },
+                new TaskDefinition(Signed, BuiltInBlueprints.Approval) { Title = "Sign" },
+            ],
+            Types) { Agents = PlanningContext.Offers(Machine) };
+
+        var contract = slots.Contract(ConversationMode.Autonomous);
+
+        Assert.Contains("- slot-1: \"Backend\", type Implement. Fields: instructions (Instructions, required), acceptanceCriteria (Acceptance criteria).\n", contract);
+        Assert.Contains("- slot-2: \"Frontend\", type Implement. Fields: instructions (Instructions, required), acceptanceCriteria (Acceptance criteria). It has its own agent, codex, gpt-6-sol, high, so leave out \"agent\".\n", contract);
+        Assert.Contains("- slot-3: \"Check\", type Review. Fields: focus (What to check). Reads only, so it needs a client with a read-only mode.\n", contract);
+        Assert.Contains("- slot-4: \"Sign\", type Approval. Fields: checklist (What to check). Takes no agent.\n", contract);
+        Assert.Contains("- slot-1: \"Backend\", type Implement. Fields: instructions (Instructions, required), acceptanceCriteria (Acceptance criteria).\n",
+            (slots with { Agents = [] }).Contract(ConversationMode.Autonomous));
+        Assert.Contains("- slot-2: \"Frontend\", type Implement. Fields: instructions (Instructions, required), acceptanceCriteria (Acceptance criteria).\n",
+            (slots with { Agents = [] }).Contract(ConversationMode.Autonomous));
     }
 
     [Fact]
@@ -159,6 +187,21 @@ public sealed class AgentChoiceTests
 
         Assert.Equal(new ProposedAgent("codex", "gpt-5.5", "low", "A mechanical rename."), proposal.Nodes[0].Agent);
         Assert.Null(proposal.Nodes[1].Agent);
+    }
+
+    [Fact]
+    public void A_fill_carries_the_agent_its_planner_chose_and_why()
+    {
+        var proposal = Ready("""
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."},
+                       "agent": {"client": "codex", "model": "gpt-5.5", "reasoning": "low", "reason": "A small endpoint."}},
+                      {"slot": "slot-2", "fields": {"instructions": "Add the button."}, "agent": "codex"}]}
+            """);
+
+        Assert.Equal(new ProposedAgent("codex", "gpt-5.5", "low", "A small endpoint."), proposal.Fills[0].Agent);
+        Assert.Equal("The agent of slot-2 is not an object.", proposal.Fills[1].Agent!.Unreadable);
+        Assert.DoesNotContain("\"agent\":", RunJournal.Canonical(Ready("""{"status": "proposal", "fill": [{"slot": "slot-1", "title": "A"}]}""")));
     }
 
     [Theory]
@@ -269,7 +312,7 @@ public sealed class AgentChoiceTests
                 ("check", Sol, ConversationMode.Autonomous),
                 ("sign", null, ConversationMode.Autonomous),
                 ("careful", Haiku, ConversationMode.MayAsk),
-                ("slot-1", null, ConversationMode.Autonomous),
+                ("slot-1", planned, ConversationMode.Autonomous),
             ],
             Agents(proposal, accepted));
     }
@@ -292,9 +335,59 @@ public sealed class AgentChoiceTests
                 ("check", Sol, ConversationMode.Autonomous),
                 ("sign", null, ConversationMode.Autonomous),
                 ("careful", mine, ConversationMode.MayAsk),
-                ("slot-1", null, ConversationMode.Autonomous),
+                ("slot-1", Sol, ConversationMode.Autonomous),
             ],
             Agents(proposal, accepted));
+    }
+
+    [Fact]
+    public void A_fill_whose_task_has_no_agent_takes_the_persons_choice_else_the_planners_else_the_fallback_and_a_tasks_own_agent_stays()
+    {
+        var workflow = ArchitectWithTwoSlots().Must(new SetExecution(Frontend, Haiku));
+        var proposal = Ready("""
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}},
+                      {"slot": "slot-2", "fields": {"instructions": "Add the button."}}]}
+            """);
+        var planned = new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-opus-5-5", Reasoning = "xhigh" };
+        var mine = new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "low" };
+        var both = new Dictionary<TaskId, ExecutionSettings> { [Backend] = planned, [Frontend] = planned };
+
+        Workflow Accepted(IReadOnlyDictionary<TaskId, ExecutionSettings>? changed = null) =>
+            workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, both, changed));
+
+        var chosen = Accepted();
+        var changed = Accepted(new Dictionary<TaskId, ExecutionSettings> { [Backend] = mine, [Frontend] = mine });
+
+        Assert.Equal((planned, Haiku), (chosen.Tasks[Backend].Execution, chosen.Tasks[Frontend].Execution));
+        Assert.Equal((mine, mine), (changed.Tasks[Backend].Execution, changed.Tasks[Frontend].Execution));
+        // Without a choice, a fill whose task has no agent takes the planner's agent while the box is ticked, as a new task does.
+        var none = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol));
+        Assert.Equal((Sol, Haiku), (none.Tasks[Backend].Execution, none.Tasks[Frontend].Execution));
+        var unticked = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
+        Assert.Equal((null, Haiku), (unticked.Tasks[Backend].Execution, unticked.Tasks[Frontend].Execution));
+        Assert.DoesNotContain(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, both).Edits,
+            edit => edit is SetExecution { Task: var task } && task == Frontend);
+    }
+
+    [Fact]
+    public void A_fill_that_is_left_out_has_started_or_takes_no_agent_gets_no_agent()
+    {
+        var workflow = ArchitectWithTwoSlots()
+            .Must(new PlaceNode(Signed, BuiltInBlueprints.Approval, new CanvasPoint(320, 380)) { Title = "Sign" })
+            .Must(new Connect(new ConnectionKey(Architect, Signed), ConnectionKind.Dependency));
+        var proposal = Ready("""
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}},
+                      {"slot": "slot-2", "fields": {"instructions": "Add the button."}},
+                      {"slot": "slot-3", "fields": {"checklist": "The export opens."}}]}
+            """, [Backend, Frontend, Signed]);
+        var planned = new Dictionary<TaskId, ExecutionSettings> { [Backend] = Sol, [Frontend] = Sol, [Signed] = Sol };
+
+        var accepted = workflow.Must(proposal.Accept(workflow, new HashSet<TaskId> { Backend, Signed }, task => task == Backend, null, planned, planned));
+
+        Assert.All(new[] { Backend, Frontend, Signed }, task => Assert.Null(accepted.Tasks[task].Execution));
+        Assert.Equal("The export opens.", accepted.Tasks[Signed].Field("checklist"));
     }
 
     /// <summary>A proposal that fills slot-1 and adds an Implement, a Review, an Approval, and a <see cref="Careful"/> node.</summary>
@@ -329,13 +422,13 @@ public sealed class AgentChoiceTests
             .Must(new Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency));
 
     /// <summary>The proposal of an Architect attempt whose one turn ended with <paramref name="json"/> in its block.</summary>
-    private static Proposal Ready(string json)
+    private static Proposal Ready(string json, ImmutableArray<TaskId>? slots = null)
     {
         var record = AttemptReducer.Replay(
         [
             new AttemptEvent.Requested(AttemptEvents.T0, new AttemptId(Guid.Parse("019a9d2e-6000-7000-8000-000000000091")), Architect, "Design export", Sol, "p", "codex", [])
             {
-                Planning = new PlanningHandles(Plan, [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)]),
+                Planning = new PlanningHandles(Plan, slots ?? [Backend, Frontend], [.. Types.Select(blueprint => blueprint.Key)]),
             },
             new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.SessionStarted("01a108d7-464d-77a3-8908-a36f38ce6c91")),
             new AttemptEvent.Agent(AttemptEvents.T0, new AgentEvent.Succeeded($"Here is the plan.\n\n```idevelop\n{json}\n```")),

@@ -106,7 +106,23 @@ internal abstract record AmendmentOrigin
 }
 
 /// <summary>What the person chose from a proposal: its items, in id order, and the agent a new task takes when its type has none.</summary>
-internal sealed record AmendmentChoice(ImmutableArray<TaskId> Chosen, ExecutionSettings? Fallback);
+internal sealed record AmendmentChoice(ImmutableArray<TaskId> Chosen, ExecutionSettings? Fallback)
+{
+    /// <summary>The planner's choices that the person's review found usable, by task (#99). Null for none, as before.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ImmutableArray<ChosenAgent>? Planned { get; init; }
+
+    /// <summary>The person's own choices in the review, by task, which win over every other agent (#99). Null for none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ImmutableArray<ChosenAgent>? Changed { get; init; }
+
+    /// <summary>The choices in task id order, or null for none, so an acceptance without agents records as it always did.</summary>
+    public static ImmutableArray<ChosenAgent>? Agents(IReadOnlyDictionary<TaskId, ExecutionSettings>? agents) =>
+        agents is null || agents.Count == 0 ? null : [.. agents.OrderBy(pair => pair.Key).Select(pair => new ChosenAgent(pair.Key, pair.Value))];
+}
+
+/// <summary>The agent a task takes from a proposal's review.</summary>
+internal sealed record ChosenAgent(TaskId Task, ExecutionSettings Agent);
 
 internal enum TerminalAttemptOutcome { Succeeded, Failed, Cancelled, Interrupted }
 

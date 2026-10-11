@@ -420,7 +420,7 @@ public sealed class PlanningTests : IDisposable
     }
 
     [Fact]
-    public void With_a_fallback_a_new_agent_or_review_whose_type_has_no_default_agent_takes_it()
+    public void With_a_fallback_a_new_agent_or_review_whose_type_has_no_default_agent_takes_it_and_so_does_a_fill_whose_task_has_none()
     {
         Assert.Equal(
             [
@@ -428,7 +428,7 @@ public sealed class PlanningTests : IDisposable
                 ("check", Sol, ConversationMode.Autonomous),
                 ("sign", null, ConversationMode.Autonomous),
                 ("careful", Haiku, ConversationMode.MayAsk),
-                ("slot-1", null, ConversationMode.Autonomous),
+                ("slot-1", Sol, ConversationMode.Autonomous),
             ],
             AcceptedAgents(Sol));
     }

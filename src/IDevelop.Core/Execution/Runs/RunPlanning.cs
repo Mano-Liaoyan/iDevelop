@@ -8,7 +8,7 @@ namespace IDevelop.Execution;
 /// What a run-owned planner may fill and place, derived from its attempt alone, so every preparation, claim, and recovery
 /// renders the same prompt. Its slots are the empty tasks its dependency connections reach in the attempt's revision. Its
 /// types are the built-in blueprints, then each other blueprint that revision uses, by key: the blueprints an amendment
-/// can resolve.
+/// can resolve. Its agents are those its start recorded as ready (#99).
 /// </summary>
 internal static class RunPlanning
 {
@@ -28,8 +28,12 @@ internal static class RunPlanning
         // What started is left out: a task the planner's dependencies reach starts only after its result, and an
         // amendment never fills a task that started.
         return snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Agent { Proposes: true }
-            ? PlanningContext.For(snapshot, attempt.Task, Types(snapshot), _ => false) : null;
+            ? PlanningContext.For(snapshot, attempt.Task, Types(snapshot), _ => false) with { Agents = Agents(record, attempt) } : null;
     }
+
+    /// <summary>The agents <paramref name="attempt"/>'s start recorded, or none for a start without, as before #99.</summary>
+    private static ImmutableArray<AgentOffer> Agents(RunRecord record, RunAttempt attempt) =>
+        record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(plan => plan.Attempt == attempt.Id)?.Agents ?? [];
 
     /// <summary>
     /// The handles <paramref name="attempt"/>'s log records. Each attempt plans under its own id; a continuation keeps the
