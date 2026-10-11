@@ -67,11 +67,23 @@ C1a moved Claude Code and Codex to protocols that carry questions, permission re
 - After Claude Code or Codex reports success and its stdin closes, it has 60 seconds to exit before iDevelop stops it and fails the turn. Pi and Antigravity CLI have no deadline after success. After a stop or a deferral, any client has 5 seconds.
 - To stop a turn, iDevelop sends Claude Code or Codex its interrupt and reads until the final result before it stops the process tree. Pi and Antigravity CLI have no interrupt, so iDevelop stops their process tree at once.
 
+## Skills
+
+A node's skill choice ([ADR 0025](adr/0025-a-node-s-skill-choice-is-exactly-its-skills-and-each-client-gets-it-its-own-way.md)) needs each client to list the skills it loads in the project folder without a model turn, and to take the choice on every turn, because a resume keeps none of it. The [research note](research/2026-10-09-client-sessions-and-skills.md#skills-by-client) gives the sources. No real client has run these listings or launches yet.
+
+| Client | Listing, run in the project folder | Each turn of a node with a choice |
+| --- | --- | --- |
+| Claude Code | `claude -p --input-format stream-json --output-format stream-json --verbose`, an `initialize` control request, then `reload_skills`, whose answer lists the skills alone, the bundled ones among them. Without `reload_skills`, the `initialize` commands that are not Claude Code's own. | The chosen names as the `skills` array of the turn's `initialize` request |
+| Codex | `codex app-server`, `initialize`, `initialized`, then `skills/list` with the project as its folder. A skill whose `enabled` is false is left out. | `skills.config` in the `config` of `thread/start` or `thread/resume`, with `enabled = false` for each listed skill not chosen. A `-c` value would not pass an npm `codex.cmd` shim. |
+| Pi | `pi --mode rpc --no-session` and `get_commands`. Each entry whose `source` is `skill` gives the name after `skill:` and its file in `sourceInfo.path`. | `--no-skills` and `--skill <file>` for each chosen skill |
+| Antigravity CLI | None. It has no per-run skill control. | Nothing |
+
 ## Unverified items
 
 - Codex `thread/start` and `thread/resume` with `cwd`, which a workflow turn sends so Codex works in the task's checkout. Only the fake agent has received it.
 - Every launch in the C1 protocols section, on each platform: Claude Code questions under `acceptEdits` and `plan`, a denied `ExitPlanMode`, `--permission-prompts none`, an interrupt with trailing output, and resuming after a deferred question; Codex app-server with the question feature off, `thread/resume` of a session that `codex exec` created, and read-only turns; npm shims on Windows holding stdin open.
 
+- Every skill listing and launch in the [Skills](#skills) section: that each listing runs no model turn, that Claude Code's allow-list hides the bundled skills that were not chosen on every resumed turn, that Codex applies a thread's `skills.config` on `thread/start` and `thread/resume`, and that Pi's `--no-skills --skill` holds on a resumed session.
 - Whether `agy models` fails for a signed-out account, which iDevelop treats as the readiness signal.
 - Whether each client's terminal command opens its interactive interface on the session that iDevelop's turns used, and whether a later resumed turn sees the turns a person took there. No probe opened an interactive interface.
 - Real client runs on macOS, and the login shell's PATH on macOS and Linux. On Linux on 2026-10-05, `scripts/probe-clients.mjs` and a scratch harness that drives `ProjectRuns` ran all four real clients, but the harness inherited a full PATH. CI runs the fake client on both.
