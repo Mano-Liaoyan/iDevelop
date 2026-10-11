@@ -253,7 +253,12 @@ internal sealed partial class RunStore
         return (new(new(new(_ids()), inclusion.Task, revision.Id, inputs.Id, origin, report, null), inputs), null);
     }
 
-    public RunDecision Plan(RunLease lease, OperationId operation, RevisionId revision, AttemptCause cause) =>
+    /// <param name="agents">
+    /// What the clients offer now. A planner's start renders its prompt from the task's template, as an initial start or a
+    /// retry does, and records them so its prompt lists them every time it renders. A repeat keeps the offers it recorded,
+    /// so they are no part of the command.
+    /// </param>
+    public RunDecision Plan(RunLease lease, OperationId operation, RevisionId revision, AttemptCause cause, ImmutableArray<AgentOffer> agents = default) =>
         Transact(lease.Permit, operation, Fingerprint("plan", new { task = lease.Task, revision, cause }), (record, _) =>
         {
             var task = lease.Task;
@@ -294,7 +299,11 @@ internal sealed partial class RunStore
             var bindings = capture.Inputs!.Bindings;
             var sources = InputMaterial.Sources(record, bindings);
             var review = InputMaterial.Review(record.Revisions[revision].Snapshot, task, bindings);
-            var candidate = new MaterializationPlan.Preparation(default, default, task, revision, cause, bindings, sources, review);
+            var proposes = record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Proposes: true };
+            var candidate = new MaterializationPlan.Preparation(default, default, task, revision, cause, bindings, sources, review)
+            {
+                Agents = proposes && cause is AttemptCause.Initial or AttemptCause.Retry && !agents.IsDefaultOrEmpty ? agents : null,
+            };
             if (RunReducer.PlanProblem(record, candidate) is { } problem)
             {
                 return Refuse(problem);
@@ -910,15 +919,27 @@ internal sealed partial class RunStore
             return new Mutation.Append(new RunEvent.Amended(previous, candidate, origin, confirmation));
         });
 
+    /// <param name="planned">The planner's choices that the person's review found usable, by task, as <see cref="Proposal.Accept"/> takes them.</param>
+    /// <param name="changed">The person's own choices in the review, by task, which win over every other agent.</param>
     public RunDecision AmendFromProposal(CoordinatorPermit permit, OperationId operation, RevisionId previous, Proposal proposal,
-        IReadOnlySet<TaskId> chosen, OperationId confirmation, ExecutionSettings? fallback = null) =>
-        Transact(permit, operation, Fingerprint("amendProposal", new
+        IReadOnlySet<TaskId> chosen, OperationId confirmation, ExecutionSettings? fallback = null,
+        IReadOnlyDictionary<TaskId, ExecutionSettings>? planned = null, IReadOnlyDictionary<TaskId, ExecutionSettings>? changed = null) =>
+        Transact(permit, operation, AmendmentChoice.Agents(planned) is null && AmendmentChoice.Agents(changed) is null ? Fingerprint("amendProposal", new
         {
             previous,
             proposal,
             chosen = chosen.Order().ToArray(),
             confirmation,
             fallback
+        }) : Fingerprint("amendProposal", new
+        {
+            previous,
+            proposal,
+            chosen = chosen.Order().ToArray(),
+            confirmation,
+            fallback,
+            planned = AmendmentChoice.Agents(planned),
+            changed = AmendmentChoice.Agents(changed),
         }), (record, _) =>
         {
             if (record is null)
@@ -954,11 +975,15 @@ internal sealed partial class RunStore
             }
 
             var origin = new AmendmentOrigin.Planner(planner.Id, proposal.Turn);
-            var choice = new AmendmentChoice([.. chosen.Order()], fallback);
+            var choice = new AmendmentChoice([.. chosen.Order()], fallback)
+            {
+                Planned = AmendmentChoice.Agents(planned),
+                Changed = AmendmentChoice.Agents(changed),
+            };
             // The same acceptance again, under another confirmation, finds the amendment it recorded, whatever started since.
             if (record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Amended>().FirstOrDefault(amended =>
                 amended.Previous == previous && RunReducer.Same<AmendmentOrigin>(amended.Origin, origin) && amended.Choice is { } recorded &&
-                recorded.Chosen.SequenceEqual(choice.Chosen) && recorded.Fallback == choice.Fallback) is { } repeated)
+                RunReducer.Same(recorded, choice)) is { } repeated)
             {
                 return new Mutation.Existing(repeated);
             }
@@ -967,7 +992,7 @@ internal sealed partial class RunStore
             // proposal neither fills such a task nor gives it an input; the reducer checks the same for attempts and results.
             bool Started(TaskId id) => record.Plans.Values.Any(plan => plan is MaterializationPlan.Preparation preparation && preparation.Task == id) ||
                 record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
-            if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback)) is not EditResult.Applied applied)
+            if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback, planned, changed)) is not EditResult.Applied applied)
             {
                 return Refuse(RunProblem.InvalidData);
             }

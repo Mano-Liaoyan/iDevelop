@@ -9,7 +9,15 @@ using IDevelop.Workflows;
 namespace IDevelop.Nodes;
 
 /// <summary>Fills an empty node with a title, when the proposal gives one, and field values.</summary>
-public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDictionary<string, string> Fields);
+public sealed record ProposedFill(TaskId Slot, string? Title, ImmutableSortedDictionary<string, string> Fields)
+{
+    /// <summary>
+    /// The agent the planner chose for the node, which it takes only when it has no agent of its own, or null when it
+    /// chose none. A run's journal leaves out a null agent, so a fill without one records as it always did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProposedAgent? Agent { get; init; }
+}
 
 /// <summary>A new node. Its id is minted from the plan and the agent's own id for it.</summary>
 public sealed record ProposedNode(TaskId Id, string Name, Blueprint Blueprint, string Title, ImmutableSortedDictionary<string, string> Fields)
@@ -141,16 +149,17 @@ public sealed record Proposal(
     /// <param name="started">Whether a task has an attempt.</param>
     /// <param name="fallback">
     /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
-    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. Null leaves
-    /// such a node without an agent. A fill never changes its node's agent.
+    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. A fill whose
+    /// node has no agent and no choice takes it too. Null leaves such a node without an agent.
     /// </param>
     /// <param name="planned">
-    /// The planner's choice for each new Agent or Review node, one this machine can run. A node takes it only when its
-    /// blueprint has no agent of its own, so a blueprint's saved agent wins, as the person chose it.
+    /// The planner's choice for each new Agent or Review node and each fill, one this machine can run. A new node takes it
+    /// only when its blueprint has no agent of its own, and a fill only when its node has none, so the agent the person
+    /// saved wins.
     /// </param>
     /// <param name="changed">
-    /// The person's choice for each new Agent or Review node in the review, which wins over everything. A node that takes
-    /// no agent, and a fill, ignore theirs.
+    /// The person's choice for each new node and each fill in the review, which wins over everything. A node that takes no
+    /// agent ignores theirs.
     /// </param>
     public WorkflowEdit.Batch Accept(
         Workflow workflow, IReadOnlySet<TaskId> chosen, Func<TaskId, bool> started, ExecutionSettings? fallback = null,
@@ -171,7 +180,8 @@ public sealed record Proposal(
                     Fields = node.Fields.ToImmutableDictionary(),
                     Settings = SettingsFor(node.Blueprint, changed?.GetValueOrDefault(node.Id), planned?.GetValueOrDefault(node.Id), fallback),
                 }),
-            .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(Fill),
+            .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(fill =>
+                Fill(fill, workflow.Tasks.GetValueOrDefault(fill.Slot), changed?.GetValueOrDefault(fill.Slot), planned?.GetValueOrDefault(fill.Slot), fallback)),
             .. Connections
                 .Where(connection => Kept(connection.From) && Kept(connection.To))
                 .Where(connection => !workflow.Connections.ContainsKey(new ConnectionKey(connection.From, connection.To)))
@@ -229,11 +239,21 @@ public sealed record Proposal(
         : (changed ?? (blueprint.Defaults.Execution is null ? planned ?? fallback : null)) is { } agent ? blueprint.Defaults with { Execution = agent }
         : null;
 
-    private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill) =>
-    [
-        .. fill.Title is { } title ? [new WorkflowEdit.EditTitle(fill.Slot, title)] : Array.Empty<WorkflowEdit>(),
-        .. fill.Fields.Select(field => new WorkflowEdit.SetField(fill.Slot, field.Key, field.Value)),
-    ];
+    /// <summary>
+    /// A fill's title and fields, and its agent: the person's choice, else the node's own agent, else the planner's choice,
+    /// else the fallback.
+    /// </summary>
+    private static IEnumerable<WorkflowEdit> Fill(
+        ProposedFill fill, TaskDefinition? slot, ExecutionSettings? changed, ExecutionSettings? planned, ExecutionSettings? fallback)
+    {
+        var agent = slot is null || slot.Blueprint.Work.Kind == WorkKind.Person ? null : changed ?? slot.Execution ?? planned ?? fallback;
+        return
+        [
+            .. fill.Title is { } title ? [new WorkflowEdit.EditTitle(fill.Slot, title)] : Array.Empty<WorkflowEdit>(),
+            .. fill.Fields.Select(field => new WorkflowEdit.SetField(fill.Slot, field.Key, field.Value)),
+            .. agent is not null && agent != slot!.Execution ? [new WorkflowEdit.SetExecution(fill.Slot, agent)] : Array.Empty<WorkflowEdit>(),
+        ];
+    }
 
     private static Proposal Parse(JsonElement block, AttemptRecord attempt, int turn, PlanningHandles handles, Func<BlueprintKey, Blueprint?> blueprint)
     {
@@ -260,7 +280,7 @@ public sealed record Proposal(
                 throw new ProposalException($"The proposal fills {slot} with nothing.");
             }
 
-            fills.Add(new ProposedFill(handles.Slots[index], title, fields));
+            fills.Add(new ProposedFill(handles.Slots[index], title, fields) { Agent = Agent(item, slot) });
         }
 
         // Every fill's slot is an end, and so is every slot the person drew, which a connection may name without filling.
