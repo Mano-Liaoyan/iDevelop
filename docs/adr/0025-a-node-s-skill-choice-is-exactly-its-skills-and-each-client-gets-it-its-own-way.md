@@ -18,7 +18,7 @@ A node's agent can use a choice of skills. The node's skill picker lists the ski
   - Codex gets `skills.config` in the `config` of `thread/start` or `thread/resume`, with `enabled = false` for each listed skill that the node did not choose.
   - Antigravity CLI gets nothing.
 - **A chosen skill that is no longer installed is skipped.** The turn runs with the chosen skills the client still lists. The Skills row names the missing ones, for example "gone is not installed, so the task runs without it.", and the attempt's activity says "Claude Code runs without gone, which is not installed." The picker keeps a missing skill ticked as "gone (not installed)", so the person can see it and untick it. Pi gets only the files that exist.
-- **A start with a choice waits for its listing.** While the client lists its skills, the start says "iDevelop is still listing the skills Claude Code loads, which this task's choice needs." When the listing failed, it says why.
+- **A start with a choice waits for its listing.** While the client lists its skills, the start says "iDevelop is still listing the skills Claude Code loads, which this task's choice needs." When the listing failed, the task cannot keep its choice, so it does not start. It says why, and that checking the agents again lists them once more, and its card shows that it needs setup. Clearing the choice with the revert arrow lets it run with every skill.
 
 ## Considered options
 
