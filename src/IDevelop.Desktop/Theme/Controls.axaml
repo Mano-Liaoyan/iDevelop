@@ -341,10 +341,43 @@
     <Setter Property="BoxShadow" Value="none" />
   </Style>
 
-  <!-- A workflow row in the sidebar's project tree. The shown workflow's row is selected, as a task row is. -->
+  <!-- A project's or a workflow's name in the sidebar's tree wraps in full rather than ending in an ellipsis. Its lines are
+       20 px apart, a count's height, so its first line centres on its row's first line, and a longer name grows the row
+       downward. -->
+  <Style Selector="TextBlock.treeName">
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="LineHeight" Value="20" />
+  </Style>
+  <!-- What a tree row shows after its name, on its first line: its dots, then its count or its buttons, 8 px apart. A
+       hidden dot takes no room. -->
+  <Style Selector="StackPanel.trail">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="Spacing" Value="8" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+  <!-- A project's row centres its folder glyph, its name's first line, its dots, and its buttons on a 28 px first line, a
+       glyph button's height. -->
+  <Style Selector="Grid.projectRow > PathIcon">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,6,0,0" />
+  </Style>
+  <Style Selector="Grid.projectRow > TextBlock.treeName">
+    <Setter Property="Padding" Value="0,4" />
+  </Style>
+
+  <!-- A workflow row in the sidebar's project tree. The shown workflow's row is selected, as a task row is. It centres its
+       glyph, its name's first line, its dots, and its count on a 20 px first line, which with its padding and border makes
+       a one-line row 32 px tall, as tall as its chevron. Its count ends 8 px before the row's right edge, where the glyphs
+       of the project's 28 px buttons end drawing. -->
   <Style Selector="Button.nav.workflow">
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Height" Value="NaN" />
+    <Setter Property="Padding" Value="8,5,7,5" />
+  </Style>
+  <Style Selector="Button.nav.workflow > Grid > PathIcon">
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="0,2,0,0" />
   </Style>
   <Style Selector="Button.nav.workflow.selected /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.nav.workflow.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource StateSelectedSurfaceBrush}" />
