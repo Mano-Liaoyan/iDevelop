@@ -241,6 +241,51 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_waiting_cards_list_counts_what_a_listed_task_waits_for_so_the_listed_title_keeps_one_line()
+    {
+        const string first = "Design the workflow file format";
+        using var f = new WorkflowRunFixture(Task(Design, first, 105), Task(Build, "Check the storage format", 405),
+            TaskAt(Docs, "C", 405, 250, Codex, "Build C."),
+            Dependency(Design, Build), Dependency(Build, Docs));
+        f.Answer(first, f.Says("Designed.", gate: "go")).Answer("Check the storage format", f.Says("Checked.")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard(first, "Running");
+
+        shell.Click(shell.InCard<ToggleButton>("C", "CardExpand"));
+
+        // The card's own status names the task it waits for; the row beside a title only counts it.
+        Assert.Equal($"Waits for \"{first}\"", ((TaskNodeViewModel)shell.Node("Check the storage format").DataContext!).StatusLabel);
+        var waits = shell.InCard<ItemsControl>("C", "CardWaits");
+        Assert.Equal(["Check the storage format", "Waits for 1 task"], Shell.Texts(waits));
+        Assert.Single(waits.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == "Check the storage format").TextLayout.TextLines);
+        f.Open("go");
+        shell.WaitForStatus("Completed");
+    }
+
+    [AvaloniaFact]
+    public void A_waiting_cards_list_follows_a_listed_task_whose_change_leaves_the_cards_own_status_as_it_was()
+    {
+        using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat), TaskAt(Build, "B", 105, 250, Codex, "Build B."),
+            Task(Docs, "C", 405), Dependency(Design, Docs), Dependency(Build, Docs));
+        f.Answer("A", f.Says("Which file?", gate: "a")).Answer("B", f.Says("B ready.", gate: "b")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+        shell.Click(shell.InCard<ToggleButton>("C", "CardExpand"));
+        shell.StartRun();
+        shell.WaitUntil(() => Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")) is ["A", "Running", "B", "Running"], "C lists both running",
+            () => string.Join(", ", Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits"))));
+
+        // A stops to wait for the person while B still runs, so C still waits for 2 tasks, and its list says where A is now.
+        f.Open("a");
+        shell.WaitForCard("A", "Waiting for you");
+
+        Assert.Equal("Waits for 2 tasks", shell.CardText("C", "CardStatus"));
+        shell.WaitUntil(() => Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")) is ["A", "Waiting for you", "B", "Running"], "C's list follows A",
+            () => string.Join(", ", Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits"))));
+        f.Open("b");
+    }
+
+    [AvaloniaFact]
     public void Ctrl_Enter_in_the_answer_box_sends_the_answer_as_the_agents_next_turn()
     {
         using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));

@@ -116,12 +116,13 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// The tasks this one waits for, with where each stands: those the active run holds it back for, or, between runs, those
-    /// without a result that its newest run could not start it without (#90).
+    /// without a result that its newest run could not start it without (#90). A listed task that waits for one task counts
+    /// it, as its card does when the name does not fit, so the row keeps its room for the listed title.
     /// </summary>
     public IReadOnlyList<CardWait> Waits => WaitsFor is { } holders
         ? [.. holders.Select(id => _canvas.Nodes.FirstOrDefault(node => node.Id == id)).OfType<TaskNodeViewModel>()
             .OrderBy(node => node.Title, StringComparer.CurrentCultureIgnoreCase)
-            .Select(node => new CardWait(node.Title, node.StatusLabel, node.Kind))]
+            .Select(node => new CardWait(node.Title, node.SubtitleChoices is [_, var counted] ? counted : node.StatusLabel, node.Kind))]
         : [];
 
     private IReadOnlyCollection<TaskId>? WaitsFor => Standing is TaskStanding.Waits waits ? waits.Holders
