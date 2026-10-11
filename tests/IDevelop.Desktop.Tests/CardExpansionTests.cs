@@ -204,6 +204,43 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_expanded_cards_pickers_change_the_tasks_agent_as_the_inspectors_do_and_a_press_on_them_never_moves_the_card()
+    {
+        var fakes = new FakeClients(_temp.Create("bin"));
+        FakeAgents.Install(fakes, ClientId.Codex);
+        FakeAgents.Install(fakes, ClientId.Antigravity);
+        var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Propose a JSON layout."));
+        var shell = Shell.Open(folder, fakes.DiscoverAsync().Result);
+        var canvas = shell.Window.ViewModel.Canvas!;
+        shell.Click(shell.InCard<ToggleButton>("Design", "CardExpand"));
+        ComboBox Picker(string automationId) => shell.InCard<ComboBox>("Design", automationId);
+
+        Assert.Equal(["GPT-6.1-Sol", "GPT-6-Sol", "GPT-5.5"], shell.Pick(Picker("CardPickModel"), "GPT-6-Sol"));
+        Assert.Equal(["low", "medium", "high", "xhigh", "max", "ultra"], shell.Pick(Picker("CardPickReasoning"), "max"));
+
+        // The card's choice is the task's, as the inspector's is: the workflow changes and the inspector shows it.
+        Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "max" }, canvas.Workflow.Tasks[Design].Execution);
+        Assert.Equal("Codex · GPT-6-Sol · max", shell.CardAgent("Design"));
+        Assert.True(canvas.Document.HasUnsavedChanges);
+        shell.Click(shell.Header(shell.Node("Design")));
+        Assert.Equal(["Codex", "GPT-6-Sol", "max"], new[] { "TaskClient", "TaskModel", "TaskReasoning" }.Select(shell.Picked));
+
+        Assert.Equal(
+            ["None", "Claude Code · not installed", "Codex", "Pi · not installed", "Antigravity CLI"],
+            shell.Pick(Picker("CardPickClient"), "Antigravity CLI"));
+        Assert.Equal(ClientId.Antigravity, canvas.Workflow.Tasks[Design].Execution!.Client);
+        Assert.Equal("Antigravity CLI", shell.Picked("TaskClient"));
+
+        // A press that starts on a picker or on a button and drags leaves the card where it was.
+        var placed = canvas.Workflow.Positions[Design];
+        shell.Drag(shell.Center(Picker("CardPickModel")), shell.Center(Picker("CardPickModel")) + new Vector(120, 60));
+        shell.Drag(shell.Center(shell.InCard<Button>("Design", "CardOpenConversation")),
+            shell.Center(shell.InCard<Button>("Design", "CardOpenConversation")) + new Vector(120, 60));
+        Assert.Equal(placed, canvas.Workflow.Positions[Design]);
+        Assert.Equal(new Point(105, 90), shell.Node("Design").Location);
+    }
+
+    [AvaloniaFact]
     public void Ctrl_Enter_in_the_answer_box_sends_the_answer_as_the_agents_next_turn()
     {
         using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));
