@@ -89,6 +89,26 @@ public sealed class SkillStartTests : IDisposable
     }
 
     [Fact]
+    public void A_pi_skill_file_whose_path_holds_a_space_runs_through_pis_node_script_rather_than_its_npm_shim()
+    {
+        const string file = "C:/Users/John Smith/.pi/agent/skills/deploy/SKILL.md";
+        var listed = new SkillListing.Listed([new SkillOption("deploy", "") { Path = file }]);
+        var shim = new ResolvedCommand("C:/npm/pi.cmd", IsBatchShim: true);
+        var followed = shim with { Script = new NodeScript("C:/npm/node.exe", ["C:/npm/node_modules/pi/cli.js"]) };
+        IReadOnlyDictionary<ClientId, ClientStatus> With(ResolvedCommand command) =>
+            new Dictionary<ClientId, ClientStatus> { [ClientId.Pi] = new ClientStatus.Ready(command, [new ModelOption("m", "M", ["high"])]) };
+
+        var plan = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(Task(ClientId.Pi, ["deploy"]), "C:/project", With(followed), skills: listed)).Plan;
+        var launch = followed.Launch(plan.Launch.Arguments)!;
+
+        Assert.Equal(("C:/npm/node.exe", "C:/npm/node_modules/pi/cli.js"), (launch.File, launch.Arguments[0]));
+        Assert.Contains(file, launch.Arguments);
+        // A shim iDevelop cannot follow still says that cmd.exe could misread the path.
+        Assert.Equal(new StartProblem.UnsafeArgument(ClientId.Pi, file),
+            Assert.IsType<StartVerdict.Blocked>(StartCheck.Evaluate(Task(ClientId.Pi, ["deploy"]), "C:/project", With(shim), skills: listed)).Problem);
+    }
+
+    [Fact]
     public void An_attempt_names_the_skills_its_turn_runs_without_once_until_they_change()
     {
         var requested = new AttemptEvent.Requested(DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design",

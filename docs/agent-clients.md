@@ -80,6 +80,8 @@ A node's skill choice ([ADR 0025](adr/0025-a-node-s-skill-choice-is-exactly-its-
 
 Claude Code's `skills` allow-list applies to the main session only: a subagent uses its own `AgentDefinition.skills` and sees every skill. It matches a skill's full name or a `:name` suffix, so a chosen `code-review` also lets in a plugin's `code-review:code-review`. A probe on 2026-10-11 confirmed both.
 
+On Windows, a `--skill` path that cmd.exe could misread, such as one with a space, goes to the node script that Pi's npm shim runs instead of through `pi.cmd`.
+
 When the listing fails, a turn of a node with a choice still starts, as the owner decided on 2026-10-11. Claude Code gets the chosen names unchecked. Codex and Pi get nothing and run with all of their skills, because Codex's list of skills to turn off and Pi's skill files both come from the listing.
 
 ## Unverified items
