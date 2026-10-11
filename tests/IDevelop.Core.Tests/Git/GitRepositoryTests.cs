@@ -780,51 +780,24 @@ public sealed class GitRepositoryTests
         using var f = new GitFixture();
         _ = f.Diamond();
         var bound = TimeSpan.FromSeconds(30);
-        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var takes = 0;
-        // The run's scheduled work in a tight loop: it takes the lock again as soon as it lets it go. It holds its first
-        // take until the person's command waits, and each later one until that command has finished.
-        var loop = Task.Run(() =>
-        {
-            while (!finished.Task.IsCompleted)
-            {
-                using var mutation = f.Open().TakeMutationLock(TimeSpan.FromSeconds(30), scheduled: true);
-                Assert.NotNull(mutation);
-                if (Interlocked.Increment(ref takes) == 1)
-                {
-                    held.SetResult();
-                    release.Task.Wait();
-                }
-                else finished.Task.Wait();
-            }
-        });
-        try
-        {
-            await held.Task.WaitAsync(bound);
-            // A wait asks whether to stop after each try the lock refuses, so the first ask means the command waits.
-            var person = Task.Run(() => f.Open().TakeMutationLock(halted: () =>
-            {
-                waiting.TrySetResult();
-                return false;
-            }));
-            await waiting.Task.WaitAsync(bound);
-            release.SetResult();
-            using var taken = await person.WaitAsync(bound);
+        await using var loop = new ScheduledLoop(f.Open());
+        await loop.Held.WaitAsync(bound);
 
-            // The person's command got the lock within its one-second wait, before the loop took it again.
-            Assert.NotNull(taken);
-            Assert.Equal(1, Volatile.Read(ref takes));
-        }
-        finally
+        // A wait asks whether to stop after each try the lock refuses, and the loop lets the lock go each time.
+        var turns = 0;
+        using (var taken = await Task.Run(() => f.Open().TakeMutationLock(halted: () =>
         {
-            finished.TrySetResult();
-            release.TrySetResult();
+            turns++;
+            loop.Turn();
+            return false;
+        })).WaitAsync(bound))
+        {
+            // The person's command waited and got the lock within its one-second wait, before the loop took it again.
+            Assert.NotNull(taken);
+            Assert.True(turns > 0);
+            Assert.Equal(1, loop.Takes);
         }
-        await loop.WaitAsync(bound);
-        Assert.Equal(2, takes);
+        await loop.Again.WaitAsync(bound);
     }
 
     [Fact]

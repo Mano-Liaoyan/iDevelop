@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Git;
 using IDevelop.Core.Tests.Turns;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -339,43 +340,23 @@ public sealed class ConcurrencyTests
         await f.Resume();
         var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
         var turn = new TurnKey(waiting.Tasks[A].Attempt!.Value, 1);
-        using var waits = new SemaphoreSlim(0);
-        var waited = 0;
-        f.Runs.Probe = point =>
-        {
-            if (point != "mutation.waiting") return;
-            Interlocked.Increment(ref waited);
-            waits.Release();
-        };
-        using var stop = new CancellationTokenSource();
-        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        // Scheduled work in a tight loop: it takes the lock again as soon as it lets it go, and lets it go only after a step
-        // that waits for it has tried it once more.
-        var loop = Task.Run(() =>
-        {
-            while (!stop.IsCancellationRequested)
-            {
-                using var mutation = f.Preparation.Git.Open().TakeMutationLock(Bound, () => stop.IsCancellationRequested, scheduled: true);
-                if (mutation is null) return;
-                held.TrySetResult();
-                try { waits.Wait(stop.Token); }
-                catch (OperationCanceledException) { return; }
-            }
-        });
         ConversationCommandResult done;
-        try
+        var turns = 0;
+        await using (var loop = new ScheduledLoop(f.Preparation.Git.Open()))
         {
-            await held.Task.WaitAsync(Bound);
+            await loop.Held.WaitAsync(Bound);
+            // Each try a step's wait for the lock is refused lets the loop's lock go once.
+            f.Runs.Probe = point =>
+            {
+                if (point != "mutation.waiting") return;
+                Interlocked.Increment(ref turns);
+                loop.Turn();
+            };
             done = await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound);
         }
-        finally
-        {
-            await stop.CancelAsync();
-        }
-        await loop.WaitAsync(Bound);
 
-        // Mark done waited behind the loop and still got the lock within its one-second wait.
-        Assert.True(Volatile.Read(ref waited) > 0);
+        // Mark done waited behind the loop and still got the lock within its one-second wait, for each of its steps.
+        Assert.True(Volatile.Read(ref turns) > 0);
         Assert.Equal(CommandOutcome.Applied, done.Outcome);
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
