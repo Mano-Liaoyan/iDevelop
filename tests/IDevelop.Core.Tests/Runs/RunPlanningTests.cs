@@ -56,6 +56,34 @@ public sealed class RunPlanningTests
     }
 
     [Fact]
+    public void A_planners_retry_records_the_agents_ready_then_and_its_prompt_lists_them_while_the_first_keeps_its_own()
+    {
+        var planner = new TaskDefinition(T, Approval.PlannerInclusionTests.PlannerBlueprint) { Title = "Plan", Execution = Task().Execution }
+            .WithField("brief", "Plan it.")!;
+        using var f = new RunFixtures(FixtureWorkflow(planner));
+        f.Approve();
+        ImmutableArray<AgentOffer> later = [new(ClientId.ClaudeCode, [new ModelOption("claude-opus-5-5", "Claude Opus 5.5", ["high"])])];
+        Assert.IsType<RunDecision.Recorded>(f.Store.Plan(f.Lease(T), f.Op(), f.Read().Revision.Id, new AttemptCause.Initial(), Offered));
+        var first = Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(f.Store.Reserve(f.Lease(T), f.Op(), f.Read().Plans.Single().Key)).Event);
+        f.Claim(first);
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), first.Attempt.Id, TerminalAttemptOutcome.Failed,
+            f.WriteLog(first, TerminalAttemptOutcome.Failed)));
+
+        var retried = Assert.IsType<RunDecision.Recorded>(f.Store.Plan(f.Lease(T), f.Op(), f.Read().Revision.Id,
+            new AttemptCause.Retry(first.Attempt.Id, f.Op()), later));
+
+        var plan = (MaterializationPlan.Preparation)((RunEvent.Planned)retried.Event).Plan;
+        Assert.Equal<AgentOffer>(later, plan.Agents!.Value);
+        var retry = Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(f.Store.Reserve(f.Lease(T), f.Op(),
+            f.Read().Plans.Single(pair => RunReducer.Same(pair.Value, plan)).Key)).Event);
+        var record = f.Read();
+        Assert.EndsWith("Agents you may choose:\n- claude-code (Claude Code):\n  - claude-opus-5-5, Claude Opus 5.5. Reasoning: high.",
+            RunPlanning.Context(record, record.Attempts[retry.Attempt.Id])!.Contract(ConversationMode.Chat));
+        Assert.EndsWith("Agents you may choose:\n- codex (Codex):\n  - gpt-5.5, GPT-5.5. Reasoning: low, high.",
+            RunPlanning.Context(record, record.Attempts[first.Attempt.Id])!.Contract(ConversationMode.Chat));
+    }
+
+    [Fact]
     public void A_start_that_renders_no_planners_prompt_records_no_agents()
     {
         var planner = new TaskDefinition(T, Approval.PlannerInclusionTests.PlannerBlueprint) { Title = "Plan", Execution = Task().Execution }
