@@ -340,23 +340,37 @@ public sealed class ConcurrencyTests
         await f.Resume();
         var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
         var turn = new TurnKey(waiting.Tasks[A].Attempt!.Value, 1);
+        // A step that waited as the run's work would give up within the test's bound.
+        f.Runs.MutationPatience = TimeSpan.FromSeconds(3);
         ConversationCommandResult done;
         var turns = 0;
+        var publishing = 0;
+        var publishTurns = 0;
         await using (var loop = new ScheduledLoop(f.Preparation.Git.Open()))
         {
             await loop.Held.WaitAsync(Bound);
-            // Each try a step's wait for the lock is refused lets the loop's lock go once.
             f.Runs.Probe = point =>
             {
+                // The loop takes the lock back after Mark done's first step, and the publication starts only once it has.
+                if (point == "publish.lock.before")
+                {
+                    Volatile.Write(ref publishing, 1);
+                    loop.WaitHeld();
+                    return;
+                }
                 if (point != "mutation.waiting") return;
+                // Each try a step's wait for the lock is refused lets the loop's lock go once.
                 Interlocked.Increment(ref turns);
+                if (Volatile.Read(ref publishing) == 1) Interlocked.Increment(ref publishTurns);
                 loop.Turn();
             };
             done = await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound);
         }
 
-        // Mark done waited behind the loop and still got the lock within its one-second wait, for each of its steps.
-        Assert.True(Volatile.Read(ref turns) > 0);
+        // Mark done's closure and its publication each waited behind the loop and still got the lock within the one-second
+        // wait of a person's command.
+        Assert.True(Volatile.Read(ref turns) > Volatile.Read(ref publishTurns));
+        Assert.True(Volatile.Read(ref publishTurns) > 0);
         Assert.Equal(CommandOutcome.Applied, done.Outcome);
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal("A\n", f.ResultFile(A, "a.txt"));

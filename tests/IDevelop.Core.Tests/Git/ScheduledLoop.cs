@@ -15,6 +15,7 @@ internal sealed class ScheduledLoop : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly TaskCompletionSource _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _again = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly ManualResetEventSlim _holding = new();
     private readonly Lock _gate = new();
     private readonly Task _loop;
     private int _takes;
@@ -47,6 +48,13 @@ internal sealed class ScheduledLoop : IAsyncDisposable
         }
     }
 
+    /// <summary>Returns once the loop holds the lock, at once while it does.</summary>
+    public void WaitHeld()
+    {
+        try { _holding.Wait(_stop.Token); }
+        catch (OperationCanceledException) { }
+    }
+
     private void Settle()
     {
         if (Interlocked.Exchange(ref _turning, 0) == 1) _settled.Release();
@@ -62,11 +70,13 @@ internal sealed class ScheduledLoop : IAsyncDisposable
                 return _stop.IsCancellationRequested;
             }, scheduled: true);
             if (mutation is null) return;
+            _holding.Set();
             if (Interlocked.Increment(ref _takes) == 1) _held.TrySetResult();
             else _again.TrySetResult();
             Settle();
             try { _turn.Wait(_stop.Token); }
             catch (OperationCanceledException) { return; }
+            finally { _holding.Reset(); }
         }
     }
 
