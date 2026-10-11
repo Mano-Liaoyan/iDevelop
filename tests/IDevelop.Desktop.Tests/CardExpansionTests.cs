@@ -261,6 +261,24 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void An_approval_card_points_to_the_inspector_where_the_person_answers_its_request()
+    {
+        using var f = new WorkflowRunFixture(Task(Design, "A", 105), Approval(Build, "Approve", 405), Dependency(Design, Build));
+        f.Answer("A", f.Says("A ready."));
+        var shell = f.Window();
+        shell.Click(shell.InCard<ToggleButton>("Approve", "CardExpand"));
+        Assert.False(shell.InCard<Button>("Approve", "CardShowInspector").IsEffectivelyVisible);
+        shell.StartRun();
+        shell.WaitForCard("Approve", "Waiting for approval");
+
+        Assert.Equal("Waits for your approval", shell.CardText("Approve", "CardNowHeading"));
+        shell.Click(shell.InCard<Button>("Approve", "CardShowInspector"));
+
+        Assert.Equal("Approve", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
+        Assert.True(shell.InView<Button>("ApproveGate").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void A_waiting_cards_list_counts_what_a_listed_task_waits_for_so_the_listed_title_keeps_one_line()
     {
         const string first = "Design the workflow file format";
