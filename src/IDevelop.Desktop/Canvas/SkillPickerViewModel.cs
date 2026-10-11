@@ -73,8 +73,8 @@ public sealed class SkillPickerViewModel : ObservableObject
         _ => $"Listing the skills {ClientName} loads…",
     };
 
-    /// <summary>The one line that says a client's listing leaves out its built-in skills, as Claude Code's does.</summary>
-    public string? BuiltInNote => ShowsList && Listing is SkillListing.Listed && !SkillChoices.ListsBuiltIns(Settings!.Client)
+    /// <summary>The one line that says a listing left out the client's built-in skills, as an older Claude Code's does.</summary>
+    public string? BuiltInNote => ShowsList && Listing is SkillListing.Listed { LeavesOutBuiltIns: true }
         ? $"{ClientName} doesn't list its built-in skills, so a choice leaves them out."
         : null;
 

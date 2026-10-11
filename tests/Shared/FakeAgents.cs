@@ -19,11 +19,13 @@ internal static class FakeAgents
     public static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
 
     /// <summary>
-    /// Claude Code's answer to the initialize request of its skill listing: the skills in its project folder and in
-    /// <paramref name="folders"/>, and the built-in commands that the listing leaves out. A turn has partial messages on.
+    /// Claude Code's skill listing, which a turn tells apart by its partial messages: its initialize answer lists the skills
+    /// in its project folder and in <paramref name="folders"/> beside its own commands, compact and the bundled simplify
+    /// alike, and its reload_skills answer lists the same skills with simplify among them.
     /// </summary>
-    public static FakeRule ClaudeSkills(params string[] folders) =>
-        On("-p").Lacking("--include-partial-messages").WaitForLine("initialize").ListSkills("claude", [".claude/skills", .. folders], builtIn: ["compact", "simplify"]);
+    public static FakeRule ClaudeSkills(params string[] folders) => On("-p").Lacking("--include-partial-messages")
+        .WaitForLine("initialize").ListSkills("claude", [".claude/skills", .. folders], builtIn: ["compact", "simplify"])
+        .WaitForLine("reload_skills").ListSkills("claude-skills", [".claude/skills", .. folders], builtIn: ["simplify"]);
 
     /// <summary>Codex's answer to skills/list: the skills in its project folders and in <paramref name="folders"/>.</summary>
     public static FakeRule CodexSkills(params string[] folders) =>

@@ -109,7 +109,8 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
         var picker = shell.Find<ToggleButton>("TaskSkills");
         shell.Click(picker);
-        shell.WaitUntil(() => Shell.ById<CheckBox>(shell.Window, "SkillChoice").Count() == 3, "the listed skills");
+        // simplify is one of Claude Code's bundled skills.
+        shell.WaitUntil(() => Shell.ById<CheckBox>(shell.Window, "SkillChoice").Count() == 4, "the listed skills");
         shell.Render();
 
         Assert.Equal("actions at 12, values at 64", Edges(shell));

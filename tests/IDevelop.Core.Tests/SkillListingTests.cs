@@ -28,7 +28,7 @@ public sealed class SkillListingTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [Fact]
-    public async Task Claude_code_lists_what_its_initialize_reports_in_the_project_and_leaves_out_its_own_commands()
+    public async Task Claude_code_lists_its_skills_with_its_bundled_ones_in_the_project_after_it_initializes()
     {
         Skill(_personal, "find-skills", "Finds skills to install.");
         Skill(Path.Combine(_project, ".claude", "skills"), "verify-idevelop", "Drives the built app's real window.");
@@ -36,7 +36,8 @@ public sealed class SkillListingTests : IDisposable
         var arguments = _temp.Path("listing-arguments.json");
         _fakes.Install("claude", FakeAgents.ClaudeSignedIn,
             On("-p").Lacking("--include-partial-messages").RecordWorkingDirectory(folder).RecordArguments(arguments)
-                .WaitForLine("initialize").ListSkills("claude", [".claude/skills", _personal], builtIn: ["compact", "simplify"]));
+                .WaitForLine("initialize").ListSkills("claude", [".claude/skills", _personal], builtIn: ["compact", "simplify"])
+                .WaitForLine("reload_skills").ListSkills("claude-skills", [".claude/skills", _personal], builtIn: ["simplify"]));
         var directory = await _fakes.DiscoverAsync();
 
         var listing = await ListedAsync(directory, ClientId.ClaudeCode, _project);
@@ -44,12 +45,30 @@ public sealed class SkillListingTests : IDisposable
         Assert.Equal(new SkillListing.Listed(
         [
             new SkillOption("find-skills", "Finds skills to install."),
+            new SkillOption("simplify", "Built-in simplify"),
             new SkillOption("verify-idevelop", "Drives the built app's real window."),
         ]), listing);
+        Assert.False(((SkillListing.Listed)listing).LeavesOutBuiltIns);
         Assert.Equal(Path.GetFullPath(_project), File.ReadAllText(folder));
         Assert.Equal(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"], Read<string[]>(arguments));
         Assert.True(SkillChoices.CanChoose(ClientId.ClaudeCode));
-        Assert.False(SkillChoices.ListsBuiltIns(ClientId.ClaudeCode));
+    }
+
+    [Fact]
+    public async Task A_claude_code_that_cannot_reload_its_skills_lists_its_initialize_commands_without_its_own()
+    {
+        Skill(_personal, "find-skills", "Finds skills to install.");
+        _fakes.Install("claude", FakeAgents.ClaudeSignedIn,
+            On("-p").Lacking("--include-partial-messages")
+                .WaitForLine("initialize").ListSkills("claude", [".claude/skills", _personal], builtIn: ["compact", "simplify"])
+                .WaitForLine("reload_skills")
+                .EchoId("""{"type":"control_response","response":{"subtype":"error","request_id":$id,"error":"Unsupported control request subtype: reload_skills"}}"""));
+        var directory = await _fakes.DiscoverAsync();
+
+        var listing = Assert.IsType<SkillListing.Listed>(await ListedAsync(directory, ClientId.ClaudeCode, _project));
+
+        Assert.Equal(new SkillListing.Listed([new SkillOption("find-skills", "Finds skills to install.")]) { LeavesOutBuiltIns = true }, listing);
+        Assert.NotEqual(new SkillListing.Listed(listing.Skills), listing);
     }
 
     [Fact]
@@ -69,7 +88,7 @@ public sealed class SkillListingTests : IDisposable
         Assert.Equal(["app-server"], Read<string[]>(arguments));
         using var request = JsonDocument.Parse(File.ReadAllText(arguments + ".thread.json"));
         Assert.Equal([Path.GetFullPath(_project)], request.RootElement.GetProperty("params").GetProperty("cwds").EnumerateArray().Select(cwd => cwd.GetString()));
-        Assert.True(SkillChoices.ListsBuiltIns(ClientId.Codex));
+        Assert.False(((SkillListing.Listed)listing).LeavesOutBuiltIns);
     }
 
     [Fact]
@@ -106,7 +125,7 @@ public sealed class SkillListingTests : IDisposable
     }
 
     [Fact]
-    public async Task A_folders_listing_lasts_until_the_clients_next_refresh()
+    public async Task A_folders_listing_lasts_until_the_clients_next_refresh_and_stays_until_the_new_one_is_in()
     {
         _fakes.LaunchFolder = _temp.Create("launches");
         Skill(Path.Combine(_project, ".claude", "skills"), "verify-idevelop", "Drives the built app's real window.");
@@ -118,16 +137,20 @@ public sealed class SkillListingTests : IDisposable
         await ListedAsync(directory, ClientId.ClaudeCode, _project);
         Assert.Equal(1, Listings());
 
-        Assert.Equal(new SkillListing.Listed([]), await ListedAsync(directory, ClientId.ClaudeCode, other));
+        Assert.Equal(["simplify"], Names(await ListedAsync(directory, ClientId.ClaudeCode, other)));
         Assert.Equal(2, Listings());
 
         Skill(Path.Combine(_project, ".claude", "skills"), "release", "Cuts a release.");
         await directory.RefreshAsync();
 
-        Assert.Equal(["release", "verify-idevelop"],
-            Assert.IsType<SkillListing.Listed>(await ListedAsync(directory, ClientId.ClaudeCode, _project)).Skills.Select(skill => skill.Name));
+        // A start while the client lists its skills again, such as a run's next task, still has the last listing.
+        Assert.Equal(["simplify", "verify-idevelop"], Names(directory.Skills(ClientId.ClaudeCode, _project)));
+        var relisted = await UntilAsync(directory, ClientId.ClaudeCode, _project, listing => Names(listing).Contains("release"));
+        Assert.Equal(["release", "simplify", "verify-idevelop"], Names(relisted));
         Assert.Equal(3, Listings());
     }
+
+    private static string[] Names(SkillListing listing) => [.. Assert.IsType<SkillListing.Listed>(listing).Skills.Select(skill => skill.Name)];
 
     [Fact]
     public async Task A_listing_the_client_refuses_says_why()
@@ -154,12 +177,16 @@ public sealed class SkillListingTests : IDisposable
     }
 
     /// <summary>The listing once it is in, which the directory's change says.</summary>
-    internal static async Task<SkillListing> ListedAsync(ClientDirectory directory, ClientId client, string folder)
+    internal static Task<SkillListing> ListedAsync(ClientDirectory directory, ClientId client, string folder) =>
+        UntilAsync(directory, client, folder, listing => listing is not SkillListing.Checking);
+
+    /// <summary>The listing once <paramref name="done"/> accepts it, checked at each of the directory's changes.</summary>
+    private static async Task<SkillListing> UntilAsync(ClientDirectory directory, ClientId client, string folder, Func<SkillListing, bool> done)
     {
         var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnChanged(object? sender, EventArgs e)
         {
-            if (directory.Skills(client, folder) is not SkillListing.Checking)
+            if (done(directory.Skills(client, folder)))
             {
                 listed.TrySetResult();
             }
@@ -168,7 +195,7 @@ public sealed class SkillListingTests : IDisposable
         directory.Changed += OnChanged;
         try
         {
-            if (directory.Skills(client, folder) is SkillListing.Checking)
+            if (!done(directory.Skills(client, folder)))
             {
                 await listed.Task.WaitAsync(TimeSpan.FromSeconds(60));
             }

@@ -20,8 +20,14 @@ public abstract record SkillListing
     /// <summary>Each name once, in the order the picker shows them.</summary>
     public sealed record Listed(ImmutableArray<SkillOption> Skills) : SkillListing
     {
+        /// <summary>
+        /// The listing could not tell the client's built-in skills from its built-in commands, so it left them all out, as
+        /// a Claude Code without <c>reload_skills</c> does. A choice then leaves the built-in skills out too.
+        /// </summary>
+        public bool LeavesOutBuiltIns { get; init; }
+
         // ImmutableArray compares by reference, so equality compares the skills themselves.
-        public bool Equals(Listed? other) => other is not null && Skills.SequenceEqual(other.Skills);
+        public bool Equals(Listed? other) => other is not null && Skills.SequenceEqual(other.Skills) && LeavesOutBuiltIns == other.LeavesOutBuiltIns;
 
         public override int GetHashCode() => Skills.Length;
     }
@@ -33,14 +39,8 @@ public abstract record SkillListing
     public sealed record Unsupported : SkillListing;
 }
 
-/// <summary>
-/// How a client lists the skills it loads in a folder without a model turn. <see cref="ListsBuiltIns"/> is false when the
-/// listing cannot tell the client's built-in skills from its built-in commands, so it leaves them out.
-/// </summary>
-internal sealed record SkillSource(Func<string, Probe> Probe, Func<ProbeOutput, SkillListing> Parse)
-{
-    public bool ListsBuiltIns { get; init; } = true;
-}
+/// <summary>How a client lists the skills it loads in a folder without a model turn.</summary>
+internal sealed record SkillSource(Func<string, Probe> Probe, Func<ProbeOutput, SkillListing> Parse);
 
 /// <summary>What one launch passes for a node's choice: the chosen skills that the client lists, and the ones it lists that were not chosen.</summary>
 internal sealed record SkillLaunch(ImmutableArray<SkillOption> Chosen, ImmutableArray<SkillOption> Others);
@@ -53,9 +53,6 @@ public static class SkillChoices
 {
     /// <summary>Whether the client can limit a task's skills. Antigravity CLI cannot.</summary>
     public static bool CanChoose(ClientId client) => Clients.Get(client).Skills is not null;
-
-    /// <summary>Whether the client's listing holds its built-in skills, which a choice can then keep.</summary>
-    public static bool ListsBuiltIns(ClientId client) => Clients.Get(client).Skills is { ListsBuiltIns: true };
 
     /// <summary>
     /// The listed skills, each ticked when the node has no choice or chose it, then each chosen skill that the client no

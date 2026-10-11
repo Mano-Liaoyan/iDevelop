@@ -56,11 +56,12 @@ using System.Text.Json;
 //   answer [{"line": <pattern>, "steps": [...]}, ...]
 //                                 read stdin frames until one contains an option's pattern, and run that option's steps
 //                                 with the frame as the last matched one, so one RPC client answers each request in kind
-//   listSkills {"format": "claude" | "codex" | "pi", "folders": [...], "builtin": [...], "disabled": [...]}
+//   listSkills {"format": "claude" | "claude-skills" | "codex" | "pi", "folders": [...], "builtin": [...], "disabled": [...]}
 //                                 answer the last matched frame with the skills in the folders, as that client lists them:
 //                                 each subfolder with a SKILL.md, named and described by its front matter. A relative
-//                                 folder is in the current folder. Claude Code also lists the built-in commands, and
-//                                 Codex lists the disabled names as turned off
+//                                 folder is in the current folder. Claude Code's initialize ("claude") also lists the
+//                                 built-in names as its own commands, and its reload_skills ("claude-skills") lists them
+//                                 as its bundled skills. Codex lists the disabled names as turned off
 //   exit <code>
 
 if (args is ["--sleep-forever"])
@@ -668,6 +669,19 @@ internal static class FakeSkills
                         commands = skills.Select(skill => (object)new { name = skill.Name, description = skill.Description, argumentHint = "" })
                             .Concat(Strings(options, "builtin").Select(name => (object)new { name, description = $"Built-in {name}", argumentHint = "", builtin = true })),
                         agents = Array.Empty<object>(), output_style = "default", available_output_styles = new[] { "default" }, models = Array.Empty<object>(),
+                    },
+                },
+            }),
+            "claude-skills" => JsonSerializer.Serialize(new
+            {
+                type = "control_response",
+                response = new
+                {
+                    subtype = "success", request_id = id,
+                    response = new
+                    {
+                        skills = skills.Select(skill => (object)new { name = skill.Name, description = skill.Description, argumentHint = "" })
+                            .Concat(Strings(options, "builtin").Select(name => (object)new { name, description = $"Built-in {name}", argumentHint = "", builtin = true })),
                     },
                 },
             }),

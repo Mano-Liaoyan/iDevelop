@@ -49,7 +49,8 @@ public sealed class ClientDirectory
     /// <summary>
     /// The skills <paramref name="client"/> loads in <paramref name="folder"/>. The first call for a folder lists them in
     /// the background with the client's own command, which runs no model turn, and returns Checking until <see cref="Changed"/>
-    /// says the listing is in. A listing lasts until the client's next refresh.
+    /// says the listing is in. A listing lasts until the client's next refresh. The first call after it lists them again,
+    /// and returns the last listing until the new one is in, so a start during a refresh, such as a run's next task, has it.
     /// </summary>
     public SkillListing Skills(ClientId client, string folder)
     {
@@ -72,10 +73,16 @@ public sealed class ClientDirectory
                     {
                         entry = new SkillLookup();
                         _skills[key] = entry;
-                        _ = Task.Run(() => ListSkillsAsync(Clients.Get(client), source, ready.Command, key, entry));
                     }
 
-                    return entry.Listing;
+                    if (entry is { Stale: true, Running: false })
+                    {
+                        entry.Stale = false;
+                        entry.Running = true;
+                        _ = Task.Run(() => ListSkillsAsync(source, ready.Command, key, entry));
+                    }
+
+                    return entry.Result;
                 default:
                     return new SkillListing.Checking();
             }
@@ -128,23 +135,23 @@ public sealed class ClientDirectory
         {
             Current = Current.SetItem(id, status);
             // The next request lists the client's skills again, as the client is now.
-            foreach (var key in _skills.Keys.Where(key => key.Client == id).ToList())
+            foreach (var (_, entry) in _skills.Where(skills => skills.Key.Client == id))
             {
-                _skills.Remove(key);
+                entry.Stale = true;
             }
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private async Task ListSkillsAsync(ClientDefinition client, SkillSource source, ResolvedCommand command, (ClientId Client, string Folder) key, SkillLookup entry)
+    private async Task ListSkillsAsync(SkillSource source, ResolvedCommand command, (ClientId Client, string Folder) key, SkillLookup entry)
     {
         SkillListing listing;
         var probe = source.Probe(key.Folder);
         try
         {
             var output = await Probes.RunAsync(command, probe);
-            listing = output.TimedOut ? new SkillListing.Unavailable(NoAnswer(client, probe)) : source.Parse(output);
+            listing = output.TimedOut ? new SkillListing.Unavailable(NoAnswer(Clients.Get(key.Client), probe)) : source.Parse(output);
         }
         catch (LaunchException e)
         {
@@ -153,21 +160,24 @@ public sealed class ClientDirectory
 
         lock (_gate)
         {
-            // A refresh since the listing began asked for a new one.
-            if (!_skills.TryGetValue(key, out var current) || current != entry)
-            {
-                return;
-            }
-
-            entry.Listing = listing;
+            // A refresh since the listing began marked it stale, so the next request lists the skills again.
+            entry.Result = listing;
+            entry.Running = false;
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>One client's skills in one folder.</summary>
     private sealed class SkillLookup
     {
-        public SkillListing Listing { get; set; } = new SkillListing.Checking();
+        /// <summary>The last listing, or Checking before the first is in.</summary>
+        public SkillListing Result { get; set; } = new SkillListing.Checking();
+
+        public bool Running { get; set; }
+
+        /// <summary>No listing began since the client's last refresh, so the next request lists the skills.</summary>
+        public bool Stale { get; set; } = true;
     }
 
     private async Task<ClientStatus> ProbeAsync(ClientDefinition client)

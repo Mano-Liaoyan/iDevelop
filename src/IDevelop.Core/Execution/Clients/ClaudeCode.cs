@@ -30,15 +30,18 @@ internal static class ClaudeCode
         Protocol = request => new ClaudeProtocol(request),
         Terminal = session => $"claude --resume {session}",
         HasReadOnlyMode = true,
-        // The initialize response lists every command the session would load, and marks Claude Code's own. Those are its
-        // built-in commands and its bundled skills together, so the listing leaves them all out.
+        // reload_skills answers with the session's skills alone, its bundled skills among them, which is what the initialize
+        // allow-list chooses from. It follows initialize, as in a turn.
         Skills = new SkillSource(folder => new Probe(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"])
         {
             Folder = folder,
-            Stdin = JsonSerializer.Serialize(new { type = "control_request", request_id = SkillsRequest, request = new { subtype = "initialize" } }) + "\n",
-            DoneWhen = IsSkillsResponse,
-        }, ParseSkills) { ListsBuiltIns = false },
+            Stdin = Control(InitializeRequest, "initialize"),
+            Reply = line => IsResponse(line, InitializeRequest) && Succeeded(line) ? Control(SkillsRequest, "reload_skills") : null,
+            DoneWhen = line => IsResponse(line, SkillsRequest) || IsResponse(line, InitializeRequest) && !Succeeded(line),
+        }, ParseSkills),
     };
+
+    private const string InitializeRequest = "idevelop-init";
 
     private const string SkillsRequest = "idevelop-skills";
 
@@ -52,33 +55,63 @@ internal static class ClaudeCode
     ],
     "");
 
-    private static bool IsSkillsResponse(string line) =>
-        line.Contains("\"control_response\"", StringComparison.Ordinal) && line.Contains($"\"{SkillsRequest}\"", StringComparison.Ordinal);
+    private static string Control(string id, string subtype) =>
+        JsonSerializer.Serialize(new { type = "control_request", request_id = id, request = new { subtype } }) + "\n";
 
+    private static bool IsResponse(string line, string id) =>
+        line.Contains("\"control_response\"", StringComparison.Ordinal) && line.Contains($"\"{id}\"", StringComparison.Ordinal);
+
+    private static bool Succeeded(string line) => Response(line)?.String("subtype") == "success";
+
+    /// <summary>A control response's own "response" object, or null for a line that is not one.</summary>
+    private static JsonElement? Response(string line)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(line);
+            return json.RootElement.Property("response")?.Clone();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The skills that reload_skills lists. A Claude Code without it lists only its initialize commands, which mark its
+    /// built-in commands and bundled skills alike, so that listing leaves them all out and says so.
+    /// </summary>
     private static SkillListing ParseSkills(ProbeOutput output)
     {
-        foreach (var line in TextLines.Lines(output.Stdout).Where(IsSkillsResponse))
+        var lines = TextLines.Lines(output.Stdout).ToArray();
+        var initialize = lines.Where(line => IsResponse(line, InitializeRequest)).Select(Response).FirstOrDefault(response => response is not null);
+        if (initialize is { } failed && failed.String("subtype") != "success")
         {
-            try
-            {
-                using var json = JsonDocument.Parse(line);
-                if (json.RootElement.Property("response") is not { } response || response.String("subtype") != "success")
-                {
-                    return new SkillListing.Unavailable(
-                        $"Claude Code did not list its skills: {json.RootElement.Property("response")?.String("error") ?? "it reported a failure"}.");
-                }
+            return new SkillListing.Unavailable($"Claude Code did not list its skills: {failed.String("error") ?? "it reported a failure"}.");
+        }
 
-                return new SkillListing.Listed(SkillChoices.Distinct(response.Property("response")?.Items("commands")
-                    .Where(command => command.Bool("builtin") != true && command.String("name") is not null)
-                    .Select(command => new SkillOption(command.String("name")!, command.String("description") ?? "")) ?? []));
-            }
-            catch (JsonException)
+        if (lines.Where(line => IsResponse(line, SkillsRequest)).Select(Response).FirstOrDefault(response => response is not null) is { } reloaded)
+        {
+            if (reloaded.String("subtype") == "success")
             {
+                return new SkillListing.Listed(Options(reloaded.Property("response")?.Items("skills")));
+            }
+
+            if (initialize is { } initialized)
+            {
+                return new SkillListing.Listed(Options(initialized.Property("response")?.Items("commands").Where(command => command.Bool("builtin") != true)))
+                {
+                    LeavesOutBuiltIns = true,
+                };
             }
         }
 
         return new SkillListing.Unavailable($"Claude Code did not list its skills. {Probes.Failure("claude -p", output)}");
     }
+
+    private static ImmutableArray<SkillOption> Options(IEnumerable<JsonElement>? entries) => SkillChoices.Distinct(entries?
+        .Where(entry => entry.String("name") is not null)
+        .Select(entry => new SkillOption(entry.String("name")!, entry.String("description") ?? "")) ?? []);
 
     private static ReadinessProblem? SignInProblem(ProbeOutput output)
     {

@@ -48,16 +48,21 @@ public sealed class SkillPickerTests : IDisposable
 
         OpenList(shell);
 
-        Assert.Equal([("find-skills", true), ("verify-idevelop", true)], Ticks(shell));
+        // simplify is one of Claude Code's bundled skills.
+        Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
         Assert.Equal("Finds skills to install.", ToolTip.GetTip(Choice(shell, "find-skills")));
-        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out.", shell.Find<TextBlock>("SkillBuiltInNote").Text);
+        Assert.False(shell.Find<TextBlock>("SkillBuiltInNote").IsEffectivelyVisible);
 
         shell.Click(Choice(shell, "find-skills"));
 
-        Assert.Equal(["verify-idevelop"], Execution(shell).Skills!);
-        Assert.Equal([("find-skills", false), ("verify-idevelop", true)], Ticks(shell));
-        Assert.Equal("1 skill", Summary(shell));
+        Assert.Equal(["simplify", "verify-idevelop"], Execution(shell).Skills!);
+        Assert.Equal([("find-skills", false), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
+        Assert.Equal("2 skills", Summary(shell));
         Assert.True(shell.Find<Button>("RevertSkills").IsEffectivelyVisible);
+
+        shell.Click(Choice(shell, "simplify"));
+
+        Assert.Equal("1 skill", Summary(shell));
 
         shell.Click(Choice(shell, "verify-idevelop"));
 
@@ -70,8 +75,49 @@ public sealed class SkillPickerTests : IDisposable
 
         Assert.Null(Execution(shell).Skills);
         Assert.Equal("All skills", Summary(shell));
-        Assert.Equal([("find-skills", true), ("verify-idevelop", true)], Ticks(shell));
+        Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
         Assert.Equal(Claude, Execution(shell));
+    }
+
+    [AvaloniaFact]
+    public void A_claude_code_that_cannot_list_its_built_in_skills_says_a_choice_leaves_them_out()
+    {
+        var folder = Project(TaskAt(Design, "Design", 105, 90, Claude));
+        _fakes.Install("claude", ClaudeSignedIn, FakeRule.On("-p").Lacking("--include-partial-messages")
+            .WaitForLine("initialize").ListSkills("claude", [".claude/skills"], builtIn: ["compact", "simplify"])
+            .WaitForLine("reload_skills")
+            .EchoId("""{"type":"control_response","response":{"subtype":"error","request_id":$id,"error":"Unsupported control request subtype: reload_skills"}}"""));
+        var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        OpenList(shell);
+
+        Assert.Equal([("verify-idevelop", true)], Ticks(shell));
+        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out.", shell.Find<TextBlock>("SkillBuiltInNote").Text);
+        Assert.True(shell.Find<TextBlock>("SkillBuiltInNote").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Codex_and_pi_nodes_list_their_own_clients_skills()
+    {
+        var personal = _temp.Create("agents-skills");
+        Skill(personal, "imagegen", "Makes images.");
+        _fakes.Install("codex", CodexModels, CodexSignedIn, CodexSkills(personal));
+        _fakes.Install("pi", PiRpc(personal), PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"));
+        var folder = _temp.Seed(
+            TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "high" }),
+            TaskAt(TestTasks.Build, "Build", 405, 90, new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" }));
+        Skill(Path.Combine(folder, ".agents", "skills"), "release", "Cuts a release.");
+        Skill(Path.Combine(folder, ".pi", "skills"), "deploy", "Deploys the site.");
+        var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        OpenList(shell);
+        Assert.Equal([("imagegen", true), ("release", true)], Ticks(shell));
+
+        shell.Click(shell.Header(shell.Node("Build")));
+        OpenList(shell);
+        Assert.Equal([("deploy", true), ("imagegen", true), ("release", true)], Ticks(shell));
     }
 
     [AvaloniaFact]
@@ -86,13 +132,13 @@ public sealed class SkillPickerTests : IDisposable
 
         OpenList(shell);
 
-        Assert.Equal([("find-skills", false), ("verify-idevelop", true), ("gone (not installed)", true)], Ticks(shell));
+        Assert.Equal([("find-skills", false), ("simplify", false), ("verify-idevelop", true), ("gone (not installed)", true)], Ticks(shell));
 
         shell.Click(Choice(shell, "gone (not installed)"));
 
         Assert.Equal(["verify-idevelop"], Execution(shell).Skills!);
         Assert.False(shell.Find<TextBlock>("SkillsNote").IsEffectivelyVisible);
-        Assert.Equal([("find-skills", false), ("verify-idevelop", true)], Ticks(shell));
+        Assert.Equal([("find-skills", false), ("simplify", false), ("verify-idevelop", true)], Ticks(shell));
     }
 
     [AvaloniaFact]
