@@ -36,6 +36,12 @@ internal sealed record ClientDefinition
     /// node would run with write access, so it does not start.
     /// </summary>
     public required bool HasReadOnlyMode { get; init; }
+
+    /// <summary>
+    /// The client finds a session only in the folder where it ran, so it cannot continue one after that folder moved. Pi
+    /// 1.1.0 then starts an empty session under the same id (probe of 2026-10-09), so iDevelop refuses such a message.
+    /// </summary>
+    public bool SessionsPerFolder { get; init; }
 }
 
 internal abstract record CatalogSource

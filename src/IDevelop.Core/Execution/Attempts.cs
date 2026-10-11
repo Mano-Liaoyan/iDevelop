@@ -65,7 +65,15 @@ public sealed record FixReport(AttemptId Attempt, string? Text, int Guidance);
 public sealed record GuidanceNote(DateTimeOffset At, string Text, int AfterTurn);
 
 /// <summary>The settled attempt whose client session an attempt resumes, and that session's id.</summary>
-public sealed record Continuation(AttemptId Attempt, string Session);
+public sealed record Continuation(AttemptId Attempt, string Session)
+{
+    /// <summary>
+    /// The folder the session lives in: where the continued attempt's client last reported it. Null when that attempt's
+    /// log predates folders.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Folder { get; init; }
+}
 
 /// <summary>
 /// The command a person copied to open the attempt's session in the client's own terminal interface. It changes into
@@ -128,6 +136,10 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>The project's files as a Git tree before the first turn started. Null outside Git and in older logs.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Tree { get; init; }
+
+        /// <summary>The folder the first turn's client runs in: the project, or a run's task checkout. Null in older logs.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? WorkingFolder { get; init; }
 
         /// <summary>The turns run in the client's read-only mode, so a turn that changes the project's files fails.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -217,6 +229,10 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>A review's turn after a fix round: what the subject reported in that round.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public FixReport? Report { get; init; }
+
+        /// <summary>The folder this turn's client runs in. Null in older logs, where it is the folder of the turn before.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? WorkingFolder { get; init; }
     }
 
     /// <summary>The person ended a waiting attempt as done.</summary>
@@ -248,6 +264,7 @@ public sealed record AttemptRecord
         RequestedAt = requested.At;
         Continues = requested.Continues?.Attempt;
         Resuming = requested.Continues;
+        WorkingFolder = requested.WorkingFolder;
         Conversation = requested.Conversation ?? ConversationMode.Autonomous;
         Planning = requested.Planning;
         ReadOnly = requested.ReadOnly;
@@ -285,6 +302,16 @@ public sealed record AttemptRecord
     /// ended without reporting one. Null before then, and for an attempt that continues nothing.
     /// </summary>
     public bool? Resumed { get; internal init; }
+
+    /// <summary>The folder the latest turn's client ran in. Null in logs written before folders.</summary>
+    public string? WorkingFolder { get; internal init; }
+
+    /// <summary>
+    /// The folder where <see cref="SessionId"/> lives: the working folder of the turn whose client last reported it, or the
+    /// continued session's folder until the client reports. Null when unknown, as in logs written before folders. Pi finds
+    /// a session only there.
+    /// </summary>
+    public string? SessionFolder { get; internal init; }
 
     /// <summary>Every turn ran in the client's read-only mode.</summary>
     public bool ReadOnly { get; }
@@ -398,6 +425,7 @@ internal static partial class AttemptReducer
     {
         Status = AttemptStatus.Running,
         SessionId = requested.Continues is { Session: var session } && PlainSessionId().IsMatch(session) ? session : null,
+        SessionFolder = requested.Continues?.Folder,
     };
 
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e)
@@ -468,6 +496,7 @@ internal static partial class AttemptReducer
         Verdict = null,
         LastMessage = null,
         Conversation = turn.Conversation ?? record.Conversation,
+        WorkingFolder = turn.WorkingFolder ?? record.WorkingFolder,
     };
 
     private static RequestKey Key(AttemptRecord record, string id) => new(new TurnKey(record.Id, record.Turns.Count), id);
@@ -545,6 +574,7 @@ internal static partial class AttemptReducer
         AgentEvent.SessionStarted session when PlainSessionId().IsMatch(session.SessionId) => record with
         {
             SessionId = session.SessionId,
+            SessionFolder = record.WorkingFolder,
             // Only the first turn decides: Apply settles the flag when that turn ends.
             Resumed = record.Resumed ?? (record.Resuming is { } continues ? session.SessionId == continues.Session : null),
         },

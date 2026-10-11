@@ -47,6 +47,37 @@ public sealed class AttemptLogTests : IDisposable
     }
 
     [Fact]
+    public void The_folders_of_a_continuation_and_its_turns_are_written_only_when_known_and_read_back()
+    {
+        var attempts = _temp.Create("attempts");
+        var requested = BuildRequested(Second) with
+        {
+            Prompt = "banana", WorkingFolder = "/home/me/fruit", Continues = new Continuation(First, "thread-1") { Folder = "/home/me/fruit" },
+        };
+
+        string folder;
+        using (var log = AttemptLog.Create(attempts, requested))
+        {
+            folder = log.Folder;
+            log.Append(NextTurn(4, "Use an apple.") with { WorkingFolder = "/home/me/fruit" });
+            log.Append(NextTurn(5, "And a pear."));
+        }
+
+        var lines = File.ReadAllLines(Path.Combine(folder, "events.jsonl"));
+        Assert.EndsWith("""
+            "continues":{"attempt":"019aa000-0000-7000-8000-000000000001","session":"thread-1","folder":"/home/me/fruit"},"workingFolder":"/home/me/fruit"}
+            """, lines[0]);
+        Assert.EndsWith("""
+            "workingFolder":"/home/me/fruit"}
+            """, lines[1]);
+        Assert.DoesNotContain("folder", lines[2], StringComparison.OrdinalIgnoreCase);
+        var read = AttemptLog.Read(folder);
+        var first = Assert.IsType<AttemptEvent.Requested>(read[0]);
+        Assert.Equal((requested.Continues, requested.WorkingFolder), (first.Continues, first.WorkingFolder));
+        Assert.Equal("/home/me/fruit", Assert.IsType<AttemptEvent.TurnRequested>(read[1]).WorkingFolder);
+    }
+
+    [Fact]
     public void A_continuation_and_its_turns_are_written_as_new_event_types_and_read_back()
     {
         var attempts = _temp.Create("attempts");

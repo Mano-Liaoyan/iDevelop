@@ -99,6 +99,8 @@ public sealed partial class ProjectRuns
             StartProblem.ModelNotOffered => "The configured model is unavailable.",
             StartProblem.ReasoningNotOffered => "The configured reasoning level is unavailable.",
             StartProblem.NoReadOnlyMode => "This client cannot run a read-only task.",
+            StartProblem.SessionFolderMoved moved =>
+                $"{Clients.Name(moved.Client)} can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.",
             _ => "The task cannot continue with its current configuration and ownership.",
         };
 

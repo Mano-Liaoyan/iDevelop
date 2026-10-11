@@ -242,6 +242,8 @@ public static class RunText
         StartProblem.FixInterrupted p =>
             $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Its session cannot go on, so retry the fix in a fresh session.",
         StartProblem.NoFixChoice p => $"\"{p.Review}\" has no interrupted fix round to continue or retry.",
+        StartProblem.SessionFolderMoved p =>
+            $"{Clients.Name(p.Client)} can't continue this conversation after the project folder moved, so it needs a new conversation. Run the task again to start one.",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",

@@ -30,6 +30,7 @@ internal static class Pi
         Protocol = request => new OneShotProtocol(Launch(request), Interpret),
         Terminal = session => $"pi --session {session}",
         HasReadOnlyMode = false,
+        SessionsPerFolder = true,
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(

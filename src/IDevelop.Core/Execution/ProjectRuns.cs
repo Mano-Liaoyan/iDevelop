@@ -376,7 +376,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
 
             var settings = last is { Status: AttemptStatus.WaitingForInput } ? last.Requested : task.Execution;
-            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, ""), questions: _questions) is StartVerdict.Blocked blocked
+            return StartCheck.Evaluate(task with { Execution = settings }, _projectFolder, _clients.Current, new Resumption(from.Session, "") { Folder = from.Folder }, questions: _questions) is StartVerdict.Blocked blocked
                 ? new SendProblem.CannotStart(blocked.Problem)
                 : null;
         }
@@ -834,7 +834,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(problem), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message), questions: _questions);
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(from.Session, message) { Folder = from.Folder }, questions: _questions);
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -866,7 +866,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         var prompt = waiting.Status == AttemptStatus.WaitingForInput
             ? string.Join("\n\n", waiting.Queued.Select(item => item.Text).Append(message)) : message;
-        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, prompt), questions: _questions);
+        var verdict = StartCheck.Evaluate(task with { Execution = waiting.Requested }, _projectFolder, _clients.Current, new Resumption(from.Session, prompt) { Folder = from.Folder }, questions: _questions);
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
@@ -901,6 +901,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Conversation = task.Conversation,
                 Tree = tree,
                 Report = report,
+                WorkingFolder = _projectFolder,
                 Consumed = waiting.Status == AttemptStatus.WaitingForInput ? [.. record.Queued.Select(item => item.Id)] : default,
                 Replies = waiting.Status == AttemptStatus.WaitingForInput
                     ? [.. waiting.DeferredRequestIds.Select(id => new TurnRequestId(waiting.Turns.Count, id))] : default,
@@ -943,7 +944,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             { SessionId: null } => (null, new SendProblem.NoSession(last.Requested.Client)),
             _ when task.Execution is { } settings && settings.Client != last.Requested.Client =>
                 (null, new SendProblem.ClientChanged(last.Requested.Client, settings.Client)),
-            { SessionId: { } session } => (new Continuation(last.Id, session), (SendProblem?)null),
+            { SessionId: { } session } => (new Continuation(last.Id, session) { Folder = last.SessionFolder }, (SendProblem?)null),
         };
         return from is not null;
     }
@@ -1002,6 +1003,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Conversation = task.Conversation,
                 Planning = planning,
                 Tree = tree,
+                WorkingFolder = _projectFolder,
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,

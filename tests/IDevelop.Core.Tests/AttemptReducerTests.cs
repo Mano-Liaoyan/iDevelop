@@ -262,6 +262,27 @@ public class AttemptReducerTests
     }
 
     [Fact]
+    public void An_attempt_records_the_folder_its_turns_run_in_and_its_session_lives_where_the_client_last_reported_it()
+    {
+        const string here = "/home/me/fruit", moved = "/home/me/moved-fruit";
+        var requested = BuildRequested(First) with { WorkingFolder = here };
+        AttemptEvent[] reported = [requested, LaunchedAt1s, Said(2, new SessionStarted("thread-1")), Sent(3, "banana"), Said(4, new Succeeded("Which fruit?")), Exit(5, 0)];
+        var elsewhere = NextTurn(6, "banana") with { WorkingFolder = moved };
+        var continues = BuildRequested(new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000bb"))) with { Prompt = "banana", WorkingFolder = moved, Continues = new Continuation(First, "thread-1") { Folder = here } };
+
+        (string?, string?, string?) Folders(params AttemptEvent[] events) =>
+            AttemptReducer.Replay(events) is { } record ? (record.WorkingFolder, record.SessionFolder, record.SessionId) : default;
+
+        Assert.Equal((here, null, null), Folders(requested, LaunchedAt1s));
+        Assert.Equal((here, here, "thread-1"), Folders(reported));
+        Assert.Equal((moved, here, "thread-1"), Folders([.. reported, elsewhere]));
+        Assert.Equal((moved, moved, "thread-2"), Folders([.. reported, elsewhere, Said(7, new SessionStarted("thread-2"))]));
+        Assert.Equal((here, here, "thread-1"), Folders([.. reported, NextTurn(6, "banana")]));
+        Assert.Equal((moved, here, "thread-1"), Folders(continues, LaunchedAt1s));
+        Assert.Equal((null, null, "thread-1"), Folders(BuildRequested(First), LaunchedAt1s, Said(2, new SessionStarted("thread-1"))));
+    }
+
+    [Fact]
     public void A_continuation_resumed_its_session_once_the_client_reports_that_session()
     {
         var earlier = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa"));

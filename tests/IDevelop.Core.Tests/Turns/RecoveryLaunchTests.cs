@@ -72,7 +72,8 @@ public sealed class RecoveryLaunchTests
         Assert.Equal(1, f.Preparation.Read().Attempts.Values.Count(attempt => attempt.Cause is AttemptCause.Continue));
         Assert.Equal(launches + 1, f.Launches);
         Assert.Equal("session-1", turn.Attempt.SessionId);
-        Assert.Equal(new Continuation(previous, "session-1"), Assert.IsType<AttemptEvent.Requested>(f.Log(turn.Address.Launch).Events[0]).Continues);
+        var requested = Assert.IsType<AttemptEvent.Requested>(f.Log(turn.Address.Launch).Events[0]);
+        Assert.Equal((new Continuation(previous, "session-1") { Folder = f.Checkout }, f.Checkout), (requested.Continues, requested.WorkingFolder));
         Assert.Equal(f.Checkout, File.ReadAllText(Path.Combine(f.Evidence, "continue-cwd.txt")));
         Assert.Equal("keep\n", File.ReadAllText(Path.Combine(f.Evidence, "continue-keep.txt")));
         Assert.IsType<TurnStart.Existing>(await f.Runs.StartTurn(f.Preparation.Permit, intent).WaitAsync(Bound));

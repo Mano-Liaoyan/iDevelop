@@ -57,7 +57,7 @@ internal static class RunReviews
         if (Previous(record, fix) is not { } previous || log(record.Attempts[previous]) is not { SessionId: { } session } earlier) return null;
         var attempt = record.Attempts[fix];
         return record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Execution?.Client == earlier.Requested.Client
-            ? new Continuation(previous, session) : null;
+            ? new Continuation(previous, session) { Folder = earlier.SessionFolder } : null;
     }
 
     /// <summary>

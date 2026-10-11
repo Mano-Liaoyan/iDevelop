@@ -154,6 +154,7 @@ public sealed partial class ProjectRuns
             var evidence = intent is TurnIntent.Next ? AttemptEvidence.Read(folder) : null;
             if (evidence is { Rejection: { } invalid }) return new TurnStart.Refused(invalid);
             var session = evidence?.Record?.SessionId;
+            var sessionFolder = evidence?.Record?.SessionFolder;
             Continuation? continues = null;
             if (intent is TurnIntent.First { Cause: AttemptCause.Continue continued })
             {
@@ -162,7 +163,7 @@ public sealed partial class ProjectRuns
                 session = record.Baselines.GetValueOrDefault((continued.Previous, continued.Confirmation))?.Baseline.Session ?? earlier?.SessionId;
                 if (session is null || earlier?.Requested.Client != definition.Execution?.Client)
                     return new TurnStart.Refused(new(RunProblem.SessionUnavailable));
-                continues = new(continued.Previous, session);
+                continues = new(continued.Previous, session) { Folder = earlier?.SessionFolder };
             }
             else if (intent is TurnIntent.First { Cause: AttemptCause.ReviewFix })
             {
@@ -171,8 +172,9 @@ public sealed partial class ProjectRuns
                     earlier => AttemptEvidence.Read(store.AttemptFolder(permit.Workflow, permit.Run, earlier.Task, earlier.Id)).Record);
                 session = continues?.Session;
             }
+            if (intent is TurnIntent.First) sessionFolder = continues?.Folder;
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
-                new Resumption(session, prepared.Prompt), questions: _questions);
+                new Resumption(session, prepared.Prompt) { Folder = sessionFolder }, questions: _questions);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);
             var plan = ((StartVerdict.Allowed)verdict).Plan;
             plan = plan with { Request = plan.Request with { WorkingFolder = ready.Checkout } };
@@ -196,7 +198,7 @@ public sealed partial class ProjectRuns
                         new AttemptEvent.Requested(TimeProvider.GetUtcNow(), attempt.Id, task, definition.Title, plan.Settings,
                             prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                         {
-                            RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly,
+                            RunBinding = binding, Conversation = definition.Conversation, ReadOnly = readOnly, WorkingFolder = ready.Checkout,
                             Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues, Planning = RunPlanning.Handles(record, attempt),
                             // A reviewer's attempt names its subject, so it rests in review between its turns.
                             Subject = definition.Blueprint.Work is WorkSpec.Review ? record.Revisions[attempt.Revision].Snapshot.SubjectOf(task) : null,
@@ -246,6 +248,7 @@ public sealed partial class ProjectRuns
                 owner.Log!.Append(new AttemptEvent.TurnRequested(TimeProvider.GetUtcNow(), prepared.Prompt, plan.Command.Path, plan.Launch.Arguments)
                 {
                     Conversation = definition.Conversation, Consumed = [.. resting.Queued.Select(message => message.Id)], Tree = tree,
+                    WorkingFolder = ready.Checkout,
                     Report = ((TurnIntent.Next)intent).Report,
                     // A reply to a waiting attempt answers its deferred questions, as a standalone reply does.
                     Replies = resting.Status == AttemptStatus.WaitingForInput

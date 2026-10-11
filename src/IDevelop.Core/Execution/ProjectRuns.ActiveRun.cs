@@ -1039,6 +1039,7 @@ public sealed partial class ProjectRuns
             {
                 Conversation = _conversation,
                 Tree = tree,
+                WorkingFolder = plan.Request.WorkingFolder ?? _owner._projectFolder,
                 Consumed = [.. Record.Queued.Select(message => message.Id)],
             });
             var (record, process) = _owner.LaunchTurn(plan, Record, _log);
