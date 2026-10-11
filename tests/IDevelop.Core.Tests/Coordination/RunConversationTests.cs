@@ -16,6 +16,30 @@ public sealed class RunConversationTests
         await session.SendAsync(session.Snapshot.Current!.Value, text, stopTurn, default).WaitAsync(Bound);
 
     [Fact]
+    public async Task A_fix_round_that_resumed_its_session_reads_on_in_the_run_s_conversation_without_a_new_attempt_marker()
+    {
+        await using var f = new RunConversationFixture(RunReviewTests.Reviewed());
+        RunReviewTests.Routed(f).Answer(A,
+                RunReviewTests.Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                RunReviewTests.Writes(f, A, 2, "calc.txt", "a + b\n", RunReviewTests.Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
+            .Answer(C, RunReviewTests.Reads(f, 1, """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""),
+                RunReviewTests.Reads(f, 2, """{"status": "verdict", "verdict": "approve", "findings": []}"""))
+            .Answer(B, RunReviewTests.Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        using var session = f.Session(A);
+        var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(f.Attempt(A), new HistoryQuery.Latest(), 50, default));
+
+        Assert.True(f.Log(A).Record!.Resumed);
+        Assert.Equal(2, page.Entries.Select(entry => entry.Turn.Attempt).Distinct().Count());
+        Assert.Equal(["attempt"], page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Marker>()
+            .Where(marker => marker.Kind is "attempt" or "configuration").Select(marker => marker.Kind));
+        Assert.Equal(2, (await session.ListAttemptsAsync(default)).Length);
+    }
+
+    [Fact]
     public async Task A_waiting_reply_starts_the_next_turn_in_the_prepared_checkout()
     {
         await using var f = new RunConversationFixture(Chat(A));
