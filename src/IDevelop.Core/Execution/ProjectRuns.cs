@@ -907,8 +907,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
     /// <summary>
     /// Starts a new conversation in a fresh session. Its first prompt is the task's own prompt, exactly as when the task
-    /// starts, followed by the person's message. A waiting attempt that could not go on is cancelled first. Called under the
-    /// gate with the task's lock, which it releases on a refusal.
+    /// starts, followed by the person's message. A waiting attempt that could not go on is cancelled once the new attempt is
+    /// on record. Called under the gate with the task's lock, which it releases on a refusal.
     /// </summary>
     private (SendResult Result, ActiveRun? Run) StartNewConversation(TaskDefinition task, string message, StandaloneLease held, string? tree)
     {
@@ -928,24 +928,23 @@ public sealed partial class ProjectRuns : IAsyncDisposable
 
         var plan = ((StartVerdict.Allowed)verdict).Plan;
         plan = plan with { Request = plan.Request with { Prompt = $"{plan.Request.Prompt.TrimEnd('\n')}\n\n{message}" } };
-        if (Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting)
+        var waiting = Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } latest ? latest : null;
+        var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles(Guid.CreateVersion7()) : null;
+        var (result, run) = RecordAndLaunch(task, plan, held, continues: null, tree, handles, personMessage: message);
+        if (result is StartResult.Started && waiting is not null)
         {
-            var cancel = new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow());
+            // Only once the new attempt is on record does the waiting one end, so a failed record leaves it as it was.
             try
             {
                 using var log = AttemptLog.Open(AttemptLog.FolderOf(_attempts, task.Id, waiting.Id));
-                log.Append(cancel);
-                SetPublished(task.Id, new PublishedAttempt(AttemptReducer.Apply(waiting, cancel), log.LineCount));
+                log.Append(new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow()));
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                held.Dispose();
-                return (new SendResult.Refused(new SendProblem.CannotStart(CannotRecord(e))), null);
+                // The new conversation runs either way, and the earlier attempt's log keeps it waiting.
             }
         }
 
-        var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles(Guid.CreateVersion7()) : null;
-        var (result, run) = RecordAndLaunch(task, plan, held, continues: null, tree, handles, personMessage: message);
         return result switch
         {
             StartResult.Started started => (new SendResult.Continued(started.Attempt), run),

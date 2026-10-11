@@ -265,6 +265,40 @@ public sealed class SessionContinuityTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_conversation_that_cannot_be_recorded_leaves_the_waiting_attempt_waiting()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Install(_fakes, ClientId.Pi, Fresh(ClientId.Pi).RecordArguments(Evidence("fresh.json")).Print(SessionLine(ClientId.Pi, Original)).Print(ReplyLines(ClientId.Pi, "OK")));
+        var waiting = PlantWaiting(Path.Combine(Path.GetDirectoryName(_project)!, "old-project"));
+        var task = SayHi() with { Conversation = ConversationMode.Chat };
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        Assert.True(runs.StartNewConversation(task));
+        // The task's attempt folder takes no new attempt. Its lock file and the waiting attempt's log stay writable.
+        var attempts = Path.Combine(_project, ".idp", "attempts", SayHiId.ToString());
+        File.WriteAllText(Path.Combine(attempts, "run.lock"), "");
+        var mode = File.GetUnixFileMode(attempts);
+        File.SetUnixFileMode(attempts, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        SendResult result;
+        try
+        {
+            result = await runs.SendAsync(task, "Start over.", stopTurn: false);
+        }
+        finally
+        {
+            File.SetUnixFileMode(attempts, mode);
+        }
+
+        Assert.IsType<StartProblem.CannotRecord>(Assert.IsType<SendProblem.CannotStart>(Assert.IsType<SendResult.Refused>(result).Problem).Problem);
+        Assert.False(File.Exists(Evidence("fresh.json")), "Pi started a new conversation that was not recorded.");
+        Assert.Equal((waiting, AttemptStatus.WaitingForInput), (runs.Latest[SayHiId].Id, runs.Latest[SayHiId].Status));
+        Assert.Empty(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, waiting)).OfType<AttemptEvent.CancelRequested>());
+    }
+
+    [Fact]
     public async Task A_conversation_whose_client_reported_no_session_offers_a_new_one_and_one_that_can_go_on_does_not()
     {
         Install(_fakes, ClientId.Pi);
