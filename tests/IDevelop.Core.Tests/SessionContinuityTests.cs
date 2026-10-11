@@ -1,4 +1,5 @@
 using System.Text.Json;
+using IDevelop.Core.Tests.Turns;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -136,6 +137,41 @@ public sealed class SessionContinuityTests : IDisposable
     }
 
     [Fact]
+    public async Task A_reply_to_a_run_s_Pi_attempt_whose_checkout_moved_is_refused_and_nothing_launches()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat, client: ClientId.Pi, model: "deepseek/deepseek-flash");
+        await f.Open();
+        var first = await f.Settled(await f.Start());
+        Assert.IsType<TurnDisposition.Resting>(Assert.IsType<Release.Released>(first.Release()).Receipt);
+        MoveRecordedCheckout(f.Folder(first.Address.Launch), f.Checkout);
+        FakeAgents.Install(f.Fakes, ClientId.Pi, FakeAgents.Resuming(ClientId.Pi, "session-1")
+            .Print(FakeAgents.SessionLine(ClientId.Pi, "session-1")).Print(FakeAgents.ReplyLines(ClientId.Pi, "Unknown")));
+
+        var refused = Assert.IsType<TurnStart.Refused>(await f.Runs.StartTurn(f.Preparation.Permit,
+            new TurnIntent.Next(f.Preparation.Op(), new(first.Address.Launch.Attempt, 2), "Use the fixture")).WaitAsync(TurnFixture.Bound));
+
+        Assert.Equal(new StartProblem.SessionFolderMoved(ClientId.Pi), refused.Client);
+        Assert.Equal(1, f.Launches);
+    }
+
+    [Fact]
+    public async Task A_run_s_Continue_of_a_Pi_attempt_whose_checkout_moved_is_refused_and_nothing_launches()
+    {
+        await using var f = new TurnFixture(client: ClientId.Pi, model: "deepseek/deepseek-flash");
+        var (previous, confirmation, _) = await RecoveryLaunchTests.Baselined(f);
+        MoveRecordedCheckout(f.Folder(new(previous, 1)), f.Checkout);
+        var launches = f.Launches;
+        FakeAgents.Install(f.Fakes, ClientId.Pi, FakeAgents.Resuming(ClientId.Pi, "session-1")
+            .Print(FakeAgents.SessionLine(ClientId.Pi, "session-1")).Print(FakeAgents.ReplyLines(ClientId.Pi, "Unknown")));
+
+        var refused = Assert.IsType<TurnStart.Refused>(await f.Runs.StartTurn(f.Preparation.Permit,
+            new TurnIntent.First(f.Preparation.Op(), Runs.RunFixtures.T, new AttemptCause.Continue(previous, confirmation))).WaitAsync(TurnFixture.Bound));
+
+        Assert.Equal(new StartProblem.SessionFolderMoved(ClientId.Pi), refused.Client);
+        Assert.Equal(launches, f.Launches);
+    }
+
+    [Fact]
     public async Task A_Pi_attempt_logged_before_folders_resumes_its_session_by_id_as_before()
     {
         Install(_fakes, ClientId.Pi,
@@ -209,6 +245,19 @@ public sealed class SessionContinuityTests : IDisposable
             }
         };
         return settled.Task.WaitAsync(Patience);
+    }
+
+    /// <summary>
+    /// Rewrites a run attempt's log as if its turns had run in another checkout, as after the project moved, without moving
+    /// the project, whose Git worktrees would not follow.
+    /// </summary>
+    private static void MoveRecordedCheckout(string attemptFolder, string checkout)
+    {
+        var events = Path.Combine(attemptFolder, "events.jsonl");
+        var text = File.ReadAllText(events);
+        var recorded = $"\"workingFolder\":{JsonSerializer.Serialize(checkout)}";
+        Assert.Contains(recorded, text, StringComparison.Ordinal);
+        File.WriteAllText(events, text.Replace(recorded, $"\"workingFolder\":{JsonSerializer.Serialize(checkout + "-before-the-move")}", StringComparison.Ordinal));
     }
 
     /// <summary>Writes a Chat attempt, of Pi unless <paramref name="settings"/> say otherwise, that waits for the person, whose session ran in <paramref name="folder"/>.</summary>
