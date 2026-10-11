@@ -127,8 +127,8 @@ public sealed class ProposalViewModel : ObservableObject
     public bool HasItems => Items.Count > 0;
 
     /// <summary>
-    /// A new task has no agent of its own, neither the person's nor a planner's choice that this machine runs, and its type
-    /// has none, so <see cref="UsePlannerAgent"/> decides its agent. A fill never takes the planner's agent.
+    /// A task has no agent of its own, neither the person's nor a planner's choice that this machine runs, nor its type's or,
+    /// for a fill, its task's, so <see cref="UsePlannerAgent"/> decides its agent.
     /// </summary>
     public bool UsesFallback => Items.Any(item => item.Agent is { NeedsFallback: true });
 
@@ -358,7 +358,7 @@ public sealed class ProposalViewModel : ObservableObject
 
     /// <summary>
     /// The one edit that accepts the chosen tasks, each with the person's choice, else its own agent, else the planner's
-    /// usable choice, else, for a new task, the planner's agent while the box is ticked, as each row shows.
+    /// usable choice, else the planner's agent while the box is ticked, as each row shows.
     /// </summary>
     private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
         workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null,

@@ -10,8 +10,8 @@ namespace IDevelop.Desktop.Canvas;
 /// <summary>
 /// The agent that a task a proposal adds or fills takes once accepted, which the review shows and the person may change:
 /// their own choice, else the task's own agent (its type's for a new task, the task's for a fill), else the planner's
-/// when this machine can run it, else, for a new task, the planner's agent while the proposal's box is ticked. A
-/// planner's choice this machine cannot run says why, on the task's row and its ghost card.
+/// when this machine can run it, else the planner's agent while the proposal's box is ticked. A planner's choice this
+/// machine cannot run says why, on the task's row and its ghost card.
 /// </summary>
 public sealed class ProposalAgentViewModel : ObservableObject
 {
@@ -35,7 +35,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
     private bool _isEditing;
 
     /// <param name="own">The agent the task has of its own, which wins over the planner's choice.</param>
-    /// <param name="fills">True for a fill, whose own agent is its task's and which never takes the planner's agent.</param>
+    /// <param name="fills">True for a fill, whose own agent is its task's.</param>
     private ProposalAgentViewModel(ProposalViewModel proposal, TaskId id, string title, Blueprint blueprint, ProposedAgent? agent,
         Func<ExecutionSettings?> own, bool fills)
     {
@@ -84,7 +84,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     /// <summary>Why the planner's choice falls back, and to what, or null.</summary>
     public string? Note => Unusable is { } unusable
-        ? $"{unusable.Problem} {(Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
+        ? $"{unusable.Problem} {(_proposal.Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
         : null;
 
     /// <summary>
@@ -146,12 +146,12 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     /// <summary>
     /// What accepting gives the task, as <see cref="Proposal.Accept"/> decides it: the person's choice, else its own agent,
-    /// else the planner's choice, else, for a new task, the planner's agent while the box is ticked.
+    /// else the planner's choice, else the planner's agent while the box is ticked.
     /// </summary>
-    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? Fallback;
+    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? _proposal.Fallback;
 
-    /// <summary>A new task has no agent of its own, its type has none, and the planner gave none it can use, so the box decides.</summary>
-    internal bool NeedsFallback => !_fills && _changed is null && Own is null && Planned is null;
+    /// <summary>The task has no agent of its own and the planner gave none it can use, so the box decides.</summary>
+    internal bool NeedsFallback => _changed is null && Own is null && Planned is null;
 
     private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
@@ -160,8 +160,6 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// <summary>The agent the task's blueprint saves, or a fill's task has now, which wins over the planner's choice.</summary>
     private ExecutionSettings? Own => _own();
 
-    /// <summary>The planner's agent while the box is ticked, which only a new task takes. A fill keeps its task as it is.</summary>
-    private ExecutionSettings? Fallback => _fills ? null : _proposal.Fallback;
 
     /// <summary>A planner's choice that falls back: one the machine cannot run, for a task without an agent of its own.</summary>
     private AgentCheck.Unusable? Unusable => _changed is null && Own is null ? _check as AgentCheck.Unusable : null;

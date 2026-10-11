@@ -54,14 +54,26 @@ public sealed class AmendmentAgentsTests
     }
 
     [Fact]
-    public void Without_choices_a_fill_keeps_its_task_as_it_is_and_a_new_task_takes_its_own_agent_else_the_fallback()
+    public void Without_choices_each_task_without_an_agent_of_its_own_takes_the_fallback_and_a_fill_too()
     {
         using var f = Proposing(out var proposal, out var previous);
 
         var amended = Assert.IsType<RunDecision.Recorded>(f.Store.AmendFromProposal(f.Permit, f.Op(), previous, proposal, proposal.Items.ToHashSet(),
             f.Op(), Fallback)).Record.Revision.Snapshot;
 
-        Assert.Equal([null, Fallback, Own, Fallback],
+        Assert.Equal([Fallback, Fallback, Own, Fallback],
+            new[] { U, New(proposal, "chosen"), New(proposal, "careful"), New(proposal, "none") }.Select(task => amended.Tasks[task].Execution));
+    }
+
+    [Fact]
+    public void Without_a_fallback_a_fill_without_a_choice_keeps_its_task_as_it_is()
+    {
+        using var f = Proposing(out var proposal, out var previous);
+
+        var amended = Assert.IsType<RunDecision.Recorded>(f.Store.AmendFromProposal(f.Permit, f.Op(), previous, proposal, proposal.Items.ToHashSet(),
+            f.Op())).Record.Revision.Snapshot;
+
+        Assert.Equal([null, null, Own, null],
             new[] { U, New(proposal, "chosen"), New(proposal, "careful"), New(proposal, "none") }.Select(task => amended.Tasks[task].Execution));
     }
 

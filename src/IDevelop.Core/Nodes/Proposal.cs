@@ -149,8 +149,8 @@ public sealed record Proposal(
     /// <param name="started">Whether a task has an attempt.</param>
     /// <param name="fallback">
     /// The agent that a new Agent or Review node takes when it has no other: no person's choice, no agent of its
-    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. Null leaves
-    /// such a node without an agent. A fill never takes it.
+    /// blueprint's own, and no planner's choice. It takes it with the blueprint's default conversation mode. A fill whose
+    /// node has no agent and no choice takes it too. Null leaves such a node without an agent.
     /// </param>
     /// <param name="planned">
     /// The planner's choice for each new Agent or Review node and each fill, one this machine can run. A new node takes it
@@ -181,7 +181,7 @@ public sealed record Proposal(
                     Settings = SettingsFor(node.Blueprint, changed?.GetValueOrDefault(node.Id), planned?.GetValueOrDefault(node.Id), fallback),
                 }),
             .. Fills.Where(fill => Kept(fill.Slot)).SelectMany(fill =>
-                Fill(fill, workflow.Tasks.GetValueOrDefault(fill.Slot), changed?.GetValueOrDefault(fill.Slot), planned?.GetValueOrDefault(fill.Slot))),
+                Fill(fill, workflow.Tasks.GetValueOrDefault(fill.Slot), changed?.GetValueOrDefault(fill.Slot), planned?.GetValueOrDefault(fill.Slot), fallback)),
             .. Connections
                 .Where(connection => Kept(connection.From) && Kept(connection.To))
                 .Where(connection => !workflow.Connections.ContainsKey(new ConnectionKey(connection.From, connection.To)))
@@ -240,11 +240,13 @@ public sealed record Proposal(
         : null;
 
     /// <summary>
-    /// A fill's title and fields, and its agent: the person's choice, else the node's own agent, else the planner's choice.
+    /// A fill's title and fields, and its agent: the person's choice, else the node's own agent, else the planner's choice,
+    /// else the fallback.
     /// </summary>
-    private static IEnumerable<WorkflowEdit> Fill(ProposedFill fill, TaskDefinition? slot, ExecutionSettings? changed, ExecutionSettings? planned)
+    private static IEnumerable<WorkflowEdit> Fill(
+        ProposedFill fill, TaskDefinition? slot, ExecutionSettings? changed, ExecutionSettings? planned, ExecutionSettings? fallback)
     {
-        var agent = slot is null || slot.Blueprint.Work.Kind == WorkKind.Person ? null : changed ?? slot.Execution ?? planned;
+        var agent = slot is null || slot.Blueprint.Work.Kind == WorkKind.Person ? null : changed ?? slot.Execution ?? planned ?? fallback;
         return
         [
             .. fill.Title is { } title ? [new WorkflowEdit.EditTitle(fill.Slot, title)] : Array.Empty<WorkflowEdit>(),

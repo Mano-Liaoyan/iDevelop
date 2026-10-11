@@ -206,8 +206,9 @@ public sealed class PlanningTests : IDisposable
             GenerateTests.Review(shell));
         Assert.Equal(["Fills · GPT-6.1-Sol · low Backend API", "Fills Frontend"], GenerateTests.Ghosts(shell));
         Assert.Equal(new string?[] { null, "Pi isn't installed" }, GenerateTests.GhostNotes(shell));
-        // The planner's agent is a fallback for the tasks a proposal adds, so a fill leaves the box out.
-        Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+        // Frontend has no usable choice, so the box offers it the planner's agent, which a planner the person placed leaves off.
+        Assert.True(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+        Assert.False(shell.InView<CheckBox>("ProposalUsePlannerAgent").IsChecked);
 
         shell.Click(shell.InView<Button>("AcceptProposal"));
 
@@ -254,7 +255,7 @@ public sealed class PlanningTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_planners_agent_is_a_fallback_for_a_new_task_and_a_fill_without_a_usable_choice_keeps_no_agent()
+    public void A_ticked_box_gives_the_planners_agent_to_a_new_task_and_a_fill_without_a_usable_choice()
     {
         var shell = RunArchitect("""
             ```idevelop
@@ -271,12 +272,13 @@ public sealed class PlanningTests : IDisposable
 
         Assert.Equal(
             [
-                ("Frontend", "No agent", null, "The planner chose Pi, which isn't installed. Choose the task's agent before it runs."),
+                ("Frontend", "Codex · GPT-5.5 · high", null, "The planner chose Pi, which isn't installed. The task takes the planner's agent instead."),
                 ("Wire export", "Codex · GPT-5.5 · high", null, null),
             ],
             GenerateTests.Review(shell));
+        Assert.Equal(["Fills · GPT-5.5 · high Frontend", "Codex · GPT-5.5 · high Wire export"], GenerateTests.Ghosts(shell));
         shell.Click(shell.InView<Button>("AcceptProposal"));
-        Assert.Null(canvas.Workflow.Tasks[Frontend].Execution);
+        Assert.Equal(Codex, canvas.Workflow.Tasks[Frontend].Execution);
         Assert.Equal(Codex, Assert.Single(canvas.Workflow.Tasks.Values, task => task.Title == "Wire export").Execution);
     }
 

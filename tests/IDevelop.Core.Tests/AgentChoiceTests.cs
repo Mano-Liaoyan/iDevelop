@@ -335,13 +335,13 @@ public sealed class AgentChoiceTests
                 ("check", Sol, ConversationMode.Autonomous),
                 ("sign", null, ConversationMode.Autonomous),
                 ("careful", mine, ConversationMode.MayAsk),
-                ("slot-1", null, ConversationMode.Autonomous),
+                ("slot-1", Sol, ConversationMode.Autonomous),
             ],
             Agents(proposal, accepted));
     }
 
     [Fact]
-    public void A_fill_whose_task_has_no_agent_takes_the_persons_choice_else_the_planners_and_a_tasks_own_agent_stays()
+    public void A_fill_whose_task_has_no_agent_takes_the_persons_choice_else_the_planners_else_the_fallback_and_a_tasks_own_agent_stays()
     {
         var workflow = ArchitectWithTwoSlots().Must(new SetExecution(Frontend, Haiku));
         var proposal = Ready("""
@@ -361,9 +361,11 @@ public sealed class AgentChoiceTests
 
         Assert.Equal((planned, Haiku), (chosen.Tasks[Backend].Execution, chosen.Tasks[Frontend].Execution));
         Assert.Equal((mine, mine), (changed.Tasks[Backend].Execution, changed.Tasks[Frontend].Execution));
-        // Without a choice, a fill keeps its task as it is: the box's agent is for the tasks a proposal adds.
+        // Without a choice, a fill whose task has no agent takes the planner's agent while the box is ticked, as a new task does.
         var none = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol));
-        Assert.Equal((null, Haiku), (none.Tasks[Backend].Execution, none.Tasks[Frontend].Execution));
+        Assert.Equal((Sol, Haiku), (none.Tasks[Backend].Execution, none.Tasks[Frontend].Execution));
+        var unticked = workflow.Must(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false));
+        Assert.Equal((null, Haiku), (unticked.Tasks[Backend].Execution, unticked.Tasks[Frontend].Execution));
         Assert.DoesNotContain(proposal.Accept(workflow, proposal.Items.ToHashSet(), _ => false, Sol, both).Edits,
             edit => edit is SetExecution { Task: var task } && task == Frontend);
     }
