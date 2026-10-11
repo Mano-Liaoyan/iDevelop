@@ -136,7 +136,8 @@ public sealed partial class ProjectRuns
             lease = taken.Lease;
             var preparation = intent switch
             {
-                TurnIntent.First first => await materializer.Prepare(lease, first.Operation, first.Cause, first.BasePrompt),
+                TurnIntent.First first => await materializer.Prepare(lease, first.Operation, first.Cause, first.BasePrompt,
+                    agents: PlanningContext.Offers(_clients.Current)),
                 TurnIntent.Next next => await materializer.PrepareTurn(lease, next.Operation, next.Launch, next.Prompt),
                 _ => throw new InvalidOperationException(),
             };

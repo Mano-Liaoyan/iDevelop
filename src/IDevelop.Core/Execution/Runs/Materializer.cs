@@ -45,8 +45,9 @@ internal sealed partial class Materializer
         TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null, Func<string, ulong?>? volumes = null) =>
         new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe, volumes ?? FileIdentities.VolumeOf);
 
+    /// <param name="agents">What the clients offer now, which a planner's start records for its prompt to list (#99).</param>
     public async ValueTask<Preparation> Prepare(RunLease lease, OperationId operation, AttemptCause cause,
-        string? basePrompt = null, CancellationToken cancellation = default)
+        string? basePrompt = null, CancellationToken cancellation = default, ImmutableArray<AgentOffer> agents = default)
     {
         using var authority = lease.Use();
         if (authority is null) return new Preparation.Rejected(new(RunProblem.TaskBusy));
@@ -104,7 +105,7 @@ internal sealed partial class Materializer
                 RunEvent.Planned { Plan: MaterializationPlan.Preparation originalPlan }
                 ? originalPlan.Revision
                 : RunReducer.Slot(record, task, cause)?.Revision ?? record.Revision.Id;
-            var planned = Journal("plan", () => _store.Plan(lease, planOperation, revision, cause));
+            var planned = Journal("plan", () => _store.Plan(lease, planOperation, revision, cause, agents));
             record = DecisionRecord(planned);
             var planEvent = DecisionEvent(planned);
             var plan = (MaterializationPlan.Preparation)((RunEvent.Planned)planEvent).Plan;
