@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -44,7 +45,16 @@ internal abstract record MaterializationPlan
     private MaterializationPlan() { }
 
     internal sealed record Preparation(AttemptId Attempt, InputId Inputs, TaskId Task, RevisionId Revision, AttemptCause Cause,
-        ImmutableArray<InputBinding> Bindings, ImmutableArray<CodeSource> Sources, ReviewInput? Review) : MaterializationPlan;
+        ImmutableArray<InputBinding> Bindings, ImmutableArray<CodeSource> Sources, ReviewInput? Review) : MaterializationPlan
+    {
+        /// <summary>
+        /// The agents a planner's first prompt lists, as the clients offered them when its start was planned (#99), so every
+        /// preparation, claim, and recovery renders that prompt the same. Null for a start whose prompt lists none, which
+        /// the journal leaves out, as it always did.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ImmutableArray<AgentOffer>? Agents { get; init; }
+    }
 
     internal sealed record Refresh(LaunchKey Launch, InputId Inputs, ImmutableArray<InputBinding> Bindings,
         ImmutableArray<CodeSource> Sources, ReviewInput? Review, JoinRecord? Composed = null) : MaterializationPlan;

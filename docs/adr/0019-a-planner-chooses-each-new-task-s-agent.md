@@ -14,11 +14,11 @@ A planner that the app starts, whether Generate Workflow placed it or the person
 ## Considered options
 
 - Letting the planner's choice override a blueprint's saved agent, which the first version of pull request #98 did. A blueprint's agent is the person's own choice, which the node model keeps.
-- Letting a run's planner choose agents too. Its prompt must render the same from its attempt alone, so it would need the offers recorded in the attempt. A run's planner keeps the old contract until a ticket asks for that.
+- Letting a run's planner choose agents too. Its prompt must render the same from its attempt alone, so it would need the offers recorded in the attempt. A run's planner keeps the old contract until a ticket asks for that. Superseded by [ADR 0028](0028-a-run-s-planner-and-its-amendment-choose-agents-and-so-does-a-fill.md): a run's planner chooses agents from the offers its start records.
 
 ## Consequences
 
-- A fill still keeps the agent of the task the person drew, and an Approval ignores a choice, since it takes no agent.
+- A fill still keeps the agent of the task the person drew, and an Approval ignores a choice, since it takes no agent. Superseded for a fill by [ADR 0028](0028-a-run-s-planner-and-its-amendment-choose-agents-and-so-does-a-fill.md): a fill whose task has no agent takes the planner's choice, else the planner's agent while the box is ticked. An Approval still ignores a choice.
 - A proposal without agents, from an older build or a run's planner, reads and records as before.
 
 Source: pull request [#98](https://github.com/Mano-Liaoyan/iDevelop/pull/98), its Decisions 1 to 6.
