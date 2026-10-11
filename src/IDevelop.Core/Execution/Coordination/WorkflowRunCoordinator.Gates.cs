@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -20,12 +21,23 @@ internal sealed partial class WorkflowRunCoordinator
         Answer(address, response, new GateAnswer.SendBack(reason), command, wait);
 
     /// <summary>
-    /// What approving <paramref name="request"/> hands on: each input's report under its task's title, as the approval
-    /// records it. Null when the journal cannot be read or holds no such request. It reads the journal off the loop.
+    /// What approving <paramref name="request"/> hands on, input by input: each input's report under its task's title, as the
+    /// approval records it, and for a review, its verdict and every finding it raised, read from the review's attempt in
+    /// this run or, for a result carried from an earlier run, in that run. Null when the journal cannot be read or holds no
+    /// such request. It reads the journals and logs off the loop.
     /// </summary>
-    public string? GateReport(GateId request) =>
+    public ImmutableArray<GateInput>? GateInputs(GateId request) =>
         Record() is { } record && record.Gates.TryGetValue(request, out var state) && record.Inputs.TryGetValue(state.Request.Inputs, out var inputs)
-            ? GateForwarding.Report(record, inputs) : null;
+            ? GateForwarding.Inputs(record, inputs, result => ReviewLog(record, Address.Run, result)) : null;
+
+    /// <summary>The log of the attempt that produced <paramref name="result"/> of run <paramref name="run"/>, or null.</summary>
+    private AttemptRecord? ReviewLog(RunRecord record, RunId run, ResultRecord result) => result.Origin switch
+    {
+        ResultOrigin.Executed executed => Log(run, record.Attempts[executed.Attempt]),
+        ResultOrigin.Carried carried when _store.Read(Address.Workflow, carried.Run) is RunRead.Loaded earlier =>
+            ReviewLog(earlier.Record, carried.Run, earlier.Record.Results.Single(each => each.Id == carried.Result)),
+        _ => null,
+    };
 
     private async Task<GateReply> Answer(RunAddress address, GateResponse response, GateAnswer answer, OperationId command, CancellationToken wait)
     {

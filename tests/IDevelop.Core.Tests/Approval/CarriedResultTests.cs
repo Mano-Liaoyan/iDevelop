@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Coordination;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -234,6 +235,38 @@ public sealed class CarriedResultTests
         Assert.Equal("B ready.\n", carried.Report);
         Assert.Contains("B ready.", File.ReadAllText(Path.Combine(f.Folder(C), "1.stdin")));
         Assert.Equal(("A\n", "root moved\n"), (Copied(f, C, "out-a.txt"), Copied(f, C, "root.txt")));
+    }
+
+    [Fact]
+    public async Task An_approval_reads_a_review_carried_from_an_earlier_run_from_that_run_s_record_of_the_review()
+    {
+        const string Agreed = """{"status": "verdict", "verdict": "approve", "findings": []}""";
+        var workflow = Graph([Agent(A), RunReviewTests.Reviewer(C, "Build C."), new TaskDefinition(X, BuiltInBlueprints.Approval) { Title = "Gate" }], (A, C), (C, X));
+        await using var f = new ApprovalFixture(workflow);
+        f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(C, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-C"))
+            .Print(FakeAgents.ReplyLines(ClientId.Codex, RunReviewTests.Verdict(Agreed))));
+        await f.Open();
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, A), BaseChoice.Head, Command(1));
+        await Approve(started.Coordinator);
+        await Completed(started.Coordinator);
+
+        var again = await Start(f, f.Runs.Preflight(f.Workflow, X), BaseChoice.Head, Command(2));
+        var request = await Approve(again.Coordinator, answer: false);
+
+        Assert.Equal([1, 1], Launches(f, A, C));
+        Assert.IsType<ResultOrigin.Carried>(f.Read(again.Coordinator.Address.Run).CurrentResults[C].Origin);
+        var review = Assert.Single(again.Coordinator.GateInputs(request)!.Value).Review!;
+        Assert.Equal((true, 1), (review.Verdict.Approves, review.Round));
+    }
+
+    /// <summary>Waits for <c>X</c>'s request and approves it unless <paramref name="answer"/> is false.</summary>
+    private static async Task<GateId> Approve(WorkflowRunCoordinator coordinator, bool answer = true)
+    {
+        var waiting = await coordinator.Until(view => view.Tasks[X].Gate is { Status: GateStatus.Waiting }).WaitAsync(Bound);
+        var gate = waiting.Tasks[X].Gate!;
+        if (answer)
+            Assert.IsType<GateReply.Recorded>(await coordinator.Approve(coordinator.Address, new(gate.Request.Id, gate.Request.Inputs), new(Guid.NewGuid())).WaitAsync(Bound));
+        return gate.Request.Id;
     }
 
     [Fact]

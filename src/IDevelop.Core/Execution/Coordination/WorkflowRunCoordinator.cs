@@ -309,9 +309,12 @@ internal sealed partial class WorkflowRunCoordinator
     private RunView Project(RunRecord record) => RunProjection.Of(Address, record, Log,
         _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions };
 
-    private AttemptRecord? Log(RunAttempt attempt)
+    private AttemptRecord? Log(RunAttempt attempt) => Log(Address.Run, attempt);
+
+    /// <summary>The log of <paramref name="attempt"/> of run <paramref name="run"/> of this workflow, or null when it cannot be read.</summary>
+    private AttemptRecord? Log(RunId run, RunAttempt attempt)
     {
-        try { return AttemptEvidence.Read(_store.AttemptFolder(Address.Workflow, Address.Run, attempt.Task, attempt.Id)).Record; }
+        try { return AttemptEvidence.Read(_store.AttemptFolder(Address.Workflow, run, attempt.Task, attempt.Id)).Record; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
     }
 

@@ -517,17 +517,65 @@
                               <TextBlock Text="{Binding RequestLabel}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                          AutomationProperties.AutomationId="GateRequest" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}"
-                                                    IsShown="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <!-- The forwarded report is Markdown, which renders as the conversation renders it. -->
+                            <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}" IsShown="{Binding HasInputs}">
+                              <!-- Each forwarded report is Markdown, which renders as the conversation renders it. A review shows its
+                                   verdict as a status and every finding it raised, like the Review node's Findings, and keeps its
+                                   recorded report, with the raw verdict, behind a disclosure. -->
                               <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8">
                                 <Border.Styles>
                                   <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
                                 </Border.Styles>
-                                <!-- The card grows with the report, so the panel's own scroll is the only one. -->
-                                <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
-                                                           AutomationProperties.AutomationId="GateReport"
-                                                           AutomationProperties.Name="What approving hands on" />
+                                <!-- The card grows with the inputs, so the panel's own scroll is the only one. -->
+                                <ItemsControl ItemsSource="{Binding Inputs}" AutomationProperties.AutomationId="GateInputs">
+                                  <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                      <StackPanel Spacing="12" />
+                                    </ItemsPanelTemplate>
+                                  </ItemsControl.ItemsPanel>
+                                  <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="execution:GateInputViewModel">
+                                      <StackPanel Spacing="8">
+                                        <conversation:MarkdownView Markdown="{Binding Markdown}" FitsCode="True"
+                                                                   AutomationProperties.AutomationId="GateReport"
+                                                                   AutomationProperties.Name="What approving hands on" />
+                                        <StackPanel Spacing="8" IsVisible="{Binding IsReview}" AutomationProperties.AutomationId="GateReview">
+                                          <Border Classes="pill" HorizontalAlignment="Left" Classes.complete="{Binding Approves}" Classes.waiting="{Binding !Approves}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                              <PathIcon Theme="{StaticResource Glyph}" />
+                                              <TextBlock Text="{Binding Verdict}" AutomationProperties.AutomationId="GateVerdict" />
+                                            </StackPanel>
+                                          </Border>
+                                          <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
+                                                        IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                                        AutomationProperties.AutomationId="GateFindings"
+                                                        AutomationProperties.Name="Findings">
+                                            <ItemsControl.ItemsPanel>
+                                              <ItemsPanelTemplate>
+                                                <StackPanel Spacing="8" />
+                                              </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                          </ItemsControl>
+                                          <TextBlock Classes="caption" Text="{Binding NoFindings}" TextWrapping="Wrap"
+                                                     IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                     AutomationProperties.AutomationId="GateNoFindings" />
+                                          <StackPanel>
+                                            <ToggleButton x:Name="RawToggle" Classes="disclosure"
+                                                          AutomationProperties.AutomationId="GateRawToggle"
+                                                          AutomationProperties.Name="Raw data">
+                                              <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <PathIcon Theme="{StaticResource Glyph}" />
+                                                <TextBlock Text="Raw data" />
+                                              </StackPanel>
+                                            </ToggleButton>
+                                            <conversation:MarkdownView Markdown="{Binding Raw}" FitsCode="True" IsVisible="{Binding #RawToggle.IsChecked}" Margin="14,4,0,0"
+                                                                       AutomationProperties.AutomationId="GateRaw"
+                                                                       AutomationProperties.Name="The review's recorded report" />
+                                          </StackPanel>
+                                        </StackPanel>
+                                      </StackPanel>
+                                    </DataTemplate>
+                                  </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                               </Border>
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding SentBackReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
