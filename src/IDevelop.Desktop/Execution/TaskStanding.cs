@@ -16,7 +16,11 @@ internal abstract record TaskStanding
 
     /// <summary>Its newest run left it a result that still counts, so a node's Run of a task after it uses it.</summary>
     /// <param name="At">When that run recorded the result.</param>
-    internal sealed record Succeeded(DateTimeOffset At) : TaskStanding;
+    internal sealed record Succeeded(DateTimeOffset At) : TaskStanding
+    {
+        /// <summary>The result's report, which an expanded card shows the first paragraph of (#94).</summary>
+        public string? Report { get; init; }
+    }
 
     /// <summary>Its newest result no longer counts, for <paramref name="Reason"/>.</summary>
     internal sealed record OutOfDate(OutOfDateReason Reason, TaskId? Input, DateTimeOffset At) : TaskStanding
@@ -48,7 +52,7 @@ internal abstract record TaskStanding
     {
         switch (history[task])
         {
-            case TaskHistory.Current current: return new Succeeded(current.Result.At);
+            case TaskHistory.Current current: return new Succeeded(current.Result.At) { Report = current.Result.Result.Report };
             case TaskHistory.OutOfDate outOfDate:
                 return new OutOfDate(outOfDate.Reason, outOfDate.Input, outOfDate.Result.At)
                 {

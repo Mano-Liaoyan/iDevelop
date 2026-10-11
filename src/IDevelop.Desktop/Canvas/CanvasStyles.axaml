@@ -13,6 +13,51 @@
   <Style Selector="nodify|ItemContainer:previewing-selection Border.ring">
     <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
   </Style>
+  <!-- A card is 240 wide in its 260 wide container, and an expanded card 320 in 340 (ADR 0024). An expanded card's state
+       tint stays on its header, so its details read on the card's own surface. -->
+  <Style Selector="Panel.taskCard">
+    <Setter Property="Width" Value="260" />
+    <Setter Property="MinHeight" Value="64" />
+  </Style>
+  <Style Selector="Panel.taskCard.expanded">
+    <Setter Property="Width" Value="340" />
+  </Style>
+  <Style Selector="Panel.taskCard Border.stateTint">
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
+  </Style>
+  <Style Selector="Panel.taskCard.expanded Border.stateTint">
+    <Setter Property="CornerRadius" Value="14,14,0,0" />
+  </Style>
+  <!-- The card's disclosure: a 28 px target drawn in the 16 px glyph column, right while collapsed and down while expanded,
+       as the sidebar's rows show theirs. -->
+  <Style Selector="ToggleButton.cardChevron">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.cardChevron:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextStrongBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron PathIcon">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="Data" Value="{StaticResource IconChevronRight}" />
+  </Style>
+  <Style Selector="ToggleButton.cardChevron:checked PathIcon">
+    <Setter Property="Data" Value="{StaticResource IconChevronDown}" />
+  </Style>
   <Style Selector="Border.card">
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BoxShadow" Value="{DynamicResource NodeShadow}" />

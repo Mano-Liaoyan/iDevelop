@@ -170,9 +170,11 @@ internal sealed partial class Shell
     public void Click(Visual visual) => Click(Center(visual));
 
     /// <summary>Opens the picker, chooses the entry, and returns every entry the picker offered, in order.</summary>
-    public string[] Pick(string picker, string entry)
+    public string[] Pick(string picker, string entry) => Pick(InView<ComboBox>(picker), entry);
+
+    /// <summary>Opens the picker, such as one on an expanded card, chooses the entry, and returns every entry it offered.</summary>
+    public string[] Pick(ComboBox box, string entry)
     {
-        var box = InView<ComboBox>(picker);
         Click(box);
         string[] offered = [.. Window.GetVisualDescendants().OfType<ComboBoxItem>().Select(TextOf)];
         Assert.True(offered.Contains(entry), $"The picker offers [{string.Join(", ", offered)}], not {entry}.");
@@ -186,7 +188,7 @@ internal sealed partial class Shell
             Press(steps > 0 ? Key.Down : Key.Up);
         }
 
-        Assert.Equal(entry, Picked(picker));
+        Assert.Equal(entry, TextOf(box));
         return offered;
     }
 

@@ -113,7 +113,8 @@
         <ControlTheme TargetType="nodify:ItemContainer"
                       BasedOn="{StaticResource {x:Type nodify:ItemContainer}}"
                       x:DataType="canvas:TaskNodeViewModel">
-          <Setter Property="Location" Value="{Binding Location}" />
+          <!-- Where the card shows: its saved position, moved aside on screen while other cards are expanded (ADR 0024). -->
+          <Setter Property="Location" Value="{Binding DisplayLocation}" />
           <Setter Property="BorderThickness" Value="0" />
           <Setter Property="SelectedBorderThickness" Value="0" />
           <!-- The selection ring and the shadow are drawn outside the card's box. -->
@@ -145,6 +146,22 @@
       <Border x:Name="ZoomPanel" Classes="floating" canvas:CanvasBottomBar.Slot="Leading">
         <Border>
           <StackPanel>
+            <!-- Expand All and Collapse All, for this workflow's cards only (ADR 0024), with the zoom controls, since it
+                 changes only this machine's view. The chevron points down to expand every card, and right to collapse
+                 them, as a card's points when it is expanded or collapsed, and the tooltip's first line names it. It shows
+                 with the minimap, which is taller than the four buttons, so the bottom row keeps its height. A compact or
+                 short canvas has room for one expanded card at most, and each card's chevron still expands it. -->
+            <Panel x:Name="ExpandAllSlot">
+              <Button Classes="icon zoom" Command="{Binding ExpandCardsCommand}" IsVisible="{Binding !IsEmpty}"
+                      ToolTip.Tip="{Binding ExpandCardsLabel, StringFormat='{}{0}&#10;Show or hide the details of every card in this workflow'}"
+                      AutomationProperties.AutomationId="ExpandAll"
+                      AutomationProperties.Name="{Binding ExpandCardsLabel}">
+                <Panel>
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}" IsVisible="{Binding !AnyCardExpanded}" />
+                  <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronRight}" IsVisible="{Binding AnyCardExpanded}" />
+                </Panel>
+              </Button>
+            </Panel>
             <Button Classes="icon zoom" Click="OnZoomIn" ToolTip.Tip="Zoom in (+)"
                     AutomationProperties.AutomationId="ZoomIn" AutomationProperties.Name="Zoom in">
               <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconZoomIn}" />

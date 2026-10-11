@@ -210,13 +210,22 @@ internal static class WorkflowRunText
     private static string Waits(IReadOnlyCollection<TaskId> holders, Func<TaskId, string> title, IReadOnlyDictionary<TaskId, TaskView>? tasks)
     {
         var waits = $"It starts once {Names(holders, title)} {(holders.Count == 1 ? "hands" : "hand")} on a result.";
+        return Unrun(holders, title, tasks) is { } unrun ? $"{waits} {unrun}" : waits;
+    }
+
+    /// <summary>
+    /// Which of the predecessors a waiting task waits for nobody ran: ""B" runs only when you run it.", or null when the run
+    /// starts each of them itself. An expanded card says it under the tasks it lists (#94).
+    /// </summary>
+    public static string? Unrun(IEnumerable<TaskId> holders, Func<TaskId, string> title, IReadOnlyDictionary<TaskId, TaskView>? tasks)
+    {
         var unrun = holders.Where(holder => tasks?.GetValueOrDefault(holder) is { State: TaskState.Unrequested }).ToArray();
         return unrun.Length switch
         {
-            0 => waits,
+            0 => null,
             // The last word stays with the one before it, so a narrow inspector leaves no word alone on a line.
-            1 => $"{waits} {Names(unrun, title)} runs only when you run\u00A0it.",
-            _ => $"{waits} {Names(unrun, title)} run only when you run\u00A0them.",
+            1 => $"{Names(unrun, title)} runs only when you run\u00A0it.",
+            _ => $"{Names(unrun, title)} run only when you run\u00A0them.",
         };
     }
 

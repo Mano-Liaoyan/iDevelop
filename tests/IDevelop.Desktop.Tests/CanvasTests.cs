@@ -82,7 +82,8 @@ public sealed class CanvasTests : IDisposable
         Assert.Equal(60 + pan, added.Location.X);
         Assert.False(existing.Bounds.Intersects(added.Bounds), $"{existing.Bounds} overlaps {added.Bounds}");
         Assert.True(existing.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == title).TextLayout.TextLines.Single().HasCollapsed);
-        Assert.Equal(title, ((string)ToolTip.GetTip(shell.InCard<Panel>(title, "TaskCard"))!).Split('\n')[0]);
+        // The peek names the whole title that the card cuts short.
+        Assert.Equal(title, shell.PeekTexts(title)![0]);
     }
 
     [AvaloniaFact]
@@ -105,16 +106,15 @@ public sealed class CanvasTests : IDisposable
     public void A_card_shows_its_title_and_one_subtitle_and_its_tooltip_previews_its_instructions()
     {
         var shell = Shell.Open(_temp.Seed(TaskAt(Build, "Build", 405, 90)));
-        string Tip() => (string)ToolTip.GetTip(shell.InCard<Panel>("Build", "TaskCard"))!;
         Assert.Equal(["Build", "Choose an agent"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal("Build\nImplement · No agent\nChoose an agent for this task first.", Tip());
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Nothing written yet.", "Choose an agent for this task first."], shell.PeekTexts("Build")!);
 
         shell.Click(shell.Header(shell.Node("Build")));
         shell.Click(shell.Find<TextBox>("TaskInstructions"));
         shell.Type("Compile");
 
         Assert.Equal(["Build", "Choose an agent"], Shell.Texts(shell.Node("Build")));
-        Assert.Equal("Build\nImplement · No agent\nCompile\nChoose an agent for this task first.", Tip());
+        Assert.Equal(["Build", "Implement · No agent", "Instructions", "Compile", "Choose an agent for this task first."], shell.PeekTexts("Build")!);
     }
 
     [AvaloniaFact]

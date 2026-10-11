@@ -503,6 +503,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
         if (!ReferenceEquals(previous?.Positions, current.Positions))
         {
             Reroute();
+            ScheduleCardLayout();
         }
 
         if (connectionsChanged || !ReferenceEquals(previous?.Tasks, current.Tasks) || !ReferenceEquals(previous?.Positions, current.Positions))
@@ -604,6 +605,7 @@ public sealed partial class WorkflowCanvasViewModel : ObservableObject
             SelectedNodes.Remove(node);
             Nodes.Remove(node);
             _nodes.Remove(id);
+            node.DetachDetail();
         }
     }
 

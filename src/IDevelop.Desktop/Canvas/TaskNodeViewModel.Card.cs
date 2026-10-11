@@ -4,11 +4,9 @@ using IDevelop.Execution;
 
 namespace IDevelop.Desktop.Canvas;
 
-/// <summary>What the node's card shows: its kind tile, its title, and one subtitle line, with the rest in its tooltip.</summary>
+/// <summary>What the node's card shows: its kind tile, its title, and its two lines under it. Its peek and its details show the rest.</summary>
 public sealed partial class TaskNodeViewModel
 {
-    private const int TipFieldLines = 3;
-
     private bool _isRenaming;
 
     /// <summary>The card's title is a box that takes a new title.</summary>
@@ -67,28 +65,9 @@ public sealed partial class TaskNodeViewModel
     /// <summary>"Under review by Check the diff", on the review badge of a node that a review goes on with.</summary>
     public string? ReviewerTip => Problem is StartProblem.UnderReview underReview ? $"Under review by {underReview.Review}" : null;
 
-    /// <summary>
-    /// The card's tooltip: the title, the blueprint and agent, a review's summary, the start of the first field, and why the
-    /// node cannot start. None while the title is renamed, so it never covers the box.
-    /// </summary>
-    public string? CardTip => IsRenaming ? null : string.Join("\n", new[]
-    {
-        Title,
-        HasAgent ? $"{TypeName} · {AgentLabel}" : TypeName,
-        // What a task of the run, or one between runs, waits for, by name, which the card may only count.
-        Standing is { } standing ? standing.Tip(TitleOf) : RunTask is { State: TaskState.Pending } ? RunDetail?.Replace('\u00A0', ' ') : null,
-        ReviewSummary,
-        FirstFieldLines(),
-        Problem is { } problem ? RunText.Describe(problem) : null,
-    }.Where(line => !string.IsNullOrWhiteSpace(line)));
-
     partial void InitializeCard()
     {
         PropertyChanged += (_, e) => OnCardChanged(e.PropertyName);
-        if (Fields.Count > 0)
-        {
-            Fields[0].PropertyChanged += (_, _) => OnPropertyChanged(nameof(CardTip));
-        }
     }
 
     private void OnCardChanged(string? property)
@@ -108,33 +87,16 @@ public sealed partial class TaskNodeViewModel
             case nameof(Proposal) or nameof(StatusLabel):
                 OnPropertyChanged(nameof(Subtitle));
                 OnPropertyChanged(nameof(SubtitleChoices));
-                OnPropertyChanged(nameof(CardTip));
                 break;
             case nameof(Problem):
                 OnPropertyChanged(nameof(Subtitle));
                 OnPropertyChanged(nameof(SubtitleChoices));
                 OnPropertyChanged(nameof(ReviewerTip));
-                OnPropertyChanged(nameof(CardTip));
                 break;
             case nameof(AgentLabel):
                 OnPropertyChanged(nameof(AgentClient));
                 OnPropertyChanged(nameof(AgentModel));
-                OnPropertyChanged(nameof(CardTip));
-                break;
-            case nameof(Title) or nameof(ReviewSummary) or nameof(IsRenaming):
-                OnPropertyChanged(nameof(CardTip));
                 break;
         }
-    }
-
-    private string? FirstFieldLines()
-    {
-        if (Fields.Count == 0)
-        {
-            return null;
-        }
-
-        var lines = Fields[0].Text.Trim().Split('\n');
-        return lines.Length <= TipFieldLines ? string.Join("\n", lines) : string.Join("\n", lines.Take(TipFieldLines)) + " …";
     }
 }
