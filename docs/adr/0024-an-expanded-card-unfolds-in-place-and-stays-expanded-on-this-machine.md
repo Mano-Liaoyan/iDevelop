@@ -2,7 +2,7 @@
 
 A card on the canvas can expand. An expanded card unfolds in place to 320 px wide and as tall as its details, and the cards around it slide aside on screen while it stays open. A collapsed card's tooltip is a quick read-only peek of the same details. An expanded card has its own editable pickers for the client, the model, and the reasoning level, and it answers its agent the conversation's way. Expanded cards stay expanded after a restart, remembered for each workflow on this machine only. The owner chose this on 2026-10-09 in issue [#94](https://github.com/Mano-Liaoyan/iDevelop/issues/94), from three working prototypes: option A, unfold in place, with option B's hover peek. They asked for it because "each node on the canvas should show more content".
 
-The [product direction](../product-direction.md) says: "Expansion must preserve node positions and connections." This record refines that line. The workflow's saved positions are preserved. Expanding a card never changes them, never marks the workflow unsaved, and never writes its file. Only the view moves cards aside, and the cards slide back when the card closes.
+The [workspace and execution plan](../handoffs/2026-10-06-workspace-execution-plan.md#preserve-compact-cards-and-reveal-practical-controls), which the [product direction](../product-direction.md) approves, says: "Expansion must preserve node positions and connections." This record refines that line. The workflow's saved positions are preserved. Expanding a card never changes them, never marks the workflow unsaved, and never writes its file. Only the view moves cards aside, and the cards slide back when the card closes.
 
 ## How it works
 

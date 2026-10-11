@@ -144,3 +144,12 @@ _Avoid_: client slot, which is a run's place for a running client
 **Amendment**:
 A recorded change to an approved run's workflow, from a run planner's proposal that the person accepted. It only adds tasks and connections and fills tasks that have not started, and a task counts as started once the plan of its start is recorded. An edit of the workflow document changes no run.
 _Avoid_: edit, which changes only the document
+
+### Canvas
+
+**Expanded card**:
+A task's card unfolded in place to show what goes on now, its agent's pickers, and its actions. Expansion is this machine's view of the workflow: the cards around it slide aside on screen only, and the workflow's positions and file never change ([ADR 0024](docs/adr/0024-an-expanded-card-unfolds-in-place-and-stays-expanded-on-this-machine.md)).
+_Avoid_: expanded node, and an expanded workflow, which is a sidebar row that shows its tasks
+
+**Peek**:
+A collapsed card's tooltip, a read-only look at what its expanded card shows first.
