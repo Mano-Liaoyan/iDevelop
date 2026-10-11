@@ -256,6 +256,13 @@ public sealed class AddNodeViewModel : ObservableObject
         yield return new("Select All", "IconSelectAll", CanvasKeys.Hint(CanvasKeys.SelectAll), new RelayCommand(_canvas.SelectAll));
         yield return new("Fit to View", "IconFit", CanvasKeys.Hint(CanvasKeys.Fit), new RelayCommand(() => _canvas.View?.FitToView()));
         yield return new("Zoom to 100%", "IconZoomIn", CanvasKeys.Hint(CanvasKeys.ZoomToActual), new RelayCommand(() => _canvas.View?.ZoomToActual()));
+
+        // Also here, since a compact or short canvas leaves it out of the zoom controls (ADR 0024).
+        if (!_canvas.IsEmpty)
+        {
+            yield return new(_canvas.ExpandCardsLabel, _canvas.AnyCardExpanded ? "IconChevronRight" : "IconChevronDown", "", _canvas.ExpandCardsCommand);
+        }
+
         if (_canvas.SelectedNodes.Count > 0 || _canvas.SelectedConnections.Count > 0)
         {
             yield return new("Delete Selection", "IconDelete", CanvasKeys.Hint(CanvasKeys.Delete), _canvas.DeleteSelectionCommand);

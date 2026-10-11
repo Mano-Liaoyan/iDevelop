@@ -144,6 +144,42 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_canvas_menu_offers_Expand_All_and_Collapse_All_at_every_canvas_size_even_where_the_zoom_controls_leave_them_out()
+    {
+        var shell = Shell.Open(Diamond());
+        var canvas = shell.Window.ViewModel.Canvas!;
+        shell.Window.Width = 900;
+        shell.Window.Height = 600;
+        shell.Render();
+        Assert.False(shell.Find<Button>("ExpandAll").IsEffectivelyVisible);
+        Assert.True(canvas.IsEmptyAt(new CanvasPoint(20, 300)));
+
+        shell.RightClick(Screen(shell, new Point(20, 300)));
+
+        Assert.Equal(["Select All", "Fit to View", "Zoom to 100%", "Expand All"], shell.AddRows().SkipWhile(row => row != "Select All"));
+        shell.Click(AddAction(shell, "Expand All"));
+        Assert.False(shell.AddPopoverIsOpen);
+        Assert.All(canvas.Nodes, node => Assert.True(node.IsExpanded, $"{node.Title} is collapsed."));
+        Assert.False(canvas.Document.HasUnsavedChanges);
+
+        shell.RightClick(Screen(shell, new Point(20, 300)));
+
+        Assert.Contains("Collapse All", shell.AddRows());
+        shell.Click(AddAction(shell, "Collapse All"));
+        Assert.All(canvas.Nodes, node => Assert.False(node.IsExpanded, $"{node.Title} is expanded."));
+    }
+
+    [AvaloniaFact]
+    public void The_canvas_menu_leaves_Expand_All_out_of_an_empty_workflow()
+    {
+        var shell = Shell.Open(_temp.Create("empty"));
+
+        shell.RightClick(shell.InEditor(400, 300));
+
+        Assert.DoesNotContain("Expand All", shell.AddRows());
+    }
+
+    [AvaloniaFact]
     public void A_cards_ports_stay_on_its_header_line_so_its_wires_keep_their_rows_when_it_unfolds()
     {
         // Design's context wire to Archive, below and right of Docs, would pass under the collapsed Docs, through its body.
@@ -488,6 +524,9 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
         Assert.Null(ToolTip.GetTip(shell.InCard<Panel>("Docs", "TaskCard")));
     }
+
+    private static Button AddAction(Shell shell, string name) => shell.Window.GetVisualDescendants().OfType<Button>()
+        .Single(button => Avalonia.Automation.AutomationProperties.GetAutomationId(button) == "AddNodeAction" && Avalonia.Automation.AutomationProperties.GetName(button) == name);
 
     /// <summary>The window point that shows a canvas point.</summary>
     private static Point Screen(Shell shell, Point point) => shell.InEditor(
