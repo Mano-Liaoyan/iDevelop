@@ -35,6 +35,12 @@ internal sealed partial class Materializer
     /// </summary>
     internal TimeSpan MutationPatience { get; set; } = GitRepository.MutationPatience;
 
+    /// <summary>
+    /// Whether the steps are a run's own scheduled work, which never takes the repository's mutation lock while a person's
+    /// command waits for it. A person's command, the default, goes ahead of that work (issue #105).
+    /// </summary>
+    internal bool Scheduled { get; set; }
+
     /// <summary>Whether the step's owner stopped, such as a halted coordinator or a closing project, so a wait for the lock ends.</summary>
     internal Func<bool>? Halted { get; set; }
 
@@ -62,7 +68,7 @@ internal sealed partial class Materializer
         {
             cancellation.ThrowIfCancellationRequested();
             var repository = OpenRepository();
-            using var held = repository.TakeMutationLock(MutationPatience, Halted);
+            using var held = MutationLock(repository);
             if (held is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             var record = Read(workflow, run);
             if (record.Phase != RunPhase.Approved) return new Preparation.Rejected(new(RunProblem.RunStopped));
@@ -173,6 +179,16 @@ internal sealed partial class Materializer
         RepositoryOpen.Refused refused => throw Fault(refused.Problem, refused.Detail, new BlockScope.Repository()),
         _ => throw new InvalidOperationException(),
     };
+
+    /// <summary>
+    /// The repository's mutation lock, waited for as this materializer's steps wait, or null once that wait ends. Each try
+    /// the lock refuses is probed as <c>mutation.waiting</c>.
+    /// </summary>
+    private FileStream? MutationLock(GitRepository repository) => repository.TakeMutationLock(MutationPatience, () =>
+    {
+        _probe?.Invoke("mutation.waiting");
+        return Halted?.Invoke() == true;
+    }, Scheduled);
 
     private RunRecord Read(WorkflowId workflow, RunId run) => _store.Read(workflow, run) switch
     {

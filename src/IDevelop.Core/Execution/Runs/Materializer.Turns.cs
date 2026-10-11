@@ -29,7 +29,7 @@ internal sealed partial class Materializer
                 return new Preparation.Rejected(new(RunProblem.InvalidClaim));
             inputs = old.Inputs;
             var repository = OpenRepository();
-            using var mutation = repository.TakeMutationLock(MutationPatience, Halted);
+            using var mutation = MutationLock(repository);
             if (mutation is null) return new Preparation.Rejected(new(RunProblem.JournalBusy));
             record = Read(workflow, run);
             VerifyRepository(record, repository);

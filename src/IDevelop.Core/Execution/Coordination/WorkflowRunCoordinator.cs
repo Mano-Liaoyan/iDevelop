@@ -30,7 +30,7 @@ internal sealed partial class WorkflowRunCoordinator
 
     private readonly ProjectRuns _runs;
     private readonly RunStore _store;
-    private readonly Func<TimeSpan, Func<bool>?, Materializer> _materializer;
+    private readonly Func<bool, Func<bool>?, Materializer> _materializer;
     private readonly CoordinatorPermit? _permit;
     private readonly Channel<Action> _inbox = Channel.CreateUnbounded<Action>(new() { SingleReader = true });
     private readonly Task _loop;
@@ -55,8 +55,8 @@ internal sealed partial class WorkflowRunCoordinator
     private readonly Dictionary<TaskId, UnresolvedTurn> _unresolved = [];
     private readonly List<Task> _inflight = [];
 
-    /// <param name="materializer">A materializer whose steps wait the given time for the repository's lock and stop waiting once the given check says so.</param>
-    internal WorkflowRunCoordinator(ProjectRuns runs, RunStore store, Func<TimeSpan, Func<bool>?, Materializer> materializer, RunAddress address,
+    /// <param name="materializer">A materializer for the run's own scheduled work when the flag is set, or for a person's command otherwise, whose steps stop waiting for the repository's lock once the given check says so.</param>
+    internal WorkflowRunCoordinator(ProjectRuns runs, RunStore store, Func<bool, Func<bool>?, Materializer> materializer, RunAddress address,
         CoordinatorPermit? permit)
     {
         _runs = runs;
@@ -397,12 +397,16 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// A materializer for the run's own scheduled work, which waits as long as the run allows for the repository's lock,
-    /// because the run's tasks prepare, claim, and publish at the same time (ADR 0018).
+    /// because the run's tasks prepare, claim, and publish at the same time (ADR 0018). It lets a person's command that
+    /// waits for the lock go first (issue #105).
     /// </summary>
-    private Materializer Scheduled() => _materializer(_runs.MutationPatience, Halted);
+    private Materializer Scheduled() => _materializer(true, Halted);
 
-    /// <summary>A materializer for a person's command, which reports a busy repository after the usual short wait.</summary>
-    private Materializer Commanded() => _materializer(GitRepository.MutationPatience, Halted);
+    /// <summary>
+    /// A materializer for a person's command, which takes the repository's lock ahead of the run's scheduled work and
+    /// reports a busy repository after the usual short wait.
+    /// </summary>
+    private Materializer Commanded() => _materializer(false, Halted);
 
     /// <summary>This window's work for a task. Starting and Running each hold one of the run's client slots.</summary>
     private sealed record Live(LiveStage Stage, RunningTurn? Turn = null, bool Cancelled = false);

@@ -12,7 +12,8 @@ public sealed partial class ProjectRuns
     /// </summary>
     /// <param name="scheduled">
     /// The run's own work closes the attempt, such as a stop or a review's conclusion, so it waits for the repository's lock
-    /// as long as the run's other steps do. A person's Mark done or Cancel keeps the default wait.
+    /// as long as the run's other steps do, behind any person's command that waits. A person's Mark done or Cancel keeps the
+    /// default wait and goes ahead of the run's work.
     /// </param>
     /// <param name="halted">Whether the run's coordinator halted, which ends the closure's wait for the repository's lock.</param>
     internal Task<RestingClose> CloseResting(CoordinatorPermit permit, OperationId operation, AttemptId attempt, RestingEnd end,
@@ -33,13 +34,13 @@ public sealed partial class ProjectRuns
                     return closing.WaitAsync(wait);
                 _commands.Remove(key);
             }
-            command = Task.Run(() => CloseRestingCore(permit, operation, attempt, end, scheduled ? MutationPatience : GitRepository.MutationPatience, halted));
+            command = Task.Run(() => CloseRestingCore(permit, operation, attempt, end, scheduled, halted));
             _commands.Add(key, new(intent, command));
         }
         return command.WaitAsync(wait);
     }
 
-    private RestingClose CloseRestingCore(CoordinatorPermit permit, OperationId operation, AttemptId attemptId, RestingEnd end, TimeSpan patience,
+    private RestingClose CloseRestingCore(CoordinatorPermit permit, OperationId operation, AttemptId attemptId, RestingEnd end, bool scheduled,
         Func<bool>? halted)
     {
         var store = TurnStore;
@@ -75,7 +76,7 @@ public sealed partial class ProjectRuns
             {
                 case []:
                     if (!Rests(AttemptEvidence.ReadPrefix(folder, turn).Record, end)) return Refused(RunProblem.InvalidClaim);
-                    switch (TurnMaterializer(store, patience, halted).CheckRestingBaseline(lease, operation, attemptId, end is RestingEnd.Cancel))
+                    switch (TurnMaterializer(store, scheduled, halted).CheckRestingBaseline(lease, operation, attemptId, end is RestingEnd.Cancel))
                     {
                         case RestingCheck.Rejected rejected: return new RestingClose.Refused(rejected.Reason);
                         case RestingCheck.Drifted drifted when end is not RestingEnd.Cancel: return new RestingClose.Blocked(drifted.Block);

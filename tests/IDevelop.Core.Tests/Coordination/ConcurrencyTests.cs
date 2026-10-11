@@ -331,6 +331,82 @@ public sealed class ConcurrencyTests
     }
 
     [Fact]
+    public async Task A_person_s_Mark_done_takes_the_repository_ahead_of_scheduled_work_that_takes_it_again_at_once()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        var turn = new TurnKey(waiting.Tasks[A].Attempt!.Value, 1);
+        using var waits = new SemaphoreSlim(0);
+        var waited = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point != "mutation.waiting") return;
+            Interlocked.Increment(ref waited);
+            waits.Release();
+        };
+        using var stop = new CancellationTokenSource();
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Scheduled work in a tight loop: it takes the lock again as soon as it lets it go, and lets it go only after a step
+        // that waits for it has tried it once more.
+        var loop = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                using var mutation = f.Preparation.Git.Open().TakeMutationLock(Bound, () => stop.IsCancellationRequested, scheduled: true);
+                if (mutation is null) return;
+                held.TrySetResult();
+                try { waits.Wait(stop.Token); }
+                catch (OperationCanceledException) { return; }
+            }
+        });
+        ConversationCommandResult done;
+        try
+        {
+            await held.Task.WaitAsync(Bound);
+            done = await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound);
+        }
+        finally
+        {
+            await stop.CancelAsync();
+        }
+        await loop.WaitAsync(Bound);
+
+        // Mark done waited behind the loop and still got the lock within its one-second wait.
+        Assert.True(Volatile.Read(ref waited) > 0);
+        Assert.Equal(CommandOutcome.Applied, done.Outcome);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
+    }
+
+    [Fact]
+    public async Task A_start_does_not_take_the_repository_while_a_person_s_command_waits_for_it()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        var first = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runs.Probe = point =>
+        {
+            if (point is "mutation.waiting" or "runner.prepared") first.TrySetResult(point);
+        };
+        var folder = Directory.CreateDirectory(Path.Combine(f.Preparation.Git.Open().CommonDirectory, "idevelop")).FullName;
+        // A person's command holds this file while it waits for the lock, here or in another iDevelop window.
+        using (new FileStream(Path.Combine(folder, "person.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            await f.Resume();
+
+            // Nothing holds the lock itself, so only the waiting command keeps the start from preparing.
+            Assert.Equal("mutation.waiting", await first.Task.WaitAsync(Bound));
+        }
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(1, f.Launches(A));
+        Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
+    }
+
+    [Fact]
     public async Task Closing_the_project_ends_a_start_s_wait_for_the_repository()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A)]));
