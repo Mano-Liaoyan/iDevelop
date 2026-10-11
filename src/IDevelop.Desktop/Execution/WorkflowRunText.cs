@@ -193,6 +193,8 @@ internal static class WorkflowRunText
         TaskState.Pending when !task.HeldBy.IsEmpty => Waits(task.HeldBy, title, tasks),
         TaskState.Blocked when task.Block is { } block && block.Task != task.Task => $"The checkout of \"{title(block.Task)}\" holds it. {block.Detail}".Trim(),
         TaskState.Blocked when task.Block is { } block => $"{RecoveryText.Problem(block)} {block.Detail}".Trim(),
+        // A run's task starts a new conversation with Retry, which starts a fresh attempt (#92).
+        TaskState.Refused when task.Problem is StartProblem.SessionFolderMoved moved => $"{RunText.Describe(moved)} Retry starts a new attempt.",
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
