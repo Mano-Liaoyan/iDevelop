@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.VisualTree;
+using Nodify;
 
 namespace IDevelop.Desktop.Canvas;
 
@@ -22,6 +23,15 @@ public partial class CardDetail : UserControl
                 e.Handled = true;
             }
         }, RoutingStrategies.Bubble);
+        // A focused picker takes a wheel notch as a choice, and keeps the focus after a choice. Over a closed picker the wheel
+        // is the canvas's, as it is over the rest of the card, so the canvas takes the focus before the picker sees the notch.
+        AddHandler(PointerWheelChangedEvent, (_, e) =>
+        {
+            if (e.Source is Visual source && source.FindAncestorOfType<ComboBox>(includeSelf: true) is { IsDropDownOpen: false, IsKeyboardFocusWithin: true })
+            {
+                this.FindAncestorOfType<NodifyEditor>()?.Focus();
+            }
+        }, RoutingStrategies.Tunnel);
     }
 
     // A picker whose list is replaced keeps an equal entry selected, so only a change in the open list or by a key on the

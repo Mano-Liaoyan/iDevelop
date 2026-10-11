@@ -231,6 +231,14 @@ public sealed class CardExpansionTests : IDisposable
         Assert.Equal(ClientId.Antigravity, canvas.Workflow.Tasks[Design].Execution!.Client);
         Assert.Equal("Antigravity CLI", shell.Picked("TaskClient"));
 
+        // The picker keeps the focus after a choice. A wheel notch over it zooms the canvas and chooses nothing.
+        var chosen = canvas.Workflow.Tasks[Design].Execution;
+        var zoom = canvas.ViewportZoom;
+        shell.Window.MouseWheel(shell.Center(Picker("CardPickClient")), new Vector(0, 1));
+        shell.Render();
+        Assert.Equal(chosen, canvas.Workflow.Tasks[Design].Execution);
+        Assert.NotEqual(zoom, canvas.ViewportZoom);
+
         // A press that starts on a picker or on a button and drags leaves the card where it was.
         var placed = canvas.Workflow.Positions[Design];
         shell.Drag(shell.Center(Picker("CardPickModel")), shell.Center(Picker("CardPickModel")) + new Vector(120, 60));
