@@ -15,8 +15,11 @@ internal sealed class ScheduledLoop : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly TaskCompletionSource _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _again = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Lock _gate = new();
     private readonly Task _loop;
     private int _takes;
+    // Set by Turn and cleared by the loop as it settles, so each turn settles once, not once per refused try.
+    private int _turning;
 
     public ScheduledLoop(GitRepository repository) => _loop = Task.Run(() => Run(repository));
 
@@ -28,13 +31,25 @@ internal sealed class ScheduledLoop : IAsyncDisposable
 
     public int Takes => Volatile.Read(ref _takes);
 
-    /// <summary>Lets the lock go, and returns once the loop took it again or was refused it.</summary>
+    /// <summary>
+    /// Lets the lock go, and returns once the loop took it again or was refused it. Turns of several waiting steps take place
+    /// one after another.
+    /// </summary>
     public void Turn()
     {
-        if (_stop.IsCancellationRequested) return;
-        _turn.Release();
-        try { _settled.Wait(_stop.Token); }
-        catch (OperationCanceledException) { }
+        lock (_gate)
+        {
+            if (_stop.IsCancellationRequested) return;
+            Volatile.Write(ref _turning, 1);
+            _turn.Release();
+            try { _settled.Wait(_stop.Token); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
+    private void Settle()
+    {
+        if (Interlocked.Exchange(ref _turning, 0) == 1) _settled.Release();
     }
 
     private void Run(GitRepository repository)
@@ -43,16 +58,13 @@ internal sealed class ScheduledLoop : IAsyncDisposable
         {
             using var mutation = repository.TakeMutationLock(TimeSpan.FromSeconds(30), () =>
             {
-                _settled.Release();
+                Settle();
                 return _stop.IsCancellationRequested;
             }, scheduled: true);
             if (mutation is null) return;
             if (Interlocked.Increment(ref _takes) == 1) _held.TrySetResult();
-            else
-            {
-                _again.TrySetResult();
-                _settled.Release();
-            }
+            else _again.TrySetResult();
+            Settle();
             try { _turn.Wait(_stop.Token); }
             catch (OperationCanceledException) { return; }
         }
