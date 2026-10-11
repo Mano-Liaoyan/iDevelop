@@ -37,5 +37,6 @@ public static class NodeStates
     /// <summary>A setting the person must give before the node can start, as opposed to a wait for something else.</summary>
     public static bool IsSetup(StartProblem problem) => problem is StartProblem.NoAgent or StartProblem.FieldMissing
         or StartProblem.NoModel or StartProblem.ModelNotOffered or StartProblem.ModelUnready or StartProblem.ReasoningNotOffered
-        or StartProblem.NoReadOnlyMode or StartProblem.NoSubject or StartProblem.ClientMissing or StartProblem.ClientUnready;
+        or StartProblem.NoReadOnlyMode or StartProblem.NoSubject or StartProblem.ClientMissing or StartProblem.ClientUnready
+        or StartProblem.SkillsUnlisted;
 }

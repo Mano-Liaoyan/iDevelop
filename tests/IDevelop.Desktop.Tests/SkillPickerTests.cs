@@ -2,7 +2,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.VisualTree;
 using IDevelop.Execution;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
@@ -121,6 +124,28 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void An_open_picker_keeps_its_own_colors_and_draws_a_comboboxs_chevron()
+    {
+        var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude)));
+        var picker = shell.Find<ToggleButton>("TaskSkills");
+
+        OpenList(shell);
+        shell.Render();
+
+        // Fluent's checked toggle would fill the box with the accent and turn its text white.
+        Assert.True(picker.IsChecked);
+        var presenter = picker.GetVisualDescendants().OfType<ContentPresenter>().Single(part => part.Name == "PART_ContentPresenter");
+        Assert.True(presenter.Background is null or ISolidColorBrush { Color.A: 0 }, $"The open box is filled with {presenter.Background}.");
+        Assert.Equal(Color(picker.Foreground), Color(presenter.Foreground));
+        var chevron = picker.GetVisualDescendants().OfType<PathIcon>().Single();
+        var glyph = shell.Find<ComboBox>("TaskModel").GetVisualDescendants().OfType<PathIcon>().Single(part => part.Name == "DropDownGlyph");
+        Assert.Equal((glyph.Data!.Bounds, glyph.Width, glyph.Height, Color(glyph.Foreground)), (chevron.Data!.Bounds, chevron.Width, chevron.Height, Color(chevron.Foreground)));
+        Assert.Equal(shell.Bounds(glyph).Right, shell.Bounds(chevron).Right, 0.5);
+
+        static Color? Color(IBrush? brush) => (brush as ISolidColorBrush)?.Color;
+    }
+
+    [AvaloniaFact]
     public void A_chosen_skill_that_is_not_installed_stays_listed_and_the_inspector_says_the_task_runs_without_it()
     {
         var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["gone", "verify-idevelop"] })));
@@ -173,7 +198,7 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_listing_that_fails_says_why_in_the_open_list()
+    public void A_listing_that_fails_says_why_in_the_open_list_and_checking_the_agents_again_lists_once_more()
     {
         _fakes.Install("claude", ClaudeSignedIn, FakeRule.On("-p").Lacking("--include-partial-messages").WaitForLine("initialize")
             .EchoId("""{"type":"control_response","response":{"subtype":"error","request_id":$id,"error":"settings are invalid"}}"""));
@@ -183,9 +208,16 @@ public sealed class SkillPickerTests : IDisposable
         shell.Click(shell.Find<ToggleButton>("TaskSkills"));
         shell.WaitUntil(() => shell.Find<TextBlock>("SkillListNote").Text?.StartsWith("iDevelop could not", StringComparison.Ordinal) == true, "the listing's failure");
 
-        Assert.Equal("iDevelop could not list the skills Claude Code loads. Claude Code did not list its skills: settings are invalid.",
+        Assert.Equal("iDevelop could not list the skills Claude Code loads. Claude Code did not list its skills: settings are invalid. Check agents again to list them once more.",
             shell.Find<TextBlock>("SkillListNote").Text);
         Assert.Empty(Ticks(shell));
+
+        _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(_personal));
+        shell.Click(shell.Find<Button>("RefreshAgents"));
+        shell.WaitUntil(() => Ticks(shell).Length > 0, "the skills listed once more");
+
+        Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
+        Assert.False(shell.Find<TextBlock>("SkillListNote").IsEffectivelyVisible);
     }
 
     /// <summary>A project whose Claude Code skills folder holds verify-idevelop, and whose fake Claude Code also lists find-skills.</summary>

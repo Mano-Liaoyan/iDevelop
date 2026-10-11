@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Windows.Input;
+using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
 using IDevelop.Workflows;
@@ -69,7 +70,7 @@ public sealed class SkillPickerViewModel : ObservableObject
     {
         SkillListing.Listed { Skills.IsEmpty: true } when Settings!.Skills is not { Count: > 0 } => $"{ClientName} loads no skills in this project.",
         SkillListing.Listed => null,
-        SkillListing.Unavailable unavailable => $"iDevelop could not list the skills {ClientName} loads. {unavailable.Reason}",
+        SkillListing.Unavailable unavailable => $"iDevelop could not list the skills {ClientName} loads. {unavailable.Reason} {RunText.TryListingAgain}",
         _ => $"Listing the skills {ClientName} loads…",
     };
 

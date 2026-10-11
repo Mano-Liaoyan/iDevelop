@@ -338,15 +338,16 @@
   <Style Selector="inspector|InspectorRow CheckBox">
     <Setter Property="FontSize" Value="13" />
   </Style>
-  <!-- A picker whose list opens in place, under it: a box like the pickers above it, whose chevron turns while the list is
-       open. Its own template keeps Fluent's checked toggle from filling it with the accent. -->
+  <!-- A picker whose list opens in place, under it: a box like the pickers above it, with an accent edge while the list
+       is open, as a ComboBox has while its list is. -->
   <Style Selector="ToggleButton.picker">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />
-    <Setter Property="Padding" Value="11,5,10,5" />
+    <!-- Its text starts 12 px in and its chevron ends 10 px in, where a ComboBox draws them. -->
+    <Setter Property="Padding" Value="11,5,9,5" />
     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Border100Brush}" />
@@ -360,12 +361,23 @@
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
                               HorizontalAlignment="Stretch" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-            <PathIcon Name="Chevron" Grid.Column="1" Theme="{StaticResource Glyph}" Data="{StaticResource IconChevronDown}"
-                      Width="12" Height="12" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+            <!-- The chevron of a ComboBox in Fluent's own drawing, size, and brush, so this box reads as one of them. -->
+            <PathIcon Name="Chevron" Grid.Column="1" Data="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401z" UseLayoutRounding="False"
+                      Width="12" Height="12" VerticalAlignment="Center" Foreground="{DynamicResource ComboBoxDropDownGlyphForeground}" />
           </Grid>
         </Border>
       </ControlTemplate>
     </Setter>
+  </Style>
+  <!-- Fluent's toggle styles paint the content presenter in every state, the accent while checked among them. The box keeps
+       its own colors in each state instead. -->
+  <Style Selector="ToggleButton.picker /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="ToggleButton.picker:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
   <!-- A picker does not shrink while pressed, as Fluent's buttons do, so it keeps the value edge. -->
   <Style Selector="ToggleButton.picker:pressed">
@@ -377,9 +389,6 @@
   <Style Selector="ToggleButton.picker:checked /template/ Border#Box, ToggleButton.picker:focus-visible /template/ Border#Box">
     <Setter Property="BorderBrush" Value="{DynamicResource StateSelectedBrush}" />
   </Style>
-  <Style Selector="ToggleButton.picker:checked /template/ PathIcon#Chevron">
-    <Setter Property="RenderTransform" Value="rotate(180deg)" />
-  </Style>
   <Style Selector="ToggleButton.picker:disabled">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
@@ -387,7 +396,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
   <Style Selector="ToggleButton.picker:disabled /template/ PathIcon#Chevron">
-    <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ComboBoxDropDownGlyphForegroundDisabled}" />
   </Style>
   <!-- The open list: one tick box per skill, each name wrapping in full, inside a box of the picker's edges. -->
   <Style Selector="Border.skillList">
