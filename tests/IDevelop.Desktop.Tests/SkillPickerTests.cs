@@ -173,6 +173,25 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_chosen_skill_says_which_plugin_skills_claude_code_lets_in_with_it()
+    {
+        Skill(_personal, "probeplug-probe-alpha", "A plugin's alpha.", name: "probeplug:probe-alpha");
+        var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] })));
+        Skill(Path.Combine(shell.Window.ViewModel.Canvas!.Document.ProjectFolder, ".claude", "skills"), "probe-alpha", "Alpha.");
+        shell.Click(shell.Find<Button>("RefreshAgents"));
+
+        OpenList(shell);
+        shell.WaitUntil(() => Ticks(shell).Any(tick => tick.Item1 == "probe-alpha"), "probe-alpha listed");
+        Assert.DoesNotContain(Shell.ById<TextBlock>(shell.Window, "SkillLetsIn"), text => text.IsEffectivelyVisible);
+
+        shell.Click(Choice(shell, "probe-alpha"));
+
+        var note = Assert.Single(Shell.ById<TextBlock>(shell.Window, "SkillLetsIn"), text => text.IsEffectivelyVisible);
+        Assert.Equal("Also lets in probeplug:probe-alpha.", note.Text);
+        Assert.Same(Choice(shell, "probe-alpha"), note.FindAncestorOfType<CheckBox>());
+    }
+
+    [AvaloniaFact]
     public void A_chosen_skill_that_is_not_installed_stays_listed_and_the_inspector_says_the_task_runs_without_it()
     {
         var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["gone", "verify-idevelop"] })));
@@ -285,9 +304,11 @@ public sealed class SkillPickerTests : IDisposable
 
     private static ExecutionSettings Execution(Shell shell) => shell.Window.ViewModel.Canvas!.Document.Current.Tasks[Design].Execution!;
 
-    internal static void Skill(string folder, string name, string description)
+    /// <summary>A skill folder whose SKILL.md names it <paramref name="name"/>, or its folder's name.</summary>
+    internal static void Skill(string folder, string directory, string description, string? name = null)
     {
-        var skill = Directory.CreateDirectory(Path.Combine(folder, name)).FullName;
+        var skill = Directory.CreateDirectory(Path.Combine(folder, directory)).FullName;
+        name ??= directory;
         File.WriteAllText(Path.Combine(skill, "SKILL.md"), $"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nInstructions iDevelop never reads.\n");
     }
 }

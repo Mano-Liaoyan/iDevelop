@@ -421,6 +421,12 @@
   <Style Selector="CheckBox.skill TextBlock.missing">
     <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
   </Style>
+  <!-- What a chosen name lets in beside it, in a line under the name. -->
+  <Style Selector="CheckBox.skill TextBlock.letsIn">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="Margin" Value="0,-3,0,5" />
+  </Style>
   <Style Selector="inspector|InspectorRow ComboBox, inspector|InspectorRow TextBox">
     <Setter Property="FontSize" Value="13" />
     <Setter Property="MinHeight" Value="{x:Static inspector:InspectorGrid.LineHeight}" />

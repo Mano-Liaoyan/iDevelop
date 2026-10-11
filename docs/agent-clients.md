@@ -78,7 +78,7 @@ A node's skill choice ([ADR 0025](adr/0025-a-node-s-skill-choice-is-exactly-its-
 | Pi | `pi --mode rpc --no-session` and `get_commands`. Each entry whose `source` is `skill` gives the name after `skill:` and its file in `sourceInfo.path`. A project's own skills appear only once the folder is trusted in Pi, which `trust.json` in Pi's agent folder records. | `--no-skills` and `--skill <file>` for each chosen skill. A `--skill` file loads in an untrusted folder too. |
 | Antigravity CLI | None. It has no per-run skill control. | Nothing |
 
-Claude Code's `skills` allow-list applies to the main session only: a subagent uses its own `AgentDefinition.skills` and sees every skill. It matches a skill's full name or a `:name` suffix, so a chosen `code-review` also lets in a plugin's `code-review:code-review`. A probe on 2026-10-11 confirmed both.
+Claude Code's `skills` allow-list applies to the main session only: a subagent uses its own `AgentDefinition.skills` and sees every skill. It matches a skill's full name or a `:name` suffix, so a chosen `code-review` also lets in a plugin's `code-review:code-review`. A probe on 2026-10-11 confirmed both. The picker says both: under its list for subagents, and on a chosen skill for the plugin skills it lets in.
 
 On Windows, a `--skill` path that cmd.exe could misread, such as one with a space, goes to the node script that Pi's npm shim runs instead of through `pi.cmd`.
 

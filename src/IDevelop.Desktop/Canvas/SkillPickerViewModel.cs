@@ -62,7 +62,7 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     /// <summary>The listed skills, then each chosen skill that the client no longer lists, marked not installed.</summary>
     public IReadOnlyList<SkillChoiceViewModel> Choices => ShowsList && Listing is SkillListing.Listed listed
-        ? [.. SkillChoices.Entries(Settings!.Skills, listed.Skills).Select(entry => new SkillChoiceViewModel(this, entry))]
+        ? [.. SkillChoices.Entries(Settings!.Client, Settings.Skills, listed.Skills).Select(entry => new SkillChoiceViewModel(this, entry))]
         : [];
 
     /// <summary>What the open list shows in place of skills: that it is listing them, why it cannot, or that there are none.</summary>
@@ -159,6 +159,12 @@ public sealed class SkillChoiceViewModel(SkillPickerViewModel picker, SkillEntry
     public string? Description => string.IsNullOrWhiteSpace(entry.Description) ? null : entry.Description;
 
     public bool IsInstalled => entry.Installed;
+
+    /// <summary>"Also lets in probeplug:probe-alpha." for a chosen name that Claude Code also matches in plugin skills, or null.</summary>
+    public string? LetsIn => entry.LetsIn.IsEmpty ? null : $"Also lets in {Join(entry.LetsIn)}.";
+
+    private static string Join(IReadOnlyList<string> names) =>
+        names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
 
     public bool IsChosen
     {

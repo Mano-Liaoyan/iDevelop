@@ -281,7 +281,12 @@
                                     <CheckBox Classes="skill" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Description}"
                                               AutomationProperties.AutomationId="SkillChoice"
                                               AutomationProperties.Name="{Binding Label}">
-                                      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.missing="{Binding !IsInstalled}" />
+                                      <StackPanel>
+                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.missing="{Binding !IsInstalled}" />
+                                        <TextBlock Classes="letsIn" Text="{Binding LetsIn}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding LetsIn, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   AutomationProperties.AutomationId="SkillLetsIn" />
+                                      </StackPanel>
                                     </CheckBox>
                                   </DataTemplate>
                                 </ItemsControl.ItemTemplate>

@@ -65,7 +65,16 @@ internal sealed record SkillLaunch(ImmutableArray<SkillOption> Chosen, Immutable
 }
 
 /// <summary>One entry of a node's skill picker. A chosen skill that the client no longer lists stays, not installed.</summary>
-public sealed record SkillEntry(string Name, string Description, bool Chosen, bool Installed);
+public sealed record SkillEntry(string Name, string Description, bool Chosen, bool Installed)
+{
+    /// <summary>The listed plugin skills that the client lets in with this chosen name, as Claude Code does by a name's ending.</summary>
+    public ImmutableArray<string> LetsIn { get; init; } = [];
+
+    public bool Equals(SkillEntry? other) => other is not null && (Name, Description, Chosen, Installed) == (other.Name, other.Description, other.Chosen, other.Installed)
+        && LetsIn.SequenceEqual(other.LetsIn);
+
+    public override int GetHashCode() => HashCode.Combine(Name, Chosen, Installed);
+}
 
 /// <summary>The rules that the skill picker and the start share. None of them is a graph rule.</summary>
 public static class SkillChoices
@@ -83,11 +92,23 @@ public static class SkillChoices
     /// The listed skills, each ticked when the node has no choice or chose it, then each chosen skill that the client no
     /// longer lists.
     /// </summary>
-    public static ImmutableArray<SkillEntry> Entries(ImmutableSortedSet<string>? chosen, ImmutableArray<SkillOption> listed)
+    public static ImmutableArray<SkillEntry> Entries(ClientId client, ImmutableSortedSet<string>? chosen, ImmutableArray<SkillOption> listed)
     {
-        ImmutableArray<SkillEntry> installed = [.. listed.Select(skill => new SkillEntry(skill.Name, skill.Description, chosen is null || chosen.Contains(skill.Name), true))];
+        ImmutableArray<SkillEntry> installed = [.. listed.Select(skill => new SkillEntry(skill.Name, skill.Description, chosen is null || chosen.Contains(skill.Name), true)
+        {
+            LetsIn = LetsIn(client, chosen, skill.Name, listed),
+        })];
         return [.. installed, .. Missing(chosen, listed).Select(name => new SkillEntry(name, "", true, false))];
     }
+
+    /// <summary>
+    /// Claude Code's allow-list matches a skill's full name or a ":name" ending of it, so a chosen bare name also lets in
+    /// each plugin skill that ends with it (probe and owner decision, 2026-10-11). The picker says so on the chosen skill.
+    /// </summary>
+    private static ImmutableArray<string> LetsIn(ClientId client, ImmutableSortedSet<string>? chosen, string name, ImmutableArray<SkillOption> listed) =>
+        client == ClientId.ClaudeCode && chosen is not null && chosen.Contains(name) && !name.Contains(':', StringComparison.Ordinal)
+            ? [.. listed.Select(skill => skill.Name).Where(other => other.EndsWith(":" + name, StringComparison.Ordinal))]
+            : [];
 
     /// <summary>
     /// The choice after the person ticks or unticks <paramref name="name"/>. With no choice yet every listed skill counts
