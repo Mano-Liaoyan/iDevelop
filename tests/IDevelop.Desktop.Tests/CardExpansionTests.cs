@@ -167,6 +167,22 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_wire_dropped_from_an_expanded_card_starts_at_its_port_where_the_card_shows_it()
+    {
+        var shell = Shell.Open(_temp.Seed(TaskAt(Design, "Design", 105, 90, Codex, "Propose a JSON layout.")));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var design = canvas.Nodes.Single(node => node.Title == "Design");
+        shell.Click(shell.InCard<ToggleButton>("Design", "CardExpand"));
+
+        shell.Drag(shell.Thumb(shell.Output("Design")), Screen(shell, new Point(700, 300)));
+
+        Assert.True(shell.AddPopoverIsOpen);
+        var wire = canvas.Ghosts.OfType<DanglingWireViewModel>().Single();
+        Assert.Equal(design.DisplayLocation + new Vector(WorkflowCanvasViewModel.ExpandedCardWidth - 10, 32), design.Output.Anchor);
+        Assert.Equal(design.Output.Anchor, wire.Location + (Vector)wire.Source);
+    }
+
+    [AvaloniaFact]
     public void Keys_typed_in_the_answer_box_and_on_the_agent_pickers_stay_with_them_and_never_reach_the_canvas()
     {
         using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));
@@ -420,6 +436,10 @@ public sealed class CardExpansionTests : IDisposable
         shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
         Assert.Null(ToolTip.GetTip(shell.InCard<Panel>("Docs", "TaskCard")));
     }
+
+    /// <summary>The window point that shows a canvas point.</summary>
+    private static Point Screen(Shell shell, Point point) => shell.InEditor(
+        (point.X - shell.Editor.ViewportLocation.X) * shell.Editor.ViewportZoom, (point.Y - shell.Editor.ViewportLocation.Y) * shell.Editor.ViewportZoom);
 
     /// <summary>Every pair of cards whose visible boxes, the containers less their 10 px port gutters, overlap.</summary>
     private static (string, string)[] Overlaps(Shell shell)
