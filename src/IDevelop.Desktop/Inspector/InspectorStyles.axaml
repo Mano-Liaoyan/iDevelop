@@ -361,9 +361,10 @@
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
                               HorizontalAlignment="Stretch" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-            <!-- The chevron of a ComboBox in Fluent's own drawing, size, and brush, so this box reads as one of them. -->
-            <PathIcon Name="Chevron" Grid.Column="1" Data="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401z" UseLayoutRounding="False"
-                      Width="12" Height="12" VerticalAlignment="Center" Foreground="{DynamicResource ComboBoxDropDownGlyphForeground}" />
+            <!-- A ComboBox's chevron, in the drawing, width, and brush of Fluent's own template, so this box reads as one of
+                 them. A stretched Path draws it at its size, where a PathIcon's Viewbox would lay out the raw drawing. -->
+            <Path Name="Chevron" Grid.Column="1" Data="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401z" Stretch="Uniform"
+                  UseLayoutRounding="False" Width="12" VerticalAlignment="Center" Fill="{DynamicResource ComboBoxDropDownGlyphForeground}" />
           </Grid>
         </Border>
       </ControlTemplate>
@@ -395,8 +396,8 @@
   <Style Selector="ToggleButton.picker:disabled /template/ Border#Box">
     <Setter Property="Background" Value="{DynamicResource SurfaceMutedBrush}" />
   </Style>
-  <Style Selector="ToggleButton.picker:disabled /template/ PathIcon#Chevron">
-    <Setter Property="Foreground" Value="{DynamicResource ComboBoxDropDownGlyphForegroundDisabled}" />
+  <Style Selector="ToggleButton.picker:disabled /template/ Path#Chevron">
+    <Setter Property="Fill" Value="{DynamicResource ComboBoxDropDownGlyphForegroundDisabled}" />
   </Style>
   <!-- The open list: one tick box per skill, each name wrapping in full, inside a box of the picker's edges. -->
   <Style Selector="Border.skillList">

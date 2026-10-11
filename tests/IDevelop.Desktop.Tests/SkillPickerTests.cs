@@ -137,10 +137,12 @@ public sealed class SkillPickerTests : IDisposable
         var presenter = picker.GetVisualDescendants().OfType<ContentPresenter>().Single(part => part.Name == "PART_ContentPresenter");
         Assert.True(presenter.Background is null or ISolidColorBrush { Color.A: 0 }, $"The open box is filled with {presenter.Background}.");
         Assert.Equal(Color(picker.Foreground), Color(presenter.Foreground));
-        var chevron = picker.GetVisualDescendants().OfType<PathIcon>().Single();
+        var chevron = picker.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(part => part.Name == "Chevron");
         var glyph = shell.Find<ComboBox>("TaskModel").GetVisualDescendants().OfType<PathIcon>().Single(part => part.Name == "DropDownGlyph");
-        Assert.Equal((glyph.Data!.Bounds, glyph.Width, glyph.Height, Color(glyph.Foreground)), (chevron.Data!.Bounds, chevron.Width, chevron.Height, Color(chevron.Foreground)));
-        Assert.Equal(shell.Bounds(glyph).Right, shell.Bounds(chevron).Right, 0.5);
+        Assert.Equal((glyph.Data!.Bounds, glyph.Bounds.Width, Color(glyph.Foreground)), (chevron.Data!.Bounds, chevron.Bounds.Width, Color(chevron.Fill)));
+        var (drawn, box) = (shell.Bounds(glyph), shell.Bounds(chevron));
+        Assert.Equal((drawn.Right, drawn.Center.Y - shell.Bounds(shell.Find<ComboBox>("TaskModel")).Top),
+            (box.Right, box.Center.Y - shell.Bounds(picker).Top));
 
         static Color? Color(IBrush? brush) => (brush as ISolidColorBrush)?.Color;
     }
