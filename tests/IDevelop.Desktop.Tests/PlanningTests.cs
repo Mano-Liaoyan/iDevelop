@@ -186,6 +186,122 @@ public sealed class PlanningTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_fill_of_a_task_without_an_agent_shows_the_planners_choice_and_Accept_gives_it_to_the_task()
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "title": "Backend API", "fields": {"instructions": "Add the endpoint."},
+                       "agent": {"client": "codex", "model": "gpt-6.1-sol", "reasoning": "low", "reason": "A small endpoint."}},
+                      {"slot": "slot-2", "fields": {"instructions": "Add the button."},
+                       "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low", "reason": "Fast and cheap."}}]}
+            ```
+            """);
+
+        Assert.Equal(
+            [
+                ("Backend API", "Codex · GPT-6.1-Sol · low", "A small endpoint.", null),
+                ("Frontend", "No agent", null, "The planner chose Pi, which isn't installed. Choose the task's agent before it runs."),
+            ],
+            GenerateTests.Review(shell));
+        Assert.Equal(["Fills · GPT-6.1-Sol · low Backend API", "Fills Frontend"], GenerateTests.Ghosts(shell));
+        Assert.Equal(new string?[] { null, "Pi isn't installed" }, GenerateTests.GhostNotes(shell));
+        // The planner's agent is a fallback for the tasks a proposal adds, so a fill leaves the box out.
+        Assert.False(shell.Find<CheckBox>("ProposalUsePlannerAgent").IsEffectivelyVisible);
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        var workflow = shell.Window.ViewModel.Canvas!.Workflow;
+        Assert.Equal(new ExecutionSettings(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" }, workflow.Tasks[Backend].Execution);
+        Assert.Null(workflow.Tasks[Frontend].Execution);
+        shell.ShowTasks();
+        Assert.Equal("Codex · GPT-6.1-Sol · low", shell.CardAgent("Backend API"));
+    }
+
+    [AvaloniaFact]
+    public void A_fill_keeps_the_agent_its_task_has_and_the_person_changes_a_fills_agent_before_accepting()
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "title": "Backend API", "fields": {"instructions": "Add the endpoint."},
+                       "agent": {"client": "codex", "model": "gpt-6.1-sol", "reasoning": "low", "reason": "A small endpoint."}},
+                      {"slot": "slot-2", "fields": {"instructions": "Add the button."},
+                       "agent": {"client": "codex", "model": "gpt-6.1-sol", "reasoning": "low", "reason": "A small button."}}]}
+            ```
+            """);
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        // The person gives Frontend an agent of its own while the proposal waits, and the fill keeps it.
+        canvas.Edit(new WorkflowEdit.SetExecution(Frontend, Codex));
+        shell.Render();
+        Assert.Equal(("Frontend", "Codex · GPT-5.5 · high", "Set on the task", null), GenerateTests.Review(shell)[1]);
+        Assert.Equal("Fills · GPT-5.5 · high Frontend", GenerateTests.Ghosts(shell)[1]);
+        shell.Click(GenerateTests.EditButton(shell, "Backend API"));
+        shell.Pick("ProposalAgentModel", "GPT-5.5");
+        shell.Pick("ProposalAgentReasoning", "medium");
+        Assert.Equal(("Backend API", "Codex · GPT-5.5 · medium", "Your choice. The planner chose Codex · GPT-6.1-Sol · low.", null),
+            GenerateTests.Review(shell)[0]);
+        shell.Click(GenerateTests.EditButton(shell, "Frontend"));
+        shell.Pick("ProposalAgentReasoning", "low");
+        Assert.Equal(("Frontend", "Codex · GPT-5.5 · low", "Your choice. The task has Codex · GPT-5.5 · high.", null), GenerateTests.Review(shell)[1]);
+
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+
+        Assert.Equal(
+            (new ExecutionSettings(ClientId.Codex) { Model = "gpt-5.5", Reasoning = "medium" }, Codex with { Reasoning = "low" }),
+            (canvas.Workflow.Tasks[Backend].Execution, canvas.Workflow.Tasks[Frontend].Execution));
+    }
+
+    [AvaloniaFact]
+    public void The_planners_agent_is_a_fallback_for_a_new_task_and_a_fill_without_a_usable_choice_keeps_no_agent()
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-2", "fields": {"instructions": "Add the button."},
+                       "agent": {"client": "pi", "model": "deepseek/deepseek-flash", "reasoning": "low", "reason": "Fast and cheap."}}],
+             "add": [{"id": "wire", "type": "type-1", "title": "Wire export", "fields": {"instructions": "Connect them."}}],
+             "connect": [{"from": "slot-2", "to": "wire"}]}
+            ```
+            """);
+        var canvas = shell.Window.ViewModel.Canvas!;
+
+        shell.Click(shell.InView<CheckBox>("ProposalUsePlannerAgent"));
+
+        Assert.Equal(
+            [
+                ("Frontend", "No agent", null, "The planner chose Pi, which isn't installed. Choose the task's agent before it runs."),
+                ("Wire export", "Codex · GPT-5.5 · high", null, null),
+            ],
+            GenerateTests.Review(shell));
+        shell.Click(shell.InView<Button>("AcceptProposal"));
+        Assert.Null(canvas.Workflow.Tasks[Frontend].Execution);
+        Assert.Equal(Codex, Assert.Single(canvas.Workflow.Tasks.Values, task => task.Title == "Wire export").Execution);
+    }
+
+    [AvaloniaFact]
+    public void A_fill_of_an_Approval_shows_no_agent()
+    {
+        var signed = new TaskId(Guid.Parse("019a9d2e-5d10-7a99-8c11-0b9f2e7d4a44"));
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-3", "fields": {"checklist": "The export opens."},
+                       "agent": {"client": "codex", "model": "gpt-6.1-sol", "reasoning": "low", "reason": "Quick."}}]}
+            ```
+            """, ConversationMode.Chat, [],
+            [
+                new WorkflowEdit.PlaceNode(signed, BuiltInBlueprints.Approval, new CanvasPoint(465, 510)) { Title = "Sign off" },
+                new WorkflowEdit.Connect(new ConnectionKey(Architect, signed), ConnectionKind.Dependency),
+            ]);
+
+        Assert.Equal([("Sign off", null, null, null)], GenerateTests.Review(shell));
+        Assert.Equal(["Fills Sign off"], GenerateTests.Ghosts(shell));
+        Assert.False(shell.Find<Button>("ProposalAgentEdit").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void A_planner_may_place_every_blueprint_the_palette_offers()
     {
         var project = _temp.Seed(new WorkflowEdit.PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(105, 90)) { Title = "Design export" });
@@ -205,10 +321,15 @@ public sealed class PlanningTests : IDisposable
     }
 
     /// <summary>Opens an Architect with two empty tasks after it, runs it, and waits for its first reply.</summary>
-    private Shell RunArchitect(string reply, ConversationMode mode = ConversationMode.Chat, params FakeRule[] later)
+    private Shell RunArchitect(string reply, ConversationMode mode = ConversationMode.Chat, params FakeRule[] later) =>
+        RunArchitect(reply, mode, later, []);
+
+    /// <summary>Opens an Architect with two empty tasks after it and <paramref name="extra"/>, runs it, and waits for its first reply.</summary>
+    private Shell RunArchitect(string reply, ConversationMode mode, FakeRule[] later, WorkflowEdit[] extra)
     {
         Install(_fakes, ClientId.Codex, [.. later, Fresh(ClientId.Codex).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, reply))]);
         var project = _temp.Seed(
+        [
             new WorkflowEdit.PlaceNode(Architect, BuiltInBlueprints.Architect, new CanvasPoint(105, 90))
             {
                 Title = "Design export",
@@ -218,7 +339,9 @@ public sealed class PlanningTests : IDisposable
             TaskAt(Backend, "Backend", 465, 90),
             TaskAt(Frontend, "Frontend", 465, 300),
             new WorkflowEdit.Connect(new ConnectionKey(Architect, Backend), ConnectionKind.Dependency),
-            new WorkflowEdit.Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency));
+            new WorkflowEdit.Connect(new ConnectionKey(Architect, Frontend), ConnectionKind.Dependency),
+            .. extra,
+        ]);
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design export")));
         shell.RunOnItsOwn();

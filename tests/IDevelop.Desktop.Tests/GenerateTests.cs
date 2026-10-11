@@ -808,11 +808,11 @@ public sealed class GenerateTests : IDisposable
         shell.Click(shell.Find<Button>("GenerateSubmit"));
     }
 
-    private static IEnumerable<T> ById<T>(Shell shell, string automationId) where T : Control =>
+    internal static IEnumerable<T> ById<T>(Shell shell, string automationId) where T : Control =>
         Shell.ById<T>(shell.Window, automationId).Where(control => control.IsEffectivelyVisible);
 
     /// <summary>Each proposed task in the review: its title, the agent it takes, the reason shown, and the note on its choice.</summary>
-    private static (string Title, string? Agent, string? Reason, string? Note)[] Review(Shell shell) =>
+    internal static (string Title, string? Agent, string? Reason, string? Note)[] Review(Shell shell) =>
         [.. ById<StackPanel>(shell, "ProposalEntry").Select(entry => (
             Shell.TextOf(Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single()),
             AgentLines(entry),
@@ -820,16 +820,16 @@ public sealed class GenerateTests : IDisposable
             Visible(entry, "ProposalAgentNote")))];
 
     /// <summary>A proposed task's agent on its row: the client's line, then the model and level's, joined as one label.</summary>
-    private static string? AgentLines(Visual entry) =>
+    internal static string? AgentLines(Visual entry) =>
         Shell.ById<StackPanel>(entry, "ProposalAgent").SingleOrDefault(agent => agent.IsEffectivelyVisible) is { } agent
             ? string.Join(" · ", Shell.Texts(agent))
             : null;
 
-    private static string? Visible(Visual root, string automationId) =>
+    internal static string? Visible(Visual root, string automationId) =>
         Shell.ById<TextBlock>(root, automationId).SingleOrDefault(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text))?.Text;
 
     /// <summary>The button that opens or closes the agent of the proposed task with this title.</summary>
-    private static Button EditButton(Shell shell, string title)
+    internal static Button EditButton(Shell shell, string title)
     {
         var entry = ById<StackPanel>(shell, "ProposalEntry").Single(entry => Shell.TextOf(Shell.ById<TextBlock>(entry, "ProposalItemTitle").Single()) == title);
         var button = Shell.ById<Button>(entry, "ProposalAgentEdit").Single();
@@ -863,18 +863,18 @@ public sealed class GenerateTests : IDisposable
 
     private static string? ButtonLabel(Shell shell) => AutomationProperties.GetName(shell.Find<Button>("GenerateWorkflow"));
 
-    private static IEnumerable<Panel> GhostCards(Shell shell) =>
+    internal static IEnumerable<Panel> GhostCards(Shell shell) =>
         shell.Window.GetVisualDescendants().OfType<Panel>().Where(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard")
             .OrderBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.X).ThenBy(panel => panel.TranslatePoint(default, shell.Editor)!.Value.Y);
 
     /// <summary>Each ghost card's subtitle, its two lines joined as one label, then its title.</summary>
-    private static string[] Ghosts(Shell shell) =>
+    internal static string[] Ghosts(Shell shell) =>
         [.. GhostCards(shell).Select(panel => $"{string.Join(" · ", new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>())} {AutomationProperties.GetName(panel)}")];
 
     /// <summary>Each ghost card's subtitle lines, in the order of <see cref="Ghosts"/>.</summary>
-    private static string[][] GhostLines(Shell shell) =>
+    internal static string[][] GhostLines(Shell shell) =>
         [.. GhostCards(shell).Select(panel => new[] { Visible(panel, "GhostLabel"), Visible(panel, "GhostDetail") }.OfType<string>().ToArray())];
 
     /// <summary>The note under each ghost card, in the order of <see cref="Ghosts"/>, or null for a card without one.</summary>
-    private static string?[] GhostNotes(Shell shell) => [.. GhostCards(shell).Select(panel => Visible(panel, "GhostNote"))];
+    internal static string?[] GhostNotes(Shell shell) => [.. GhostCards(shell).Select(panel => Visible(panel, "GhostNote"))];
 }

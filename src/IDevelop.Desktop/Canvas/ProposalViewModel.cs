@@ -13,7 +13,7 @@ namespace IDevelop.Desktop.Canvas;
 /// <param name="label">What accepting does, such as Add Implement "Wire export", which names the row and leads its tooltip.</param>
 /// <param name="slot">For a fill, the title of the task it fills, else null.</param>
 /// <param name="hasText">A fill of a task the person has written in, which starts unticked.</param>
-/// <param name="agent">For a new task that takes an agent, the agent it takes once accepted, else null.</param>
+/// <param name="agent">For a task that takes an agent, the agent it takes once accepted, else null.</param>
 public sealed class ProposalItemViewModel(
     ProposalViewModel proposal, TaskId id, string title, string label, string preview, bool isChosen, NodeKind kind, string? slot = null, bool hasText = false,
     ProposalAgentViewModel? agent = null) : ObservableObject
@@ -40,7 +40,7 @@ public sealed class ProposalItemViewModel(
 
     public string Preview { get; } = preview;
 
-    /// <summary>The agent a new task takes once accepted, or null for a fill and for a task that takes no agent.</summary>
+    /// <summary>The agent the task takes once accepted, or null for a task that takes no agent.</summary>
     public ProposalAgentViewModel? Agent { get; } = agent;
 
     public bool HasAgent => Agent is not null;
@@ -107,7 +107,7 @@ public sealed class ProposalViewModel : ObservableObject
                     .. Proposal.Nodes.Where(node => !workflow.Tasks.ContainsKey(node.Id))
                         .Select(node => new ProposalItemViewModel(
                             this, node.Id, node.Title, $"Add {node.Blueprint.Name} \"{node.Title}\"", Preview(node.Blueprint, node.Fields), true, _canvas.KindOf(node.Blueprint),
-                            agent: node.Blueprint.Work is WorkSpec.Person ? null : new ProposalAgentViewModel(this, node)))];
+                            agent: node.Blueprint.Work is WorkSpec.Person ? null : ProposalAgentViewModel.ForNode(this, node)))];
                 break;
             case ProposalRead.Problem problem:
                 _readProblem = problem.Text;
@@ -128,7 +128,7 @@ public sealed class ProposalViewModel : ObservableObject
 
     /// <summary>
     /// A new task has no agent of its own, neither the person's nor a planner's choice that this machine runs, and its type
-    /// has none, so <see cref="UsePlannerAgent"/> decides its agent. A fill keeps its task's agent.
+    /// has none, so <see cref="UsePlannerAgent"/> decides its agent. A fill never takes the planner's agent.
     /// </summary>
     public bool UsesFallback => Items.Any(item => item.Agent is { NeedsFallback: true });
 
@@ -232,20 +232,22 @@ public sealed class ProposalViewModel : ObservableObject
             ? node.DisplayLocation + new Vector(node.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.OutputPortCenter.Y)
             : Place(id, saved) + (Vector)WorkflowCanvasViewModel.OutputPortCenter;
         var cards = new List<Ghost>();
+        var agents = Agents().ToDictionary(agent => agent.Id);
         foreach (var fill in proposal.Fills.Where(fill => chosen.Contains(fill.Slot) && workflow.Positions.ContainsKey(fill.Slot)))
         {
             var slot = workflow.Tasks[fill.Slot];
+            // A fill shows the model of the agent it takes, its task's own or the planner's choice, on the card's second line.
+            var agent = agents.GetValueOrDefault(fill.Slot);
             cards.Add(new GhostCardViewModel(
                 Place(fill.Slot, workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
                 Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint))
             {
-                // A fill keeps its task's agent, whose model the card's second line shows, as the task's own card does.
-                Detail = RunText.AgentLines(slot.Execution, slot.Execution is { } execution ? Status(execution.Client) : new ClientStatus.Checking()).Model,
+                Detail = agent?.Model,
+                Note = agent?.GhostNote,
             });
         }
 
         var added = proposal.Nodes.Where(node => chosen.Contains(node.Id)).ToDictionary(node => node.Id);
-        var agents = Agents().ToDictionary(agent => agent.Id);
         foreach (var node in added.Values)
         {
             // A new task shows the agent it takes on the lines its card will, or its type while it has none.
@@ -355,8 +357,8 @@ public sealed class ProposalViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The one edit that accepts the chosen tasks, each new task with the person's choice, else its type's own agent,
-    /// else the planner's usable choice, else the planner's agent while the box is ticked, as each row shows.
+    /// The one edit that accepts the chosen tasks, each with the person's choice, else its own agent, else the planner's
+    /// usable choice, else, for a new task, the planner's agent while the box is ticked, as each row shows.
     /// </summary>
     private WorkflowEdit.Batch AcceptEdit(Workflow workflow, IReadOnlySet<TaskId> chosen) => Proposal!.Accept(
         workflow, chosen, _canvas.HasStarted, UsePlannerAgent ? workflow.Tasks.GetValueOrDefault(Proposal.Planner)?.Execution : null,
@@ -372,10 +374,13 @@ public sealed class ProposalViewModel : ObservableObject
         var hasText = task is not null && !empty;
         var named = slot is null ? "an untitled task" : $"\"{slot}\"";
         var label = fill.Title is { } title && title != task?.Title.Trim() ? $"Fill {named} as \"{title}\"" : $"Fill {named}";
+        var shown = fill.Title ?? slot ?? "Untitled task";
         return new ProposalItemViewModel(
-            this, fill.Slot, fill.Title ?? slot ?? "Untitled task", hasText ? $"{label}. It has text of yours now" : label,
+            this, fill.Slot, shown, hasText ? $"{label}. It has text of yours now" : label,
             Preview(task?.Blueprint, fill.Fields), empty, _canvas.KindOf(task?.Blueprint ?? BuiltInBlueprints.Implement), slot ?? "an untitled task",
-            hasText);
+            hasText,
+            task is null || task.Blueprint.Work is WorkSpec.Person ? null
+                : ProposalAgentViewModel.ForFill(this, fill, shown, task.Blueprint, () => _canvas.Workflow.Tasks.GetValueOrDefault(fill.Slot)?.Execution));
     }
 
     /// <summary>A title the proposal gives, else the workflow's, for a message about a task.</summary>

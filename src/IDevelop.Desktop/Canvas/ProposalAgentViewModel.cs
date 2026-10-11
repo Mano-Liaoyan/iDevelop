@@ -8,9 +8,10 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// The agent that a task a proposal adds takes once accepted, which the review shows and the person may change: their
-/// own choice, else the planner's when this machine can run it, else its type's, else the planner's agent while the
-/// proposal's box is ticked. A planner's choice this machine cannot run says why, on the task's row and its ghost card.
+/// The agent that a task a proposal adds or fills takes once accepted, which the review shows and the person may change:
+/// their own choice, else the task's own agent (its type's for a new task, the task's for a fill), else the planner's
+/// when this machine can run it, else, for a new task, the planner's agent while the proposal's box is ticked. A
+/// planner's choice this machine cannot run says why, on the task's row and its ghost card.
 /// </summary>
 public sealed class ProposalAgentViewModel : ObservableObject
 {
@@ -24,18 +25,38 @@ public sealed class ProposalAgentViewModel : ObservableObject
     ];
 
     private readonly ProposalViewModel _proposal;
-    private readonly ProposedNode _node;
+    private readonly string _title;
+    private readonly Blueprint _blueprint;
+    private readonly ProposedAgent? _agent;
+    private readonly Func<ExecutionSettings?> _own;
+    private readonly bool _fills;
     private AgentCheck _check;
     private ExecutionSettings? _changed;
     private bool _isEditing;
 
-    internal ProposalAgentViewModel(ProposalViewModel proposal, ProposedNode node)
+    /// <param name="own">The agent the task has of its own, which wins over the planner's choice.</param>
+    /// <param name="fills">True for a fill, whose own agent is its task's and which never takes the planner's agent.</param>
+    private ProposalAgentViewModel(ProposalViewModel proposal, TaskId id, string title, Blueprint blueprint, ProposedAgent? agent,
+        Func<ExecutionSettings?> own, bool fills)
     {
         _proposal = proposal;
-        _node = node;
+        Id = id;
+        _title = title;
+        _blueprint = blueprint;
+        _agent = agent;
+        _own = own;
+        _fills = fills;
         _check = Check();
         EditCommand = new RelayCommand(() => _proposal.Edit(this));
     }
+
+    /// <summary>The agent of a task the proposal adds, whose own agent is its type's.</summary>
+    internal static ProposalAgentViewModel ForNode(ProposalViewModel proposal, ProposedNode node) =>
+        new(proposal, node.Id, node.Title, node.Blueprint, node.Agent, () => node.Blueprint.Defaults.Execution, fills: false);
+
+    /// <summary>The agent of a task the proposal fills, whose own agent is the one the task has now (#99).</summary>
+    internal static ProposalAgentViewModel ForFill(ProposalViewModel proposal, ProposedFill fill, string title, Blueprint blueprint, Func<ExecutionSettings?> own) =>
+        new(proposal, fill.Slot, title, blueprint, fill.Agent, own, fills: true);
 
     /// <summary>"Codex · GPT-5.5 · high", or "No agent".</summary>
     public string Label => RunText.AgentLabel(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
@@ -47,23 +68,23 @@ public sealed class ProposalAgentViewModel : ObservableObject
     public string? Model => Lines.Model;
 
     /// <summary>
-    /// Why the task takes its agent: "Set by the blueprint" for a type with an agent of its own, the planner's reason for
-    /// its choice, or what the person's own choice replaced.
+    /// Why the task takes its agent: "Set by the blueprint" for a type with an agent of its own, "Set on the task" for a
+    /// fill whose task has one, the planner's reason for its choice, or what the person's own choice replaced.
     /// </summary>
     public string? Reason => _changed is not null
-        ? Own is { } own ? $"Your choice. The blueprint sets {RunText.AgentLabel(own, _proposal.Status(own.Client))}."
+        ? Own is { } own ? $"Your choice. {(_fills ? "The task has" : "The blueprint sets")} {RunText.AgentLabel(own, _proposal.Status(own.Client))}."
         : _check switch
         {
             AgentCheck.Usable usable => $"Your choice. The planner chose {RunText.AgentLabel(usable.Settings, _proposal.Status(usable.Settings.Client))}.",
             AgentCheck.Unusable unusable => $"Your choice. {unusable.Problem}",
             _ => "Your choice.",
         }
-        : Own is not null ? "Set by the blueprint"
-        : _check is AgentCheck.Usable ? _node.Agent?.Reason : null;
+        : Own is not null ? _fills ? "Set on the task" : "Set by the blueprint"
+        : _check is AgentCheck.Usable ? _agent?.Reason : null;
 
     /// <summary>Why the planner's choice falls back, and to what, or null.</summary>
     public string? Note => Unusable is { } unusable
-        ? $"{unusable.Problem} {(_proposal.Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
+        ? $"{unusable.Problem} {(Fallback is not null ? "The task takes the planner's agent instead." : "Choose the task's agent before it runs.")}"
         : null;
 
     /// <summary>
@@ -91,23 +112,23 @@ public sealed class ProposalAgentViewModel : ObservableObject
 
     public ICommand EditCommand { get; }
 
-    public string EditName => _isEditing ? $"Done changing the agent of \"{_node.Title}\"" : $"Change the agent of \"{_node.Title}\"";
+    public string EditName => _isEditing ? $"Done changing the agent of \"{_title}\"" : $"Change the agent of \"{_title}\"";
 
     /// <summary>Every client, or only those with a read-only mode for a task that only reads.</summary>
     public IReadOnlyList<ClientChoice> ClientChoices =>
-        [.. Clients.All.Where(id => !ReadOnly || Clients.HasReadOnlyMode(id)).Select(id => new ClientChoice(_node.Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
+        [.. Clients.All.Where(id => !ReadOnly || Clients.HasReadOnlyMode(id)).Select(id => new ClientChoice(Id, id, RunText.ClientChoice(id, _proposal.Status(id))))];
 
     public ClientChoice? SelectedClient => ClientChoices.FirstOrDefault(choice => choice.Id == Settings?.Client);
 
     public IReadOnlyList<Choice> ModelChoices => Settings is { } settings
         ? [.. ExecutionChoices.Models(settings, _proposal.Status(settings.Client))
-            .Select(choice => new Choice(_node.Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, _proposal.Status(settings.Client))))]
+            .Select(choice => new Choice(Id, choice.Model.Id, RunText.ModelChoice(choice.Model, choice.Offered, _proposal.Status(settings.Client))))]
         : [];
 
     public Choice? SelectedModel => ModelChoices.FirstOrDefault(choice => choice.Id == Settings?.Model);
 
     public IReadOnlyList<Choice> ReasoningChoices => Settings is { } settings
-        ? [.. ExecutionChoices.Reasoning(settings, _proposal.Status(settings.Client)).Select(choice => new Choice(_node.Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
+        ? [.. ExecutionChoices.Reasoning(settings, _proposal.Status(settings.Client)).Select(choice => new Choice(Id, choice.Level, RunText.ReasoningChoice(choice.Level, choice.Offered)))]
         : [];
 
     public Choice? SelectedReasoning => ReasoningChoices.FirstOrDefault(choice => choice.Id == Settings?.Reasoning);
@@ -115,31 +136,34 @@ public sealed class ProposalAgentViewModel : ObservableObject
     /// <summary>False when the model takes no reasoning level.</summary>
     public bool HasReasoning => ReasoningChoices.Count > 0;
 
-    internal TaskId Id => _node.Id;
+    internal TaskId Id { get; }
 
-    /// <summary>The planner's choice that this machine can run, which the task takes only when its type has no agent of its own.</summary>
+    /// <summary>The planner's choice that this machine can run, which the task takes only when it has no agent of its own.</summary>
     internal ExecutionSettings? Planned => (_check as AgentCheck.Usable)?.Settings;
 
     /// <summary>The person's choice in the review, which wins over everything.</summary>
     internal ExecutionSettings? Changed => _changed;
 
     /// <summary>
-    /// What accepting gives the task, as <see cref="Proposal.Accept"/> decides it: the person's choice, else its type's own
-    /// agent, else the planner's choice, else the planner's agent while the box is ticked.
+    /// What accepting gives the task, as <see cref="Proposal.Accept"/> decides it: the person's choice, else its own agent,
+    /// else the planner's choice, else, for a new task, the planner's agent while the box is ticked.
     /// </summary>
-    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? _proposal.Fallback;
+    internal ExecutionSettings? Settings => _changed ?? Own ?? Planned ?? Fallback;
 
-    /// <summary>The task has no agent of its own, its type has none, and the planner gave none it can use, so the box decides.</summary>
-    internal bool NeedsFallback => _changed is null && Own is null && Planned is null;
+    /// <summary>A new task has no agent of its own, its type has none, and the planner gave none it can use, so the box decides.</summary>
+    internal bool NeedsFallback => !_fills && _changed is null && Own is null && Planned is null;
 
     private (string Client, string? Model) Lines => RunText.AgentLines(Settings, Settings is { } settings ? _proposal.Status(settings.Client) : new ClientStatus.Checking());
 
-    private bool ReadOnly => _node.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
+    private bool ReadOnly => _blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review;
 
-    /// <summary>The agent the task's blueprint saves, which wins over the planner's choice.</summary>
-    private ExecutionSettings? Own => _node.Blueprint.Defaults.Execution;
+    /// <summary>The agent the task's blueprint saves, or a fill's task has now, which wins over the planner's choice.</summary>
+    private ExecutionSettings? Own => _own();
 
-    /// <summary>A planner's choice that falls back: one the machine cannot run, for a type without an agent of its own.</summary>
+    /// <summary>The planner's agent while the box is ticked, which only a new task takes. A fill keeps its task as it is.</summary>
+    private ExecutionSettings? Fallback => _fills ? null : _proposal.Fallback;
+
+    /// <summary>A planner's choice that falls back: one the machine cannot run, for a task without an agent of its own.</summary>
     private AgentCheck.Unusable? Unusable => _changed is null && Own is null ? _check as AgentCheck.Unusable : null;
 
     internal void ChooseClient(ClientChoice choice)
@@ -189,7 +213,7 @@ public sealed class ProposalAgentViewModel : ObservableObject
         }
     }
 
-    private AgentCheck Check() => AgentCheck.Of(_node.Agent, _node.Blueprint, _proposal.ClientStatuses);
+    private AgentCheck Check() => AgentCheck.Of(_agent, _blueprint, _proposal.ClientStatuses);
 
     private void Change(ExecutionSettings settings)
     {
