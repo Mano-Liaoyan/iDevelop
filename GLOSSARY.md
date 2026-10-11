@@ -145,6 +145,12 @@ _Avoid_: client slot, which is a run's place for a running client
 A recorded change to an approved run's workflow, from a run planner's proposal that the person accepted. It only adds tasks and connections and fills tasks that have not started, and a task counts as started once the plan of its start is recorded. An edit of the workflow document changes no run.
 _Avoid_: edit, which changes only the document
 
+### Agents
+
+**Skill choice**:
+The skills a node's agent may use, by its client's own names, kept in the task's agent settings. No choice means every skill the client loads. A choice holds exactly its skills: an allow-list for Claude Code and Pi, and for Codex every other listed skill turned off. Antigravity CLI takes none. A chosen skill that is no longer installed is skipped, and a skill list that can't be read leaves the choice unchecked rather than stopping the task.
+_Avoid_: allow-list, which only two clients take
+
 ### Canvas
 
 **Expanded card**:

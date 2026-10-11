@@ -110,13 +110,13 @@ internal sealed class ChildProcess : IDisposable
     /// <exception cref="LaunchException">The command did not start, or a batch shim was given an unsafe argument.</exception>
     public static ChildProcess Start(ResolvedCommand command, IReadOnlyList<string> arguments, string workingDirectory, ProcessLifetime lifetime)
     {
-        if (command.UnsafeArgument(arguments) is { } argument)
+        if (command.UnsafeArgument(arguments) is { } argument || command.Launch(arguments) is not { } launch)
         {
             throw new LaunchException(
-                $"{command.Path} runs through cmd.exe, which could misread the argument {argument}, so iDevelop did not start it.");
+                $"{command.Path} runs through cmd.exe, which could misread the argument {command.UnsafeArgument(arguments)}, so iDevelop did not start it.");
         }
 
-        var start = new ProcessStartInfo(command.Path)
+        var start = new ProcessStartInfo(launch.File)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -128,7 +128,7 @@ internal sealed class ChildProcess : IDisposable
             StandardOutputEncoding = Utf8,
             StandardErrorEncoding = Utf8,
         };
-        foreach (var value in arguments)
+        foreach (var value in launch.Arguments)
         {
             start.ArgumentList.Add(value);
         }

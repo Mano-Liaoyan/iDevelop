@@ -159,6 +159,14 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>Set on an attempt of a review's subject that fixes a round of the review's findings.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public ReviewLink? Fix { get; init; }
+
+        /// <summary>The chosen skills that the client did not list on this machine, which the first turn ran without.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public ImmutableArray<string> MissingSkills { get; init; }
+
+        /// <summary>Why the client's skill list could not be read when the first turn passed the choice unchecked.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? SkillsUnchecked { get; init; }
     }
 
     public sealed record Launched(DateTimeOffset At, int ProcessId, DateTimeOffset ProcessStarted) : AttemptEvent(At)
@@ -247,6 +255,14 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
         /// <summary>The folder this turn's client runs in. Null in older logs, where it is the folder of the turn before.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? WorkingFolder { get; init; }
+
+        /// <summary>The chosen skills that the client did not list when this turn started, which it runs without.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public ImmutableArray<string> MissingSkills { get; init; }
+
+        /// <summary>Why the client's skill list could not be read when this turn passed the choice unchecked.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? SkillsUnchecked { get; init; }
     }
 
     /// <summary>The person ended a waiting attempt as done.</summary>
@@ -338,6 +354,12 @@ public sealed record AttemptRecord
 
     /// <summary>A review's guidance from the person, oldest first.</summary>
     public ImmutableList<GuidanceNote> Guidance { get; internal init; } = [];
+
+    /// <summary>The chosen skills that the client did not list when the latest turn started, which it ran without.</summary>
+    public ImmutableArray<string> MissingSkills { get; internal init; } = [];
+
+    /// <summary>Why the client's skill list could not be read when the latest turn started, which then passed the choice unchecked.</summary>
+    public string? SkillsUnchecked { get; internal init; }
 
     /// <summary>The project's files when the first turn started, or null outside Git.</summary>
     public string? StartTree => Turns[0].StartTree;
@@ -435,12 +457,45 @@ internal static partial class AttemptReducer
         return record;
     }
 
-    public static AttemptRecord Start(AttemptEvent.Requested requested) => new(requested)
+    public static AttemptRecord Start(AttemptEvent.Requested requested) => NoteSkills(new(requested)
     {
         Status = AttemptStatus.Running,
         SessionId = requested.Continues is { Session: var session } && PlainSessionId().IsMatch(session) ? session : null,
         SessionFolder = requested.Continues?.Folder,
-    };
+    }, requested.MissingSkills, requested.SkillsUnchecked, requested.At);
+
+    private static AttemptRecord NoteSkills(AttemptRecord record, ImmutableArray<string> missing, string? reason, DateTimeOffset at) =>
+        NoteUncheckedSkills(NoteMissingSkills(record, missing, at), reason, at);
+
+    /// <summary>A turn whose client's skill list could not be read passes the choice unchecked, and its activity says so, once.</summary>
+    private static AttemptRecord NoteUncheckedSkills(AttemptRecord record, string? reason, DateTimeOffset at)
+    {
+        if (reason == record.SkillsUnchecked)
+        {
+            return record;
+        }
+
+        record = record with { SkillsUnchecked = reason };
+        return reason is null ? record : Log(record, at, $"{SkillChoices.UncheckedNote(record.Requested.Client)} {reason}");
+    }
+
+    /// <summary>A turn runs with the chosen skills that are still installed, and its activity names the ones it runs without, once.</summary>
+    private static AttemptRecord NoteMissingSkills(AttemptRecord record, ImmutableArray<string> missing, DateTimeOffset at)
+    {
+        missing = missing.IsDefault ? [] : missing;
+        if (missing.SequenceEqual(record.MissingSkills))
+        {
+            return record;
+        }
+
+        record = record with { MissingSkills = missing };
+        return missing.IsEmpty ? record : Log(record, at, MissingSkillsNote(record.Requested.Client, missing));
+    }
+
+    /// <summary>"Claude Code runs without find-skills, which is not installed."</summary>
+    public static string MissingSkillsNote(ClientId client, IReadOnlyList<string> missing) => missing.Count == 1
+        ? $"{Clients.Name(client)} runs without {missing[0]}, which is not installed."
+        : $"{Clients.Name(client)} runs without {string.Join(", ", missing.Take(missing.Count - 1))} and {missing[^1]}, which are not installed.";
 
     public static AttemptRecord Apply(AttemptRecord record, AttemptEvent e)
     {
@@ -499,7 +554,7 @@ internal static partial class AttemptReducer
         _ => throw new UnreachableException($"Unhandled attempt event {e.GetType().Name}"),
     };
 
-    private static AttemptRecord NextTurn(AttemptRecord record, AttemptEvent.TurnRequested turn) => record with
+    private static AttemptRecord NextTurn(AttemptRecord record, AttemptEvent.TurnRequested turn) => NoteSkills(record with
     {
         Turns = record.Turns.Add(new TurnRecord(record.Turns.Count + 1, turn.Prompt, TurnOutcome.Running, null)
         {
@@ -517,7 +572,7 @@ internal static partial class AttemptReducer
         LastMessage = null,
         Conversation = turn.Conversation ?? record.Conversation,
         WorkingFolder = turn.WorkingFolder ?? record.WorkingFolder,
-    };
+    }, turn.MissingSkills, turn.SkillsUnchecked, turn.At);
 
     private static RequestKey Key(AttemptRecord record, string id) => new(new TurnKey(record.Id, record.Turns.Count), id);
 

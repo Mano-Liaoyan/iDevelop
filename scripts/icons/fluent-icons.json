@@ -55,6 +55,7 @@
     { "key": "IconWireContext", "asset": "Line Horizontal 1 Dashes", "file": "ic_fluent_line_horizontal_1_dashes_16_regular.svg" },
     { "key": "IconModel", "asset": "Brain", "file": "ic_fluent_brain_16_regular.svg" },
     { "key": "IconReasoning", "asset": "Gauge", "file": "ic_fluent_gauge_16_regular.svg" },
+    { "key": "IconSkills", "asset": "Toolbox", "file": "ic_fluent_toolbox_16_regular.svg" },
     { "key": "IconConversation", "asset": "Chat", "file": "ic_fluent_chat_16_regular.svg" },
     { "key": "IconStatus", "asset": "Status", "file": "ic_fluent_status_16_regular.svg" },
     { "key": "IconTime", "asset": "History", "file": "ic_fluent_history_16_regular.svg" },

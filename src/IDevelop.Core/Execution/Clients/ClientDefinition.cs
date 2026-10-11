@@ -48,6 +48,9 @@ internal sealed record ClientDefinition
     /// that id, which it then reports as if it had resumed it. Null when the client never does so.
     /// </summary>
     public string? LostSessionNotice { get; init; }
+
+    /// <summary>How the client lists its skills, or null when it cannot limit a task's skills, as Antigravity CLI cannot.</summary>
+    public SkillSource? Skills { get; init; }
 }
 
 internal abstract record CatalogSource
@@ -88,6 +91,9 @@ internal sealed record LaunchRequest(string Model, string? Reasoning, string Pro
     public string? WorkingFolder { get; init; }
 
     public EffectivePolicy? Policy { get; init; }
+
+    /// <summary>The skills the node chose, as this machine's client lists them. Null leaves the client's own skills as they are.</summary>
+    public SkillLaunch? Skills { get; init; }
 
     public EffectivePolicy PolicyFor(ClientId client) => Policy ?? ClientPolicy.For(
         client, ReadOnly, ConversationMode.Autonomous, reviewer: false, new HostQuestions.Disabled());

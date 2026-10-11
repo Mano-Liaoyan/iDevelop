@@ -18,12 +18,88 @@ public sealed partial record ResolvedCommand(string Path, bool IsBatchShim)
     /// </summary>
     public string? SearchPath { get; init; }
 
-    /// <summary>The first argument a batch shim cannot pass safely, or null.</summary>
+    /// <summary>
+    /// For an npm shim, the node script it runs. A launch whose arguments cmd.exe could misread, such as Pi's skill file
+    /// under a user folder with a space, runs node with the script directly, and node reads each argument as given.
+    /// </summary>
+    public NodeScript? Script { get; init; }
+
+    /// <summary>The first argument a batch shim cannot pass safely and that cannot go to its node script instead, or null.</summary>
     internal string? UnsafeArgument(IEnumerable<string> arguments) =>
-        IsBatchShim ? arguments.FirstOrDefault(argument => !BatchSafe().IsMatch(argument)) : null;
+        IsBatchShim && Script is null ? arguments.FirstOrDefault(argument => !BatchSafe().IsMatch(argument)) : null;
+
+    /// <summary>
+    /// The program and arguments that run the command: the command itself, or an npm shim's node script when an argument
+    /// cannot pass cmd.exe. Null when no launch passes every argument safely.
+    /// </summary>
+    internal ProcessLaunch? Launch(IReadOnlyList<string> arguments) =>
+        !IsBatchShim || arguments.All(argument => BatchSafe().IsMatch(argument)) ? new ProcessLaunch(Path, [.. arguments])
+        : Script is { } script ? new ProcessLaunch(script.Node, [.. script.Arguments, .. arguments])
+        : null;
 
     [GeneratedRegex("^[A-Za-z0-9._/:=@+-]*$")]
     private static partial Regex BatchSafe();
+}
+
+/// <summary>A program and the arguments it starts with.</summary>
+internal sealed record ProcessLaunch(string File, ImmutableArray<string> Arguments);
+
+/// <summary>The node program and the arguments, flags and then the script, that an npm shim runs before the client's own.</summary>
+public sealed record NodeScript(string Node, ImmutableArray<string> Arguments)
+{
+    // ImmutableArray compares by reference, so equality compares the arguments themselves.
+    public bool Equals(NodeScript? other) => other is not null && Node == other.Node && Arguments.SequenceEqual(other.Arguments);
+
+    public override int GetHashCode() => HashCode.Combine(Node, Arguments.Length);
+}
+
+/// <summary>
+/// Reads the node script that an npm cmd-shim runs, in the form npm writes since 2019 and the one before it. The shim runs
+/// the node.exe beside it, or else the node on the search path, so this does the same. Anything else is not followed.
+/// </summary>
+internal static partial class NpmShim
+{
+    public static NodeScript? Read(string shim, Func<string?> nodeOnPath)
+    {
+        string text;
+        try
+        {
+            if (new FileInfo(shim).Length > 16 * 1024)
+            {
+                return null;
+            }
+
+            text = File.ReadAllText(shim);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        if (Invocation().Match(text) is not { Success: true } match)
+        {
+            return null;
+        }
+
+        ImmutableArray<string> flags = [.. match.Groups["flags"].Value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)];
+        var folder = System.IO.Path.GetDirectoryName(shim)!;
+        var script = System.IO.Path.Combine(folder,
+            match.Groups["script"].Value.Replace('\\', System.IO.Path.DirectorySeparatorChar).TrimStart(System.IO.Path.DirectorySeparatorChar));
+        if (flags.Any(flag => !Flag().IsMatch(flag)) || !File.Exists(script))
+        {
+            return null;
+        }
+
+        var beside = System.IO.Path.Combine(folder, "node.exe");
+        return (File.Exists(beside) ? beside : nodeOnPath()) is { } node ? new NodeScript(node, [.. flags, script]) : null;
+    }
+
+    // "%_prog%" (npm since 2019), "%~dp0\node.exe" or node (before), then any node flags, then the script beside the shim, then %*.
+    [GeneratedRegex(@"(?:""%_prog%""|""%~dp0\\node\.exe""|\bnode)[ \t]+(?<flags>(?:[^""\r\n%]*?[ \t]+)?)""%(?:dp0%|~dp0)\\(?<script>[^""\r\n%]+)""[ \t]+%\*")]
+    private static partial Regex Invocation();
+
+    [GeneratedRegex("^-[A-Za-z0-9._=:-]+$")]
+    private static partial Regex Flag();
 }
 
 /// <summary>
@@ -121,8 +197,19 @@ public sealed class CommandResolver
 
         return null;
 
-        ResolvedCommand Found(string path, bool isBatch) => new(path, isBatch) { SearchPath = string.Join(Path.PathSeparator, searchPath) };
+        ResolvedCommand Found(string path, bool isBatch) => new(path, isBatch)
+        {
+            SearchPath = string.Join(Path.PathSeparator, searchPath),
+            Script = isBatch ? NpmShim.Read(path, () => NodeOnPath(searchPath)) : null,
+        };
     }
+
+    /// <summary>The node program on the search path that cmd.exe would run for a bare node, never a batch file.</summary>
+    private string? NodeOnPath(ImmutableArray<string> searchPath) => searchPath
+        .SelectMany(folder => _extensions
+            .Where(extension => !extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".bat", StringComparison.OrdinalIgnoreCase))
+            .Select(extension => Path.Combine(folder, "node" + extension)))
+        .FirstOrDefault(File.Exists);
 
     /// <summary>
     /// The login shell's order when it contains every folder of the app's PATH, as for an app started from Finder or a

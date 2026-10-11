@@ -173,8 +173,10 @@ public sealed partial class ProjectRuns
                 session = continues?.Session;
             }
             if (intent is TurnIntent.First) sessionFolder = continues?.Folder;
+            // A run that starts the task before its client's first skill listing waits for the listing under way.
+            var skills = await SkillsOfAsync(definition.Execution);
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
-                new Resumption(session, prepared.Prompt) { Folder = sessionFolder }, questions: _questions);
+                new Resumption(session, prepared.Prompt) { Folder = sessionFolder }, questions: _questions, skills: skills);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);
             var plan = ((StartVerdict.Allowed)verdict).Plan;
             plan = plan with { Request = plan.Request with { WorkingFolder = ready.Checkout } };
@@ -202,6 +204,8 @@ public sealed partial class ProjectRuns
                             Fix = record.ReviewOf(attempt.Id), Tree = tree, Continues = continues, Planning = RunPlanning.Handles(record, attempt),
                             // A reviewer's attempt names its subject, so it rests in review between its turns.
                             Subject = definition.Blueprint.Work is WorkSpec.Review ? record.Revisions[attempt.Revision].Snapshot.SubjectOf(task) : null,
+                            MissingSkills = plan.LoggedMissingSkills,
+                            SkillsUnchecked = plan.SkillsUnchecked,
                         }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }
@@ -253,6 +257,8 @@ public sealed partial class ProjectRuns
                     // A reply to a waiting attempt answers its deferred questions, as a standalone reply does.
                     Replies = resting.Status == AttemptStatus.WaitingForInput
                         ? [.. resting.DeferredRequestIds.Select(id => new TurnRequestId(resting.Turns.Count, id))] : default,
+                    MissingSkills = plan.LoggedMissingSkills,
+                    SkillsUnchecked = plan.SkillsUnchecked,
                 });
                 owner.MarkRequested();
                 Probe?.Invoke("runner.turn-requested.after");

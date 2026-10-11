@@ -14,9 +14,37 @@ internal static class FakeAgents
     public static readonly FakeRule CodexSignedIn = On("login", "status").Print("Logged in using ChatGPT");
 
     // Pi's RPC mode keeps running after it answers and exits when its input ends, as the real one does.
-    public static readonly FakeRule PiModels = On("--mode", "rpc", "--no-session").Replay(Fixture.Path("pi-rpc-models.jsonl")).WaitForStdinEnd();
+    public static readonly FakeRule PiModels = PiRpc();
 
     public static readonly FakeRule AgyModels = On("models").Replay(Fixture.Path("agy-models.txt"));
+
+    /// <summary>
+    /// Claude Code's skill listing, which a turn tells apart by its partial messages: its initialize answer lists the skills
+    /// in its project folder and in <paramref name="folders"/> beside its own commands, compact and the bundled simplify
+    /// alike, and its reload_skills answer lists the same skills with simplify among them.
+    /// </summary>
+    public static FakeRule ClaudeSkills(params string[] folders) => On("-p").Lacking("--include-partial-messages")
+        .WaitForLine("initialize").ListSkills("claude", [".claude/skills", .. folders], builtIn: ["compact", "simplify"])
+        .WaitForLine("reload_skills").ListSkills("claude-skills", [".claude/skills", .. folders], builtIn: ["simplify"]);
+
+    /// <summary>Codex's answer to each skills/list: the skills in its project folders and in <paramref name="folders"/>.</summary>
+    public static FakeRule CodexSkills(params string[] folders) => CodexSkills([.. folders], null, 0);
+
+    /// <summary>
+    /// Codex's answer to each skills/list, which holds the skills in <paramref name="late"/> only once the app-server has run
+    /// <paramref name="lateAfterMs"/>, as Codex lists its remote plugins' skills once it has loaded them in the background.
+    /// </summary>
+    public static FakeRule CodexSkills(string[] folders, string[]? late, int lateAfterMs)
+    {
+        string[] all = [".agents/skills", ".codex/skills", .. folders];
+        return On("app-server").Thread("skills/list").ListSkills("codex", all, late: late, lateAfterMs: lateAfterMs)
+            .AnswerEach("skills/list", On().ListSkills("codex", all, late: late, lateAfterMs: lateAfterMs));
+    }
+
+    /// <summary>Pi's RPC mode, which answers the model list and the command list with the skills in its project folders and in <paramref name="folders"/>.</summary>
+    public static FakeRule PiRpc(params string[] folders) => On("--mode", "rpc", "--no-session").Answer(
+        ("get_available_models", On().Replay(Fixture.Path("pi-rpc-models.jsonl"))),
+        ("get_commands", On().ListSkills("pi", [".pi/skills", ".agents/skills", .. folders]))).WaitForStdinEnd();
 
     public static FakeRule PiProvider(string provider, string status) =>
         On("auth", "check", "--provider", provider, "--json").Print($$"""{"status":"{{status}}"}""");
@@ -24,8 +52,8 @@ internal static class FakeAgents
     /// <summary>One client as on the probing machine, plus the rules for its runs. Returns the shim's path.</summary>
     public static string Install(FakeClients fakes, ClientId client, params FakeRule[] runs) => client switch
     {
-        ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, .. runs]),
-        ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, .. runs]),
+        ClientId.ClaudeCode => fakes.Install("claude", [ClaudeSignedIn, ClaudeSkills(), .. runs]),
+        ClientId.Codex => fakes.Install("codex", [CodexModels, CodexSignedIn, CodexSkills(), .. runs]),
         ClientId.Pi => fakes.Install("pi", [PiModels, PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"), .. runs]),
         ClientId.Antigravity => fakes.Install("agy", [AgyModels, .. runs]),
     };

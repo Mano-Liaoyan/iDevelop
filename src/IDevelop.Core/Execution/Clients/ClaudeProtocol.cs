@@ -14,7 +14,10 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
     private bool _initialized;
     private bool _interrupted;
 
-    public override ProtocolOutput Start() => new([], [Control("init-1", "initialize")], false);
+    // A node's skill choice is an allow-list, which a resumed session does not keep, so every turn's initialize sends it.
+    public override ProtocolOutput Start() => new([], [launch.Skills is { } skills
+        ? Frame(new { type = "control_request", request_id = "init-1", request = new { subtype = "initialize", skills = skills.Chosen.Select(skill => skill.Name).ToArray() } })
+        : Control("init-1", "initialize")], false);
 
     public override ProtocolOutput Read(string line)
     {

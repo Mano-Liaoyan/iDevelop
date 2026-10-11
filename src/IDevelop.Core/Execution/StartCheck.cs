@@ -82,6 +82,9 @@ public abstract record StartProblem
     /// <summary>The level is missing or not offered. <paramref name="Offered"/> is empty when the model takes no level.</summary>
     public sealed record ReasoningNotOffered(ClientId Client, string Model, string? Reasoning, ImmutableArray<string> Offered) : StartProblem;
 
+    /// <summary>iDevelop is still listing the skills the client loads, which the node's skill choice needs.</summary>
+    public sealed record SkillsChecking(ClientId Client) : StartProblem;
+
     /// <summary>The client is a batch shim, and cmd.exe could misread this argument.</summary>
     public sealed record UnsafeArgument(ClientId Client, string Argument) : StartProblem;
 
@@ -115,6 +118,15 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
 {
     public LaunchArguments Launch => Client.Launch(Request);
 
+    /// <summary>The chosen skills the client does not list on this machine, which the turn runs without.</summary>
+    public ImmutableArray<string> MissingSkills { get; init; } = [];
+
+    /// <summary>The missing skills as an attempt log writes them: absent when there are none, so older logs read alike.</summary>
+    public ImmutableArray<string> LoggedMissingSkills => MissingSkills.IsEmpty ? default : MissingSkills;
+
+    /// <summary>Why the client's skill list could not be read, when the turn passes the choice unchecked, or null.</summary>
+    public string? SkillsUnchecked { get; init; }
+
     /// <summary>A later turn, which resumes the session with the person's message alone. The client holds the context.</summary>
     public LaunchPlan Resuming(string session, string message) => this with { Request = Request with { Prompt = message, ResumeSession = session } };
 }
@@ -145,9 +157,10 @@ internal static class StartCheck
     /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no field filled in.</param>
     /// <param name="planning">What a node whose agent proposes may fill and place, which its first prompt lists.</param>
     /// <param name="subject">A review's subject, which its first prompt reads.</param>
+    /// <param name="skills">The skills the task's client lists in the project, which a node with a skill choice needs.</param>
     public static StartVerdict Evaluate(
         TaskDefinition task, string projectFolder, IReadOnlyDictionary<ClientId, ClientStatus> clients, Resumption? resume = null,
-        PlanningContext? planning = null, SubjectView? subject = null, HostQuestions? questions = null)
+        PlanningContext? planning = null, SubjectView? subject = null, HostQuestions? questions = null, SkillListing? skills = null)
     {
         if (task.Blueprint.Work is WorkSpec.Person)
         {
@@ -212,6 +225,29 @@ internal static class StartCheck
             return Block(new StartProblem.ReasoningNotOffered(client, id, settings.Reasoning, model.ReasoningLevels));
         }
 
+        // A chosen skill that is no longer installed is left out, and the turn says so. A skill list that could not be read
+        // does not hold the task back: the choice goes as it is, and the turn says so (#93, 2026-10-11). Antigravity CLI has no
+        // choice to keep.
+        SkillLaunch? skillLaunch = null;
+        ImmutableArray<string> missingSkills = [];
+        string? skillsUnchecked = null;
+        if (settings.Skills is { } chosen && SkillChoices.CanChoose(client))
+        {
+            switch (skills)
+            {
+                case SkillListing.Listed listed:
+                    skillLaunch = SkillChoices.Launch(chosen, listed.Skills);
+                    missingSkills = SkillChoices.Missing(chosen, listed.Skills);
+                    break;
+                case SkillListing.Unavailable unavailable:
+                    skillLaunch = SkillChoices.Unchecked(chosen);
+                    skillsUnchecked = unavailable.Reason;
+                    break;
+                default:
+                    return Block(new StartProblem.SkillsChecking(client));
+            }
+        }
+
         var work = NodeWorks.For(task.Blueprint.Work);
         string prompt;
         if (resume is not null)
@@ -241,8 +277,12 @@ internal static class StartCheck
             }
         }
 
-        var request = new LaunchRequest(id, settings.Reasoning, prompt) { ResumeSession = resume?.Session, ReadOnly = readOnly, Policy = ClientPolicy.For(client, readOnly, task.Conversation, task.Blueprint.Work is WorkSpec.Review, questions ?? new HostQuestions.Disabled()) };
-        var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request);
+        var request = new LaunchRequest(id, settings.Reasoning, prompt)
+        {
+            ResumeSession = resume?.Session, ReadOnly = readOnly, Skills = skillLaunch,
+            Policy = ClientPolicy.For(client, readOnly, task.Conversation, task.Blueprint.Work is WorkSpec.Review, questions ?? new HostQuestions.Disabled()),
+        };
+        var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request) { MissingSkills = missingSkills, SkillsUnchecked = skillsUnchecked };
         if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)
         {
             return Block(new StartProblem.UnsafeArgument(client, argument));

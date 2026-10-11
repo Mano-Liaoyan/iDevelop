@@ -59,6 +59,16 @@ internal sealed class CodexProtocol(LaunchRequest launch) : TurnProtocol
                     args["excludeTurns"] = true;
                 }
 
+                // Codex takes no allow-list, so a node's choice turns off each skill it lists that the node did not choose. A
+                // resumed thread in a new app-server reads the same overrides, and the JSON passes through any npm shim.
+                if (launch.Skills is { Others.IsEmpty: false } skills)
+                {
+                    args["config"] = new Dictionary<string, object?>
+                    {
+                        ["skills.config"] = skills.Others.Select(skill => new { name = skill.Name, enabled = false }).ToArray(),
+                    };
+                }
+
                 return new([], [Frame(new { method = "initialized" }), Rpc("thread-1", launch.ResumeSession is null ? "thread/start" : "thread/resume", args)], false);
             }
 
