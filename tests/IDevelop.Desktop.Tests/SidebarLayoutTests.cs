@@ -163,6 +163,42 @@ public sealed class SidebarLayoutTests : IDisposable
         return $"first line {line - Top(row):0.#}, tile {Centre(row.GetVisualDescendants().OfType<Theme.KindTile>().Single()) - line:0.#}";
     }
 
+    [AvaloniaFact]
+    public void An_agent_s_name_and_summary_wrap_in_full_with_its_dot_on_the_name_s_first_line()
+    {
+        FakeAgents.Install(_fakes, ClientId.Codex);
+        var shell = Shell.Show(_fakes.DiscoverAsync().Result);
+        var agents = shell.Find<ItemsControl>("Agents");
+        // Every row fits the sidebar's 240 px today, so the list narrows to 90 px, where "Antigravity CLI" and "Ready · 3
+        // models" need two lines, as a larger system font would leave them.
+        Assert.Equal(4, AgentRows(agents).Length);
+        Assert.All(AgentRows(agents), row => Assert.Equal("first line 10, dot 0", AgentCentres(row)));
+
+        agents.Width = 90;
+        shell.Render();
+
+        Assert.All(AgentRows(agents), row => Assert.All(row.GetVisualDescendants().OfType<TextBlock>(), text => AssertWhole(text)));
+        Assert.All(AgentRows(agents), row => Assert.Equal("first line 10, dot 0", AgentCentres(row)));
+        Assert.True(AgentTexts(agents, "Antigravity CLI").Name.TextLayout.TextLines.Count > 1, "\"Antigravity CLI\" does not wrap.");
+        Assert.True(AgentTexts(agents, "Codex").Summary.TextLayout.TextLines.Count > 1, "Codex's \"Ready · 3 models\" does not wrap.");
+    }
+
+    // Each agent's row: its dot, its name, and under the name its summary.
+    private static Grid[] AgentRows(ItemsControl agents) => [.. agents.GetVisualDescendants().OfType<Grid>().Where(grid => grid.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Any())];
+
+    private static (TextBlock Name, TextBlock Summary) AgentTexts(ItemsControl agents, string name)
+    {
+        var texts = AgentRows(agents).Select(row => row.Children.OfType<TextBlock>().ToArray()).Single(texts => texts[0].Text == name);
+        return (texts[0], texts[1]);
+    }
+
+    private static string AgentCentres(Grid row)
+    {
+        var name = row.Children.OfType<TextBlock>().First();
+        var line = FirstLine(name);
+        return $"first line {line - Top(row):0.#}, dot {Centre(row.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Single()) - line:0.#}";
+    }
+
     /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
     private FakeRule Waits() => On("exec", "--json")
         .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")

@@ -291,18 +291,19 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="execution:AgentRow">
                 <!-- UI Automation shows no plain panel, so the summary carries the row's id and its reason. The summary
-                     names the reason in a few words, and the row's tooltip holds all of it. -->
+                     names the reason in a few words, and the row's tooltip holds all of it. The name and the summary wrap
+                     in full, and the dot centres on the name's first line. -->
                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="8"
                       Background="Transparent"
                       ToolTip.Tip="{Binding Detail}">
-                  <Ellipse Classes="status" VerticalAlignment="Center"
+                  <Ellipse Classes="status" VerticalAlignment="Top" Margin="0,6,0,0"
                            Classes.running="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Running}}"
                            Classes.complete="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Complete}}"
                            Classes.problem="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Problem}}"
                            Classes.waiting="{Binding Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static execution:StatusTone.Waiting}}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                              FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" />
-                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"
+                  <TextBlock Grid.Row="1" Grid.Column="1" Classes="caption" Text="{Binding Summary}" TextWrapping="Wrap"
                              AutomationProperties.AutomationId="{Binding AutomationId}"
                              AutomationProperties.HelpText="{Binding Detail}" />
                 </Grid>
