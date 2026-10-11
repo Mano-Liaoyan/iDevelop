@@ -81,7 +81,7 @@ public sealed class SkillPickerViewModel : ObservableObject
 
     /// <summary>
     /// The note under the picker: that Antigravity CLI uses all of its skills, the chosen skills that are not installed,
-    /// which the task runs without, or that the client's skill list couldn't be checked, so the choice goes unchecked.
+    /// which the task runs without, or that the client's skill list couldn't be read, and what the task gets instead.
     /// </summary>
     public string? Note => Settings is not { } settings ? null
         : !SkillChoices.CanChoose(settings.Client) ? $"{ClientName} uses all of its installed skills; it can't limit them per task."

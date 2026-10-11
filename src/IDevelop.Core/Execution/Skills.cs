@@ -91,13 +91,14 @@ public static class SkillChoices
 
     /// <summary>
     /// What a task with a choice gets when its client's skill list could not be read, which the Skills row and the attempt's
-    /// activity say: "Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are."
+    /// activity say. The owner decided on 2026-10-11 that Claude Code gets the chosen names unchecked, and that Codex and Pi,
+    /// whose choice needs the list, run with all of their skills.
     /// </summary>
     public static string UncheckedNote(ClientId client) => client switch
     {
-        ClientId.Codex => "Codex's skill list couldn't be checked, and turning off the other skills needs it, so Codex runs with all of its skills.",
-        ClientId.Pi => "Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills.",
-        _ => $"{Clients.Name(client)}'s skill list couldn't be checked, so it gets the chosen skills as they are.",
+        ClientId.Codex or ClientId.Pi =>
+            $"{Clients.Name(client)}'s skill list couldn't be read, so the skill choice couldn't be applied, and {Clients.Name(client)} runs with all of its skills.",
+        _ => $"{Clients.Name(client)}'s skill list couldn't be read, so it gets the chosen skills as they are, unchecked.",
     };
 
     /// <summary>A launch takes only the chosen skills the client lists, so a skill that is not installed is left out.</summary>

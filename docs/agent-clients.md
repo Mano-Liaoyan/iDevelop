@@ -78,7 +78,7 @@ A node's skill choice ([ADR 0025](adr/0025-a-node-s-skill-choice-is-exactly-its-
 | Pi | `pi --mode rpc --no-session` and `get_commands`. Each entry whose `source` is `skill` gives the name after `skill:` and its file in `sourceInfo.path`. | `--no-skills` and `--skill <file>` for each chosen skill |
 | Antigravity CLI | None. It has no per-run skill control. | Nothing |
 
-When the listing fails, a turn of a node with a choice still starts. Claude Code gets the chosen names as they are. Codex and Pi get nothing, because Codex's list of skills to turn off and Pi's skill files both come from the listing.
+When the listing fails, a turn of a node with a choice still starts, as the owner decided on 2026-10-11. Claude Code gets the chosen names unchecked. Codex and Pi get nothing and run with all of their skills, because Codex's list of skills to turn off and Pi's skill files both come from the listing.
 
 ## Unverified items
 

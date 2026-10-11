@@ -215,7 +215,7 @@ public sealed class SkillPickerTests : IDisposable
             shell.Find<TextBlock>("SkillListNote").Text);
         Assert.Empty(Ticks(shell));
         // The task is not refused: it runs with its choice as it is, and the row says the list couldn't be checked.
-        Assert.Equal("Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are.", shell.Find<TextBlock>("SkillsNote").Text);
+        Assert.Equal("Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked.", shell.Find<TextBlock>("SkillsNote").Text);
         Assert.False(shell.ShowsAny("StartProblem"), shell.Text("StartProblem"));
         Assert.Equal("1 skill", Summary(shell));
 

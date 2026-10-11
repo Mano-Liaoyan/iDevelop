@@ -117,7 +117,7 @@ public sealed class SkillStartTests : IDisposable
         var requested = new AttemptEvent.Requested(DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design",
             new ExecutionSettings(ClientId.ClaudeCode) { Skills = ["tdd"] }, "p", "claude", []) { SkillsUnchecked = "It broke." };
         var record = AttemptReducer.Start(requested);
-        Assert.Equal(["Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are. It broke."], record.Activity.Select(line => line.Text));
+        Assert.Equal(["Claude Code's skill list couldn't be read, so it gets the chosen skills as they are, unchecked. It broke."], record.Activity.Select(line => line.Text));
 
         record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []) { SkillsUnchecked = "It broke." });
         Assert.Single(record.Activity);
@@ -125,9 +125,9 @@ public sealed class SkillStartTests : IDisposable
         Assert.Null(record.SkillsUnchecked);
         Assert.Single(record.Activity);
 
-        Assert.Equal("Codex's skill list couldn't be checked, and turning off the other skills needs it, so Codex runs with all of its skills.",
+        Assert.Equal("Codex's skill list couldn't be read, so the skill choice couldn't be applied, and Codex runs with all of its skills.",
             SkillChoices.UncheckedNote(ClientId.Codex));
-        Assert.Equal("Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills.",
+        Assert.Equal("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills.",
             SkillChoices.UncheckedNote(ClientId.Pi));
         var roundTrip = JsonSerializer.Deserialize<AttemptEvent>(JsonSerializer.Serialize<AttemptEvent>(requested, AttemptLog.Options), AttemptLog.Options);
         Assert.Equal("It broke.", Assert.IsType<AttemptEvent.Requested>(roundTrip).SkillsUnchecked);
@@ -166,7 +166,7 @@ public sealed class SkillStartTests : IDisposable
 
         Assert.Equal(AttemptStatus.Succeeded, record.Status);
         Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!);
-        Assert.Equal("Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills. Pi did not list its skills: an extension failed.",
+        Assert.Equal("Pi's skill list couldn't be read, so the skill choice couldn't be applied, and Pi runs with all of its skills. Pi did not list its skills: an extension failed.",
             record.Activity[0].Text);
     }
 
