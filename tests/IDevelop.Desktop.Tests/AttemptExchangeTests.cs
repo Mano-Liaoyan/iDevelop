@@ -15,6 +15,20 @@ public sealed class AttemptExchangeTests
         AttemptReducer.Replay([Requested(attempt, TestTasks.Design, seconds, "Go on.", new Continuation(continues, "thread-1")), Launched(seconds + 1), .. events])!;
 
     [Fact]
+    public void An_interrupted_or_cancelled_attempt_keeps_its_status_line_even_when_the_next_message_resumed_its_session()
+    {
+        var first = Record(A, Launched(1), At(2, new AgentEvent.SessionStarted("thread-1")), At(3, new AgentEvent.Succeeded("Which fruit?")), Exited(4));
+        var interrupted = Continuing(B, A, 100, At(102, new AgentEvent.SessionStarted("thread-1")), new AttemptEvent.Reconciled(T0.AddSeconds(103), null));
+        var cancelled = Continuing(C, B, 200, At(202, new AgentEvent.SessionStarted("thread-1")), new AttemptEvent.CancelRequested(T0.AddSeconds(203)), Exited(204, 1));
+        var resumed = Continuing(D, C, 300, At(302, new AgentEvent.SessionStarted("thread-1")), At(303, new AgentEvent.Succeeded("Done.")), Exited(304));
+
+        var view = new AttemptViewModel(resumed, [first, interrupted, cancelled], elsewhere: false, new ClientStatus.Checking());
+
+        Assert.Equal([AttemptStatus.Interrupted, AttemptStatus.Cancelled], new[] { interrupted.Status, cancelled.Status });
+        Assert.Equal([true, true, true, false], view.Conversation.Select(exchange => exchange.StatusLine is not null));
+    }
+
+    [Fact]
     public void An_attempt_heads_its_exchange_only_when_it_started_a_new_session_or_failed()
     {
         var first = Record(A, Launched(1), At(2, new AgentEvent.SessionStarted("thread-1")), At(3, new AgentEvent.Succeeded("Which fruit?")), Exited(4));

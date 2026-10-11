@@ -71,15 +71,15 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
 
     /// <summary>
     /// Turns are numbered across the whole conversation. Only a conversation of several attempts has status lines, and in
-    /// it only an attempt that started a new session or failed has one, so a continued session reads as one list, as in the
-    /// conversation view (#92). The latest attempt's detail and terminal note have their own places above and below the
+    /// it only an attempt that started a new session, or failed, was interrupted, or was cancelled, has one, so a continued
+    /// session reads as one list, as in the conversation view (#92). The latest attempt's detail and terminal note have their own places above and below the
     /// conversation.
     /// </summary>
     private static List<ExchangeViewModel> Exchanges(AttemptRecord record, ImmutableArray<AttemptRecord> earlier, bool elsewhere)
     {
         var number = 0;
         ExchangeViewModel Exchange(AttemptRecord attempt, bool first, bool latest) => new(
-            earlier.IsEmpty || !(first || attempt.Resumed == false || attempt.Status == AttemptStatus.Failed) ? null
+            earlier.IsEmpty || !(first || attempt.Resumed == false || attempt.Status is AttemptStatus.Failed or AttemptStatus.Interrupted or AttemptStatus.Cancelled) ? null
                 : RunText.ExchangeLine(attempt, latest && elsewhere),
             [.. attempt.Turns.Select(turn => new TurnViewModel(turn, ++number, latest && turn.Number == attempt.Turns.Count, Author(attempt, turn)))],
             latest ? null : RunText.TerminalNote(attempt));
