@@ -169,7 +169,6 @@ public sealed class ConversationTests : IDisposable
         Assert.Collection(
             Shell.Texts(shell.Find<ItemsControl>("Conversation")),
             line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
-            line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
             line => Assert.Equal("You", line),
             line => Assert.Equal("banana", line));
     }

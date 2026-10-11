@@ -70,18 +70,21 @@ public sealed class AttemptViewModel(AttemptRecord record, ImmutableArray<Attemp
     }
 
     /// <summary>
-    /// Turns are numbered across the whole conversation. Only a conversation of several attempts has status lines. The
-    /// latest attempt's detail and terminal note have their own places above and below the conversation.
+    /// Turns are numbered across the whole conversation. Only a conversation of several attempts has status lines, and in
+    /// it only an attempt that started a new session or failed has one, so a continued session reads as one list, as in the
+    /// conversation view (#92). The latest attempt's detail and terminal note have their own places above and below the
+    /// conversation.
     /// </summary>
     private static List<ExchangeViewModel> Exchanges(AttemptRecord record, ImmutableArray<AttemptRecord> earlier, bool elsewhere)
     {
         var number = 0;
-        ExchangeViewModel Exchange(AttemptRecord attempt, bool latest) => new(
-            earlier.IsEmpty ? null : RunText.ExchangeLine(attempt, latest && elsewhere),
+        ExchangeViewModel Exchange(AttemptRecord attempt, bool first, bool latest) => new(
+            earlier.IsEmpty || !(first || attempt.Resumed == false || attempt.Status == AttemptStatus.Failed) ? null
+                : RunText.ExchangeLine(attempt, latest && elsewhere),
             [.. attempt.Turns.Select(turn => new TurnViewModel(turn, ++number, latest && turn.Number == attempt.Turns.Count, Author(attempt, turn)))],
             latest ? null : RunText.TerminalNote(attempt));
 
-        return [.. earlier.Select(attempt => Exchange(attempt, latest: false)), Exchange(record, latest: true)];
+        return [.. earlier.Select((attempt, index) => Exchange(attempt, index == 0, latest: false)), Exchange(record, earlier.IsEmpty, latest: true)];
     }
 
     /// <summary>A review writes its reviewer's later messages and the first message of each fix round. The person writes the rest.</summary>
