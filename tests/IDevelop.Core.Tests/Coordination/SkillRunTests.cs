@@ -35,4 +35,32 @@ public sealed class SkillRunTests
             arguments.SkipWhile(argument => argument != "--no-skills").TakeWhile(argument => argument != "--session-id"));
         Assert.Contains("Pi runs without gone, which is not installed.", f.Log(A).Record!.Activity.Select(line => line.Text));
     }
+
+    [Fact]
+    public async Task A_run_that_starts_before_codex_has_listed_its_skills_waits_for_the_listing_and_goes_on()
+    {
+        var parser = RunConversationFixture.Agent(A, ConversationMode.Autonomous) with
+        {
+            Execution = new ExecutionSettings(ClientId.Codex) { Model = "gpt-6-sol", Reasoning = "high", Skills = ["imagegen"] },
+        };
+        await using var f = new RunConversationFixture(Graph([parser]));
+        var personal = Directory.CreateDirectory(Path.Combine(f.Evidence, "agents-skills")).FullName;
+        var remote = Directory.CreateDirectory(Path.Combine(f.Evidence, "remote-plugins")).FullName;
+        SkillListingTests.Skill(personal, "imagegen", "Makes images.");
+        SkillListingTests.Skill(personal, "release", "Cuts a release.");
+        SkillListingTests.Skill(remote, "pages-write-page", "Writes a page.", name: "pages:write-page");
+        f.Answer(A, f.Says(A, 1, "Done."));
+        f.Install();
+        // Codex settles its list only once its remote plugins have loaded, so the run starts long before the listing is in.
+        f.Fakes.Install("codex", FakeAgents.CodexModels, FakeAgents.CodexSignedIn, FakeAgents.CodexSkills([personal], [remote], 900),
+            FakeRule.On("app-server").Choose([("Build A.", FakeRule.On().Scripted(f.Folder(A)))]));
+        await f.Open(install: false);
+
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        using var thread = JsonDocument.Parse(File.ReadAllText(Path.Combine(f.Evidence, "A-1.args") + ".thread.json"));
+        Assert.Equal("""{"skills.config":[{"name":"pages:write-page","enabled":false},{"name":"release","enabled":false}]}""",
+            thread.RootElement.GetProperty("params").GetProperty("config").GetRawText());
+    }
 }

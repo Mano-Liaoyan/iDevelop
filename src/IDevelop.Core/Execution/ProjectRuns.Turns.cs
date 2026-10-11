@@ -171,8 +171,10 @@ public sealed partial class ProjectRuns
                     earlier => AttemptEvidence.Read(store.AttemptFolder(permit.Workflow, permit.Run, earlier.Task, earlier.Id)).Record);
                 session = continues?.Session;
             }
+            // A run that starts the task before its client's first skill listing waits for the listing under way.
+            var skills = await SkillsOfAsync(definition.Execution);
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
-                new Resumption(session, prepared.Prompt), questions: _questions, skills: SkillsOf(definition.Execution));
+                new Resumption(session, prepared.Prompt), questions: _questions, skills: skills);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);
             var plan = ((StartVerdict.Allowed)verdict).Plan;
             plan = plan with { Request = plan.Request with { WorkingFolder = ready.Checkout } };

@@ -1064,6 +1064,21 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     internal SkillListing? SkillsOf(ExecutionSettings? settings) =>
         settings is { Skills: not null } chosen && SkillChoices.CanChoose(chosen.Client) ? _clients.Skills(chosen.Client, _projectFolder) : null;
 
+    /// <summary>
+    /// As <see cref="SkillsOf"/>, but a run's turn waits for a listing that is under way, so a task the run starts before the
+    /// first listing goes on once it is in, with its choice or unchecked, rather than waiting for the person.
+    /// </summary>
+    internal async Task<SkillListing?> SkillsOfAsync(ExecutionSettings? settings) =>
+        settings is { Skills: not null } chosen && SkillChoices.CanChoose(chosen.Client)
+            ? await _clients.SkillsAsync(chosen.Client, _projectFolder, SkillListingWait).ConfigureAwait(false)
+            : null;
+
+    /// <summary>
+    /// How long a run's turn waits for its client's skill listing. A listing ends on its own within its probe's 30 seconds and
+    /// 5 seconds of shutdown, Codex's after at most about 8 seconds of listing again.
+    /// </summary>
+    internal TimeSpan SkillListingWait { get; set; } = TimeSpan.FromSeconds(40);
+
     private SendProblem? SendTarget(TaskDefinition task, TurnKey? expected)
     {
         if (_leaving is not null)
