@@ -182,4 +182,11 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
 /// identifies the acceptance.
 /// </summary>
 internal sealed record RunAmendment(RevisionId Previous, Proposal Proposal, ImmutableArray<TaskId> Chosen, ExecutionSettings? Fallback,
-    OperationId Confirmation);
+    OperationId Confirmation)
+{
+    /// <summary>The planner's choices that the review found this machine can run, by task, as Generate Workflow's review passes them (#99).</summary>
+    public ImmutableDictionary<TaskId, ExecutionSettings>? Planned { get; init; }
+
+    /// <summary>The person's own choices in the review, by task, which win over every other agent (#99).</summary>
+    public ImmutableDictionary<TaskId, ExecutionSettings>? Changed { get; init; }
+}

@@ -75,6 +75,31 @@ public sealed class AmendmentTests
     }
 
     [Fact]
+    public async Task An_amendment_gives_a_new_task_the_agent_the_persons_review_passed_and_its_turn_runs_with_it()
+    {
+        await using var f = Fixture();
+        await f.Open();
+        var original = f.Read().Revision.Id;
+        await f.Resume();
+        await f.Until(view => view.Tasks[A].State == TaskState.Done);
+        var (_, _, proposal) = Proposed(f);
+        var added = proposal.Nodes.Single(node => node.Name == "new-1").Id;
+        var chosen = new ExecutionSettings(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "low" };
+
+        var amended = await f.Coordinator.Amend(f.Address, new(original, proposal, [added], f.Read().Revision.Snapshot.Tasks[A].Execution, Accept)
+        {
+            Planned = ImmutableDictionary<TaskId, ExecutionSettings>.Empty.Add(added, chosen),
+        }).WaitAsync(Bound);
+
+        Assert.IsType<RunCommand.Accepted>(amended);
+        await f.UntilStatus(RunStatus.Completed);
+        var record = f.Read();
+        Assert.Equal(chosen, record.Revision.Snapshot.Tasks[added].Execution);
+        var attempt = record.Attempts.Values.Single(attempt => attempt.Task == added);
+        Assert.Equal(chosen, AttemptEvidence.Read(f.Preparation.Store.AttemptFolder(W, f.Preparation.RunId, added, attempt.Id)).Record!.Requested);
+    }
+
+    [Fact]
     public async Task An_amendment_after_a_reservation_keeps_the_original_preparation_and_runs_the_amended_task()
     {
         await using var f = Fixture();
@@ -116,6 +141,9 @@ public sealed class AmendmentTests
         Assert.Equal(record.Revision.Id, Revision.Capture(Edit(record.Revisions[original].Snapshot, projection.Edit)).Id);
         Assert.Contains("Empty tasks you may fill:\n- None.\n", f.Prompt(A));
         Assert.Contains("- type-7: Writer. Fields: brief (Brief, required).\n", f.Prompt(A));
+        // The planner chooses each new task's agent from the clients ready when its start was planned (#99).
+        Assert.Contains("\n\nAgents you may choose:\n- codex (Codex):\n  - gpt-6.1-sol, GPT-6.1-Sol. Reasoning: ", f.Prompt(A));
+        Assert.DoesNotContain("- claude-code (Claude Code)", f.Prompt(A));
     }
 
     [Fact]
