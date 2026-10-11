@@ -231,6 +231,9 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Equal($"count 8, running {slot + 8:0.#}, name {slot + 24:0.#}", WorkflowEdges(shell, Reports, ReleaseNotes));
         Assert.Equal($"count 8, unsaved {slot + 8:0.#}, name {slot + 24:0.#}", WorkflowEdges(shell, Reports, Quarterly));
         Assert.Equal($"count 8, name {slot + 8:0.#}", WorkflowEdges(shell, Onboarding, "Workflow"));
+        // A count keeps the width of its own digits at the slot's right end, so "2" stays narrower than "12".
+        var (two, twelve) = (Count(shell, Reports, ReleaseNotes).Bounds.Width, Count(shell, Reports, Quarterly).Bounds.Width);
+        Assert.True(two < twelve, $"\"2\" is {two:0.#} px wide and \"12\" {twelve:0.#} px.");
 
         // Every item of a row centres on the first line of the row's name: 14 px into a project's row and 16 px into a
         // workflow's, the middle of a one-line row.
