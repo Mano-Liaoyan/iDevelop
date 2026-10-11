@@ -191,6 +191,9 @@ public sealed class RunConversationTests
         f.Runs.ClientRoots = 1;
         await f.Resume();
         await f.Until(view => view.Tasks[A].State == TaskState.Waiting && view.Tasks[X].State == TaskState.Running);
+        // Running means only that X's process started. Its session means it has begun its turn and counted its launch,
+        // which the restart below would otherwise cut short.
+        await TurnFixture.WaitUntilAsync(() => f.Log(X).Record?.SessionId == "session-X");
         using (var session = f.Session(A))
         {
             Assert.IsType<SendResult.Queued>(await Send(session, "Use the fixture"));
