@@ -33,11 +33,10 @@ A node's agent can use a choice of skills. The node's skill picker lists the ski
 ## Consequences
 
 - A skill installed after the person made a choice is not used until they tick it.
-- No real client ran for this decision. The Claude Code listing rests on the request and answer types that Claude Code 2.1.296 ships. A real-client probe, which needs the owner's approval, still has to show that each of these works as described:
-  - Claude Code, driven directly, answers `initialize` and `reload_skills` without a turn, and its `skills` allow-list holds on every resumed turn and hides the bundled skills that were not chosen.
-  - Codex applies `skills.config` from a thread's `config` on both `thread/start` and `thread/resume`.
-  - Pi's `--no-skills --skill` holds on a resumed session.
-- A listing starts the client in the project folder, so whatever the client does on starting there may run for a listing too.
+- A real-client probe that the owner approved on 2026-10-11 confirmed on Linux, with Claude Code 2.1.296, Codex 0.160.1, and Pi 1.1.0, that each listing runs no model turn, that Claude Code's allow-list and Pi's `--no-skills --skill` hold on every resumed turn, each turn with its own choice, and that Codex turns off each named skill on `thread/start` and `thread/resume`. Each client ignores a chosen name or file that matches nothing, without an error.
+- Claude Code's allow-list is "exactly the chosen skills" for the main session only. A subagent takes its skills from its own `AgentDefinition.skills` and, in the follow-up probe, saw and ran every skill, bundled ones included.
+- The allow-list matches a skill's full name or a `:name` suffix of it, as the 2.1.296 schema says and the follow-up probe confirmed. Choosing `probe-alpha` also lets in a plugin's `probeplug:probe-alpha`, and choosing the bundled `code-review` also lets in the plugin skill `code-review:code-review`.
+- A listing starts the client in the project folder, so whatever the client does on starting there may run for a listing too. Claude Code runs the person's SessionStart hooks, and each listing leaves an empty `~/.claude/session-env/<session>/` folder, as each turn does.
 - On Windows, a Pi skill whose file path holds a space cannot pass `pi.cmd`, so the start says that cmd.exe could misread it.
 
-Source: issue [#93](https://github.com/Mano-Liaoyan/iDevelop/issues/93) and the owner's decisions of 2026-10-09.
+Source: issue [#93](https://github.com/Mano-Liaoyan/iDevelop/issues/93), the owner's decisions of 2026-10-09 and 2026-10-11, and the real-client probes of 2026-10-11.
