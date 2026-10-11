@@ -17,6 +17,9 @@ internal sealed record AttemptHistory(AttemptId Id, ImmutableArray<ProjectedConv
 {
     public required AttemptRecord Record { get; init; }
 
+    /// <summary>The conversation mode the attempt started in. <see cref="AttemptRecord.Conversation"/> is the latest one.</summary>
+    public ConversationMode Opening { get; init; }
+
     public ImmutableArray<ConversationEntry> Entries => [.. Rows.Select(row => row.Entry)];
 }
 
@@ -30,6 +33,7 @@ internal static class ConversationHistory
         IReadOnlyDictionary<string, LiveMessageBuffer>? live = null)
     {
         AttemptRecord? record = null;
+        var opening = ConversationMode.Autonomous;
         var rows = new Dictionary<EntryId, ProjectedConversationEntry>();
         var queue = new List<(string Id, EntryId Entry)>();
         var lastComplete = new Dictionary<int, string>();
@@ -85,7 +89,8 @@ internal static class ConversationHistory
             switch (e)
             {
                 case AttemptEvent.Requested requested when before is null:
-                    Marker("attempt", $"Attempt {record.Id}\n{Clients.Name(record.Requested.Client)}, model {record.Requested.Model ?? "unspecified"}, reasoning {record.Requested.Reasoning ?? "unspecified"}, conversation {record.Conversation}.");
+                    opening = record.Conversation;
+                    Marker("attempt", $"Attempt {record.Id}\n{Settings(record.Requested, record.Conversation)}");
                     Message(requested.Continues is null || requested.Fix is not null || requested.Subject is not null
                         ? MessageAuthor.Application : MessageAuthor.Person, requested.Prompt, MessageState.Submitted, "prompt");
                     break;
@@ -242,10 +247,14 @@ internal static class ConversationHistory
         }
 
         return new AttemptHistory(record.Id, [.. rows.Values.OrderBy(row => row.Entry.Order).ThenBy(row => row.Position)
-            .ThenBy(row => row.Slot).ThenBy(row => row.Entry.Id.Value, StringComparer.Ordinal)]) { Record = record };
+            .ThenBy(row => row.Slot).ThenBy(row => row.Entry.Id.Value, StringComparer.Ordinal)]) { Record = record, Opening = opening };
     }
 
-    private static EntryId Id(AttemptId attempt, int turn, string kind, string? identity, long position) =>
+    /// <summary>What an attempt runs with, as its first marker names it.</summary>
+    internal static string Settings(ExecutionSettings settings, ConversationMode mode) =>
+        $"{Clients.Name(settings.Client)}, model {settings.Model ?? "unspecified"}, reasoning {settings.Reasoning ?? "unspecified"}, conversation {mode}.";
+
+    internal static EntryId Id(AttemptId attempt, int turn, string kind, string? identity, long position) =>
         new($"c1/{attempt}/{turn}/{kind}/{(identity is null ? $"p{position}" : "i" + Encode(identity))}");
 
     private static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');

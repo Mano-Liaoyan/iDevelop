@@ -49,6 +49,26 @@ public sealed partial class ProjectRuns
         return RunAttempt(task, attempt) is { } place ? ReadRunHistory(place.Workflow, place.Run, task, attempt)?.History : null;
     }
 
+    /// <summary>
+    /// The attempts from the one <paramref name="head"/> continues back to the first, oldest first, read as one
+    /// conversation. An attempt that cannot be read, or that an edited log links back to, ends the chain there.
+    /// </summary>
+    private ImmutableArray<AttemptHistory> ConversationChainOf(TaskId task, AttemptId head, CancellationToken ct)
+    {
+        var histories = new List<AttemptHistory>();
+        var seen = new HashSet<AttemptId>();
+        AttemptId? link = head;
+        while (link is { } id && seen.Add(id) && ReadConversationHistory(task, id) is { } history)
+        {
+            ct.ThrowIfCancellationRequested();
+            histories.Add(history);
+            link = history.Record.Continues;
+        }
+
+        histories.Reverse();
+        return ConversationChain.Join(histories);
+    }
+
     /// <summary>The history of a run-owned attempt, with this window's live text and record while its turn runs here.</summary>
     private CachedConversation? ReadRunHistory(WorkflowId workflow, RunId run, TaskId task, AttemptId attempt)
     {

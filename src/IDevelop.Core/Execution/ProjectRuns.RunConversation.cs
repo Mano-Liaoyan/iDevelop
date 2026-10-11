@@ -126,17 +126,7 @@ public sealed partial class ProjectRuns
                 return new HistoryResult.Unavailable(ClosedOwner);
             }
 
-            var histories = new List<AttemptHistory>();
-            var seen = new HashSet<AttemptId>();
-            AttemptId? link = head;
-            while (link is { } id && seen.Add(id) && _owner.ReadConversationHistory(Task, id) is { } history)
-            {
-                ct.ThrowIfCancellationRequested();
-                histories.Add(history);
-                link = history.Record.Continues;
-            }
-
-            histories.Reverse();
+            var histories = _owner.ConversationChainOf(Task, head, ct);
             ct.ThrowIfCancellationRequested();
             return Unavailable ? new HistoryResult.Unavailable(ClosedOwner)
                 : ConversationPager.Read($"{_owner._projectFolder}/{Task}/run/{Address.Workflow}/{Address.Run}", histories,

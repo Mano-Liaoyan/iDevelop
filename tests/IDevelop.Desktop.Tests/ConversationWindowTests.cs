@@ -80,6 +80,29 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_continuation_of_the_same_session_reads_on_without_a_new_attempt_divider_and_a_new_session_keeps_it()
+    {
+        var project = Project();
+        WriteThreeAttempts(project);
+        var restarted = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-00000000000d"));
+        WriteAttempt(project, Requested(restarted, TestTasks.Design, 300, "Try again", new Continuation(C, "thread-1")), Launched(301),
+            At(302, new AgentEvent.SessionStarted("thread-9")), At(303, new AgentEvent.Message("Try what again?")),
+            At(304, new AgentEvent.Succeeded("Try what again?")), Exited(305));
+        var shell = Shell.Open(project);
+        string[] Markers() => [.. Conversation(shell).Items.OfType<MarkerItemViewModel>().Select(marker => marker.Title)];
+
+        OpenFromInspector(shell, "Design");
+
+        Assert.Equal(["New attempt", "New attempt"], Markers());
+        Assert.Equal(["iDevelop: " + Prompt, "Codex: Which fruit?", "You: banana", "Codex: Wrote banana.", "You: Use the fixture",
+            "Codex: Used the fixture.", "You: Try again", "Codex: Try what again?"], Messages(shell));
+        Assert.Equal(4, Conversation(shell).Attempts.Count);
+        Conversation(shell).SelectedAttempt = Conversation(shell).Attempts.Single(choice => choice.Id == C);
+        shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted && Messages(shell).Length == 6, "the earlier attempt's chain shows");
+        Assert.Equal(["New attempt"], Markers());
+    }
+
+    [AvaloniaFact]
     public void A_failed_card_opens_its_conversation_from_its_attention_glyph()
     {
         var project = Project();
