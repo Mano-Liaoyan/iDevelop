@@ -37,6 +37,14 @@ public sealed class NodeRunTests
     private static (DateTimeOffset Launched, DateTimeOffset Exited) Interval(CoordinatorFixture f, TaskId task) =>
         ConcurrencyTests.Interval(f.Preparation.Store.AttemptFolder(Runs.RunFixtures.W, f.Preparation.RunId, task, RunProjection.LatestAttempts(f.Read())[task]));
 
+    /// <summary>
+    /// Waits until <paramref name="task"/>'s client reports its session, so it has begun its turn and counted its launch.
+    /// <see cref="TaskState.Running"/> means only that the client's process started; a stop that soon ends the fake client
+    /// before it reads its prompt and counts the launch.
+    /// </summary>
+    private static Task UntilSession(CoordinatorFixture f, TaskId task) => TurnFixture.WaitUntilAsync(() => AttemptEvidence.Read(
+        f.Preparation.Store.AttemptFolder(Runs.RunFixtures.W, f.Preparation.RunId, task, RunProjection.LatestAttempts(f.Read())[task])).Record?.SessionId == "session-" + Name(task));
+
     private static DateTimeOffset Accepted(CoordinatorFixture f, TaskId task) =>
         f.Read().Receipts.Values.Single(entry => entry.Event is RunEvent.ResultAccepted accepted && accepted.Result.Task == task).At;
 
@@ -233,6 +241,7 @@ public sealed class NodeRunTests
         await f.Open();
         await f.Resume();
         await f.Until(view => view.Tasks[A].State == TaskState.Running);
+        await UntilSession(f, A);
 
         Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, new(Guid.NewGuid())).WaitAsync(Bound));
         var stopped = await f.UntilStatus(RunStatus.Stopped);
