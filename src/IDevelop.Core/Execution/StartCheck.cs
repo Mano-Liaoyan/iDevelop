@@ -79,9 +79,6 @@ public abstract record StartProblem
     /// <summary>iDevelop is still listing the skills the client loads, which the node's skill choice needs.</summary>
     public sealed record SkillsChecking(ClientId Client) : StartProblem;
 
-    /// <summary>The client's skills could not be listed, so the node's skill choice cannot be kept. The reason is for the person.</summary>
-    public sealed record SkillsUnlisted(ClientId Client, string Reason) : StartProblem;
-
     /// <summary>The client is a batch shim, and cmd.exe could misread this argument.</summary>
     public sealed record UnsafeArgument(ClientId Client, string Argument) : StartProblem;
 
@@ -120,6 +117,9 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
 
     /// <summary>The missing skills as an attempt log writes them: absent when there are none, so older logs read alike.</summary>
     public ImmutableArray<string> LoggedMissingSkills => MissingSkills.IsEmpty ? default : MissingSkills;
+
+    /// <summary>Why the client's skill list could not be read, when the turn passes the choice unchecked, or null.</summary>
+    public string? SkillsUnchecked { get; init; }
 
     /// <summary>A later turn, which resumes the session with the person's message alone. The client holds the context.</summary>
     public LaunchPlan Resuming(string session, string message) => this with { Request = Request with { Prompt = message, ResumeSession = session } };
@@ -209,9 +209,12 @@ internal static class StartCheck
             return Block(new StartProblem.ReasoningNotOffered(client, id, settings.Reasoning, model.ReasoningLevels));
         }
 
-        // A chosen skill that is no longer installed is left out, and the turn says so. Antigravity CLI has no choice to keep.
+        // A chosen skill that is no longer installed is left out, and the turn says so. A skill list that could not be read
+        // does not hold the task back: the choice goes as it is, and the turn says so (#93, 2026-10-11). Antigravity CLI has no
+        // choice to keep.
         SkillLaunch? skillLaunch = null;
         ImmutableArray<string> missingSkills = [];
+        string? skillsUnchecked = null;
         if (settings.Skills is { } chosen && SkillChoices.CanChoose(client))
         {
             switch (skills)
@@ -221,7 +224,9 @@ internal static class StartCheck
                     missingSkills = SkillChoices.Missing(chosen, listed.Skills);
                     break;
                 case SkillListing.Unavailable unavailable:
-                    return Block(new StartProblem.SkillsUnlisted(client, unavailable.Reason));
+                    skillLaunch = SkillChoices.Unchecked(chosen);
+                    skillsUnchecked = unavailable.Reason;
+                    break;
                 default:
                     return Block(new StartProblem.SkillsChecking(client));
             }
@@ -261,7 +266,7 @@ internal static class StartCheck
             ResumeSession = resume?.Session, ReadOnly = readOnly, Skills = skillLaunch,
             Policy = ClientPolicy.For(client, readOnly, task.Conversation, task.Blueprint.Work is WorkSpec.Review, questions ?? new HostQuestions.Disabled()),
         };
-        var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request) { MissingSkills = missingSkills };
+        var plan = new LaunchPlan(Clients.Get(client), ready.Command, settings, request) { MissingSkills = missingSkills, SkillsUnchecked = skillsUnchecked };
         if (ready.Command.UnsafeArgument(plan.Launch.Arguments) is { } argument)
         {
             return Block(new StartProblem.UnsafeArgument(client, argument));

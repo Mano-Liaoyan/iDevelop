@@ -76,7 +76,6 @@ public sealed class NodeStateTests
             new StartProblem.ModelNotOffered(ClientId.Codex, "gpt-x"), new StartProblem.ModelUnready(ClientId.Codex, "gpt-x", "Sign in."),
             new StartProblem.ReasoningNotOffered(ClientId.Codex, "gpt-x", "max", ["low"]), new StartProblem.NoReadOnlyMode(ClientId.Pi),
             new StartProblem.NoSubject(), new StartProblem.ClientMissing(ClientId.Codex, "Not found."), new StartProblem.ClientUnready(ClientId.Codex, "Sign in."),
-            new StartProblem.SkillsUnlisted(ClientId.Codex, "It broke."),
         ];
         StartProblem[] other =
         [

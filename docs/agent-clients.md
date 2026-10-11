@@ -78,6 +78,8 @@ A node's skill choice ([ADR 0025](adr/0025-a-node-s-skill-choice-is-exactly-its-
 | Pi | `pi --mode rpc --no-session` and `get_commands`. Each entry whose `source` is `skill` gives the name after `skill:` and its file in `sourceInfo.path`. | `--no-skills` and `--skill <file>` for each chosen skill |
 | Antigravity CLI | None. It has no per-run skill control. | Nothing |
 
+When the listing fails, a turn of a node with a choice still starts. Claude Code gets the chosen names as they are. Codex and Pi get nothing, because Codex's list of skills to turn off and Pi's skill files both come from the listing.
+
 ## Unverified items
 
 - Codex `thread/start` and `thread/resume` with `cwd`, which a workflow turn sends so Codex works in the task's checkout. Only the fake agent has received it.

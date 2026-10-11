@@ -908,6 +908,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Replies = waiting.Status == AttemptStatus.WaitingForInput
                     ? [.. waiting.DeferredRequestIds.Select(id => new TurnRequestId(waiting.Turns.Count, id))] : default,
                 MissingSkills = plan.LoggedMissingSkills,
+                SkillsUnchecked = plan.SkillsUnchecked,
             };
             log.Append(turn);
             record = AttemptReducer.Apply(record, turn);
@@ -1010,6 +1011,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 Subject = subject,
                 Fix = fix,
                 MissingSkills = plan.LoggedMissingSkills,
+                SkillsUnchecked = plan.SkillsUnchecked,
                 StandaloneCapture = continues is null
                     ? JsonSerializer.SerializeToElement(new StandaloneCapture(task, ""), RunJournal.Options) : null,
             };

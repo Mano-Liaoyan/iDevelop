@@ -123,6 +123,22 @@ public sealed class ProtocolLaunchTests
     }
 
     [Fact]
+    public void An_unchecked_choice_reaches_claude_code_by_its_names_and_leaves_codex_and_pi_their_own_skills()
+    {
+        // The skill list could not be read, so the choice holds its names alone, with no files and no other skills.
+        var request = new LaunchRequest("m", "high", "banana")
+        {
+            ResumeSession = "session-1", Skills = new SkillLaunch([new SkillOption("gone", ""), new SkillOption("tdd", "")], []) { Unchecked = true },
+        };
+
+        Assert.Equal(["""{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize","skills":["gone","tdd"]}}"""],
+            Clients.Get(ClientId.ClaudeCode).Protocol(request).Start().Writes.ToArray());
+        using var thread = ThreadFrame(request);
+        Assert.False(thread.RootElement.GetProperty("params").TryGetProperty("config", out _));
+        Assert.Equal(Pi, Clients.Get(ClientId.Pi).Launch(request).Arguments.ToArray());
+    }
+
+    [Fact]
     public void Without_a_choice_no_client_is_told_anything_about_skills()
     {
         var request = new LaunchRequest("m", "high", "banana") { ResumeSession = "session-1" };

@@ -201,6 +201,7 @@ public sealed partial class ProjectRuns
                             // A reviewer's attempt names its subject, so it rests in review between its turns.
                             Subject = definition.Blueprint.Work is WorkSpec.Review ? record.Revisions[attempt.Revision].Snapshot.SubjectOf(task) : null,
                             MissingSkills = plan.LoggedMissingSkills,
+                            SkillsUnchecked = plan.SkillsUnchecked,
                         }, RequestStream);
                     evidence = AttemptEvidence.Read(folder);
                 }
@@ -252,6 +253,7 @@ public sealed partial class ProjectRuns
                     Replies = resting.Status == AttemptStatus.WaitingForInput
                         ? [.. resting.DeferredRequestIds.Select(id => new TurnRequestId(resting.Turns.Count, id))] : default,
                     MissingSkills = plan.LoggedMissingSkills,
+                    SkillsUnchecked = plan.SkillsUnchecked,
                 });
                 owner.MarkRequested();
                 Probe?.Invoke("runner.turn-requested.after");

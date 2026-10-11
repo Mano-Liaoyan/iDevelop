@@ -256,7 +256,6 @@ public static class RunText
             $"{p.Model} takes no reasoning level. Choose another model and then {p.Model} again to clear {p.Reasoning}.",
         StartProblem.ReasoningNotOffered p => $"{p.Model} does not offer the {p.Reasoning} reasoning level. Choose {string.Join(", ", p.Offered)}.",
         StartProblem.SkillsChecking p => $"iDevelop is still listing the skills {Clients.Name(p.Client)} loads, which this task's choice needs.",
-        StartProblem.SkillsUnlisted p => $"iDevelop could not list the skills {Clients.Name(p.Client)} loads, which this task's choice needs. {p.Reason} {TryListingAgain}",
         StartProblem.UnsafeArgument p =>
             $"{Clients.Name(p.Client)} runs through cmd.exe, which could misread {p.Argument}, so iDevelop will not start it.",
         StartProblem.UncProjectFolder p =>

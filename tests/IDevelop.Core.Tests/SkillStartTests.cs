@@ -38,13 +38,23 @@ public sealed class SkillStartTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Choosing))]
-    public void A_choice_waits_for_its_clients_listing_and_a_failed_listing_says_why(ClientId client)
+    public void A_choice_waits_while_its_client_lists_its_skills(ClientId client)
     {
         var task = Task(client, ["tdd"]);
 
         Assert.Equal(new StartProblem.SkillsChecking(client), Blocked(task, null));
         Assert.Equal(new StartProblem.SkillsChecking(client), Blocked(task, new SkillListing.Checking()));
-        Assert.Equal(new StartProblem.SkillsUnlisted(client, "It broke."), Blocked(task, new SkillListing.Unavailable("It broke.")));
+    }
+
+    [Theory]
+    [MemberData(nameof(Choosing))]
+    public void A_choice_whose_skill_list_could_not_be_read_still_starts_with_its_names_as_they_are(ClientId client)
+    {
+        var plan = Allowed(Task(client, ["gone", "tdd"]), new SkillListing.Unavailable("It broke."));
+
+        Assert.Equal(new SkillLaunch([new SkillOption("gone", ""), new SkillOption("tdd", "")], []) { Unchecked = true }, plan.Request.Skills, SkillLaunches.Instance);
+        Assert.Equal("It broke.", plan.SkillsUnchecked);
+        Assert.Empty(plan.MissingSkills);
     }
 
     [Theory]
@@ -56,6 +66,7 @@ public sealed class SkillStartTests : IDisposable
         Assert.Null(plan.Request.Skills);
         Assert.Empty(plan.MissingSkills);
         Assert.True(plan.LoggedMissingSkills.IsDefault);
+        Assert.Null(plan.SkillsUnchecked);
     }
 
     [Fact]
@@ -98,6 +109,65 @@ public sealed class SkillStartTests : IDisposable
         Assert.Equal(["gone"], Assert.IsType<AttemptEvent.Requested>(roundTrip).MissingSkills.ToArray());
         Assert.DoesNotContain("missingSkills", JsonSerializer.Serialize<AttemptEvent>(requested with { MissingSkills = default }, AttemptLog.Options),
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_attempt_says_once_that_its_skill_list_could_not_be_checked_and_what_its_client_got()
+    {
+        var requested = new AttemptEvent.Requested(DateTimeOffset.UnixEpoch, AttemptId.New(), TestTasks.Design, "Design",
+            new ExecutionSettings(ClientId.ClaudeCode) { Skills = ["tdd"] }, "p", "claude", []) { SkillsUnchecked = "It broke." };
+        var record = AttemptReducer.Start(requested);
+        Assert.Equal(["Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are. It broke."], record.Activity.Select(line => line.Text));
+
+        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []) { SkillsUnchecked = "It broke." });
+        Assert.Single(record.Activity);
+        record = AttemptReducer.Apply(record, new AttemptEvent.TurnRequested(DateTimeOffset.UnixEpoch, "next", "claude", []));
+        Assert.Null(record.SkillsUnchecked);
+        Assert.Single(record.Activity);
+
+        Assert.Equal("Codex's skill list couldn't be checked, and turning off the other skills needs it, so Codex runs with all of its skills.",
+            SkillChoices.UncheckedNote(ClientId.Codex));
+        Assert.Equal("Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills.",
+            SkillChoices.UncheckedNote(ClientId.Pi));
+        var roundTrip = JsonSerializer.Deserialize<AttemptEvent>(JsonSerializer.Serialize<AttemptEvent>(requested, AttemptLog.Options), AttemptLog.Options);
+        Assert.Equal("It broke.", Assert.IsType<AttemptEvent.Requested>(roundTrip).SkillsUnchecked);
+        Assert.DoesNotContain("skillsUnchecked", JsonSerializer.Serialize<AttemptEvent>(requested with { SkillsUnchecked = null }, AttemptLog.Options),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pi_runs_a_task_whose_skill_list_could_not_be_read_with_all_of_its_skills_and_says_so()
+    {
+        var project = _temp.Create("project");
+        var evidence = _temp.Create("evidence");
+        var fakes = new FakeClients(_temp.Create("bin"));
+        fakes.Install("pi",
+            On("--mode", "rpc", "--no-session").Answer(
+                ("get_available_models", On().Replay(Fixture.Path("pi-rpc-models.jsonl"))),
+                ("get_commands", On().Print("""{"id":"idevelop-skills","type":"response","command":"get_commands","success":false,"error":"an extension failed"}"""))).WaitForStdinEnd(),
+            FakeAgents.PiProvider("deepseek", "ready"), FakeAgents.PiProvider("openai-codex", "invalid"),
+            On("-p").RecordArguments(Path.Combine(evidence, "arguments.json")).Replay(Fixture.Path("pi-success.jsonl")));
+        var clients = await fakes.DiscoverAsync();
+        await using var runs = ProjectRuns.Open(project, clients);
+        var task = TestNodes.Implement(TestTasks.Design, "Deploy", "Deploy it. Then reply with DONE.",
+            execution: new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high", Skills = ["deploy"] });
+
+        Assert.IsType<SkillListing.Unavailable>(await SkillListingTests.ListedAsync(clients, ClientId.Pi, project));
+        var settled = new TaskCompletionSource<AttemptRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runs.Changed += (_, _) =>
+        {
+            if (runs.Latest.GetValueOrDefault(TestTasks.Design) is { Status: not AttemptStatus.Running } record)
+            {
+                settled.TrySetResult(record);
+            }
+        };
+        Assert.IsType<StartResult.Started>(runs.Start(task));
+        var record = await settled.Task.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(AttemptStatus.Succeeded, record.Status);
+        Assert.DoesNotContain("--no-skills", JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(evidence, "arguments.json")))!);
+        Assert.Equal("Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills. Pi did not list its skills: an extension failed.",
+            record.Activity[0].Text);
     }
 
     [Fact]
@@ -154,7 +224,7 @@ public sealed class SkillStartTests : IDisposable
         public static readonly SkillLaunches Instance = new();
 
         public bool Equals(SkillLaunch? x, SkillLaunch? y) =>
-            x is not null && y is not null && x.Chosen.SequenceEqual(y.Chosen) && x.Others.SequenceEqual(y.Others);
+            x is not null && y is not null && x.Chosen.SequenceEqual(y.Chosen) && x.Others.SequenceEqual(y.Others) && x.Unchecked == y.Unchecked;
 
         public int GetHashCode(SkillLaunch? obj) => 0;
     }

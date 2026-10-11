@@ -43,7 +43,15 @@ public abstract record SkillListing
 internal sealed record SkillSource(Func<string, Probe> Probe, Func<ProbeOutput, SkillListing> Parse);
 
 /// <summary>What one launch passes for a node's choice: the chosen skills that the client lists, and the ones it lists that were not chosen.</summary>
-internal sealed record SkillLaunch(ImmutableArray<SkillOption> Chosen, ImmutableArray<SkillOption> Others);
+internal sealed record SkillLaunch(ImmutableArray<SkillOption> Chosen, ImmutableArray<SkillOption> Others)
+{
+    /// <summary>
+    /// The client's skill list could not be read, so <see cref="Chosen"/> holds the chosen names as they are, with no files,
+    /// and <see cref="Others"/> is empty. Claude Code takes the names. Codex, which needs the others to turn them off, and
+    /// Pi, which needs the files, are told nothing and use all of their skills.
+    /// </summary>
+    public bool Unchecked { get; init; }
+}
 
 /// <summary>One entry of a node's skill picker. A chosen skill that the client no longer lists stays, not installed.</summary>
 public sealed record SkillEntry(string Name, string Description, bool Chosen, bool Installed);
@@ -77,6 +85,20 @@ public static class SkillChoices
     /// <summary>The chosen skills that the client does not list, in order.</summary>
     public static ImmutableArray<string> Missing(ImmutableSortedSet<string>? chosen, ImmutableArray<SkillOption> listed) =>
         chosen is null ? [] : [.. chosen.Where(name => !listed.Any(skill => skill.Name == name))];
+
+    /// <summary>The launch of a choice whose skill list could not be read: its names as they are (#93, 2026-10-11).</summary>
+    internal static SkillLaunch Unchecked(ImmutableSortedSet<string> chosen) => new([.. chosen.Select(name => new SkillOption(name, ""))], []) { Unchecked = true };
+
+    /// <summary>
+    /// What a task with a choice gets when its client's skill list could not be read, which the Skills row and the attempt's
+    /// activity say: "Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are."
+    /// </summary>
+    public static string UncheckedNote(ClientId client) => client switch
+    {
+        ClientId.Codex => "Codex's skill list couldn't be checked, and turning off the other skills needs it, so Codex runs with all of its skills.",
+        ClientId.Pi => "Pi's skill list couldn't be checked, and loading the chosen skills needs it, so Pi runs with all of its skills.",
+        _ => $"{Clients.Name(client)}'s skill list couldn't be checked, so it gets the chosen skills as they are.",
+    };
 
     /// <summary>A launch takes only the chosen skills the client lists, so a skill that is not installed is left out.</summary>
     internal static SkillLaunch Launch(ImmutableSortedSet<string> chosen, ImmutableArray<SkillOption> listed) =>

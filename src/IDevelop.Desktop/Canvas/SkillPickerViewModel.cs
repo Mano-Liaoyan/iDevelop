@@ -80,12 +80,13 @@ public sealed class SkillPickerViewModel : ObservableObject
         : null;
 
     /// <summary>
-    /// The note under the picker: that Antigravity CLI uses all of its skills, or the chosen skills that are not installed,
-    /// which the task runs without.
+    /// The note under the picker: that Antigravity CLI uses all of its skills, the chosen skills that are not installed,
+    /// which the task runs without, or that the client's skill list couldn't be checked, so the choice goes unchecked.
     /// </summary>
     public string? Note => Settings is not { } settings ? null
         : !SkillChoices.CanChoose(settings.Client) ? $"{ClientName} uses all of its installed skills; it can't limit them per task."
         : Listing is SkillListing.Listed listed && SkillChoices.Missing(settings.Skills, listed.Skills) is { IsEmpty: false } missing ? MissingNote(missing)
+        : settings.Skills is not null && Listing is SkillListing.Unavailable ? SkillChoices.UncheckedNote(settings.Client)
         : null;
 
     /// <summary>The node chose its skills, which the revert arrow clears, so the node uses every skill again.</summary>

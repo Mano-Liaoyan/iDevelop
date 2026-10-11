@@ -44,7 +44,8 @@ internal static class Pi
         "-p", "--mode", "json", "--model", request.Model,
         .. request.Reasoning is { } thinking ? ["--thinking", thinking] : Array.Empty<string>(),
         // Pi loads exactly the skills it is given after --no-skills. A file path with forward slashes passes through pi.cmd.
-        .. request.Skills is { } skills
+        // A choice whose skill list could not be read has no files to give, so Pi keeps its own skills.
+        .. request.Skills is { Unchecked: false } skills
             ? ["--no-skills", .. skills.Chosen.Where(skill => skill.Path is not null).SelectMany(skill => new[] { "--skill", SkillPath(skill.Path!) })]
             : Array.Empty<string>(),
         .. request.ResumeSession is { } session ? ["--session-id", session] : Array.Empty<string>(),

@@ -97,7 +97,6 @@ public sealed partial class ProjectRuns
             StartProblem.NoModel => "Choose a model before continuing.",
             StartProblem.ClientChecking => "The client is still being checked.",
             StartProblem.SkillsChecking => "The client's skills are still being listed.",
-            StartProblem.SkillsUnlisted unlisted => unlisted.Reason,
             StartProblem.ModelNotOffered => "The configured model is unavailable.",
             StartProblem.ReasoningNotOffered => "The configured reasoning level is unavailable.",
             StartProblem.NoReadOnlyMode => "This client cannot run a read-only task.",

@@ -200,11 +200,12 @@ public sealed class SkillPickerTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_listing_that_fails_says_why_in_the_open_list_and_checking_the_agents_again_lists_once_more()
+    public void A_listing_that_fails_says_why_the_task_still_runs_with_its_choice_and_checking_the_agents_again_lists_once_more()
     {
         _fakes.Install("claude", ClaudeSignedIn, FakeRule.On("-p").Lacking("--include-partial-messages").WaitForLine("initialize")
             .EchoId("""{"type":"control_response","response":{"subtype":"error","request_id":$id,"error":"settings are invalid"}}"""));
-        var shell = Shell.Open(Project(TaskAt(Design, "Design", 105, 90, Claude)), _fakes.DiscoverAsync().Result);
+        var shell = Shell.Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["verify-idevelop"] }, instructions: "Design it.")),
+            _fakes.DiscoverAsync().Result);
         shell.Click(shell.Header(shell.Node("Design")));
 
         shell.Click(shell.Find<ToggleButton>("TaskSkills"));
@@ -213,13 +214,18 @@ public sealed class SkillPickerTests : IDisposable
         Assert.Equal("iDevelop could not list the skills Claude Code loads. Claude Code did not list its skills: settings are invalid. Check agents again to list them once more.",
             shell.Find<TextBlock>("SkillListNote").Text);
         Assert.Empty(Ticks(shell));
+        // The task is not refused: it runs with its choice as it is, and the row says the list couldn't be checked.
+        Assert.Equal("Claude Code's skill list couldn't be checked, so it gets the chosen skills as they are.", shell.Find<TextBlock>("SkillsNote").Text);
+        Assert.False(shell.ShowsAny("StartProblem"), shell.Text("StartProblem"));
+        Assert.Equal("1 skill", Summary(shell));
 
         _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(_personal));
         shell.Click(shell.Find<Button>("RefreshAgents"));
         shell.WaitUntil(() => Ticks(shell).Length > 0, "the skills listed once more");
 
-        Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
+        Assert.Equal([("find-skills", false), ("simplify", false), ("verify-idevelop", true)], Ticks(shell));
         Assert.False(shell.Find<TextBlock>("SkillListNote").IsEffectivelyVisible);
+        Assert.False(shell.Find<TextBlock>("SkillsNote").IsEffectivelyVisible);
     }
 
     /// <summary>A project whose Claude Code skills folder holds verify-idevelop, and whose fake Claude Code also lists find-skills.</summary>
