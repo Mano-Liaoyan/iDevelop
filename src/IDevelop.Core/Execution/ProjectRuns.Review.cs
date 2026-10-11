@@ -158,7 +158,8 @@ public sealed partial class ProjectRuns
                         return new FixLaunch.Moved();
                     }
 
-                    var verdict = StartCheck.Evaluate(node, _projectFolder, _clients.Current, new Resumption(from?.Session, fix.Prompt), questions: _questions);
+                    var verdict = StartCheck.Evaluate(node, _projectFolder, _clients.Current, new Resumption(from?.Session, fix.Prompt), questions: _questions,
+                        skills: SkillsOf(node.Execution));
                     if (verdict is StartVerdict.Blocked blocked)
                     {
                         taken.Lock.Dispose();

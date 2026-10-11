@@ -93,15 +93,44 @@ internal static class BlueprintJson
 
     public static ExecutionDto? Execution(ExecutionSettings? settings) => settings is null
         ? null
-        : new ExecutionDto { Client = Clients.WireName(settings.Client), Model = settings.Model, Reasoning = settings.Reasoning };
+        : new ExecutionDto
+        {
+            Client = Clients.WireName(settings.Client), Model = settings.Model, Reasoning = settings.Reasoning,
+            Skills = settings.Skills is { } skills ? [.. skills] : null,
+        };
 
-    /// <exception cref="ProjectException">The client is unknown.</exception>
+    /// <exception cref="ProjectException">The client is unknown, or a skill name is null, blank, or repeated.</exception>
     public static ExecutionSettings Execution(ExecutionDto execution, string entry) =>
         new(Clients.ParseWireName(execution.Client) ?? throw new ProjectException($"{entry} names unknown agent \"{execution.Client}\"."))
         {
             Model = execution.Model,
             Reasoning = execution.Reasoning,
+            Skills = execution.Skills is { } skills ? SkillNames(skills, entry) : null,
         };
+
+    private static ImmutableSortedSet<string> SkillNames(string?[] names, string entry)
+    {
+        var chosen = ImmutableSortedSet.CreateBuilder<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (name is null)
+            {
+                throw new ProjectException($"{entry} has a null skill name.");
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new ProjectException($"{entry} has a blank skill name.");
+            }
+
+            if (!chosen.Add(name.Trim()))
+            {
+                throw new ProjectException($"{entry} names skill \"{name.Trim()}\" twice.");
+            }
+        }
+
+        return chosen.ToImmutable();
+    }
 
     public static string ConversationName(ConversationMode mode) => mode switch
     {
@@ -267,4 +296,7 @@ internal sealed class ExecutionDto
     public required string Client { get; init; }
     public required string? Model { get; init; }
     public required string? Reasoning { get; init; }
+
+    /// <summary>Written only for a node whose person chose its skills, so a file without a choice stays as it was.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string?[]? Skills { get; init; }
 }

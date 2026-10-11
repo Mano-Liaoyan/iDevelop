@@ -260,6 +260,47 @@
                           </ComboBox.ItemTemplate>
                         </ComboBox>
                       </inspector:InspectorRow>
+                      <!-- The skill picker opens its list in place, under the box, so the list keeps the panel's edges and scroll. -->
+                      <inspector:InspectorRow Label="Skills" Icon="{StaticResource IconSkills}" IsShown="{Binding HasClient}"
+                                              RevertCommand="{Binding Skills.RevertCommand}" CanRevert="{Binding Skills.CanRevert}" RevertId="RevertSkills">
+                        <StackPanel Spacing="4">
+                          <ToggleButton Classes="picker" IsChecked="{Binding Skills.IsOpen}" IsEnabled="{Binding Skills.CanChoose}"
+                                        ToolTip.Tip="{Binding Skills.SummaryTip}"
+                                        AutomationProperties.AutomationId="TaskSkills"
+                                        AutomationProperties.Name="Skills">
+                            <TextBlock Text="{Binding Skills.Summary}" TextWrapping="Wrap" />
+                          </ToggleButton>
+                          <Border Classes="skillList" IsVisible="{Binding Skills.ShowsList}" AutomationProperties.AutomationId="SkillList">
+                            <StackPanel>
+                              <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListNote}"
+                                         IsVisible="{Binding Skills.ListNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                         AutomationProperties.AutomationId="SkillListNote" />
+                              <ItemsControl ItemsSource="{Binding Skills.Choices}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate DataType="canvas:SkillChoiceViewModel">
+                                    <CheckBox Classes="skill" IsChecked="{Binding IsChosen}" ToolTip.Tip="{Binding Description}"
+                                              AutomationProperties.AutomationId="SkillChoice"
+                                              AutomationProperties.Name="{Binding Label}">
+                                      <StackPanel>
+                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.missing="{Binding !IsInstalled}" />
+                                        <TextBlock Classes="letsIn" Text="{Binding LetsIn}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding LetsIn, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   AutomationProperties.AutomationId="SkillLetsIn" />
+                                      </StackPanel>
+                                    </CheckBox>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                              <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListFooter}"
+                                         IsVisible="{Binding Skills.ListFooter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                         AutomationProperties.AutomationId="SkillListFooter" />
+                            </StackPanel>
+                          </Border>
+                          <TextBlock Classes="note" Text="{Binding Skills.Note}"
+                                     IsVisible="{Binding Skills.Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                     AutomationProperties.AutomationId="SkillsNote" />
+                        </StackPanel>
+                      </inspector:InspectorRow>
                       <inspector:InspectorRow Label="Conversation" Icon="{StaticResource IconConversation}" IsShown="{Binding HasConversation}"
                                               Info="{Binding ConversationNote}" InfoName="{Binding ConversationSummary}" InfoId="ConversationNote"
                                               RevertCommand="{Binding RevertConversationCommand}" CanRevert="{Binding CanRevertConversation}" RevertId="RevertConversation">

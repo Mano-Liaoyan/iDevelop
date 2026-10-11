@@ -88,6 +88,87 @@ public sealed class CommandResolverTests : IDisposable
         Assert.Null(new ResolvedCommand("/usr/bin/pi", IsBatchShim: false).UnsafeArgument(["a&b"]));
     }
 
+    // npm's cmd-shim since 2019, as npm writes pi.cmd on Windows.
+    private const string NpmShim =
+        "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n\r\n" +
+        "IF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n  SET PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\n" +
+        "endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & \"%_prog%\"  \"%dp0%\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js\" %*\r\n";
+
+    // The shim npm wrote before 2019.
+    private const string OldNpmShim =
+        "@IF EXIST \"%~dp0\\node.exe\" (\r\n  \"%~dp0\\node.exe\"  --no-warnings \"%~dp0\\node_modules\\pi\\cli.js\" %*\r\n) ELSE (\r\n" +
+        "  @SETLOCAL\r\n  @SET PATHEXT=%PATHEXT:;.JS;=;%\r\n  node  --no-warnings \"%~dp0\\node_modules\\pi\\cli.js\" %*\r\n)\r\n";
+
+    [Fact]
+    public void An_npm_shim_sends_an_argument_cmd_would_misread_to_node_directly_and_every_other_launch_through_the_shim()
+    {
+        var npm = _temp.Create("npm");
+        File.WriteAllText(Path.Combine(npm, "pi.cmd"), NpmShim);
+        File.WriteAllText(Path.Combine(npm, "node.exe"), "");
+        var script = Script(npm, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+        var pi = CommandResolver.Create([npm], [".exe", ".cmd"]).Resolve("pi")!;
+
+        // A path under a Windows user name with a space, as Pi's --skill takes it.
+        var skill = "C:/Users/John Smith/.pi/agent/skills/deploy/SKILL.md";
+        Assert.True(pi.IsBatchShim);
+        Assert.Null(pi.UnsafeArgument(["--skill", skill]));
+        Assert.Equal(Expected(Path.Combine(npm, "node.exe"), script, "-p", "--skill", skill), Launch(pi, ["-p", "--skill", skill]));
+        Assert.Equal(Expected(pi.Path, "-p", "--skill", "C:/Users/John/SKILL.md"), Launch(pi, ["-p", "--skill", "C:/Users/John/SKILL.md"]));
+    }
+
+    [Fact]
+    public void An_npm_shim_without_its_own_node_runs_the_node_on_the_search_path_and_its_flags()
+    {
+        var npm = _temp.Create("npm");
+        var nodejs = _temp.Create("nodejs");
+        File.WriteAllText(Path.Combine(npm, "pi.cmd"), OldNpmShim);
+        File.WriteAllText(Path.Combine(nodejs, "node.cmd"), "@echo off\r\n");
+        File.WriteAllText(Path.Combine(nodejs, "node.exe"), "");
+        var script = Script(npm, "node_modules", "pi", "cli.js");
+
+        var pi = CommandResolver.Create([npm, nodejs], [".exe", ".cmd"]).Resolve("pi")!;
+
+        Assert.Equal(Expected(Path.Combine(nodejs, "node.exe"), "--no-warnings", script, "two words"), Launch(pi, ["two words"]));
+    }
+
+    [Fact]
+    public void A_batch_file_iDevelop_cannot_follow_still_refuses_an_argument_cmd_would_misread()
+    {
+        var npm = _temp.Create("npm");
+        File.WriteAllText(Path.Combine(npm, "pi.cmd"), NpmShim);
+        File.WriteAllText(Path.Combine(npm, "codex.cmd"), "@echo off\r\n\"%~dp0\\codex.exe\" %*\r\n");
+        Script(npm, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+        var resolver = CommandResolver.Create([npm], [".exe", ".cmd"]);
+
+        // No node beside the shim or on the search path, a batch file that is not an npm shim, and an npm shim whose script
+        // is gone.
+        foreach (var command in new[] { "pi", "codex" })
+        {
+            var shim = resolver.Resolve(command)!;
+            Assert.Equal("two words", shim.UnsafeArgument(["two words"]));
+            Assert.Null(shim.Launch(["two words"]));
+        }
+
+        File.WriteAllText(Path.Combine(npm, "node.exe"), "");
+        File.Delete(Path.Combine(npm, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js"));
+        Assert.Equal("two words", resolver.Resolve("pi")!.UnsafeArgument(["two words"]));
+        Assert.Equal("100%", new ResolvedCommand(@"C:\tools\pi.cmd", IsBatchShim: true).UnsafeArgument(["100%"]));
+    }
+
+    private static string Script(string folder, params string[] parts)
+    {
+        var script = Path.Combine([folder, .. parts]);
+        Directory.CreateDirectory(Path.GetDirectoryName(script)!);
+        File.WriteAllText(script, "");
+        return script;
+    }
+
+    /// <summary>The program and its arguments, one per line, which compare by text.</summary>
+    private static (string, string) Launch(ResolvedCommand command, string[] arguments) =>
+        command.Launch(arguments) is { } launch ? (launch.File, string.Join("\n", launch.Arguments)) : throw new Xunit.Sdk.XunitException("No launch.");
+
+    private static (string, string) Expected(string file, params string[] arguments) => (file, string.Join("\n", arguments));
+
     [Fact]
     public void The_login_shell_path_is_read_after_its_marker_and_start_up_noise_is_ignored()
     {

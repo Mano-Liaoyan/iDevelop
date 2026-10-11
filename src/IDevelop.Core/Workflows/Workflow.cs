@@ -57,6 +57,24 @@ public sealed record ExecutionSettings(ClientId Client)
 
     public string? Reasoning { get; init => field = Blank(value); }
 
+    /// <summary>
+    /// The skills the agent may use, by the client's own names. Null means the person has not chosen: the agent uses every
+    /// skill its client loads, including skills installed later. A set, even an empty one, means exactly those skills.
+    /// </summary>
+    public ImmutableSortedSet<string>? Skills
+    {
+        get;
+        init => field = value is null ? null : ImmutableSortedSet.CreateRange(StringComparer.Ordinal,
+            value.Select(name => name.Trim()).Where(name => name.Length > 0));
+    }
+
+    // A set compares by reference, so equality compares the names themselves.
+    public bool Equals(ExecutionSettings? other) =>
+        other is not null && Client == other.Client && Model == other.Model && Reasoning == other.Reasoning &&
+        (Skills is null ? other.Skills is null : other.Skills is not null && Skills.SetEquals(other.Skills));
+
+    public override int GetHashCode() => HashCode.Combine(Client, Model, Reasoning, Skills?.Count);
+
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 

@@ -19,13 +19,16 @@ internal sealed class RunApprovals
     private readonly Action<string>? _probe;
     private readonly IReadOnlyDictionary<TaskId, AttemptRecord> _latest;
     private readonly Func<TaskId, TurnKey, StartProblem?>? _finish;
+    private readonly Func<ExecutionSettings?, SkillListing?>? _skills;
 
     /// <param name="latest">The newest standalone attempt of each task, whose report the preview may list as reusable.</param>
     /// <param name="finish">Marks a waiting standalone attempt done at its turn, or says why it cannot.</param>
+    /// <param name="skills">The skills a client lists in the project, which a task with a skill choice needs.</param>
     public RunApprovals(string project, RunStore store, IReadOnlyDictionary<string, string>? environment,
         IReadOnlyDictionary<ClientId, ClientStatus> clients, IReadOnlyDictionary<TaskId, AttemptRecord> latest, TimeProvider clock,
-        Action<string>? probe = null, Func<TaskId, TurnKey, StartProblem?>? finish = null)
+        Action<string>? probe = null, Func<TaskId, TurnKey, StartProblem?>? finish = null, Func<ExecutionSettings?, SkillListing?>? skills = null)
     {
+        _skills = skills;
         _probe = probe;
         _latest = latest;
         _finish = finish;
@@ -142,14 +145,16 @@ internal sealed class RunApprovals
         new(run, revision.Snapshot.Id, codeBase, revision) { Schema = 3, Requested = [node] };
 
     /// <summary>Why the task could not start as configured, as a single start would say, or null.</summary>
-    private StartProblem? Gap(TaskDefinition task) => Gap(task, _project, _clients);
+    private StartProblem? Gap(TaskDefinition task) => Gap(task, _project, _clients, _skills);
 
     /// <summary>Why <paramref name="task"/> could not start in a run as configured, as the preflight names it, or null.</summary>
-    internal static StartProblem? Gap(TaskDefinition task, string project, IReadOnlyDictionary<ClientId, ClientStatus> clients)
+    internal static StartProblem? Gap(TaskDefinition task, string project, IReadOnlyDictionary<ClientId, ClientStatus> clients,
+        Func<ExecutionSettings?, SkillListing?>? skills = null)
     {
         if (task.Blueprint.Work is WorkSpec.Person) return null;
         // A run renders the prompt from the node and its inputs, so this checks the agent and its settings, then the fields.
-        if (StartCheck.Evaluate(task, project, clients, new Resumption(null, "Preflight")) is StartVerdict.Blocked blocked) return blocked.Problem;
+        if (StartCheck.Evaluate(task, project, clients, new Resumption(null, "Preflight"), skills: skills?.Invoke(task.Execution)) is StartVerdict.Blocked blocked)
+            return blocked.Problem;
         return task.Blueprint.Fields.FirstOrDefault(field => field.Required && string.IsNullOrWhiteSpace(task.Field(field.Key))) is { } missing
             ? new StartProblem.FieldMissing(missing.Label) : null;
     }

@@ -30,15 +30,66 @@ internal static class Pi
         Protocol = request => new OneShotProtocol(Launch(request), Interpret),
         Terminal = session => $"pi --session {session}",
         HasReadOnlyMode = false,
+        // get_commands lists every skill the session loads, with its file, beside prompt templates and extension commands.
+        Skills = new SkillSource(folder => new Probe(["--mode", "rpc", "--no-session"])
+        {
+            Folder = folder,
+            Stdin = """{"id":"idevelop-skills","type":"get_commands"}""" + "\n",
+            DoneWhen = IsCommandsResponse,
+        }, ParseSkills)
+        {
+            Annotate = (listing, folder, user) => listing is SkillListing.Listed listed && PiTrust.HidesProjectSkills(folder, user)
+                ? listed with { ProjectNotTrusted = true }
+                : listing,
+        },
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(
     [
         "-p", "--mode", "json", "--model", request.Model,
         .. request.Reasoning is { } thinking ? ["--thinking", thinking] : Array.Empty<string>(),
+        // Pi loads exactly the skills it is given after --no-skills. A file path with forward slashes passes through pi.cmd.
+        // A choice whose skill list could not be read has no files to give, so Pi keeps its own skills.
+        .. request.Skills is { Unchecked: false } skills
+            ? ["--no-skills", .. skills.Chosen.Where(skill => skill.Path is not null).SelectMany(skill => new[] { "--skill", SkillPath(skill.Path!) })]
+            : Array.Empty<string>(),
         .. request.ResumeSession is { } session ? ["--session-id", session] : Array.Empty<string>(),
     ],
     request.Prompt);
+
+    private static string SkillPath(string path) => OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
+
+    private static bool IsCommandsResponse(string line) =>
+        line.Contains("\"type\":\"response\"", StringComparison.Ordinal) && line.Contains("\"command\":\"get_commands\"", StringComparison.Ordinal);
+
+    private static SkillListing ParseSkills(ProbeOutput output)
+    {
+        foreach (var line in TextLines.Lines(output.Stdout).Where(IsCommandsResponse))
+        {
+            try
+            {
+                using var json = JsonDocument.Parse(line);
+                var response = json.RootElement;
+                if (response.Bool("success") != true)
+                {
+                    return new SkillListing.Unavailable($"Pi did not list its skills: {response.String("error") ?? "it reported a failure"}.");
+                }
+
+                // A skill's command is its name after "skill:".
+                return new SkillListing.Listed(SkillChoices.Distinct(response.Property("data")?.Items("commands")
+                    .Where(command => command.String("source") == "skill" && command.String("name") is { } name && name.StartsWith("skill:", StringComparison.Ordinal))
+                    .Select(command => new SkillOption(command.String("name")!["skill:".Length..], command.String("description") ?? "")
+                    {
+                        Path = command.Property("sourceInfo")?.String("path"),
+                    }) ?? []));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new SkillListing.Unavailable($"Pi did not list its skills. {Probes.Failure("pi --mode rpc", output)}");
+    }
 
     private static CatalogParse ParseCatalog(ProbeOutput output)
     {

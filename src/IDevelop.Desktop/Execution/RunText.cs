@@ -8,6 +8,9 @@ namespace IDevelop.Desktop.Execution;
 /// <summary>What the interface says about clients and attempts. Core's reasons are already sentences for the user.</summary>
 public static class RunText
 {
+    /// <summary>A failed skill listing lasts until the next check of the agents, whose button in the Agents section says this.</summary>
+    public const string TryListingAgain = "Check agents again to list them once more.";
+
     public static StatusTone Tone(ClientStatus status) => status switch
     {
         ClientStatus.Ready => StatusTone.Complete,
@@ -252,6 +255,7 @@ public static class RunText
         StartProblem.ReasoningNotOffered { Offered.IsEmpty: true } p =>
             $"{p.Model} takes no reasoning level. Choose another model and then {p.Model} again to clear {p.Reasoning}.",
         StartProblem.ReasoningNotOffered p => $"{p.Model} does not offer the {p.Reasoning} reasoning level. Choose {string.Join(", ", p.Offered)}.",
+        StartProblem.SkillsChecking p => $"iDevelop is still listing the skills {Clients.Name(p.Client)} loads, which this task's choice needs.",
         StartProblem.UnsafeArgument p =>
             $"{Clients.Name(p.Client)} runs through cmd.exe, which could misread {p.Argument}, so iDevelop will not start it.",
         StartProblem.UncProjectFolder p =>

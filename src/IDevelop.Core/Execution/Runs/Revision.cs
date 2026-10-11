@@ -90,6 +90,16 @@ internal static class Revision
             writer.WriteString("client", Clients.WireName(execution.Client));
             writer.WriteString("model", execution.Model);
             writer.WriteString("reasoning", execution.Reasoning);
+            // Only a task whose person chose its skills names them, so every revision without a choice keeps its id.
+            if (execution.Skills is { } skills)
+            {
+                writer.WriteStartArray("skills");
+                foreach (var skill in skills)
+                {
+                    writer.WriteStringValue(skill);
+                }
+                writer.WriteEndArray();
+            }
             writer.WriteEndObject();
         }
         writer.WriteStartArray("fields");

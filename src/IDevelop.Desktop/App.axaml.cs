@@ -35,7 +35,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var clients = new ClientDirectory(CommandResolver.FromEnvironment());
+            var clients = new ClientDirectory(CommandResolver.FromEnvironment()) { User = UserFolders.FromEnvironment() };
             _ = clients.RefreshAsync();
             var window = new MainWindow(clients);
             window.ViewModel.Restore(desktop.Args is [var folder, ..] ? folder : null);
