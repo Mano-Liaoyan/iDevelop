@@ -74,7 +74,7 @@
         <!-- Each project lists its workflows, and each workflow lists its tasks while its row is expanded. The shown
              workflow is the selected row, as in PlanWeave's project tree. The scroll bar draws over the content and sits
              in the sidebar's right margin, so while the tree overflows the rows end where the bar starts.
-             A project's or a workflow's name wraps in full rather than ending in an ellipsis. Its row keeps its glyph,
+             A project's, a workflow's, or a task's name wraps in full rather than ending in an ellipsis. Its row keeps its glyph,
              dots, count, and buttons on its first line, at the edges the inspector keeps (ADR 0021): buttons end where
              Open Folder ends, a count ends where their glyphs' drawing ends, and dots end 8 px before a row's buttons or
              its count's slot, which is as wide as the widest count, so rows of one kind line their dots up. -->
@@ -94,7 +94,7 @@
                   <StackPanel Spacing="4">
                     <Grid Classes="projectRow" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="8,0,0,0">
                       <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextStrongBrush}" />
-                      <TextBlock Grid.Column="1" Classes="treeName" Text="{Binding Name}"
+                      <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                                  FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                  ToolTip.Tip="{Binding Folder}"
                                  AutomationProperties.AutomationId="ProjectName" />
@@ -164,7 +164,7 @@
                                   </Button.ContextMenu>
                                   <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFlowchart}" />
-                                    <TextBlock Grid.Column="1" Classes="treeName" Text="{Binding Name}"
+                                    <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                                                AutomationProperties.AutomationId="WorkflowName" />
                                     <StackPanel Grid.Column="2" Classes="trail">
                                       <Ellipse Classes="status"
@@ -216,8 +216,8 @@
                                 <ListBox.ItemTemplate>
                                   <DataTemplate DataType="canvas:TaskNodeViewModel">
                                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" VerticalAlignment="Center" />
-                                      <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                      <theme:KindTile Kind="{Binding Kind}" IsLibrary="{Binding IsLibrary}" TileSize="18" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                      <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Title}"
                                                  ToolTip.Tip="{Binding Title}" />
                                     </Grid>
                                   </DataTemplate>
@@ -246,7 +246,7 @@
                         Background="Transparent"
                         ToolTip.Tip="{Binding Reason}">
                     <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" Foreground="{DynamicResource TextFaintBrush}" />
-                    <TextBlock Grid.Column="1" Classes="treeName" Text="{Binding Name}"
+                    <TextBlock Grid.Column="1" Classes="sidebarName" Text="{Binding Name}"
                                FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextMutedBrush}"
                                AutomationProperties.AutomationId="UnopenedName" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary}" TextTrimming="CharacterEllipsis"

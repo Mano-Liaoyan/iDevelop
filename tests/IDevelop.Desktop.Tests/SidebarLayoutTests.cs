@@ -62,12 +62,15 @@ public sealed class SidebarLayoutTests : IDisposable
         return shell;
     }
 
-    private static void Save(string folder, string name, int tasks)
+    private static void Save(string folder, string name, int tasks) =>
+        Save(folder, name, [.. Enumerable.Range(1, tasks).Select(task => $"Task {task}")]);
+
+    private static void Save(string folder, string name, params string[] titles)
     {
         var document = WorkflowDocument.Create(folder, name);
-        for (var task = 0; task < tasks; task++)
+        foreach (var (title, index) in titles.Select((title, index) => (title, index)))
         {
-            Assert.IsType<EditResult.Applied>(document.Apply(TaskAt(TaskId.New(), $"Task {task + 1}", 105 + 300 * task, 90, Codex, "Say hi.")));
+            Assert.IsType<EditResult.Applied>(document.Apply(TaskAt(TaskId.New(), title, 105 + 300 * index, 90, Codex, "Say hi.")));
         }
 
         document.Save();
@@ -131,6 +134,35 @@ public sealed class SidebarLayoutTests : IDisposable
             $"Forget ends at {FromEdge(shell, forget):0.#}, centred {Centre(forget) - FirstLine(name):0.#} from the name's first line");
     }
 
+    private const string LongTask = "Draft the release notes from every pull request merged since the last tag, grouped by area";
+
+    [AvaloniaTheory]
+    [InlineData(240)]
+    [InlineData(400)]
+    public void Task_titles_show_in_full_with_their_tile_on_the_first_line(double width)
+    {
+        var reports = _temp.Create(Reports);
+        Save(reports, ReleaseNotes, LongTask, "Ship");
+        var shell = Shell.Open(reports);
+        shell.Click(shell.WorkflowExpand(Reports, ReleaseNotes));
+        shell.SizeSidebar(width);
+        var rows = new[] { LongTask, "Ship" }.Select(title => shell.TaskRow(Reports, ReleaseNotes, title)).ToArray();
+        var titles = rows.Select(row => row.GetVisualDescendants().OfType<TextBlock>().Single()).ToArray();
+
+        Assert.All(titles, title => AssertWhole(shell, title));
+        Assert.True(titles[0].TextLayout.TextLines.Count > 1, $"The long title fits on one line at {width} px, so nothing here wraps.");
+        // Each row centres its tile on its title's first line, 16 px into the row, the middle of a one-line row's 32 px.
+        Assert.Equal(["first line 16, tile 0", "first line 16, tile 0, row 32"],
+            rows.Select((row, index) => TaskCentres(row) + (index == 1 ? $", row {row.Bounds.Height:0.#}" : "")));
+    }
+
+    private static string TaskCentres(ListBoxItem row)
+    {
+        var title = row.GetVisualDescendants().OfType<TextBlock>().Single();
+        var line = FirstLine(title);
+        return $"first line {line - Top(row):0.#}, tile {Centre(row.GetVisualDescendants().OfType<Theme.KindTile>().Single()) - line:0.#}";
+    }
+
     /// <summary>The client waits at the gate until it is stopped or the test opens the gate.</summary>
     private FakeRule Waits() => On("exec", "--json")
         .Print("""{"type":"thread.started","thread_id":"01a104d5-d442-71a1-9b08-8938c119e5ae"}""")
@@ -172,15 +204,21 @@ public sealed class SidebarLayoutTests : IDisposable
         Assert.Equal("first line 16, chevron 0, flowchart 0, unsaved 0, count 0", WorkflowCentres(shell, Reports, Quarterly));
     }
 
-    /// <summary>The text shows whole: no line ends in an ellipsis, and its lines fit inside the box that shows them.</summary>
+    /// <summary>The name shows whole and ends before the tree's content edge.</summary>
     private static void AssertWhole(Shell shell, TextBlock name)
     {
-        var layout = name.TextLayout;
-        var content = name.Bounds.Size.Deflate(name.Padding);
-        Assert.False(layout.TextLines.Any(line => line.HasCollapsed), $"\"{name.Text}\" ends in an ellipsis.");
-        Assert.True(layout.Width <= content.Width + 0.5 && layout.Height <= content.Height + 0.5,
-            $"\"{name.Text}\" needs {layout.Width:0.#}×{layout.Height:0.#} px and shows in {content.Width:0.#}×{content.Height:0.#}.");
+        AssertWhole(name);
         Assert.True(FromEdge(shell, name) >= 0, $"\"{name.Text}\" runs {-FromEdge(shell, name):0.#} px past the content edge.");
+    }
+
+    /// <summary>The text shows whole: no line ends in an ellipsis, and its lines fit inside the box that shows them.</summary>
+    private static void AssertWhole(TextBlock text)
+    {
+        var layout = text.TextLayout;
+        var content = text.Bounds.Size.Deflate(text.Padding);
+        Assert.False(layout.TextLines.Any(line => line.HasCollapsed), $"\"{text.Text}\" ends in an ellipsis.");
+        Assert.True(layout.Width <= content.Width + 0.5 && layout.Height <= content.Height + 0.5,
+            $"\"{text.Text}\" needs {layout.Width:0.#}×{layout.Height:0.#} px and shows in {content.Width:0.#}×{content.Height:0.#}.");
     }
 
     /// <summary>

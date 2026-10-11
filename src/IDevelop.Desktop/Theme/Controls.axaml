@@ -311,9 +311,11 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
+  <!-- A task's row centres its tile and its title's first line on a 20 px first line, which with its padding and border
+       makes a one-line row 32 px tall, as tall as a workflow's row. -->
   <Style Selector="ListBox.tasks ListBoxItem">
     <Setter Property="MinHeight" Value="32" />
-    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="Padding" Value="8,5" />
     <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="Transparent" />
@@ -341,10 +343,10 @@
     <Setter Property="BoxShadow" Value="none" />
   </Style>
 
-  <!-- A project's or a workflow's name in the sidebar's tree wraps in full rather than ending in an ellipsis. Its lines are
-       20 px apart, a count's height, so its first line centres on its row's first line, and a longer name grows the row
-       downward. -->
-  <Style Selector="TextBlock.treeName">
+  <!-- A name in the sidebar, a project's, a workflow's, a task's, or an agent's, wraps in full rather than ending in an
+       ellipsis. Its lines are 20 px apart, a count's height, so its first line centres on its row's first line, and a
+       longer name grows the row downward. -->
+  <Style Selector="TextBlock.sidebarName">
     <Setter Property="TextWrapping" Value="Wrap" />
     <Setter Property="LineHeight" Value="20" />
   </Style>
@@ -361,7 +363,7 @@
     <Setter Property="VerticalAlignment" Value="Top" />
     <Setter Property="Margin" Value="0,6,0,0" />
   </Style>
-  <Style Selector="Grid.projectRow > TextBlock.treeName">
+  <Style Selector="Grid.projectRow > TextBlock.sidebarName">
     <Setter Property="Padding" Value="0,4" />
   </Style>
 
