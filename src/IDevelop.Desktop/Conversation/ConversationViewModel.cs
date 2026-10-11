@@ -52,6 +52,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     private readonly RelayCommand _cancel;
     private readonly RelayCommand _markDone;
     private readonly RelayCommand _openInTerminal;
+    private readonly RelayCommand _newConversation;
     private readonly RelayCommand _loadEarlier;
     private readonly CancellationTokenSource _closed = new();
     private readonly TaskNodeViewModel? _node;
@@ -81,7 +82,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _stopAndSend = new RelayCommand(() => _ = SendAsync(stopTurn: true), () => CanSend && ShowsStopAndSend);
         _cancel = new RelayCommand(() => _ = RunAsync(turn => _session.CancelAsync(turn, CancellationToken.None)), () => ShowsCancel && !_busy);
         _markDone = new RelayCommand(() => _ = RunAsync(turn => _session.MarkDoneAsync(turn, CancellationToken.None)), () => ShowsMarkDone && !_busy);
-        _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && !_busy);
+        _newConversation = new RelayCommand(() => _ = RunAsync(_ => _session.StartNewConversationAsync(Target.Canvas.Planning(Target.Task), CancellationToken.None)), () => ShowsNewConversation && !_busy);
+        _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && _snapshot.Actions.Terminal.Enabled && !_busy);
         _loadEarlier = new RelayCommand(() =>
         {
             _earlier = true;
@@ -163,6 +165,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public string ComposerHint => IsHistorical ? "Return to current conversation to send."
         : !_snapshot.Actions.Send.Enabled ? _snapshot.Actions.Send.Reason
+        : _snapshot.Actions.StartsNewConversation ? RunText.StartsNewConversation
         : _snapshot.Latest switch
         {
             { Subject: not null } => "Your guidance reaches both agents in their next message.",
@@ -190,7 +193,10 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
 
     public bool ShowsMarkDone => !IsHistorical && _snapshot.Actions.MarkDone.Enabled;
 
-    public bool ShowsTerminal => !IsHistorical && _snapshot.Actions.Terminal.Enabled;
+    public bool ShowsTerminal => !IsHistorical && (_snapshot.Actions.Terminal.Enabled || _snapshot.Actions.Terminal.ShowsWhenUnavailable);
+
+    /// <summary>Why Open in terminal is disabled while it stays in view, or null while it works.</summary>
+    public string? TerminalNote => ShowsTerminal && !_snapshot.Actions.Terminal.Enabled ? _snapshot.Actions.Terminal.Reason : null;
 
     public ICommand SendCommand => _send;
 
@@ -199,6 +205,11 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
     public ICommand CancelCommand => _cancel;
 
     public ICommand MarkDoneCommand => _markDone;
+
+    /// <summary>Start a new conversation, while the conversation cannot continue.</summary>
+    public bool ShowsNewConversation => !IsHistorical && _snapshot.Actions.NewConversation.Enabled;
+
+    public ICommand NewConversationCommand => _newConversation;
 
     public ICommand OpenInTerminalCommand => _openInTerminal;
 
@@ -638,6 +649,8 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowsCancel));
         OnPropertyChanged(nameof(ShowsMarkDone));
         OnPropertyChanged(nameof(ShowsTerminal));
+        OnPropertyChanged(nameof(TerminalNote));
+        OnPropertyChanged(nameof(ShowsNewConversation));
         NotifyCommands();
     }
 
@@ -657,6 +670,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _cancel.NotifyCanExecuteChanged();
         _markDone.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();
+        _newConversation.NotifyCanExecuteChanged();
     }
 
     // Commands take no cancellation: once sent, a message, an answer, or a cancel goes through even if the view closes.

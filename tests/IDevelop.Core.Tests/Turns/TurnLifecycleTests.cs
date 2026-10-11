@@ -63,6 +63,9 @@ public sealed class TurnLifecycleTests
         var next = await f.Settled(await f.Start(new TurnIntent.Next(f.Preparation.Op(), new(first.Address.Launch.Attempt, 2), "Use the fixture")));
         Assert.Equal("WaitingForInput", next.Attempt.Status.ToString());
         Assert.Equal("session-1", next.Attempt.SessionId);
+        Assert.Equal((f.Checkout, f.Checkout), (next.Attempt.WorkingFolder, next.Attempt.SessionFolder));
+        Assert.Equal(f.Checkout, Assert.IsType<AttemptEvent.Requested>(f.Log(first.Address.Launch).Events[0]).WorkingFolder);
+        Assert.Equal(f.Checkout, Assert.Single(f.Log(first.Address.Launch).Events.OfType<AttemptEvent.TurnRequested>()).WorkingFolder);
         Assert.IsType<CaptureDisposition.Matched>(next.Capture.Disposition);
         Assert.Equal(Path.GetFullPath(Path.Combine(f.Preparation.Git.Folder, ".worktrees", "93f23689", "90d5b0a2")),
             File.ReadAllText(Path.Combine(f.Evidence, "reply-cwd.txt")));

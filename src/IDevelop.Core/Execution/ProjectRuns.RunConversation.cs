@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -83,7 +84,8 @@ public sealed partial class ProjectRuns
                         unavailable ?? WorkflowRunCoordinator.NothingToCancelMessage, "Cancel this attempt."),
                     Availability(unavailable is null && resting && latest?.Status == AttemptStatus.WaitingForInput,
                         unavailable ?? WorkflowRunCoordinator.NotWaitingMessage, "Mark this task done."),
-                    Availability(false, unavailable ?? "A workflow run owns this task's session.", ""));
+                    Availability(false, unavailable ?? "A workflow run owns this task's session.", ""),
+                    Availability(false, unavailable ?? "A workflow run owns this task. Retry starts a new attempt.", ""));
                 return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), logRevision,
                     latest is null ? null : new TurnKey(latest.Id, latest.Turns.Count), latest, Capabilities(latest), actions);
             }
@@ -126,17 +128,7 @@ public sealed partial class ProjectRuns
                 return new HistoryResult.Unavailable(ClosedOwner);
             }
 
-            var histories = new List<AttemptHistory>();
-            var seen = new HashSet<AttemptId>();
-            AttemptId? link = head;
-            while (link is { } id && seen.Add(id) && _owner.ReadConversationHistory(Task, id) is { } history)
-            {
-                ct.ThrowIfCancellationRequested();
-                histories.Add(history);
-                link = history.Record.Continues;
-            }
-
-            histories.Reverse();
+            var histories = _owner.ConversationChainOf(Task, head, ct);
             ct.ThrowIfCancellationRequested();
             return Unavailable ? new HistoryResult.Unavailable(ClosedOwner)
                 : ConversationPager.Read($"{_owner._projectFolder}/{Task}/run/{Address.Workflow}/{Address.Run}", histories,
@@ -174,6 +166,10 @@ public sealed partial class ProjectRuns
             return Unavailable ? AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, ClosedOwner))
                 : _run.Cancel(Address, Task, expected, ct);
         }
+
+        public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct) => ct.IsCancellationRequested
+            ? AsyncTask.FromCanceled<ConversationCommandResult>(ct)
+            : AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "A workflow run owns this task. Retry starts a new attempt."));
 
         public Task<ConversationCommandResult> MarkDoneAsync(TurnKey expected, CancellationToken ct)
         {

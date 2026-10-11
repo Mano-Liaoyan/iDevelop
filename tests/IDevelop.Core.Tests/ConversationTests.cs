@@ -301,7 +301,7 @@ public sealed class ConversationTests : IDisposable
         var earlier = AttemptReducer.Replay(AttemptLog.Read(AttemptLog.FolderOf(attempts, SayHiId, interrupted.Id)))!;
         Assert.Equal((AttemptStatus.Interrupted, "The project was closed while this task ran."), (earlier.Status, earlier.Detail));
         var requested = Assert.IsType<AttemptEvent.Requested>(AttemptLog.Read(AttemptLog.FolderOf(attempts, SayHiId, record.Id))[0]);
-        Assert.Equal(("Go on.", new Continuation(interrupted.Id, Session)), (requested.Prompt, requested.Continues));
+        Assert.Equal(("Go on.", new Continuation(interrupted.Id, Session) { Folder = _project }, _project), (requested.Prompt, requested.Continues, requested.WorkingFolder));
     }
 
     [Fact]

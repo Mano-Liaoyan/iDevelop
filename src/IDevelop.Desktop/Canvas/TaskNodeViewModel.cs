@@ -44,6 +44,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private readonly RelayCommand _send;
     private readonly RelayCommand _stopAndSend;
     private readonly RelayCommand _openInTerminal;
+    private readonly RelayCommand _newConversation;
     private readonly RelayCommand _markDone;
     private readonly RelayCommand _continueFix;
     private readonly RelayCommand _retryFix;
@@ -76,8 +77,10 @@ public sealed partial class TaskNodeViewModel : ObservableObject
                 _attempt is { Status: AttemptStatus.Running, Stopping: false } attempt && _canvas.Runs.Active.Any(run => run.Id == attempt.Id)));
         _send = new RelayCommand(() => Send(stopTurn: false), () => !IsRunOwned && !string.IsNullOrWhiteSpace(Draft) && _canvas.Runs.CheckSend(_task) is null);
         _stopAndSend = new RelayCommand(() => Send(stopTurn: true), () => CanStopAndSend && _send.CanExecute(null));
-        _openInTerminal = new RelayCommand(OpenInTerminal, () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null });
+        _openInTerminal = new RelayCommand(OpenInTerminal,
+            () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null } attempt && !_canvas.Runs.SessionFolderMoved(attempt));
         _markDone = new RelayCommand(MarkDone, () => StandaloneWaiting);
+        _newConversation = new RelayCommand(() => _canvas.Runs.StartNewConversation(_task, _canvas.Planning(Id)), () => CanStartNewConversation);
         _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => RunFix is { } fix
             ? CanChooseRunFix && fix.ContinueUnavailable is null : RunTask is null && _problem is StartProblem.FixInterrupted { CanContinue: true });
         _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => RunFix is not null ? CanChooseRunFix : RunTask is null && _problem is StartProblem.FixInterrupted);
@@ -326,7 +329,14 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     }
 
     /// <summary>Why a message cannot go to the task's agent now, shown under the composer before any click.</summary>
-    public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem) : null;
+    /// <summary>Why a message cannot go to the agent now, or, after the person chose Start a new conversation, that the next one starts it.</summary>
+    public string? SendProblem => _canvas.Runs.CheckSend(_task) is { } problem ? RunText.Describe(problem)
+        : _canvas.Runs.StartsNewConversation(_task.Id) ? RunText.StartsNewConversation : null;
+
+    /// <summary>Start a new conversation, offered while the conversation cannot continue (#92).</summary>
+    public bool CanStartNewConversation => !IsRunOwned && _canvas.Runs.CanStartNewConversation(_task);
+
+    public ICommand NewConversationCommand => _newConversation;
 
     /// <summary>A review's guidance never stops the reviewer's turn.</summary>
     public bool CanStopAndSend => TurnRunsHere && !IsReview;
@@ -624,11 +634,13 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     private void OnConversationChanged()
     {
         OnPropertyChanged(nameof(SendProblem));
+        OnPropertyChanged(nameof(CanStartNewConversation));
         OnPropertyChanged(nameof(TurnRunsHere));
         OnPropertyChanged(nameof(CanStopAndSend));
         _send.NotifyCanExecuteChanged();
         _stopAndSend.NotifyCanExecuteChanged();
         _openInTerminal.NotifyCanExecuteChanged();
+        _newConversation.NotifyCanExecuteChanged();
     }
 
     private void ShowState()

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -46,6 +47,8 @@ public sealed partial class ProjectRuns
                     var active = _owner._active.GetValueOrDefault(Task);
                     var running = active is not null && record is { Status: AttemptStatus.Running, Stopping: false };
                     var waiting = active is null && record is { Status: AttemptStatus.WaitingForInput };
+                    var moved = record is not null && _owner.SessionFolderMoved(record);
+                    var renewable = unavailable is null && task is not null && _owner.CanStartNewConversation(task);
                     var actions = new ConversationActions(
                         Availability(sendReason is null, sendReason, "Send a message."),
                         Availability(sendReason is null && running && record?.Subject is null,
@@ -54,8 +57,15 @@ public sealed partial class ProjectRuns
                             unavailable ?? "There is no owned run to cancel.", "Cancel this attempt."),
                         Availability(unavailable is null && task is not null && waiting,
                             unavailable ?? (task is null ? "The task no longer exists." : "The task must finish teardown and wait for input."), "Mark this task done."),
-                        Availability(unavailable is null && waiting && record?.SessionId is not null,
-                            unavailable ?? "The task must finish teardown and wait with a session.", "Open this session in a terminal."));
+                        Availability(unavailable is null && waiting && record?.SessionId is not null && !moved,
+                            unavailable ?? (moved ? StartReason(new StartProblem.SessionFolderMoved(record!.Requested.Client))
+                                : "The task must finish teardown and wait with a session."), "Open this session in a terminal.")
+                        // A Pi conversation whose folder moved keeps Open in terminal in view, disabled with the composer's note (#92).
+                        with { ShowsWhenUnavailable = unavailable is null && moved },
+                        Availability(renewable, unavailable ?? "The conversation can continue.", "Start a new conversation."))
+                    {
+                        StartsNewConversation = unavailable is null && _owner.StartsNewConversation(Task),
+                    };
                     return new ConversationSnapshot(Interlocked.Read(ref _owner._revision), published?.LogRevision ?? 0,
                         record is null ? null : new TurnKey(record.Id, record.Turns.Count), record, capabilities, actions);
                 }
@@ -100,6 +110,8 @@ public sealed partial class ProjectRuns
             StartProblem.ModelNotOffered => "The configured model is unavailable.",
             StartProblem.ReasoningNotOffered => "The configured reasoning level is unavailable.",
             StartProblem.NoReadOnlyMode => "This client cannot run a read-only task.",
+            StartProblem.SessionFolderMoved moved =>
+                $"{Clients.Name(moved.Client)} can't continue this conversation after the project folder moved, so it needs a new conversation.",
             _ => "The task cannot continue with its current configuration and ownership.",
         };
 
@@ -121,17 +133,7 @@ public sealed partial class ProjectRuns
                 return new HistoryResult.Unavailable("The conversation owner is closed.");
             }
 
-            var histories = new List<AttemptHistory>();
-            var seen = new HashSet<AttemptId>();
-            AttemptId? link = head;
-            while (link is { } id && seen.Add(id) && _owner.ReadConversationHistory(Task, id) is { } history)
-            {
-                ct.ThrowIfCancellationRequested();
-                histories.Add(history);
-                link = history.Record.Continues;
-            }
-
-            histories.Reverse();
+            var histories = _owner.ConversationChainOf(Task, head, ct);
             ct.ThrowIfCancellationRequested();
             if (Unavailable)
             {
@@ -227,6 +229,24 @@ public sealed partial class ProjectRuns
             var result = await _owner.CancelCoreAsync(Task, expected, ct);
             return new ConversationCommandResult(result.Applied ? CommandOutcome.Applied : result.Stale ? CommandOutcome.Stale : CommandOutcome.Refused,
                 result.Applied ? "The cancellation was recorded." : result.Problem is { } problem ? StartReason(problem) : "The attempt is no longer available.");
+        }
+
+        public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (Unavailable)
+            {
+                return AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "The conversation owner is closed."));
+            }
+
+            if (_owner.Resolve(Task) is not { } task)
+            {
+                return AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "The task no longer exists."));
+            }
+
+            return AsyncTask.FromResult(_owner.StartNewConversation(task, planning)
+                ? new ConversationCommandResult(CommandOutcome.Applied, "Your next message starts a new conversation.")
+                : new ConversationCommandResult(CommandOutcome.Refused, "The conversation can continue."));
         }
 
         public Task<ConversationCommandResult> MarkDoneAsync(TurnKey expected, CancellationToken ct)

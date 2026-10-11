@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -131,11 +132,23 @@ public abstract record HistoryResult
     public sealed record Unavailable(string Reason) : HistoryResult;
 }
 
-public sealed record ActionAvailability(bool Enabled, string Reason);
+public sealed record ActionAvailability(bool Enabled, string Reason)
+{
+    /// <summary>The action stays in view while it is unavailable, so the person sees it disabled with its reason.</summary>
+    public bool ShowsWhenUnavailable { get; init; }
+}
 
+/// <param name="NewConversation">
+/// Start a new conversation, offered while the conversation cannot continue because the client lost its session or Pi's
+/// folder moved. The person's next message then starts a fresh session.
+/// </param>
 public sealed record ConversationActions(
     ActionAvailability Send, ActionAvailability StopAndSend,
-    ActionAvailability Cancel, ActionAvailability MarkDone, ActionAvailability Terminal);
+    ActionAvailability Cancel, ActionAvailability MarkDone, ActionAvailability Terminal, ActionAvailability NewConversation)
+{
+    /// <summary>The person chose Start a new conversation, so the next message starts a fresh session.</summary>
+    public bool StartsNewConversation { get; init; }
+}
 
 public sealed record ClientCapabilities(bool StreamsText, bool LiveQuestions, string Limitations);
 
@@ -176,6 +189,12 @@ public interface IConversationSession : IDisposable
     Task<ConversationCommandResult> MarkDoneAsync(TurnKey expected, CancellationToken ct);
 
     Task<TerminalResult> OpenInTerminalAsync(TurnKey expected, CancellationToken ct);
+
+    /// <summary>
+    /// Makes the next message start a fresh session, while the conversation cannot continue. Its first prompt is the task's
+    /// own prompt, which reads <paramref name="planning"/> as the task's Run does, followed by the message.
+    /// </summary>
+    Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct);
 }
 
 public abstract record HostQuestions

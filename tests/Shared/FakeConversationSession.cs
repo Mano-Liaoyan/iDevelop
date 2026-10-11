@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -13,7 +14,7 @@ internal sealed class FakeConversationSession(TaskId task) : IConversationSessio
 
     public ConversationSnapshot Snapshot { get; set; } = new(0, 0, null, null,
         new ClientCapabilities(false, false, "No client selected."),
-        new ConversationActions(Disabled, Disabled, Disabled, Disabled, Disabled));
+        new ConversationActions(Disabled, Disabled, Disabled, Disabled, Disabled, Disabled));
 
     private static ActionAvailability Disabled => new(false, "Unavailable.");
 
@@ -110,6 +111,13 @@ internal sealed class FakeConversationSession(TaskId task) : IConversationSessio
         return AsyncTask.FromResult(_disposed ? new TerminalResult.Refused(new TerminalProblem.ClosedOwner()) : Terminal(call));
     }
 
+    public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        Calls.Add(new Call.NewConversation(ct));
+        return AsyncTask.FromResult(new ConversationCommandResult(_disposed ? CommandOutcome.Unavailable : CommandOutcome.Applied, _disposed ? "Closed." : "Started."));
+    }
+
     public void Dispose() => _disposed = true;
 
     public abstract record Call
@@ -131,5 +139,7 @@ internal sealed class FakeConversationSession(TaskId task) : IConversationSessio
         public sealed record MarkDone(TurnKey Expected, CancellationToken Ct) : Call;
 
         public sealed record Terminal(TurnKey Expected, CancellationToken Ct) : Call;
+
+        public sealed record NewConversation(CancellationToken Ct) : Call;
     }
 }

@@ -245,6 +245,8 @@ public static class RunText
         StartProblem.FixInterrupted p =>
             $"Closing iDevelop interrupted fix round {p.Round} of \"{p.Subject}\". Its session cannot go on, so retry the fix in a fresh session.",
         StartProblem.NoFixChoice p => $"\"{p.Review}\" has no interrupted fix round to continue or retry.",
+        StartProblem.SessionFolderMoved p =>
+            $"{Clients.Name(p.Client)} can't continue this conversation after the project folder moved, so it needs a new conversation.",
         StartProblem.NoModel p => $"Choose a {Clients.Name(p.Client)} model first.",
         StartProblem.ClientChecking p => $"iDevelop is still checking {Clients.Name(p.Client)}.",
         StartProblem.ClientMissing p => $"{Clients.Name(p.Client)} is not installed. {p.Reason}",
@@ -267,6 +269,9 @@ public static class RunText
         _ => throw new UnreachableException(),
     };
 
+    /// <summary>What the composer says after the person chose Start a new conversation.</summary>
+    public const string StartsNewConversation = "Your next message starts a new conversation.";
+
     /// <summary>One or two sentences for each reason a message cannot go to a task's agent.</summary>
     public static string Describe(SendProblem problem) => problem switch
     {
@@ -275,7 +280,7 @@ public static class RunText
         SendProblem.StaleTarget => "The conversation has moved to another turn.",
         SendProblem.EmptyMessage => "Write a message first.",
         SendProblem.NeverRan => "Run this task first. Then you can write to its agent.",
-        SendProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to continue. Run the task again.",
+        SendProblem.NoSession p => $"{Clients.Name(p.Client)} reported no session in the last run, so there is nothing to continue.",
         SendProblem.NoSessionYet p => $"{Clients.Name(p.Client)} has not reported its session yet. Send again in a moment.",
         SendProblem.ClientChanged p =>
             $"The last run used {Clients.Name(p.Ran)}, and this task now uses {Clients.Name(p.Now)}. Run the task to start a {Clients.Name(p.Now)} session.",

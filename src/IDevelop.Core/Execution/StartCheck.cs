@@ -61,6 +61,12 @@ public abstract record StartProblem
     /// <summary>The review has no interrupted fix round to continue or retry, or another choice already started it.</summary>
     public sealed record NoFixChoice(string Review) : StartProblem;
 
+    /// <summary>
+    /// The client finds a session only in the folder where it ran, and the project folder moved or was renamed since the
+    /// session's last turn, so the conversation cannot go on and a new one is needed (#92).
+    /// </summary>
+    public sealed record SessionFolderMoved(ClientId Client) : StartProblem;
+
     public sealed record NoModel(ClientId Client) : StartProblem;
 
     public sealed record ClientChecking(ClientId Client) : StartProblem;
@@ -129,7 +135,11 @@ internal sealed record LaunchPlan(ClientDefinition Client, ResolvedCommand Comma
 /// A first turn whose prompt is given instead of rendered from the node: the person's message, a review's next message,
 /// or a fix round. It resumes <paramref name="Session"/> when set.
 /// </summary>
-internal sealed record Resumption(string? Session, string Message);
+internal sealed record Resumption(string? Session, string Message)
+{
+    /// <summary>The folder <see cref="Session"/> lives in, or null when an older log never recorded it.</summary>
+    public string? Folder { get; init; }
+}
 
 internal abstract record StartVerdict
 {
@@ -143,6 +153,7 @@ internal abstract record StartVerdict
 /// <summary>Pure. The inspector's message before any click and the start itself use the same check.</summary>
 internal static class StartCheck
 {
+    /// <param name="projectFolder">The folder the turn's client runs in: the project, or a run's task checkout.</param>
     /// <param name="resume">Set for a continuation, whose prompt is the person's message, so the task needs no field filled in.</param>
     /// <param name="planning">What a node whose agent proposes may fill and place, which its first prompt lists.</param>
     /// <param name="subject">A review's subject, which its first prompt reads.</param>
@@ -166,6 +177,11 @@ internal static class StartCheck
         if (readOnly && !Clients.Get(client).HasReadOnlyMode)
         {
             return Block(new StartProblem.NoReadOnlyMode(client));
+        }
+
+        if (resume is { Session: not null, Folder: { } sessionFolder } && Clients.Get(client).SessionsPerFolder && !SameFolder(sessionFolder, projectFolder))
+        {
+            return Block(new StartProblem.SessionFolderMoved(client));
         }
 
         ClientStatus.Ready ready;
@@ -276,4 +292,13 @@ internal static class StartCheck
     }
 
     private static StartVerdict.Blocked Block(StartProblem problem) => new(problem);
+
+    /// <summary>
+    /// Whether two folders are the same by their full paths. Windows and macOS compare without case, as their file systems
+    /// usually do, so a folder opened by another letter case is not taken for a moved one.
+    /// </summary>
+    internal static bool SameFolder(string one, string other) => string.Equals(Full(one), Full(other),
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static string Full(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
 }

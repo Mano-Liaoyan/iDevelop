@@ -617,6 +617,38 @@ public sealed class ReviewTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task After_the_project_moved_a_review_starts_no_fix_round_of_a_Pi_subject_and_says_why()
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var resumed = Path.Combine(_implementer, "resumed.json");
+        Install(_fakes, ClientId.Pi,
+            Resuming(ClientId.Pi, ImplementerSession).RecordArguments(resumed).Print(SessionLine(ClientId.Pi, ImplementerSession)).Print(ReplyLines(ClientId.Pi, "Fixed.")),
+            Fresh(ClientId.Pi).Print(SessionLine(ClientId.Pi, ImplementerSession)).Write("calc.py", Buggy).Print(ReplyLines(ClientId.Pi, "Wrote calc.py with add.")));
+        Reviewer(1, Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add subtracts.", "change": "Return a + b."}]}"""));
+        var subject = SubjectNode with { Execution = pi };
+        var workflow = Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(subject, new CanvasPoint(0, 0))).Must(TestNodes.Place(ReviewNode, new CanvasPoint(300, 0)))
+            .Must(new WorkflowEdit.Connect(new ConnectionKey(Subject, Review), ConnectionKind.Dependency));
+        var clients = await _fakes.DiscoverAsync();
+        await using (var before = ProjectRuns.Open(_project, clients))
+        {
+            before.Follow(workflow);
+            Assert.IsType<StartResult.Started>(before.Start(subject));
+            await Until(() => before.Latest[Subject].Status == AttemptStatus.Succeeded && before.Active.IsEmpty, "the subject succeeds");
+        }
+
+        var moved = Path.Combine(Path.GetDirectoryName(_project)!, "moved-project");
+        Directory.Move(_project, moved);
+        await using var runs = ProjectRuns.Open(moved, clients);
+        runs.Follow(workflow);
+        Assert.IsType<StartResult.Started>(runs.Start(ReviewNode));
+        var blocked = new StartProblem.SubjectBlocked("Add numbers", new StartProblem.SessionFolderMoved(ClientId.Pi));
+        await Until(() => runs.Active.IsEmpty && runs.Check(ReviewNode) == blocked, "the review says why the fix round cannot start");
+
+        Assert.False(File.Exists(resumed), "Pi resumed the subject's session in the moved folder.");
+        Assert.Equal(AttemptStatus.InReview, runs.Latest[Review].Status);
+    }
+
     /// <summary>Runs the subject, then the review, and waits until the review settles.</summary>
     private async Task<(AttemptRecord Review, ProjectRuns Runs)> RunLoop(Func<ProjectRuns, Task>? during = null)
     {

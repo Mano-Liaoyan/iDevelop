@@ -45,6 +45,27 @@ public class StartCheckTests
     }
 
     [Fact]
+    public void A_Pi_session_whose_folder_moved_is_refused_and_one_in_this_folder_an_unknown_folder_or_another_client_resumes()
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var ready = new Dictionary<ClientId, ClientStatus>(CodexReady)
+        {
+            [ClientId.Pi] = new ClientStatus.Ready(new ResolvedCommand("/usr/local/bin/pi", IsBatchShim: false), [new ModelOption("deepseek/deepseek-v4-pro", "DeepSeek V4 Pro", ["high"])]),
+        };
+        StartVerdict Message(ExecutionSettings settings, string? folder, string? session = "s-1") =>
+            StartCheck.Evaluate(SayHi(settings, instructions: ""), Folder, ready, new Resumption(session, "banana") { Folder = folder });
+        const string moved = Folder + "-old";
+
+        Assert.Equal(new StartVerdict.Blocked(new SessionFolderMoved(ClientId.Pi)), Message(pi, moved));
+        Assert.Equal(["--session-id", "s-1"], Assert.IsType<StartVerdict.Allowed>(Message(pi, Folder)).Plan.Launch.Arguments[^2..].ToArray());
+        Assert.IsType<StartVerdict.Allowed>(Message(pi, Folder + Path.DirectorySeparatorChar));
+        Assert.IsType<StartVerdict.Allowed>(Message(pi, null));
+        Assert.IsType<StartVerdict.Allowed>(Message(pi, moved, session: null));
+        Assert.IsType<StartVerdict.Allowed>(Message(SolHigh, moved));
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), Message(pi, Folder.ToUpperInvariant()) is StartVerdict.Allowed);
+    }
+
+    [Fact]
     public void Codex_arguments_pass_through_an_npm_codex_cmd_shim()
     {
         var shim = new Dictionary<ClientId, ClientStatus>

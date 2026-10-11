@@ -80,6 +80,62 @@ public sealed class ConversationWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_continuation_of_the_same_session_reads_on_without_a_new_attempt_divider_and_a_new_session_keeps_it()
+    {
+        var project = Project();
+        WriteThreeAttempts(project);
+        var restarted = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-00000000000d"));
+        WriteAttempt(project, Requested(restarted, TestTasks.Design, 300, "Try again", new Continuation(C, "thread-1")), Launched(301),
+            At(302, new AgentEvent.SessionStarted("thread-9")), At(303, new AgentEvent.Message("Try what again?")),
+            At(304, new AgentEvent.Succeeded("Try what again?")), Exited(305));
+        var shell = Shell.Open(project);
+        string[] Markers() => [.. Conversation(shell).Items.OfType<MarkerItemViewModel>().Select(marker => marker.Title)];
+
+        OpenFromInspector(shell, "Design");
+
+        Assert.Equal(["New attempt", "New attempt"], Markers());
+        Assert.Equal(["iDevelop: " + Prompt, "Codex: Which fruit?", "You: banana", "Codex: Wrote banana.", "You: Use the fixture",
+            "Codex: Used the fixture.", "You: Try again", "Codex: Try what again?"], Messages(shell));
+        Assert.Equal(4, Conversation(shell).Attempts.Count);
+        Conversation(shell).SelectedAttempt = Conversation(shell).Attempts.Single(choice => choice.Id == C);
+        shell.WaitUntil(() => Conversation(shell).Idle.IsCompleted && Messages(shell).Length == 6, "the earlier attempt's chain shows");
+        Assert.Equal(["New attempt"], Markers());
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_waiting_Pi_conversation_whose_project_folder_moved_disables_Open_in_terminal_with_the_composer_s_note(bool moved)
+    {
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        var project = Project(TaskAt(TestTasks.Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
+        var folder = moved ? Path.Combine(Path.GetDirectoryName(project)!, "before-the-move") : project;
+        WriteAttempt(project, Requested(A, TestTasks.Design, 0, Prompt) with { Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = folder },
+            Launched(1), At(2, new AgentEvent.SessionStarted("s-1")), At(3, new AgentEvent.Succeeded("Which fruit?")), Exited(4));
+        var shell = Shell.Open(project);
+
+        shell.Click(shell.Header(shell.Node("Design")));
+        shell.Render();
+
+        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation.";
+        Assert.Equal(!moved, shell.InView<Button>("OpenInTerminal").IsEffectivelyEnabled);
+        if (moved)
+        {
+            Assert.Equal(note, shell.InView<TextBlock>("SendProblem").Text);
+        }
+
+        Invoke(shell.InView<Button>("OpenConversation"));
+        shell.WaitUntil(() => shell.Has<ConversationView>("ConversationView") && Conversation(shell).Idle.IsCompleted && Conversation(shell).Items.Count > 0,
+            "the conversation shows its history");
+        shell.Render();
+        var terminal = shell.Find<Button>("ConversationTerminal");
+
+        Assert.Equal((true, !moved), (terminal.IsEffectivelyVisible, terminal.IsEffectivelyEnabled));
+        Assert.Equal(moved ? note : null, ToolTip.GetTip(terminal));
+        Assert.Equal(moved, shell.Find<TextBlock>("ComposerHint").Text == note);
+    }
+
+    [AvaloniaFact]
     public void A_failed_card_opens_its_conversation_from_its_attention_glyph()
     {
         var project = Project();

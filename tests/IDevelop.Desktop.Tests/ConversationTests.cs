@@ -169,9 +169,59 @@ public sealed class ConversationTests : IDisposable
         Assert.Collection(
             Shell.Texts(shell.Find<ItemsControl>("Conversation")),
             line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
-            line => Assert.Matches(@"^Succeeded · Started .+ · took \d+ s$", line),
             line => Assert.Equal("You", line),
             line => Assert.Equal("banana", line));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_Pi_conversation_whose_folder_moved_offers_Start_a_new_conversation_and_the_next_message_starts_a_fresh_session(bool conversationView)
+    {
+        const string note = "Pi can't continue this conversation after the project folder moved, so it needs a new conversation.";
+        const string armed = "Your next message starts a new conversation.";
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        Install(_fakes, ClientId.Pi,
+            Resuming(ClientId.Pi, Session).CaptureStdin(Path.Combine(_evidence, "resumed.txt")).Print(SessionLine(ClientId.Pi, Session)).Print(ReplyLines(ClientId.Pi, "Unknown")),
+            Fresh(ClientId.Pi).CaptureStdin(Path.Combine(_evidence, "fresh.txt")).Print(SessionLine(ClientId.Pi, "01a108d7-0000-77a3-8908-a36f38ce6c14"))
+                .Print(ReplyLines(ClientId.Pi, "Started over.")));
+        _project = _temp.Seed(TaskAt(SayHi, "Say hi", 105, 90, pi, "Create hello.txt containing hi.", ConversationMode.Chat));
+        ConversationFixtures.WriteAttempt(_project, ConversationFixtures.Requested(ConversationFixtures.A, SayHi, 0, "# Say hi") with
+            {
+                Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = Path.Combine(Path.GetDirectoryName(_project)!, "before-the-move"),
+            },
+            ConversationFixtures.Launched(1), ConversationFixtures.At(2, new IDevelop.Execution.AgentEvent.SessionStarted(Session)),
+            ConversationFixtures.At(3, new IDevelop.Execution.AgentEvent.Succeeded("Which fruit?")), ConversationFixtures.Exited(4));
+        var shell = Shell.Open(_project, _fakes.DiscoverAsync().Result);
+        shell.Click(shell.Header(shell.Node("Say hi")));
+        shell.WaitUntil(() => shell.InView<TextBlock>("SendProblem").Text == note, "the inspector says why the conversation cannot go on");
+
+        if (conversationView)
+        {
+            Invoke(shell.InView<Button>("OpenConversation"));
+            shell.WaitUntil(() => shell.Has<TextBlock>("ComposerHint") && shell.Find<TextBlock>("ComposerHint").Text == note, "the composer says why");
+            Invoke(shell.Find<Button>("ConversationNewConversation"));
+            shell.WaitUntil(() => shell.Find<TextBlock>("ComposerHint").Text == armed, "the composer says the next message starts a new conversation");
+            Assert.False(shell.Find<Button>("ConversationNewConversation").IsEffectivelyVisible);
+            shell.Click(shell.Find<TextBox>("ConversationComposer"));
+        }
+        else
+        {
+            Assert.True(shell.InView<Button>("StartNewConversation").IsEffectivelyEnabled);
+            Invoke(shell.InView<Button>("StartNewConversation"));
+            shell.WaitUntil(() => shell.InView<TextBlock>("SendProblem").Text == armed, "the inspector says the next message starts a new conversation");
+            Assert.False(shell.Find<Button>("StartNewConversation").IsEffectivelyVisible);
+            shell.Click(shell.InView<TextBox>("Composer"));
+        }
+
+        shell.Type("Start over: which fruit?");
+        shell.Press(Key.Enter, RawInputModifiers.Control);
+
+        shell.WaitUntil(() => File.Exists(Path.Combine(_evidence, "fresh.txt")) && shell.Find<TextBox>("LastRunResult").Text == "Started over.", "a fresh session answers");
+        var sent = File.ReadAllText(Path.Combine(_evidence, "fresh.txt"));
+        Assert.StartsWith("# Say hi\n\nCreate hello.txt containing hi.", sent, StringComparison.Ordinal);
+        Assert.EndsWith("\n\nStart over: which fruit?", sent, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_evidence, "resumed.txt")));
     }
 
     [AvaloniaFact]

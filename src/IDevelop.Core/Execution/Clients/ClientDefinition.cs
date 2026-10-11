@@ -37,6 +37,18 @@ internal sealed record ClientDefinition
     /// </summary>
     public required bool HasReadOnlyMode { get; init; }
 
+    /// <summary>
+    /// The client finds a session only in the folder where it ran, so it cannot continue one after that folder moved. Pi
+    /// 1.1.0 then starts an empty session under the same id (probe of 2026-10-09), so iDevelop refuses such a message.
+    /// </summary>
+    public bool SessionsPerFolder { get; init; }
+
+    /// <summary>
+    /// What the client prints on stderr when it found no session under the id it was given and started an empty one under
+    /// that id, which it then reports as if it had resumed it. Null when the client never does so.
+    /// </summary>
+    public string? LostSessionNotice { get; init; }
+
     /// <summary>How the client lists its skills, or null when it cannot limit a task's skills, as Antigravity CLI cannot.</summary>
     public SkillSource? Skills { get; init; }
 }

@@ -25,6 +25,15 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
+    public void A_run_s_Pi_task_whose_folder_moved_points_to_Retry()
+    {
+        var view = new TaskView(Task, TaskState.Refused) { Problem = new StartProblem.SessionFolderMoved(ClientId.Pi) };
+
+        Assert.Equal("Pi can't continue this conversation after the project folder moved, so it needs a new conversation. Retry starts a new attempt.",
+            WorkflowRunText.Detail(view, Title));
+    }
+
+    [Fact]
     public void A_closure_by_recovery_says_whether_the_task_started_and_why()
     {
         var stopped = new TaskView(Task, TaskState.Failed) { End = new AttemptEnd.Recovered(RecoveryOutcome.Stopped, new(Guid.NewGuid()), "Gone after the crash.") };

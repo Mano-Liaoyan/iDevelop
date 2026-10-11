@@ -1,4 +1,5 @@
 using IDevelop.Execution;
+using IDevelop.Workflows;
 using static IDevelop.Core.Tests.AttemptEvents;
 using static IDevelop.Execution.AgentEvent;
 using static IDevelop.Execution.AttemptEvent;
@@ -259,6 +260,59 @@ public class AttemptReducerTests
         Assert.Equal("thread-1", record.SessionId);
         Assert.Equal(new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa")), record.Continues);
         Assert.Equal([new TurnRecord(1, "banana", TurnOutcome.Running, null)], record.Turns);
+    }
+
+    [Fact]
+    public void An_attempt_records_the_folder_its_turns_run_in_and_its_session_lives_where_the_client_last_reported_it()
+    {
+        const string here = "/home/me/fruit", moved = "/home/me/moved-fruit";
+        var requested = BuildRequested(First) with { WorkingFolder = here };
+        AttemptEvent[] reported = [requested, LaunchedAt1s, Said(2, new SessionStarted("thread-1")), Sent(3, "banana"), Said(4, new Succeeded("Which fruit?")), Exit(5, 0)];
+        var elsewhere = NextTurn(6, "banana") with { WorkingFolder = moved };
+        var continues = BuildRequested(new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000bb"))) with { Prompt = "banana", WorkingFolder = moved, Continues = new Continuation(First, "thread-1") { Folder = here } };
+
+        (string?, string?, string?) Folders(params AttemptEvent[] events) =>
+            AttemptReducer.Replay(events) is { } record ? (record.WorkingFolder, record.SessionFolder, record.SessionId) : default;
+
+        Assert.Equal((here, null, null), Folders(requested, LaunchedAt1s));
+        Assert.Equal((here, here, "thread-1"), Folders(reported));
+        Assert.Equal((moved, here, "thread-1"), Folders([.. reported, elsewhere]));
+        Assert.Equal((moved, moved, "thread-2"), Folders([.. reported, elsewhere, Said(7, new SessionStarted("thread-2"))]));
+        Assert.Equal((here, here, "thread-1"), Folders([.. reported, NextTurn(6, "banana")]));
+        Assert.Equal((moved, here, "thread-1"), Folders(continues, LaunchedAt1s));
+        Assert.Equal((null, null, "thread-1"), Folders(BuildRequested(First), LaunchedAt1s, Said(2, new SessionStarted("thread-1"))));
+    }
+
+    [Fact]
+    public void A_continuation_resumed_its_session_once_the_client_reports_that_session()
+    {
+        var earlier = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa"));
+        AttemptRecord Run(params AttemptEvent[] events) =>
+            AttemptReducer.Replay([BuildRequested(First) with { Prompt = "banana", Continues = new Continuation(earlier, "thread-1") }, LaunchedAt1s, .. events])!;
+
+        Assert.Null(Run().Resumed);
+        Assert.True(Run(Said(2, new SessionStarted("thread-1"))).Resumed);
+        Assert.True(Run(Said(2, new SessionStarted("thread-1")), Said(3, new SessionStarted("thread-9"))).Resumed);
+        Assert.False(Run(Said(2, new SessionStarted("thread-9"))).Resumed);
+        Assert.False(Run(Said(2, new Failed("No conversation found with session ID thread-1.")), Exit(3, 1)).Resumed);
+        Assert.False(Run(new Reconciled(T0.AddSeconds(2), null)).Resumed);
+        Assert.Null(AttemptReducer.Replay([BuildRequested(First), LaunchedAt1s, Said(2, new SessionStarted("thread-1")), Exit(3, 0)])!.Resumed);
+    }
+
+    [Fact]
+    public void A_Pi_continuation_whose_first_turn_warned_that_it_found_no_session_started_over_under_the_same_id()
+    {
+        var earlier = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa"));
+        var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
+        AttemptRecord Run(bool lost, params AttemptEvent[] later) => AttemptReducer.Replay(
+            [BuildRequested(First) with { Settings = pi, Prompt = "banana", Continues = new Continuation(earlier, "s-1"), Conversation = ConversationMode.Chat }, LaunchedAt1s,
+                Said(2, new SessionStarted("s-1")), Said(3, new Succeeded("Unknown")), Exit(4, 0) with { LostSession = lost }, .. later])!;
+
+        Assert.Equal((false, "s-1"), (Run(lost: true).Resumed, Run(lost: true).SessionId));
+        Assert.True(Run(lost: false).Resumed);
+        var later = Run(false, NextTurn(5, "and an apple"), new Launched(T0.AddSeconds(5), 4243, T0.AddSeconds(5)), Said(6, new Succeeded("OK")),
+            Exit(7, 0) with { LostSession = true });
+        Assert.Equal((2, true), (later.Turns.Count, later.Resumed));
     }
 
     [Theory]
