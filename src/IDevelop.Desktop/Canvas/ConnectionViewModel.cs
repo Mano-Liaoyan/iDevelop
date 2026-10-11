@@ -69,12 +69,13 @@ public sealed class ConnectionViewModel : ObservableObject
     /// <summary>Finds the wire's path again, as any card may have moved into it or out of it.</summary>
     internal void Reroute()
     {
-        // The wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
+        // Every card stands where it shows and at the size it shows, so a wire goes around an expanded card (ADR 0024). The
+        // wire's own two cards stand where their ports are, which Nodify keeps current while a card is dragged.
         Rect[] cards =
         [
-            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => WireRouting.Card(node.Location)),
-            WireRouting.Card(From.Output.Anchor - (Vector)WorkflowCanvasViewModel.OutputPortCenter),
-            WireRouting.Card(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter),
+            .. _canvas.Nodes.Where(node => node != From && node != To).Select(node => node.DisplayRect),
+            new(From.Output.Anchor - new Vector(From.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.InputPortCenter.Y), From.CardSize),
+            new(To.Input.Anchor - (Vector)WorkflowCanvasViewModel.InputPortCenter, To.CardSize),
         ];
         var route = WireRouting.Route(From.Output.Anchor, To.Input.Anchor, cards);
         if (!route.SequenceEqual(_route))

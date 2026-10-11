@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
@@ -59,6 +60,20 @@ public sealed class CarriedResultTests
         Select(shell, title);
         shell.Click(shell.InView<Button>("RunTask"));
         shell.WaitUntil(() => shell.Preflight is { IsReady: true }, $"the preflight of \"{title}\" reads the project", () => $"Notice: {shell.Status}");
+    }
+
+    /// <summary>
+    /// Expands the cards in order, as their chevrons do. The window opens the project directly, so it restores no expanded
+    /// cards; put C before B, since B's card pushes C's column to the right, toward the inspector.
+    /// </summary>
+    private static void Expand(Shell shell, params string[] titles)
+    {
+        foreach (var title in titles)
+        {
+            shell.Click(shell.InCard<ToggleButton>(title, "CardExpand"));
+        }
+
+        shell.Render();
     }
 
     private static bool Shows(Shell shell, string automationId) => shell.Has<TextBlock>(automationId) && shell.Find<TextBlock>(automationId).IsEffectivelyVisible;
@@ -126,7 +141,8 @@ public sealed class CarriedResultTests
         {
             shell.Render();
             Assert.Equal("Waits for 1 task", shell.CardText("C", "CardStatus"));
-            Assert.Contains($"Waits for \"{longTitle}\".", (string?)ToolTip.GetTip(shell.InCard<Panel>("C", "TaskCard")));
+            // The card's peek lists the task it waits for by its whole name.
+            Assert.Contains(longTitle, shell.PeekTexts("C")!);
             string[] cut = [.. shell.Nodes().SelectMany(node => node.GetVisualDescendants().OfType<TextBlock>())
                 .Where(text => text.IsEffectivelyVisible && (text.TextLayout.TextLines.Any(line => line.HasCollapsed) || text.TextLayout.Width > text.Bounds.Width + 0.5))
                 .Select(text => text.Text ?? "")];
@@ -408,6 +424,123 @@ public sealed class CarriedResultTests
         Assert.Equal((NodeState.Interrupted, "Closed as stopped"), ended.Card(_ => "A"));
         Assert.Equal("You closed its turn as stopped.", ended.Detail(_ => "A"));
         Assert.Equal("A run of the \"W\" workflow ran this task last.", ended.Owner("W", hasAgent: true));
+    }
+
+    [AvaloniaFact]
+    public void An_expanded_card_between_runs_shows_the_earlier_result_what_it_waits_for_and_why_its_result_is_out_of_date()
+    {
+        using var f = Join();
+        var shell = f.Window();
+        RunNode(shell, "B");
+        var runsAfterA = WorkflowRunText.Unbroken("Runs after \"A\". Run \"A\"\u00A0first.");
+
+        // The peek lists what C waits for and says what to run first.
+        var peek = shell.PeekTexts("C")!;
+        Assert.Equal(["Starts after", "A", runsAfterA], peek.Where(text => text is "Starts after" or "A" || text == runsAfterA));
+        Expand(shell, "C", "B");
+        shell.Render();
+
+        // The run that ran B is still on the canvas, so B's card reads that run's attempt.
+        Assert.Equal(("Result", "B ready."), (shell.CardText("B", "CardNowHeading"), shell.CardText("B", "CardNowText")));
+        Assert.StartsWith("Took ", shell.CardText("B", "CardNowMeta"));
+        Assert.Equal("Starts after", shell.CardText("C", "CardNowHeading"));
+        Assert.Contains("A", Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")));
+        Assert.Equal((runsAfterA, true, false), (shell.CardText("C", "CardRunNote"), shell.InCard<TextBlock>("C", "CardRunNote").IsEffectivelyVisible,
+            shell.InCard<Button>("C", "CardRun").IsEffectivelyEnabled));
+        Assert.False(shell.InCard<TextBlock>("B", "CardRunNote").IsEffectivelyVisible);
+        shell.Window.Close();
+        shell.Render();
+
+        // After a restart no run is on the canvas, and B's card shows the earlier run's report: B's own conversation, which
+        // the card reads between runs, has none.
+        var reopened = f.Window();
+        reopened.WaitUntil(() => reopened.CardText("B", "CardStatus") == "Succeeded", "the reopened window reads the earlier run",
+            () => reopened.CardText("B", "CardStatus"));
+        Expand(reopened, "C", "B");
+        Assert.Equal(("Result", "B ready.", "From an earlier run"),
+            (reopened.CardText("B", "CardNowHeading"), reopened.CardText("B", "CardNowText"), reopened.CardText("B", "CardNowMeta")));
+        Assert.Equal(("Starts after", runsAfterA), (reopened.CardText("C", "CardNowHeading"), reopened.CardText("C", "CardRunNote")));
+
+        // New instructions put B's result out of date, which its card says once, in its state's warning colour.
+        reopened.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.SetField(B, "instructions", "Build B again."));
+        reopened.Render();
+        Assert.Equal(("Out of date", "Out of date because it changed since it\u00A0ran."),
+            (reopened.CardText("B", "CardNowHeading"), reopened.CardText("B", "CardNowText")));
+        Assert.False(reopened.InCard<TextBlock>("B", "CardRunNote").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void An_expanded_card_reads_a_task_the_run_carried_as_its_conversation_does_and_says_once_what_to_run_first()
+    {
+        using var f = Join();
+        var shell = f.Window();
+        RunNode(shell, "B");
+        RunNode(shell, "A");
+        Expand(shell, "C", "B", "A");
+        TaskNodeViewModel Node(string title) => (TaskNodeViewModel)shell.Node(title).DataContext!;
+
+        // The run took B's result from the earlier run and never talked to B, so B's card reads B's own conversation, as
+        // Open conversation does, and A's card reads the run's.
+        Assert.Equal(("Result", "From an earlier run"), (shell.CardText("B", "CardNowHeading"), shell.CardText("B", "CardNowMeta")));
+        Assert.Equal((null, true), (Node("B").Detail!.Route, Node("A").Detail!.Route is not null));
+        Assert.Equal(("Result", "A ready."), (shell.CardText("A", "CardNowHeading"), shell.CardText("A", "CardNowText")));
+
+        // New instructions for B put its result and C's out of date. C's card says why once: Run's refusal names what to
+        // run first, so nothing repeats it under Run, nor in the peek.
+        shell.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.SetField(B, "instructions", "Build B again."));
+        shell.Render();
+        var runB = WorkflowRunText.Unbroken("Out of date because\u200B \"B\" changed. Run \"B\"\u00A0first.");
+        Assert.Equal(("Out of date", runB), (shell.CardText("C", "CardNowHeading"), shell.CardText("C", "CardNowText")));
+        Assert.False(shell.InCard<TextBlock>("C", "CardRunNote").IsEffectivelyVisible);
+        // C's column stands right of two expanded cards now, under the inspector, so its own toggle collapses it.
+        Node("C").ToggleExpandCommand.Execute(null);
+        shell.Render();
+        Assert.Single(shell.PeekTexts("C")!, text => text == runB);
+    }
+
+    [AvaloniaFact]
+    public void An_expanded_card_whose_newest_run_ended_its_task_shows_that_end_and_never_an_older_result_of_its_own()
+    {
+        using var f = Join();
+        // A failed and B succeeded on their own once. Then a run fails B and stops A while it runs.
+        f.Answer("A", FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Stderr("error: model not found").Exit(1),
+                f.Says("A ready.", gate: "a"))
+            .Answer("B", f.Says("B on its own."), FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-1")).Exit(1));
+        var shell = f.Window();
+        shell.RunOnItsOwn("A");
+        shell.RunOnItsOwn("B");
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.Nodes.Where(node => node.Title is "A" or "B").Select(node => node.LastAttempt?.StatusLabel)
+            .SequenceEqual(["Failed", "Succeeded"]), "A's and B's own runs end");
+        var ownFailure = Assert.IsType<string>(shell.Window.ViewModel.Canvas!.Nodes.Single(node => node.Title == "A").LastAttempt!.Detail);
+        Expand(shell, "C", "B", "A");
+        shell.StartRun();
+        shell.WaitUntil(() => shell.CardText("B", "CardStatus") == "Failed" && shell.CardText("A", "CardStatus") == "Running", "B fails while A runs",
+            () => string.Join(", ", Cards(shell)));
+        shell.Click(shell.Find<Button>("StopWorkflow"));
+        shell.WaitUntil(() => shell.WorkflowRun is { IsActive: false, View.PinsReleased: true }, "the run stops", () => shell.RunStatus);
+        shell.WaitUntil(() => shell.CardText("B", "CardNowHeading") == "Failed", "B's card reads the run's attempt",
+            () => shell.CardText("B", "CardNowHeading"));
+        AssertEnded(shell);
+        shell.Window.Close();
+        shell.Render();
+
+        var reopened = f.Window();
+        reopened.WaitUntil(() => reopened.CardText("B", "CardStatus") == "Failed", "the reopened window reads the stopped run",
+            () => string.Join(", ", Cards(reopened)));
+        Expand(reopened, "C", "B", "A");
+        AssertEnded(reopened);
+        // Between runs the card reads A's own conversation, whose newest attempt is older than the run that stopped A.
+        Assert.Equal(("Cancelled", ((TaskNodeViewModel)reopened.Node("A").DataContext!).RunOwner),
+            (reopened.CardText("A", "CardNowHeading"), reopened.CardText("A", "CardNowText")));
+        Assert.DoesNotContain(ownFailure, reopened.CardText("A", "CardNowText"));
+
+        static void AssertEnded(Shell shell)
+        {
+            Assert.Equal(("Failed", "Starts after"), (shell.CardText("B", "CardNowHeading"), shell.CardText("C", "CardNowHeading")));
+            Assert.NotEqual("B on its own.", shell.CardText("B", "CardNowText"));
+            Assert.NotEmpty(shell.CardText("B", "CardNowText"));
+            Assert.Equal(["A", "B"], Shell.Texts(shell.InCard<ItemsControl>("C", "CardWaits")).Where(text => text is "A" or "B"));
+        }
     }
 
     [AvaloniaFact]

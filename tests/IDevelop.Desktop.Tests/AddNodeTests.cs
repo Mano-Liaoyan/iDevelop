@@ -325,7 +325,7 @@ public sealed class AddNodeTests : IDisposable
 
         shell.RightClick(shell.InEditor(400, 300));
 
-        string[] actions = ["Generate Workflow…", "Undo", "Select All", "Fit to View", "Zoom to 100%", "Delete Selection"];
+        string[] actions = ["Generate Workflow…", "Undo", "Select All", "Fit to View", "Zoom to 100%", "Expand All", "Delete Selection"];
         Assert.Equal(actions, shell.AddRows().SkipWhile(row => row.StartsWith("Add ", StringComparison.Ordinal)));
         var list = shell.Find<ItemsControl>("AddNodeList").FindAncestorOfType<ScrollViewer>()!;
         Assert.True(list.Extent.Height > list.Viewport.Height, $"The list shows all of its {list.Extent.Height} px in {list.Viewport.Height} px.");

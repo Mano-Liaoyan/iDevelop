@@ -1,9 +1,11 @@
 using System.Collections.Immutable;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
+using IDevelop.Desktop.Canvas;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -76,6 +78,35 @@ public sealed class PlanningTests : IDisposable
         Assert.Equal(("Backend API", "Add the endpoint.", ""), (workflow.Tasks[Backend].Title, workflow.Tasks[Backend].Field("instructions"), workflow.Tasks[Frontend].Field("instructions")));
         var wire = Assert.Single(workflow.Tasks.Values, task => task.Title == "Wire export");
         Assert.Equal([(Architect, Backend), (Architect, Frontend), (Backend, wire.Id)], workflow.Connections.Keys.Select(key => (key.From, key.To)).Order());
+    }
+
+    [AvaloniaFact]
+    public void A_proposals_ghost_cards_and_wires_follow_the_cards_where_they_show_while_the_planner_is_expanded()
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-1", "title": "Backend API", "fields": {"instructions": "Add the endpoint."}}],
+             "add": [{"id": "wire", "type": "type-1", "title": "Wire export", "fields": {"instructions": "Connect them."}}],
+             "connect": [{"from": "slot-1", "to": "wire"}]}
+            ```
+            """);
+        var canvas = shell.Window.ViewModel.Canvas!;
+        GhostCardViewModel Card(string title) => canvas.Ghosts.OfType<GhostCardViewModel>().Single(ghost => ghost.Title == title);
+        var newCard = Card("Wire export").Location;
+        var wireStart = canvas.Ghosts.OfType<GhostWireViewModel>().Select(wire => wire.Location + (Vector)wire.Source).Single();
+
+        shell.Click(shell.InCard<ToggleButton>("Design export", "CardExpand"));
+
+        // The planner unfolds 80 px wider, so its slot and the column of new tasks right of it show 80 px further right.
+        var backend = canvas.Nodes.Single(node => node.Title == "Backend");
+        var extra = WorkflowCanvasViewModel.ExpandedCardWidth - WorkflowCanvasViewModel.TaskCardWidth;
+        Assert.Equal(new Vector(extra, 0), backend.ViewOffset);
+        Assert.Equal(backend.DisplayLocation, Card("Backend API").Location);
+        Assert.Equal(newCard + new Vector(extra, 0), Card("Wire export").Location);
+        var wire = canvas.Ghosts.OfType<GhostWireViewModel>().Single();
+        Assert.Equal((wireStart + new Vector(extra, 0), Card("Wire export").Location + (Vector)WorkflowCanvasViewModel.InputPortCenter),
+            (wire.Location + (Vector)wire.Source, wire.Location + (Vector)wire.Target));
     }
 
     [AvaloniaFact]

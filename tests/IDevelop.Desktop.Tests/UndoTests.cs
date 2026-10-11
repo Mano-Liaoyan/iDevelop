@@ -137,7 +137,7 @@ public sealed class UndoTests : IDisposable
         var shell = OpenChain();
         var empty = shell.InEditor(150, 450);
         shell.RightClick(empty);
-        Assert.Equal(["Generate Workflow…", "Select All", "Fit to View", "Zoom to 100%"], shell.AddRows().SkipWhile(row => row.StartsWith("Add ", StringComparison.Ordinal)));
+        Assert.Equal(["Generate Workflow…", "Select All", "Fit to View", "Zoom to 100%", "Expand All"], shell.AddRows().SkipWhile(row => row.StartsWith("Add ", StringComparison.Ordinal)));
         shell.Press(Key.Escape);
 
         Delete(shell, "Build");
