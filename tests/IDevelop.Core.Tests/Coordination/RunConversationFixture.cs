@@ -33,6 +33,7 @@ internal sealed class RunConversationFixture : IAsyncDisposable
     public FakeClients Fakes { get; }
     public string Evidence { get; }
     public ProjectRuns Runs { get; private set; } = null!;
+    public ClientDirectory Clients { get; private set; } = null!;
     public WorkflowRunCoordinator Coordinator { get; private set; } = null!;
     public RunAddress Address => Coordinator.Address;
     public RunView View => Coordinator.View;
@@ -133,7 +134,8 @@ internal sealed class RunConversationFixture : IAsyncDisposable
     public async Task Open(bool install = true)
     {
         if (install) Install();
-        Runs = OpenRuns(await Fakes.DiscoverAsync());
+        Clients = await Fakes.DiscoverAsync();
+        Runs = OpenRuns(Clients);
         Coordinator = Assert.IsType<RunOpen.Opened>(Runs.OpenRun(W, Preparation.RunId)).Coordinator;
     }
 

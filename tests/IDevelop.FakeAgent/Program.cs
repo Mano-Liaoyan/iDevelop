@@ -52,7 +52,8 @@ using System.Text.Json;
 //                                 <folder>/<n>.json, so each turn of a conversation can answer differently
 //   choose [{"prompt": <text>, "steps": [...]}, ...]
 //                                 run the steps of the first option whose text starts the turn's prompt, so one client
-//                                 answers each task of a workflow differently. Exit 95 when no option matches
+//                                 answers each task of a workflow differently. A prompt on stdin, as Pi reads it, is
+//                                 read whole. Exit 95 when no option matches
 //   answer [{"line": <pattern>, "steps": [...]}, ...]
 //                                 read stdin frames until one contains an option's pattern, and run that option's steps
 //                                 with the frame as the last matched one, so one RPC client answers each request in kind
@@ -397,7 +398,8 @@ int? Run(JsonElement steps)
                     JsonSerializer.Serialize(new { schema = 1, artifacts = new[] { new { name = artifact, path = artifact + ".bin" } } }));
                 break;
             case "choose":
-                var turnPrompt = prompt ?? "";
+                // A client that reads its whole prompt from stdin, as Pi does, is chosen by that text.
+                var turnPrompt = prompt ??= stdin.ReadToEnd();
                 var option = value.EnumerateArray()
                     .Where(candidate => turnPrompt.StartsWith(candidate.GetProperty("prompt").GetString()!, StringComparison.Ordinal))
                     .Select(candidate => (JsonElement?)candidate).FirstOrDefault();
