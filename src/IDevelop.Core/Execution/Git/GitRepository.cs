@@ -136,26 +136,62 @@ internal sealed partial class GitRepository
     /// <summary>
     /// The repository's mutation lock, or null when another holder, in this process or another, keeps it for longer than
     /// <paramref name="patience"/>, <see cref="MutationPatience"/> by default, or once <paramref name="halted"/> says the
-    /// caller stopped waiting. Waiters retry every 20 ms, so they take the lock in no fixed order. The persistent lock file
-    /// is never deleted, so concurrent owners cannot lock different files at the same path.
+    /// caller stopped waiting. Waiters retry every 20 ms. A person's command goes ahead of a run's
+    /// <paramref name="scheduled"/> work: while it waits, it holds <c>person.lock</c> beside the lock, and scheduled work
+    /// tries the lock only under a shared hold of that file, so it never takes the lock while a person's command waits.
+    /// The command then gets the lock once its current holder lets it go. Commands among themselves, and scheduled work
+    /// among itself, take it in no fixed order. The persistent lock files are never deleted, so concurrent owners cannot
+    /// lock different files at the same path.
     /// </summary>
-    public FileStream? TakeMutationLock(TimeSpan? patience = null, Func<bool>? halted = null)
+    public FileStream? TakeMutationLock(TimeSpan? patience = null, Func<bool>? halted = null, bool scheduled = false)
     {
         var limit = patience ?? MutationPatience;
         var folder = Directory.CreateDirectory(Path.Combine(CommonDirectory, "idevelop")).FullName;
+        var mutation = Path.Combine(folder, "mutation.lock");
+        var person = Path.Combine(folder, "person.lock");
+        FileStream? waiting = null;
         var waited = Stopwatch.StartNew();
-        do
+        try
         {
-            try
+            do
             {
-                return new FileStream(Path.Combine(folder, "mutation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException)
-            {
+                if (scheduled)
+                {
+                    // The shared hold lasts through the try, so no person's command starts to wait between the check and the take.
+                    using var clear = TryLock(person, exclusive: false);
+                    if (clear is not null && TryLock(mutation, exclusive: true) is { } taken) return taken;
+                }
+                else
+                {
+                    waiting ??= TryLock(person, exclusive: true);
+                    if (TryLock(mutation, exclusive: true) is { } taken) return taken;
+                }
                 Thread.Sleep(20);
-            }
-        } while (waited.Elapsed < limit && halted?.Invoke() != true);
-        return null;
+            } while (waited.Elapsed < limit && halted?.Invoke() != true);
+            return null;
+        }
+        finally
+        {
+            waiting?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// An exclusive or shared lock on <paramref name="path"/>, or null while a conflicting one is held. An exclusive lock
+    /// conflicts with every other lock, and shared locks only with an exclusive one, in this process or another.
+    /// </summary>
+    private static FileStream? TryLock(string path, bool exclusive)
+    {
+        try
+        {
+            return exclusive
+                ? new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                : new FileStream(path, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     public GitRead<CommitId?> ResolveCommit(string revision)

@@ -774,6 +774,73 @@ public sealed class GitRepositoryTests
         Assert.Null(f.Open().TakeMutationLock());
     }
 
+    [Fact]
+    public async Task A_person_s_command_takes_the_mutation_lock_ahead_of_scheduled_work_that_takes_it_again_at_once()
+    {
+        using var f = new GitFixture();
+        _ = f.Diamond();
+        var bound = TimeSpan.FromSeconds(30);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var takes = 0;
+        // The run's scheduled work in a tight loop: it takes the lock again as soon as it lets it go. It holds its first
+        // take until the person's command waits, and each later one until that command has finished.
+        var loop = Task.Run(() =>
+        {
+            while (!finished.Task.IsCompleted)
+            {
+                using var mutation = f.Open().TakeMutationLock(TimeSpan.FromSeconds(30), scheduled: true);
+                Assert.NotNull(mutation);
+                if (Interlocked.Increment(ref takes) == 1)
+                {
+                    held.SetResult();
+                    release.Task.Wait();
+                }
+                else finished.Task.Wait();
+            }
+        });
+        try
+        {
+            await held.Task.WaitAsync(bound);
+            // A wait asks whether to stop after each try the lock refuses, so the first ask means the command waits.
+            var person = Task.Run(() => f.Open().TakeMutationLock(halted: () =>
+            {
+                waiting.TrySetResult();
+                return false;
+            }));
+            await waiting.Task.WaitAsync(bound);
+            release.SetResult();
+            using var taken = await person.WaitAsync(bound);
+
+            // The person's command got the lock within its one-second wait, before the loop took it again.
+            Assert.NotNull(taken);
+            Assert.Equal(1, Volatile.Read(ref takes));
+        }
+        finally
+        {
+            finished.TrySetResult();
+            release.TrySetResult();
+        }
+        await loop.WaitAsync(bound);
+        Assert.Equal(2, takes);
+    }
+
+    [Fact]
+    public void A_person_s_command_that_stops_waiting_lets_scheduled_work_take_the_mutation_lock()
+    {
+        using var f = new GitFixture();
+        _ = f.Diamond();
+        using (var held = f.Open().TakeMutationLock())
+        {
+            Assert.NotNull(held);
+            Assert.Null(f.Open().TakeMutationLock(halted: () => true));
+        }
+        using var scheduled = f.Open().TakeMutationLock(scheduled: true);
+        Assert.NotNull(scheduled);
+    }
+
     [UnixFact]
     public void Metadata_times_out_while_a_worktree_scan_uses_its_longer_limit()
     {
