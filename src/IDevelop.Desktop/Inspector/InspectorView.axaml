@@ -947,7 +947,7 @@
                                   </ItemsControl>
                                 </StackPanel>
                               </inspector:InspectorRow>
-                              <!-- Only a new task without an agent of its own, from the person or the planner, needs the planner's. -->
+                              <!-- A new or filled task without an agent of its own, from the person or the planner, needs the planner's. -->
                               <inspector:InspectorRow Layout="Full" Label="Fall back to the planner's agent" IsShown="{Binding UsesFallback}">
                                 <CheckBox IsChecked="{Binding UsePlannerAgent}"
                                           ToolTip.Tip="A new or filled task without an agent of its own, and without a choice of the planner's that this machine runs, takes the planner's client, model, and reasoning."
