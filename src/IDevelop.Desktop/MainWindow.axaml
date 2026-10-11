@@ -20,10 +20,11 @@
   </Window.KeyBindings>
 
   <!-- The sidebar and the inspector keep the width the person drags them to while the canvas keeps 336 px. The code-behind
-       lowers their columns' largest widths as the window narrows, which the splitters also keep to. -->
+       lowers their columns' largest widths as the window narrows, which the splitters also keep to. The sidebar is never
+       narrower than its 240 px default, which leaves a tree row's name room for a word beside the row's dots and buttons. -->
   <Grid x:Name="Columns">
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="240" MinWidth="200" MaxWidth="400" />
+      <ColumnDefinition Width="240" MinWidth="240" MaxWidth="400" />
       <ColumnDefinition Width="1" />
       <ColumnDefinition Width="*" />
       <ColumnDefinition Width="1" />

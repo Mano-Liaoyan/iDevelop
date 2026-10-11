@@ -39,7 +39,7 @@ internal sealed partial class Shell
         Click(WorkflowExpand(canvas.Project.Name, canvas.Name));
     }
 
-    /// <summary>Sets the sidebar's width, as dragging the splitter after it does, within its 200 to 400 px range.</summary>
+    /// <summary>Sets the sidebar's width, as dragging the splitter after it does, within its 240 to 400 px range.</summary>
     public void SizeSidebar(double width)
     {
         Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0].Width = new GridLength(width);

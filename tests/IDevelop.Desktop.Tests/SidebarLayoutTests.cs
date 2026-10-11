@@ -13,10 +13,11 @@ using static IDevelop.TestSupport.FakeRule;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// The sidebar's project tree at its narrowest, default, and widest widths: project and workflow names wrap in full instead
-/// of ending in an ellipsis, and each row keeps its glyph, its dots, its count, and its buttons on its first line, at the
-/// right edges the inspector keeps (ADR 0021). Glyph buttons end at the tree's content edge, and a count ends where their
-/// glyphs' drawing ends. Dots end just before a row's count or buttons, so rows of one kind line them up.
+/// The sidebar's project tree from its 240 px default, which is also its narrowest, to its widest: project and workflow
+/// names wrap in full instead of ending in an ellipsis, and each row keeps its glyph, its dots, its count, and its buttons on
+/// its first line, at the right edges the inspector keeps (ADR 0021). Glyph buttons end at the tree's content edge, and a
+/// count ends where their glyphs' drawing ends. Dots end just before a row's count or buttons, so rows of one kind line
+/// them up.
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class SidebarLayoutTests : IDisposable
@@ -73,8 +74,8 @@ public sealed class SidebarLayoutTests : IDisposable
     }
 
     [AvaloniaTheory]
-    [InlineData(200)]
     [InlineData(240)]
+    [InlineData(320)]
     [InlineData(400)]
     public void Project_and_workflow_names_show_in_full_at_every_sidebar_width(double width)
     {
@@ -92,8 +93,22 @@ public sealed class SidebarLayoutTests : IDisposable
             name => Assert.True(name.TextLayout.TextLines.Count > 1, $"\"{name.Text}\" fits on one line at {width} px, so nothing here wraps."));
     }
 
+    [AvaloniaFact]
+    public void The_sidebar_s_splitter_widens_it_and_stops_at_its_240_px_default()
+    {
+        var shell = OpenBoth();
+        var splitter = shell.Window.GetVisualDescendants().OfType<GridSplitter>().Single(control => Grid.GetColumn(control) == 1);
+        var sidebar = shell.Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0];
+
+        shell.Drag(shell.Center(splitter), shell.Center(splitter) + new Vector(100, 0));
+        Assert.InRange(sidebar.ActualWidth, 339, 341);
+
+        shell.Drag(shell.Center(splitter), shell.Center(splitter) - new Vector(200, 0));
+        Assert.Equal(240, sidebar.ActualWidth);
+    }
+
     [AvaloniaTheory]
-    [InlineData(200)]
+    [InlineData(240)]
     [InlineData(400)]
     public void A_project_that_did_not_open_shows_its_whole_name(double width)
     {
@@ -122,7 +137,7 @@ public sealed class SidebarLayoutTests : IDisposable
         .WaitForFile(_gate);
 
     [AvaloniaTheory]
-    [InlineData(200)]
+    [InlineData(240)]
     [InlineData(400)]
     public void Each_row_keeps_its_dots_count_and_buttons_on_its_first_line_at_shared_right_edges(double width)
     {
