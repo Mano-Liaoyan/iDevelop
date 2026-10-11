@@ -26,9 +26,9 @@ public sealed record PlanningContext(ImmutableArray<TaskDefinition> Slots, Immut
     public static readonly PlanningContext None = new([], []);
 
     /// <summary>
-    /// The ready clients and models from which the planner chooses each new task's agent, which its prompt lists. Empty,
-    /// the planner chooses none and its prompt is the one it always was, as for a run's planner, whose prompt must render
-    /// the same from its attempt alone.
+    /// The ready clients and models from which the planner chooses the agent of each task it adds or fills, which its
+    /// prompt lists. A run's planner lists those its start recorded, so its prompt renders the same from its attempt
+    /// alone. Empty, the planner chooses none and its prompt is the one it always was.
     /// </summary>
     public ImmutableArray<AgentOffer> Agents { get; init; } = [];
 
