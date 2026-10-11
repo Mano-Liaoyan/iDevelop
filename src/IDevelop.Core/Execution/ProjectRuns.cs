@@ -1050,6 +1050,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             { SessionId: null } => (null, new SendProblem.NoSession(last.Requested.Client)),
             _ when task.Execution is { } settings && settings.Client != last.Requested.Client =>
                 (null, new SendProblem.ClientChanged(last.Requested.Client, settings.Client)),
+            // The client could not find the session it was asked to resume, so the attempt still holds that lost id (#92).
+            { Resumed: false, Turns: [{ Outcome: TurnOutcome.Failed }, ..], SessionId: { } lost } when lost == last.Resuming?.Session =>
+                (null, new SendProblem.NoSession(last.Requested.Client)),
             { SessionId: { } session } => (new Continuation(last.Id, session) { Folder = last.SessionFolder }, (SendProblem?)null),
         };
         return from is not null;

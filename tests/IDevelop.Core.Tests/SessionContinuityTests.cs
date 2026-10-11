@@ -291,6 +291,55 @@ public sealed class SessionContinuityTests : IDisposable
         Assert.False(reopened.StartsNewConversation(SayHiId));
     }
 
+    [Theory]
+    [InlineData("lost")]
+    [InlineData("crashed")]
+    [InlineData("another")]
+    public async Task A_resume_the_client_could_not_find_offers_a_new_conversation_and_one_a_crash_cut_short_or_another_session_goes_on(string how)
+    {
+        Install(_fakes, ClientId.ClaudeCode);
+        var claude = new ExecutionSettings(ClientId.ClaudeCode) { Model = "claude-haiku-4-5", Reasoning = "low" };
+        var first = new AttemptId(Guid.CreateVersion7(T0));
+        using (var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"),
+            new AttemptEvent.Requested(T0, first, SayHiId, "Say hi", claude, "# Say hi\n", "claude", ["-p"]) { WorkingFolder = _project }))
+        {
+            log.Append(new AttemptEvent.Launched(T0.AddSeconds(1), 4242, T0.AddSeconds(1)));
+            log.Append(new AttemptEvent.Agent(T0.AddSeconds(2), new AgentEvent.SessionStarted(Original)));
+            log.Append(new AttemptEvent.Agent(T0.AddSeconds(3), new AgentEvent.Succeeded("OK")));
+            log.Append(new AttemptEvent.Exited(T0.AddSeconds(4), 0, ""));
+        }
+
+        var later = T0.AddMinutes(1);
+        using (var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"),
+            new AttemptEvent.Requested(later, new AttemptId(Guid.CreateVersion7(later)), SayHiId, "Say hi", claude, "What word?", "claude", ["-p"])
+            {
+                WorkingFolder = _project, Continues = new Continuation(first, Original) { Folder = _project },
+            }))
+        {
+            // A launch whose process is gone: opening the project closes it as interrupted.
+            log.Append(new AttemptEvent.Launched(later.AddSeconds(1), 4242, later.AddSeconds(1)));
+            if (how == "another")
+            {
+                log.Append(new AttemptEvent.Agent(later.AddSeconds(2), new AgentEvent.SessionStarted("01a1225d-9999-74d8-8b83-b2462362dc0b")));
+            }
+
+            if (how != "crashed")
+            {
+                log.Append(new AttemptEvent.Agent(later.AddSeconds(3), new AgentEvent.Failed($"No conversation found with session ID: {Original}")));
+                log.Append(new AttemptEvent.Exited(later.AddSeconds(4), 1, ""));
+            }
+        }
+
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var task = SayHi(claude);
+
+        var lost = how == "lost";
+        Assert.Equal((how == "crashed" ? AttemptStatus.Interrupted : AttemptStatus.Failed, false),
+            (runs.Latest[SayHiId].Status, runs.Latest[SayHiId].Resumed ?? false));
+        Assert.Equal(lost ? (new SendProblem.NoSession(ClientId.ClaudeCode), true) : ((SendProblem?)null, false),
+            (runs.CheckSend(task), runs.CanStartNewConversation(task)));
+    }
+
     [Fact]
     public async Task Every_other_client_resumes_its_session_by_id_after_the_project_moved()
     {
