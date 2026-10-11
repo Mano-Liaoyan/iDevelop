@@ -31,6 +31,7 @@ internal static class Pi
         Terminal = session => $"pi --session {session}",
         HasReadOnlyMode = false,
         SessionsPerFolder = true,
+        LostSessionNotice = "No project session found with id",
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(

@@ -436,6 +436,13 @@ internal static partial class AttemptReducer
             next = next with { Resumed = false };
         }
 
+        // Pi reports the id it was given even when it found no session under it and started an empty one.
+        if (e is AttemptEvent.Exited exited && next is { Resuming: not null, Resumed: true, Turns.Count: 1 }
+            && Clients.Get(next.Requested.Client).LostSessionNotice is { } notice && exited.StderrTail.Contains(notice, StringComparison.Ordinal))
+        {
+            next = next with { Resumed = false };
+        }
+
         return e is not AttemptEvent.CleanedUp && record.Status is AttemptStatus.Running or AttemptStatus.WaitingForInput or AttemptStatus.InReview
             ? next with { AppliedEvents = record.AppliedEvents + 1 }
             : next;
