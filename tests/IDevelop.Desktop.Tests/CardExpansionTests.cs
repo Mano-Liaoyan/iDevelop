@@ -127,6 +127,23 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_deleted_expanded_card_lets_its_details_and_their_conversation_go()
+    {
+        var shell = Shell.Open(Diamond());
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var docs = canvas.Nodes.Single(node => node.Title == "Docs");
+        shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
+        Assert.NotNull(docs.Detail);
+
+        canvas.Edit(new Delete([Docs], []));
+        shell.Render();
+
+        Assert.DoesNotContain(docs, canvas.Nodes);
+        Assert.Null(docs.Detail);
+        Assert.Empty(canvas.ExpandedCards);
+    }
+
+    [AvaloniaFact]
     public void A_cards_ports_stay_on_its_header_line_so_its_wires_keep_their_rows_when_it_unfolds()
     {
         // Design's context wire to Archive, below and right of Docs, would pass under the collapsed Docs, through its body.
