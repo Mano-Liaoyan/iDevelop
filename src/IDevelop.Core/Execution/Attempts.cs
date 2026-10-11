@@ -194,6 +194,13 @@ internal abstract record AttemptEvent([property: JsonPropertyOrder(-1)] DateTime
 
     public sealed record Exited(DateTimeOffset At, int ExitCode, string StderrTail) : AttemptEvent(At)
     {
+        /// <summary>
+        /// The client said on stderr, at any point of the turn, that it found no session under the id it was given and
+        /// started an empty one under that id. Pi does so after its folder moved.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LostSession { get; init; }
+
         /// <summary>The project's files as a Git tree after the client exited. Null outside Git and in older logs.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Tree { get; init; }
@@ -437,8 +444,7 @@ internal static partial class AttemptReducer
         }
 
         // Pi reports the id it was given even when it found no session under it and started an empty one.
-        if (e is AttemptEvent.Exited exited && next is { Resuming: not null, Resumed: true, Turns.Count: 1 }
-            && Clients.Get(next.Requested.Client).LostSessionNotice is { } notice && exited.StderrTail.Contains(notice, StringComparison.Ordinal))
+        if (e is AttemptEvent.Exited { LostSession: true } && next is { Resuming: not null, Resumed: true, Turns.Count: 1 })
         {
             next = next with { Resumed = false };
         }

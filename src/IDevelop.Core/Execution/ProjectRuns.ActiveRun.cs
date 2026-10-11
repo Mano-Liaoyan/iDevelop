@@ -348,7 +348,10 @@ public sealed partial class ProjectRuns
                                 Append(new AttemptEvent.Agent(_owner.TimeProvider.GetUtcNow(), new AgentEvent.Failed(failure)));
                             }
 
-                            Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = GitTree.Snapshot(_owner._projectFolder) });
+                            Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr)
+                            {
+                                Tree = GitTree.Snapshot(_owner._projectFolder), LostSession = exit.LostSession,
+                            });
                             exited = true;
                             Publish();
                             if (Record.Status != AttemptStatus.Running || !await NextTurnAsync())
@@ -839,7 +842,7 @@ public sealed partial class ProjectRuns
 
         private void Read(Turn turn)
         {
-            var stderr = new Tail();
+            var stderr = new Tail(Clients.Get(Record.Requested.Client).LostSessionNotice);
             turn.Process.ReadStdout(line =>
             {
                 lock (_gate)
@@ -904,7 +907,7 @@ public sealed partial class ProjectRuns
                 {
                     turn.Open = false;
                     _closed |= !_messageWaiting;
-                    var exit = new Input.Exit(turn, code, stderr.Text) { Cleanup = cleanup };
+                    var exit = new Input.Exit(turn, code, stderr.Text) { Cleanup = cleanup, LostSession = stderr.Noticed };
                     if (Workflow is not null) _workflowExit = exit;
                     _events.Writer.TryWrite(exit);
                 }
@@ -935,7 +938,7 @@ public sealed partial class ProjectRuns
                 Append(new AttemptEvent.CleanedUp(_owner.TimeProvider.GetUtcNow(), cleanup.Result, cleanup.Detail, cleanup.Steps));
             var tree = Record.ReadOnly || Workflow!.Definition.Blueprint.Work is WorkSpec.Review
                 ? GitTree.Snapshot(_plan.Request.WorkingFolder!) : null;
-            Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = tree });
+            Append(new AttemptEvent.Exited(_owner.TimeProvider.GetUtcNow(), exit.Code, exit.Stderr) { Tree = tree, LostSession = exit.LostSession });
             _workflowExited = true;
         }
 
@@ -1125,6 +1128,9 @@ public sealed partial class ProjectRuns
             public sealed record Exit(Turn Turn, int Code, string Stderr) : Input
             {
                 public Cleanup? Cleanup { get; init; }
+
+                /// <summary>A stderr line carried the client's lost-session notice, which the tail may no longer hold.</summary>
+                public bool LostSession { get; init; }
             }
 
             public sealed record Answer(RequestKey Key, QuestionsReply Reply, TaskCompletionSource<AnswerResult> Done, CancellationToken Ct) : Input;
@@ -1178,12 +1184,27 @@ public sealed partial class ProjectRuns
         }
     }
 
-    /// <summary>The last few kilobytes of the client's stderr, for the exit event.</summary>
-    private sealed class Tail
+    /// <summary>
+    /// The last few kilobytes of the client's stderr, for the exit event, and whether any line carried the client's
+    /// lost-session notice, which a chatty client can push out of those kilobytes.
+    /// </summary>
+    private sealed class Tail(string? notice)
     {
         private const int Limit = 4096;
 
         private readonly StringBuilder _text = new();
+        private bool _noticed;
+
+        public bool Noticed
+        {
+            get
+            {
+                lock (_text)
+                {
+                    return _noticed;
+                }
+            }
+        }
 
         public string Text
         {
@@ -1200,6 +1221,7 @@ public sealed partial class ProjectRuns
         {
             lock (_text)
             {
+                _noticed |= notice is not null && line.Contains(notice, StringComparison.Ordinal);
                 _text.Append(line).Append('\n');
                 if (_text.Length > Limit)
                 {

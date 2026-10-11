@@ -195,6 +195,31 @@ public sealed class SessionContinuityTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Pi_turn_that_warns_it_found_no_session_starts_over_even_when_later_stderr_pushes_the_warning_out_of_the_tail()
+    {
+        var chatter = Enumerable.Range(1, 60).Aggregate(
+            Resuming(ClientId.Pi, Original).Stderr($"No project session found with id '{Original}'; creating a new session with that id"),
+            (rule, line) => rule.Stderr($"pi: loading extension {line} " + new string('.', 90)));
+        Install(_fakes, ClientId.Pi, chatter.Print(SessionLine(ClientId.Pi, Original)).Print(ReplyLines(ClientId.Pi, "Unknown")));
+        var earlier = AttemptId.New();
+        using (var log = AttemptLog.Create(Path.Combine(_project, ".idp", "attempts"),
+            new AttemptEvent.Requested(T0, earlier, SayHiId, "Say hi", Pi, "# Say hi\n", "pi", ["-p"])))
+        {
+            log.Append(new AttemptEvent.Launched(T0.AddSeconds(1), 4242, T0.AddSeconds(1)));
+            log.Append(new AttemptEvent.Agent(T0.AddSeconds(2), new AgentEvent.SessionStarted(Original)));
+            log.Append(new AttemptEvent.Agent(T0.AddSeconds(3), new AgentEvent.Succeeded("OK")));
+            log.Append(new AttemptEvent.Exited(T0.AddSeconds(4), 0, ""));
+        }
+
+        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var continued = await Settled(runs, async () => Assert.IsType<SendResult.Continued>(await runs.SendAsync(SayHi(), "What word?", stopTurn: false)).Attempt.Id);
+        var exited = AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, continued.Id)).OfType<AttemptEvent.Exited>().Single();
+
+        Assert.DoesNotContain("No project session found", exited.StderrTail, StringComparison.Ordinal);
+        Assert.Equal((true, false, Original), (exited.LostSession, continued.Resumed, continued.SessionId));
+    }
+
+    [Fact]
     public async Task Every_other_client_resumes_its_session_by_id_after_the_project_moved()
     {
         Install(_fakes, ClientId.ClaudeCode,

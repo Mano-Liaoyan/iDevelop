@@ -304,15 +304,14 @@ public class AttemptReducerTests
     {
         var earlier = new AttemptId(Guid.Parse("019aa000-0000-7000-8000-0000000000aa"));
         var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
-        const string notice = "No project session found with id 's-1'; creating a new session with that id\n";
-        AttemptRecord Run(ExecutionSettings settings, string stderr, params AttemptEvent[] later) => AttemptReducer.Replay(
-            [BuildRequested(First) with { Settings = settings, Prompt = "banana", Continues = new Continuation(earlier, "s-1"), Conversation = ConversationMode.Chat }, LaunchedAt1s,
-                Said(2, new SessionStarted("s-1")), Said(3, new Succeeded("Unknown")), Exit(4, 0, stderr), .. later])!;
+        AttemptRecord Run(bool lost, params AttemptEvent[] later) => AttemptReducer.Replay(
+            [BuildRequested(First) with { Settings = pi, Prompt = "banana", Continues = new Continuation(earlier, "s-1"), Conversation = ConversationMode.Chat }, LaunchedAt1s,
+                Said(2, new SessionStarted("s-1")), Said(3, new Succeeded("Unknown")), Exit(4, 0) with { LostSession = lost }, .. later])!;
 
-        Assert.Equal((false, "s-1"), (Run(pi, notice).Resumed, Run(pi, notice).SessionId));
-        Assert.True(Run(pi, "").Resumed);
-        Assert.True(Run(CodexHigh, notice).Resumed);
-        var later = Run(pi, "", NextTurn(5, "and an apple"), new Launched(T0.AddSeconds(5), 4243, T0.AddSeconds(5)), Said(6, new Succeeded("OK")), Exit(7, 0, notice));
+        Assert.Equal((false, "s-1"), (Run(lost: true).Resumed, Run(lost: true).SessionId));
+        Assert.True(Run(lost: false).Resumed);
+        var later = Run(false, NextTurn(5, "and an apple"), new Launched(T0.AddSeconds(5), 4243, T0.AddSeconds(5)), Said(6, new Succeeded("OK")),
+            Exit(7, 0) with { LostSession = true });
         Assert.Equal((2, true), (later.Turns.Count, later.Resumed));
     }
 
