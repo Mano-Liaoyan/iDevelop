@@ -36,7 +36,12 @@ internal static class Pi
             Folder = folder,
             Stdin = """{"id":"idevelop-skills","type":"get_commands"}""" + "\n",
             DoneWhen = IsCommandsResponse,
-        }, ParseSkills),
+        }, ParseSkills)
+        {
+            Annotate = (listing, folder, user) => listing is SkillListing.Listed listed && PiTrust.HidesProjectSkills(folder, user)
+                ? listed with { ProjectNotTrusted = true }
+                : listing,
+        },
     };
 
     private static LaunchArguments Launch(LaunchRequest request) => new(

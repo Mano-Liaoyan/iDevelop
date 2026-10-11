@@ -54,7 +54,7 @@ public sealed class SkillPickerTests : IDisposable
         // simplify is one of Claude Code's bundled skills.
         Assert.Equal([("find-skills", true), ("simplify", true), ("verify-idevelop", true)], Ticks(shell));
         Assert.Equal("Finds skills to install.", ToolTip.GetTip(Choice(shell, "find-skills")));
-        Assert.False(shell.Find<TextBlock>("SkillBuiltInNote").IsEffectivelyVisible);
+        Assert.False(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
 
         shell.Click(Choice(shell, "find-skills"));
 
@@ -96,8 +96,30 @@ public sealed class SkillPickerTests : IDisposable
         OpenList(shell);
 
         Assert.Equal([("verify-idevelop", true)], Ticks(shell));
-        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out.", shell.Find<TextBlock>("SkillBuiltInNote").Text);
-        Assert.True(shell.Find<TextBlock>("SkillBuiltInNote").IsEffectivelyVisible);
+        Assert.Equal("Claude Code doesn't list its built-in skills, so a choice leaves them out.", shell.Find<TextBlock>("SkillListFooter").Text);
+        Assert.True(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Pis_picker_says_the_projects_skills_appear_once_the_folder_is_trusted_in_pi()
+    {
+        var personal = _temp.Create("pi-skills");
+        Skill(personal, "find-skills", "Finds skills to install.");
+        _fakes.Install("pi", FakeRule.On("--mode", "rpc", "--no-session").Answer(
+                ("get_available_models", FakeRule.On().Replay(Fixture.Path("pi-rpc-models.jsonl"))),
+                ("get_commands", FakeRule.On().ListSkills("pi", [personal]))).WaitForStdinEnd(),
+            PiProvider("deepseek", "ready"), PiProvider("openai-codex", "invalid"));
+        var folder = _temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" }));
+        Skill(Path.Combine(folder, ".pi", "skills"), "deploy", "Deploys the site.");
+        var shell = Shell.Open(folder, _fakes.DiscoverAsync().Result);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        OpenList(shell);
+
+        Assert.Equal([("find-skills", true)], Ticks(shell));
+        Assert.Equal("This project's skills appear after the folder is trusted in Pi. Check agents again once it is.",
+            shell.Find<TextBlock>("SkillListFooter").Text);
+        Assert.True(shell.Find<TextBlock>("SkillListFooter").IsEffectivelyVisible);
     }
 
     [AvaloniaFact]

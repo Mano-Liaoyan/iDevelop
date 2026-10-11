@@ -109,6 +109,31 @@ public sealed class SkillListingTests : IDisposable
     }
 
     [Fact]
+    public async Task Pis_listing_says_when_it_leaves_out_the_projects_own_skills_until_the_folder_is_trusted_in_pi()
+    {
+        Skill(_personal, "find-skills", "Finds skills to install.");
+        Directory.CreateDirectory(Path.Combine(_project, ".agents", "skills"));
+        // The real Pi lists no project skill in a folder it does not trust, so this one lists only the person's own.
+        _fakes.Install("pi", On("--mode", "rpc", "--no-session").Answer(
+                ("get_available_models", On().Replay(Fixture.Path("pi-rpc-models.jsonl"))),
+                ("get_commands", On().ListSkills("pi", [_personal]))).WaitForStdinEnd(),
+            FakeAgents.PiProvider("deepseek", "ready"), FakeAgents.PiProvider("openai-codex", "ready"));
+        var directory = await _fakes.DiscoverAsync();
+
+        var untrusted = Assert.IsType<SkillListing.Listed>(await ListedAsync(directory, ClientId.Pi, _project));
+        Assert.True(untrusted.ProjectNotTrusted);
+        Assert.Equal(["find-skills"], untrusted.Skills.Select(skill => skill.Name));
+
+        var trust = Path.Combine(_fakes.User.PiAgent, "trust.json");
+        Directory.CreateDirectory(_fakes.User.PiAgent);
+        File.WriteAllText(trust, JsonSerializer.Serialize(new Dictionary<string, bool> { [PiTrust.RealPath(_project)] = true }));
+        await directory.RefreshAsync();
+        var trusted = await UntilAsync(directory, ClientId.Pi, _project, listing => listing is SkillListing.Listed { ProjectNotTrusted: false });
+
+        Assert.False(Assert.IsType<SkillListing.Listed>(trusted).ProjectNotTrusted);
+    }
+
+    [Fact]
     public async Task Antigravity_has_no_listing_and_a_client_that_is_not_ready_says_why()
     {
         _fakes.Install("claude", On("auth", "status").Print("""{"loggedIn":false}""").Exit(1));

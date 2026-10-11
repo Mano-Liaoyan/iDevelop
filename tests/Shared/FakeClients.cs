@@ -54,10 +54,13 @@ internal sealed class FakeClients : IDisposable
 
     public CommandResolver Resolver => CommandResolver.Create([Folder], OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []);
 
+    /// <summary>A fake home inside this folder, whose files the client directory reads in place of the person's.</summary>
+    public UserFolders User => new(Path.Combine(Folder, "home"), Path.Combine(Folder, "home", ".pi", "agent"));
+
     /// <summary>A client directory that searches only this folder, after its first refresh.</summary>
     public async Task<ClientDirectory> DiscoverAsync()
     {
-        var clients = new ClientDirectory(Resolver);
+        var clients = new ClientDirectory(Resolver) { User = User };
         // The headless tests block on this on the UI thread, so its end must not need that thread.
         await clients.RefreshAsync().ConfigureAwait(false);
         return clients;

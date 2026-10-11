@@ -40,6 +40,12 @@ public sealed class ClientDirectory
         Current = Clients.All.ToImmutableDictionary(id => id, ClientStatus (_) => new ClientStatus.Checking());
     }
 
+    /// <summary>
+    /// The person's own folders, whose client files a skill listing reads, such as Pi's trust store. The app reads them from
+    /// its environment. Without them, as in a test that sets none, a listing reads nothing there.
+    /// </summary>
+    public UserFolders? User { get; init; }
+
     /// <summary>Every client has an entry. Each starts as Checking and keeps its last status while a refresh runs.</summary>
     public ImmutableDictionary<ClientId, ClientStatus> Current { get; private set; }
 
@@ -152,6 +158,10 @@ public sealed class ClientDirectory
         {
             var output = await Probes.RunAsync(command, probe);
             listing = output.TimedOut ? new SkillListing.Unavailable(NoAnswer(Clients.Get(key.Client), probe)) : source.Parse(output);
+            if (User is { } user && source.Annotate is { } annotate)
+            {
+                listing = annotate(listing, key.Folder, user);
+            }
         }
         catch (LaunchException e)
         {

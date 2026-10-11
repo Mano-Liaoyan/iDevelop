@@ -286,9 +286,9 @@
                                   </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                               </ItemsControl>
-                              <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.BuiltInNote}"
-                                         IsVisible="{Binding Skills.BuiltInNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                         AutomationProperties.AutomationId="SkillBuiltInNote" />
+                              <TextBlock Classes="note" Margin="0,4" Text="{Binding Skills.ListFooter}"
+                                         IsVisible="{Binding Skills.ListFooter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                         AutomationProperties.AutomationId="SkillListFooter" />
                             </StackPanel>
                           </Border>
                           <TextBlock Classes="note" Text="{Binding Skills.Note}"

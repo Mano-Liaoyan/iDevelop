@@ -26,8 +26,15 @@ public abstract record SkillListing
         /// </summary>
         public bool LeavesOutBuiltIns { get; init; }
 
+        /// <summary>
+        /// The client leaves out the project's own skills because the person has not trusted the folder in it, as Pi does
+        /// (#93, owner decision 2026-10-11). They appear once the folder is trusted.
+        /// </summary>
+        public bool ProjectNotTrusted { get; init; }
+
         // ImmutableArray compares by reference, so equality compares the skills themselves.
-        public bool Equals(Listed? other) => other is not null && Skills.SequenceEqual(other.Skills) && LeavesOutBuiltIns == other.LeavesOutBuiltIns;
+        public bool Equals(Listed? other) => other is not null && Skills.SequenceEqual(other.Skills) && LeavesOutBuiltIns == other.LeavesOutBuiltIns
+            && ProjectNotTrusted == other.ProjectNotTrusted;
 
         public override int GetHashCode() => Skills.Length;
     }
@@ -40,7 +47,11 @@ public abstract record SkillListing
 }
 
 /// <summary>How a client lists the skills it loads in a folder without a model turn.</summary>
-internal sealed record SkillSource(Func<string, Probe> Probe, Func<ProbeOutput, SkillListing> Parse);
+internal sealed record SkillSource(Func<string, Probe> Probe, Func<ProbeOutput, SkillListing> Parse)
+{
+    /// <summary>What the listing adds from the person's own folders about the project folder, such as Pi's trust in it.</summary>
+    public Func<SkillListing, string, UserFolders, SkillListing>? Annotate { get; init; }
+}
 
 /// <summary>What one launch passes for a node's choice: the chosen skills that the client lists, and the ones it lists that were not chosen.</summary>
 internal sealed record SkillLaunch(ImmutableArray<SkillOption> Chosen, ImmutableArray<SkillOption> Others)
