@@ -82,7 +82,7 @@ public sealed class ConversationViewModel : ObservableObject, IDisposable
         _stopAndSend = new RelayCommand(() => _ = SendAsync(stopTurn: true), () => CanSend && ShowsStopAndSend);
         _cancel = new RelayCommand(() => _ = RunAsync(turn => _session.CancelAsync(turn, CancellationToken.None)), () => ShowsCancel && !_busy);
         _markDone = new RelayCommand(() => _ = RunAsync(turn => _session.MarkDoneAsync(turn, CancellationToken.None)), () => ShowsMarkDone && !_busy);
-        _newConversation = new RelayCommand(() => _ = RunAsync(_ => _session.StartNewConversationAsync(CancellationToken.None)), () => ShowsNewConversation && !_busy);
+        _newConversation = new RelayCommand(() => _ = RunAsync(_ => _session.StartNewConversationAsync(Target.Canvas.Planning(Target.Task), CancellationToken.None)), () => ShowsNewConversation && !_busy);
         _openInTerminal = new RelayCommand(() => _ = OpenInTerminalAsync(), () => ShowsTerminal && _snapshot.Actions.Terminal.Enabled && !_busy);
         _loadEarlier = new RelayCommand(() =>
         {

@@ -232,13 +232,17 @@ public sealed class SessionContinuityTests : IDisposable
         var old = Path.Combine(Path.GetDirectoryName(_project)!, "old-project");
         var earlier = waiting ? PlantWaiting(old) : PlantSettled(old);
         var task = waiting ? SayHi() with { Conversation = ConversationMode.Chat } : SayHi();
-        await using var runs = ProjectRuns.Open(_project, await _fakes.DiscoverAsync());
+        var clients = await _fakes.DiscoverAsync();
+        await using var runs = ProjectRuns.Open(_project, clients);
         runs.Follow(Workflow.Empty(WorkflowId.New()).Must(TestNodes.Place(task, new CanvasPoint(0, 0))));
         using var session = runs.OpenConversation(SayHiId);
         Assert.Equal((Moved.Problem, true), (runs.CheckSend(task), runs.CanStartNewConversation(task)));
+        // The task's own prompt, exactly as when the task starts.
+        var start = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(task, _project, clients.Current)).Plan.Request.Prompt;
+        Assert.StartsWith("# Say hi", start, StringComparison.Ordinal);
         Assert.Equal((true, false), (session.Snapshot.Actions.NewConversation.Enabled, session.Snapshot.Actions.StartsNewConversation));
 
-        Assert.Equal(CommandOutcome.Applied, (await session.StartNewConversationAsync(default)).Outcome);
+        Assert.Equal(CommandOutcome.Applied, (await session.StartNewConversationAsync(null, default)).Outcome);
 
         Assert.Equal((null, false, true), (runs.CheckSend(task), runs.CanStartNewConversation(task), runs.StartsNewConversation(SayHiId)));
         Assert.Equal((true, false, true), (session.Snapshot.Actions.Send.Enabled, session.Snapshot.Actions.NewConversation.Enabled,
@@ -247,16 +251,17 @@ public sealed class SessionContinuityTests : IDisposable
 
         Assert.False(File.Exists(Evidence("resumed.json")), "Pi resumed the old session.");
         Assert.Equal(PiTurn, Recorded("fresh.json"));
-        Assert.Equal("Start over: which word?", File.ReadAllText(Evidence("fresh.txt")));
+        var sent = start.TrimEnd('\n') + "\n\nStart over: which word?";
+        Assert.Equal(sent, File.ReadAllText(Evidence("fresh.txt")));
         var requested = Assert.IsType<AttemptEvent.Requested>(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, fresh.Id))[0]);
-        Assert.Equal((null, true, _project), (requested.Continues, requested.PersonPrompt, requested.WorkingFolder));
+        Assert.Equal((null, sent, "Start over: which word?", _project), (requested.Continues, requested.Prompt, requested.PersonMessage, requested.WorkingFolder));
         Assert.Equal((renewed, (bool?)null, false), (fresh.SessionId, fresh.Resumed, runs.StartsNewConversation(SayHiId)));
         Assert.Equal("Start over: which word?", fresh.Turns[0].Message);
         var earlierRecord = AttemptReducer.Replay(AttemptLog.Read(AttemptLog.FolderOf(Path.Combine(_project, ".idp", "attempts"), SayHiId, earlier)))!;
         Assert.Equal(waiting ? AttemptStatus.Cancelled : AttemptStatus.Succeeded, earlierRecord.Status);
         var page = Assert.IsType<HistoryResult.Page>(await session.ReadPageAsync(fresh.Id, new HistoryQuery.Latest(), 50, default));
-        Assert.Equal([(MessageAuthor.Person, "Start over: which word?"), (MessageAuthor.Agent, "Started over.")],
-            page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Message>().Select(message => (message.Author, message.Text)).Take(2));
+        Assert.Equal([(MessageAuthor.Application, start.TrimEnd('\n')), (MessageAuthor.Person, "Start over: which word?"), (MessageAuthor.Agent, "Started over.")],
+            page.Entries.Select(entry => entry.Content).OfType<ConversationContent.Message>().Select(message => (message.Author, message.Text)).Take(3));
     }
 
     [Fact]

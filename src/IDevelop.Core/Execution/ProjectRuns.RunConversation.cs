@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -166,7 +167,7 @@ public sealed partial class ProjectRuns
                 : _run.Cancel(Address, Task, expected, ct);
         }
 
-        public Task<ConversationCommandResult> StartNewConversationAsync(CancellationToken ct) => ct.IsCancellationRequested
+        public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct) => ct.IsCancellationRequested
             ? AsyncTask.FromCanceled<ConversationCommandResult>(ct)
             : AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "A workflow run owns this task. Retry starts a new attempt."));
 

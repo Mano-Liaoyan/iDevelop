@@ -39,7 +39,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     private ImmutableDictionary<TaskId, StartProblem> _stalls = ImmutableDictionary<TaskId, StartProblem>.Empty;
 
     /// <summary>The tasks whose next message starts a new conversation, as the person chose.</summary>
-    private ImmutableHashSet<TaskId> _newConversations = [];
+    private ImmutableDictionary<TaskId, PlanningContext?> _newConversations = ImmutableDictionary<TaskId, PlanningContext?>.Empty;
 
     private ProjectRuns(string projectFolder, ClientDirectory clients, ImmutableDictionary<TaskId, AttemptRecord> latest, ImmutableArray<string> warnings,
         ImmutableDictionary<(TaskId Task, AttemptId Attempt), long> logRevisions, HostQuestions questions)
@@ -320,7 +320,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                     taken.Lock.Dispose();
                     return new SendResult.Refused(lockedTarget);
                 case LockTake.Taken taken:
-                    (result, run) = _newConversations.Contains(task.Id) ? StartNewConversation(task, text, taken.Lock, tree)
+                    (result, run) = _newConversations.ContainsKey(task.Id) ? StartNewConversation(task, text, taken.Lock, tree)
                         : Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting
                             ? Answer(task, text, waiting, taken.Lock, tree)
                             : Continue(task, text, taken.Lock, tree);
@@ -374,9 +374,9 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 return new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle));
             }
 
-            if (_newConversations.Contains(task.Id))
+            if (_newConversations.TryGetValue(task.Id, out var planning))
             {
-                return StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(null, ""), questions: _questions) is StartVerdict.Blocked fresh
+                return StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, questions: _questions) is StartVerdict.Blocked fresh
                     ? new SendProblem.CannotStart(fresh.Problem) : null;
             }
 
@@ -877,7 +877,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// Makes the task's next message start a new conversation in a fresh session, while its conversation cannot continue.
     /// False when it can continue, or when the person already chose this.
     /// </summary>
-    public bool StartNewConversation(TaskDefinition task)
+    /// <param name="planning">What a node whose agent proposes may fill and place, as its Run passes it.</param>
+    public bool StartNewConversation(TaskDefinition task, PlanningContext? planning = null)
     {
         lock (_gate)
         {
@@ -886,7 +887,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 return false;
             }
 
-            _newConversations = _newConversations.Add(task.Id);
+            _newConversations = _newConversations.SetItem(task.Id, planning);
         }
 
         NotifyChanged(task.Id);
@@ -898,13 +899,14 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     {
         lock (_gate)
         {
-            return _newConversations.Contains(task);
+            return _newConversations.ContainsKey(task);
         }
     }
 
     /// <summary>
-    /// Starts a new conversation with the message as its first prompt, in a fresh session. A waiting attempt that could not
-    /// go on is cancelled first. Called under the gate with the task's lock, which it releases on a refusal.
+    /// Starts a new conversation in a fresh session. Its first prompt is the task's own prompt, exactly as when the task
+    /// starts, followed by the person's message. A waiting attempt that could not go on is cancelled first. Called under the
+    /// gate with the task's lock, which it releases on a refusal.
     /// </summary>
     private (SendResult Result, ActiveRun? Run) StartNewConversation(TaskDefinition task, string message, StandaloneLease held, string? tree)
     {
@@ -914,13 +916,16 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             return (new SendResult.Refused(new SendProblem.CannotStart(new StartProblem.UnderReview(review.TaskTitle))), null);
         }
 
-        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, new Resumption(null, message), questions: _questions);
+        var planning = _newConversations.GetValueOrDefault(task.Id);
+        var verdict = StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, questions: _questions);
         if (verdict is StartVerdict.Blocked blocked)
         {
             held.Dispose();
             return (new SendResult.Refused(new SendProblem.CannotStart(blocked.Problem)), null);
         }
 
+        var plan = ((StartVerdict.Allowed)verdict).Plan;
+        plan = plan with { Request = plan.Request with { Prompt = $"{plan.Request.Prompt.TrimEnd('\n')}\n\n{message}" } };
         if (Latest.GetValueOrDefault(task.Id) is { Status: AttemptStatus.WaitingForInput } waiting)
         {
             var cancel = new AttemptEvent.CancelRequested(TimeProvider.GetUtcNow());
@@ -937,7 +942,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             }
         }
 
-        var (result, run) = RecordAndLaunch(task, ((StartVerdict.Allowed)verdict).Plan, held, continues: null, tree, personPrompt: true);
+        var handles = task.Blueprint.Work is WorkSpec.Agent { Proposes: true } ? (planning ?? PlanningContext.None).Handles(Guid.CreateVersion7()) : null;
+        var (result, run) = RecordAndLaunch(task, plan, held, continues: null, tree, handles, personMessage: message);
         return result switch
         {
             StartResult.Started started => (new SendResult.Continued(started.Attempt), run),
@@ -1096,7 +1102,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// </summary>
     private (StartResult Result, ActiveRun? Run) RecordAndLaunch(
         TaskDefinition task, LaunchPlan plan, StandaloneLease held, Continuation? continues, string? tree, PlanningHandles? planning = null,
-        TaskId? subject = null, ReviewLink? fix = null, bool personPrompt = false)
+        TaskId? subject = null, ReviewLink? fix = null, string? personMessage = null)
     {
         AttemptLog log;
         AttemptEvent.Requested requested;
@@ -1114,7 +1120,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 ReadOnly = plan.Request.ReadOnly,
                 Subject = subject,
                 Fix = fix,
-                PersonPrompt = personPrompt,
+                PersonMessage = personMessage,
                 StandaloneCapture = continues is null
                     ? JsonSerializer.SerializeToElement(new StandaloneCapture(task, ""), RunJournal.Options) : null,
             };

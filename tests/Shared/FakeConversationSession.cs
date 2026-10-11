@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -110,7 +111,7 @@ internal sealed class FakeConversationSession(TaskId task) : IConversationSessio
         return AsyncTask.FromResult(_disposed ? new TerminalResult.Refused(new TerminalProblem.ClosedOwner()) : Terminal(call));
     }
 
-    public Task<ConversationCommandResult> StartNewConversationAsync(CancellationToken ct)
+    public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Calls.Add(new Call.NewConversation(ct));

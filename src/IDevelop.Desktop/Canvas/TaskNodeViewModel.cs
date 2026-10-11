@@ -80,7 +80,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         _openInTerminal = new RelayCommand(OpenInTerminal,
             () => !IsRunOwned && _attempt is { Status: AttemptStatus.WaitingForInput, SessionId: not null } attempt && !_canvas.Runs.SessionFolderMoved(attempt));
         _markDone = new RelayCommand(MarkDone, () => StandaloneWaiting);
-        _newConversation = new RelayCommand(() => _canvas.Runs.StartNewConversation(_task), () => CanStartNewConversation);
+        _newConversation = new RelayCommand(() => _canvas.Runs.StartNewConversation(_task, _canvas.Planning(Id)), () => CanStartNewConversation);
         _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => RunFix is { } fix
             ? CanChooseRunFix && fix.ContinueUnavailable is null : RunTask is null && _problem is StartProblem.FixInterrupted { CanContinue: true });
         _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => RunFix is not null ? CanChooseRunFix : RunTask is null && _problem is StartProblem.FixInterrupted);

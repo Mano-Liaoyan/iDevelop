@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 using AsyncTask = System.Threading.Tasks.Task;
 
@@ -229,7 +230,7 @@ public sealed partial class ProjectRuns
                 result.Applied ? "The cancellation was recorded." : result.Problem is { } problem ? StartReason(problem) : "The attempt is no longer available.");
         }
 
-        public Task<ConversationCommandResult> StartNewConversationAsync(CancellationToken ct)
+        public Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             if (Unavailable)
@@ -242,7 +243,7 @@ public sealed partial class ProjectRuns
                 return AsyncTask.FromResult(new ConversationCommandResult(CommandOutcome.Unavailable, "The task no longer exists."));
             }
 
-            return AsyncTask.FromResult(_owner.StartNewConversation(task)
+            return AsyncTask.FromResult(_owner.StartNewConversation(task, planning)
                 ? new ConversationCommandResult(CommandOutcome.Applied, "Your next message starts a new conversation.")
                 : new ConversationCommandResult(CommandOutcome.Refused, "The conversation can continue."));
         }

@@ -59,6 +59,39 @@ public sealed class PlanningTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [Fact]
+    public async Task A_new_conversation_of_an_Architect_whose_session_was_lost_opens_with_its_planning_prompt_then_the_message()
+    {
+        Install(_fakes, ClientId.Codex,
+            Fresh(ClientId.Codex).CaptureStdin(Evidence("prompt.txt")).Print(SessionLine(ClientId.Codex, Session)).Print(ReplyLines(ClientId.Codex, FillsBothAndAddsOne)));
+        var clients = await _fakes.DiscoverAsync();
+        var workflow = ArchitectWithTwoSlots(ConversationMode.Autonomous);
+        var planner = workflow.Tasks[Architect];
+        var planning = PlanningContext.For(workflow, Architect, BuiltInBlueprints.All, _ => false);
+        var t0 = new DateTimeOffset(2026, 10, 9, 5, 0, 0, TimeSpan.Zero);
+        using (var log = AttemptLog.Create(DataFolder.Attempts(_project), new AttemptEvent.Requested(t0, AttemptId.New(), Architect, planner.Title,
+            planner.Execution!, "# Design export\n", "codex", ["app-server"])))
+        {
+            log.Append(new AttemptEvent.Launched(t0.AddSeconds(1), 4242, t0.AddSeconds(1)));
+            log.Append(new AttemptEvent.Agent(t0.AddSeconds(2), new AgentEvent.Failed("The model is busy.")));
+            log.Append(new AttemptEvent.Exited(t0.AddSeconds(3), 1, ""));
+        }
+
+        AttemptRecord record;
+        await using (var runs = ProjectRuns.Open(_project, clients))
+        {
+            runs.Follow(workflow);
+            Assert.Equal(new SendProblem.NoSession(ClientId.Codex), runs.CheckSend(planner));
+            Assert.True(runs.StartNewConversation(planner, planning));
+            record = await Settles(runs, async () => await runs.SendAsync(planner, "Plan it again, smaller.", stopTurn: false));
+        }
+
+        var start = Assert.IsType<StartVerdict.Allowed>(StartCheck.Evaluate(planner, _project, clients.Current, planning: planning)).Plan.Request.Prompt;
+        Assert.Contains("- slot-1: \"Backend\", type Implement.", start);
+        Assert.Equal(start.TrimEnd('\n') + "\n\nPlan it again, smaller.", File.ReadAllText(Evidence("prompt.txt")));
+        Assert.NotNull(record.Planning);
+    }
+
+    [Fact]
     public async Task An_Architect_with_two_drawn_empty_nodes_fills_both_and_adds_one()
     {
         Install(_fakes, ClientId.Codex,

@@ -218,7 +218,9 @@ public sealed class ConversationTests : IDisposable
         shell.Press(Key.Enter, RawInputModifiers.Control);
 
         shell.WaitUntil(() => File.Exists(Path.Combine(_evidence, "fresh.txt")) && shell.Find<TextBox>("LastRunResult").Text == "Started over.", "a fresh session answers");
-        Assert.Equal("Start over: which fruit?", File.ReadAllText(Path.Combine(_evidence, "fresh.txt")));
+        var sent = File.ReadAllText(Path.Combine(_evidence, "fresh.txt"));
+        Assert.StartsWith("# Say hi\n\nCreate hello.txt containing hi.", sent, StringComparison.Ordinal);
+        Assert.EndsWith("\n\nStart over: which fruit?", sent, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_evidence, "resumed.txt")));
     }
 

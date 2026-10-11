@@ -91,8 +91,17 @@ internal static class ConversationHistory
                 case AttemptEvent.Requested requested when before is null:
                     opening = record.Conversation;
                     Marker("attempt", $"Attempt {record.Id}\n{Settings(record.Requested, record.Conversation)}");
-                    Message(!requested.PersonPrompt && (requested.Continues is null || requested.Fix is not null || requested.Subject is not null)
-                        ? MessageAuthor.Application : MessageAuthor.Person, requested.Prompt, MessageState.Submitted, "prompt");
+                    if (requested.PersonMessage is { } started && requested.Prompt.EndsWith(started, StringComparison.Ordinal))
+                    {
+                        // A new conversation: the task's own prompt, then the person's message that started it.
+                        Message(MessageAuthor.Application, requested.Prompt[..^started.Length].TrimEnd('\n'), MessageState.Submitted, "prompt");
+                        Message(MessageAuthor.Person, started, MessageState.Submitted, "message");
+                    }
+                    else
+                    {
+                        Message(requested.Continues is null || requested.Fix is not null || requested.Subject is not null
+                            ? MessageAuthor.Application : MessageAuthor.Person, requested.Prompt, MessageState.Submitted, "prompt");
+                    }
                     break;
                 case AttemptEvent.MessageQueued queued:
                     var queueId = queued.Id ?? $"legacy:{record.Id}:{before?.AppliedEvents ?? line.Position}";

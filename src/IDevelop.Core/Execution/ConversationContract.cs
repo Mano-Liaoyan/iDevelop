@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json.Serialization;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -189,8 +190,11 @@ public interface IConversationSession : IDisposable
 
     Task<TerminalResult> OpenInTerminalAsync(TurnKey expected, CancellationToken ct);
 
-    /// <summary>Makes the next message start a fresh session, while the conversation cannot continue.</summary>
-    Task<ConversationCommandResult> StartNewConversationAsync(CancellationToken ct);
+    /// <summary>
+    /// Makes the next message start a fresh session, while the conversation cannot continue. Its first prompt is the task's
+    /// own prompt, which reads <paramref name="planning"/> as the task's Run does, followed by the message.
+    /// </summary>
+    Task<ConversationCommandResult> StartNewConversationAsync(PlanningContext? planning, CancellationToken ct);
 }
 
 public abstract record HostQuestions
