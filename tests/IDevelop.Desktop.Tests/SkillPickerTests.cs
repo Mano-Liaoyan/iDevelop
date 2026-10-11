@@ -187,8 +187,29 @@ public sealed class SkillPickerTests : IDisposable
         shell.Click(Choice(shell, "probe-alpha"));
 
         var note = Assert.Single(Shell.ById<TextBlock>(shell.Window, "SkillLetsIn"), text => text.IsEffectivelyVisible);
-        Assert.Equal("Also lets in probeplug:probe-alpha.", note.Text);
+        Assert.Equal("Also lets in probeplug:probe-alpha.", Visible(note.Text));
         Assert.Same(Choice(shell, "probe-alpha"), note.FindAncestorOfType<CheckBox>());
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void What_a_chosen_skill_lets_in_wraps_only_between_names(double width)
+    {
+        Skill(_personal, "code-review", "Reviews.");
+        Skill(_personal, "code-review-plugin", "Reviews a pull request.", name: "code-review:code-review");
+        var shell = Open(Project(TaskAt(Design, "Design", 105, 90, Claude with { Skills = ["code-review"] })));
+        shell.SizeInspector(width);
+
+        OpenList(shell);
+        shell.Render();
+
+        var note = Assert.Single(Shell.ById<TextBlock>(shell.Window, "SkillLetsIn"), text => text.IsEffectivelyVisible);
+        Assert.Equal("Also lets in code-review:code-review.", Visible(note.Text));
+        // A line that is not the first starts after a space, never inside a name such as after "code-".
+        Assert.All(note.TextLayout.TextLines.Skip(1), line => Assert.True(note.Text![line.FirstTextSourceIndex - 1] == ' ',
+            $"At {width} px a line starts at \"{Visible(note.Text![line.FirstTextSourceIndex..])}\"."));
     }
 
     [AvaloniaFact]
@@ -293,6 +314,9 @@ public sealed class SkillPickerTests : IDisposable
         shell.Click(shell.Find<ToggleButton>("TaskSkills"));
         shell.WaitUntil(() => Shell.ById<CheckBox>(shell.Window, "SkillChoice").Any(), "the listed skills");
     }
+
+    /// <summary>The text without its word joiners, which only keep a name on one line.</summary>
+    private static string? Visible(string? text) => text?.Replace("\u2060", "", StringComparison.Ordinal);
 
     private static string Summary(Shell shell) => Shell.TextOf(shell.Find<ToggleButton>("TaskSkills"));
 

@@ -160,8 +160,13 @@ public sealed class SkillChoiceViewModel(SkillPickerViewModel picker, SkillEntry
 
     public bool IsInstalled => entry.Installed;
 
-    /// <summary>"Also lets in probeplug:probe-alpha." for a chosen name that Claude Code also matches in plugin skills, or null.</summary>
-    public string? LetsIn => entry.LetsIn.IsEmpty ? null : $"Also lets in {Join(entry.LetsIn)}.";
+    /// <summary>
+    /// "Also lets in probeplug:probe-alpha." for a chosen name that Claude Code also matches in plugin skills, or null. It
+    /// wraps only between names: a word joiner after each hyphen keeps a name on one line while it fits one.
+    /// </summary>
+    public string? LetsIn => entry.LetsIn.IsEmpty ? null : $"Also lets in {Join([.. entry.LetsIn.Select(Unbroken)])}.";
+
+    private static string Unbroken(string name) => name.Replace("-", "-\u2060", StringComparison.Ordinal);
 
     private static string Join(IReadOnlyList<string> names) =>
         names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
