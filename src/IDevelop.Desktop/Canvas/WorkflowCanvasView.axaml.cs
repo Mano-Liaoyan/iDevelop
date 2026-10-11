@@ -65,16 +65,17 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
         {
             Classes.Set("compact", CanvasChrome.IsCompact(e.NewSize));
             MinimapPanel.IsVisible = CanvasChrome.ShowsMinimap(e.NewSize);
+            ExpandAllSlot.IsVisible = MinimapPanel.IsVisible;
         };
     }
 
     /// <inheritdoc />
     public CanvasPoint Pointer => new(Editor.MouseLocation.X, Editor.MouseLocation.Y);
 
-    /// <summary>Centers the canvas on a task chosen in the sidebar when its card is not wholly in view.</summary>
+    /// <summary>Centers the canvas on a task chosen in the sidebar when its card, where and as large as it shows, is not wholly in view.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node)
     {
-        var card = new Rect(node.Location, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight));
+        var card = node.DisplayRect;
         if (!new Rect(Editor.ViewportLocation, Editor.ViewportSize).Contains(card))
         {
             // Nodify's animated pan moves the editor alone, so the view model, which places new tasks, would keep
@@ -178,7 +179,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     {
         var size = new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight);
         return _viewModel is not { } canvas ? []
-            : canvas.Nodes.Select(node => new Rect(node.Location, size)).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
+            // A card shows where the expanded cards' layout moves it, and as large as it shows (ADR 0024).
+            : canvas.Nodes.Select(node => node.DisplayRect).Concat(canvas.Ghosts.OfType<GhostCardViewModel>().Select(ghost => new Rect(ghost.Location, size)));
     }
 
     public void ZoomToActual() => Editor.ZoomAtPosition(1 / Editor.ViewportZoom, new Rect(Editor.ViewportLocation, Editor.ViewportSize).Center);
@@ -391,7 +393,8 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     // Nodify's own key gestures never fire, so the canvas's shortcuts are read here. A box's keys stay its own.
     private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_viewModel is { } canvas && e.Source is not TextBox)
+        // A key typed in a text box, or on an expanded card's answer box and pickers, stays with it (ADR 0024).
+        if (_viewModel is { } canvas && e.Source is not TextBox && !(e.Source is Visual source && source.FindAncestorOfType<CardDetail>(includeSelf: true) is not null))
         {
             e.Handled = Shortcut(canvas, e.Key, e.KeyModifiers);
         }

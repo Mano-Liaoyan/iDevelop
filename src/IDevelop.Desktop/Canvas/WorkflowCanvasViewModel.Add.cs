@@ -177,17 +177,23 @@ public sealed partial class WorkflowCanvasViewModel
 
     internal ConnectionMenuViewModel ConnectionMenu(ConnectionViewModel connection, CanvasPoint point) => new(this, connection, point);
 
-    /// <summary>Whether no card covers the point, so a click or a drop there is on the canvas itself.</summary>
-    internal bool IsEmptyAt(CanvasPoint point) => !Workflow.Positions.Values.Any(position =>
-        point.X >= position.X && point.X < position.X + TaskCardWidth && point.Y >= position.Y && point.Y < position.Y + TaskCardHeight);
+    /// <summary>
+    /// Whether no card covers the point where the cards show, so a click or a drop there is on the canvas itself. An
+    /// expanded card covers its whole body (ADR 0024).
+    /// </summary>
+    internal bool IsEmptyAt(CanvasPoint point) => !Nodes.Select(node => node.DisplayRect).Any(card =>
+        point.X >= card.X && point.X < card.Right && point.Y >= card.Y && point.Y < card.Bottom);
 
-    /// <summary>While the Add popover offers a node for a dropped wire, the wire stays from its port to the drop.</summary>
+    /// <summary>
+    /// While the Add popover offers a node for a dropped wire, the wire stays from its port, where the card shows it, to the
+    /// drop. The editor keeps a port's anchor current from the moment a wire leaves it.
+    /// </summary>
     private DanglingWireViewModel? DanglingWire() => AddNode?.Target switch
     {
         AddTarget.FromOutput from when _nodes.TryGetValue(from.Source, out var source) =>
-            DanglingWireViewModel.Between(source.Location + OutputPortCenter, ToPoint(from.Drop), source.Kind),
+            DanglingWireViewModel.Between(source.Output.Anchor, ToPoint(from.Drop), source.Kind),
         AddTarget.ToInput to when _nodes.TryGetValue(to.Target, out var target) =>
-            DanglingWireViewModel.Between(target.Location + InputPortCenter, ToPoint(to.Drop), target.Kind),
+            DanglingWireViewModel.Between(target.Input.Anchor, ToPoint(to.Drop), target.Kind),
         _ => null,
     };
 

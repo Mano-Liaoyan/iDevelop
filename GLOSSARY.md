@@ -150,3 +150,12 @@ _Avoid_: edit, which changes only the document
 **Skill choice**:
 The skills a node's agent may use, by its client's own names, kept in the task's agent settings. No choice means every skill the client loads. A choice holds exactly its skills: an allow-list for Claude Code and Pi, and for Codex every other listed skill turned off. Antigravity CLI takes none. A chosen skill that is no longer installed is skipped, and a skill list that can't be read leaves the choice unchecked rather than stopping the task.
 _Avoid_: allow-list, which only two clients take
+
+### Canvas
+
+**Expanded card**:
+A task's card unfolded in place to show what goes on now, its agent's pickers, and its actions. Expansion is this machine's view of the workflow: the cards around it slide aside on screen only, and the workflow's positions and file never change ([ADR 0024](docs/adr/0024-an-expanded-card-unfolds-in-place-and-stays-expanded-on-this-machine.md)).
+_Avoid_: expanded node, and an expanded workflow, which is a sidebar row that shows its tasks
+
+**Peek**:
+A collapsed card's tooltip, a read-only look at what its expanded card shows first.

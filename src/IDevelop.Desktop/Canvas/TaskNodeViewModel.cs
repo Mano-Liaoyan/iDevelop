@@ -92,6 +92,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeConversation();
         InitializeRun();
         InitializeStanding();
+        InitializeExpansion();
     }
 
     public TaskId Id => _task.Id;
@@ -651,6 +652,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     /// <summary>Keeps the agent with another skill choice, as the node's skill picker makes it.</summary>
     internal void SetSkills(ExecutionSettings settings) => SetExecution(settings);
+
+    partial void InitializeExpansion();
 
     private void SetExecution(ExecutionSettings? settings)
     {
