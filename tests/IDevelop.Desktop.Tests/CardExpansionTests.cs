@@ -183,6 +183,41 @@ public sealed class CardExpansionTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_wire_dropped_on_an_expanded_cards_body_lands_on_the_card_not_on_empty_canvas()
+    {
+        var shell = Shell.Open(_temp.Seed(
+            TaskAt(Design, "Design", 105, 90, Codex, "Propose a JSON layout."), TaskAt(Build, "Build", 105, 520, Codex, "Parse it.")));
+        var canvas = shell.Window.ViewModel.Canvas!;
+        var design = canvas.Nodes.Single(node => node.Title == "Design");
+        shell.Click(shell.InCard<ToggleButton>("Design", "CardExpand"));
+        var body = design.DisplayLocation + new Vector(170, 160);
+
+        shell.Drag(shell.Thumb(shell.Output("Build")), Screen(shell, body));
+
+        Assert.False(shell.AddPopoverIsOpen);
+        Assert.False(canvas.IsEmptyAt(new CanvasPoint(body.X, body.Y)));
+    }
+
+    [AvaloniaFact]
+    public void A_task_chosen_in_the_sidebar_comes_into_view_as_large_as_its_expanded_card_shows()
+    {
+        var shell = Shell.Open(Diamond());
+        var canvas = shell.Window.ViewModel.Canvas!;
+        shell.Click(shell.InCard<ToggleButton>("Docs", "CardExpand"));
+        var docs = canvas.Nodes.Single(node => node.Title == "Docs");
+        var view = shell.Window.GetVisualDescendants().OfType<WorkflowCanvasView>().Single();
+        // Docs's header shows at the viewport's bottom edge, and its body runs below the viewport.
+        shell.Editor.ViewportLocation = new Point(docs.Location.X - 40, docs.Location.Y + 100 - shell.Editor.ViewportSize.Height);
+        shell.Render();
+
+        view.BringIntoViewIfHidden(docs);
+        shell.Render();
+
+        Assert.True(new Rect(shell.Editor.ViewportLocation, shell.Editor.ViewportSize).Contains(docs.DisplayRect),
+            $"The viewport {new Rect(shell.Editor.ViewportLocation, shell.Editor.ViewportSize)} cuts {docs.DisplayRect}.");
+    }
+
+    [AvaloniaFact]
     public void Keys_typed_in_the_answer_box_and_on_the_agent_pickers_stay_with_them_and_never_reach_the_canvas()
     {
         using var f = new WorkflowRunFixture(Task(Design, "A", 105, ConversationMode.Chat));

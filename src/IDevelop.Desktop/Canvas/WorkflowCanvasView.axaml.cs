@@ -72,10 +72,10 @@ public partial class WorkflowCanvasView : UserControl, ICanvasView
     /// <inheritdoc />
     public CanvasPoint Pointer => new(Editor.MouseLocation.X, Editor.MouseLocation.Y);
 
-    /// <summary>Centers the canvas on a task chosen in the sidebar when its card is not wholly in view.</summary>
+    /// <summary>Centers the canvas on a task chosen in the sidebar when its card, where and as large as it shows, is not wholly in view.</summary>
     internal void BringIntoViewIfHidden(TaskNodeViewModel node)
     {
-        var card = new Rect(node.Location, new Size(WorkflowCanvasViewModel.TaskCardWidth, WorkflowCanvasViewModel.TaskCardHeight));
+        var card = node.DisplayRect;
         if (!new Rect(Editor.ViewportLocation, Editor.ViewportSize).Contains(card))
         {
             // Nodify's animated pan moves the editor alone, so the view model, which places new tasks, would keep
