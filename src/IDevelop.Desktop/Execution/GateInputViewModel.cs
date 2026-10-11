@@ -17,8 +17,11 @@ public sealed class GateInputViewModel
         Findings = input.Review is { } review ? [.. review.Findings.Select(finding => new FindingViewModel(finding))] : [];
     }
 
-    /// <summary>"## A (dependency)" and the input's report, or only the heading of a review, whose conclusion follows it.</summary>
-    public string Markdown => IsReview ? $"## {_input.Heading}" : _input.Markdown;
+    /// <summary>The input's heading, such as "Review (dependency)": its task's title and connection kind.</summary>
+    public string Heading => _input.Heading;
+
+    /// <summary>"## A (dependency)" and the input's report, which a review shows only behind its disclosure.</summary>
+    public string Markdown => _input.Markdown;
 
     public bool IsReview => _input.Review is not null;
 

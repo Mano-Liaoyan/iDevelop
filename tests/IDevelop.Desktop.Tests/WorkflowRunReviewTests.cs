@@ -108,8 +108,9 @@ public sealed class WorkflowRunReviewTests
         shell.WaitUntil(() => shell.Has<TextBlock>("GateVerdict") && shell.Find<TextBlock>("GateVerdict").IsEffectivelyVisible,
             "the panel reads the review that approving hands on");
 
-        Assert.Equal(["Review (dependency)"], ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateReport")));
-        Assert.Equal("Approved in round 2", shell.Text("GateVerdict"));
+        // No Markdown, and so no JSON, shows before the disclosure opens.
+        Assert.Empty(ConversationFixtures.Blocks(shell.Find<ItemsControl>("GateInputs")));
+        Assert.Equal(("Review (dependency)", "Approved in round 2"), (shell.Text("GateReviewHeading"), shell.Text("GateVerdict")));
         Assert.Equal(
             ["Finding 1 · Resolved", "High", "calc.txt:1", "add subtracts.", "Implementer: It adds now.",
                 "Finding 2 · Withdrawn", "The ticket asks for no comment.", "Implementer: Not asked."],
