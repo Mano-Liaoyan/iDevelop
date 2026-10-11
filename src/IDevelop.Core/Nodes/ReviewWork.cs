@@ -18,10 +18,12 @@ public sealed class ReviewWork : IConverses
     internal const string VerdictContract =
         "End your final message with your verdict in this block, and nothing after it:\n\n" +
         "```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", " +
-        "\"findings\": [{\"id\": \"1\", \"text\": \"what is wrong\", \"change\": \"the exact change that would settle it\"}], " +
-        "\"withdrawn\": []}\n```\n\n" +
+        "\"findings\": [{\"id\": \"1\", \"severity\": \"high\", \"location\": \"src/Calc.cs:12\", \"text\": \"what is wrong\", " +
+        "\"change\": \"the exact change that would settle it\"}], \"withdrawn\": []}\n```\n\n" +
         "Write \"approve\" with no findings when nothing stands. Otherwise write \"changes\" and list every finding that " +
-        "still stands, each with the exact change that would settle it. Keep the id of a finding you raised before, and give a new finding an id you have not used. When " +
+        "still stands, each with the exact change that would settle it. Give each finding a severity, \"high\", \"medium\", or \"low\", " +
+        "and its location, the file and line it concerns, such as src/Calc.cs:12. " +
+        "Keep the id of a finding you raised before, and give a new finding an id you have not used. When " +
         "the implementer disputes a finding, withdraw it by listing {\"id\": \"...\", \"reason\": \"...\"} in \"withdrawn\", or keep " +
         "it in \"findings\" and say in its text why it stands. A finding you leave out of both lists is settled.";
 

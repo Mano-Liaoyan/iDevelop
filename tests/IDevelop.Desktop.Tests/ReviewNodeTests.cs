@@ -51,7 +51,8 @@ public sealed class ReviewNodeTests : IDisposable
         Install(_fakes, ClientId.ClaudeCode, Resuming(ClientId.ClaudeCode, ReviewerSession).Scripted(_reviewer), Fresh(ClientId.ClaudeCode).Scripted(_reviewer));
         Turn(_implementer, 1, ClientId.Codex, ImplementerSession, "Wrote calc.py.", write: "def add(a, b):\n    return a - b\n");
         Turn(_reviewer, 1, ClientId.ClaudeCode, ReviewerSession,
-            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```",
+            "Found one.\n\n```idevelop\n{\"status\": \"verdict\", \"verdict\": \"changes\", \"findings\": [{\"id\": \"1\", \"severity\": \"high\", " +
+            "\"location\": \"calc.py:2\", \"text\": \"add subtracts.\", \"change\": \"Return a + b.\"}]}\n```",
             gate: _reading);
         Turn(_implementer, 2, ClientId.Codex, ImplementerSession,
             "Fixed.\n\n```idevelop\n{\"status\": \"answers\", \"answers\": [{\"id\": \"1\", \"answer\": \"fixed\", \"note\": \"It adds now.\"}]}\n```",
@@ -90,7 +91,7 @@ public sealed class ReviewNodeTests : IDisposable
 
         Assert.Equal("Round 1 · 1 open finding", shell.Find<TextBlock>("ReviewSummary").Text);
         Assert.Contains("Round 1 · 1 open finding", shell.PeekTexts("Review add")!);
-        Assert.Equal(["Finding 1 · Open", "add subtracts.", "Settled by: Return a + b."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
+        Assert.Equal(["Finding 1 · Open", "High", "calc.py:2", "add subtracts.", "Settled by: Return a + b."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
         // The review rests in review while its fix round snapshots the project and starts, off the window's thread.
         shell.WaitUntil(() => shell.CardText("Add numbers", "CardStatus") == "Running", "the fix round starts");
         shell.Click(shell.InView<TextBox>("Composer"));
@@ -102,7 +103,7 @@ public sealed class ReviewNodeTests : IDisposable
 
         shell.WaitUntil(() => shell.CardText("Review add", "CardStatus") == "Succeeded", "the review approves");
         Assert.Equal("Approved in round 2.", shell.Find<TextBlock>("ReviewSummary").Text);
-        Assert.Equal(["Finding 1 · Resolved", "add subtracts.", "Implementer: It adds now."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
+        Assert.Equal(["Finding 1 · Resolved", "High", "calc.py:2", "add subtracts.", "Implementer: It adds now."], Shell.Texts(shell.Find<ItemsControl>("Findings")));
         Assert.Contains("Keep it short.", File.ReadAllText(Path.Combine(_reviewer, "2.stdin")));
         var conversation = Shell.Texts(shell.Find<ItemsControl>("Conversation"));
         Assert.Contains("iDevelop", conversation);

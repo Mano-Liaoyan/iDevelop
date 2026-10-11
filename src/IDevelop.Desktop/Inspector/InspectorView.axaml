@@ -17,6 +17,33 @@
     <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
          buttons, and the rows never move for it. -->
     <x:Double x:Key="ScrollBarSize">10</x:Double>
+    <!-- One finding of a review, in the Review node's Findings and in an Approval's handed-on review alike: its heading, with
+         its severity at the card's right edge where every card keeps it, then its location, the reviewer's latest words, and
+         how it was or would be settled. A verdict that gave no severity or location shows neither. -->
+    <DataTemplate x:Key="FindingTemplate" DataType="execution:FindingViewModel">
+      <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+              BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
+              Opacity="{Binding Emphasis}">
+        <StackPanel Spacing="4">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="caption" Text="{Binding Heading}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="chip" VerticalAlignment="Top"
+                    IsVisible="{Binding Severity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    AutomationProperties.AutomationId="FindingSeverity">
+              <TextBlock Text="{Binding Severity}" />
+            </Border>
+          </Grid>
+          <TextBlock Classes="location" Text="{Binding Location}"
+                     IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     AutomationProperties.AutomationId="FindingLocation" />
+          <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+          <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
   </UserControl.Resources>
   <Panel>
     <!-- The blueprint editor takes the panel while it is open. Its sections fold apart from the inspector's. -->
@@ -1000,7 +1027,7 @@
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
                         <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
-                        <ItemsControl ItemsSource="{Binding Findings}"
+                        <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
                                       AutomationProperties.AutomationId="Findings"
                                       AutomationProperties.Name="Findings">
                           <ItemsControl.ItemsPanel>
@@ -1008,22 +1035,6 @@
                               <StackPanel Spacing="8" />
                             </ItemsPanelTemplate>
                           </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="execution:FindingViewModel">
-                              <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                                      BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
-                                      Opacity="{Binding Emphasis}">
-                                <StackPanel Spacing="4">
-                                  <TextBlock Classes="caption" Text="{Binding Heading}" />
-                                  <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                                  <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                             IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                  <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                             IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                </StackPanel>
-                              </Border>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
                         </ItemsControl>
                       </StackPanel>
                     </inspector:InspectorRow>

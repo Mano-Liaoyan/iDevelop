@@ -2,10 +2,19 @@ using IDevelop.Nodes;
 
 namespace IDevelop.Desktop.Execution;
 
-/// <summary>One finding of a review in the inspector: its state, the reviewer's latest words, and the implementer's.</summary>
+/// <summary>
+/// One finding of a review in the inspector: its state, its severity and location, the reviewer's latest words, and the
+/// implementer's. A verdict written before the contract asked for a severity and a location shows neither.
+/// </summary>
 public sealed class FindingViewModel(Finding finding)
 {
     public string Heading => $"Finding {finding.Id} · {RunText.FindingState(finding.State)}";
+
+    /// <summary>"High", "Medium", or "Low", as the reviewer rated it, or null.</summary>
+    public string? Severity => finding.Severity is { Length: > 0 } severity ? char.ToUpperInvariant(severity[0]) + severity[1..] : null;
+
+    /// <summary>The file and line the finding concerns, such as "src/Calc.cs:12", or null.</summary>
+    public string? Location => finding.Location;
 
     public string Reviewer => finding.Text;
 

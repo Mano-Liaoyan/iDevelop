@@ -12,15 +12,20 @@ public enum FindingState { Open, Fixed, Disputed, Resolved, Withdrawn }
 
 /// <summary>
 /// One finding with both sides' latest words. <see cref="Text"/> is the reviewer's: what is wrong, why it still stands, or
-/// why it was withdrawn. <see cref="Answer"/> is the implementer's latest answer, if any.
+/// why it was withdrawn. <see cref="Answer"/> is the implementer's latest answer, if any. <see cref="Severity"/> and
+/// <see cref="Location"/> are what the reviewer last gave it, and null in a verdict written before the contract asked.
 /// </summary>
-public sealed record Finding(string Id, FindingState State, string Text, string Change, string? Answer, int Raised)
+public sealed record Finding(string Id, FindingState State, string Text, string Change, string? Answer, int Raised,
+    string? Severity = null, string? Location = null)
 {
     public bool IsOpen => State is FindingState.Open or FindingState.Fixed or FindingState.Disputed;
 }
 
-/// <summary>A finding as the reviewer lists it in a verdict: still standing, with the change that would settle it.</summary>
-public sealed record Standing(string Id, string Text, string Change);
+/// <summary>
+/// A finding as the reviewer lists it in a verdict: still standing, with the change that would settle it, its severity in
+/// lower case, such as "high", and its location, such as "src/Calc.cs:12". Either is null when the reviewer gave no text.
+/// </summary>
+public sealed record Standing(string Id, string Text, string Change, string? Severity = null, string? Location = null);
 
 /// <summary>The reviewer's verdict block. Approval lists no finding, and a request for changes lists at least one.</summary>
 public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings, ImmutableArray<(string Id, string Reason)> Withdrawn);
@@ -136,7 +141,9 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
                 return (null, $"Finding {id} appears twice.");
             }
 
-            standing.Add(new Standing(id, text, change));
+            // A severity or a location that is missing or not text is left out, so a verdict from before the contract asked
+            // for them, or one that gets them wrong, still reads.
+            standing.Add(new Standing(id, text, change, Text(item, "severity")?.ToLowerInvariant(), Text(item, "location")));
         }
 
         var withdrawn = Items(block.Value, "withdrawn")
@@ -171,7 +178,8 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
         foreach (var standing in verdict.Findings)
         {
             var index = findings.FindIndex(finding => finding.Id == standing.Id);
-            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, index < 0 ? null : findings[index].Answer, index < 0 ? round.Number : findings[index].Raised);
+            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, index < 0 ? null : findings[index].Answer,
+                index < 0 ? round.Number : findings[index].Raised, standing.Severity, standing.Location);
             if (index < 0)
             {
                 findings.Add(finding);
