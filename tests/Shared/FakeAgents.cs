@@ -27,9 +27,19 @@ internal static class FakeAgents
         .WaitForLine("initialize").ListSkills("claude", [".claude/skills", .. folders], builtIn: ["compact", "simplify"])
         .WaitForLine("reload_skills").ListSkills("claude-skills", [".claude/skills", .. folders], builtIn: ["simplify"]);
 
-    /// <summary>Codex's answer to skills/list: the skills in its project folders and in <paramref name="folders"/>.</summary>
-    public static FakeRule CodexSkills(params string[] folders) =>
-        On("app-server").Thread("skills/list").ListSkills("codex", [".agents/skills", ".codex/skills", .. folders]);
+    /// <summary>Codex's answer to each skills/list: the skills in its project folders and in <paramref name="folders"/>.</summary>
+    public static FakeRule CodexSkills(params string[] folders) => CodexSkills([.. folders], null, 0);
+
+    /// <summary>
+    /// Codex's answer to each skills/list, which holds the skills in <paramref name="late"/> only once the app-server has run
+    /// <paramref name="lateAfterMs"/>, as Codex lists its remote plugins' skills once it has loaded them in the background.
+    /// </summary>
+    public static FakeRule CodexSkills(string[] folders, string[]? late, int lateAfterMs)
+    {
+        string[] all = [".agents/skills", ".codex/skills", .. folders];
+        return On("app-server").Thread("skills/list").ListSkills("codex", all, late: late, lateAfterMs: lateAfterMs)
+            .AnswerEach("skills/list", On().ListSkills("codex", all, late: late, lateAfterMs: lateAfterMs));
+    }
 
     /// <summary>Pi's RPC mode, which answers the model list and the command list with the skills in its project folders and in <paramref name="folders"/>.</summary>
     public static FakeRule PiRpc(params string[] folders) => On("--mode", "rpc", "--no-session").Answer(

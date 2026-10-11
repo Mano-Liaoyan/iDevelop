@@ -12,7 +12,7 @@ internal sealed record Probe(ImmutableArray<string> Arguments)
     public Func<string, bool>? DoneWhen { get; init; }
 
     /// <summary>A probe that talks: what to write after a line it reads, or null. Its input stays open until it answers.</summary>
-    public Func<string, string?>? Reply { get; init; }
+    public Func<string, ProbeReply?>? Reply { get; init; }
 
     /// <summary>
     /// The folder the probe runs in. Null, the default, is the temporary folder, so a model list or a sign-in check never
@@ -25,6 +25,14 @@ internal sealed record Probe(ImmutableArray<string> Arguments)
 
 /// <summary><see cref="ExitCode"/> is null when the probe was stopped, at its timeout or after it answered and did not exit.</summary>
 internal sealed record ProbeOutput(int? ExitCode, string Stdout, string Stderr, bool TimedOut);
+
+/// <summary>What a talking probe writes after a line it read, once <see cref="Delay"/> has passed.</summary>
+internal sealed record ProbeReply(string Text)
+{
+    public TimeSpan Delay { get; init; }
+
+    public static implicit operator ProbeReply(string text) => new(text);
+}
 
 internal static class Probes
 {
@@ -102,10 +110,15 @@ internal static class Probes
         return new ProbeOutput(exitCode, Snapshot(stdout), Snapshot(stderr), TimedOut: first != exit && first != answered.Task);
     }
 
-    private static async Task WriteAfter(Task before, ChildProcess child, string text)
+    private static async Task WriteAfter(Task before, ChildProcess child, ProbeReply reply)
     {
         await before;
-        await child.WriteStdinAsync(text, close: false);
+        if (reply.Delay > TimeSpan.Zero)
+        {
+            await Task.Delay(reply.Delay);
+        }
+
+        await child.WriteStdinAsync(reply.Text, close: false);
     }
 
     /// <summary>Why a probe did not answer as expected, in the words of its last output line.</summary>

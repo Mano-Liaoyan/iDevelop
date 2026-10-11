@@ -36,7 +36,7 @@ internal static class ClaudeCode
         {
             Folder = folder,
             Stdin = Control(InitializeRequest, "initialize"),
-            Reply = line => IsResponse(line, InitializeRequest) && Succeeded(line) ? Control(SkillsRequest, "reload_skills") : null,
+            Reply = line => IsResponse(line, InitializeRequest) && Succeeded(line) ? new ProbeReply(Control(SkillsRequest, "reload_skills")) : null,
             DoneWhen = line => IsResponse(line, SkillsRequest) || IsResponse(line, InitializeRequest) && !Succeeded(line),
         }, ParseSkills),
     };

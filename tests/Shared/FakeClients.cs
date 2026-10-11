@@ -242,14 +242,31 @@ internal sealed record FakeRule(ImmutableArray<string> When, ImmutableArray<Json
     /// Answers the last matched frame with the skills in <paramref name="folders"/>, as the client of <paramref name="format"/>
     /// lists them. A relative folder is in the client's current folder.
     /// </summary>
-    public FakeRule ListSkills(string format, IEnumerable<string> folders, IEnumerable<string>? builtIn = null, IEnumerable<string>? disabled = null) =>
-        Step("listSkills", new JsonObject
+    public FakeRule ListSkills(string format, IEnumerable<string> folders, IEnumerable<string>? builtIn = null, IEnumerable<string>? disabled = null,
+        IEnumerable<string>? late = null, int lateAfterMs = 0)
+    {
+        var options = new JsonObject
         {
             ["format"] = format,
             ["folders"] = Strings([.. folders]),
             ["builtin"] = Strings([.. builtIn ?? []]),
             ["disabled"] = Strings([.. disabled ?? []]),
-        });
+        };
+        if (late is not null)
+        {
+            options["late"] = Strings([.. late]);
+            options["lateAfterMs"] = lateAfterMs;
+        }
+
+        return Step("listSkills", options);
+    }
+
+    /// <summary>Until stdin ends, runs <paramref name="steps"/> for each frame that contains <paramref name="line"/>.</summary>
+    public FakeRule AnswerEach(string line, FakeRule steps) => Step("answerEach", new JsonObject
+    {
+        ["line"] = line,
+        ["steps"] = new JsonArray([.. steps.Steps.Select(step => step.DeepClone())]),
+    });
 
     /// <summary>The steps as the JSON array that a scripted turn's file holds.</summary>
     public string StepsJson() => new JsonArray([.. Steps.Select(step => step.DeepClone())]).ToJsonString();

@@ -79,7 +79,8 @@ public sealed class SkillListingTests : IDisposable
         Skill(Path.Combine(_project, ".agents", "skills"), "release", "Cuts a release.");
         var arguments = _temp.Path("listing-arguments.json");
         _fakes.Install("codex", FakeAgents.CodexModels, FakeAgents.CodexSignedIn,
-            On("app-server").Thread("skills/list").RecordArguments(arguments).ListSkills("codex", [".agents/skills", _personal], disabled: ["openai-docs"]));
+            On("app-server").Thread("skills/list").RecordArguments(arguments).ListSkills("codex", [".agents/skills", _personal], disabled: ["openai-docs"])
+                .AnswerEach("skills/list", On().ListSkills("codex", [".agents/skills", _personal], disabled: ["openai-docs"])));
         var directory = await _fakes.DiscoverAsync();
 
         var listing = await ListedAsync(directory, ClientId.Codex, _project);
@@ -89,6 +90,27 @@ public sealed class SkillListingTests : IDisposable
         using var request = JsonDocument.Parse(File.ReadAllText(arguments + ".thread.json"));
         Assert.Equal([Path.GetFullPath(_project)], request.RootElement.GetProperty("params").GetProperty("cwds").EnumerateArray().Select(cwd => cwd.GetString()));
         Assert.False(((SkillListing.Listed)listing).LeavesOutBuiltIns);
+    }
+
+    [Fact]
+    public async Task Codex_lists_again_until_the_skills_of_the_remote_plugins_it_loads_in_the_background_are_in_and_the_list_holds()
+    {
+        Skill(_personal, "imagegen", "Makes images.");
+        var remote = _temp.Create("remote-plugins");
+        Skill(remote, "pages-write-page", "Writes a page.", name: "pages:write-page");
+        var frames = _temp.Path("listing-frames.txt");
+        string[] folders = [".agents/skills", _personal];
+        // As the real Codex 0.160.1 does, the remote plugins' skills join the list about a second after the app-server starts,
+        // and no notification says when.
+        _fakes.Install("codex", FakeAgents.CodexModels, FakeAgents.CodexSignedIn,
+            On("app-server").Thread("skills/list").RecordFrames(frames).ListSkills("codex", folders, late: [remote], lateAfterMs: 900)
+                .AnswerEach("skills/list", On().ListSkills("codex", folders, late: [remote], lateAfterMs: 900)));
+        var directory = await _fakes.DiscoverAsync();
+
+        var listing = await ListedAsync(directory, ClientId.Codex, _project);
+
+        Assert.Equal(new SkillListing.Listed([new SkillOption("imagegen", "Makes images."), new SkillOption("pages:write-page", "Writes a page.")]), listing);
+        Assert.True(File.ReadAllLines(frames).Count(frame => frame.Contains("skills/list", StringComparison.Ordinal)) >= 2, "Codex was asked once.");
     }
 
     [Fact]
@@ -195,9 +217,11 @@ public sealed class SkillListingTests : IDisposable
 
     private static T Read<T>(string file) => JsonSerializer.Deserialize<T>(File.ReadAllBytes(file))!;
 
-    internal static void Skill(string folder, string name, string description)
+    /// <summary>A skill folder whose SKILL.md names it <paramref name="name"/>, or its folder's name.</summary>
+    internal static void Skill(string folder, string directory, string description, string? name = null)
     {
-        var skill = Directory.CreateDirectory(Path.Combine(folder, name)).FullName;
+        var skill = Directory.CreateDirectory(Path.Combine(folder, directory)).FullName;
+        name ??= directory;
         File.WriteAllText(Path.Combine(skill, "SKILL.md"), $"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nInstructions iDevelop never reads.\n");
     }
 

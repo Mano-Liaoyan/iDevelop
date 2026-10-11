@@ -57,12 +57,18 @@ using System.Text.Json;
 //   answer [{"line": <pattern>, "steps": [...]}, ...]
 //                                 read stdin frames until one contains an option's pattern, and run that option's steps
 //                                 with the frame as the last matched one, so one RPC client answers each request in kind
-//   listSkills {"format": "claude" | "claude-skills" | "codex" | "pi", "folders": [...], "builtin": [...], "disabled": [...]}
+//   answerEach {"line": <pattern>, "steps": [...]}
+//                                 until stdin ends, run the steps for each frame that contains the pattern, with that frame
+//                                 as the last matched one, so a client answers a request each time it comes
+//   listSkills {"format": "claude" | "claude-skills" | "codex" | "pi", "folders": [...], "builtin": [...], "disabled": [...],
+//               "late": [...], "lateAfterMs": <ms>}
 //                                 answer the last matched frame with the skills in the folders, as that client lists them:
 //                                 each subfolder with a SKILL.md, named and described by its front matter. A relative
 //                                 folder is in the current folder. Claude Code's initialize ("claude") also lists the
 //                                 built-in names as its own commands, and its reload_skills ("claude-skills") lists them
-//                                 as its bundled skills. Codex lists the disabled names as turned off
+//                                 as its bundled skills. Codex lists the disabled names as turned off. The skills in the
+//                                 late folders are listed only once the process has run lateAfterMs, as Codex lists its
+//                                 remote plugins' skills once it has loaded them in the background
 //   exit <code>
 
 if (args is ["--sleep-forever"])
@@ -436,6 +442,23 @@ int? Run(JsonElement steps)
                 }
 
                 break;
+            case "answerEach":
+                var eachPattern = value.GetProperty("line").GetString()!;
+                while (ReadWireLine() is { } each)
+                {
+                    if (!each.Contains(eachPattern, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    matchedLine = JsonDocument.Parse(each).RootElement.Clone();
+                    if (Run(value.GetProperty("steps")) is { } eachCode)
+                    {
+                        return eachCode;
+                    }
+                }
+
+                break;
             case "listSkills":
                 stdout.WriteLine(FakeSkills.Answer(value, matchedLine ?? throw new IOException("No input frame matched.")));
                 break;
@@ -655,7 +678,9 @@ internal static class FakeSkills
     public static string Answer(JsonElement options, JsonElement request)
     {
         var format = options.GetProperty("format").GetString();
-        var skills = Strings(options, "folders").SelectMany(Read).ToArray();
+        var late = options.TryGetProperty("lateAfterMs", out var after)
+            && DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime >= TimeSpan.FromMilliseconds(after.GetInt32());
+        var skills = Strings(options, "folders").Concat(late ? Strings(options, "late") : []).SelectMany(Read).ToArray();
         var disabled = Strings(options, "disabled").ToHashSet();
         var id = request.TryGetProperty("id", out var rpcId) ? rpcId : request.GetProperty("request_id");
         return format switch
