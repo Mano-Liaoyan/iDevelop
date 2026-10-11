@@ -398,7 +398,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>
     /// A materializer for the run's own scheduled work, which waits as long as the run allows for the repository's lock,
     /// because the run's tasks prepare, claim, and publish at the same time (ADR 0018). It lets a person's command that
-    /// waits for the lock go first (issue #105).
+    /// waits for the lock go first (#105).
     /// </summary>
     private Materializer Scheduled() => _materializer(true, Halted);
 

@@ -37,7 +37,7 @@ internal sealed partial class Materializer
 
     /// <summary>
     /// Whether the steps are a run's own scheduled work, which never takes the repository's mutation lock while a person's
-    /// command waits for it. A person's command, the default, goes ahead of that work (issue #105).
+    /// command waits for it. A person's command, the default, goes ahead of that work (#105).
     /// </summary>
     internal bool Scheduled { get; set; }
 
