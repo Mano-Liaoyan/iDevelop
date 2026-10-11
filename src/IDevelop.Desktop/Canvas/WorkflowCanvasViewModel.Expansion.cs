@@ -102,7 +102,12 @@ public sealed partial class WorkflowCanvasViewModel
             nodes[index].ViewOffset = offsets[index];
         }
 
-        // A card that grew stands in other wires' way even where no card moved.
+        // A card that grew stands in other wires' way even where no card moved, and an open proposal's ghosts sit beside
+        // the cards where they show.
         Reroute();
+        if (Ghosts.OfType<GhostCardViewModel>().Any())
+        {
+            ShowGhosts();
+        }
     }
 }

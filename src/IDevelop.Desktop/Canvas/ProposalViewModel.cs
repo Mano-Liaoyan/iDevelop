@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using Avalonia;
 using IDevelop.Desktop.Execution;
 using IDevelop.Desktop.Mvvm;
 using IDevelop.Execution;
@@ -220,12 +221,22 @@ public sealed class ProposalViewModel : ObservableObject
 
         var chosen = Chosen();
         var layout = proposal.Layout(workflow);
+        // A card the workflow holds shows where the canvas shows it, and a new one moves as the planner shows, wider while
+        // it is expanded, so the proposal keeps its place beside the planner (ADR 0024).
+        var shown = _canvas.Nodes.ToDictionary(node => node.Id);
+        var shift = shown.GetValueOrDefault(proposal.Planner) is { } planner
+            ? planner.ViewOffset + new Vector(planner.CardSize.Width - WorkflowCanvasViewModel.TaskCardWidth, 0)
+            : default;
+        Point Place(TaskId id, CanvasPoint saved) => shown.GetValueOrDefault(id) is { } node ? node.DisplayLocation : WorkflowCanvasViewModel.ToPoint(saved) + shift;
+        Point Output(TaskId id, CanvasPoint saved) => shown.GetValueOrDefault(id) is { } node
+            ? node.DisplayLocation + new Vector(node.CardSize.Width - WorkflowCanvasViewModel.InputPortCenter.X, WorkflowCanvasViewModel.OutputPortCenter.Y)
+            : Place(id, saved) + (Vector)WorkflowCanvasViewModel.OutputPortCenter;
         var cards = new List<Ghost>();
         foreach (var fill in proposal.Fills.Where(fill => chosen.Contains(fill.Slot) && workflow.Positions.ContainsKey(fill.Slot)))
         {
             var slot = workflow.Tasks[fill.Slot];
             cards.Add(new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
+                Place(fill.Slot, workflow.Positions[fill.Slot]), "Fills", fill.Title ?? slot.Title,
                 Preview(slot.Blueprint, fill.Fields), _canvas.KindOf(slot.Blueprint))
             {
                 // A fill keeps its task's agent, whose model the card's second line shows, as the task's own card does.
@@ -241,7 +252,7 @@ public sealed class ProposalViewModel : ObservableObject
             var agent = agents.GetValueOrDefault(node.Id);
             var hasAgent = agent?.Settings is not null;
             cards.Add(new GhostCardViewModel(
-                WorkflowCanvasViewModel.ToPoint(layout[node.Id]), hasAgent ? agent!.Client : $"New {node.Blueprint.Name}", node.Title,
+                Place(node.Id, layout[node.Id]), hasAgent ? agent!.Client : $"New {node.Blueprint.Name}", node.Title,
                 Preview(node.Blueprint, node.Fields), _canvas.KindOf(node.Blueprint))
             {
                 Detail = hasAgent ? agent!.Model : null,
@@ -254,8 +265,8 @@ public sealed class ProposalViewModel : ObservableObject
         var wires = AcceptEdit(workflow, chosen).Edits.OfType<WorkflowEdit.Connect>()
             .Where(connect => At(connect.Key.From) is not null && At(connect.Key.To) is not null && BlueprintOf(connect.Key.From) is not null)
             .Select(connect => GhostWireViewModel.Between(
-                WorkflowCanvasViewModel.ToPoint(At(connect.Key.From)!.Value) + WorkflowCanvasViewModel.OutputPortCenter,
-                WorkflowCanvasViewModel.ToPoint(At(connect.Key.To)!.Value) + WorkflowCanvasViewModel.InputPortCenter,
+                Output(connect.Key.From, At(connect.Key.From)!.Value),
+                Place(connect.Key.To, At(connect.Key.To)!.Value) + (Vector)WorkflowCanvasViewModel.InputPortCenter,
                 _canvas.KindOf(BlueprintOf(connect.Key.From)!),
                 connect.Kind));
         return [.. wires, .. cards];
