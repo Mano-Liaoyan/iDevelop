@@ -81,6 +81,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         _continueFix = new RelayCommand(() => ChooseFix(FixChoice.Continue), () => RunFix is { } fix
             ? CanChooseRunFix && fix.ContinueUnavailable is null : RunTask is null && _problem is StartProblem.FixInterrupted { CanContinue: true });
         _retryFix = new RelayCommand(() => ChooseFix(FixChoice.Retry), () => RunFix is not null ? CanChooseRunFix : RunTask is null && _problem is StartProblem.FixInterrupted);
+        Skills = new SkillPickerViewModel(this);
         DeriveCommand = new RelayCommand(() => _canvas.Blueprints.Derive(_task.Blueprint));
         SaveAsBlueprintCommand = new RelayCommand(() => _canvas.Blueprints.SaveAs(_task));
         (_kind, _isLibrary) = (canvas.KindOf(task.Blueprint), !NodeKinds.IsBuiltIn(task.Blueprint));
@@ -94,6 +95,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     }
 
     public TaskId Id => _task.Id;
+
+    /// <summary>The canvas the node is on, whose clients and project the node's pickers read.</summary>
+    internal WorkflowCanvasViewModel Canvas => _canvas;
 
     /// <summary>The task as the workflow document holds it now.</summary>
     internal TaskDefinition Definition => _task;
@@ -253,6 +257,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
 
     /// <summary>False when the model takes no reasoning level, such as an Antigravity model without a level suffix.</summary>
     public bool HasReasoning => ReasoningChoices.Count > 0;
+
+    /// <summary>The skills the node's agent may use (#93), which the inspector, and any other view of the node, picks.</summary>
+    public SkillPickerViewModel Skills { get; }
 
     public string? PermissionNote => _task.Execution is { } settings
         ? IsReview ? RunText.ReviewerNote(settings.Client) : RunText.PermissionNote(settings.Client, _task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly })
@@ -498,6 +505,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             OnPropertyChanged(property);
         }
 
+        Skills.Refresh();
         OnConversationChanged();
     }
 
@@ -640,6 +648,9 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeRun();
 
     partial void InitializeStanding();
+
+    /// <summary>Keeps the agent with another skill choice, as the node's skill picker makes it.</summary>
+    internal void SetSkills(ExecutionSettings settings) => SetExecution(settings);
 
     private void SetExecution(ExecutionSettings? settings)
     {

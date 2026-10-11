@@ -88,6 +88,68 @@ public sealed class InspectorLayoutTests : IDisposable
         Assert.Equal("actions at 12, values at 64", Edges(shell));
     }
 
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void The_skill_picker_and_its_open_list_keep_the_panels_edges_and_cut_nothing_short(double width)
+    {
+        const string longName = "write-the-release-notes-for-every-storage-adapter";
+        var personal = _temp.Create("personal-skills");
+        SkillPickerTests.Skill(personal, longName, "Writes release notes.");
+        SkillPickerTests.Skill(personal, "find-skills", "Finds skills to install.");
+        _fakes.Install("claude", ClaudeSignedIn, ClaudeSkills(personal));
+        var shell = Shell.Open(
+            _temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.ClaudeCode)
+            {
+                Model = "claude-opus-5-5", Reasoning = "high", Skills = [longName, "a-skill-this-machine-does-not-have-installed"],
+            })),
+            _fakes.DiscoverAsync().Result);
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node("Design")));
+        var picker = shell.Find<ToggleButton>("TaskSkills");
+        shell.Click(picker);
+        shell.WaitUntil(() => Shell.ById<CheckBox>(shell.Window, "SkillChoice").Count() == 3, "the listed skills");
+        shell.Render();
+
+        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        AssertUnder(shell, width < InspectorGrid.NarrowPanelWidth, "TaskModel", "TaskSkills");
+        AssertNothingCutShort(shell);
+        // The box is as tall as the pickers above it, and its list and its note start and end where it does.
+        Assert.Equal(shell.Find<ComboBox>("TaskModel").Bounds.Height, picker.Bounds.Height, 0.5);
+        var box = shell.Bounds(picker);
+        foreach (var under in new[] { shell.Find<Control>("SkillList"), shell.Find<Control>("SkillsNote") })
+        {
+            Assert.Equal((box.Left, box.Right), (Math.Round(shell.Bounds(under).Left, 1), Math.Round(shell.Bounds(under).Right, 1)));
+            Assert.True(shell.Bounds(under).Top >= box.Bottom, $"{AutomationProperties.GetAutomationId(under)} starts above the box's end.");
+        }
+
+        // Each tick box sits in the list's padding, and a long name wraps rather than running past it.
+        var list = shell.Bounds(shell.Find<Control>("SkillList"));
+        Assert.All(Shell.ById<CheckBox>(shell.Window, "SkillChoice"), choice =>
+            Assert.True(shell.Bounds(choice).Left >= list.Left + 10 - 0.5 && shell.Bounds(choice).Right <= list.Right - 10 + 0.5,
+                $"{AutomationProperties.GetName(choice)} spans {shell.Bounds(choice)} in a list at {list}."));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(280)]
+    [InlineData(320)]
+    [InlineData(520)]
+    public void Antigravitys_note_wraps_in_full_under_its_picker(double width)
+    {
+        Install(_fakes, ClientId.Antigravity);
+        var shell = Shell.Open(
+            _temp.Seed(TaskAt(Design, "Design", 105, 90, new ExecutionSettings(ClientId.Antigravity) { Model = "gemini-3.8-flash", Reasoning = "low" })),
+            _fakes.DiscoverAsync().Result);
+        shell.SizeInspector(width);
+        shell.Click(shell.Header(shell.Node("Design")));
+
+        Assert.Equal("actions at 12, values at 64", Edges(shell));
+        AssertNothingCutShort(shell);
+        var (box, note) = (shell.Bounds(shell.Find<ToggleButton>("TaskSkills")), shell.Bounds(shell.Find<Control>("SkillsNote")));
+        Assert.Equal((box.Left, box.Right), (Math.Round(note.Left, 1), Math.Round(note.Right, 1)));
+    }
+
     [AvaloniaFact]
     public void An_empty_library_says_so_in_full_in_the_narrowest_inspector()
     {
@@ -128,11 +190,11 @@ public sealed class InspectorLayoutTests : IDisposable
             .Where(row => row.IsEffectivelyVisible && row.Layout is not (RowLayout.Full or RowLayout.Buttons)).ToArray();
 
         Assert.Equal(
-            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Conversation", "Type", "Version", "Description"],
+            ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version", "Description"],
             rows.Select(row => row.Label));
         Assert.All(rows, row => Assert.True(row.Icon is not null || row.Lead is not null, $"{row.Label} has no glyph."));
         Assert.Equal(
-            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconConversation", null, "IconVersion", "IconDescription"],
+            ["IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", null, "IconVersion", "IconDescription"],
             rows.Select(row => IconKey(row.Icon)));
     }
 
@@ -265,7 +327,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        Assert.Equal(["Client", "Model", "Reasoning", "Conversation", "Type", "Version"], BesideRows(shell).Select(row => row.Label));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version"], BesideRows(shell).Select(row => row.Label));
         Assert.Equal("labels at 36, values at 124", Columns(shell));
 
         shell.Click(shell.ConnectionInto("Build"));
@@ -317,7 +379,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
 
-        AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Conversation", "Type", "Version", "Description"]);
+        AssertAllUnder(shell, ["Instructions", "Acceptance criteria", "Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version", "Description"]);
 
         shell.Click(shell.ConnectionInto("Build"));
 
@@ -334,7 +396,7 @@ public sealed class InspectorLayoutTests : IDisposable
         shell.Click(shell.Header(shell.Node("Design")));
 
         var rows = BesideRows(shell);
-        Assert.Equal(["Client", "Model", "Reasoning", "Conversation", "Type", "Version"], rows.Select(row => row.Label));
+        Assert.Equal(["Client", "Model", "Reasoning", "Skills", "Conversation", "Type", "Version"], rows.Select(row => row.Label));
         Assert.True(shell.Find<Control>("PermissionNote").IsEffectivelyVisible);
         foreach (var row in rows)
         {
@@ -377,9 +439,11 @@ public sealed class InspectorLayoutTests : IDisposable
     private static string? Part(Control control) => control switch
     {
         KindTile => "glyph",
-        PathIcon icon when icon.FindAncestorOfType<KindTile>() is null && icon.FindAncestorOfType<ComboBox>() is null => "glyph",
+        PathIcon icon when icon.FindAncestorOfType<KindTile>() is null && icon.FindAncestorOfType<ComboBox>() is null
+            && icon.FindAncestorOfType<ToggleButton>() is null => "glyph",
         Border border when border.Classes.Contains("infoGlyph") => "info",
         ComboBox => "value",
+        ToggleButton picker when picker.Classes.Contains("picker") => "value",
         TextBlock text when text.Classes.Contains("value") => "value",
         _ => null,
     };
@@ -651,7 +715,9 @@ public sealed class InspectorLayoutTests : IDisposable
         var values = shown.Where(control =>
             control is ComboBox
             || control is TextBox && (Id(control) == "InspectorFilter" || InRow(control))
-            || control is Button { Classes: var classes } && classes.Contains("rowLink"));
+            || control is Button { Classes: var classes } && classes.Contains("rowLink")
+            || control is ToggleButton { Classes: var pickers } && pickers.Contains("picker")
+            || control is Border { Classes: var lists } && lists.Contains("skillList"));
 
         string Insets(IEnumerable<Control> controls) =>
             string.Join(" and ", controls.Select(control => Math.Round(right - shell.Bounds(control).Right, 1)).Distinct().Order());
@@ -660,6 +726,6 @@ public sealed class InspectorLayoutTests : IDisposable
 
     private static string? IconKey(Geometry? icon) =>
         icon is null ? null
-        : new[] { "IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconConversation", "IconVersion", "IconDescription", "IconField" }
+        : new[] { "IconEdit", "IconCheckmark", "IconAgent", "IconModel", "IconReasoning", "IconSkills", "IconConversation", "IconVersion", "IconDescription", "IconField" }
             .SingleOrDefault(key => Application.Current!.TryGetResource(key, null, out var resource) && ReferenceEquals(resource, icon));
 }
