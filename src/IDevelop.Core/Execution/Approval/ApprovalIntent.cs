@@ -55,15 +55,15 @@ internal static class ApprovalPin
 
     /// <summary>
     /// Removes the pin once <paramref name="baseRef"/> holds <paramref name="commit"/>, or, without a base ref, for a run
-    /// that was never approved. Best effort: a pin left behind only keeps a commit, and the next preparation or
-    /// confirmation of the workflow removes it.
+    /// that was never approved or that settled before its first preparation. Best effort: a pin left behind only keeps a
+    /// commit, and the next preparation or confirmation of the workflow removes it. True when it removed the pin.
     /// </summary>
-    public static void Release(GitRepository repository, RunId run, CommitId? commit = null, string? baseRef = null)
+    public static bool Release(GitRepository repository, RunId run, CommitId? commit = null, string? baseRef = null)
     {
-        if (repository.ReadRef(Name(run)) is not GitRead<CommitId?>.Read { Value: { } pinned }) return;
+        if (repository.ReadRef(Name(run)) is not GitRead<CommitId?>.Read { Value: { } pinned }) return false;
         if (baseRef is not null && (pinned != commit || repository.ReadRef(baseRef) is not GitRead<CommitId?>.Read { Value: { } held } || held != pinned))
-            return;
-        repository.DeleteRef(Name(run), pinned);
+            return false;
+        return repository.DeleteRef(Name(run), pinned).ExitCode == 0;
     }
 }
 
