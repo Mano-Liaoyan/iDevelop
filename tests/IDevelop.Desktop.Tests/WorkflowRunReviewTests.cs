@@ -1,5 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
+using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
 using IDevelop.Projects;
@@ -12,7 +15,8 @@ namespace IDevelop.Desktop.Tests;
 
 /// <summary>
 /// A workflow run's review in the window (E3g.2): a consumer that an accepted fix made stale, rebased from its Updated
-/// inputs section, and a fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix.
+/// inputs section, a fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix, and an
+/// Approval that reads the review it hands on as its verdict and findings (#101).
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class WorkflowRunReviewTests
@@ -82,6 +86,95 @@ public sealed class WorkflowRunReviewTests
         Assert.Equal((2, 2, 1, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
         Assert.Single(f.Record().Results, result => result.Origin is ResultOrigin.Rebased);
         Assert.False(shell.Has<Button>("ReviewUpdatedInputs") && shell.Find<Button>("ReviewUpdatedInputs").IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void An_approval_shows_a_handed_on_review_as_its_verdict_and_every_finding_it_raised_with_the_raw_data_behind_a_disclosure()
+    {
+        const string Raised = """
+            {"status": "verdict", "verdict": "changes", "findings": [
+              {"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."},
+              {"id": "2", "text": "add has no comment.", "change": "Add # sum."}]}
+            """;
+        const string Agreed = """{"status": "verdict", "verdict": "approve", "findings": [], "withdrawn": [{"id": "2", "reason": "The ticket asks for no comment."}]}""";
+        using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Approval(D, "Approve", 705), Dependency(A, R), Dependency(R, D)]);
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."),
+                f.Writes("calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}, {"id": "2", "answer": "disputed", "note": "Not asked."}]""")))
+            .Answer("Review", f.Says(Verdict(Raised), "session-r"), f.Says(Verdict(Agreed), "session-r"))
+            .Route("A reviewer read your change", "A").Route("The implementer answered", "Review");
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("Approve", "Waiting for approval");
+        shell.Click(shell.Find<Button>("NextWaiting"));
+        shell.WaitUntil(() => shell.Has<TextBlock>("GateVerdict") && shell.Find<TextBlock>("GateVerdict").IsEffectivelyVisible,
+            "the panel reads the review that approving hands on");
+
+        // No Markdown, and so no JSON, shows before the disclosure opens.
+        Assert.Empty(ConversationFixtures.Blocks(shell.Find<ItemsControl>("GateInputs")));
+        Assert.Equal(("Review (dependency)", "Approved in round 2"), (shell.Text("GateInputHeading"), shell.Text("GateVerdict")));
+        Assert.Equal(
+            ["Finding 1 · Resolved", "High", "calc.txt:1", "add subtracts.", "Implementer: It adds now.",
+                "Finding 2 · Withdrawn", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
+            Shell.Texts(shell.Find<ItemsControl>("GateFindings")));
+        // Every finding an Approval reads is settled, and a person deciding on them reads them at full contrast.
+        Assert.All(shell.Find<ItemsControl>("GateFindings").GetVisualDescendants(), visual => Assert.Equal(1, visual.Opacity));
+        Assert.False(shell.Find<TextBlock>("GateNoFindings").IsEffectivelyVisible);
+        Assert.False(shell.Find<MarkdownView>("GateRaw").IsEffectivelyVisible);
+        InspectorLayoutTests.AssertLaidOut(shell);
+
+        shell.Click(shell.InView<ToggleButton>("GateRawToggle"));
+
+        Assert.Equal(Verdict(Agreed), shell.Find<MarkdownView>("GateRaw").Markdown);
+        var raw = ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateRaw"));
+        Assert.Equal("I read the change.", raw[0]);
+        Assert.StartsWith("{\n  \"status\": \"verdict\",\n  \"verdict\": \"approve\",", raw[1]);
+        InspectorLayoutTests.AssertLaidOut(shell);
+
+        shell.Click(shell.InView<Button>("ApproveGate"));
+        shell.WaitForStatus("Completed");
+        Assert.Equal("Approved", shell.CardText("Approve", "CardStatus"));
+    }
+
+    [AvaloniaFact]
+    public void An_approval_lines_up_the_heading_of_a_review_and_of_another_input_and_keeps_a_long_severity_in_its_card()
+    {
+        const string Raised = """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "severity": "high, because every stored total drifts", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."}]}""";
+        using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Approval(D, "Approve", 705), Reader(B, "Notes", 405, 300),
+            Dependency(A, R), Dependency(R, D), Dependency(B, D)]);
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)))
+            .Answer("Review", f.Says(Verdict(Raised), "session-r"), f.Says(Verdict(Agree), "session-r")).Answer("Notes", f.Says("Notes ready.", "session-n"))
+            .Route("A reviewer read your change", "A").Route("The implementer answered", "Review");
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("Approve", "Waiting for approval");
+        shell.Click(shell.Find<Button>("NextWaiting"));
+        shell.WaitUntil(() => shell.TextsOf("GateInputHeading").Length == 2, "the panel reads both inputs that approving hands on");
+
+        Assert.Equal(["Notes (dependency)", "Review (dependency)"], shell.TextsOf("GateInputHeading").Order());
+        Assert.Equal(["Notes ready."], ConversationFixtures.Blocks(Shell.ById<MarkdownView>(shell.Window, "GateReport").Single(report => report.IsEffectivelyVisible)));
+        foreach (var size in new double[] { 280, 320, 520 })
+        {
+            shell.SizeInspector(size);
+            Assert.Single(Shell.ById<TextBlock>(shell.Window, "GateInputHeading").Select(heading => shell.Bounds(heading).Left).Distinct());
+        }
+
+        InspectorLayoutTests.AssertLaidOut(shell);
+    }
+
+    [AvaloniaFact]
+    public void An_approval_says_when_the_review_it_hands_on_raised_no_findings()
+    {
+        using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Approval(D, "Approve", 705), Dependency(A, R), Dependency(R, D)]);
+        f.Answer("A", f.Writes("calc.txt", "a + b\n", "A ready.")).Answer("Review", f.Says(Verdict(Agree), "session-r"));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("Approve", "Waiting for approval");
+        shell.Click(shell.Find<Button>("NextWaiting"));
+        shell.WaitUntil(() => shell.Has<TextBlock>("GateVerdict") && shell.Find<TextBlock>("GateVerdict").IsEffectivelyVisible,
+            "the panel reads the review that approving hands on");
+
+        Assert.Equal(("Approved in round 1", "The reviewer raised no findings."), (shell.Text("GateVerdict"), shell.Text("GateNoFindings")));
+        Assert.False(shell.Find<ItemsControl>("GateFindings").IsEffectivelyVisible);
     }
 
     /// <summary>A read-only agent whose prompt starts with its title, so its result is a report with no code of its own.</summary>

@@ -11,16 +11,22 @@ namespace IDevelop.Nodes;
 public enum FindingState { Open, Fixed, Disputed, Resolved, Withdrawn }
 
 /// <summary>
-/// One finding with both sides' latest words. <see cref="Text"/> is the reviewer's: what is wrong, why it still stands, or
-/// why it was withdrawn. <see cref="Answer"/> is the implementer's latest answer, if any.
+/// One finding with both sides' latest words. <see cref="Text"/> is the reviewer's: what is wrong, or why it still stands.
+/// <see cref="Answer"/> is the implementer's latest answer, if any, and <see cref="Reason"/> why the reviewer withdrew it,
+/// if the reviewer said. <see cref="Severity"/> and <see cref="Location"/> are what the reviewer last gave it, and null in a
+/// verdict written before the contract asked.
 /// </summary>
-public sealed record Finding(string Id, FindingState State, string Text, string Change, string? Answer, int Raised)
+public sealed record Finding(string Id, FindingState State, string Text, string Change, string? Answer, int Raised,
+    string? Severity = null, string? Location = null, string? Reason = null)
 {
     public bool IsOpen => State is FindingState.Open or FindingState.Fixed or FindingState.Disputed;
 }
 
-/// <summary>A finding as the reviewer lists it in a verdict: still standing, with the change that would settle it.</summary>
-public sealed record Standing(string Id, string Text, string Change);
+/// <summary>
+/// A finding as the reviewer lists it in a verdict: still standing, with the change that would settle it, its severity in
+/// lower case, such as "high", and its location, such as "src/Calc.cs:12". Either is null when the reviewer gave no text.
+/// </summary>
+public sealed record Standing(string Id, string Text, string Change, string? Severity = null, string? Location = null);
 
 /// <summary>The reviewer's verdict block. Approval lists no finding, and a request for changes lists at least one.</summary>
 public sealed record Verdict(bool Approves, ImmutableArray<Standing> Findings, ImmutableArray<(string Id, string Reason)> Withdrawn);
@@ -136,7 +142,9 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
                 return (null, $"Finding {id} appears twice.");
             }
 
-            standing.Add(new Standing(id, text, change));
+            // A severity or a location that is missing or not text is left out, so a verdict from before the contract asked
+            // for them, or one that gets them wrong, still reads.
+            standing.Add(new Standing(id, text, change, Text(item, "severity")?.ToLowerInvariant(), Text(item, "location")));
         }
 
         var withdrawn = Items(block.Value, "withdrawn")
@@ -163,7 +171,8 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
 
     /// <summary>
     /// Applies a verdict. A listed finding stands, with the reviewer's latest words. A withdrawn finding is settled with its
-    /// reason. Any other open finding is settled: withdrawn if the implementer disputed it, otherwise resolved.
+    /// reason beside what it raised. Any other open finding is settled: withdrawn if the implementer disputed it, otherwise
+    /// resolved.
     /// </summary>
     private static ReviewRound Judge(List<Finding> findings, ReviewRound round)
     {
@@ -171,7 +180,10 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
         foreach (var standing in verdict.Findings)
         {
             var index = findings.FindIndex(finding => finding.Id == standing.Id);
-            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, index < 0 ? null : findings[index].Answer, index < 0 ? round.Number : findings[index].Raised);
+            // A finding listed again without a severity or a location keeps the ones the reviewer gave it before.
+            var earlier = index < 0 ? null : findings[index];
+            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, earlier?.Answer, earlier?.Raised ?? round.Number,
+                standing.Severity ?? earlier?.Severity, standing.Location ?? earlier?.Location);
             if (index < 0)
             {
                 findings.Add(finding);
@@ -192,7 +204,7 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
 
             var reason = verdict.Withdrawn.FirstOrDefault(withdrawal => withdrawal.Id == finding.Id).Reason;
             findings[index] = finding.State == FindingState.Disputed || reason is not null
-                ? finding with { State = FindingState.Withdrawn, Text = string.IsNullOrWhiteSpace(reason) ? finding.Text : reason }
+                ? finding with { State = FindingState.Withdrawn, Reason = string.IsNullOrWhiteSpace(reason) ? null : reason }
                 : finding with { State = FindingState.Resolved };
         }
 

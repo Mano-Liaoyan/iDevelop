@@ -18,7 +18,7 @@ public sealed class GateViewModel : ObservableObject, IDisposable
     private readonly OperationId _approval = new(Guid.NewGuid());
     private readonly Dictionary<string, OperationId> _sendBacks = [];
     private GateView _gate;
-    private string? _report;
+    private IReadOnlyList<GateInputViewModel>? _inputs;
     private string _reason = "";
     private string? _notice;
     private bool _busy;
@@ -31,7 +31,7 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         _approve = new RelayCommand(() => _ = AnswerAsync(sendBack: null), () => CanAnswer);
         _sendBack = new RelayCommand(() => _ = AnswerAsync(Reason.Trim()), () => CanAnswer && !string.IsNullOrWhiteSpace(Reason));
         run.PropertyChanged += OnRunChanged;
-        _ = LoadReportAsync();
+        _ = LoadInputsAsync();
     }
 
     /// <summary>"Waiting for approval", "Approved", "Sent back", or "Closed".</summary>
@@ -40,12 +40,20 @@ public sealed class GateViewModel : ObservableObject, IDisposable
     /// <summary>"1 of this run", which counts the node's requests in its run.</summary>
     public string RequestLabel => $"{_gate.Request.Sequence} of this run";
 
-    /// <summary>What approving hands on: each input's report under its task's title, once it is read.</summary>
-    public string? Report
+    /// <summary>What approving hands on, input by input, once it is read: each input's report, or a review's conclusion.</summary>
+    public IReadOnlyList<GateInputViewModel>? Inputs
     {
-        get => _report;
-        private set => SetProperty(ref _report, value);
+        get => _inputs;
+        private set
+        {
+            if (SetProperty(ref _inputs, value))
+            {
+                OnPropertyChanged(nameof(HasInputs));
+            }
+        }
     }
+
+    public bool HasInputs => Inputs is { Count: > 0 };
 
     /// <summary>The person's reason for sending the request back, which they write before Send back.</summary>
     public string Reason
@@ -122,14 +130,14 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         _sendBack.NotifyCanExecuteChanged();
     }
 
-    private async Task LoadReportAsync()
+    private async Task LoadInputsAsync()
     {
         var coordinator = _run.Coordinator;
         var request = _gate.Request.Id;
-        var report = await Task.Run(() => coordinator.GateReport(request));
-        if (!_disposed)
+        var inputs = await Task.Run(() => coordinator.GateInputs(request));
+        if (!_disposed && inputs is { } read)
         {
-            Report = report;
+            Inputs = [.. read.Select(input => new GateInputViewModel(input))];
         }
     }
 

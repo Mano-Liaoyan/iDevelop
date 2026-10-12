@@ -186,7 +186,8 @@ public sealed class ReviewTests : IDisposable
             Assert.Contains("\"answer\": \"disputed\"", Prompt(_reviewer, 2));
             Assert.Contains("## The change in this round\n\nNo file changed.", Prompt(_reviewer, 2));
             var finding = Assert.Single(ReviewLedger.Fold(review).Findings);
-            Assert.Equal((FindingState.Withdrawn, "The ticket wants the exact sum.", "The ticket asks for the exact sum."), (finding.State, finding.Text, finding.Answer));
+            Assert.Equal((FindingState.Withdrawn, "add should round.", "The ticket wants the exact sum.", "The ticket asks for the exact sum."),
+                (finding.State, finding.Text, finding.Reason, finding.Answer));
         }
     }
 

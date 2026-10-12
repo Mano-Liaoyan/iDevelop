@@ -498,6 +498,14 @@
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
+  <!-- A finding's file and line, in the conversation's code font, so a path reads as one. -->
+  <Style Selector="TextBlock.location">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
   <!-- A disclosure: a chevron and a count that show or hide detail most people never need. -->
   <Style Selector="ToggleButton.disclosure">
     <Setter Property="Padding" Value="0,2" />

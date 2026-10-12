@@ -189,6 +189,40 @@ public sealed class RunReviewTests
     }
 
     [Fact]
+    public async Task An_approval_reads_a_handed_on_review_as_its_verdict_and_every_finding_it_raised_and_records_its_report_unchanged()
+    {
+        const string Raised = """
+            {"status": "verdict", "verdict": "changes", "findings": [
+              {"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."},
+              {"id": "2", "text": "add has no comment.", "change": "Add # sum."}]}
+            """;
+        const string Agreed = """{"status": "verdict", "verdict": "approve", "findings": [], "withdrawn": [{"id": "2", "reason": "The ticket asks for no comment."}]}""";
+        await using var f = new RunConversationFixture(Gated());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}, {"id": "2", "answer": "disputed", "note": "Not asked."}]""")))
+            .Answer(R, Reads(f, 1, Raised), Reads(f, 2, Agreed))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        await f.Resume();
+
+        var waiting = await f.Until(view => view.Tasks[G].Gate is { Status: GateStatus.Waiting });
+        var inputs = f.Coordinator.GateInputs(waiting.Tasks[G].Gate!.Request.Id)!.Value;
+
+        var input = Assert.Single(inputs);
+        Assert.Equal(("Review (dependency)", Verdict(Agreed)), (input.Heading, input.Report));
+        var review = input.Review!;
+        Assert.Equal((true, 2), (review.Verdict.Approves, review.Round));
+        Assert.Equal(
+            [("1", FindingState.Resolved, "high", "calc.txt:1", "add subtracts.", null, "It adds now."),
+                ("2", FindingState.Withdrawn, null, null, "add has no comment.", "The ticket asks for no comment.", "Not asked.")],
+            review.Findings.Select(finding => (finding.Id, finding.State, finding.Severity, finding.Location, finding.Text, finding.Reason, finding.Answer)));
+        await Approved(f);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(f.Read().CurrentResults[G].Report, string.Join("\n\n", inputs.Select(each => each.Markdown)));
+    }
+
+    [Fact]
     public async Task Agreement_forwards_the_reviewed_code_and_artifacts_without_making_the_reviewer_their_owner()
     {
         await using var f = new RunConversationFixture(Gated());

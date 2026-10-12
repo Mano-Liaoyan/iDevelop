@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using IDevelop.Nodes;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -43,24 +44,59 @@ internal abstract record GateAnswer
 }
 
 /// <summary>
+/// One input that approving a request hands on, as the person reads it before answering: the heading the approval's report
+/// gives it, its task's title and connection kind, then its report. <paramref name="Review"/> is a review's conclusion, or
+/// null for any other input and for a review whose record cannot be read.
+/// </summary>
+internal sealed record GateInput(string Heading, string Report, HandedReview? Review)
+{
+    /// <summary>The input as the approval's report records it.</summary>
+    public string Markdown => $"## {Heading}\n\n{Report}";
+}
+
+/// <summary>
+/// A review's conclusion as an approval hands it on: the verdict it agreed with in round <paramref name="Round"/>, and every
+/// finding it raised, each with how it was settled.
+/// </summary>
+internal sealed record HandedReview(Verdict Verdict, int Round, ImmutableArray<Finding> Findings);
+
+/// <summary>
 /// What an approval hands on: the code of its inputs, their dependency artifacts under the approval's result, and their
 /// reports. The person decides on these, so the request fixes them and the approval records them unchanged.
 /// </summary>
 internal static class GateForwarding
 {
     /// <summary>Each input's report under its task's title, in binding order, unshortened.</summary>
-    public static string Report(RunRecord record, InputRecord inputs)
+    public static string Report(RunRecord record, InputRecord inputs) =>
+        string.Join("\n\n", Inputs(record, inputs, _ => null).Select(input => input.Markdown));
+
+    /// <summary>
+    /// Each input as <see cref="Report"/> records it, and for a review's input the review's conclusion, folded from the log of
+    /// the review attempt that <paramref name="reviewLog"/> finds for its result. A log that cannot be read, or that holds no
+    /// verdict, gives no conclusion.
+    /// </summary>
+    public static ImmutableArray<GateInput> Inputs(RunRecord record, InputRecord inputs, Func<ResultRecord, AttemptRecord?> reviewLog)
     {
         var workflow = record.Revisions[inputs.Revision].Snapshot;
-        return string.Join("\n\n", inputs.Bindings.Select(binding => binding switch
+        return [.. inputs.Bindings.Select(binding => binding switch
         {
-            InputBinding.Provided provided =>
-                $"## {workflow.Tasks[provided.Edge.From].Title} ({provided.Kind.ToString().ToLowerInvariant()})\n\n" +
-                record.Results.Single(result => result.Id == provided.Result).Report,
-            InputBinding.MissingContext missing => $"## {workflow.Tasks[missing.Edge.From].Title} (context)\n\nContext was unavailable.",
+            InputBinding.Provided provided => Provided(record, workflow.Tasks[provided.Edge.From], provided, reviewLog),
+            InputBinding.MissingContext missing => new GateInput($"{workflow.Tasks[missing.Edge.From].Title} (context)", "Context was unavailable.", null),
             _ => throw new InvalidOperationException("Unknown input binding."),
-        }));
+        })];
     }
+
+    private static GateInput Provided(RunRecord record, TaskDefinition from, InputBinding.Provided provided, Func<ResultRecord, AttemptRecord?> reviewLog)
+    {
+        var result = record.Results.Single(result => result.Id == provided.Result);
+        return new GateInput($"{from.Title} ({provided.Kind.ToString().ToLowerInvariant()})", result.Report,
+            from.Blueprint.Work is WorkSpec.Review ? Conclusion(reviewLog(result)) : null);
+    }
+
+    private static HandedReview? Conclusion(AttemptRecord? log) =>
+        log is not null && ReviewLedger.Fold(log) is { Rounds: [.., { Verdict: { } verdict }] } ledger
+            ? new HandedReview(verdict, ledger.Round, ledger.Findings)
+            : null;
 
     /// <summary>The code an approval forwards: its inputs' code, or none on the approved base.</summary>
     public static CodeOutput? Code(InputRecord inputs) =>

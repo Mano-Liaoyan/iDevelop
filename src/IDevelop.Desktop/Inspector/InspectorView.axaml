@@ -17,6 +17,38 @@
     <!-- An overlay scroll bar 10 px wide, expanded, fits in the panel's 12 px right inset, so it never covers a row's
          buttons, and the rows never move for it. -->
     <x:Double x:Key="ScrollBarSize">10</x:Double>
+    <!-- One finding of a review, in the Review node's Findings and in an Approval's handed-on review alike: its heading, with
+         its severity at the card's right edge where every card keeps it, then its location, the reviewer's latest words, and
+         how it was or would be settled: the change that would settle it, the implementer's answer, and why the reviewer
+         withdrew it. A verdict that gave no severity or location shows neither. -->
+    <DataTemplate x:Key="FindingTemplate" DataType="execution:FindingViewModel">
+      <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
+              BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
+              Opacity="{Binding Emphasis}">
+        <StackPanel Spacing="4">
+          <!-- The chip keeps to 96 px, so an odd long severity wraps inside it rather than pushing it past the card, and the
+               heading sits on the chip's first line. -->
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Classes="caption" Text="{Binding Heading}" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,3,0,0" />
+            <Border Grid.Column="1" Classes="chip" VerticalAlignment="Top" MaxWidth="96"
+                    IsVisible="{Binding Severity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    AutomationProperties.AutomationId="FindingSeverity">
+              <TextBlock Text="{Binding Severity}" />
+            </Border>
+          </Grid>
+          <TextBlock Classes="location" Text="{Binding Location}"
+                     IsVisible="{Binding Location, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     AutomationProperties.AutomationId="FindingLocation" />
+          <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+          <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding Withdrawal}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Withdrawal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
   </UserControl.Resources>
   <Panel>
     <!-- The blueprint editor takes the panel while it is open. Its sections fold apart from the inspector's. -->
@@ -490,18 +522,74 @@
                               <TextBlock Text="{Binding RequestLabel}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextBrush}"
                                          AutomationProperties.AutomationId="GateRequest" />
                             </inspector:InspectorRow>
-                            <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}"
-                                                    IsShown="{Binding Report, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                              <!-- The forwarded report is Markdown, which renders as the conversation renders it. -->
-                              <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8">
-                                <Border.Styles>
+                            <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}" IsShown="{Binding HasInputs}">
+                              <!-- Each input shows its heading, then its report as Markdown in a card, as the conversation renders
+                                   it. A review shows its verdict as a status and every finding it raised on the Review node's
+                                   finding cards, with no card around them, and keeps its recorded report, with the raw verdict,
+                                   behind a disclosure. Everything grows with what it holds, so the panel's own scroll is the only one. -->
+                              <ItemsControl ItemsSource="{Binding Inputs}" AutomationProperties.AutomationId="GateInputs">
+                                <ItemsControl.Styles>
                                   <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
-                                </Border.Styles>
-                                <!-- The card grows with the report, so the panel's own scroll is the only one. -->
-                                <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
-                                                           AutomationProperties.AutomationId="GateReport"
-                                                           AutomationProperties.Name="What approving hands on" />
-                              </Border>
+                                </ItemsControl.Styles>
+                                <ItemsControl.ItemsPanel>
+                                  <ItemsPanelTemplate>
+                                    <StackPanel Spacing="12" />
+                                  </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate DataType="execution:GateInputViewModel">
+                                    <!-- Every input's heading starts at the row's edge, above its report's card or its review. -->
+                                    <StackPanel Spacing="8">
+                                      <TextBlock Text="{Binding Heading}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium"
+                                                 Foreground="{DynamicResource TextStrongBrush}"
+                                                 AutomationProperties.AutomationId="GateInputHeading" />
+                                      <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
+                                              IsVisible="{Binding !IsReview}">
+                                        <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
+                                                                   AutomationProperties.AutomationId="GateReport"
+                                                                   AutomationProperties.Name="What approving hands on" />
+                                      </Border>
+                                      <StackPanel Spacing="8" IsVisible="{Binding IsReview}" AutomationProperties.AutomationId="GateReview">
+                                        <Border Classes="pill" HorizontalAlignment="Left" Classes.complete="{Binding Approves}" Classes.waiting="{Binding !Approves}">
+                                          <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <PathIcon Theme="{StaticResource Glyph}" />
+                                            <TextBlock Text="{Binding Verdict}" AutomationProperties.AutomationId="GateVerdict" />
+                                          </StackPanel>
+                                        </Border>
+                                        <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
+                                                      IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                                      AutomationProperties.AutomationId="GateFindings"
+                                                      AutomationProperties.Name="Findings">
+                                          <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                              <StackPanel Spacing="8" />
+                                            </ItemsPanelTemplate>
+                                          </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                        <TextBlock Classes="caption" Text="{Binding NoFindings}" TextWrapping="Wrap"
+                                                   IsVisible="{Binding NoFindings, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   AutomationProperties.AutomationId="GateNoFindings" />
+                                        <StackPanel Spacing="4">
+                                          <ToggleButton x:Name="RawToggle" Classes="disclosure"
+                                                        AutomationProperties.AutomationId="GateRawToggle"
+                                                        AutomationProperties.Name="Raw data">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                              <PathIcon Theme="{StaticResource Glyph}" />
+                                              <TextBlock Text="Raw data" />
+                                            </StackPanel>
+                                          </ToggleButton>
+                                          <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
+                                                  IsVisible="{Binding #RawToggle.IsChecked}">
+                                            <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
+                                                                       AutomationProperties.AutomationId="GateRaw"
+                                                                       AutomationProperties.Name="The review's recorded report" />
+                                          </Border>
+                                        </StackPanel>
+                                      </StackPanel>
+                                    </StackPanel>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Layout="Full" IsShown="{Binding SentBackReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                               <TextBlock Text="{Binding SentBackReason, StringFormat='Sent back: {0}'}" TextWrapping="Wrap" FontSize="12"
@@ -1000,7 +1088,7 @@
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
                         <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
-                        <ItemsControl ItemsSource="{Binding Findings}"
+                        <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
                                       AutomationProperties.AutomationId="Findings"
                                       AutomationProperties.Name="Findings">
                           <ItemsControl.ItemsPanel>
@@ -1008,22 +1096,6 @@
                               <StackPanel Spacing="8" />
                             </ItemsPanelTemplate>
                           </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="execution:FindingViewModel">
-                              <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
-                                      BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
-                                      Opacity="{Binding Emphasis}">
-                                <StackPanel Spacing="4">
-                                  <TextBlock Classes="caption" Text="{Binding Heading}" />
-                                  <TextBlock Text="{Binding Reviewer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}" />
-                                  <TextBlock Text="{Binding Change}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                             IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                  <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
-                                             IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                </StackPanel>
-                              </Border>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
                         </ItemsControl>
                       </StackPanel>
                     </inspector:InspectorRow>
