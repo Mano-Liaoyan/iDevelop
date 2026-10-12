@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Git;
 using IDevelop.Core.Tests.Turns;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -328,6 +329,76 @@ public sealed class ConcurrencyTests
         }
         Assert.True(waited.Elapsed < TimeSpan.FromSeconds(10), $"The preview waited {waited.Elapsed}.");
         Assert.Equal(RunProblem.JournalBusy, Assert.IsType<RebasePreviewRead.Rejected>(preview).Reason.Problem);
+    }
+
+    [Fact]
+    public async Task A_person_s_Mark_done_takes_the_repository_ahead_of_scheduled_work_that_takes_it_again_at_once()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A, conversation: ConversationMode.Chat)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[A].State == TaskState.Waiting);
+        var turn = new TurnKey(waiting.Tasks[A].Attempt!.Value, 1);
+        // A step that waited as the run's work would give up within the test's bound.
+        f.Runs.MutationPatience = TimeSpan.FromSeconds(3);
+        ConversationCommandResult done;
+        var turns = 0;
+        var publishing = 0;
+        var publishTurns = 0;
+        await using (var loop = new ScheduledLoop(f.Preparation.Git.Open()))
+        {
+            await loop.Held.WaitAsync(Bound);
+            f.Runs.Probe = point =>
+            {
+                // The loop takes the lock back after Mark done's first step, and the publication starts only once it has.
+                if (point == "publish.lock.before")
+                {
+                    Volatile.Write(ref publishing, 1);
+                    loop.WaitHeld();
+                    return;
+                }
+                if (point != "mutation.waiting") return;
+                // Each try a step's wait for the lock is refused lets the loop's lock go once.
+                Interlocked.Increment(ref turns);
+                if (Volatile.Read(ref publishing) == 1) Interlocked.Increment(ref publishTurns);
+                loop.Turn();
+            };
+            done = await f.Coordinator.MarkDone(f.Address, A, turn).WaitAsync(Bound);
+        }
+
+        // Mark done's closure and its publication each waited behind the loop and still got the lock within the one-second
+        // wait of a person's command.
+        Assert.True(Volatile.Read(ref turns) > Volatile.Read(ref publishTurns));
+        Assert.True(Volatile.Read(ref publishTurns) > 0);
+        Assert.Equal(CommandOutcome.Applied, done.Outcome);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
+    }
+
+    [Fact]
+    public async Task A_start_does_not_take_the_repository_while_a_person_s_command_waits_for_it()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        var first = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runs.Probe = point =>
+        {
+            if (point is "mutation.waiting" or "runner.prepared") first.TrySetResult(point);
+        };
+        var folder = Directory.CreateDirectory(Path.Combine(f.Preparation.Git.Open().CommonDirectory, "idevelop")).FullName;
+        // A person's command holds this file while it waits for the lock, here or in another iDevelop window.
+        using (new FileStream(Path.Combine(folder, "person.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            await f.Resume();
+
+            // Nothing holds the lock itself, so only the waiting command keeps the start from preparing.
+            Assert.Equal("mutation.waiting", await first.Task.WaitAsync(Bound));
+        }
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(1, f.Launches(A));
+        Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
     }
 
     [Fact]

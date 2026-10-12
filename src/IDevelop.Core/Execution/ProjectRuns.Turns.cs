@@ -23,13 +23,16 @@ public sealed partial class ProjectRuns
 
     private RunStore TurnStore => Store ?? RunStore.Open(_projectFolder);
     /// <summary>
-    /// A materializer whose steps wait <paramref name="patience"/> for the repository's mutation lock, and stop waiting once
-    /// the project closes or <paramref name="halted"/> says their owner halted.
+    /// A materializer whose steps wait for the repository's mutation lock as a run's own <paramref name="scheduled"/> work,
+    /// for <see cref="MutationPatience"/> and behind any person's command that waits, or as a person's command, for
+    /// <see cref="GitRepository.MutationPatience"/> and ahead of that work. They stop waiting once the project closes or
+    /// <paramref name="halted"/> says their owner halted.
     /// </summary>
-    internal Materializer TurnMaterializer(RunStore store, TimeSpan patience, Func<bool>? halted = null)
+    internal Materializer TurnMaterializer(RunStore store, bool scheduled, Func<bool>? halted = null)
     {
         var materializer = MergeJoins.Open(_projectFolder, store, MaterializerClock ?? TimeProvider, GitEnvironment, point => Probe?.Invoke(point), Volumes);
-        materializer.MutationPatience = patience;
+        materializer.MutationPatience = scheduled ? MutationPatience : GitRepository.MutationPatience;
+        materializer.Scheduled = scheduled;
         materializer.Halted = () => Closing || halted?.Invoke() == true;
         return materializer;
     }
@@ -108,7 +111,7 @@ public sealed partial class ProjectRuns
         if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
         var store = TurnStore;
-        var materializer = TurnMaterializer(store, MutationPatience, halted);
+        var materializer = TurnMaterializer(store, scheduled: true, halted);
         RunLease? lease = null;
         AttemptLog? log = null;
         TurnOwner? owner = null;
@@ -335,7 +338,7 @@ public sealed partial class ProjectRuns
             taken.Lease.Dispose();
             return new Reconciliation.Refused(new(RunProblem.InvalidClaim));
         }
-        var owner = new TurnOwner(this, store, TurnMaterializer(store, MutationPatience), taken.Lease,
+        var owner = new TurnOwner(this, store, TurnMaterializer(store, scheduled: true), taken.Lease,
             new(record.Repository!, permit.Workflow, permit.Run, task, launch), operation, record.Preparations[launch], null,
             record.Revisions[record.Attempts[launch.Attempt].Revision].Snapshot.Tasks[task], adopted: true);
         bool closing;

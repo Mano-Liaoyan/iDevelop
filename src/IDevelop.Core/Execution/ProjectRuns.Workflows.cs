@@ -22,7 +22,7 @@ public sealed partial class ProjectRuns
     /// <summary>
     /// How long a run's own scheduled work in this window waits for the repository's mutation lock. A run's tasks prepare,
     /// claim, and publish at the same time, and each retries the lock rather than being refused as busy. A person's command
-    /// keeps <see cref="GitRepository.MutationPatience"/>.
+    /// keeps <see cref="GitRepository.MutationPatience"/> and takes the lock ahead of that work.
     /// </summary>
     internal TimeSpan MutationPatience { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -61,7 +61,7 @@ public sealed partial class ProjectRuns
                     throw new InvalidOperationException();
             }
             WorkflowRunCoordinator coordinator;
-            try { coordinator = new(this, store, (patience, halted) => TurnMaterializer(store, patience, halted), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
+            try { coordinator = new(this, store, (scheduled, halted) => TurnMaterializer(store, scheduled, halted), new(ProjectFolders.OnDisk(_projectFolder), workflow, run), permit); }
             catch (InvalidOperationException)
             {
                 permit?.Dispose();
