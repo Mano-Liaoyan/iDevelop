@@ -39,6 +39,19 @@ internal sealed partial class Shell
         Click(WorkflowExpand(canvas.Project.Name, canvas.Name));
     }
 
+    /// <summary>Sets the sidebar's width, as dragging the splitter after it does, within its 240 to 400 px range.</summary>
+    public void SizeSidebar(double width)
+    {
+        Window.FindControl<Grid>("Columns")!.ColumnDefinitions[0].Width = new GridLength(width);
+        Render();
+    }
+
+    /// <summary>The project's name in its row.</summary>
+    public TextBlock ProjectName(string project) => ById<TextBlock>(ProjectItem(project), "ProjectName").Single();
+
+    /// <summary>The workflow's name in its row.</summary>
+    public TextBlock WorkflowName(string project, string workflow) => ById<TextBlock>(WorkflowItem(project, workflow).Item, "WorkflowName").Single();
+
     /// <summary>The project, then the workflow, as the breadcrumb names them.</summary>
     public (string, string) Breadcrumb() => (Find<TextBlock>("BreadcrumbProject").Text ?? "", Find<TextBlock>("BreadcrumbWorkflow").Text ?? "");
 

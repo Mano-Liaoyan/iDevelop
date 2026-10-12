@@ -43,7 +43,7 @@ public sealed class CanvasChromeTests : IDisposable
 
         Assert.Equal((240, 322, 336), Widths(shell));
 
-        SizeSidebar(shell, 400);
+        shell.SizeSidebar(400);
         Assert.Equal((282, 280, 336), Widths(shell));
 
         Resize(shell, 1600, 1000);
@@ -477,12 +477,6 @@ public sealed class CanvasChromeTests : IDisposable
     {
         var columns = (Grid)shell.Find<Control>("Inspector").Parent!;
         return (columns.ColumnDefinitions[0].ActualWidth, shell.Find<Control>("Inspector").Bounds.Width, columns.ColumnDefinitions[2].ActualWidth);
-    }
-
-    private static void SizeSidebar(Shell shell, double width)
-    {
-        ((Grid)shell.Find<Control>("Inspector").Parent!).ColumnDefinitions[0].Width = new GridLength(width);
-        shell.Render();
     }
 
     private static void Resize(Shell shell, double width, double height, double? inspector = null)
