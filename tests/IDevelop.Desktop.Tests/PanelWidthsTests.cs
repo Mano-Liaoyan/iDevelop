@@ -6,7 +6,7 @@ namespace IDevelop.Desktop.Tests;
 /// </summary>
 public sealed class PanelWidthsTests
 {
-    private static PanelWidths.Side Sidebar(double chosen) => new(chosen, 200, 400);
+    private static PanelWidths.Side Sidebar(double chosen) => new(chosen, 240, 400);
 
     private static PanelWidths.Side Inspector(double chosen) => new(chosen, 280, 520);
 
