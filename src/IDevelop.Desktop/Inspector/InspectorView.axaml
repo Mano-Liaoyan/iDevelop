@@ -521,10 +521,10 @@
                                          AutomationProperties.AutomationId="GateRequest" />
                             </inspector:InspectorRow>
                             <inspector:InspectorRow Label="Hands on" Layout="Stacked" Icon="{StaticResource IconBrief}" IsShown="{Binding HasInputs}">
-                              <!-- Each forwarded report is Markdown, which renders in a card as the conversation renders it. A
-                                   review shows its verdict as a status and every finding it raised on the Review node's finding
-                                   cards, with no card around them, and keeps its recorded report, with the raw verdict, behind a
-                                   disclosure. Everything grows with what it holds, so the panel's own scroll is the only one. -->
+                              <!-- Each input shows its heading, then its report as Markdown in a card, as the conversation renders
+                                   it. A review shows its verdict as a status and every finding it raised on the Review node's
+                                   finding cards, with no card around them, and keeps its recorded report, with the raw verdict,
+                                   behind a disclosure. Everything grows with what it holds, so the panel's own scroll is the only one. -->
                               <ItemsControl ItemsSource="{Binding Inputs}" AutomationProperties.AutomationId="GateInputs">
                                 <ItemsControl.Styles>
                                   <StyleInclude Source="/Conversation/ConversationStyles.axaml" />
@@ -536,17 +536,18 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                   <DataTemplate DataType="execution:GateInputViewModel">
-                                    <StackPanel>
+                                    <!-- Every input's heading starts at the row's edge, above its report's card or its review. -->
+                                    <StackPanel Spacing="8">
+                                      <TextBlock Text="{Binding Heading}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium"
+                                                 Foreground="{DynamicResource TextStrongBrush}"
+                                                 AutomationProperties.AutomationId="GateInputHeading" />
                                       <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
                                               IsVisible="{Binding !IsReview}">
-                                        <conversation:MarkdownView Markdown="{Binding Markdown}" FitsCode="True"
+                                        <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
                                                                    AutomationProperties.AutomationId="GateReport"
                                                                    AutomationProperties.Name="What approving hands on" />
                                       </Border>
                                       <StackPanel Spacing="8" IsVisible="{Binding IsReview}" AutomationProperties.AutomationId="GateReview">
-                                        <TextBlock Text="{Binding Heading}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium"
-                                                   Foreground="{DynamicResource TextStrongBrush}"
-                                                   AutomationProperties.AutomationId="GateReviewHeading" />
                                         <Border Classes="pill" HorizontalAlignment="Left" Classes.complete="{Binding Approves}" Classes.waiting="{Binding !Approves}">
                                           <StackPanel Orientation="Horizontal" Spacing="6">
                                             <PathIcon Theme="{StaticResource Glyph}" />
@@ -577,7 +578,7 @@
                                           </ToggleButton>
                                           <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8"
                                                   IsVisible="{Binding #RawToggle.IsChecked}">
-                                            <conversation:MarkdownView Markdown="{Binding Raw}" FitsCode="True"
+                                            <conversation:MarkdownView Markdown="{Binding Report}" FitsCode="True"
                                                                        AutomationProperties.AutomationId="GateRaw"
                                                                        AutomationProperties.Name="The review's recorded report" />
                                           </Border>

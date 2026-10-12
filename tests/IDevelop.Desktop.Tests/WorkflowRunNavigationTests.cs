@@ -102,8 +102,8 @@ public sealed class WorkflowRunNavigationTests
         Assert.False(shell.Find<TextBlock>("RunConversationNote").IsEffectivelyVisible);
         shell.WaitUntil(() => shell.Find<MarkdownView>("GateReport").Markdown is { Length: > 0 }, "the panel reads what approving hands on",
             () => "It has no report yet.");
-        Assert.Equal("## A (dependency)\n\nA ready.", shell.Find<MarkdownView>("GateReport").Markdown?.TrimEnd());
-        Assert.Equal(["A (dependency)", "A ready."], ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateReport")));
+        Assert.Equal(("A (dependency)", "A ready."), (shell.Text("GateInputHeading"), shell.Find<MarkdownView>("GateReport").Markdown?.TrimEnd()));
+        Assert.Equal(["A ready."], ConversationFixtures.Blocks(shell.Find<MarkdownView>("GateReport")));
         InspectorLayoutTests.AssertLaidOut(shell);
 
         shell.Click(shell.InView<Button>("ApproveGate"));

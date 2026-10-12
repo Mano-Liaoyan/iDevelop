@@ -111,7 +111,7 @@ public sealed class WorkflowRunReviewTests
 
         // No Markdown, and so no JSON, shows before the disclosure opens.
         Assert.Empty(ConversationFixtures.Blocks(shell.Find<ItemsControl>("GateInputs")));
-        Assert.Equal(("Review (dependency)", "Approved in round 2"), (shell.Text("GateReviewHeading"), shell.Text("GateVerdict")));
+        Assert.Equal(("Review (dependency)", "Approved in round 2"), (shell.Text("GateInputHeading"), shell.Text("GateVerdict")));
         Assert.Equal(
             ["Finding 1 · Resolved", "High", "calc.txt:1", "add subtracts.", "Implementer: It adds now.",
                 "Finding 2 · Withdrawn", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
@@ -133,6 +133,32 @@ public sealed class WorkflowRunReviewTests
         shell.Click(shell.InView<Button>("ApproveGate"));
         shell.WaitForStatus("Completed");
         Assert.Equal("Approved", shell.CardText("Approve", "CardStatus"));
+    }
+
+    [AvaloniaFact]
+    public void An_approval_lines_up_the_heading_of_a_review_and_of_another_input_and_keeps_a_long_severity_in_its_card()
+    {
+        const string Raised = """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."}]}""";
+        using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Approval(D, "Approve", 705), Reader(B, "Notes", 405, 300),
+            Dependency(A, R), Dependency(R, D), Dependency(B, D)]);
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)))
+            .Answer("Review", f.Says(Verdict(Raised), "session-r"), f.Says(Verdict(Agree), "session-r")).Answer("Notes", f.Says("Notes ready.", "session-n"))
+            .Route("A reviewer read your change", "A").Route("The implementer answered", "Review");
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForCard("Approve", "Waiting for approval");
+        shell.Click(shell.Find<Button>("NextWaiting"));
+        shell.WaitUntil(() => shell.TextsOf("GateInputHeading").Length == 2, "the panel reads both inputs that approving hands on");
+
+        Assert.Equal(["Notes (dependency)", "Review (dependency)"], shell.TextsOf("GateInputHeading").Order());
+        Assert.Equal(["Notes ready."], ConversationFixtures.Blocks(Shell.ById<MarkdownView>(shell.Window, "GateReport").Single(report => report.IsEffectivelyVisible)));
+        foreach (var size in new double[] { 280, 320, 520 })
+        {
+            shell.SizeInspector(size);
+            Assert.Single(Shell.ById<TextBlock>(shell.Window, "GateInputHeading").Select(heading => shell.Bounds(heading).Left).Distinct());
+        }
+
+        InspectorLayoutTests.AssertLaidOut(shell);
     }
 
     [AvaloniaFact]
