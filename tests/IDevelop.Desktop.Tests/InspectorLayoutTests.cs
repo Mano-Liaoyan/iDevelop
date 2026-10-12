@@ -38,32 +38,39 @@ public sealed class InspectorLayoutTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [AvaloniaTheory]
-    [InlineData(280)]
-    [InlineData(320)]
-    [InlineData(520)]
-    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width)
+    [InlineData(280, true)]
+    [InlineData(320, true)]
+    [InlineData(520, true)]
+    [InlineData(280, false)]
+    [InlineData(320, false)]
+    [InlineData(520, false)]
+    public void The_composer_s_buttons_end_where_its_box_ends_and_wrap_before_it(double width, bool moved)
     {
         var pi = new ExecutionSettings(ClientId.Pi) { Model = "deepseek/deepseek-v4-pro", Reasoning = "high" };
         Install(_fakes, ClientId.Pi);
         var project = _temp.Seed(TaskAt(Design, "Design", 105, 90, pi, "Draft it.", ConversationMode.Chat));
         // A waiting Pi conversation whose folder moved shows every button: Send, Mark done, Start a new conversation, and
-        // Open in terminal.
+        // Open in terminal. One whose folder stayed shows Send, Mark done, and Open in terminal, which once ran 26 px past
+        // the box in the default 320 px inspector, where they share a line only at the panel's inset (#85).
         ConversationFixtures.WriteAttempt(project, ConversationFixtures.Requested(ConversationFixtures.A, Design, 0, "# Design") with
             {
-                Settings = pi, Conversation = ConversationMode.Chat, WorkingFolder = Path.Combine(Path.GetDirectoryName(project)!, "before-the-move"),
+                Settings = pi, Conversation = ConversationMode.Chat,
+                WorkingFolder = moved ? Path.Combine(Path.GetDirectoryName(project)!, "before-the-move") : project,
             },
             ConversationFixtures.Launched(1), ConversationFixtures.At(2, new AgentEvent.SessionStarted("s-1")),
             ConversationFixtures.At(3, new AgentEvent.Succeeded("Which fruit?")), ConversationFixtures.Exited(4));
         var shell = Shell.Open(project, _fakes.DiscoverAsync().Result);
         shell.SizeInspector(width);
         shell.Click(shell.Header(shell.Node("Design")));
-        shell.WaitUntil(() => shell.Find<Button>("StartNewConversation").IsEffectivelyVisible, "the inspector offers a new conversation");
+        shell.WaitUntil(() => shell.Find<Button>("MarkDone").IsEffectivelyVisible && shell.Find<Button>("StartNewConversation").IsEffectivelyVisible == moved,
+            "the inspector offers Mark done, and a new conversation only after the folder moved");
         var inspector = shell.Find<Control>("Inspector");
         var box = shell.InView<TextBox>("Composer");
         shell.Render();
         double Right(Control control) => control.TranslatePoint(new Point(control.Bounds.Width, 0), inspector)!.Value.X;
 
-        var buttons = new[] { "SendMessage", "MarkDone", "StartNewConversation", "OpenInTerminal" }.Select(shell.Find<Button>).ToArray();
+        string[] shown = moved ? ["SendMessage", "MarkDone", "StartNewConversation", "OpenInTerminal"] : ["SendMessage", "MarkDone", "OpenInTerminal"];
+        var buttons = shown.Select(shell.Find<Button>).ToArray();
 
         Assert.All(buttons, button => Assert.True(button.IsEffectivelyVisible, AutomationProperties.GetAutomationId(button)));
         Assert.All(buttons, button => Assert.True(Right(button) <= Right(box) + 0.5,
