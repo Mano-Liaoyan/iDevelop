@@ -1083,10 +1083,12 @@
                     </StackPanel>
                   </inspector:InspectorSection>
 
-                  <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding ReviewSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <!-- The review's round and every finding it raised: the task's review in the canvas's run while the run shows the
+                       task, else its own latest attempt. -->
+                  <inspector:InspectorSection Key="Findings" Title="Findings" IsShown="{Binding FindingsSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <inspector:InspectorRow Layout="Full">
                       <StackPanel Spacing="6" AutomationProperties.AutomationId="Review">
-                        <TextBlock Text="{Binding ReviewSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
+                        <TextBlock Text="{Binding FindingsSummary}" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextStrongBrush}"
                                    AutomationProperties.AutomationId="ReviewSummary" />
                         <ItemsControl ItemsSource="{Binding Findings}" ItemTemplate="{StaticResource FindingTemplate}"
                                       AutomationProperties.AutomationId="Findings"

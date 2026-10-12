@@ -16,7 +16,8 @@ public sealed partial class TaskNodeViewModel
     [
         nameof(RunTask), nameof(ShowsRunState), nameof(ShowsRunConversation), nameof(IsRunOwned), nameof(JoinsRun), nameof(RunOwner), nameof(StatusLabel), nameof(IsWaiting), nameof(Waiting), nameof(StartProblem), nameof(RunRefusal), nameof(LastAttempt),
         nameof(RunStatusLabel), nameof(RunTone), nameof(RunDetail), nameof(RunHasGlyph), nameof(ShowsAgent), nameof(Subtitle), nameof(SendProblem),
-        nameof(CanStartNewConversation), nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp),
+        nameof(CanStartNewConversation), nameof(ShowsFixChoice), nameof(AttendCommand), nameof(AttendHelp), nameof(FindingsSummary), nameof(Findings),
+        nameof(HasFindings),
     ];
 
     private TaskView? _runTask;
@@ -29,6 +30,8 @@ public sealed partial class TaskNodeViewModel
     private UpdatedInputsViewModel? _updatedInputs;
     private readonly Dictionary<(AttemptId Fix, FixChoice Choice), OperationId> _fixChoices = [];
     private bool _choosingFix;
+    private AttemptRecord? _runReview;
+    private int _runReviewReads;
 
     /// <summary>
     /// The run's view of the task while the canvas's run shows it, or null. A settled run shows it until the task's own
@@ -213,6 +216,7 @@ public sealed partial class TaskNodeViewModel
         _shownStanding = Standing;
         ShowGate();
         ShowPanels();
+        _ = ReadRunReviewAsync();
         foreach (var property in RunDependents)
         {
             OnPropertyChanged(property);
@@ -327,6 +331,40 @@ public sealed partial class TaskNodeViewModel
             FixReply.Unavailable unavailable => unavailable.Message,
             _ => null,
         });
+    }
+
+    /// <summary>
+    /// Reads the log of the task's review in the canvas's run off the window's thread, each time the run's view of the task
+    /// changes, so the inspector's Findings follow the review round by round. A read that a newer one overtook is dropped.
+    /// </summary>
+    private async Task ReadRunReviewAsync()
+    {
+        var read = ++_runReviewReads;
+        if (!IsReview || RunTask is null || _canvas.Run is not { } run)
+        {
+            ShowRunReview(null);
+            return;
+        }
+
+        var (coordinator, task) = (run.Coordinator, Id);
+        var review = await Task.Run(() => coordinator.ReviewLog(task));
+        if (read == _runReviewReads)
+        {
+            ShowRunReview(review);
+        }
+    }
+
+    private void ShowRunReview(AttemptRecord? review)
+    {
+        if (ReferenceEquals(review, _runReview))
+        {
+            return;
+        }
+
+        _runReview = review;
+        OnPropertyChanged(nameof(FindingsSummary));
+        OnPropertyChanged(nameof(Findings));
+        OnPropertyChanged(nameof(HasFindings));
     }
 
     private void ShowGate()

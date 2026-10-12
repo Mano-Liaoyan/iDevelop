@@ -192,12 +192,24 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         ? "Both agents read your guidance in their next message. Ctrl+Enter sends."
         : "Write to the agent. Ctrl+Enter sends.";
 
-    /// <summary>"Round 2 · 1 open finding" for a review's latest attempt, or null.</summary>
+    /// <summary>"Round 2 · 1 open finding" for a review's latest attempt, or null, which its card shows.</summary>
     public string? ReviewSummary => _attempt is { Subject: not null } review ? RunText.ReviewSummary(review, ReviewLedger.Fold(review)) : null;
 
-    /// <summary>A review's findings, with both sides' latest words.</summary>
-    public IReadOnlyList<FindingViewModel> Findings => _attempt is { Subject: not null } review
-        ? [.. ReviewLedger.Fold(review).Findings.Select(finding => new FindingViewModel(finding))]
+    /// <summary>
+    /// The review whose findings the inspector shows: the task's review in the canvas's run while the run shows the task,
+    /// else the task's own latest attempt.
+    /// </summary>
+    private AttemptRecord? InspectedReview => RunTask is not null ? _runReview : _attempt;
+
+    /// <summary>"Round 2 · 1 open finding" for the review the inspector shows, or null, which hides its Findings.</summary>
+    public string? FindingsSummary => InspectedReview is { Subject: not null } review ? RunText.ReviewSummary(review, ReviewLedger.Fold(review)) : null;
+
+    /// <summary>
+    /// The findings of the review the inspector shows, with both sides' latest words. A settled finding fades only beside
+    /// one that still stands, so a review that ended reads in full, as an Approval reads it.
+    /// </summary>
+    public IReadOnlyList<FindingViewModel> Findings => InspectedReview is { Subject: not null } review && ReviewLedger.Fold(review) is var ledger
+        ? [.. ledger.Findings.Select(finding => new FindingViewModel(finding, fades: ledger.OpenCount > 0))]
         : [];
 
     public bool HasFindings => Findings.Count > 0;
@@ -436,6 +448,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
             ShowProposal();
             OnPropertyChanged(nameof(Preview));
             OnPropertyChanged(nameof(ReviewSummary));
+            OnPropertyChanged(nameof(FindingsSummary));
             OnPropertyChanged(nameof(Findings));
             OnPropertyChanged(nameof(HasFindings));
         }

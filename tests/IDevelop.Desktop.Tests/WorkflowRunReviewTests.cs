@@ -177,6 +177,62 @@ public sealed class WorkflowRunReviewTests
         Assert.False(shell.Find<ItemsControl>("GateFindings").IsEffectivelyVisible);
     }
 
+    [AvaloniaFact]
+    public void A_run_s_review_node_lists_every_finding_with_its_severity_its_location_and_how_it_was_settled()
+    {
+        const string Raised = """
+            {"status": "verdict", "verdict": "changes", "findings": [
+              {"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."},
+              {"id": "2", "severity": "low", "text": "add has no comment.", "change": "Add # sum."}]}
+            """;
+        const string Stands = """
+            {"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add still subtracts once.", "change": "Return a + b in both branches."}],
+             "withdrawn": [{"id": "2", "reason": "The ticket asks for no comment."}]}
+            """;
+        using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Task(B, "B", 705), Dependency(A, R), Dependency(R, B)]);
+        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."),
+                f.Writes("calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}, {"id": "2", "answer": "disputed", "note": "Not asked."}]""")),
+                f.Writes("calc.txt", "a + b # both\n", Answers("""[{"id": "1", "answer": "fixed", "note": "Both branches add."}]"""), gate: "fix"))
+            .Answer("Review", f.Says(Verdict(Raised), "session-r"), f.Says(Verdict(Stands), "session-r"), f.Says(Verdict(Agree), "session-r"))
+            .Answer("B", f.Writes("b.txt", "B\n", "B ready."))
+            .Route("A reviewer read your change", "A").Route("The implementer answered", "Review");
+        var shell = f.Window();
+        shell.StartRun();
+        shell.Click(shell.Header(shell.Node("Review")));
+
+        // The inspector follows the run's review: its second fix round waits, so one finding stands and one is withdrawn.
+        shell.WaitUntil(() => shell.Find<TextBlock>("ReviewSummary") is { IsEffectivelyVisible: true, Text: "Round 2 · 1 open finding" },
+            "the inspector reads the run's review in round 2", () => $"It reads \"{shell.Find<TextBlock>("ReviewSummary").Text}\".");
+        Assert.Equal(
+            ["Finding 1 · Open", "High", "calc.txt:1", "add still subtracts once.", "Settled by: Return a + b in both branches.", "Implementer: It adds now.",
+                "Finding 2 · Withdrawn", "Low", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
+            Shell.Texts(shell.Find<ItemsControl>("Findings")));
+        // A settled finding fades beside the one that stands.
+        Assert.Equal([1, 0.6], FindingCards(shell).Select(card => card.Opacity));
+        InspectorLayoutTests.AssertLaidOut(shell);
+
+        f.Open("fix");
+
+        shell.WaitForStatus("Completed");
+        shell.WaitUntil(() => shell.Text("ReviewSummary") == "Approved in round 3.", "the inspector reads the agreed review",
+            () => $"It reads \"{shell.Text("ReviewSummary")}\".");
+        Assert.Equal(
+            ["Finding 1 · Resolved", "High", "calc.txt:1", "add still subtracts once.", "Implementer: Both branches add.",
+                "Finding 2 · Withdrawn", "Low", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
+            Shell.Texts(shell.Find<ItemsControl>("Findings")));
+        // Once the review agreed no finding stands, so none fades, as in an Approval.
+        Assert.All(shell.Find<ItemsControl>("Findings").GetVisualDescendants(), visual => Assert.Equal(1, visual.Opacity));
+        foreach (var size in new double[] { 280, 320, 520 })
+        {
+            shell.SizeInspector(size);
+            InspectorLayoutTests.AssertLaidOut(shell);
+        }
+    }
+
+    /// <summary>The finding cards of the inspector's Findings section, in order.</summary>
+    private static Border[] FindingCards(Shell shell) =>
+        [.. shell.Find<ItemsControl>("Findings").GetRealizedContainers().Select(container => container.GetVisualDescendants().OfType<Border>().First())];
+
     /// <summary>A read-only agent whose prompt starts with its title, so its result is a report with no code of its own.</summary>
     private static WorkflowEdit.PlaceNode Reader(TaskId id, string title, double x, double y) =>
         new(id, new Blueprint(new("example.reader", 1), "Reader",
