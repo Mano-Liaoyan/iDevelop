@@ -158,7 +158,18 @@ internal static class RunProjection
             return new(task, end is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } ? TaskState.Settling : TaskState.Failed)
             { Attempt = id, End = end };
         }
-        if (LastLaunch(record, id) is not { } last) return new(task, TaskState.Ready) { Attempt = id };
+        if (LastLaunch(record, id) is not { } last)
+        {
+            // A reserved start whose producer's current result, the one it took, went stale waits for that producer, as a
+            // start not yet reserved does, because its first claim would be refused (#85).
+            var dependencies = record.Inputs[record.Attempts[id].InitialInputs].Bindings.OfType<InputBinding.Provided>()
+                .Where(binding => binding.Kind == ConnectionKind.Dependency).ToArray();
+            var (results, current) = dependencies.Length == 0
+                ? (ImmutableHashSet<ResultId>.Empty, ImmutableDictionary<TaskId, ResultRecord>.Empty) : (record.StaleResults, record.CurrentResults);
+            ImmutableSortedSet<TaskId> stale = [.. dependencies.Where(binding => results.Contains(binding.Result) &&
+                current.GetValueOrDefault(binding.Edge.From)?.Id == binding.Result).Select(binding => binding.Edge.From)];
+            return stale.IsEmpty ? new(task, TaskState.Ready) { Attempt = id } : new(task, TaskState.Pending) { Attempt = id, HeldBy = stale };
+        }
         if (!record.TurnClosures.ContainsKey(last))
             return new(task, record.RootExits.ContainsKey(last) ? TaskState.Settling : TaskState.Uncertain) { Attempt = id };
         var resting = log(record.Attempts[id]);
