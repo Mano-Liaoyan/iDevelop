@@ -65,6 +65,7 @@ internal sealed partial class WorkflowRunCoordinator
         _permit = permit;
         Address = address;
         _view = Project(Read() ?? throw new InvalidOperationException("The run could not be read."));
+        runs.TurnBackgroundChanged += OnTurnBackground;
         _loop = Task.Run(Loop);
         Post(() => { });
     }
@@ -249,6 +250,7 @@ internal sealed partial class WorkflowRunCoordinator
             var all = Task.WhenAll(pending);
             if (await Task.WhenAny(all, deadline).ConfigureAwait(false) != all) break;
         }
+        _runs.TurnBackgroundChanged -= OnTurnBackground;
         _inbox.Writer.TryComplete();
         await _loop.ConfigureAwait(false);
         // A settled turn whose disposition did not release keeps its lease only while this window can still dispose of
@@ -306,8 +308,8 @@ internal sealed partial class WorkflowRunCoordinator
         return null;
     }
 
-    private RunView Project(RunRecord record) => RunProjection.Of(Address, record, Log,
-        _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions };
+    private RunView Project(RunRecord record) => WithBackground(RunProjection.Of(Address, record, Log,
+        _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions });
 
     private AttemptRecord? Log(RunAttempt attempt) => Log(Address.Run, attempt);
 

@@ -157,10 +157,15 @@ public static class RunText
         null => "Not run",
         { Status: AttemptStatus.Running } when elsewhere => "Running in another window",
         { Status: AttemptStatus.Running, Stopping: true } => "Stopping",
+        { Status: AttemptStatus.Running, Background.IsEmpty: false } => Background(attempt.Background),
         { Status: AttemptStatus.WaitingForInput } => "Waiting for you",
         { Status: AttemptStatus.InReview } => "In review",
         _ => attempt.Status.ToString(),
     };
+
+    /// <summary>What a running turn waits for once its client has answered, while work it started in the background still runs (#113).</summary>
+    public static string Background(IEnumerable<BackgroundTask> tasks) =>
+        tasks.Any(task => task.IsSubagent) ? "Waiting for a background subagent" : "Waiting for background work";
 
     /// <summary>"Round 2 · 1 open finding", "Approved in round 2", or what ended the review, for its card.</summary>
     public static string ReviewSummary(AttemptRecord review, ReviewLedger ledger) => (review.Status, ledger.Round) switch

@@ -81,7 +81,11 @@ public abstract record ConversationContent
     private ConversationContent() { }
 
     public sealed record Message(
-        MessageAuthor Author, string Text, MessageState State) : ConversationContent;
+        MessageAuthor Author, string Text, MessageState State) : ConversationContent
+    {
+        /// <summary>The subagent of the task's agent that wrote it, or null when the agent itself did.</summary>
+        public string? Subagent { get; init; }
+    }
 
     public sealed record Activity(string Text, bool IsTool) : ConversationContent;
 

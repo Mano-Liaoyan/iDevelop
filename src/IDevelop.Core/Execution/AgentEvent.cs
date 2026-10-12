@@ -16,6 +16,7 @@ namespace IDevelop.Execution;
 [JsonDerivedType(typeof(QuestionAsked), "questionAsked")]
 [JsonDerivedType(typeof(PermissionRequested), "permissionRequested")]
 [JsonDerivedType(typeof(RequestClosed), "requestClosed")]
+[JsonDerivedType(typeof(BackgroundTasks), "backgroundTasks")]
 internal abstract record AgentEvent
 {
     private AgentEvent() { }
@@ -33,6 +34,10 @@ internal abstract record AgentEvent
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool Partial { get; init; }
+
+        /// <summary>The subagent that wrote it, or null when the task's own agent did.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Subagent { get; init; }
     }
 
     public sealed record MessageDelta(string MessageId, string Text) : AgentEvent;
@@ -52,4 +57,18 @@ internal abstract record AgentEvent
     public sealed record Succeeded(string? Result) : AgentEvent;
 
     public sealed record Failed(string Reason) : AgentEvent;
+
+    /// <summary>
+    /// The work the client still does in the background for this turn, which it answers before it exits. It replaces the
+    /// previous list; an empty one says none is left.
+    /// </summary>
+    public sealed record BackgroundTasks(ImmutableArray<BackgroundTask> Tasks) : AgentEvent
+    {
+        public bool Equals(BackgroundTasks? other) => other is not null && Tasks.SequenceEqual(other.Tasks);
+
+        public override int GetHashCode() => Tasks.Length;
+    }
 }
+
+/// <summary>Work a client does in the background for a turn: a subagent, or another task such as a background command.</summary>
+public sealed record BackgroundTask(string Description, bool IsSubagent);

@@ -156,6 +156,7 @@ internal static class WorkflowRunText
         }),
         TaskState.Ready => (NodeState.Idle, "Ready"),
         TaskState.Starting => (NodeState.Running, "Starting"),
+        TaskState.Running when !task.Background.IsEmpty => (NodeState.Running, RunText.Background(task.Background)),
         TaskState.Running => (NodeState.Running, "Running"),
         TaskState.Settling => (NodeState.Running, "Finishing"),
         TaskState.Waiting when task.Gate is not null => (NodeState.Waiting, "Waiting for approval"),

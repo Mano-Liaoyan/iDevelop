@@ -423,6 +423,11 @@ public sealed record AttemptRecord
 
     internal string? LastMessage { get; init; }
 
+    /// <summary>
+    /// What the client still does in the background for the running turn, which the turn waits for before it ends (#113).
+    /// </summary>
+    public ImmutableArray<BackgroundTask> Background { get; internal init; } = [];
+
     internal int AppliedEvents { get; init; } = 1;
 
     internal string? DeferredQuestion { get; init; }
@@ -570,6 +575,7 @@ internal static partial class AttemptReducer
         StopTurnRequested = false,
         Verdict = null,
         LastMessage = null,
+        Background = [],
         Conversation = turn.Conversation ?? record.Conversation,
         WorkingFolder = turn.WorkingFolder ?? record.WorkingFolder,
     }, turn.MissingSkills, turn.SkillsUnchecked, turn.At);
@@ -659,7 +665,9 @@ internal static partial class AttemptReducer
             ReportedModel = reported.Model ?? record.ReportedModel,
             ReportedReasoning = reported.Reasoning ?? record.ReportedReasoning,
         },
+        AgentEvent.Message { Subagent: { } subagent } message => Log(record, at, $"{subagent}: {TextLines.FirstLine(message.Text) ?? ""}"),
         AgentEvent.Message message => Log(record with { LastMessage = message.Text }, at, TextLines.FirstLine(message.Text) ?? ""),
+        AgentEvent.BackgroundTasks background => record with { Background = background.Tasks },
         AgentEvent.ToolStarted tool => Log(record, at, tool.Detail is null ? tool.Tool : $"{tool.Tool}: {tool.Detail}", isTool: true),
         AgentEvent.Notice notice => Log(record, at, notice.Text),
         AgentEvent.PermissionRequested permission => AddRequest(record,
@@ -676,7 +684,7 @@ internal static partial class AttemptReducer
     /// </summary>
     private static AttemptRecord AtExit(AttemptRecord record, AttemptEvent.Exited exited)
     {
-        record = record with { Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with { EndTree = exited.Tree }) };
+        record = record with { Turns = record.Turns.SetItem(record.Turns.Count - 1, record.Turns[^1] with { EndTree = exited.Tree }), Background = [] };
         var (turn, status, detail) = ExitPolicy(record, exited);
         var deferring = record is { DeferredQuestion: not null, CancelRequested: false, InterruptReason: null };
         if ((status == AttemptStatus.Succeeded || deferring) && record.ReadOnly && record.Turns[^1] is { StartTree: { } before, EndTree: { } after } && before != after)

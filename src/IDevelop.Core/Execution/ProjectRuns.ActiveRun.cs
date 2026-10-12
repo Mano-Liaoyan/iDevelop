@@ -310,7 +310,7 @@ public sealed partial class ProjectRuns
                             }
 
                             break;
-                        case Input.Deadline deadline when deadline.Turn == _turn && !_turn.Process.HasExited:
+                        case Input.Deadline deadline when deadline.Turn == _turn && deadline.Token == _turn.StopToken && !_turn.Process.HasExited:
                             if (!_turn.Stopping && Record.Verdict is AgentEvent.Succeeded)
                             {
                                 Append(new AttemptEvent.ShutdownForced(_owner.TimeProvider.GetUtcNow()));
@@ -598,6 +598,14 @@ public sealed partial class ProjectRuns
 
                         Append(new AttemptEvent.RequestClosed(at, closed.RequestId, RequestCloseReason.Resolved));
                         break;
+                    case AgentEvent.BackgroundTasks background:
+                        Append(new AttemptEvent.Agent(at, background));
+                        if (Workflow is { } owner)
+                        {
+                            _owner.NotifyBackground(owner.Address, background.Tasks);
+                        }
+
+                        break;
                     default:
                         Append(new AttemptEvent.Agent(at, e));
                         break;
@@ -619,8 +627,40 @@ public sealed partial class ProjectRuns
                 CloseInput();
                 if (_turn.Protocol is not OneShotProtocol)
                 {
-                    Deadline(Record.Verdict is AgentEvent.Succeeded ? _owner.TimeProvider.GetUtcNow() + _owner.SuccessExitTime : null);
+                    _turn.Reported = true;
+                    if (Record.Verdict is not AgentEvent.Succeeded)
+                    {
+                        Deadline();
+                    }
                 }
+            }
+
+            ExitClock();
+        }
+
+        /// <summary>
+        /// After a reported success the client has <see cref="ProjectRuns.SuccessExitTime"/> to exit, a clock that stands
+        /// still while the client still answers background work it lists (#113). Stop stays the way out.
+        /// </summary>
+        private void ExitClock()
+        {
+            if (!_turn.Reported || _turn.Stopping || Record.Verdict is not AgentEvent.Succeeded || !_turn.ClientRuns)
+            {
+                return;
+            }
+
+            if (Record.Background.IsEmpty && !_turn.ExitClockRuns)
+            {
+                _turn.ExitClockRuns = true;
+                Deadline(_owner.TimeProvider.GetUtcNow() + _owner.SuccessExitTime);
+            }
+            else if (!Record.Background.IsEmpty && _turn.ExitClockRuns)
+            {
+                _turn.ExitClockRuns = false;
+                _turn.StopTimer?.Dispose();
+                _turn.StopTimer = null;
+                _turn.StopToken = null;
+                _turn.StopBy = null;
             }
         }
 
@@ -819,7 +859,8 @@ public sealed partial class ProjectRuns
             _turn.StopTimer?.Dispose();
             _turn.StopBy = deadline;
             var turn = _turn;
-            turn.StopTimer = _owner.TimeProvider.CreateTimer(_ => _events.Writer.TryWrite(new Input.Deadline(turn)), null,
+            var token = turn.StopToken = new object();
+            turn.StopTimer = _owner.TimeProvider.CreateTimer(_ => _events.Writer.TryWrite(new Input.Deadline(turn) { Token = token }), null,
                 Remaining(_turn.StopBy.Value), Timeout.InfiniteTimeSpan);
         }
 
@@ -1141,7 +1182,10 @@ public sealed partial class ProjectRuns
 
             public sealed record WriteDone(Turn Turn, string? RequestId, bool Success, Answer? Delivery) : Input;
 
-            public sealed record Deadline(Turn Turn) : Input;
+            public sealed record Deadline(Turn Turn) : Input
+            {
+                public object? Token { get; init; }
+            }
         }
 
         private sealed record WriteWork(string Frame, bool Close, string? RequestId, Input.Answer? Answer, bool OneShotPrompt);
@@ -1179,6 +1223,14 @@ public sealed partial class ProjectRuns
             public DateTimeOffset? StopBy { get; set; }
 
             public ITimer? StopTimer { get; set; }
+
+            /// <summary>The newest stop timer's, so a deadline that a paused exit clock withdrew does nothing.</summary>
+            public object? StopToken { get; set; }
+
+            /// <summary>The client ended its turn with a result and its input is closed.</summary>
+            public bool Reported { get; set; }
+
+            public bool ExitClockRuns { get; set; }
 
             public ITimer? QuestionTimer { get; set; }
 
