@@ -465,7 +465,8 @@ internal sealed partial class WorkflowRunCoordinator
             switch (closing)
             {
                 case Closing.Pending still:
-                    Hold(task, new TaskHold.Refused(still.Reason, null, Transient: true));
+                    // Only a passing refusal is tried again; one that would refuse every rerun needs the person (#85).
+                    Hold(task, new TaskHold.Refused(still.Reason, null, Transient(still.Reason.Problem)));
                     break;
                 case Closing.Refused { Reason: { } reason }:
                     Hold(task, new TaskHold.Refused(reason, null, Transient(reason.Problem)));

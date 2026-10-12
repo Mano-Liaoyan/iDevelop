@@ -520,6 +520,43 @@ public sealed class RunConversationTests
         if (end == "cancel-reply") Assert.Equal(1, f.Lines(A, "messageQueued"));
     }
 
+    /// <summary>
+    /// A Mark done whose log line was written while the journal refused its closure, and whose closure the journal then
+    /// refuses for good, because another event holds the closure's operation: the run does not retry it as if the refusal
+    /// were passing, and the task needs attention (#85).
+    /// </summary>
+    [Fact]
+    public async Task A_pending_closure_the_journal_refuses_for_good_is_not_retried()
+    {
+        await using var f = new RunConversationFixture(Chat(A));
+        f.Answer(A, f.Says(A, 1, "A ready.\n"));
+        await f.Open();
+        await f.Resume();
+        await f.UntilWaiting(A, 1);
+        var attempt = f.Attempt(A);
+        var record = f.Read();
+        var closure = OperationIds.Derive(OperationIds.Derive(RunOperations.Turn(record, RunProjection.LastLaunch(record, attempt)!.Value),
+            "conversation/mark-done"), "close");
+        var writes = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point != "runner.close.attempt.before" || Interlocked.Increment(ref writes) != 1) return;
+            Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Coordinator.Permit!, closure, new RunEvent.Blocked(new(closure, A,
+                attempt, MaterializationProblem.InputUnavailable, null, [], "Another step.") { Scope = new BlockScope.Operation() })));
+            Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Coordinator.Permit!, f.Preparation.Op(), new RunEvent.BlockResolved(closure, "Done.")));
+            throw new IOException("The journal refused the closure.");
+        };
+        using (var session = f.Session(A))
+            Assert.Equal((CommandOutcome.Applied, "The task was marked done."), await Outcome(session.MarkDoneAsync(session.Snapshot.Current!.Value, default)));
+
+        var held = await f.Until(view => view.Tasks[A] is { State: TaskState.Refused, Refusal.Problem: RunProblem.OperationConflict });
+
+        Assert.Equal(RunStatus.NeedsAttention, held.Status);
+        Assert.Equal(1, f.Lines(A, "markedDone"));
+        Assert.False(f.Read().Closures.ContainsKey(attempt));
+        Assert.Equal(1, writes);
+    }
+
     [Fact]
     public async Task Cancel_stops_a_running_turn_and_its_dependents_wait()
     {
