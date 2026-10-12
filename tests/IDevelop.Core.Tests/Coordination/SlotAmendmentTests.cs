@@ -114,4 +114,50 @@ public sealed class SlotAmendmentTests
         Assert.Equal(original, f.Read().Revision.Id);
         Assert.Equal(1, f.Launches(C));
     }
+
+    /// <summary>The empty Approval node G after planner A, whose one field is optional.</summary>
+    private static readonly TaskId G = new(Guid.Parse("00000000-0000-0000-0000-0000000000e5"));
+
+    /// <summary>A fill for G and a writer Y after A, of the type that B's writer has.</summary>
+    private const string FillsGAddsY = """
+        G needs a checklist, and Y goes after me.
+
+        ```idevelop
+        {"status": "proposal",
+         "add": [{"id": "new-1", "type": "type-7", "title": "Y", "fields": {"brief": "Build Y."}}],
+         "fill": [{"slot": "slot-1", "fields": {"checklist": "Check the tests."}}],
+         "connect": [{"from": "planner", "to": "new-1"}]}
+        ```
+        """;
+
+    /// <summary>
+    /// G already asked the person for approval when the proposal that fills it is accepted, so G counts as started: its
+    /// fill is left out, as a started slot's is, and the rest of the amendment is recorded (#85).
+    /// </summary>
+    [Fact]
+    public async Task A_fill_of_an_approval_node_that_requested_approval_is_left_out_and_the_rest_of_the_amendment_runs()
+    {
+        await using var f = new CoordinatorFixture(Graph([Planner(A), new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "G" }, Agent(B)], (A, G)))
+            .Answer(A, Proposes(A, FillsGAddsY)).Answer(B, Writes(B, "b.txt", "B\n"))
+            .Answer("Y", FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-Y")).Write("y.txt", "Y\n")
+                .Print(FakeAgents.ReplyLines(ClientId.Codex, "Y ready.\n")));
+        await f.Open();
+        var original = f.Read().Revision.Id;
+        await f.Resume();
+        var request = (await f.Until(view => view.Tasks[G] is { State: TaskState.Waiting, Gate: not null })).Tasks[G].Gate!.Request;
+        var (_, _, proposal) = Proposed(f);
+        var added = proposal.Nodes.Single().Id;
+
+        var amended = await f.Coordinator.Amend(f.Address, new(original, proposal, [.. proposal.Items], Agent(A).Execution, Accept)).WaitAsync(Bound);
+
+        Assert.IsType<RunCommand.Accepted>(amended);
+        var record = f.Read();
+        Assert.NotEqual(original, record.Revision.Id);
+        Assert.Equal("", record.Revision.Snapshot.Tasks[G].Field("checklist"));
+        Assert.Equal("Build Y.", record.Revision.Snapshot.Tasks[added].Field("brief"));
+        Assert.Equal(request, Assert.Single(record.Gates.Values).Request);
+        var ran = await f.Until(view => view.Tasks.GetValueOrDefault(added) is { State: TaskState.Done });
+        Assert.Equal((TaskState.Waiting, request.Id), (ran.Tasks[G].State, ran.Tasks[G].Gate!.Request.Id));
+        Assert.Equal(1, f.Launches("Y"));
+    }
 }

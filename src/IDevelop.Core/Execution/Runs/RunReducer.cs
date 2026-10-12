@@ -565,17 +565,22 @@ internal static partial class RunReducer
                 return RunProblem.StartedTaskChanged;
             }
 
-            if (record.Attempts.Values.Any(attempt => attempt.Task == task.Id) || record.Results.Any(result => result.Task == task.Id) ||
-                record.Gates.Values.Any(gate => gate.Request.Task == task.Id))
+            if (Started(record, task.Id) && !SameTask(record.Revision.Snapshot, candidate, task.Id))
             {
-                if (!SameTask(record.Revision.Snapshot, candidate, task.Id))
-                {
-                    return RunProblem.StartedTaskChanged;
-                }
+                return RunProblem.StartedTaskChanged;
             }
         }
         return null;
     }
+
+    /// <summary>
+    /// Whether the journal keeps <paramref name="task"/> as the run has it against an amendment: it has an attempt, a
+    /// result, or a gate request. A proposal's acceptance also counts a task whose start is only planned (ADR 0012), whose
+    /// preparation plans again at the amended revision when an amendment overtakes it.
+    /// </summary>
+    internal static bool Started(RunRecord record, TaskId task) =>
+        record.Attempts.Values.Any(attempt => attempt.Task == task) || record.Results.Any(result => result.Task == task) ||
+        record.Gates.Values.Any(gate => gate.Request.Task == task);
 
     internal static bool SameTask(Workflow original, Workflow current, TaskId task) =>
         original.Tasks.TryGetValue(task, out var definition) && current.Tasks.TryGetValue(task, out var replacement) &&
