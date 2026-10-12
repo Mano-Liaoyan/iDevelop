@@ -73,9 +73,10 @@
     <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
   </Style>
+  <!-- A ghost's surface is opaque: a fill's ghost covers the empty card it fills, whose subtitle and glyph would otherwise
+       show through it (#85). Its dashed edge and faded tile say it is a proposal. -->
   <Style Selector="Border.ghost">
     <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
-    <Setter Property="Opacity" Value="0.85" />
   </Style>
   <!-- A card's and a ghost's three text lines, 18 + 16 + 16 px, sit 7 px from the card's top and bottom edges. -->
   <Style Selector="StackPanel.cardText">

@@ -4,8 +4,11 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using IDevelop.Desktop.Canvas;
+using IDevelop.Desktop.Theme;
 using IDevelop.Projects;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -301,6 +304,50 @@ public sealed class PlanningTests : IDisposable
         Assert.Equal([("Sign off", null, null, null)], GenerateTests.Review(shell));
         Assert.Equal(["Fills Sign off"], GenerateTests.Ghosts(shell));
         Assert.False(shell.Find<Button>("ProposalAgentEdit").IsEffectivelyVisible);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void A_fill_s_ghost_card_hides_the_empty_card_under_it(string theme)
+    {
+        var shell = RunArchitect("""
+            ```idevelop
+            {"status": "proposal",
+             "fill": [{"slot": "slot-2", "fields": {"instructions": "Add the button."}}]}
+            ```
+            """);
+        shell.Window.RequestedThemeVariant = theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        shell.Render();
+        var ghost = shell.Window.GetVisualDescendants().OfType<Panel>().Single(panel => AutomationProperties.GetAutomationId(panel) == "GhostCard");
+        var surface = ghost.GetVisualDescendants().OfType<Border>().Single(border => border.Classes.Contains("ghost"));
+        var color = Assert.IsAssignableFrom<ISolidColorBrush>(surface.Background).Color;
+
+        // The ghost's surface, inside its dashed edge and its rounded corners, less what the ghost draws on it: its kind
+        // tile and its text. Every other pixel is the surface's own color, so the empty card's subtitle and its warning
+        // glyph under it do not show through (#85).
+        var inside = Drawn(surface).Deflate(new Thickness(14, 4));
+        Rect[] drawn =
+        [
+            Drawn(ghost.GetVisualDescendants().OfType<KindTile>().Single()).Inflate(2),
+            .. ghost.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && !string.IsNullOrEmpty(text.Text)).Select(text =>
+            {
+                var bounds = Drawn(text);
+                return new Rect(bounds.X, bounds.Y, text.TextLayout.Width * bounds.Width / text.Bounds.Width, bounds.Height).Inflate(2);
+            }),
+        ];
+        var area = new Rect(Math.Ceiling(inside.X), Math.Ceiling(inside.Y), Math.Floor(inside.Width), Math.Floor(inside.Height));
+        var rows = shell.PixelRows(area);
+        var through = Enumerable.Range(0, rows.Length).SelectMany(y => Enumerable.Range(0, rows[y].Length).Select(x => (Point: new Point(area.X + x + 0.5, area.Y + y + 0.5), Pixel: rows[y][x])))
+            .Where(sample => !drawn.Any(rect => rect.Contains(sample.Point)))
+            .Select(sample => (sample.Point, Off: Math.Max(Math.Abs(sample.Pixel.R - color.R), Math.Max(Math.Abs(sample.Pixel.G - color.G), Math.Abs(sample.Pixel.B - color.B)))))
+            .MaxBy(sample => sample.Off);
+
+        Assert.Equal(255, color.A);
+        Assert.True(through.Off <= 2, $"The card under the ghost shows through at {through.Point}, {through.Off} off the ghost's surface.");
+
+        // Where the visual draws in the window, at the canvas's zoom.
+        Rect Drawn(Visual visual) => new(visual.TranslatePoint(default, shell.Window)!.Value, visual.TranslatePoint(new Point(visual.Bounds.Width, visual.Bounds.Height), shell.Window)!.Value);
     }
 
     [AvaloniaFact]
