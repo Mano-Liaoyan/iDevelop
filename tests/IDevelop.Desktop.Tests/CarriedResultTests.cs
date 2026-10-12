@@ -228,8 +228,9 @@ public sealed class CarriedResultTests
         var shell = f.Window();
         RunNode(shell, "C");
         RunNode(shell, "A");
-        shell.WaitForCard("B", "Succeeded");
         var canvas = shell.Window.ViewModel.Canvas!;
+        // The canvas reads the run's results once it settles, which an edit then judges.
+        shell.WaitUntil(() => canvas.History?.CurrentOf(B) is not null, "the canvas reads the run's results");
         const string ran = "Every task it ran has a current result.";
         Assert.Equal(("2 of 2 done", ran), (shell.Text("RunProgress"), shell.Text("RunActivity")));
 
@@ -262,7 +263,7 @@ public sealed class CarriedResultTests
         var shell = f.Window();
         shell.StartRun();
         shell.WaitForStatus("Completed");
-        shell.WaitForCard("B", "Succeeded");
+        shell.WaitUntil(() => shell.Window.ViewModel.Canvas!.History?.CurrentOf(B) is not null, "the canvas reads the run's results");
         Assert.Equal("Every task has a current result.", shell.Text("RunActivity"));
 
         // A new model for B is a new definition, so B's result no longer counts.
