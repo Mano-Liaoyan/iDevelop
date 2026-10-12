@@ -178,8 +178,10 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
         foreach (var standing in verdict.Findings)
         {
             var index = findings.FindIndex(finding => finding.Id == standing.Id);
-            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, index < 0 ? null : findings[index].Answer,
-                index < 0 ? round.Number : findings[index].Raised, standing.Severity, standing.Location);
+            // A finding listed again without a severity or a location keeps the ones the reviewer gave it before.
+            var earlier = index < 0 ? null : findings[index];
+            var finding = new Finding(standing.Id, FindingState.Open, standing.Text, standing.Change, earlier?.Answer, earlier?.Raised ?? round.Number,
+                standing.Severity ?? earlier?.Severity, standing.Location ?? earlier?.Location);
             if (index < 0)
             {
                 findings.Add(finding);

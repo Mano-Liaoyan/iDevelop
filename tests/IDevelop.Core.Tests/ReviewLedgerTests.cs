@@ -54,6 +54,19 @@ public sealed class ReviewLedgerTests
     }
 
     [Fact]
+    public void A_finding_listed_again_without_a_severity_or_location_keeps_the_ones_the_reviewer_gave_before()
+    {
+        var review = Review(
+            (Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "severity": "high", "location": "src/Calc.cs:12", "text": "add subtracts.", "change": "Return a + b."}]}"""), null),
+            (Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add still subtracts.", "change": "Return a + b."}]}"""),
+                Answers("""[{"id": "1", "answer": "disputed", "note": "It adds."}]""")));
+
+        var finding = Assert.Single(ReviewLedger.Fold(review).Findings);
+
+        Assert.Equal(("add still subtracts.", "high", "src/Calc.cs:12"), (finding.Text, finding.Severity, finding.Location));
+    }
+
+    [Fact]
     public void A_verdict_written_before_the_contract_asked_for_severity_and_location_stays_readable()
     {
         var (verdict, problem) = ReviewLedger.ReadVerdict(Verdict(
