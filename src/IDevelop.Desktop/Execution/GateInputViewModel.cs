@@ -14,7 +14,8 @@ public sealed class GateInputViewModel
     internal GateInputViewModel(GateInput input)
     {
         _input = input;
-        Findings = input.Review is { } review ? [.. review.Findings.Select(finding => new FindingViewModel(finding))] : [];
+        // Every finding a handed-on review raised is settled, so none fades: the person deciding reads them all in full.
+        Findings = input.Review is { } review ? [.. review.Findings.Select(finding => new FindingViewModel(finding, fades: false))] : [];
     }
 
     /// <summary>The input's heading, such as "Review (dependency)": its task's title and connection kind.</summary>

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using IDevelop.Desktop.Conversation;
 using IDevelop.Desktop.Execution;
 using IDevelop.Execution;
@@ -115,6 +116,8 @@ public sealed class WorkflowRunReviewTests
             ["Finding 1 · Resolved", "High", "calc.txt:1", "add subtracts.", "Implementer: It adds now.",
                 "Finding 2 · Withdrawn", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
             Shell.Texts(shell.Find<ItemsControl>("GateFindings")));
+        // Every finding an Approval reads is settled, and a person deciding on them reads them at full contrast.
+        Assert.All(shell.Find<ItemsControl>("GateFindings").GetVisualDescendants(), visual => Assert.Equal(1, visual.Opacity));
         Assert.False(shell.Find<TextBlock>("GateNoFindings").IsEffectivelyVisible);
         Assert.False(shell.Find<MarkdownView>("GateRaw").IsEffectivelyVisible);
         InspectorLayoutTests.AssertLaidOut(shell);

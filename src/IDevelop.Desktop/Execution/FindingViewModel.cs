@@ -7,7 +7,8 @@ namespace IDevelop.Desktop.Execution;
 /// implementer's, and why the reviewer withdrew it. A verdict written before the contract asked for a severity and a
 /// location shows neither.
 /// </summary>
-public sealed class FindingViewModel(Finding finding)
+/// <param name="fades">Whether a settled finding fades, as it does beside the open ones of a review that goes on.</param>
+public sealed class FindingViewModel(Finding finding, bool fades = true)
 {
     public string Heading => $"Finding {finding.Id} · {RunText.FindingState(finding.State)}";
 
@@ -26,6 +27,6 @@ public sealed class FindingViewModel(Finding finding)
     /// <summary>"Withdrawn: " and the reviewer's reason, or null.</summary>
     public string? Withdrawal => finding.Reason is { } reason ? $"Withdrawn: {reason}" : null;
 
-    /// <summary>A settled finding fades.</summary>
-    public double Emphasis => finding.IsOpen ? 1 : 0.6;
+    /// <summary>A settled finding fades, unless the finding never fades.</summary>
+    public double Emphasis => finding.IsOpen || !fades ? 1 : 0.6;
 }
