@@ -221,19 +221,20 @@ internal sealed partial class Materializer
     {
         var workflow = permit.Workflow;
         var run = permit.Run;
-        var id = OperationIds.Derive(operation, step + "-blocked");
         try
         {
             var record = Read(workflow, run);
-            var number = 1;
-            while (record.Receipts.TryGetValue(id, out var receipt))
+            foreach (var id in RunReducer.BlockIds(operation, step))
             {
+                if (!record.Receipts.TryGetValue(id, out var receipt))
+                {
+                    Journal(step + "-blocked", () => _store.Record(permit, id, new RunEvent.Blocked(block)));
+                    return new Preparation.Blocked(block);
+                }
                 if (receipt.Event is RunEvent.Blocked prior && !record.Blocks[id].Resolved && RunReducer.Same(prior.Block, block))
                     return new Preparation.Blocked(prior.Block);
-                id = OperationIds.Derive(operation, step + "-blocked-" + number++);
             }
-            Journal(step + "-blocked", () => _store.Record(permit, id, new RunEvent.Blocked(block)));
-            return new Preparation.Blocked(block);
+            throw new InvalidOperationException();
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
     }
