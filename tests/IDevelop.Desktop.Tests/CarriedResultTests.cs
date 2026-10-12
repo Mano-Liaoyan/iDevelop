@@ -220,6 +220,61 @@ public sealed class CarriedResultTests
     }
 
     [AvaloniaFact]
+    public void A_settled_run_s_bar_stops_saying_its_results_are_current_once_an_edit_puts_one_out_of_date()
+    {
+        // A → B, which a node run of A runs, and C, which an earlier node run ran and this one never reaches.
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), At(B, "B", 405, 90), At(C, "C", 105, 250), Dependency(A, B));
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready.")).Answer("C", f.Says("C ready."));
+        var shell = f.Window();
+        RunNode(shell, "C");
+        RunNode(shell, "A");
+        shell.WaitForCard("B", "Succeeded");
+        var canvas = shell.Window.ViewModel.Canvas!;
+        const string ran = "Every task it ran has a current result.";
+        Assert.Equal(("2 of 2 done", ran), (shell.Text("RunProgress"), shell.Text("RunActivity")));
+
+        // An edit of C puts C's result from the earlier run out of date, but no result of this run.
+        canvas.Edit(new WorkflowEdit.EditTitle(C, "Write docs"));
+        shell.Render();
+        Assert.Equal("Out of date", shell.CardText("Write docs", "CardStatus"));
+        Assert.Equal(ran, shell.Text("RunActivity"));
+
+        // A new title for A puts A's result out of date, and B's, which took it (#85). The run still completed both.
+        canvas.Edit(new WorkflowEdit.EditTitle(A, "Parse source"));
+        shell.Render();
+        Assert.Equal(["Out of date", "Out of date"], new[] { "Parse source", "B" }.Select(title => shell.CardText(title, "CardStatus")));
+        Assert.Equal(("Completed", "2 of 2 done"), (shell.RunStatus, shell.Text("RunProgress")));
+        Assert.False(Shows(shell, "RunActivity"), shell.Text("RunActivity"));
+
+        // Undo gives A its title back, so both results count again, and the bar says so again.
+        shell.Click(shell.Find<Button>("Undo"));
+        shell.Render();
+        Assert.Equal(["Succeeded", "Succeeded"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
+        Assert.Equal(ran, shell.Text("RunActivity"));
+        Assert.True(Shows(shell, "RunActivity"));
+    }
+
+    [AvaloniaFact]
+    public void A_completed_Run_Workflow_s_bar_stops_saying_every_task_has_a_current_result_once_an_edit_puts_one_out_of_date()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), At(B, "B", 405, 90), Dependency(A, B));
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForStatus("Completed");
+        shell.WaitForCard("B", "Succeeded");
+        Assert.Equal("Every task has a current result.", shell.Text("RunActivity"));
+
+        // A new model for B is a new definition, so B's result no longer counts.
+        shell.Window.ViewModel.Canvas!.Edit(new WorkflowEdit.SetExecution(B, WorkflowRunFixture.Codex with { Model = "gpt-5.4" }));
+        shell.Render();
+
+        Assert.Equal("Out of date", shell.CardText("B", "CardStatus"));
+        Assert.Equal(("Completed", "2 of 2 done"), (shell.RunStatus, shell.Text("RunProgress")));
+        Assert.False(Shows(shell, "RunActivity"), shell.Text("RunActivity"));
+    }
+
+    [AvaloniaFact]
     public void Open_conversation_of_a_task_a_settled_run_carried_opens_the_task_s_own_conversation()
     {
         using var f = Join();

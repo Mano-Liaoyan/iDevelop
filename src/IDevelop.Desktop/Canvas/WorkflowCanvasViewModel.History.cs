@@ -60,6 +60,7 @@ public sealed partial class WorkflowCanvasViewModel
             node.OnHistoryChanged();
         }
 
+        Run?.OnStandingChanged();
         OnPropertyChanged(nameof(History));
     }
 
