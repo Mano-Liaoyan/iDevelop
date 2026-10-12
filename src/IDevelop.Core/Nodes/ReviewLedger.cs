@@ -11,12 +11,13 @@ namespace IDevelop.Nodes;
 public enum FindingState { Open, Fixed, Disputed, Resolved, Withdrawn }
 
 /// <summary>
-/// One finding with both sides' latest words. <see cref="Text"/> is the reviewer's: what is wrong, why it still stands, or
-/// why it was withdrawn. <see cref="Answer"/> is the implementer's latest answer, if any. <see cref="Severity"/> and
-/// <see cref="Location"/> are what the reviewer last gave it, and null in a verdict written before the contract asked.
+/// One finding with both sides' latest words. <see cref="Text"/> is the reviewer's: what is wrong, or why it still stands.
+/// <see cref="Answer"/> is the implementer's latest answer, if any, and <see cref="Reason"/> why the reviewer withdrew it,
+/// if the reviewer said. <see cref="Severity"/> and <see cref="Location"/> are what the reviewer last gave it, and null in a
+/// verdict written before the contract asked.
 /// </summary>
 public sealed record Finding(string Id, FindingState State, string Text, string Change, string? Answer, int Raised,
-    string? Severity = null, string? Location = null)
+    string? Severity = null, string? Location = null, string? Reason = null)
 {
     public bool IsOpen => State is FindingState.Open or FindingState.Fixed or FindingState.Disputed;
 }
@@ -170,7 +171,8 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
 
     /// <summary>
     /// Applies a verdict. A listed finding stands, with the reviewer's latest words. A withdrawn finding is settled with its
-    /// reason. Any other open finding is settled: withdrawn if the implementer disputed it, otherwise resolved.
+    /// reason beside what it raised. Any other open finding is settled: withdrawn if the implementer disputed it, otherwise
+    /// resolved.
     /// </summary>
     private static ReviewRound Judge(List<Finding> findings, ReviewRound round)
     {
@@ -202,7 +204,7 @@ public sealed record ReviewLedger(ImmutableArray<ReviewRound> Rounds, ImmutableA
 
             var reason = verdict.Withdrawn.FirstOrDefault(withdrawal => withdrawal.Id == finding.Id).Reason;
             findings[index] = finding.State == FindingState.Disputed || reason is not null
-                ? finding with { State = FindingState.Withdrawn, Text = string.IsNullOrWhiteSpace(reason) ? finding.Text : reason }
+                ? finding with { State = FindingState.Withdrawn, Reason = string.IsNullOrWhiteSpace(reason) ? null : reason }
                 : finding with { State = FindingState.Resolved };
         }
 

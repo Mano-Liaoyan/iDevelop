@@ -19,7 +19,8 @@
     <x:Double x:Key="ScrollBarSize">10</x:Double>
     <!-- One finding of a review, in the Review node's Findings and in an Approval's handed-on review alike: its heading, with
          its severity at the card's right edge where every card keeps it, then its location, the reviewer's latest words, and
-         how it was or would be settled. A verdict that gave no severity or location shows neither. -->
+         how it was or would be settled: the change that would settle it, the implementer's answer, and why the reviewer
+         withdrew it. A verdict that gave no severity or location shows neither. -->
     <DataTemplate x:Key="FindingTemplate" DataType="execution:FindingViewModel">
       <Border Padding="10,8" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
               BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
@@ -41,6 +42,8 @@
                      IsVisible="{Binding Change, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Text="{Binding Implementer}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                      IsVisible="{Binding Implementer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding Withdrawal}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
+                     IsVisible="{Binding Withdrawal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
       </Border>
     </DataTemplate>

@@ -113,7 +113,7 @@ public sealed class WorkflowRunReviewTests
         Assert.Equal(("Review (dependency)", "Approved in round 2"), (shell.Text("GateReviewHeading"), shell.Text("GateVerdict")));
         Assert.Equal(
             ["Finding 1 · Resolved", "High", "calc.txt:1", "add subtracts.", "Implementer: It adds now.",
-                "Finding 2 · Withdrawn", "The ticket asks for no comment.", "Implementer: Not asked."],
+                "Finding 2 · Withdrawn", "add has no comment.", "Implementer: Not asked.", "Withdrawn: The ticket asks for no comment."],
             Shell.Texts(shell.Find<ItemsControl>("GateFindings")));
         Assert.False(shell.Find<TextBlock>("GateNoFindings").IsEffectivelyVisible);
         Assert.False(shell.Find<MarkdownView>("GateRaw").IsEffectivelyVisible);

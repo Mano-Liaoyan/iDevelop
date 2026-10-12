@@ -214,9 +214,9 @@ public sealed class RunReviewTests
         var review = input.Review!;
         Assert.Equal((true, 2), (review.Verdict.Approves, review.Round));
         Assert.Equal(
-            [("1", FindingState.Resolved, "high", "calc.txt:1", "add subtracts.", "It adds now."),
-                ("2", FindingState.Withdrawn, null, null, "The ticket asks for no comment.", "Not asked.")],
-            review.Findings.Select(finding => (finding.Id, finding.State, finding.Severity, finding.Location, finding.Text, finding.Answer)));
+            [("1", FindingState.Resolved, "high", "calc.txt:1", "add subtracts.", null, "It adds now."),
+                ("2", FindingState.Withdrawn, null, null, "add has no comment.", "The ticket asks for no comment.", "Not asked.")],
+            review.Findings.Select(finding => (finding.Id, finding.State, finding.Severity, finding.Location, finding.Text, finding.Reason, finding.Answer)));
         await Approved(f);
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal(f.Read().CurrentResults[G].Report, string.Join("\n\n", inputs.Select(each => each.Markdown)));

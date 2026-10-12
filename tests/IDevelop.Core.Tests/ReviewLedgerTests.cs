@@ -67,6 +67,21 @@ public sealed class ReviewLedgerTests
     }
 
     [Fact]
+    public void A_withdrawn_finding_keeps_what_the_reviewer_raised_beside_the_reason_it_was_withdrawn()
+    {
+        var review = Review(
+            (Verdict("""{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "text": "add should round.", "change": "Return round(a + b)."}, {"id": "2", "text": "add has no docstring.", "change": "Add one."}]}"""), null),
+            (Verdict("""{"status": "verdict", "verdict": "approve", "findings": [], "withdrawn": [{"id": "1", "reason": "The ticket wants the exact sum."}]}"""),
+                Answers("""[{"id": "1", "answer": "disputed", "note": "The ticket asks for the exact sum."}, {"id": "2", "answer": "disputed", "note": "Not asked."}]""")));
+
+        var findings = ReviewLedger.Fold(review).Findings;
+
+        Assert.Equal(
+            [("1", FindingState.Withdrawn, "add should round.", "The ticket wants the exact sum."), ("2", FindingState.Withdrawn, "add has no docstring.", null)],
+            findings.Select(finding => (finding.Id, finding.State, finding.Text, finding.Reason)));
+    }
+
+    [Fact]
     public void A_verdict_written_before_the_contract_asked_for_severity_and_location_stays_readable()
     {
         var (verdict, problem) = ReviewLedger.ReadVerdict(Verdict(
