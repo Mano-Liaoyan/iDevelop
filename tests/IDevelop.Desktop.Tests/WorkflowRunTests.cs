@@ -147,8 +147,10 @@ public sealed class WorkflowRunTests
 
         shell.Click(shell.Find<Button>("DismissRun"));
         Assert.False(shell.Find<Control>("WorkflowRunBar").IsEffectivelyVisible);
-        // The cards keep where each task stands between runs (#90).
-        Assert.Equal(["Succeeded", "Succeeded"], new[] { "A", "B" }.Select(title => shell.CardText(title, "CardStatus")));
+        // The cards keep where each task stands between runs (#90), which the canvas reads off the UI thread once the run
+        // settles, so on a busy machine the read can end after the dismissal (#86).
+        shell.WaitForCard("A", "Succeeded");
+        shell.WaitForCard("B", "Succeeded");
     }
 
     [AvaloniaFact]
