@@ -49,7 +49,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     public bool IsApplication => _message.Author == MessageAuthor.Application;
 
-    /// <summary>A subagent of the task's agent wrote it, so it shows as the subagent's own (#113).</summary>
+    /// <summary>A subagent of the task's agent wrote it, so it shows as the subagent's own.</summary>
     public bool IsSubagent => _message.Subagent is not null;
 
     public string AuthorLabel => _message.Author switch

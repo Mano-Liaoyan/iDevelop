@@ -163,7 +163,7 @@ public static class RunText
         _ => attempt.Status.ToString(),
     };
 
-    /// <summary>What a running turn waits for once its client has answered, while work it started in the background still runs (#113).</summary>
+    /// <summary>What a running turn waits for once its client has answered, while work it started in the background still runs.</summary>
     public static string Background(IEnumerable<BackgroundTask> tasks) =>
         tasks.Any(task => task.IsSubagent) ? "Waiting for a background subagent" : "Waiting for background work";
 
