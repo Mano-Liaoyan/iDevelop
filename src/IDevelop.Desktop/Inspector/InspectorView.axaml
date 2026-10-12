@@ -26,9 +26,11 @@
               BorderBrush="{DynamicResource Border80Brush}" Background="{DynamicResource SurfaceRaisedBrush}"
               Opacity="{Binding Emphasis}">
         <StackPanel Spacing="4">
+          <!-- The chip keeps to 96 px, so an odd long severity wraps inside it rather than pushing it past the card, and the
+               heading sits on the chip's first line. -->
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <TextBlock Classes="caption" Text="{Binding Heading}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            <Border Grid.Column="1" Classes="chip" VerticalAlignment="Top"
+            <TextBlock Classes="caption" Text="{Binding Heading}" TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,3,0,0" />
+            <Border Grid.Column="1" Classes="chip" VerticalAlignment="Top" MaxWidth="96"
                     IsVisible="{Binding Severity, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                     AutomationProperties.AutomationId="FindingSeverity">
               <TextBlock Text="{Binding Severity}" />

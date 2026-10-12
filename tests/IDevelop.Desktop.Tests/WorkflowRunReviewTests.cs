@@ -138,7 +138,7 @@ public sealed class WorkflowRunReviewTests
     [AvaloniaFact]
     public void An_approval_lines_up_the_heading_of_a_review_and_of_another_input_and_keeps_a_long_severity_in_its_card()
     {
-        const string Raised = """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."}]}""";
+        const string Raised = """{"status": "verdict", "verdict": "changes", "findings": [{"id": "1", "severity": "high, because every stored total drifts", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."}]}""";
         using var f = new WorkflowRunFixture([Task(A, "A", 105), Review(R, "Review", 405), Approval(D, "Approve", 705), Reader(B, "Notes", 405, 300),
             Dependency(A, R), Dependency(R, D), Dependency(B, D)]);
         f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)))
