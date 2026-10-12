@@ -161,8 +161,9 @@ public sealed partial class TaskNodeViewModel
         }),
         (false, true) when NotStarted =>
             $"The last run of the \"{RunWorkflowName}\" workflow did not start this task.",
-        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task last.",
-        (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval last.",
+        // "last" stays with the word before it, so a narrow inspector never leaves it alone on a line (#85).
+        (false, true) => $"A run of the \"{RunWorkflowName}\" workflow ran this task\u00A0last.",
+        (false, false) => $"A run of the \"{RunWorkflowName}\" workflow asked for this approval\u00A0last.",
     };
 
     private string RunWorkflowName => _runWorkflow ?? Workflow.UnnamedName;

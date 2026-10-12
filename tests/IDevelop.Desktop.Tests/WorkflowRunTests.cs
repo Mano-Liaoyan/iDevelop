@@ -170,7 +170,7 @@ public sealed class WorkflowRunTests
 
         f.Open("a");
         shell.WaitForStatus("Completed");
-        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow ran this task last."), shell.Text("RunOwner"));
+        Assert.Equal(WorkflowRunText.Unbroken("A run of the \"Workflow\" workflow ran this task\u00A0last."), shell.Text("RunOwner"));
         Assert.True(shell.InView<Button>("RunTask").IsEffectivelyEnabled);
         shell.Click(shell.InView<Button>("RunTask"));
 

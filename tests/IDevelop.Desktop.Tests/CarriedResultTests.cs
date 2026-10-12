@@ -423,7 +423,8 @@ public sealed class CarriedResultTests
 
         Assert.Equal((NodeState.Interrupted, "Closed as stopped"), ended.Card(_ => "A"));
         Assert.Equal("You closed its turn as stopped.", ended.Detail(_ => "A"));
-        Assert.Equal("A run of the \"W\" workflow ran this task last.", ended.Owner("W", hasAgent: true));
+        Assert.Equal("A run of the \"W\" workflow ran this task\u00A0last.", ended.Owner("W", hasAgent: true));
+        Assert.Equal("A run of the \"W\" workflow asked for this approval\u00A0last.", ended.Owner("W", hasAgent: false));
     }
 
     [AvaloniaFact]
