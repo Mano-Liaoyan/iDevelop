@@ -140,9 +140,18 @@ internal sealed class PreparationFixture : IDisposable
         ReleaseControl();
         Git.Dispose();
     }
-    public sealed class Clock : TimeProvider
+
+    /// <summary>
+    /// Always <see cref="At"/>, and its timers fire at once. A held clock's elapsed time moves only by <see cref="Advance"/>,
+    /// so a time budget measured on it counts the time a test gives it, never the time the test's injected work takes.
+    /// </summary>
+    public sealed class Clock(bool held = false) : TimeProvider
     {
+        private long _elapsed;
         public override DateTimeOffset GetUtcNow() => At;
+        public override long TimestampFrequency => held ? TimeSpan.TicksPerSecond : base.TimestampFrequency;
+        public override long GetTimestamp() => held ? Interlocked.Read(ref _elapsed) : base.GetTimestamp();
+        public void Advance(TimeSpan elapsed) => Interlocked.Add(ref _elapsed, elapsed.Ticks);
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
             TimeProvider.System.CreateTimer(callback, state, TimeSpan.Zero, period);
     }
