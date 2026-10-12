@@ -37,6 +37,10 @@ internal sealed partial class Shell
     public static Shell Show(ClientDirectory? clients = null)
     {
         var window = clients is null ? new MainWindow() : new MainWindow(clients);
+        // A hovered control's tooltip opens once its delay passes in real time. A click moves the pointer, runs the UI
+        // thread's jobs, and then presses, so on a busy machine the tooltip opened in between and the press missed the
+        // control (#86). A test that rests the pointer on a control turns the service back on.
+        ToolTip.SetServiceEnabled(window, false);
         window.Show();
         var shell = new Shell(window);
         shell.Render();

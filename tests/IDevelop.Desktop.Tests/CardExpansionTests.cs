@@ -505,6 +505,7 @@ public sealed class CardExpansionTests : IDisposable
     public void Resting_the_pointer_on_a_collapsed_card_opens_its_peek_and_leaving_closes_it()
     {
         var shell = Shell.Open(Diamond());
+        ToolTip.SetServiceEnabled(shell.Window, true);
         var card = shell.InCard<Panel>("Docs", "TaskCard");
 
         shell.Window.MouseMove(shell.Header(shell.Node("Docs")));
