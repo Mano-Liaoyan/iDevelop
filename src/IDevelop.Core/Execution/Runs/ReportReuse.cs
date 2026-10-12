@@ -20,24 +20,12 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
 
     public static AttemptEvidence ReadPrefix(string folder, LogCheckpoint expected) => ReadCore(folder, expected, true);
 
-    /// <summary>
-    /// The log's bytes. Its writer keeps it open while the turn runs, which Windows lets a reader share only when the reader
-    /// allows writing too, as the attempt log's own readers do.
-    /// </summary>
-    private static byte[] LogBytes(string folder)
-    {
-        using var stream = new FileStream(Path.Combine(folder, "events.jsonl"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
-
     private static AttemptEvidence ReadCore(string folder, LogCheckpoint? expected, bool prefix)
     {
         AttemptEvidence Reject(RunProblem problem) => new([], null, null, new(problem));
         try
         {
-            var bytes = LogBytes(folder);
+            var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
             if (prefix && expected is { } limit)
             {
                 if (limit.ByteLength < 0 || limit.ByteLength > bytes.LongLength) return Reject(RunProblem.EvidenceMismatch);
@@ -109,7 +97,7 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         try
         {
             if (!RunValidation.Checkpoint(prefix) || !RunValidation.Checkpoint(whole) || prefix.ByteLength > whole.ByteLength) return null;
-            var bytes = LogBytes(folder);
+            var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
             if (whole.ByteLength > bytes.LongLength) return null;
             bytes = bytes[..checked((int)whole.ByteLength)];
             if (Revision.Hash(bytes) != whole.Content || Revision.Hash(bytes.AsSpan(0, checked((int)prefix.ByteLength))) != prefix.Content) return null;
