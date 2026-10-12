@@ -30,6 +30,18 @@ internal sealed partial class WorkflowRunCoordinator
         Record() is { } record && record.Gates.TryGetValue(request, out var state) && record.Inputs.TryGetValue(state.Request.Inputs, out var inputs)
             ? GateForwarding.Inputs(record, inputs, result => ReviewLog(record, Address.Run, result)) : null;
 
+    /// <summary>
+    /// The log of <paramref name="review"/>'s review as this run shows it, which its node's inspector reads the findings from
+    /// (#118): its newest attempt in this run, or, for a result the run carried from an earlier run, the attempt there that
+    /// produced it. Null when the journal or the log cannot be read, or the run has neither. It reads the journals and the
+    /// log off the loop.
+    /// </summary>
+    public AttemptRecord? ReviewLog(TaskId review) =>
+        Record() is not { } record ? null
+        : RunProjection.LatestAttempts(record).TryGetValue(review, out var newest) ? Log(record.Attempts[newest])
+        : record.CurrentResults.GetValueOrDefault(review) is { Origin: ResultOrigin.Carried } carried ? ReviewLog(record, Address.Run, carried)
+        : null;
+
     /// <summary>The log of the attempt that produced <paramref name="result"/> of run <paramref name="run"/>, or null.</summary>
     private AttemptRecord? ReviewLog(RunRecord record, RunId run, ResultRecord result) => result.Origin switch
     {

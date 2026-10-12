@@ -223,6 +223,42 @@ public sealed class RunReviewTests
     }
 
     [Fact]
+    public async Task A_run_reads_its_review_s_log_for_the_review_node_while_the_review_goes_on_and_once_it_agreed()
+    {
+        const string Raised = """
+            {"status": "verdict", "verdict": "changes", "findings": [
+              {"id": "1", "severity": "high", "location": "calc.txt:1", "text": "add subtracts.", "change": "Return a + b."},
+              {"id": "2", "text": "add has no comment.", "change": "Add # sum."}]}
+            """;
+        const string Agreed = """{"status": "verdict", "verdict": "approve", "findings": [], "withdrawn": [{"id": "2", "reason": "The ticket asks for no comment."}]}""";
+        await using var f = new RunConversationFixture(Reviewed());
+        Routed(f).Answer(A,
+                Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}, {"id": "2", "answer": "disputed", "note": "Not asked."}]"""),
+                    gate: "fix"))
+            .Answer(R, Reads(f, 1, Raised), Reads(f, 2, Agreed))
+            .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"));
+        await f.Open();
+        Assert.Null(f.Coordinator.ReviewLog(R));
+        await f.Resume();
+
+        // The fix round waits, so the review rests in round 1 with both findings open.
+        await f.Until(view => view.Tasks[R] is { State: TaskState.Waiting, Status: AttemptStatus.InReview } && view.Tasks[A].State == TaskState.Running);
+        var raised = ReviewLedger.Fold(f.Coordinator.ReviewLog(R)!);
+        Assert.Equal(1, raised.Round);
+        Assert.Equal([("1", FindingState.Open, "high", "calc.txt:1"), ("2", FindingState.Open, null, null)],
+            raised.Findings.Select(finding => (finding.Id, finding.State, finding.Severity, finding.Location)));
+        f.Open("fix");
+        await f.UntilStatus(RunStatus.Completed);
+
+        var log = f.Coordinator.ReviewLog(R)!;
+        Assert.Equal(f.Attempt(R), log.Id);
+        Assert.Equal(
+            [("1", FindingState.Resolved, "high", "calc.txt:1", null, "It adds now."), ("2", FindingState.Withdrawn, null, null, "The ticket asks for no comment.", "Not asked.")],
+            ReviewLedger.Fold(log).Findings.Select(finding => (finding.Id, finding.State, finding.Severity, finding.Location, finding.Reason, finding.Answer)));
+    }
+
+    [Fact]
     public async Task Agreement_forwards_the_reviewed_code_and_artifacts_without_making_the_reviewer_their_owner()
     {
         await using var f = new RunConversationFixture(Gated());
