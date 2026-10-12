@@ -218,7 +218,7 @@ internal static class RecoveryText
 
     /// <summary>Why no restore can make an attempt succeed whose turn-end capture was not accepted, and what would.</summary>
     public const string NoSuccess = "Its turn-end capture was not accepted, so no restore can make this attempt succeed. Restore only puts the " +
-        "checkout back. Running the task again with Retry would, and the app does not offer Retry yet. Stop Workflow ends the run, and finished work stays.";
+        "checkout back. Close as stopped, then Retry runs the task again in a fresh session. Stop Workflow ends the run, and finished work stays.";
 
     /// <summary>The note that macOS gives Restore no file identity, so the person moves files by hand there.</summary>
     public const string HandRepair = "On macOS, Restore cannot move files or remove index.lock, because iDevelop cannot read file identities there. " +
