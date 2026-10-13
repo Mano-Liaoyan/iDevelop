@@ -1,5 +1,6 @@
 using IDevelop.Core.Tests.Coordination;
 using IDevelop.Execution;
+using IDevelop.Nodes;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Approval.ApprovalTests;
@@ -240,9 +241,39 @@ public sealed class CarriedResultTests
     [Fact]
     public async Task An_approval_reads_a_review_carried_from_an_earlier_run_from_that_run_s_record_of_the_review()
     {
+        await using var f = new ApprovalFixture(CarriedReview());
+        var (_, again, request) = await RunCarriedReview(f);
+
+        Assert.Equal([1, 1], Launches(f, A, C));
+        Assert.IsType<ResultOrigin.Carried>(f.Read(again.Address.Run).CurrentResults[C].Origin);
+        var review = Assert.Single(again.GateInputs(request)!.Value).Review!;
+        Assert.Equal((true, 1), (review.Verdict.Approves, review.Round));
+    }
+
+    [Fact]
+    public async Task A_review_node_whose_result_a_run_carried_reads_the_earlier_run_s_record_of_the_review()
+    {
+        await using var f = new ApprovalFixture(CarriedReview());
+        var (earlier, again, _) = await RunCarriedReview(f);
+
+        var log = again.ReviewLog(C)!;
+
+        Assert.IsType<ResultOrigin.Carried>(f.Read(again.Address.Run).CurrentResults[C].Origin);
+        Assert.Equal((RunProjection.LatestAttempts(f.Read(earlier))[C], AttemptStatus.Succeeded), (log.Id, log.Status));
+        Assert.Equal((true, 1), (ReviewLedger.Fold(log).Rounds[^1].Verdict!.Approves, ReviewLedger.Fold(log).Round));
+    }
+
+    /// <summary><c>A → C → X</c>, where <c>C</c> reviews <c>A</c> and <c>X</c> is an approval.</summary>
+    private static Workflow CarriedReview() =>
+        Graph([Agent(A), RunReviewTests.Reviewer(C, "Build C."), new TaskDefinition(X, BuiltInBlueprints.Approval) { Title = "Gate" }], (A, C), (C, X));
+
+    /// <summary>
+    /// Runs <see cref="CarriedReview"/> to completion, where the review agrees at once, then runs <c>X</c> again, which
+    /// carries the review's result, until its request waits. Returns the first run, the second run's coordinator, and its request.
+    /// </summary>
+    private static async Task<(RunId Earlier, WorkflowRunCoordinator Again, GateId Request)> RunCarriedReview(ApprovalFixture f)
+    {
         const string Agreed = """{"status": "verdict", "verdict": "approve", "findings": []}""";
-        var workflow = Graph([Agent(A), RunReviewTests.Reviewer(C, "Build C."), new TaskDefinition(X, BuiltInBlueprints.Approval) { Title = "Gate" }], (A, C), (C, X));
-        await using var f = new ApprovalFixture(workflow);
         f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(C, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-C"))
             .Print(FakeAgents.ReplyLines(ClientId.Codex, RunReviewTests.Verdict(Agreed))));
         await f.Open();
@@ -251,12 +282,7 @@ public sealed class CarriedResultTests
         await Completed(started.Coordinator);
 
         var again = await Start(f, f.Runs.Preflight(f.Workflow, X), BaseChoice.Head, Command(2));
-        var request = await Approve(again.Coordinator, answer: false);
-
-        Assert.Equal([1, 1], Launches(f, A, C));
-        Assert.IsType<ResultOrigin.Carried>(f.Read(again.Coordinator.Address.Run).CurrentResults[C].Origin);
-        var review = Assert.Single(again.Coordinator.GateInputs(request)!.Value).Review!;
-        Assert.Equal((true, 1), (review.Verdict.Approves, review.Round));
+        return (started.Coordinator.Address.Run, again.Coordinator, await Approve(again.Coordinator, answer: false));
     }
 
     /// <summary>Waits for <c>X</c>'s request and approves it unless <paramref name="answer"/> is false.</summary>
