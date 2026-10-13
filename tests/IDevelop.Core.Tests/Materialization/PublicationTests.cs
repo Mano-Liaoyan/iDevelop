@@ -901,6 +901,30 @@ public sealed class PublicationTests
         Assert.Single(f.Read().Results);
     }
 
+    [Fact]
+    public async Task An_index_lock_a_live_git_still_writes_is_retained_with_evidence()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
+        f.Git.Write("result.txt", "done\n", ready.Checkout);
+        var log = f.ObserveAndLog(ready);
+        Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
+        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout)) + ".lock";
+        // Git for Windows opens with every share flag, so only a reader that shares writing can see the lock's bytes.
+        using var git = new FileStream(lockPath, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        git.Write("lock\n"u8);
+        git.Flush();
+
+        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        var evidence = Assert.Single(blocked.Block.Evidence);
+        var storage = new RunStorage(f.Git.Folder, W, f.RunId);
+        Assert.Equal("lock\n"u8.ToArray(), RunStorage.Read(storage.Folder, evidence.RelativePath, evidence.Content, evidence.ByteLength));
+        Assert.Empty(f.Read().Results);
+    }
+
     private static void Recheck(PreparationFixture f, OperationId block) =>
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(block, "Rechecked by the person.")));
 

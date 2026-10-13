@@ -119,14 +119,8 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         }
     }
 
-    /// <summary>The log's bytes. Its writer holds it open while the attempt lives, so the read shares it, which Windows enforces.</summary>
-    private static byte[] ReadLog(string folder)
-    {
-        using var stream = new FileStream(Path.Combine(folder, "events.jsonl"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
+    /// <summary>The log's bytes. Its writer holds it open while the attempt lives.</summary>
+    private static byte[] ReadLog(string folder) => SharedFile.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
 
     /// <summary>Whether a closure log is the turn's checkpoint, or that checkpoint and one Mark done line.</summary>
     public static bool Extends(string folder, LogCheckpoint turn, LogCheckpoint closure) =>
