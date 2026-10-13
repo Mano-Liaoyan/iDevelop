@@ -62,7 +62,8 @@ public sealed partial class WorkflowCanvasViewModel
             old.Dispose();
         }
 
-        var run = new WorkflowRunViewModel(Runs, coordinator, task => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task");
+        var run = new WorkflowRunViewModel(Runs, coordinator, task => Workflow.Tasks.GetValueOrDefault(task)?.Title ?? "a removed task",
+            task => Nodes.FirstOrDefault(node => node.Id == task)?.Standing is TaskStanding.OutOfDate);
         run.ViewChanged += OnRunViewChanged;
         run.Replaced += OnRunReplaced;
         Run = run;

@@ -114,10 +114,11 @@ internal abstract record TaskStanding
 
     /// <summary>
     /// Which run left it where it stands, for one whose newest run ended it without a result, as that run's line said:
-    /// "A run of the "W" workflow ran this task last." Null otherwise, since its status and detail say it.
+    /// "A run of the "W" workflow ran this task last." Null otherwise, since its status and detail say it. "last" stays with
+    /// the word before it, so no line holds it alone (#85).
     /// </summary>
     public string? Owner(string workflow, bool hasAgent) => this is Ended
-        ? hasAgent ? $"A run of the \"{workflow}\" workflow ran this task last." : $"A run of the \"{workflow}\" workflow asked for this approval last."
+        ? hasAgent ? $"A run of the \"{workflow}\" workflow ran this task\u00A0last." : $"A run of the \"{workflow}\" workflow asked for this approval\u00A0last."
         : null;
 
     /// <summary>

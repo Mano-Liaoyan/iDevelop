@@ -73,8 +73,32 @@ public sealed class NodeRunTests
         Select(shell, "C");
         Assert.Equal(Whole("The last run of the \"Workflow\" workflow did not start this task."), shell.Text("RunOwner"));
         Select(shell, "B");
-        Assert.Equal(Whole("A run of the \"Workflow\" workflow ran this task last."), shell.Text("RunOwner"));
+        Assert.Equal(Whole("A run of the \"Workflow\" workflow ran this task\u00A0last."), shell.Text("RunOwner"));
         Assert.Equal([A], f.Record().Requested!);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Workflow")]
+    [InlineData("chain")]
+    [InlineData("Release notes")]
+    public void The_line_naming_the_run_that_ran_a_task_last_never_leaves_last_alone_on_a_line(string workflow)
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B), new WorkflowEdit.Rename(workflow));
+        f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
+        var shell = f.Window();
+        OpenNodePreflight(shell, "A");
+        shell.Click(shell.Find<Button>("PreflightStart"));
+        shell.WaitForStatus("Completed");
+        Select(shell, "B");
+
+        // Every inspector width, from its narrowest to its widest (#85).
+        for (var width = 280; width <= 520; width += 2)
+        {
+            shell.SizeInspector(width);
+            var owner = shell.InView<TextBlock>("RunOwner");
+            var last = owner.Text![owner.TextLayout.TextLines[^1].FirstTextSourceIndex..].Trim();
+            Assert.True(last.Split(' ', ' ').Length > 1, $"\"{last}\" stands alone on the last line at {width} px.");
+        }
     }
 
     [AvaloniaFact]

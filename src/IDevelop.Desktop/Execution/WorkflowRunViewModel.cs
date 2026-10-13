@@ -15,6 +15,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
 {
     private readonly ProjectRuns _runs;
     private readonly Func<TaskId, string> _title;
+    private readonly Func<TaskId, bool> _outOfDate;
     private readonly RelayCommand _stop;
     private readonly RelayCommand _resume;
     private readonly OperationId _stopCommand = new(Guid.NewGuid());
@@ -26,10 +27,12 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     private string? _commandProblem;
 
     /// <param name="title">A task's title, as the workflow names it now.</param>
-    internal WorkflowRunViewModel(ProjectRuns runs, WorkflowRunCoordinator coordinator, Func<TaskId, string> title)
+    /// <param name="outOfDate">Whether a task's card shows its result out of date, as an edit since the run puts it (#90).</param>
+    internal WorkflowRunViewModel(ProjectRuns runs, WorkflowRunCoordinator coordinator, Func<TaskId, string> title, Func<TaskId, bool> outOfDate)
     {
         _runs = runs;
         _title = title;
+        _outOfDate = outOfDate;
         Coordinator = coordinator;
         View = coordinator.View;
         _stop = new RelayCommand(() => _ = StopAsync(), () => CanStop);
@@ -54,6 +57,12 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     internal RunAddress Address => Coordinator.Address;
 
     internal WorkflowId Workflow => Address.Workflow;
+
+    /// <summary>
+    /// Called on the UI thread after the cards took where each task stands between runs, as an edit or a new read of the
+    /// workflow's runs leaves it, which can change what the bar says of a run that completed.
+    /// </summary>
+    internal void OnStandingChanged() => OnPropertyChanged(nameof(Activity));
 
     /// <summary>Raised on the UI thread after <see cref="View"/> changes.</summary>
     internal event EventHandler? ViewChanged;
@@ -210,9 +219,11 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
                 return "Stopped. Finished work stays.";
             case RunStatus.Completed:
                 // A run that a node's Run started completes once nothing more can start, which can leave tasks of the run
-                // that wait for a task nobody ran, and tasks it never reached (#90).
+                // that wait for a task nobody ran, and tasks it never reached (#90). Once an edit puts a result of the run out
+                // of date, as its card then says, the bar no longer says its results are current (#85).
                 return WorkflowRunText.StillWaiting(tasks, _title)
-                    ?? (tasks.All(task => task.State == TaskState.Done) ? "Every task has a current result." : "Every task it ran has a current result.");
+                    ?? (tasks.Any(task => task.State == TaskState.Done && _outOfDate(task.Task)) ? null
+                        : tasks.All(task => task.State == TaskState.Done) ? "Every task has a current result." : "Every task it ran has a current result.");
         }
 
         if (WorkflowRunText.Working(tasks, _title) is { } working)
