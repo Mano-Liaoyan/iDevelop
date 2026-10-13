@@ -13,7 +13,7 @@ On macOS and Linux no real-window harness exists. Run `dotnet test -c Release`, 
 
 - Run one session at a time per Windows account. The theme preference `%APPDATA%\iDevelop\settings.json` is per user, and the user's own iDevelop shares it. A session backs it up at start and restores it at stop. `Start-IDevelop` and `scripts/check-real-window.ps1` refuse while another live run holds the backup.
 - A session opens a copy of `samples/storage-change` inside its run folder, never a user project.
-- Task runs go through a fake Codex. The session puts fake clients ahead of the user's PATH. Codex replays recorded output. Claude Code, Pi, and Antigravity CLI answer nothing, so iDevelop marks them `Not ready` and refuses to run them. No run spends quota.
+- Task runs go through a fake Codex. The app's PATH holds the session's fake clients and then Git's own folder, never the user's PATH. Codex replays recorded output. Claude Code, Pi, and Antigravity CLI answer nothing, so iDevelop marks them `Not ready` and refuses to run them. No run spends quota.
 - Never find or kill iDevelop or a fake client by process name. `Stop-IDevelop` ends only what its session started.
 
 ## Launch
