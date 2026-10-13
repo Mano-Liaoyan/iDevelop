@@ -186,6 +186,39 @@ public sealed class ProjectionTests
         Assert.Equal(RunStatus.NeedsAttention, stale.Status);
     }
 
+    /// <summary>
+    /// <c>T → U → C</c>: C was reserved on U's result, which went stale when T's retry replaced the result U took. Its
+    /// first claim would be refused, so C waits for U as a consumer that was never reserved does (#85). Once U replaces
+    /// that result, C no longer waits for U, and its start reports the stale input it was reserved on.
+    /// </summary>
+    [Fact]
+    public void A_reserved_consumer_waits_for_its_stale_producer()
+    {
+        using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C)), T, U), U, C));
+        f.Approve();
+        var first = f.Reserve(T);
+        var old = f.Complete(first, report: "T ready.\n");
+        var producer = f.Reserve(U);
+        var taken = f.Complete(producer, report: "U ready.\n");
+        var consumer = f.Reserve(C);
+        f.Prepare(consumer);
+        Assert.Equal(TaskState.Ready, View(f).Tasks[C].State);
+
+        f.Complete(f.Reserve(T, new AttemptCause.Retry(first.Attempt.Id, f.Op())), report: "T again.\n", supersedes: old.Id);
+
+        var stale = View(f);
+        Assert.Equal(TaskState.Stale, stale.Tasks[U].State);
+        Assert.Equal((TaskState.Pending, consumer.Attempt.Id), (stale.Tasks[C].State, stale.Tasks[C].Attempt));
+        Assert.Equal([U], stale.Tasks[C].HeldBy.ToArray());
+        Assert.Equal(RunStatus.NeedsAttention, stale.Status);
+
+        f.Complete(f.Reserve(U, new AttemptCause.Retry(producer.Attempt.Id, f.Op())), report: "U again.\n", supersedes: taken.Id);
+
+        var replaced = View(f);
+        Assert.Equal(TaskState.Done, replaced.Tasks[U].State);
+        Assert.Equal((TaskState.Ready, 0), (replaced.Tasks[C].State, replaced.Tasks[C].HeldBy.Count));
+    }
+
     [Fact]
     public void A_newer_attempt_outranks_an_older_result()
     {

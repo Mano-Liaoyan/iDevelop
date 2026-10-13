@@ -988,10 +988,11 @@ internal sealed partial class RunStore
                 return new Mutation.Existing(repeated);
             }
 
-            // A task counts as started once its start's plan is recorded, which keeps the revision that start uses. The
-            // proposal neither fills such a task nor gives it an input; the reducer checks the same for attempts and results.
-            bool Started(TaskId id) => record.Plans.Values.Any(plan => plan is MaterializationPlan.Preparation preparation && preparation.Task == id) ||
-                record.Attempts.Values.Any(attempt => attempt.Task == id) || record.Results.Any(result => result.Task == id);
+            // A task counts as started once its start's plan is recorded, which keeps the revision that start uses, or once
+            // the journal counts it so, as an Approval node with a gate request (#85). The proposal neither fills such a
+            // task nor gives it an input; the reducer checks the same for what it counts.
+            bool Started(TaskId id) => RunReducer.Started(record, id) ||
+                record.Plans.Values.Any(plan => plan is MaterializationPlan.Preparation preparation && preparation.Task == id);
             if (basis.Snapshot.Apply(proposal.Accept(basis.Snapshot, chosen, Started, fallback, planned, changed)) is not EditResult.Applied applied)
             {
                 return Refuse(RunProblem.InvalidData);

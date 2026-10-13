@@ -43,17 +43,33 @@ internal static partial class RunReducer
     /// fault, which that operation reruns. A failed closure check is no drift either, because the next successful baseline
     /// check of its attempt verifies what it could not and resolves it.
     /// </summary>
-    internal static bool IsDrift(OperationId id, MaterializationBlock block, OperationId? operation = null) =>
+    internal static bool IsDrift(RunRecord record, OperationId id, MaterializationBlock block, OperationId? operation = null) =>
         block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
-        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation) && !ClosureFault(id, block);
+        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation) && !ClosureFault(record, id, block);
 
-    /// <summary>An operation-scoped fault that a resting closure's baseline check recorded under its own operation.</summary>
-    internal static bool ClosureFault(OperationId id, MaterializationBlock block)
+    /// <summary>
+    /// The ids a step of <paramref name="operation"/> records its blocks under, in the order it takes them: the first, then
+    /// one numbered from 1 for each block it records after it.
+    /// </summary>
+    internal static IEnumerable<OperationId> BlockIds(OperationId operation, string step)
+    {
+        yield return OperationIds.Derive(operation, step + "-blocked");
+        for (var number = 1; ; number++) yield return OperationIds.Derive(operation, step + "-blocked-" + number);
+    }
+
+    /// <summary>
+    /// An operation-scoped fault that a resting closure's baseline check recorded under its own operation. The check takes
+    /// its block ids in order, each once, so they are the ids the journal holds in an unbroken run from the first, however
+    /// many times the check failed (#85).
+    /// </summary>
+    internal static bool ClosureFault(RunRecord record, OperationId id, MaterializationBlock block)
     {
         if (block.Scope is not BlockScope.Operation) return false;
-        if (id == OperationIds.Derive(block.Operation, ClosureCheck + "-blocked")) return true;
-        for (var number = 1; number <= 64; number++)
-            if (id == OperationIds.Derive(block.Operation, ClosureCheck + "-blocked-" + number)) return true;
+        foreach (var taken in BlockIds(block.Operation, ClosureCheck))
+        {
+            if (taken == id) return true;
+            if (!record.Receipts.ContainsKey(taken)) return false;
+        }
         return false;
     }
 
@@ -68,7 +84,7 @@ internal static partial class RunReducer
     internal static KeyValuePair<OperationId, MaterializationBlockState>? AttemptDrift(RunRecord record, Func<AttemptId, bool> attempt,
         OperationId? operation = null) =>
         record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt is { } owner && attempt(owner) &&
-                IsDrift(pair.Key, pair.Value.Block, operation))
+                IsDrift(record, pair.Key, pair.Value.Block, operation))
             .OrderBy(pair => record.Receipts[pair.Key].Sequence)
             .Select(pair => (KeyValuePair<OperationId, MaterializationBlockState>?)pair).FirstOrDefault();
 

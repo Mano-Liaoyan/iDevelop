@@ -155,6 +155,53 @@ public sealed class ApprovalCrashTests
         Assert.Equal($"{Head.Hex} refs/idp/approvals/{run}\n", f.GitText("for-each-ref", "--format=%(objectname) %(refname)", "refs/idp/approvals/"));
     }
 
+    /// <summary>
+    /// A snapshot run that a crash left approved and unprepared, opened in a new window and stopped there without Resume:
+    /// it settles without a run key, so no base ref ever holds its base. Returns the stopped run.
+    /// </summary>
+    private static async Task<RunId> StoppedBeforeItsFirstPreparation(ApprovalFixture f)
+    {
+        Uncommitted(f);
+        await Crash(f, BaseChoice.Snapshot, "approval.approved.after");
+        var run = Assert.Single(f.ApprovedRuns());
+        Assert.Equal($"refs/idp/approvals/{run}\n", f.GitText("for-each-ref", "--format=%(refname)", "refs/idp/approvals/"));
+        await f.Open();
+        var coordinator = Assert.IsType<RunOpen.Opened>(f.Runs.OpenRun(W, run)).Coordinator;
+        Assert.IsType<RunCommand.Accepted>(await coordinator.Stop(coordinator.Address, new(Guid.NewGuid())).WaitAsync(Bound));
+        await coordinator.Until(view => view.Status == RunStatus.Stopped).WaitAsync(Bound);
+        Assert.Null(f.Read(run).RunKey);
+        Assert.Equal(0, f.TotalLaunches);
+        return run;
+    }
+
+    [Fact]
+    public async Task A_run_stopped_before_its_first_preparation_lets_go_of_its_approval_pin()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+
+        await StoppedBeforeItsFirstPreparation(f);
+
+        await Turns.TurnFixture.WaitUntilAsync(() => f.GitText("for-each-ref", "refs/idp/approvals/") == "");
+    }
+
+    [Fact]
+    public async Task A_pin_left_by_a_run_stopped_before_its_first_preparation_goes_at_the_next_confirmation()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        var stopped = await StoppedBeforeItsFirstPreparation(f);
+        var snapshot = f.Read(stopped).Base.Commit;
+        // A window that closed before it let go of the pin leaves it.
+        await Turns.TurnFixture.WaitUntilAsync(() => f.GitText("for-each-ref", "refs/idp/approvals/") == "");
+        f.GitText("update-ref", $"refs/idp/approvals/{stopped}", snapshot.Hex);
+
+        var started = await Start(f, f.Preflight(), BaseChoice.Snapshot, AfterRestart);
+
+        Assert.NotEqual(stopped, started.Coordinator.Address.Run);
+        await Completed(started.Coordinator);
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
+        Assert.Equal(RunPhase.Stopped, f.Read(stopped).Phase);
+    }
+
     [Theory]
     [InlineData("file")]
     [InlineData("title")]

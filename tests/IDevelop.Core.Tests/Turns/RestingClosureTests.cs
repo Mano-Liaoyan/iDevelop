@@ -247,6 +247,44 @@ public sealed class RestingClosureTests
         Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
     }
 
+    /// <summary>
+    /// A closure check that failed under one operation more often than 64 times, each time for another reason, still
+    /// records a closure fault rather than drift (#85): a later check under another operation clears every one of them.
+    /// </summary>
+    [Fact]
+    public async Task A_closure_check_that_failed_more_than_64_times_still_records_no_drift()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var attempt = (await Waiting(f)).Address.Launch.Attempt;
+        var operation = f.Preparation.Op();
+        var step = RunReducer.ClosureCheck + "-blocked";
+        // The check's first 65 failures, each with its own detail, numbered as the materializer numbers them.
+        for (var number = 0; number <= 64; number++)
+        {
+            var id = OperationIds.Derive(operation, number == 0 ? step : step + "-" + number);
+            Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, id, new RunEvent.Blocked(
+                new(operation, T, attempt, MaterializationProblem.UncertainOwnership, null, [], $"Failure {number}.") { Scope = new BlockScope.Operation() })));
+        }
+        var branch = f.Preparation.Read().Preparations[new(attempt, 1)].Location.Owner.Branch;
+        var tip = f.Preparation.Git.Git("rev-parse", branch).Trim();
+        f.Preparation.Git.Git("branch", "foreign", tip);
+        f.Preparation.Git.Git("symbolic-ref", branch, "refs/heads/foreign");
+        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Block;
+        Assert.Equal(new BlockScope.Operation(), blocked.Scope);
+        Assert.True(f.Preparation.Read().Receipts.ContainsKey(OperationIds.Derive(operation, step + "-65")));
+        f.Preparation.Git.Git("update-ref", "--no-deref", branch, tip);
+
+        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Attempt;
+
+        Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
+        Assert.Equal(66, f.Preparation.Read().Blocks.Count);
+        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
+        Assert.Equal(1, Closures(f, attempt));
+        Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(closed.Lease, f.Preparation.Op(), attempt));
+        Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
+    }
+
     [Theory]
     [InlineData("MarkDone")]
     [InlineData("Conclude")]

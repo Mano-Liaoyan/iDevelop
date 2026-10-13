@@ -1188,9 +1188,10 @@ public sealed partial class ProjectRuns : IAsyncDisposable
     /// As <see cref="SkillsOf"/>, but a run's turn waits for a listing that is under way, so a task the run starts before the
     /// first listing goes on once it is in, with its choice or unchecked, rather than waiting for the person.
     /// </summary>
-    internal async Task<SkillListing?> SkillsOfAsync(ExecutionSettings? settings) =>
+    /// <param name="stop">Ends the wait at once, as the run's stop or its window's halt does.</param>
+    internal async Task<SkillListing?> SkillsOfAsync(ExecutionSettings? settings, CancellationToken stop = default) =>
         settings is { Skills: not null } chosen && SkillChoices.CanChoose(chosen.Client)
-            ? await _clients.SkillsAsync(chosen.Client, _projectFolder, SkillListingWait).ConfigureAwait(false)
+            ? await _clients.SkillsAsync(chosen.Client, _projectFolder, SkillListingWait, stop).ConfigureAwait(false)
             : null;
 
     /// <summary>

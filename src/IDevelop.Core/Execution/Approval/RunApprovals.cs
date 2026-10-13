@@ -399,13 +399,23 @@ internal sealed class RunApprovals
         }
     }
 
-    /// <summary>Removes the pin of each approved run whose own base ref now holds its base.</summary>
+    /// <summary>
+    /// Removes the pin of each approved run whose own base ref now holds its base, and of each run that settled before its
+    /// first preparation, which never writes a base ref (#85).
+    /// </summary>
     private void ReleasePins(GitRepository repository, ImmutableArray<ApprovalIntent> all)
     {
         foreach (var intent in all)
         {
-            if (Approved(intent.Revision.Snapshot.Id, intent.Run) is { RunKey: { } key } record)
-                ApprovalPin.Release(repository, intent.Run, record.Base.Commit, RunLayout.ApprovedBase(key));
+            switch (Approved(intent.Revision.Snapshot.Id, intent.Run))
+            {
+                case { RunKey: { } key } record:
+                    ApprovalPin.Release(repository, intent.Run, record.Base.Commit, RunLayout.ApprovedBase(key));
+                    break;
+                case { Phase: RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed or RunPhase.Abandoned }:
+                    ApprovalPin.Release(repository, intent.Run);
+                    break;
+            }
         }
     }
 

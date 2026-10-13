@@ -29,6 +29,7 @@ internal sealed partial class WorkflowRunCoordinator
                 {
                     // What held a start back no longer matters; each task's closure gets one try before it may hold.
                     _stopping = true;
+                    _ = _stop.CancelAsync();
                     _holds.Clear();
                     view = Project(record);
                 }
@@ -81,7 +82,7 @@ internal sealed partial class WorkflowRunCoordinator
         var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause)), halted: Halted),
+        Background(() => StartTurn(new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
             start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);

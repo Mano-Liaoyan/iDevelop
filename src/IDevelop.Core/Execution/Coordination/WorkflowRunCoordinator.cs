@@ -38,6 +38,9 @@ internal sealed partial class WorkflowRunCoordinator
     private readonly List<(Func<RunView, bool> Condition, TaskCompletionSource<RunView> Done)> _waiters = [];
     private RunView _view;
     private volatile bool _halting;
+    // Cancelled once the run's stop is recorded or this window halts: a start then stops waiting for its client's skill
+    // listing and launches nothing (#85). It has no timer or wait handle to dispose.
+    private readonly CancellationTokenSource _stop = new();
     private Task? _disposed;
 
     // Owned by the loop.
@@ -222,6 +225,7 @@ internal sealed partial class WorkflowRunCoordinator
     internal void Halt()
     {
         _halting = true;
+        _ = _stop.CancelAsync();
         Post(() => { });
     }
 
@@ -397,6 +401,9 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>Whether this window stopped scheduling the run, which ends its steps' waits for the repository's lock.</summary>
     private bool Halted() => _halting;
+
+    /// <summary>Starts a turn of the run, whose wait for its client's skill listing ends once the run stops or this window halts.</summary>
+    private Task<TurnStart> StartTurn(TurnIntent intent) => _runs.StartTurn(_permit!, intent, halted: Halted, stop: _stop.Token);
 
     /// <summary>
     /// A materializer for the run's own scheduled work, which waits as long as the run allows for the repository's lock,

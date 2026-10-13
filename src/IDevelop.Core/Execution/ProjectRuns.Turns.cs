@@ -38,7 +38,12 @@ public sealed partial class ProjectRuns
     }
 
     /// <param name="halted">Whether the run's coordinator halted, which ends the start's wait for the repository's lock.</param>
-    internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default, Func<bool>? halted = null)
+    /// <param name="stop">
+    /// Cancelled once the run's stop is recorded or its coordinator halts. It ends the start's wait for its client's skill
+    /// listing, and the start then launches nothing (#85).
+    /// </param>
+    internal Task<TurnStart> StartTurn(CoordinatorPermit permit, TurnIntent intent, CancellationToken wait = default, Func<bool>? halted = null,
+        CancellationToken stop = default)
     {
         Task<TurnStart>? command = null;
         LaunchKey? existing = null;
@@ -67,7 +72,7 @@ public sealed partial class ProjectRuns
             }
             if (command is null && existing is null)
             {
-                command = Task.Run(() => StartTurnCore(permit, intent, halted));
+                command = Task.Run(() => StartTurnCore(permit, intent, halted, stop));
                 _commands.Add(key, new(intent, command));
             }
         }
@@ -106,7 +111,7 @@ public sealed partial class ProjectRuns
         return new(launch, snapshot.Running, snapshot.Outcome);
     }
 
-    private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent, Func<bool>? halted)
+    private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent, Func<bool>? halted, CancellationToken stop)
     {
         if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
@@ -177,8 +182,10 @@ public sealed partial class ProjectRuns
                 session = continues?.Session;
             }
             if (intent is TurnIntent.First) sessionFolder = continues?.Folder;
-            // A run that starts the task before its client's first skill listing waits for the listing under way.
-            var skills = await SkillsOfAsync(definition.Execution);
+            // A run that starts the task before its client's first skill listing waits for the listing under way, until
+            // the run stops or its window halts, which leaves the turn unlaunched.
+            var skills = await SkillsOfAsync(definition.Execution, stop);
+            if (stop.IsCancellationRequested) return new TurnStart.Refused(new(RunProblem.RunStopped));
             var verdict = StartCheck.Evaluate(definition, ready.Checkout, _clients.Current,
                 new Resumption(session, prepared.Prompt) { Folder = sessionFolder }, questions: _questions, skills: skills);
             if (verdict is StartVerdict.Blocked client) return new TurnStart.Refused(new(RunProblem.TaskUnconfigured), client.Problem);

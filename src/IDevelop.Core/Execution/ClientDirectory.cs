@@ -100,7 +100,8 @@ public sealed class ClientDirectory
     /// the client or a listing that is under way, which ends on its own within its probe's timeout, for at most
     /// <paramref name="bound"/>. A run's turn uses it, so a task that starts before the first listing is not held back.
     /// </summary>
-    public async Task<SkillListing> SkillsAsync(ClientId client, string folder, TimeSpan bound)
+    /// <param name="stop">Ends the wait early, and the listing as it is then is returned.</param>
+    public async Task<SkillListing> SkillsAsync(ClientId client, string folder, TimeSpan bound, CancellationToken stop = default)
     {
         var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnChanged(object? sender, EventArgs e)
@@ -116,7 +117,7 @@ public sealed class ClientDirectory
         {
             if (Skills(client, folder) is SkillListing.Checking)
             {
-                await Task.WhenAny(listed.Task, Task.Delay(bound)).ConfigureAwait(false);
+                await Task.WhenAny(listed.Task, Task.Delay(bound, stop)).ConfigureAwait(false);
             }
 
             return Skills(client, folder);

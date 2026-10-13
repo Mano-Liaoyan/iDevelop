@@ -28,7 +28,11 @@ internal sealed partial class Materializer
                 record.Blocks.Values.All(block => block.Resolved);
             if (!record.Receipts.Values.Any(entry => entry.Event is RunEvent.Settled) && !recoveredAbandonment)
                 return new PinRelease.Rejected(new(RunProblem.NotSettled));
-            if (record.RunKey is null) return new PinRelease.Released(0);
+            // A run that settled before its first preparation never wrote its base ref, so its approval pin keeps the base
+            // until it goes here, as best effort, or at the workflow's next confirmation (#85).
+            if (record.RunKey is null)
+                return new PinRelease.Released(GitRepository.Open(_project, _environment) is RepositoryOpen.Opened opened &&
+                    ApprovalPin.Release(opened.Repository, permit.Run) ? 1 : 0);
             var repository = OpenRepository();
             VerifyRepository(record, repository);
             var pins = Value(repository.RefSnapshot(RunLayout.PinPrefix(record.RunKey)));

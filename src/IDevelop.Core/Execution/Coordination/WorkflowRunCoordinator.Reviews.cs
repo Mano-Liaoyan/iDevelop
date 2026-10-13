@@ -161,7 +161,7 @@ internal sealed partial class WorkflowRunCoordinator
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.review-turn");
         Background(() => RunReviews.Step(record, review.Log, Log, Address.Project) is NodeStep.RunTurn turn
-                ? _runs.StartTurn(_permit!, new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report }, halted: Halted)
+                ? StartTurn(new TurnIntent.Next(RunOperations.Turn(record, next), next, turn.Prompt) { Report = turn.Report })
                 : Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim))),
             start => Started(task, start, record.Revision.Id), error => StartFaulted(task, error));
     }
@@ -177,7 +177,7 @@ internal sealed partial class WorkflowRunCoordinator
             if (RunReviews.Step(record, review.Log, Log, Address.Project) is not NodeStep.FixRound fix)
                 return Task.FromResult<TurnStart>(new TurnStart.Refused(new(RunProblem.InvalidClaim)));
             var cause = new AttemptCause.ReviewFix(new ReviewLink(review.Task, review.Attempt, fix.Round, fix.Guidance));
-            return _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt), halted: Halted);
+            return StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause, fix.Prompt));
         }, start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 
@@ -188,8 +188,8 @@ internal sealed partial class WorkflowRunCoordinator
         var cause = record.Attempts[attempt].Cause;
         _live[subject] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.fix");
-        Background(() => _runs.StartTurn(_permit!, new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
-                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project)), halted: Halted),
+        Background(() => StartTurn(new TurnIntent.First(RunOperations.First(Address.Run, subject, cause), subject, cause,
+                RunReviews.FixPrompt(record, review.Log, attempt, Log, Address.Project))),
             start => Started(subject, start, record.Revision.Id), error => StartFaulted(subject, error));
     }
 

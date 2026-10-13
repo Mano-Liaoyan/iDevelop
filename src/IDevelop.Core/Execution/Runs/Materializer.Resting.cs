@@ -58,7 +58,7 @@ internal sealed partial class Materializer
     {
         var record = Read(permit.Workflow, permit.Run);
         foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt &&
-            RunReducer.ClosureFault(pair.Key, pair.Value.Block)).OrderBy(pair => record.Receipts[pair.Key].Sequence))
+            RunReducer.ClosureFault(record, pair.Key, pair.Value.Block)).OrderBy(pair => record.Receipts[pair.Key].Sequence))
             Journal("recheck-resolve", () => _store.Record(permit, OperationIds.Derive(operation, "recheck-resolve-" + pair.Key.Value.ToString("D")),
                 new RunEvent.BlockResolved(pair.Key, "Rechecked.")));
     }
