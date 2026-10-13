@@ -121,7 +121,7 @@ public sealed class BlueprintTests : IDisposable
 
         Assert.Equal("Saved Design, version 1, to the personal library.", shell.Status);
         var personal = ((App)Application.Current!).PersonalBlueprints!;
-        Assert.StartsWith(Path.Combine(Path.GetTempPath(), "idevelop-tests"), personal);
+        Assert.StartsWith(Path.Combine(TempFolder.Temporary, "idevelop-tests"), personal);
         var saved = Assert.Single(BlueprintLibrary.Personal(personal).Read().Blueprints);
         Assert.Equal(BuiltInBlueprints.Implement.Key, saved.DerivedFrom);
         Assert.Empty(BlueprintLibrary.Project(shell.Window.ViewModel.Canvas!.Document.ProjectFolder).Read().Blueprints);
