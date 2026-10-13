@@ -683,7 +683,7 @@ internal sealed partial class RunStore
     {
         try
         {
-            var bytes = File.ReadAllBytes(Path.Combine(AttemptFolder(record.Workflow, record.Id, owner.Task, owner.Id), "events.jsonl"));
+            var bytes = SharedFile.ReadAllBytes(Path.Combine(AttemptFolder(record.Workflow, record.Id, owner.Task, owner.Id), "events.jsonl"));
             return bytes.LongLength > frozen.ByteLength && Revision.Hash(bytes.AsSpan(0, (int)frozen.ByteLength)) == frozen.Content;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -1322,7 +1322,7 @@ internal sealed partial class RunStore
             return new RunRead.Rejected(new(RunProblem.NotApproved));
         }
 
-        var journal = RunJournal.Decode(File.ReadAllBytes(path));
+        var journal = RunJournal.Decode(SharedFile.ReadAllBytes(path));
         var read = RunReducer.Replay(workflow, run, journal.Entries);
         if (journal.Entries.Length != 0 && read is RunRead.Rejected)
         {

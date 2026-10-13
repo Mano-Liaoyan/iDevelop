@@ -86,6 +86,16 @@ public sealed class JournalAccessTests
     }
 
     [Fact]
+    public void A_journal_reads_while_an_append_holds_it_open()
+    {
+        using var f = new RunFixtures();
+        f.Approve();
+        using var append = new FileStream(f.Journal(W, Run), FileMode.Append, FileAccess.Write, FileShare.Read);
+
+        Assert.Equal(RunPhase.Approved, Assert.IsType<RunRead.Loaded>(f.Store.Read(W, Run)).Record.Phase);
+    }
+
+    [Fact]
     public void Sixteen_threads_reserve_one_initial_attempt()
     {
         using var f = new RunFixtures();

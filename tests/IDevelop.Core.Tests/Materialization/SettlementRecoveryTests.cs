@@ -365,6 +365,22 @@ public sealed class SettlementRecoveryTests
     }
 
     [Fact]
+    public async AsyncTask A_log_that_moved_on_while_its_writer_still_holds_it_closes_by_confirmed_recovery()
+    {
+        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
+        var (ready, log) = await Ready(f);
+        var launch = ready.Execution.Launch;
+        await Crash(f, ready, log, f.Op(), "journal.close-turn.before");
+        using var attempt = AttemptLog.Open(f.Store.AttemptFolder(W, f.RunId, T, launch.Attempt));
+        attempt.Append(new AttemptEvent.HandedToTerminal(At, ready.Checkout, "codex resume fixture"));
+
+        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), launch.Attempt,
+            RecoveryOutcome.Stopped, f.Op(), "The person stopped the turn after its log moved on."));
+
+        Assert.Equal("Stopped", Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[launch.Attempt]).Outcome.ToString());
+    }
+
+    [Fact]
     public async AsyncTask The_reducer_refuses_a_capture_less_turn_closure_on_a_fenced_launch()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
