@@ -25,7 +25,7 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         AttemptEvidence Reject(RunProblem problem) => new([], null, null, new(problem));
         try
         {
-            var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
+            var bytes = ReadLog(folder);
             if (prefix && expected is { } limit)
             {
                 if (limit.ByteLength < 0 || limit.ByteLength > bytes.LongLength) return Reject(RunProblem.EvidenceMismatch);
@@ -97,7 +97,7 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         try
         {
             if (!RunValidation.Checkpoint(prefix) || !RunValidation.Checkpoint(whole) || prefix.ByteLength > whole.ByteLength) return null;
-            var bytes = File.ReadAllBytes(Path.Combine(folder, "events.jsonl"));
+            var bytes = ReadLog(folder);
             if (whole.ByteLength > bytes.LongLength) return null;
             bytes = bytes[..checked((int)whole.ByteLength)];
             if (Revision.Hash(bytes) != whole.Content || Revision.Hash(bytes.AsSpan(0, checked((int)prefix.ByteLength))) != prefix.Content) return null;
@@ -117,6 +117,15 @@ internal sealed record AttemptEvidence(ImmutableArray<AttemptEvent> Events, Atte
         {
             return null;
         }
+    }
+
+    /// <summary>The log's bytes. Its writer holds it open while the attempt lives, so the read shares it, which Windows enforces.</summary>
+    private static byte[] ReadLog(string folder)
+    {
+        using var stream = new FileStream(Path.Combine(folder, "events.jsonl"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
     }
 
     /// <summary>Whether a closure log is the turn's checkpoint, or that checkpoint and one Mark done line.</summary>

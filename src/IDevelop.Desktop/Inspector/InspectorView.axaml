@@ -428,6 +428,40 @@
                           </Button>
                         </WrapPanel>
                       </inspector:InspectorRow>
+                      <!-- Retry of a run's task that ended without a result asks first, here, wherever the person chose it. -->
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRetryButton}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="primary" Command="{Binding RetryCommand}"
+                                  AutomationProperties.AutomationId="RetryTask"
+                                  AutomationProperties.Name="Retry">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+                              <TextBlock Text="Retry" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Full" IsShown="{Binding ConfirmingRetry}">
+                        <TextBlock Text="{Binding RetryConfirmation}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextBrush}"
+                                   AutomationProperties.AutomationId="RetryConfirmation" />
+                      </inspector:InspectorRow>
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ConfirmingRetry}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="primary" Command="{Binding ConfirmRetryCommand}"
+                                  AutomationProperties.AutomationId="ConfirmRetry"
+                                  AutomationProperties.Name="Retry">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconRefresh}" Width="14" Height="14" />
+                              <TextBlock Text="Retry" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                          <Button Classes="action" Command="{Binding KeepRetryCommand}"
+                                  AutomationProperties.AutomationId="KeepRetry"
+                                  AutomationProperties.Name="Not now">
+                            <TextBlock Text="Not now" VerticalAlignment="Center" />
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
                       <inspector:InspectorRow Layout="Full">
                         <inspector:InspectorRow.IsShown>
                           <MultiBinding Converter="{x:Static BoolConverters.And}">
