@@ -338,7 +338,12 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
     # -KeepProjects reopens the projects the window had open, as a restart does. Otherwise the window starts with none.
     if (-not $KeepProjects) { Clear-Session }
     $savedPath = $env:PATH
-    if (-not $RealClients) { $env:PATH = $bin }
+    if (-not $RealClients) {
+        # A workflow run needs Git, which the app finds on its PATH only. Git's own folder follows the fake clients, and
+        # the user's PATH, where the real clients live, stays out.
+        $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $env:PATH = if ($git) { "$bin;$(Split-Path $git.Source)" } else { $bin }
+    }
     try {
         $process = Start-Process -FilePath $ReleaseExe -ArgumentList "`"$Project`"" -PassThru
     } catch {
