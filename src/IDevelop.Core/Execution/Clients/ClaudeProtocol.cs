@@ -10,6 +10,13 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
     private readonly Dictionary<string, JsonElement> _requests = [];
     private readonly Dictionary<string, string> _tools = [];
     private readonly Dictionary<string, int> _blocks = [];
+    // Each subagent by the tool call that started it, and each task the client reported by its id.
+    private readonly Dictionary<string, string> _subagents = [];
+    private readonly Dictionary<string, BackgroundTask> _tasks = [];
+    // The background tasks that still run, then those that ended and whose answer the agent has yet to give in a result.
+    private readonly List<string> _running = [];
+    private readonly List<string> _answering = [];
+    private ImmutableArray<BackgroundTask> _reported = [];
     private string? _messageId;
     private bool _initialized;
     private bool _interrupted;
@@ -51,6 +58,9 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                 return new([.. root.Property("message")?.Items("content").Where(part => part.String("type") == "tool_result")
                     .Select(part => part.String("tool_use_id")).OfType<string>().Where(_tools.ContainsKey)
                     .Select(tool => new AgentEvent.RequestClosed(_tools[tool])) ?? []], [], false);
+            // A subagent's text shows once its message is complete, so it never streams as the agent's own.
+            case "stream_event" when root.String("parent_tool_use_id") is not null:
+                return ProtocolOutput.Empty;
             case "stream_event" when root.Property("event") is { } stream:
                 if (stream.String("type") == "message_start")
                 {
@@ -68,7 +78,17 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                 }
 
                 return ProtocolOutput.Empty;
+            case "assistant" when root.Property("message") is { } message && root.String("parent_tool_use_id") is { } parent:
+                return new([.. Subagent(message, _subagents.GetValueOrDefault(parent) ?? "Subagent")], [], false);
             case "assistant" when root.Property("message") is { } message:
+                foreach (var call in message.Items("content").Where(part => part.String("type") == "tool_use" && part.String("name") is "Agent" or "Task"))
+                {
+                    if (call.String("id") is { } callId)
+                    {
+                        _subagents[callId] = NonBlank(call.Property("input")?.String("subagent_type")) ?? NonBlank(call.Property("input")?.String("description")) ?? "Subagent";
+                    }
+                }
+
                 var events = ClaudeCode.Events(root);
                 var messageId = message.String("id");
                 var parts = message.Items("content").ToArray();
@@ -76,11 +96,114 @@ internal sealed class ClaudeProtocol(LaunchRequest launch) : TurnProtocol
                     .Select(pair => parts.Length == 1 && messageId is not null && _blocks.TryGetValue(messageId, out var block) ? block : pair.index));
                 return new([.. events.Select(e => e is AgentEvent.Message text
                     ? text with { Id = messageId is null ? null : $"{messageId}:{textIndexes.Dequeue()}", Partial = _interrupted } : e)], [], false);
+            case "system" when root.String("subtype") is "task_started" or "task_updated" or "task_notification" or "background_tasks_changed":
+                return new(Track(root), [], false);
             case "result":
-                return new(ClaudeCode.Events(root), [], true);
+                _answering.Clear();
+                return new([.. ClaudeCode.Events(root), .. Background()], [], true);
             default:
                 return new(ClaudeCode.Events(root), [], false);
         }
+    }
+
+    /// <summary>A subagent's complete message, as its own: its text, but no model of its own to report for the turn.</summary>
+    private static IEnumerable<AgentEvent> Subagent(JsonElement message, string name)
+    {
+        var id = message.String("id");
+        return message.Items("content").Select((part, index) => (Text: part.String("type") == "text" ? NonBlank(part.String("text")) : null, index))
+            .Where(pair => pair.Text is not null)
+            .Select(pair => new AgentEvent.Message(pair.Text!) { Id = id is null ? null : $"{id}:{pair.index}", Subagent = name });
+    }
+
+    /// <summary>
+    /// Follows the client's background tasks. A -p run answers each one that ends in a turn of its own after stdin has
+    /// closed, so a task counts until the result that follows its notification.
+    /// </summary>
+    private ImmutableArray<AgentEvent> Track(JsonElement root)
+    {
+        var id = root.String("task_id");
+        switch (root.String("subtype"))
+        {
+            case "task_started" when id is not null:
+                var subagent = NonBlank(root.String("subagent_type"));
+                _tasks[id] = new BackgroundTask(NonBlank(root.String("description")) ?? subagent ?? "Background task", subagent is not null);
+                if (subagent is not null && root.String("tool_use_id") is { } call)
+                {
+                    _subagents.TryAdd(call, subagent);
+                }
+
+                if (root.Bool("is_backgrounded") == true && root.Bool("awaited") != true)
+                {
+                    Run(id);
+                }
+
+                break;
+            case "task_updated" when id is not null && root.Property("patch") is { } patch:
+                if (patch.Bool("is_backgrounded") == true && _tasks.ContainsKey(id))
+                {
+                    Run(id);
+                }
+
+                if (patch.String("status") is "completed" or "failed" or "killed")
+                {
+                    Ended(id);
+                }
+
+                break;
+            case "task_notification" when id is not null:
+                Ended(id);
+                break;
+            case "background_tasks_changed":
+                var live = root.Items("tasks").Where(task => task.Bool("ambient") != true && task.Bool("awaited") != true)
+                    .Select(task => (Id: task.String("task_id"), Task: task)).Where(pair => pair.Id is not null).ToArray();
+                foreach (var (taskId, task) in live)
+                {
+                    _tasks.TryAdd(taskId!, new BackgroundTask(NonBlank(task.String("description")) ?? "Background task", task.String("task_type") == "local_agent"));
+                }
+
+                // A task that left the list ended, so the agent answers it as it would a notification.
+                foreach (var ended in _running.Where(running => live.All(pair => pair.Id != running)).ToArray())
+                {
+                    Ended(ended);
+                }
+
+                foreach (var (taskId, _) in live)
+                {
+                    Run(taskId!);
+                }
+
+                break;
+        }
+
+        return Background();
+    }
+
+    private void Run(string id)
+    {
+        if (!_running.Contains(id) && !_answering.Contains(id))
+        {
+            _running.Add(id);
+        }
+    }
+
+    private void Ended(string id)
+    {
+        if (_running.Remove(id))
+        {
+            _answering.Add(id);
+        }
+    }
+
+    private ImmutableArray<AgentEvent> Background()
+    {
+        ImmutableArray<BackgroundTask> now = [.. _running.Concat(_answering).Select(id => _tasks.GetValueOrDefault(id) ?? new BackgroundTask("Background task", false))];
+        if (now.SequenceEqual(_reported))
+        {
+            return [];
+        }
+
+        _reported = now;
+        return [new AgentEvent.BackgroundTasks(now)];
     }
 
     private ProtocolOutput Request(JsonElement root)

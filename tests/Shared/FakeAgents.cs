@@ -96,6 +96,31 @@ internal static class FakeAgents
         };
     }
 
+    /// <summary>
+    /// Claude Code's stream when its agent hands work to a subagent in the background, as the #93 probe saw it: the Agent
+    /// call, the backgrounded task, and a first result while the subagent still runs.
+    /// </summary>
+    public static string[] ClaudeBackgroundStart(string waiting = "The subagent runs in the background. I'll wait for it.") =>
+    [
+        """{"type":"assistant","message":{"id":"m-agent","content":[{"type":"tool_use","id":"toolu_1","name":"Agent","input":{"subagent_type":"general-purpose","description":"Survey the files","prompt":"List the files.","run_in_background":true}}]},"parent_tool_use_id":null}""",
+        """{"type":"system","subtype":"task_started","task_id":"task-1","tool_use_id":"toolu_1","description":"Survey the files","subagent_type":"general-purpose","is_backgrounded":true}""",
+        """{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"Async agent launched."}]},"parent_tool_use_id":null}""",
+        $$$"""{"type":"result","subtype":"success","is_error":false,"result":{{{JsonSerializer.Serialize(waiting)}}}}""",
+    ];
+
+    /// <summary>
+    /// The rest of that stream once stdin has closed: the subagent's own message, its task's notification, and a second
+    /// turn of the session whose result, <paramref name="answer"/>, is the reply.
+    /// </summary>
+    public static string[] ClaudeBackgroundEnd(string session, string subagentSays, string answer) =>
+    [
+        $$$"""{"type":"assistant","message":{"id":"m-sub","content":[{"type":"text","text":{{{JsonSerializer.Serialize(subagentSays)}}}}]},"parent_tool_use_id":"toolu_1"}""",
+        """{"type":"system","subtype":"task_notification","task_id":"task-1","tool_use_id":"toolu_1","status":"completed","output_file":"","summary":"Done"}""",
+        SessionLine(ClientId.ClaudeCode, session),
+        $$$"""{"type":"assistant","message":{"id":"m-answer","content":[{"type":"text","text":{{{JsonSerializer.Serialize(answer)}}}}]},"parent_tool_use_id":null}""",
+        $$$"""{"type":"result","subtype":"success","is_error":false,"result":{{{JsonSerializer.Serialize(answer)}}},"origin":{"kind":"task-notification"}}""",
+    ];
+
     public static string AppLine(string line)
     {
         using var json = JsonDocument.Parse(line);

@@ -49,9 +49,13 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
 
     public bool IsApplication => _message.Author == MessageAuthor.Application;
 
+    /// <summary>A subagent of the task's agent wrote it, so it shows as the subagent's own.</summary>
+    public bool IsSubagent => _message.Subagent is not null;
+
     public string AuthorLabel => _message.Author switch
     {
         MessageAuthor.Person => "You",
+        MessageAuthor.Agent when _message.Subagent is { } subagent => $"Subagent: {subagent}",
         MessageAuthor.Agent => _owner.AgentName,
         MessageAuthor.Application => "iDevelop",
     };
@@ -60,7 +64,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     /// The source the message shows. An agent's result block leaves the prose, and <see cref="ResultNote"/> says what it
     /// held. The artifact instructions that end iDevelop's own prompt leave it for <see cref="Instructions"/>.
     /// </summary>
-    public string Text => IsAgent && _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text)
+    public string Text => IsAgent && !IsSubagent && _message.State is MessageState.Complete ? ResultBlock.Prose(_message.Text)
         : IsApplication ? ArtifactInstructions.Split(_message.Text).Text
         : _message.Text;
 
@@ -81,7 +85,7 @@ public sealed class MessageItemViewModel : ConversationItemViewModel
     }
 
     /// <summary>What an agent's readable result block said, such as its question, or why iDevelop could not read it.</summary>
-    public string? ResultNote => !IsAgent || _message.State is not MessageState.Complete ? null : ResultBlock.Read(_message.Text) switch
+    public string? ResultNote => !IsAgent || IsSubagent || _message.State is not MessageState.Complete ? null : ResultBlock.Read(_message.Text) switch
     {
         ResultBlock.Readable { Status: "asking" } asking => asking.Text("question") is { } question ? $"Asks: {question}" : "Asks a question.",
         ResultBlock.Readable readable => readable.Status is { } status ? $"Reported {status}. The inspector shows the result." : "Reported a result. The inspector shows it.",

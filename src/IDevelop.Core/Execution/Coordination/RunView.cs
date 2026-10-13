@@ -87,6 +87,9 @@ internal enum TaskState
 
 internal sealed record TaskView(TaskId Task, TaskState State)
 {
+    /// <summary>While <see cref="TaskState.Running"/>: the work its client does in the background, which its turn waits for (#113).</summary>
+    public ImmutableArray<BackgroundTask> Background { get; init; } = [];
+
     /// <summary>The task's newest attempt in this run.</summary>
     public AttemptId? Attempt { get; init; }
 

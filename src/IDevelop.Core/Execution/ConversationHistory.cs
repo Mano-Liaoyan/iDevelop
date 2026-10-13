@@ -66,9 +66,9 @@ internal static class ConversationHistory
                 return id;
             }
 
-            void Message(MessageAuthor author, string text, MessageState state, string kind, string? identity = null)
+            void Message(MessageAuthor author, string text, MessageState state, string kind, string? identity = null, string? subagent = null)
             {
-                var content = new ConversationContent.Message(author, text, state);
+                var content = new ConversationContent.Message(author, text, state) { Subagent = subagent };
                 var id = Add(kind, content, identity);
                 if (kind == "message")
                 {
@@ -143,8 +143,8 @@ internal static class ConversationHistory
 
                     break;
                 case AttemptEvent.Agent { Event: AgentEvent.Message message }:
-                    Message(MessageAuthor.Agent, message.Text, message.Partial ? MessageState.Partial : MessageState.Complete, "message", message.Id);
-                    if (!message.Partial)
+                    Message(MessageAuthor.Agent, message.Text, message.Partial ? MessageState.Partial : MessageState.Complete, "message", message.Id, message.Subagent);
+                    if (!message.Partial && message.Subagent is null)
                     {
                         lastComplete[turn.Number] = message.Text;
                     }
@@ -232,7 +232,7 @@ internal static class ConversationHistory
                 case AttemptEvent.RequestAnswered:
                 case AttemptEvent.RequestClosed:
                 case AttemptEvent.ShutdownForced:
-                case AttemptEvent.Agent { Event: AgentEvent.SessionStarted or AgentEvent.MessageDelta or AgentEvent.QuestionAsked or AgentEvent.RequestClosed or AgentEvent.Succeeded }:
+                case AttemptEvent.Agent { Event: AgentEvent.SessionStarted or AgentEvent.MessageDelta or AgentEvent.QuestionAsked or AgentEvent.RequestClosed or AgentEvent.Succeeded or AgentEvent.BackgroundTasks }:
                     break;
                 default:
                     throw new InvalidOperationException($"Unhandled history event {e.GetType().Name}.");
