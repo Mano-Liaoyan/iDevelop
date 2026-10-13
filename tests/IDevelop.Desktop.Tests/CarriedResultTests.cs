@@ -349,9 +349,10 @@ public sealed class CarriedResultTests
         RunNode(shell, "B");
 
         shell.Click(shell.Find<Button>("DismissRun"));
-        shell.Render();
+        // The canvas reads where the task stands off the UI thread once the run settles, so on a busy machine the read can
+        // end after the dismissal (#86).
+        shell.WaitForCard("B", "Succeeded");
 
-        Assert.Equal("Succeeded", shell.CardText("B", "CardStatus"));
         Assert.False(shell.InCard<Button>("B", "CardAttention").IsEffectivelyVisible);
     }
 

@@ -257,18 +257,23 @@ internal sealed class WorkflowRunFixture : IDisposable
         return output;
     }
 
-    // A fake client that a failed test left waiting at a gate ends here. Each window's runs stop following their
-    // coordinators, so no timer of a window that only read a run asks for control after the test.
+    // Each window closes its projects as leaving the window does. Its runs stop following their coordinators at once, so
+    // no timer of a window that only read a run asks for control after the test. A fake client that a failed test left
+    // waiting at a gate ends here. Then each coordinator's work in flight ends before the project goes: a settled run
+    // releases its retention pins with Git after its bar says Completed, and deleting the project under that Git failed
+    // with "Directory not empty" (#86).
     public void Dispose()
     {
-        foreach (var canvas in _windows.SelectMany(shell => shell.Window.ViewModel.Projects).SelectMany(project => project.Workflows))
-        {
-            canvas.DisposeRun();
-        }
-
+        var closing = _windows.Select(shell => (Shell: shell, Closed: System.Threading.Tasks.Task.WhenAll(
+            shell.Window.ViewModel.Projects.Select(project => project.CloseAsync().AsTask())))).ToArray();
         foreach (var gate in _gates)
         {
             File.WriteAllText(gate, "");
+        }
+
+        foreach (var (shell, closed) in closing)
+        {
+            shell.WaitUntil(() => closed.IsCompleted, "the window's projects close");
         }
 
         Fakes.Dispose();

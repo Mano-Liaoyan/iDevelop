@@ -616,7 +616,9 @@ public sealed class CaptureTests
                 var log = f.ObserveAndLog(writer);
                 var snapshots = 0;
                 var fired = 0;
-                var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: probe =>
+                // The sibling's publication runs inside a snapshot try. A held clock keeps its Git time, which grows
+                // under load, out of the one-second budget for unstable snapshots.
+                var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(clock: new Clock(held: true), probe: probe =>
                 {
                     if (probe == "refs.snapshot.after") snapshots++;
                     if (fired != 0 || probe != point || point == "refs.snapshot.after" && snapshots != (foreign ? 1 : 2)) return;
@@ -863,7 +865,7 @@ public sealed class CaptureTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var log = f.ObserveAndLog(writer);
         var snapshots = 0;
-        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(clock: new Clock(held: true), probe: point =>
         {
             if (point != "refs.snapshot.after") return;
             if (++snapshots <= 5) RecordSiblingRefObservation(f, plan, sibling.Execution.Location.Owner.Branch);
@@ -888,15 +890,18 @@ public sealed class CaptureTests
         var operation = f.Op();
         var capture = new CaptureId(OperationIds.Derive(operation, "capture").Value);
         var snapshots = 0;
-        var churn = f.Materializer(probe: point =>
+        // Each try takes 300 ms on the held clock, so the fourth try ends the one-second budget however long Git takes.
+        var clock = new Clock(held: true);
+        var churn = f.Materializer(clock: clock, probe: point =>
         {
             if (point != "refs.snapshot.after") return;
             snapshots++;
+            clock.Advance(TimeSpan.FromMilliseconds(300));
             RecordSiblingRefObservation(f, plan, sibling.Execution.Location.Owner.Branch);
         });
         var rejected = Assert.IsType<Settlement.Rejected>(await churn.Settle(f.Lease(T), operation, writer.Execution.Launch, log));
         Assert.Equal("JournalBusy", rejected.Reason.Problem.ToString());
-        Assert.True(snapshots > 3);
+        Assert.Equal(4, snapshots);
         Assert.Empty(f.Read().Captures.GetValueOrDefault(capture, []));
         Assert.False(f.Read().Dispositions.ContainsKey(capture));
         var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation, writer.Execution.Launch, log));
@@ -910,7 +915,7 @@ public sealed class CaptureTests
         snapshots = 0;
         var publication = Assert.IsType<Publication.Rejected>(churn.Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("JournalBusy", publication.Reason.Problem.ToString());
-        Assert.True(snapshots > 3);
+        Assert.Equal(4, snapshots);
         Assert.Equal(0, f.Read().Blocks.Count(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == writer.Execution.Launch.Attempt));
         Assert.Empty(f.Read().Results);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));

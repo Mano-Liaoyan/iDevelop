@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using IDevelop.Workflows;
@@ -38,7 +37,8 @@ internal sealed partial class Materializer
         bytes = RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
             throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.", new BlockScope.Operation());
-        var patience = Stopwatch.StartNew();
+        // The budget runs on the materializer's clock, as the journal's retries do.
+        var started = _clock.GetTimestamp();
         for (var cap = 4; ; cap = Math.Min(cap * 2, 64))
         {
             var basis = Read(record.Workflow, record.Id);
@@ -46,7 +46,7 @@ internal sealed partial class Materializer
             _probe?.Invoke("refs.snapshot.after");
             record = Read(record.Workflow, record.Id);
             if (RefOwnership.Basis(basis) == RefOwnership.Basis(record)) break;
-            if (patience.Elapsed >= TimeSpan.FromSeconds(1)) throw new Refusal(new(RunProblem.JournalBusy));
+            if (_clock.GetElapsedTime(started) >= TimeSpan.FromSeconds(1)) throw new Refusal(new(RunProblem.JournalBusy));
             Thread.Sleep(Random.Shared.Next(1, cap + 1));
         }
         var owned = record.GitIntents.Values.Select(intent => intent.Mutation switch
