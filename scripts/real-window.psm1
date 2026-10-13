@@ -340,8 +340,10 @@ function Start-IDevelop([string] $Project, [ValidateNotNullOrEmpty()] [string] $
     $savedPath = $env:PATH
     if (-not $RealClients) {
         # A workflow run needs Git, which the app finds on its PATH only. Git's own folder follows the fake clients, and
-        # the user's PATH, where the real clients live, stays out.
-        $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        # the user's PATH, where the real clients live, stays out. Git for Windows' cmd launcher comes first because it
+        # finds Git's own shell tools by itself; mingw64\bin\git.exe, first in a Git Bash PATH, fails `git submodule`.
+        $gits = @(Get-Command git -CommandType Application -All -ErrorAction SilentlyContinue)
+        $git = @($gits | Where-Object { (Split-Path -Leaf (Split-Path $_.Source)) -eq 'cmd' }) + $gits | Select-Object -First 1
         $env:PATH = if ($git) { "$bin;$(Split-Path $git.Source)" } else { $bin }
     }
     try {
