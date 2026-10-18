@@ -222,15 +222,7 @@ internal sealed partial class Materializer
         // branch left its own files there, and a rebase replaces only the stale result's checkout.
         var location = record.Preparations[new(code.Attempt, 1)].Location;
         // An unfinished Git step on the owner's checkout finishes first.
-        if (record.GitIntents.Any(pair => !record.GitObservations.ContainsKey(pair.Key) && pair.Value.Mutation switch
-            {
-                GitMutation.CreateWorktree create => create.Owner == location.Owner,
-                GitMutation.MoveRef move => move.Change.Ref == location.Owner.Branch,
-                GitMutation.ResetCheckout reset => reset.Task == task,
-                GitMutation.AlignIndex align => align.Task == task,
-                GitMutation.RemovePaths remove => remove.Task == task,
-                _ => false,
-            }))
+        if (UnfinishedGitStep(record, location.Owner))
             throw new Refusal(new(RunProblem.UnresolvedOwnership, Task: task));
         var claimed = record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed { Key: var key } && key == new LaunchKey(code.Attempt, 1)).Sequence;
         if (record.Receipts.Values.Any(entry => entry.Sequence > claimed && entry.Event is RunEvent.TurnClaimed { Key: var later } &&

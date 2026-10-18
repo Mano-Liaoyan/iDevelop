@@ -25,6 +25,10 @@ internal sealed partial class Materializer
             var keepChanges = attempt.Cause is AttemptCause.Continue || launch.Turn > 1;
             VerifyCheckout(repository, prepared.Location, keepChanges, record);
             VerifyDelivery(record, prepared, repository);
+            // A turn that keeps the attempt's changes waits on an earlier block on its own checkout.
+            if (keepChanges && RunReducer.AttemptDrift(record, id => id == attempt.Id, operation) is { } held)
+                return new ClaimCheck.Blocked(held.Value.Block);
+            if (launch.Turn == 1 && ProducerStepPending(record, record.Inputs[prepared.Inputs]) is { } pending) return new ClaimCheck.Rejected(pending);
             return Journal("claim", () => _store.Claim(lease, OperationIds.Derive(operation, "claim"), launch,
                 record.Inputs[prepared.Inputs], prepared.PromptHash)) switch
             {
@@ -46,6 +50,35 @@ internal sealed partial class Materializer
             _ => throw new InvalidOperationException(),
         };
     }
+
+    /// <summary>
+    /// A consumer's first claim waits while a Git step on the checkout of a task whose code it receives, such as a
+    /// publication's branch move, is unfinished, so it never starts from code that is about to change.
+    /// </summary>
+    private static RunRejection? ProducerStepPending(RunRecord record, InputRecord inputs)
+    {
+        foreach (var owner in RunReducer.CodeOwners(inputs))
+        {
+            // A result carried from an earlier run has no checkout in this run, only its kept commit (#90).
+            if (record.CurrentResults.GetValueOrDefault(owner) is { Origin: ResultOrigin.Carried }) continue;
+            if (RunReducer.PublishingAttempt(record, owner) is not { } published || !record.Preparations.TryGetValue(new(published, 1), out var prepared) ||
+                UnfinishedGitStep(record, prepared.Location.Owner))
+                return new(RunProblem.UnresolvedOwnership);
+        }
+        return null;
+    }
+
+    /// <summary>Whether a Git step on <paramref name="owner"/>'s checkout or branch was intended and never observed.</summary>
+    private static bool UnfinishedGitStep(RunRecord record, WorktreeOwner owner) =>
+        record.GitIntents.Any(pair => !record.GitObservations.ContainsKey(pair.Key) && pair.Value.Mutation switch
+        {
+            GitMutation.CreateWorktree create => create.Owner == owner,
+            GitMutation.MoveRef move => move.Change.Ref == owner.Branch,
+            GitMutation.ResetCheckout reset => reset.Task == owner.Task,
+            GitMutation.AlignIndex align => align.Task == owner.Task,
+            GitMutation.RemovePaths remove => remove.Task == owner.Task,
+            _ => false,
+        });
 
     public ClaimCheck? ClaimedLaunch(CoordinatorPermit permit, OperationId operation, TaskId task, AttemptCause cause, string? basePrompt)
     {
