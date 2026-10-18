@@ -76,11 +76,6 @@ public sealed partial class ProjectRuns
             {
                 case []:
                     if (!Rests(AttemptEvidence.ReadPrefix(folder, turn).Record, end)) return Refused(RunProblem.InvalidClaim);
-                    switch (TurnMaterializer(store, scheduled, halted).CheckRestingBaseline(lease, operation, attemptId, end is RestingEnd.Cancel))
-                    {
-                        case RestingCheck.Rejected rejected: return new RestingClose.Refused(rejected.Reason);
-                        case RestingCheck.Drifted drifted when end is not RestingEnd.Cancel: return new RestingClose.Blocked(drifted.Block);
-                    }
                     Probe?.Invoke("runner.close.append.before");
                     using (var append = AttemptLog.Open(folder)) append.Append(ClosingEvent(end, TimeProvider.GetUtcNow()));
                     Probe?.Invoke("runner.close.append.after");

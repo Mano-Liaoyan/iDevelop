@@ -35,13 +35,12 @@ internal static partial class RunReducer
     internal static bool ProducerUnsettled(RunRecord record, ImmutableArray<TaskId> producers) =>
         record.UnresolvedClaims.Any(key => producers.Contains(record.Attempts[key.Attempt].Task));
 
-    /// <summary>The step whose blocks a resting closure's baseline check records.</summary>
+    /// <summary>The step whose blocks a resting closure's baseline check recorded in earlier journals.</summary>
     internal const string ClosureCheck = "close-recheck";
 
     /// <summary>
     /// Publish's view of drift: a dirty or unowned checkout, except an operation's own operation- or repository-scoped
-    /// fault, which that operation reruns. A failed closure check is no drift either, because the next successful baseline
-    /// check of its attempt verifies what it could not and resolves it.
+    /// fault, which that operation reruns. A failed closure check that an earlier journal holds is no drift either.
     /// </summary>
     internal static bool IsDrift(RunRecord record, OperationId id, MaterializationBlock block, OperationId? operation = null) =>
         block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
@@ -58,9 +57,9 @@ internal static partial class RunReducer
     }
 
     /// <summary>
-    /// An operation-scoped fault that a resting closure's baseline check recorded under its own operation. The check takes
-    /// its block ids in order, each once, so they are the ids the journal holds in an unbroken run from the first, however
-    /// many times the check failed (#85).
+    /// An operation-scoped fault that a resting closure's baseline check recorded under its own operation in an earlier
+    /// journal. The check took its block ids in order, each once, so they are the ids the journal holds in an unbroken run
+    /// from the first, however many times the check failed (#85).
     /// </summary>
     internal static bool ClosureFault(RunRecord record, OperationId id, MaterializationBlock block)
     {
@@ -73,13 +72,6 @@ internal static partial class RunReducer
         return false;
     }
 
-    /// <summary>The oldest unresolved drift block on a producer's publishing attempt.</summary>
-    internal static KeyValuePair<OperationId, MaterializationBlockState>? ProducerDrift(RunRecord record, ImmutableArray<TaskId> producers)
-    {
-        var attempts = producers.Select(task => PublishingAttempt(record, task)).OfType<AttemptId>().ToHashSet();
-        return AttemptDrift(record, attempts.Contains);
-    }
-
     /// <summary>The oldest unresolved drift block, as <paramref name="operation"/> sees it, on an attempt that <paramref name="attempt"/> selects.</summary>
     internal static KeyValuePair<OperationId, MaterializationBlockState>? AttemptDrift(RunRecord record, Func<AttemptId, bool> attempt,
         OperationId? operation = null) =>
@@ -88,7 +80,7 @@ internal static partial class RunReducer
             .OrderBy(pair => record.Receipts[pair.Key].Sequence)
             .Select(pair => (KeyValuePair<OperationId, MaterializationBlockState>?)pair).FirstOrDefault();
 
-    /// <summary>A first claim waits while a producer it depends on is unsettled or its checkout drifted.</summary>
+    /// <summary>A first claim waits while a producer it depends on is unsettled.</summary>
     internal static bool ProducerHold(RunRecord record, InputRecord inputs) =>
-        Producers(inputs) is { IsEmpty: false } producers && (ProducerUnsettled(record, producers) || ProducerDrift(record, producers) is not null);
+        Producers(inputs) is { IsEmpty: false } producers && ProducerUnsettled(record, producers);
 }

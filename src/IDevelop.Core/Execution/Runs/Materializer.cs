@@ -11,19 +11,17 @@ internal sealed partial class Materializer
     private readonly IJoinComposer _joins;
     private readonly RefPublisher _refs;
     private readonly TimeProvider _clock;
-    private readonly Func<string, ulong?> _volumes;
     private readonly IReadOnlyDictionary<string, string> _environment;
     private readonly Action<string>? _probe;
 
     private Materializer(string project, RunStore store, IJoinComposer joins, TimeProvider clock,
-        IReadOnlyDictionary<string, string> environment, Action<string>? probe, Func<string, ulong?> volumes)
+        IReadOnlyDictionary<string, string> environment, Action<string>? probe)
     {
         _project = Path.GetFullPath(project);
         _store = store;
         _refs = new(store, probe);
         _joins = joins;
         _clock = clock;
-        _volumes = volumes;
         _environment = environment;
         _probe = probe;
     }
@@ -48,8 +46,8 @@ internal sealed partial class Materializer
         Open(projectFolder, store, joins, TimeProvider.System, null, null);
 
     internal static Materializer Open(string projectFolder, RunStore store, IJoinComposer? joins,
-        TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null, Func<string, ulong?>? volumes = null) =>
-        new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe, volumes ?? FileIdentities.VolumeOf);
+        TimeProvider clock, IReadOnlyDictionary<string, string>? environment, Action<string>? probe = null) =>
+        new(projectFolder, store, joins ?? new UnavailableJoins(), clock, environment ?? new Dictionary<string, string>(), probe);
 
     /// <param name="agents">What the clients offer now, which a planner's start records for its prompt to list (#99).</param>
     public async ValueTask<Preparation> Prepare(RunLease lease, OperationId operation, AttemptCause cause,
@@ -95,7 +93,6 @@ internal sealed partial class Materializer
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
-                VerifyRecoveryBaseline(repository, record, completed.Execution.Location, cause);
                 VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
                 VerifyDelivery(record, completed.Execution, repository);
                 RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
@@ -147,7 +144,6 @@ internal sealed partial class Materializer
             step = "worktree";
             EnsureCheckout(permit, operation, planId, repository, location, record);
             step = "checkout";
-            VerifyRecoveryBaseline(repository, Read(workflow, run), location, cause);
             VerifyCheckout(repository, location, cause is AttemptCause.Continue, Read(workflow, run));
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
@@ -252,7 +248,7 @@ internal sealed partial class Materializer
         GitRead<T>.Failed failed => throw Fault(failed.Problem, failed.Detail, failed switch
         {
             { Refs.IsEmpty: false } => new BlockScope.Refs(failed.Refs),
-            // Only a task checkout's index that hides entries fails as DirtyWorktree, and Restore and baselines refuse one.
+            // Only a task checkout's index that hides entries fails as DirtyWorktree.
             { Problem: MaterializationProblem.DirtyWorktree } => new BlockScope.Repository(),
             _ => new BlockScope.Operation(),
         }),

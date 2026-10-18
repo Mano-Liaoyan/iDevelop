@@ -202,9 +202,8 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Continue fix: after closing iDevelop interrupted the review's fix round, the round goes on in the fix's session from
-    /// the files it left. Two matching observations preserve the checkout and become the new attempt's recovery baseline,
-    /// which its claim checks again; they never stand in for the interrupted turn's success. The attempt is reserved at once
-    /// and starts beside the run's other clients, or once a slot is free at the run's bound. Repeating the confirmation
+    /// the files it left in its checkout, which never stand in for the interrupted turn's success. The attempt is reserved at
+    /// once and starts beside the run's other clients, or once a slot is free at the run's bound. Repeating the confirmation
     /// returns the same attempt.
     /// </summary>
     internal Task<FixReply> ContinueFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default) =>
@@ -311,8 +310,8 @@ internal sealed partial class WorkflowRunCoordinator
     };
 
     /// <summary>
-    /// Under the subject's task lease: preserves and baselines the checkout for Continue, or salvages and resets it for
-    /// Retry, then reserves and prepares the replacement. Each step derives its operation from the confirmation, so a
+    /// Under the subject's task lease: salvages and resets the checkout for Retry, then reserves and prepares the
+    /// replacement, which a Continue starts in the checkout as it is. Each step derives its operation from the confirmation, so a
     /// repeat after a crash or a refusal converges on the same records.
     /// </summary>
     private async Task<FixReply> Replace(RunRecord record, RestingReview review, AttemptId fix, AttemptCause cause, OperationId confirmation)
@@ -321,22 +320,7 @@ internal sealed partial class WorkflowRunCoordinator
         using var lease = taken.Lease;
         var materializer = Commanded();
         FixReply Refused(RunRejection reason) => new FixReply.Refused(reason);
-        if (cause is AttemptCause.Continue)
-        {
-            var preservation = OperationIds.Derive(confirmation, "continue-fix/preserve");
-            _runs.Probe?.Invoke("coordinator.continue-fix.preserve");
-            switch (await materializer.Preserve(lease, preservation, fix).ConfigureAwait(false))
-            {
-                case Preservation.Blocked blocked: return new FixReply.Blocked(blocked.Block);
-                case Preservation.Rejected rejected: return Refused(rejected.Reason);
-            }
-            switch (materializer.RecordRecoveryBaseline(lease, OperationIds.Derive(confirmation, "continue-fix/baseline"), fix, confirmation, preservation))
-            {
-                case RecoveryBaselining.Blocked blocked: return new FixReply.Blocked(blocked.Block);
-                case RecoveryBaselining.Rejected rejected: return Refused(rejected.Reason);
-            }
-        }
-        else
+        if (cause is not AttemptCause.Continue)
         {
             _runs.Probe?.Invoke("coordinator.retry-fix.salvage");
             switch (await materializer.Salvage(lease, OperationIds.Derive(confirmation, "retry-fix/salvage"), fix).ConfigureAwait(false))

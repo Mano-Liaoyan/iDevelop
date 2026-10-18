@@ -63,7 +63,7 @@ internal enum TaskState
     /// <summary>Its attempt ended without a result: failed, cancelled, interrupted, or closed by recovery.</summary>
     Failed,
 
-    /// <summary>A recorded block holds it until a repair or recheck resolves the block.</summary>
+    /// <summary>A recorded block holds it until the block resolves.</summary>
     Blocked,
 
     /// <summary>Its turn's execution is unresolved. Nothing launches it again; a person recovers it.</summary>

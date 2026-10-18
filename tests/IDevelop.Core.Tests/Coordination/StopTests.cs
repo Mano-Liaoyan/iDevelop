@@ -106,12 +106,12 @@ public sealed class StopTests
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
         f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
         await f.Open();
-        var drifted = false;
+        var changed = false;
         f.Runs.Probe = point =>
         {
-            if (point != "runner.claim.before" || drifted || f.Read().Results.IsEmpty) return;
-            drifted = true;
-            File.WriteAllText(Path.Combine(f.Checkout(A), "result.txt"), "late\n");
+            if (point != "runner.claim.before" || changed || f.Read().Results.IsEmpty) return;
+            changed = true;
+            ChangeDeliveredReport(f, B);
         };
         await f.Resume();
         var stuck = await f.UntilStatus(RunStatus.NeedsAttention);
@@ -132,9 +132,9 @@ public sealed class StopTests
         using var claim = new TurnFixture.ProbeBarrier("runner.claim.before");
         f.Runs.Probe = point =>
         {
-            // B's claim waits here; by the time it rechecks its producer, the run is stopping and A's checkout drifted.
+            // B's claim waits here; by the time it checks its delivered inputs, the run is stopping and they changed.
             if (point != "runner.claim.before" || f.Read().Results.IsEmpty) return;
-            File.WriteAllText(Path.Combine(f.Checkout(A), "result.txt"), "late\n");
+            ChangeDeliveredReport(f, B);
             claim.Probe(point);
         };
         await f.Resume();
@@ -145,9 +145,14 @@ public sealed class StopTests
         claim.Dispose();
         await f.UntilStatus(RunStatus.Stopped);
         Assert.Equal(RecoveryOutcome.NotStarted, Assert.IsType<AttemptEnd.Recovered>(f.Read().Closures[reserved]).Outcome);
-        Assert.Contains(f.Read().Blocks.Values, block => !block.Resolved && block.Block.Task == A);
+        Assert.Contains(f.Read().Blocks.Values, block => !block.Resolved && block.Block.Task == B);
         Assert.Equal(0, f.Launches(B));
     }
+
+    /// <summary>Changes the report that <paramref name="task"/>'s prepared checkout received from the task before it.</summary>
+    private static void ChangeDeliveredReport(CoordinatorFixture f, TaskId task) =>
+        File.WriteAllText(Directory.EnumerateFiles(Path.Combine(f.Checkout(task), ".idp", "inputs"), "report.md", SearchOption.AllDirectories).Single(),
+            "Changed.\n");
 
     [Fact]
     public async Task Stop_lets_a_settling_success_publish()

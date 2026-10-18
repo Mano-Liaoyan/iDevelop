@@ -190,7 +190,7 @@ internal sealed partial class WorkflowRunCoordinator
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return ([], new(RunProblem.StorageUnavailable)); }
     }
 
-    /// <summary>Rereads the journal, after a change this window did not make, such as a restore or a person's recovery.</summary>
+    /// <summary>Rereads the journal, after a change this window did not make, such as a person's recovery.</summary>
     public void Refresh() => Post(() => { });
 
     /// <summary>The waits of <see cref="Until"/> still registered.</summary>

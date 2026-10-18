@@ -143,15 +143,6 @@ internal sealed class ClosedAttempt(Func<ClosedAttempt, Release> release, Execut
     }
 }
 
-/// <summary>The live checkout against an attempt's recorded baseline before its resting closure.</summary>
-internal abstract record RestingCheck
-{
-    private RestingCheck() { }
-    internal sealed record Matched : RestingCheck;
-    internal sealed record Drifted(MaterializationBlock Block) : RestingCheck;
-    internal sealed record Rejected(RunRejection Reason) : RestingCheck;
-}
-
 internal abstract record ClaimCheck
 {
     private ClaimCheck() { }

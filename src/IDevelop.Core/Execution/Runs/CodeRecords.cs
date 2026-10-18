@@ -147,3 +147,12 @@ internal abstract record BlockScope
 
 internal sealed record PreservationObservation(int Ordinal, DateTimeOffset Started, DateTimeOffset Completed, CheckoutState State,
     CommitRecipe Recipe, CommitId Commit, ImmutableArray<ArtifactRecord> Outbox, ImmutableArray<StageEntry> Stages);
+
+internal sealed record CheckoutState(CommitId? Branch, CommitId? Head, string? SymbolicHead, TreeId Files,
+    EvidenceFile? Index, TreeId? IndexTree, ImmutableArray<EvidenceFile> Untracked, LockEvidence? IndexLock);
+
+internal readonly record struct FileIdentity(ulong Volume, UInt128 File, long ChangeTicks);
+
+internal sealed record LockEvidence(EvidenceFile Bytes, FileIdentity? Identity);
+
+internal sealed record PathRestore(string Path, string? From, string? To);

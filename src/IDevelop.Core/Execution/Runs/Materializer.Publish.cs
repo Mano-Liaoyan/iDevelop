@@ -126,8 +126,6 @@ internal sealed partial class Materializer
                     VerifyCheckout(repository, prepared.Location, keepChanges: true, Read(workflow, run));
                     return repository.AlignIndex(checkout, plan.IndexBefore, plan.Recipe.Tree);
                 });
-                if (aligned is IndexAlignment.Unexpected or IndexAlignment.Failed)
-                    VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
                 if (aligned is IndexAlignment.Unexpected)
                     throw Fault(MaterializationProblem.DirtyWorktree, "The writer index changed before publication alignment.", BlockScope.Checkout.Whole);
                 if (aligned is IndexAlignment.Failed failed)
@@ -231,7 +229,6 @@ internal sealed partial class Materializer
     private void VerifyPublicationBaseline(GitRepository repository, string checkout, TreeId tree, Digest? index,
         bool compareIndex, CoordinatorPermit permit, OperationId operation, ref ImmutableArray<EvidenceFile> evidence, TreeId? indexTree = null)
     {
-        VerifyWriterIndexLock(repository, checkout, permit, operation, ref evidence);
         if (repository.UnmergedEntries(checkout) is not GitRead<ImmutableArray<StageEntry>>.Read stages)
             throw Fault(MaterializationProblem.DirtyWorktree, "Writer files or index changed after the turn-end capture.", BlockScope.Checkout.Whole);
         if (!stages.Value.IsEmpty)

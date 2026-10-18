@@ -60,7 +60,6 @@ public sealed class RestingClosureTests
 
     [Theory]
     [InlineData("published")]
-    [InlineData("late")]
     [InlineData("extra")]
     public async Task Mark_done_publishes_the_final_capture(string row)
     {
@@ -68,17 +67,6 @@ public sealed class RestingClosureTests
         await f.Open();
         var turn = await Waiting(f);
         var attempt = turn.Address.Launch.Attempt;
-        if (row == "late")
-        {
-            File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
-            var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Block;
-            Assert.Equal("DirtyWorktree", blocked.Problem.ToString());
-            Assert.Equal(new BlockScope.Checkout(["result.txt"]), blocked.Scope);
-            Assert.Equal(0, Closures(f, attempt));
-            Assert.Equal(0, Lines(f, T, attempt, "markedDone"));
-            Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
-            return;
-        }
         if (row == "extra")
         {
             // Any line besides the one Mark done leaves the closure log apart from the captured turn.
@@ -154,11 +142,10 @@ public sealed class RestingClosureTests
     [Theory]
     [InlineData("waiting")]
     [InlineData("stopped")]
-    [InlineData("drift")]
     [InlineData("review")]
     public async Task Cancel_and_conclusion_close_resting_attempts(string row)
     {
-        await using var f = new TurnFixture(row is "waiting" or "drift" ? ConversationMode.Chat : ConversationMode.Autonomous);
+        await using var f = new TurnFixture(row == "waiting" ? ConversationMode.Chat : ConversationMode.Autonomous);
         await f.Open(row == "stopped" ? f.Waiting() : null);
         AttemptId attempt;
         if (row == "review") attempt = await InReview(f, T);
@@ -172,20 +159,12 @@ public sealed class RestingClosureTests
             attempt = stopped.Address.Launch.Attempt;
         }
         else attempt = (await Waiting(f)).Address.Launch.Attempt;
-        if (row == "drift") File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
         var closed = Assert.IsType<RestingClose.Closed>(await Close(f, f.Preparation.Op(), attempt,
             row == "review" ? new RestingEnd.Conclude(null) : new RestingEnd.Cancel())).Attempt;
         Assert.Equal(row == "review" ? "Succeeded" : "Cancelled", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
         Assert.Equal(row == "review" ? "Succeeded" : "Cancelled", AttemptEvidence.Read(Folder(f, T, attempt)).Record!.Status.ToString());
         Assert.Empty(f.Preparation.Read().Results);
-        var drift = f.Preparation.Read().Blocks.Values.Where(state => !state.Resolved).ToArray();
-        if (row == "drift")
-        {
-            var block = Assert.Single(drift).Block;
-            Assert.Equal(attempt, block.Attempt);
-            Assert.Equal(new BlockScope.Checkout(["result.txt"]), block.Scope);
-        }
-        else Assert.Empty(drift);
+        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
         if (row != "review") Assert.IsType<TurnDisposition.Ended>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
         Assert.Equal(row == "review" ? 0 : 1, f.Launches);
         Assert.Equal(row == "review" ? 1 : 1, f.Claims(T));
@@ -206,144 +185,6 @@ public sealed class RestingClosureTests
         Assert.Equal(before, File.ReadAllBytes(Path.Combine(Folder(f, T, attempt), "events.jsonl")));
         Assert.Equal(0, Closures(f, attempt));
         Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
-    }
-
-    [Theory]
-    [InlineData("same")]
-    [InlineData("later")]
-    [InlineData("turn")]
-    public async Task A_failed_check_clears_when_a_later_check_succeeds(string row)
-    {
-        await using var f = new TurnFixture(ConversationMode.Chat);
-        await f.Open();
-        var attempt = (await Waiting(f)).Address.Launch.Attempt;
-        var branch = f.Preparation.Read().Preparations[new(attempt, 1)].Location.Owner.Branch;
-        var tip = f.Preparation.Git.Git("rev-parse", branch).Trim();
-        f.Preparation.Git.Git("branch", "foreign", tip);
-        f.Preparation.Git.Git("symbolic-ref", branch, "refs/heads/foreign");
-        var operation = f.Preparation.Op();
-        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Block;
-        Assert.Equal("UncertainOwnership", blocked.Problem.ToString());
-        Assert.Equal(new BlockScope.Operation(), blocked.Scope);
-        Assert.Equal(0, Closures(f, attempt));
-        f.Preparation.Git.Git("update-ref", "--no-deref", branch, tip);
-        if (row == "turn")
-        {
-            // A later turn's own-baseline recheck verifies what the failed closure check could not.
-            FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Resuming(f.Client, "session-1")
-                .Print(FakeAgents.SessionLine(f.Client, "session-1")).Print(FakeAgents.ReplyLines(f.Client, "More?")));
-            var next = await f.Settled(await f.Start(new TurnIntent.Next(f.Preparation.Op(), new(attempt, 2), "Use the fixture")));
-            Assert.Equal("WaitingForInput", next.Attempt.Status.ToString());
-            Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
-            Assert.Equal(2, f.Launches);
-            return;
-        }
-        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, row == "same" ? operation : f.Preparation.Op(), attempt,
-            new RestingEnd.MarkDone())).Attempt;
-        Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
-        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
-        Assert.Equal(1, Closures(f, attempt));
-        Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(closed.Lease, f.Preparation.Op(), attempt));
-        Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
-    }
-
-    /// <summary>
-    /// A closure check that failed under one operation more often than 64 times, each time for another reason, still
-    /// records a closure fault rather than drift (#85): a later check under another operation clears every one of them.
-    /// </summary>
-    [Fact]
-    public async Task A_closure_check_that_failed_more_than_64_times_still_records_no_drift()
-    {
-        await using var f = new TurnFixture(ConversationMode.Chat);
-        await f.Open();
-        var attempt = (await Waiting(f)).Address.Launch.Attempt;
-        var operation = f.Preparation.Op();
-        var step = RunReducer.ClosureCheck + "-blocked";
-        // The check's first 65 failures, each with its own detail, numbered as the materializer numbers them.
-        for (var number = 0; number <= 64; number++)
-        {
-            var id = OperationIds.Derive(operation, number == 0 ? step : step + "-" + number);
-            Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, id, new RunEvent.Blocked(
-                new(operation, T, attempt, MaterializationProblem.UncertainOwnership, null, [], $"Failure {number}.") { Scope = new BlockScope.Operation() })));
-        }
-        var branch = f.Preparation.Read().Preparations[new(attempt, 1)].Location.Owner.Branch;
-        var tip = f.Preparation.Git.Git("rev-parse", branch).Trim();
-        f.Preparation.Git.Git("branch", "foreign", tip);
-        f.Preparation.Git.Git("symbolic-ref", branch, "refs/heads/foreign");
-        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, operation, attempt, new RestingEnd.MarkDone())).Block;
-        Assert.Equal(new BlockScope.Operation(), blocked.Scope);
-        Assert.True(f.Preparation.Read().Receipts.ContainsKey(OperationIds.Derive(operation, step + "-65")));
-        f.Preparation.Git.Git("update-ref", "--no-deref", branch, tip);
-
-        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Attempt;
-
-        Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
-        Assert.Equal(66, f.Preparation.Read().Blocks.Count);
-        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => !state.Resolved);
-        Assert.Equal(1, Closures(f, attempt));
-        Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(closed.Lease, f.Preparation.Op(), attempt));
-        Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
-    }
-
-    [Theory]
-    [InlineData("MarkDone")]
-    [InlineData("Conclude")]
-    public async Task An_earlier_drift_block_holds_mark_done_and_conclusion(string end)
-    {
-        await using var f = new TurnFixture(end == "MarkDone" ? ConversationMode.Chat : ConversationMode.Autonomous);
-        await f.Open();
-        var attempt = end == "MarkDone" ? (await Waiting(f)).Address.Launch.Attempt : await InReview(f, T);
-        RestingEnd closing = end == "MarkDone" ? new RestingEnd.MarkDone() : new RestingEnd.Conclude(null);
-        var file = Path.Combine(f.Checkout, "root.txt");
-        var original = File.ReadAllText(file);
-        File.WriteAllText(file, "late\n");
-        var first = Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, closing)).Block;
-        Assert.Equal(new BlockScope.Checkout(["root.txt"]), first.Scope);
-        // Reverting the file outside iDevelop is no recorded recheck, so the block still holds the closure.
-        File.WriteAllText(file, original);
-        Assert.Equal(first, Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, closing)).Block);
-        Assert.Equal(0, Closures(f, attempt));
-        Assert.Single(f.Preparation.Read().Blocks);
-    }
-
-    [Fact]
-    public async Task Another_operations_fault_holds_mark_done_as_it_would_hold_publication()
-    {
-        await using var f = new TurnFixture(ConversationMode.Chat);
-        await f.Open();
-        var attempt = (await Waiting(f)).Address.Launch.Attempt;
-        var other = f.Preparation.Op();
-        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, other, new RunEvent.Blocked(
-            new(other, T, attempt, MaterializationProblem.UncertainOwnership, null, [], "Another step failed.") { Scope = new BlockScope.Operation() })));
-        var blocked = Assert.IsType<RestingClose.Blocked>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Block;
-        Assert.Equal(other, blocked.Operation);
-        Assert.Equal(0, Closures(f, attempt));
-        Assert.Equal(0, Lines(f, T, attempt, "markedDone"));
-    }
-
-    [Theory]
-    [InlineData("MarkDone")]
-    [InlineData("Cancel")]
-    public async Task An_unfinished_git_step_stops_mark_done_but_not_cancel(string end)
-    {
-        await using var f = new TurnFixture(ConversationMode.Chat);
-        await f.Open();
-        var attempt = (await Waiting(f)).Address.Launch.Attempt;
-        var record = f.Preparation.Read();
-        var prepared = record.Preparations[new(attempt, 1)];
-        var plan = record.Plans.Single(pair => pair.Value is MaterializationPlan.Preparation preparation && preparation.Attempt == attempt).Key;
-        // A worktree step that never recorded its observation, as a crash in another preparation of this checkout leaves.
-        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, f.Preparation.Op(), new RunEvent.GitIntended(plan,
-            new GitMutation.CreateWorktree(prepared.Location.Owner, prepared.Location.AttemptBase, true))));
-        var result = await Close(f, f.Preparation.Op(), attempt, end == "MarkDone" ? new RestingEnd.MarkDone() : new RestingEnd.Cancel());
-        if (end == "MarkDone")
-        {
-            Assert.Equal("UnresolvedOwnership", Assert.IsType<RestingClose.Refused>(result).Reason.Problem.ToString());
-            Assert.Equal(0, Closures(f, attempt));
-            Assert.Equal(0, Lines(f, T, attempt, "markedDone"));
-        }
-        else Assert.Equal("Cancelled", Assert.IsType<AttemptEnd.Logged>(Assert.IsType<RestingClose.Closed>(result).Attempt.End).Outcome.ToString());
-        Assert.Empty(f.Preparation.Read().Blocks);
     }
 
     [Fact]
@@ -418,24 +259,4 @@ public sealed class RestingClosureTests
         Assert.IsType<TurnDisposition.Ended>(Assert.IsType<Release.Released>(closed.Release()).Receipt);
     }
 
-    [Fact]
-    public async Task Release_accepts_a_preservation_receipt()
-    {
-        await using var f = new TurnFixture();
-        await f.Open();
-        f.Runs.Probe = point =>
-        {
-            if (point == "journal.capture-1.after") File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
-        };
-        var turn = await f.Settled(await f.Start());
-        Assert.IsType<CaptureDisposition.Diverged>(turn.Capture.Disposition);
-        Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
-        var preservation = f.Preparation.Op();
-        Assert.IsType<Preservation.Preserved>(await f.Preparation.Materializer().Preserve(turn.Lease, preservation, turn.Address.Launch.Attempt));
-        // Preserve records the drift it found as a block on the attempt, so the preservation must answer before that block.
-        Assert.Contains(f.Preparation.Read().Blocks.Values, state => !state.Resolved && state.Block.Attempt == turn.Address.Launch.Attempt);
-        var receipt = Assert.IsType<TurnDisposition.Preserved>(Assert.IsType<Release.Released>(turn.Release()).Receipt);
-        Assert.Equal(OperationIds.Derive(preservation, "preserve-plan"), receipt.Plan);
-        Assert.IsType<LeaseTake.Taken>(f.Preparation.Permit.TakeTask(T)).Lease.Dispose();
-    }
 }

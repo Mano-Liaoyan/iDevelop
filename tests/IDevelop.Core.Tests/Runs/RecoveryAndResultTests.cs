@@ -193,7 +193,7 @@ public sealed class RecoveryAndResultTests
     }
 
     [Fact]
-    public void A_logged_failure_can_be_continued_but_recovered_ownership_requires_a_retry()
+    public void A_logged_failure_and_a_turn_closed_as_stopped_can_be_continued()
     {
         using var f = new RunFixtures();
         f.Approve();
@@ -206,8 +206,8 @@ public sealed class RecoveryAndResultTests
         Assert.Equal(A1, Assert.IsType<AttemptCause.Continue>(continuation.Attempt.Cause).Previous);
         f.Claim(continuation);
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(continuation.Attempt.Task), f.Op(), continuation.Attempt.Id, RecoveryOutcome.Stopped, f.Op(), "Stopped."));
-        Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.Reserve(f.Lease(T), f.Op(), new(V1),
-            new AttemptCause.Continue(continuation.Attempt.Id, f.Op()))));
+        var again = f.Reserve(cause: new AttemptCause.Continue(continuation.Attempt.Id, f.Op()));
+        Assert.Equal(continuation.Attempt.Id, Assert.IsType<AttemptCause.Continue>(again.Attempt.Cause).Previous);
     }
 
     [Fact]

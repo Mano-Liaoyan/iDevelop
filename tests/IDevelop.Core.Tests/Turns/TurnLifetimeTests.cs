@@ -54,7 +54,7 @@ public sealed class TurnLifetimeTests
     [UnixTheory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task An_escaped_descendant_outlives_cleanup_and_its_late_write_blocks_the_consumer_first_claim(bool writes)
+    public async Task An_escaped_descendant_outlives_cleanup_and_the_consumer_reads_the_published_result(bool writes)
     {
         await using var f = new TurnFixture(configure: workflow => Connect(Edit(workflow, TestNodes.Place(Agent(U), new(0, 0))), T, U));
         using var children = new Processes();
@@ -83,28 +83,17 @@ public sealed class TurnLifetimeTests
             AssertGone(escaped);
         }
 
-        // The design's next move: before the consumer's first claim, the producer's checkout is rechecked (E3a.5b).
+        // The consumer starts from the published result, whatever the escaped descendant wrote later.
         FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Fresh(f.Client).Copy("result.txt", Path.Combine(f.Evidence, "consumer.txt"))
             .Print(FakeAgents.SessionLine(f.Client, "session-2")).Print(FakeAgents.ReplyLines(f.Client, "Done.")));
         var next = await f.Runs.StartTurn(f.Preparation.Permit, new TurnIntent.First(f.Preparation.Op(), U, new AttemptCause.Initial())).WaitAsync(Bound);
 
         Assert.Single(f.Preparation.Read().Results);
-        if (writes)
-        {
-            var block = Assert.IsType<TurnStart.Blocked>(next).Block;
-            Assert.Equal(("DirtyWorktree", T), (block.Problem.ToString(), block.Task));
-            Assert.Equal(new BlockScope.Checkout(["result.txt"]), block.Scope);
-            Assert.Equal(0, f.Claims(U));
-            Assert.Equal(1, f.Launches);
-            Assert.Equal("late\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
-        }
-        else
-        {
-            var consumer = await f.Settled(Assert.IsType<TurnStart.Started>(next).Turn);
-            Assert.Equal("Succeeded", consumer.Attempt.Status.ToString());
-            Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Evidence, "consumer.txt")));
-            Assert.Equal(1, f.Claims(U));
-        }
+        var consumer = await f.Settled(Assert.IsType<TurnStart.Started>(next).Turn);
+        Assert.Equal("Succeeded", consumer.Attempt.Status.ToString());
+        Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Evidence, "consumer.txt")));
+        Assert.Equal(1, f.Claims(U));
+        Assert.Equal(writes ? "late\n" : "done\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
     }
 
     [Fact]

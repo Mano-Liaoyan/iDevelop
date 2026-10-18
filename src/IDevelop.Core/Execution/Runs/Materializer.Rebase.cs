@@ -11,7 +11,7 @@ namespace IDevelop.Execution;
 internal sealed partial class Materializer
 {
     private const string RebaseIdentity = "iDevelop <idevelop@localhost>";
-    private const string StaleCheckoutChanged = "The checkout changed after its result was accepted. Preserve and restore it, then review the updated inputs again.";
+    private const string StaleCheckoutChanged = "The checkout changed after its result was accepted.";
 
     /// <summary>Everything a preview found, and what an approval needs to plan the same candidate.</summary>
     private sealed record RebaseBuild(RebasePreview Preview, ResultRecord Source, OwnedCode Code, ExecutionLocation Location,
@@ -192,7 +192,7 @@ internal sealed partial class Materializer
     private static ResultRecord? RebasedResult(RunRecord record, OperationId plan) =>
         record.Results.FirstOrDefault(result => result.Origin is ResultOrigin.Rebased rebased && rebased.Plan == plan);
 
-    /// <summary>The stale result, its owner's checkout as the journal last recorded it, and the candidate on the current inputs.</summary>
+    /// <summary>The stale result, its owner's clean checkout, and the candidate on the current inputs.</summary>
     private RebaseBuild BuildRebase(GitRepository repository, RunRecord record, TaskId task)
     {
         if (record.Schema != 3) throw new Refusal(new(RunProblem.UnsupportedSchema));
@@ -218,22 +218,31 @@ internal sealed partial class Materializer
         }).Where(binding => !previous.Bindings.Any(old => old is InputBinding.Provided provided && provided.Edge.From == binding.Item1 &&
             provided.Result == binding.Item2)).Select(binding => binding.Item1).Distinct().OrderBy(id => id.ToString(), StringComparer.Ordinal)];
 
-        // The owner's checkout must match what the journal last recorded for it: the stale result, clean.
+        // The owner's checkout must still be the stale result, clean. A later attempt, such as a failed retry, that moved its
+        // branch left its own files there, and a rebase replaces only the stale result's checkout.
         var location = record.Preparations[new(code.Attempt, 1)].Location;
-        var fold = CheckoutBaseline.Fold(record, location.Owner, commit => Value(repository.ReadCommit(commit)).Tree);
-        if (fold.Components.Values.Any(component => component is not ComponentBaseline.Fixed))
+        // An unfinished Git step on the owner's checkout finishes first.
+        if (record.GitIntents.Any(pair => !record.GitObservations.ContainsKey(pair.Key) && pair.Value.Mutation switch
+            {
+                GitMutation.CreateWorktree create => create.Owner == location.Owner,
+                GitMutation.MoveRef move => move.Change.Ref == location.Owner.Branch,
+                GitMutation.ResetCheckout reset => reset.Task == task,
+                GitMutation.AlignIndex align => align.Task == task,
+                GitMutation.RemovePaths remove => remove.Task == task,
+                _ => false,
+            }))
             throw new Refusal(new(RunProblem.UnresolvedOwnership, Task: task));
-        // A later attempt, such as a failed retry, may have left its own files as the checkout's last recorded state. A
-        // rebase replaces only the stale result's clean checkout, so that checkout needs a Retry or a restore first.
-        string? Recorded(string name) => (fold.Components.GetValueOrDefault(name) as ComponentBaseline.Fixed)?.Value;
-        if (Recorded("branch") != code.Commit.Hex || Recorded("head") != location.Owner.Branch ||
-            Recorded("files") != code.Tree.Hex || Recorded("index") != code.Tree.Hex)
+        var claimed = record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed { Key: var key } && key == new LaunchKey(code.Attempt, 1)).Sequence;
+        if (record.Receipts.Values.Any(entry => entry.Sequence > claimed && entry.Event is RunEvent.TurnClaimed { Key: var later } &&
+                later.Attempt != code.Attempt && record.Preparations[later].Location.Owner == location.Owner) ||
+            Value(repository.ReadRef(location.Owner.Branch)) != code.Commit)
             throw new Refusal(new(RunProblem.StartConflict, Task: task));
-        var state = ReadRecoveryCheckout(repository, record, location, code.Attempt);
-        // The fold is the stale result's clean checkout, so a match means nothing changed it since.
-        if (BaselineDifference(repository, fold.Components, state) is { } difference) throw Fault(DriftProblem(difference), StaleCheckoutChanged, difference);
-        if (state.IndexLock is not null)
-            throw Fault(MaterializationProblem.DirtyWorktree, "An index lock holds the checkout. Preserve and restore it first.", new BlockScope.Checkout([], IndexLock: true));
+        VerifyOwnedCheckout(repository, location, record);
+        var checkout = Checkout(repository, location.Owner);
+        VerifyResetHead(repository, checkout, location.Owner.Branch, code.Commit);
+        if (File.Exists(Value(repository.IndexPath(checkout)) + ".lock"))
+            throw Fault(MaterializationProblem.DirtyWorktree, "An index lock holds the checkout.", new BlockScope.Checkout([], IndexLock: true));
+        VerifyRebaseFiles(repository, checkout, code.Tree, null);
 
         var changes = Value(repository.DiffTreePaths(Value(repository.ReadCommit(oldBase)).Tree, code.Tree));
         var supported = GitRepository.ParseVersion(repository.Version) is { } version && version >= new Version(2, 43, 0);
@@ -301,8 +310,8 @@ internal sealed partial class Materializer
                 RebaseCandidate.Unavailable unavailable => new { kind = "unavailable", unavailable.Problem, unavailable.Detail },
                 _ => throw new InvalidOperationException(),
             },
-            // The index's bytes change whenever Git refreshes its stat data, so the preview binds its tree.
-            checkout = new { state.Branch, state.SymbolicHead, state.Files, state.IndexTree },
+            // The checkout is the stale result, clean, so the preview binds its trees rather than the index's bytes.
+            checkout = new { Branch = code.Commit, SymbolicHead = location.Owner.Branch, Files = code.Tree, IndexTree = code.Tree },
             report = Revision.Hash(source.Report),
             artifacts = source.Artifacts,
         }));
