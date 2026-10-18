@@ -247,7 +247,7 @@ The [product direction](../product-direction.md#nodes-have-types-that-users-defi
 - `--disable-slash-commands` turns off "slash command and skill expansion in print mode", for all skills (`agy --help`).
 - `--agent <name>` selects a custom agent, a Markdown file in `.agents/agents/` or the global config. Its frontmatter can list `skills` and set `inheritCustomizations` ([subagents](https://antigravity.google/docs/subagents)). The 1.1.14 changelog says that switch "decides whether the agent adopts your skills, rules, plugins, subagents and MCP servers".
   - A node's choice could map to a generated agent file with `inheritCustomizations: false` and a `skills` list.
-  - iDevelop would have to write that file into the project's checkout or the user's global config.
+  - iDevelop would have to write that file into the project folder or the user's global config.
   - It would probably also drop the user's rules and MCP servers.
   - Whether a `skills` list restricts the agent to those skills is undocumented.
 - **Listing.** `agy -p "/skills"` lists skills "without starting an agent turn, spending quota, or leaving a conversation behind" (1.1.11 changelog). It was not run for this note.

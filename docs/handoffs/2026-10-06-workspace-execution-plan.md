@@ -4,7 +4,7 @@
 
 The user's feedback on 2026-10-06 changes the next product milestone. A person needs to run a workflow, manage several projects, and talk to agents without treating the inspector as a log viewer. The current compact canvas remains the visual baseline.
 
-On 2026-10-06, the user approved this execution plan and explicitly deferred implementation. The scope, delivery sequence, and verification gates are approved. Choices listed as open still require the design validation described below. Later on 2026-10-06, the user authorized D0 and lifted the deferral. The user approved the client probe's real-client runs on 2026-10-06. The [D0 design validation record](2026-10-06-d0-design-validation.md) holds all three workstreams' results, including the [client capability probe](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server).
+On 2026-10-06, the user approved this execution plan and explicitly deferred implementation. The scope, delivery sequence, and verification gates are approved. Choices listed as open still require the design validation described below. Later on 2026-10-06, the user authorized D0 and lifted the deferral. The user approved the client probe's real-client runs on 2026-10-06. The [D0 design validation record](2026-10-06-d0-design-validation.md) holds both workstreams' results, including the [client capability probe](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server).
 
 ## Planning checklist
 
@@ -38,14 +38,14 @@ The planning predicate is that all seven feedback points have a requirement, an 
 
 The coordinator owns documentation and decisions. Three read-only lanes inspect execution, desktop navigation and presentation, and verification. They share this checkout without writes. A fourth fresh session was intended to synthesize their findings. That step did not run after exploration failed. Reports use file pointers rather than source dumps. A fresh Opus session instead reviews an inline design packet without file access. That review cannot establish source correctness.
 
-The intended critical path is evidence, revised roadmap, independent review, then documentation checks. The delegate runner exposed no file-reading tools, so the exploration reports were blocked and the coordinator stopped the fan-out. The coordinator inspected the source and demo directly. Independent file review remains a recorded gap, not a passed gate. Future implementation can separate inspector work from execution design. Multi-project ownership must precede background workflow execution. Conversation state must precede inline node interaction. Concurrent writers need separate worktrees and branches. Windows verification runs serially per account because the existing harness owns one theme-preference backup.
+The intended critical path is evidence, revised roadmap, independent review, then documentation checks. The delegate runner exposed no file-reading tools, so the exploration reports were blocked and the coordinator stopped the fan-out. The coordinator inspected the source and demo directly. Independent file review remains a recorded gap, not a passed gate. Future implementation can separate inspector work from execution design. Multi-project ownership must precede background workflow execution. Conversation state must precede inline node interaction. Windows verification runs serially per account because the existing harness owns one theme-preference backup.
 
 ## Confirmed requirements
 
 | Feedback | Required outcome | Planned slice |
 | --- | --- | --- |
 | 1. No workflow start button | A visible Run Workflow action starts eligible roots without requiring node selection. Node-only execution remains a distinct action. | E3 |
-| 2. Successors do not start | Successful predecessors release connected successors automatically once all required dependencies and inputs are satisfied. Successors receive predecessor content. | E1, E2, E3 |
+| 2. Successors do not start | Successful predecessors release connected successors automatically once all required dependencies and inputs are satisfied. Successors receive predecessor content. | E1, E3 |
 | 3. Unselected inspector alignment | The empty-selection panel has consistent right insets and aligned counts, fields, and actions. | U1 |
 | 4. Inspector appearance | A Godot-inspired property editor has clear groups, aligned rows, and icons for most fields, within iDevelop's existing visual language. | U1 |
 | 5. One project and one workflow | Several projects stay open. Each holds multiple workflows. Workflow rows initially hide their node references. | W1 |
@@ -90,13 +90,13 @@ The [node model record](2026-10-04-node-model.md) establishes continuing client 
 
 ### Run the selected workflow without finding a root
 
-Run Workflow belongs in the workflow toolbar near Generate Workflow. Its label and scope remain visible without a selected node. It opens a preflight summary of the selected workflow, resolved agents, dependency blockers, inputs, and code isolation. The user confirms the exact execution revision before launch.
+Run Workflow belongs in the workflow toolbar near Generate Workflow. Its label and scope remain visible without a selected node. It opens a preflight summary of the selected workflow, resolved agents, dependency blockers, and inputs. The user confirms the exact execution revision before launch.
 
 The runner finds every eligible root. There is no artificial start node to place and no requirement to select a starting task. An empty or invalid graph shows a specific reason instead of a disabled button without explanation. Missing configuration links back to the affected nodes.
 
 A workflow run has an aggregate summary and a Stop Workflow action. Stop prevents new launches and requests cancellation of active attempts. It does not undo completed work. Node Start and Stop affect only their stated node. Within a workflow run they remain subject to its dependencies and ownership checks. An explicitly labeled standalone run does not silently count as completion in an active workflow.
 
-Completed planner work needs special treatment. Proposed preflight lists reusable results and requires explicit inclusion of a matching result in the new run. An old successful attempt must not automatically satisfy a new run. Reuse validates the node configuration, inputs, and relevant code revision. This avoids both rerunning a completed planner unexpectedly and trusting a stale result.
+Completed planner work needs special treatment. Proposed preflight lists reusable results and requires explicit inclusion of a matching result in the new run. An old successful attempt must not automatically satisfy a new run. Reuse validates the node configuration and inputs. This avoids both rerunning a completed planner unexpectedly and trusting a stale result.
 
 ### Make completion observable without wiring UI nodes together
 
@@ -106,9 +106,9 @@ A completion event causes the coordinator to recompute readiness from recorded r
 
 A diamond graph is the basic acceptance case. If A feeds B and C, and both feed D, D waits for B and C and starts once. A repeated completion event cannot start D twice. Unrelated ready work continues when another branch fails, waits for a person, or is cancelled.
 
-A dependency carries a stable reference to the result of a specific attempt in the current run. The input includes the predecessor's report and declared artifacts. Code inputs also include their base and resulting revisions. The inspector shows which inputs the successor actually consumed. Input composition needs deterministic ordering and a visible policy for large content. It must not silently truncate required instructions.
+A dependency carries a stable reference to the result of a specific attempt in the current run. The input includes the predecessor's report and declared artifacts. The inspector shows which inputs the successor actually consumed. Input composition needs deterministic ordering and a visible policy for large content. It must not silently truncate required instructions.
 
-Context connections remain non-blocking. Proposed behavior captures available context when the successor is prepared and records its provenance. A later context update does not mutate a running prompt. Missing context is visible and is not mistaken for a satisfied dependency.
+Context connections remain non-blocking. Proposed behavior reads available context when the successor is prepared and records its provenance. A later context update does not mutate a running prompt. Missing context is visible and is not mistaken for a satisfied dependency.
 
 Review and Approval nodes preserve their different meanings. A review releases its dependents only after agreement. Findings and intermediate completed turns do not release them. An Approval node has no agent and waits as a structured human request. Work that must wait for a review depends on the review node, not just its subject.
 
@@ -175,42 +175,39 @@ The data shape comes before new UI handlers. Existing immutable workflow edits a
 | Local open-project session | Open projects, workflow documents, selection, view preferences, and conversation drafts | Team membership and execution decisions |
 | Workflow document | Editable task graph, embedded blueprints, layout, and undo | Processes and provider sessions |
 | Workflow run coordinator | Approved revision, run-owned attempts, readiness, launch claims, cancellation, and recovery | Avalonia controls and direct peer-node callbacks |
-| Result and input records | Reports, artifacts, code revisions, provenance, and resolved successor inputs | Implicit reads of arbitrary latest attempts |
+| Result and input records | Reports, artifacts, provenance, and resolved successor inputs | Implicit reads of arbitrary latest attempts |
 | Conversation model | Ordered turns, messages, activity, pending requests, and per-client capabilities | Independent card and inspector histories |
-| Client, Git, and GitHub adapters | Protocol parsing, process control, code materialization, and confirmed external operations | Graph or presentation rules |
+| Client and GitHub adapters | Protocol parsing, process control, and confirmed external operations | Graph or presentation rules |
 
 These are proposed responsibilities, not instructions to create one service per row. A module must remove duplicated rules or own a real boundary to earn its place. No message broker, distributed actor system, generic plug-in framework, or new application language is proposed.
 
-D0 settled two of the bullets below, Git inputs and worktree lifecycle. It also settled the conversation comparison in the Interaction bullet. Conversation uses the main area by default, with a dock as an option. D0 also recorded the Interaction bullet's [client capability table](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server). C1 still selects each client's protocol and adds only the event cases those protocols need. The [D0 design validation record](2026-10-06-d0-design-validation.md) holds the decisions.
+D0 settled the conversation comparison in the Interaction bullet. Conversation uses the main area by default, with a dock as an option. D0 also recorded the Interaction bullet's [client capability table](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server). C1 still selects each client's protocol and adds only the event cases those protocols need. The [D0 design validation record](2026-10-06-d0-design-validation.md) holds the decisions.
 
-These choices require a design gate before E2 or E3:
+These choices require a design gate before E3:
 
-- Git inputs. Compare isolated task branches with an explicit integration step against a run integration branch with serialized writers. The preferred direction is isolated writers with explicit input materialization. Conflicts block with evidence instead of an agent silently overwriting another branch.
-- Worktree lifecycle. Define branch retention, dirty-worktree recovery, review fix ownership, and user-approved cleanup. Never delete unfinished work automatically. Git remains required for workflow execution under the earlier user decision.
 - Run approval. Bind attempts and inputs to the approved revision. Preserve the previously accepted rule that a planner proposal during a run may add nodes or fill only unstarted nodes. A proposed explicit run amendment records and approves that new revision without changing running attempts. Do not silently ban these proposals under an oversimplified immutable-run rule.
 - Retries. Proposed initial default is no automatic retry of a failed or cancelled attempt. Manual retry records a new attempt. Transport retry, task retry, and a review fix round are distinct. The user-confirmed review loop still has no round limit.
-- Concurrency. Expose a bounded run setting before parallel launches. The initial value requires a measured client and isolation probe. No unmeasured throughput promise or arbitrary universal limit belongs in this plan.
+- Concurrency. Expose a bounded run setting before parallel launches. The initial value requires a measured client probe. No unmeasured throughput promise or arbitrary universal limit belongs in this plan.
 - Recovery. Duplicate completion delivery must converge. A launch with an uncertain outcome requires reconciliation before replacement. A restart must not infer success from a missing process or replay an external action blindly.
 - Interaction. Compare a bottom conversation dock with a main-area conversation view in a later prototype. D0 produces a capability table for each installed client and its exact version and launch mode. Scratch probes record a reply stream, a question, a permission request where supported, allow and deny responses, a stale response, queued or live input, Stop and send, resume, and cancellation. Unsupported cases are explicit results, not failed promises of universal parity. C1 adds only the normalized event cases the selected protocols need and keeps old attempt logs readable. Existing repository fixtures and synthetic cancellation and continuation logs provide compatibility evidence. Do not commit the user's demo transcripts as fixtures.
 
 ## Approved delivery slices
 
-The user approved these delivery units on 2026-10-06 and later authorized D0, lifting the deferral. They are not PRs created by this task. Each slice ends with headless tests, Windows real-window evidence where applicable, independent review, and the repository's required checks. D0's checks are per workstream, so inspector prototypes need not wait for Git integration research. Interaction changes require the user's visual review before merge.
+The user approved these delivery units on 2026-10-06 and later authorized D0, lifting the deferral. They are not PRs created by this task. Each slice ends with headless tests, Windows real-window evidence where applicable, independent review, and the repository's required checks. D0's checks are per workstream. Interaction changes require the user's visual review before merge.
 
 | Slice | Depends on | Scope and visible completion condition |
 | --- | --- | --- |
-| D0. Validate the designs | None | Reproduce inspector alignment. Compare inspector, expanded-card, and conversation layouts in throwaway prototypes. Probe client interaction and Git input delivery in scratch repositories. Capture baseline evidence. No production behavior yet. All three workstreams are done, and the [D0 design validation record](2026-10-06-d0-design-validation.md) holds their results, including the client [capability table](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server). |
+| D0. Validate the designs | None | Reproduce inspector alignment. Compare inspector, expanded-card, and conversation layouts in throwaway prototypes. Probe client interaction in scratch repositories. Capture baseline evidence. No production behavior yet. Both workstreams are done, and the [D0 design validation record](2026-10-06-d0-design-validation.md) holds their results, including the client [capability table](2026-10-06-d0-design-validation.md#the-client-probe-found-structured-requests-only-in-claude-code-and-codex-app-server). |
 | U1. Repair the inspector | D0 | Selected and unselected views use consistent grids, insets, icons, folds, and filters in both themes and at narrow widths. Keep the current conversation accessible until C1 replaces its presentation. |
 | W1. Open multiple projects and workflows | D0 | Two projects with multiple workflows remain open. Workflow rows hide nodes by default. Switching preserves unsaved state, history, and run ownership. Existing projects still load. |
 | C1. Build conversation and attention | D0's client probe, W1 | The selected task has durable, correctly routed history, Markdown, a composer, structured requests, and honest client capability limits. Inspector and compact-card attention open the same conversation. |
 | E1. Define run and input records | D0, W1 | An approved workflow revision owns its attempts and explicit input provenance. Replay and duplicate-start tests pass. Prior standalone results require explicit validated reuse. |
-| E2. Materialize dependency results | E1 and an accepted Git ownership and integration contract | Reports and artifacts reach successors. Isolated code inputs produce a named revision. Fan-in conflicts and uncertain ownership block without corrupting work. Review fixes use the correct code owner. |
-| E3. Execute the workflow | C1, E2, and its verified writer-isolation and join-revision gate | Run Workflow finds roots, launches eligible work, waits at questions and approvals, starts successors once, and stops safely. Review advancement and scheduling share one launch authority. Failure affects only dependent branches. |
+| E3. Execute the workflow | C1, E1 | Run Workflow finds roots, launches eligible work, waits at questions and approvals, starts successors once, and stops safely. Review advancement and scheduling share one launch authority. Failure affects only dependent branches. |
 | N1. Expand nodes | U1, C1, E3 | Per-card and workflow-wide disclosure expose common controls, compact conversation, attention, and output links. Compact visuals and graph gestures remain intact. |
 | G1. Attach confirmed GitHub results | U1, C1, E1 | Inspector preview and confirmation create or attach an issue or PR. Cancellation writes nothing. Retry cannot duplicate publication. N1 adds the full card presentation when available. |
 | T1. Add team synchronization | Local run contracts complete | The existing first-release requirement remains. Its design must reuse project, workflow, run, and attempt identity without moving agent execution to the server. |
 
-U1 can proceed while W1 and execution design develop in separate worktrees. C1 and E1 can proceed independently after W1. No slice may substitute a cosmetic Run button for E2 and E3. E3 cannot launch concurrent writers until E2 proves separate ownership and a named integration revision on the demo-shaped diamond. GitHub publication is not a prerequisite for local graph execution.
+U1 can proceed while W1 and execution design develop in separate worktrees. C1 and E1 can proceed independently after W1. No slice may substitute a cosmetic Run button for E3. GitHub publication is not a prerequisite for local graph execution.
 
 ## Verification skill plan
 
@@ -240,7 +237,7 @@ Application slices run `dotnet build -c Release`, `dotnet test -c Release`, `nod
 - Direct events between node view models. They couple launch behavior to selection, lifetime, and open views, and make replay and duplicate handling harder to inspect. Typed events into one run coordinator preserve the requested reactive behavior.
 - One overloaded inspector for properties, logs, and chat. It keeps the exact competition for space that the feedback rejects. The proposed conversation view shares data with cards and inspector without sharing their layout.
 - Expanded cards by default or full transcripts inside every card. They discard the compact canvas the user likes and crowd the graph. Expansion reveals common controls on demand.
-- A cosmetic run button on top of standalone task execution. It cannot guarantee correct inputs, isolation, or exactly one launch when dependencies complete.
+- A cosmetic run button on top of standalone task execution. It cannot guarantee correct inputs or exactly one launch when dependencies complete.
 - Team synchronization before local ownership is explicit. It spreads the existing single-project assumptions across machines. Team mode remains required after the local run model is proven.
 - Separate verification skills with duplicated setup. They can drift on client isolation and cleanup. Feature guides under one skill retain a single launch contract.
 
@@ -248,7 +245,6 @@ Application slices run `dotnet build -c Release`, `dotnet test -c Release`, `nod
 
 A fresh Claude Opus 5.5 session at xhigh reviewed an inline design packet. Its result is not a source review or a review of the complete document.
 
-- The reviewer asked for an explicit Git prerequisite before automatic fan-out. E2 and E3 already had that sequencing, but the table now names the accepted integration contract and verified diamond join as hard prerequisites. No extra architecture slice is necessary.
 - The reviewer identified two potential dispatch authorities. The plan now requires the existing review driver and new coordinator to share one launch authority for run-owned work. Its suggestion to treat changes requested as a terminal review result was rejected. Findings remain intermediate under the user's no-round-limit loop. The Approval node was already specified as human-only.
 - The reviewer asked for concrete client probe outputs and event compatibility checks. D0 now names the capability table and probe cases. Its suggestion to commit the four demo logs as fixtures was rejected because those contain private content. Existing fixtures and synthetic equivalents provide the compatibility checks.
 
@@ -274,4 +270,4 @@ A fresh Claude Opus 5.5 session at xhigh reviewed an inline design packet. Its r
 
 The execution plan is approved. Detailed run approval, concurrency, renderer choice, and client approval capabilities remain design work within its gates. Approval of the plan does not select among those open alternatives or establish runtime verification.
 
-D0 is done across all three workstreams, as the [design validation record](2026-10-06-d0-design-validation.md) records. C1 can start after W1 from the capability table and the five event cases. It selects each client's protocol, with Codex app-server as a candidate for the Codex adapter. U1 can start from layout A and the shared column definition. W1 can start and includes the blueprint icon and color field in its format and migration review. E2 builds on the revised Git contract after E1. E3 still needs its writer-isolation and join gate verified on the demo-shaped diamond in the implementation. Delete the local `d0/ui-prototypes` branch and its worktree once U1 no longer needs them.
+D0 is done across both workstreams, as the [design validation record](2026-10-06-d0-design-validation.md) records. C1 can start after W1 from the capability table and the five event cases. It selects each client's protocol, with Codex app-server as a candidate for the Codex adapter. U1 can start from layout A and the shared column definition. W1 can start and includes the blueprint icon and color field in its format and migration review. Delete the local `d0/ui-prototypes` branch and its worktree once U1 no longer needs them.

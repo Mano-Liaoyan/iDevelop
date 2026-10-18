@@ -16,7 +16,7 @@ Cleanup sends `SIGTERM` to the group and waits until the group is empty or a two
 
 ## A missing launcher never refuses a turn
 
-When the launcher is unavailable, for example on glibc older than 2.29 or macOS older than 10.15, the turn starts through `Process.Start` and records containment `None` with the cause. The user decided on 2026-10-07 that containment serves cleanup only and that no platform waits for it, so a missing group and a failed cleanup are diagnostics, never gates on publication or scheduling.
+When the launcher is unavailable, for example on glibc older than 2.29 or macOS older than 10.15, the turn starts through `Process.Start` and records containment `None` with the cause. The user decided on 2026-10-07 that containment serves cleanup only and that no platform waits for it, so a missing group and a failed cleanup are diagnostics, never gates on scheduling.
 
 ## Considered options
 
@@ -26,7 +26,7 @@ When the launcher is unavailable, for example on glibc older than 2.29 or macOS 
 
 ## Consequences
 
-- Ctrl+C and a closing terminal no longer reach workflow clients or the Git calls of [ADR 0002](0002-git-calls-are-contained-only-to-stop-them-on-a-timeout.md).
+- Ctrl+C and a closing terminal do not reach workflow clients.
 - A process that calls `setsid` or `setpgid` leaves the group and escapes cleanup. The design accepts that residual risk.
 - After a group's last member exits, the system would have to reuse its ID within one 20 ms poll for a signal to reach a stranger.
 - Nothing on macOS has run. Its `POSIX_SPAWN_SETSID` value, 0x400, comes from XNU's `bsd/sys/spawn.h`, and a stopped root there is untested.
