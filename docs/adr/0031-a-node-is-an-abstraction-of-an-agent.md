@@ -1,0 +1,5 @@
+# A node is an abstraction of an agent
+
+A node on the canvas is an abstraction of an agent. It holds the model and effort the agent uses, its system prompt, its instructions, and the skills equipped with it. It holds the agent's conversation with a person, the input the agent reads from earlier agents or a person, and the output it leaves for later agents and the person. A workflow is a graph of these nodes that executes a task in a multi-agent environment, so each model does the part of the task it is good at. The owner set this on 2026-10-18, in these words, with spelling corrected:
+
+> My goal is that node is an abstraction of an agent, it contains the model/effort it chooses, system prompt, instructions and skills equipped with it, conversation with human, input it can read from previous agent or human and output for the later agents and human. The overall goal is that we build a visual node/graph system that can execute the task in a multi-agent environment, since each model has its advantage in some domain, this system can be beneficial.

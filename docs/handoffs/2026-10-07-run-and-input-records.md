@@ -36,13 +36,13 @@ A dependency input must name a current, non-stale accepted result. Otherwise the
 
 ### Results are accepted only for read-only agent tasks in E1
 
-An executed result needs a logged successful closure and a matching report and input record. Writer output, review code handoff, artifacts, and human approval results return `UnsupportedResult` until E2 and E3 add their evidence.
+An executed result needs a logged successful closure and a matching report and input record. Writer output, artifacts, and human approval results return `UnsupportedResult` until later slices add their evidence.
 
 ### Report reuse is narrow and checks every identity
 
 `ProjectRuns` records a `StandaloneCapture` on each fresh standalone attempt. The attempt log stores it as raw JSON, and only `ReportReuse` parses it. A capture that fails to parse makes reuse unverifiable but leaves the attempt in history.
 
-`RunStore.ReuseReport` copies a report only from a fresh, single-turn, read-only agent attempt that succeeded with no handoff. The log's requested attempt and task must match the source the caller names. Its task definition, settings, and prompt must match the receiving task. The source's start and end trees must match the run's approved base outside `.idp`. The base comes from the run record, not from the caller. Equal trees prove equal content, not commit lineage, so E1 reuses reports only, never code.
+`RunStore.ReuseReport` copies a report only from a fresh, single-turn, read-only agent attempt that succeeded with no handoff. The log's requested attempt and task must match the source the caller names. Its task definition, settings, and prompt must match the receiving task.
 
 ### A command reads only its own workflow's journals
 
@@ -57,8 +57,6 @@ A journal with no complete entry counts as absent. That covers a zero-byte file 
 | Use each task's latest attempt | It loses run ownership and can import a standalone success. |
 | Store run-owned attempts in the standalone tree | Project-open reconciliation can alter them. |
 | Infer a stopped process from a lock, a PID, or `Reconciled` | None of them closes the gap between claim and process start. |
-| Treat tree equality as commit lineage | Equal content does not prove ancestry or ownership. |
-| Let the caller choose the reuse base | A base other than the run's own approved base gives false provenance. |
 | Read every run journal in the project for each command | One damaged journal blocked unrelated workflows. |
 | Persist status mirrors and stale flags | They duplicate evidence that the history already holds. |
 
@@ -66,7 +64,6 @@ A journal with no complete entry counts as absent. That covers a zero-byte file 
 
 - `src/IDevelop.Core/Execution/Runs/` holds the records, revision hash, reducer, journal codec, store, and report reuse.
 - `src/IDevelop.Core/Execution/Attempts.cs`, `AttemptLog.cs`, and `ProjectRuns.cs` add the optional `standaloneCapture` and `runBinding` fields to the `requested` attempt event.
-- `src/IDevelop.Core/Execution/GitTree.cs` reads a tree's content outside `.idp`.
 - `src/IDevelop.Core/Projects/DataFolder.cs` adds `runs/` to the project data folder's ignore file.
 - `tests/IDevelop.Core.Tests/Runs/` tests every row of the design note's behavior table and every review finding.
 
@@ -78,7 +75,7 @@ A journal with no complete entry counts as absent. That covers a zero-byte file 
 | `dotnet test -c Release` on Linux | Core passed 439 tests with 9 platform skips. Desktop passed 321. The baseline on `main` was Core 346. |
 | `Own_torn_first_line_allows_approval_and_idempotent_retry` on `c6b247e` and after the fix | Before the fix, the approval returned `Rejected` with `IncompleteTail`. After it, the approval returns `Created`, and the retry returns `Existing`. |
 | The new journal, recovery, and concurrency tests that compile against `106b243` | Nine of twelve failed. The two concurrency tests and the foreign-lock test passed, because the lock was already correct. With the lock opened without `FileShare.None`, the claim race gave 16 `Granted`, and the reservation race gave 13 `Created` and 3 rejections. Sol observed each reuse, context, and reconciliation test fail before its fix. |
-| The recovery inspection and run-base tests on `106b243` | They cannot compile against the old API. Before the fix, Sol showed `InspectRecovery` returning an empty list for a journal with a sequence gap, and `ReuseReport` returning `Created` for a source matching `first` in a run based at `later`. |
+| The recovery inspection tests on `106b243` | They cannot compile against the old API. Before the fix, Sol showed `InspectRecovery` returning an empty list for a journal with a sequence gap. |
 | The concurrency tests, repeated | 20 runs inside the Codex sandbox and 10 runs outside it gave the same result each time. |
 | Each fix-round commit checked out alone | Core tests pass at each of the six commits. |
 | `node scripts/check-licenses.mjs`, `node scripts/planweave-tokens.mjs --check`, `node scripts/fluent-icons.mjs --check` | Each exits 0. |
@@ -96,4 +93,4 @@ A journal with no complete entry counts as absent. That covers a zero-byte file 
 
 ## Next action
 
-E2 builds code-result and artifact materialization on this journal, with explicit versioned event cases for D0's Git contract.
+E3 builds workflow execution on this journal.

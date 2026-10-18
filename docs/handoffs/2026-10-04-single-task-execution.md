@@ -26,7 +26,7 @@ The user's answers on 2026-10-04:
 The coordinator settled the phase's open design questions:
 
 - **How the app drives each client.** Each client runs in its own documented non-interactive mode with a JSON event stream, and the prompt goes over stdin. Claude Code runs `claude -p --output-format stream-json`, Codex runs `codex exec --json`, Pi runs `pi -p --mode json`, and Antigravity CLI runs with `--input-format stream-json --output-format stream-json`. ACP was not used, because Claude Code and Codex need separately installed adapters for it.
-- **Project folder or worktree.** A run edits the project folder itself. Worktrees and branches wait for phase 4, workflow execution, where the results of separate runs must stay apart until they are merged.
+- **Where a run works.** A run edits the project folder itself.
 - **Overlapping runs.** Phase 3 first shipped with one run per project folder. After the merge the user asked for parallel runs, so several tasks of a folder can run at once, and each task runs at most once at a time, across every app instance. An operating-system file lock on `.idp/attempts/<task-id>/run.lock` enforces it, and the operating system releases the lock when its holder dies.
 - **Settings and the file format.** The workflow file moves to `idevelop.workflow/2`, which stores an `execution` object (client, model, reasoning) on every task. The user dropped version 1 on 2026-10-04, because no version 1 files remained. Until then the app opened them. No per-user client settings exist. The app finds clients on PATH, plus the current machine and user PATH from the registry on Windows and the login shell's PATH on macOS and Linux.
 - **The run record.** Each attempt is an append-only event log at `.idp/attempts/<task>/<attempt>/events.jsonl`, with the client's raw output beside it. One pure reducer folds the log into the record. Git ignores the folder.
@@ -134,7 +134,7 @@ The review's gap that no real client had run inside the job was already closed. 
 - The real-client check and its harness are scratch scripts kept outside the repository. Its cancel and leave cases depend on the model agreeing to run a long command, and DeepSeek once declined. A committed real-client check would make workflow execution easier to verify.
 - Whether `agy models` fails for a signed-out account is unverified, and iDevelop uses it as Antigravity CLI's readiness signal.
 - Whether each provider's plan permits unattended runs started by iDevelop is each provider's policy, as the [provider access reference](../provider-access.md) records.
-- Parallel runs share the project folder, so two agents can edit the same file at once. Workflow execution needs worktrees and branches to keep them apart.
+- Parallel runs share the project folder, so two agents can edit the same file at once.
 
 ## Next action
 

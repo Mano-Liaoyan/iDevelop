@@ -1,6 +1,6 @@
 # iDevelop
 
-A project for building a graphical interface that coordinates multiple coding agents. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). The application is a desktop editor for one project's workflow. It opens a project folder, edits tasks and their connections on a node canvas, saves the workflow inside the folder without a server, and runs a single task with Claude Code, Codex, Pi, or Antigravity CLI.
+A project for building a graphical interface that coordinates multiple coding agents. The product direction and the C#, .NET, and Avalonia stack are selected in [`docs/context.md`](docs/context.md). The application is a desktop editor for one project's workflow. It opens a project folder, edits nodes and their connections on a canvas, saves the workflow inside the folder without a server, and runs each node's agent with Claude Code, Codex, Pi, or Antigravity CLI. A node is an agent: its model and effort, system prompt, instructions, skills, conversation, input from earlier agents or a person, and output for later ones.
 
 English is the project's working language. The shared policy is in [`AGENTS.md`](AGENTS.md).
 

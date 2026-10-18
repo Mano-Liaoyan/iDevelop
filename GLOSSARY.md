@@ -1,6 +1,6 @@
 # iDevelop
 
-iDevelop coordinates coding agents over a workflow of tasks on a node canvas. These are the words its workflow execution uses, in code, issues, and records, where a newcomer would read them the wrong way.
+iDevelop runs a workflow of nodes on a canvas, each node an abstraction of an agent. These are the words its workflow execution uses, in code, issues, and records, where a newcomer would read them the wrong way.
 
 ## Language
 
@@ -44,36 +44,36 @@ _Avoid_: Continue, which starts a new attempt
 A new attempt of a task with a fresh client session, started only by a person. A step the coordinator tries again after a busy refusal is not a Retry.
 _Avoid_: Resume, rerun
 
+**Close as stopped**:
+A person's confirmed closure of an uncertain turn with no recorded root exit, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
+_Avoid_: Stop, Stop Workflow
+
 **Client slot**:
 A run's place for one task's starting or running client root. A run starts every ready task at once, up to a safety bound of 32 slots. Waiting, gates, settlement, publication, and cleanup take none.
 
 ### Results
 
 **Result**:
-A task's accepted, immutable outcome in a run, its code, report, and artifacts, which hands on to its dependents. A successful attempt is not a result until it is published or accepted.
-_Avoid_: output, success
+A node's accepted, immutable output in a run, its report and artifacts, which its dependents read as input. A successful attempt is not a result until it is accepted.
+_Avoid_: success
 
 **Current result**:
 A task's newest result. It supersedes the one before, which stays recorded.
 
 **Result origin**:
-What produced a result: an executed attempt, a standalone report that the run approval included, an approved rebase, a person's gate approval, or an earlier run whose result a node run carried. Only an executed result comes from a client in the run.
+What produced a result: an executed attempt, a standalone report that the run approval included, a person's gate approval, or an earlier run whose result a node run carried. Only an executed result comes from a client in the run.
 
 **Earlier result**:
 A task's result from a run of its workflow that has settled. It still counts as complete while it was its run's current, non-stale result, no later run ran the task, the task and the connections into it are unchanged, and each result it took counts the same way. Otherwise it is out of date.
 _Avoid_: old result, cached result
 
 **Carried result**:
-An earlier result that a node run takes for a task it does not run, recorded in its own journal with its code replayed onto the run's base, its report, and its artifacts. One whose code conflicts with the base is not carried, and its task must run again. Run Workflow carries nothing.
+An earlier result that a node run takes for a task it does not run, recorded in its own journal with its report and its artifacts. Run Workflow carries nothing.
 _Avoid_: imported result, reused result, which names a standalone report a run reuses
 
 **Stale result**:
 A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one needs attention, while an Approval node takes a new gate request instead.
 _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate request that is no longer open.
-
-**Rebase**:
-A person-approved replay of a stale result's recorded change onto its current inputs, as one new commit, with no client run. Its result has the rebased origin.
-_Avoid_: git rebase, which iDevelop does not run
 
 ### Reviews
 
@@ -82,31 +82,12 @@ A review's fix round that closing iDevelop interrupted, or that a crash or a kil
 _Avoid_: failed fix
 
 **Continue fix**:
-The person's choice to go on with an interrupted fix: a Continue in the fix's own client session, on the checkout as the fix left it.
+The person's choice to go on with an interrupted fix: a Continue in the fix's own client session.
 _Avoid_: Resume, which never chooses a fix
 
 **Retry fix**:
-The person's choice to redo an interrupted fix round: a Retry in a fresh client session, after the round's unfinished work is salvaged and the checkout reset.
+The person's choice to redo an interrupted fix round: a Retry in a fresh client session.
 _Avoid_: Retry alone, which names a new attempt of any task
-
-### Blocks
-
-**Block**:
-A durable record, with evidence, that holds a task back until a recorded recheck or repair resolves it, such as a dirty checkout or a conflicting join. In a run, a task under a block is Blocked, and a task that only waits for its dependencies is Pending, although the standalone schedule and the product direction also call that task blocked.
-
-**Drift**:
-A change to a task's checkout after its result was accepted or its baseline was recorded. It becomes a block and never changes the accepted result.
-
-**Preserve and restore**:
-A person's repair of a drift or capture block: Preserve retains the checkout as it is now, and Restore moves it back to its recorded baseline after a preview. It never moves shared refs or the stash, and it never gives a rejected capture a result.
-_Avoid_: git restore, which iDevelop does not run
-
-**Close as stopped**:
-A person's confirmed closure of an uncertain turn with no recorded root exit, as after a crash, so that nothing launches it again. It ends one attempt, not the run.
-_Avoid_: Stop, Stop Workflow
-
-**Publishing attempt**:
-The attempt whose checkout a task's current result keeps, where that task's drift is recorded and looked for.
 
 ### Approval and gates
 
@@ -114,17 +95,14 @@ The attempt whose checkout a task's current result keeps, where that task's drif
 The preview of what a run would approve, which Run Workflow opens for the whole workflow and a node's Run for that node and the tasks after it. It records nothing.
 
 **Run approval**:
-A person's confirmation of a preflight, which approves exactly one run on one base.
+A person's confirmation of a preflight, which approves exactly one run.
 _Avoid_: approval alone, which also names a gate's answer
 
 **Approval intent**:
 The durable note a run approval writes before any other side effect, so a crash finishes as the same run.
 
-**Snapshot base**:
-A commit of the person's uncommitted work over HEAD, which a run can start from instead of HEAD while their branch, index, and files stay as they were.
-
 **Inclusion**:
-A run approval's adoption of a report that a task produced on its own before the run, such as a planner's, as that task's result, so the run never runs the task. It brings no code, ownership, or client session into the run.
+A run approval's adoption of a report that a task produced on its own before the run, such as a planner's, as that task's result, so the run never runs the task. It brings no client session into the run.
 _Avoid_: import
 
 **Gate request**:
@@ -146,6 +124,9 @@ A recorded change to an approved run's workflow, from a run planner's proposal t
 _Avoid_: edit, which changes only the document
 
 ### Agents
+
+**Node**:
+An abstraction of an agent: the model and effort it chooses, its system prompt, its instructions and skills, its conversation with a person, the input it reads from earlier agents or a person, and the output it leaves for later agents and the person. The owner set this on 2026-10-18 ([ADR 0031](docs/adr/0031-a-node-is-an-abstraction-of-an-agent.md)).
 
 **Skill choice**:
 The skills a node's agent may use, by its client's own names, kept in the task's agent settings. No choice means every skill the client loads. A choice holds exactly its skills: an allow-list for Claude Code and Pi, and for Codex every other listed skill turned off. Antigravity CLI takes none. A chosen skill that is no longer installed is skipped, and a skill list that can't be read leaves the choice unchecked rather than stopping the task.

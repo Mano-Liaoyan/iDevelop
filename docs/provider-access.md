@@ -79,7 +79,7 @@ Pi implements OAuth loaders for Anthropic, OpenAI ChatGPT, legacy OpenAI Codex, 
 
 Pi converts conversation history for the destination model. It preserves compatible reasoning signatures only for the same provider, API, and model. It can convert visible thinking to ordinary text while dropping opaque or redacted data, normalize tool identifiers, and account for missing tool results. These conversions do not transfer an official client's private process state or guarantee that a new model interprets previous work identically. [Message transformation](https://github.com/earendil-works/pi/blob/4c6fb7cfe8c538a668726f6f8b3554098c39faee/packages/ai/src/api/transform-messages.ts)
 
-The proposed iDevelop handoff therefore relies on task instructions, observed actions, verified code revisions, artifacts, concise decisions, and next steps. It does not require access to hidden reasoning or a provider's opaque session state.
+The proposed iDevelop handoff therefore relies on task instructions, observed actions, artifacts, concise decisions, and next steps. It does not require access to hidden reasoning or a provider's opaque session state.
 
 ## Unverified items
 
