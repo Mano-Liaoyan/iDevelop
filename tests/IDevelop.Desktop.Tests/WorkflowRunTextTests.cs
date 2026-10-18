@@ -92,15 +92,11 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
-    public void Every_path_ref_and_update_shows()
+    public void Every_update_shows()
     {
         string[] paths = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"];
-        var block = new MaterializationBlock(new(Guid.NewGuid()), Task, null, MaterializationProblem.DirtyWorktree, null, [], "drift")
-            { Scope = new BlockScope.Checkout([.. paths], Branch: true) };
 
-        Assert.Equal(string.Join("\n", paths) + "\nthe task's branch", RecoveryText.Paths(block));
         Assert.Equal(string.Join("\n", paths), RecoveryText.CandidatePaths(new RebaseCandidate.Clean(new(new string('1', 40)), new(new string('2', 40)), [.. paths])));
-        Assert.Equal(string.Join("\n", paths), RecoveryText.Refs(block with { Scope = new BlockScope.Refs([.. paths]) }));
     }
 
     [Fact]

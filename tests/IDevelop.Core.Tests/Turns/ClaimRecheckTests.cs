@@ -9,7 +9,7 @@ using static IDevelop.Core.Tests.Turns.TurnFixture;
 
 namespace IDevelop.Core.Tests.Turns;
 
-/// <summary>The rechecks a claim runs before it is recorded, and the append-time guard behind them (E3a.5b).</summary>
+/// <summary>The checks a claim runs before it is recorded, and the append-time guard behind them (E3a.5b).</summary>
 public sealed class ClaimRecheckTests
 {
     private const string Review = "Review the changes.";
@@ -82,89 +82,6 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
-    public async Task Drift_after_accepted_publication_blocks_the_consumer_first_claim()
-    {
-        await using var f = new TurnFixture(configure: Consumer);
-        await f.Open();
-        var producer = await Published(f);
-        var attempt = producer.Address.Launch.Attempt;
-        var result = Assert.Single(f.Preparation.Read().Results);
-        File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
-        var intent = Start(f, U);
-        var block = Assert.IsType<TurnStart.Blocked>(await Begin(f, intent)).Block;
-        Assert.Equal("DirtyWorktree", block.Problem.ToString());
-        Assert.Equal(new BlockScope.Checkout(["result.txt"]), block.Scope);
-        Assert.Equal(T, block.Task);
-        Assert.Equal(attempt, block.Attempt);
-        Assert.Equal(1, f.Launches);
-        Assert.Equal(0, f.Claims(U));
-        var drift = Assert.Single(f.Preparation.Read().Blocks, pair => !pair.Value.Resolved);
-        Assert.Equal(attempt, drift.Value.Block.Attempt);
-        var duplicate = Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(f.Preparation.Lease(T), f.Preparation.Op(), attempt));
-        Assert.Equal(result.Id, duplicate.Result.Id);
-        Assert.False(f.Preparation.Read().Blocks[drift.Key].Resolved);
-        Assert.Single(f.Preparation.Read().Results);
-        Assert.Equal("late\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
-
-        var preservation = f.Preparation.Op();
-        Assert.IsType<Preservation.Preserved>(await f.Preparation.Materializer().Preserve(f.Preparation.Lease(T), preservation, attempt));
-        var preview = Assert.IsType<RestorePreviewRead.Previewed>(f.Preparation.Materializer()
-            .PreviewRestore(f.Preparation.Lease(T), attempt, preservation)).Preview;
-        Assert.IsType<Restoration.Restored>(f.Preparation.Materializer().Restore(f.Preparation.Lease(T), f.Preparation.Op(), attempt,
-            preservation, f.Preparation.Op(), preview.Identity));
-        f.Preparation.Release(T);
-        Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
-        Assert.Equal(0, Unresolved(f));
-        FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Fresh(f.Client)
-            .Copy("result.txt", Path.Combine(f.Evidence, "consumer.txt"))
-            .Print(FakeAgents.SessionLine(f.Client, "session-2"))
-            .Print(FakeAgents.ReplyLines(f.Client, "Done.")));
-        var consumer = await f.Settled(Assert.IsType<TurnStart.Started>(await Begin(f, intent)).Turn);
-        Assert.Equal("Succeeded", consumer.Attempt.Status.ToString());
-        Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Evidence, "consumer.txt")));
-        Assert.Equal(2, f.Launches);
-        Assert.Equal(1, f.Claims(U));
-    }
-
-    [Fact]
-    public async Task Repeated_consumer_starts_return_the_same_drift_block()
-    {
-        await using var f = new TurnFixture(configure: workflow => Connect(Edit(Consumer(workflow), TestNodes.Place(Agent(D), new(0, 0))), T, D));
-        await f.Open();
-        await Published(f);
-        File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
-        var intent = Start(f, U);
-        var first = Assert.IsType<TurnStart.Blocked>(await Begin(f, intent)).Block;
-        var id = Assert.Single(f.Preparation.Read().Blocks).Key;
-        Assert.Equal(first, Assert.IsType<TurnStart.Blocked>(await Begin(f, intent)).Block);
-        // Another consumer of the same producer gets the recorded block, not a second one.
-        Assert.Equal(first, Assert.IsType<TurnStart.Blocked>(await Begin(f, Start(f, D))).Block);
-        Assert.Equal(id, Assert.Single(f.Preparation.Read().Blocks).Key);
-        Assert.Equal(0, f.Claims(U));
-        Assert.Equal(0, f.Claims(D));
-        Assert.Equal(1, f.Launches);
-    }
-
-    [Fact]
-    public async Task Forwarded_code_is_rechecked_at_its_original_owner()
-    {
-        await using var f = new TurnFixture(configure: Forwarded);
-        await f.Open();
-        var producer = await Published(f);
-        var review = await Agree(f);
-        Assert.IsType<CodeOutput.Forwarded>(review.Code);
-        File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
-        var block = Assert.IsType<TurnStart.Blocked>(await Begin(f, Start(f, D))).Block;
-        Assert.Equal(T, block.Task);
-        Assert.Equal(producer.Address.Launch.Attempt, block.Attempt);
-        Assert.Equal(new BlockScope.Checkout(["result.txt"]), block.Scope);
-        Assert.DoesNotContain(f.Preparation.Read().Blocks.Values, state => state.Block.Task == C);
-        Assert.Equal(1, Unresolved(f));
-        Assert.Equal(0, f.Claims(D));
-        Assert.Equal(1, f.Launches);
-    }
-
-    [Fact]
     public async Task A_code_owner_still_settling_holds_back_the_consumer()
     {
         await using var f = new TurnFixture(configure: Forwarded);
@@ -205,6 +122,32 @@ public sealed class ClaimRecheckTests
         Assert.Empty(f.Preparation.Read().Blocks);
         Assert.Equal(0, f.Claims(U));
         Assert.Equal(2, f.Launches);
+    }
+
+    [Fact]
+    public async Task An_earlier_block_on_the_attempt_holds_its_next_turn()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open(FakeAgents.Fresh(f.Client)
+            .Print(FakeAgents.SessionLine(f.Client, "session-1"))
+            .Write("keep.txt", "keep\n")
+            .Print(FakeAgents.ReplyLines(f.Client, "More?")));
+        var waiting = await f.Settled(await f.Start());
+        Assert.Equal("WaitingForInput", waiting.Attempt.Status.ToString());
+        Assert.IsType<TurnDisposition.Resting>(Assert.IsType<Release.Released>(waiting.Release()).Receipt);
+        var attempt = waiting.Address.Launch.Attempt;
+        var operation = f.Preparation.Op();
+        var recorded = new MaterializationBlock(operation, T, attempt, MaterializationProblem.DirtyWorktree, null, [], "The checkout changed.")
+            { Scope = new BlockScope.Checkout(["keep.txt"]) };
+        Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, operation, new RunEvent.Blocked(recorded)));
+        var launches = f.Launches;
+
+        var blocked = Assert.IsType<TurnStart.Blocked>(await Begin(f, new TurnIntent.Next(f.Preparation.Op(), new(attempt, 2), "Use the fixture"))).Block;
+
+        Assert.Equal(recorded, blocked);
+        Assert.DoesNotContain(f.Preparation.Read().Claims.Keys, key => key == new LaunchKey(attempt, 2));
+        Assert.Equal(1, Unresolved(f));
+        Assert.Equal(launches, f.Launches);
     }
 
     [Fact]
@@ -254,30 +197,7 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
-    public async Task The_claim_guard_holds_against_a_block_recorded_after_the_recheck()
-    {
-        await using var f = new TurnFixture(configure: Consumer);
-        await f.Open();
-        var producer = await Published(f);
-        var recorded = 0;
-        // After the rechecks and before the claim's transaction, so only the append-time guard can see this block.
-        f.Runs.Probe = point =>
-        {
-            if (point != "journal.claim.before" || Interlocked.Increment(ref recorded) != 1) return;
-            var operation = f.Preparation.Op();
-            Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.Record(f.Preparation.Permit, operation, new RunEvent.Blocked(
-                new(operation, T, producer.Address.Launch.Attempt, MaterializationProblem.DirtyWorktree, null, [], "Late drift.")
-                { Scope = new BlockScope.Checkout(["result.txt"]) })));
-        };
-        var refused = Assert.IsType<TurnStart.Refused>(await Begin(f, Start(f, U)));
-        Assert.Equal("UnresolvedOwnership", refused.Reason.Problem.ToString());
-        Assert.Equal(1, recorded);
-        Assert.Equal(0, f.Claims(U));
-        Assert.Equal(1, f.Launches);
-    }
-
-    [Fact]
-    public void The_claim_guard_is_append_only()
+    public void A_guarded_claim_journal_replays_unchanged()
     {
         var workflow = Connect(FixtureWorkflow(Task(T), Task(U)), T, U);
         using var f = new RunFixtures(workflow);
@@ -288,20 +208,6 @@ public sealed class ClaimRecheckTests
         Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(RunJournal.Decode(bytes).Entries.Select(RunJournal.Encode))));
         var consumer = Assert.Single(record.Attempts.Values, attempt => attempt.Task == U);
         Assert.True(record.Claims.ContainsKey(new(consumer.Id, 1)));
-        Assert.True(RunReducer.ProducerHold(record, record.Inputs[consumer.InitialInputs]));
-
-        using var fresh = new RunFixtures(workflow);
-        fresh.Approve();
-        var producer = fresh.Reserve(T);
-        fresh.Complete(producer, "A ready.\n");
-        Assert.IsType<RunDecision.Recorded>(fresh.Store.Record(fresh.Permit, fresh.Op(), new RunEvent.Blocked(new(fresh.Op(), T,
-            producer.Attempt.Id, MaterializationProblem.DirtyWorktree, null, [], "The producer checkout changed after its result was accepted.")
-        { Scope = new BlockScope.Checkout(["result.txt"]) })));
-        var reservation = fresh.Reserve(U);
-        fresh.Prepare(reservation);
-        Assert.Equal(RunProblem.UnresolvedOwnership, Problem(fresh.Store.Claim(fresh.Lease(U), fresh.Op(), new(reservation.Attempt.Id, 1),
-            reservation.Inputs, Prompt)));
-        Assert.DoesNotContain(fresh.Read().Claims.Keys, key => key.Attempt == reservation.Attempt.Id);
     }
 
     [Fact]
@@ -351,60 +257,4 @@ public sealed class ClaimRecheckTests
         Assert.Contains("Build B", Assert.Single(p.Read().Preparations.Values, prepared => prepared.Location.Owner.Task == U).Prompt);
     }
 
-    [Theory]
-    [InlineData("Next", false)]
-    [InlineData("Next", true)]
-    [InlineData("Continue", false)]
-    [InlineData("Continue", true)]
-    public async Task A_change_after_preparation_blocks_a_continuing_claim(string intent, bool indexOnly)
-    {
-        await using var f = new TurnFixture(intent == "Next" ? ConversationMode.Chat : ConversationMode.Autonomous);
-        TurnIntent next;
-        OperationId? preservation = null;
-        if (intent == "Next")
-        {
-            await f.Open(FakeAgents.Fresh(f.Client)
-                .Print(FakeAgents.SessionLine(f.Client, "session-1"))
-                .Write("keep.txt", "keep\n")
-                .Print(FakeAgents.ReplyLines(f.Client, "More?")));
-            var waiting = await f.Settled(await f.Start());
-            Assert.Equal("WaitingForInput", waiting.Attempt.Status.ToString());
-            Assert.IsType<TurnDisposition.Resting>(Assert.IsType<Release.Released>(waiting.Release()).Receipt);
-            next = new TurnIntent.Next(f.Preparation.Op(), new(waiting.Address.Launch.Attempt, 2), "Use the fixture");
-        }
-        else
-        {
-            var (previous, confirmation, preserved) = await RecoveryLaunchTests.Baselined(f);
-            preservation = preserved;
-            next = new TurnIntent.First(f.Preparation.Op(), T, new AttemptCause.Continue(previous, confirmation));
-        }
-        var launches = f.Launches;
-        f.Runs.Probe = point =>
-        {
-            if (point != "runner.claim.before") return;
-            File.WriteAllText(Path.Combine(f.Checkout, "keep.txt"), "late\n");
-            if (!indexOnly) return;
-            Assert.Equal(0, f.Preparation.Git.Run(f.Checkout, "add", "keep.txt").ExitCode);
-            File.WriteAllText(Path.Combine(f.Checkout, "keep.txt"), "keep\n");
-        };
-        var blocked = Assert.IsType<TurnStart.Blocked>(await Begin(f, next)).Block;
-        Assert.Equal("DirtyWorktree", blocked.Problem.ToString());
-        Assert.Equal(new[] { "keep.txt" }, Assert.IsType<BlockScope.Checkout>(blocked.Scope).Paths);
-        var attempt = Assert.IsType<AttemptId>(blocked.Attempt);
-        Assert.Equal(T, blocked.Task);
-        Assert.Equal(intent == "Next" ? 1 : 0, f.Preparation.Read().Claims.Keys.Count(key => key.Attempt == attempt));
-        Assert.Equal(launches, f.Launches);
-        if (preservation is { } preserved2)
-        {
-            var commit = f.Preparation.Read().Preservations[OperationIds.Derive(preserved2, "preserve-plan")].Commit;
-            Assert.Equal("keep\n", f.Preparation.Git.Git("show", commit.Hex + ":keep.txt"));
-        }
-        Assert.Equal(1, Unresolved(f));
-        f.Runs.Probe = null;
-        // Another operation for the same turn gets the recorded block, not a second one.
-        if (next is TurnIntent.Next later)
-            Assert.Equal(blocked, Assert.IsType<TurnStart.Blocked>(await Begin(f, later with { Operation = f.Preparation.Op() })).Block);
-        Assert.Equal(1, Unresolved(f));
-        Assert.Equal(launches, f.Launches);
-    }
 }

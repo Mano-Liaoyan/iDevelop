@@ -127,9 +127,4 @@ public sealed class RunRetryTests
         Assert.False(Shows(shell, "RetryTask"));
         Assert.False(Shows(shell, "CardRetry"));
     }
-
-    [AvaloniaFact]
-    public void The_recovery_note_points_to_Retry_once_the_turn_is_closed_as_stopped() =>
-        Assert.EndsWith("Close as stopped, then Retry runs the task again in a fresh session. Stop Workflow ends the run, and finished work stays.",
-            RecoveryText.NoSuccess);
 }

@@ -30,8 +30,8 @@ internal sealed class PreparationFixture : IDisposable
     }
 
     public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null,
-        Func<string, ulong?>? volumes = null, IReadOnlyDictionary<string, string>? environment = null) =>
-        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), environment ?? Git.Environment, probe, volumes);
+        IReadOnlyDictionary<string, string>? environment = null) =>
+        Execution.Materializer.Open(project ?? Git.Folder, Store, joins, clock ?? new Clock(), environment ?? Git.Environment, probe);
 
     public Materializer FailingGit(string arguments)
     {

@@ -193,10 +193,12 @@ internal static partial class RunReducer
         }
     }
 
-    // Restore and RecordRecoveryBaseline verify the whole checkout, its worktree ownership and the repository identity before their receipt.
+    // An earlier journal's restoration or recovery-baseline receipt came after a check of the whole checkout, its worktree ownership and
+    // the repository identity.
     internal static bool CheckedWithCheckout(BlockScope scope) => scope is BlockScope.Checkout or BlockScope.Ownership or BlockScope.Repository;
 
-    // A restore resolves what its plan repaired or rechecked and its own faults. No recheck vouches for a pin, which only its writer rewrites.
+    // An earlier journal's restoration receipt resolves what its plan repaired or rechecked and its own faults. No recheck vouches for a
+    // pin, which only its writer rewrites.
     internal static bool RestoreResolves(RunRecord record, OperationId planId, MaterializationPlan.Restoration plan, OperationId id,
         MaterializationBlock block) =>
         block.Task == plan.Task && (plan.Repairs.Contains(id) || plan.Rechecks.Contains(id) || OwnOrSuperseded(record, planId, block.Operation)) && block.Scope switch

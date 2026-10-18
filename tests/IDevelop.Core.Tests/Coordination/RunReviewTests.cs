@@ -382,10 +382,6 @@ public sealed class RunReviewTests
         Assert.Equal((3, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
         Assert.Equal("session-1", f.Resumed(A, 3));
         Assert.StartsWith("Closing iDevelop interrupted your work on these findings. Go on from where you stopped.\n\nFix the findings.", f.Prompt(A, 3));
-        var baseline = Assert.Single(record.Baselines.Values).Baseline;
-        Assert.Equal((recovery.Fix, confirmation, "session-1"), (baseline.Previous, baseline.Confirmation, baseline.Session));
-        var preserved = record.Preservations[OperationIds.Derive(baseline.Preservation, "preserve-plan")];
-        Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{preserved.Commit.Hex}:keep.txt"));
         Assert.Equal("keep\n", File.ReadAllText(Path.Combine(f.Evidence, "continued.keep.txt")));
         Assert.Equal(continued.Id, Assert.IsType<ResultOrigin.Executed>(record.CurrentResults[A].Origin).Attempt);
         Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
@@ -414,31 +410,6 @@ public sealed class RunReviewTests
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal((1, 0), (Count(f, cause => cause is AttemptCause.Continue), Count(f, cause => cause is AttemptCause.Retry)));
         Assert.Equal((3, 2, 1), (f.Launches(A), f.Launches(R), f.Launches(B)));
-    }
-
-    [Fact]
-    public async Task Continue_fix_over_a_changing_checkout_blocks_and_starts_nothing()
-    {
-        await using var f = new RunConversationFixture(Reviewed());
-        Routed(f).Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Interrupting(f, "first\n"))
-            .Answer(R, Reads(f, 1, Changes1));
-        await Interrupt(f);
-        var keep = Path.Combine(f.Checkout(A), "keep.txt");
-        f.Runs.Probe = point =>
-        {
-            if (point == "git.preserve-observe-1.after") File.WriteAllText(keep, "second\n");
-        };
-
-        var blocked = Assert.IsType<FixReply.Blocked>(await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
-
-        Assert.Equal(MaterializationProblem.DirtyWorktree, blocked.Block.Problem);
-        var divergence = Assert.Single(f.Read().PreservationDivergences.Values);
-        Assert.Equal("first\n", f.Preparation.Git.Git("show", $"{divergence.First.Commit.Hex}:keep.txt"));
-        Assert.Equal("second\n", f.Preparation.Git.Git("show", $"{divergence.Second.Commit.Hex}:keep.txt"));
-        Assert.Empty(f.Read().Baselines);
-        await f.Decided();
-        Assert.Equal((2, 0), (f.Launches(A), Count(f, cause => cause is AttemptCause.Continue)));
-        Assert.Equal("second\n", File.ReadAllText(keep));
     }
 
     [Fact]

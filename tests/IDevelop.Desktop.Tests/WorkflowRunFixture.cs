@@ -81,9 +81,6 @@ internal sealed class WorkflowRunFixture : IDisposable
     /// <summary>Called with every probe point of each window's runs, off the UI thread.</summary>
     public Action<string>? Probe { get; set; }
 
-    /// <summary>The file system each folder lives on, for Restore. Null reads the real one; a function returning null emulates macOS.</summary>
-    public Func<string, ulong?>? Volumes { get; set; }
-
     /// <summary>A turn that writes <paramref name="file"/> in the task's checkout, then answers <paramref name="reply"/>.</summary>
     public FakeRule Writes(string file, string text, string reply, string session = "session-1", string? gate = null)
     {
@@ -206,7 +203,6 @@ internal sealed class WorkflowRunFixture : IDisposable
     {
         runs.GitEnvironment = Git;
         runs.Probe = point => Probe?.Invoke(point);
-        runs.Volumes = Volumes;
         runs.ShutdownTime = TimeSpan.FromMilliseconds(250);
         runs.LeaveTimeout = TimeSpan.FromSeconds(5);
         runs.CoordinatorRetry = TimeSpan.FromMilliseconds(50);

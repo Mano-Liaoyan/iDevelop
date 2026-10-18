@@ -669,9 +669,7 @@ internal static partial class RunReducer
                 return RunProblem.UnclosedAttempts;
             }
 
-            if (cause is AttemptCause.Continue continued && end is AttemptEnd.Recovered &&
-                (end is not AttemptEnd.Recovered { Outcome: RecoveryOutcome.Stopped } ||
-                 !record.Baselines.ContainsKey((previous, continued.Confirmation))))
+            if (cause is AttemptCause.Continue && end is AttemptEnd.Recovered { Outcome: not RecoveryOutcome.Stopped })
             {
                 return RunProblem.OutcomeMismatch;
             }

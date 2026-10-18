@@ -257,7 +257,7 @@ public sealed partial class TaskNodeViewModel
             }
             else
             {
-                Recovery = new RecoveryViewModel(run, task, TitleOf, Show);
+                Recovery = new RecoveryViewModel(run, task);
             }
         }
 
@@ -283,15 +283,6 @@ public sealed partial class TaskNodeViewModel
         var subject = _canvas.Workflow.SubjectOf(Id);
         var end = subject is { } owner && _canvas.Run?.View.Tasks.GetValueOrDefault(owner) is { } view && view.Attempt == fix.Fix ? view.End : null;
         return WorkflowRunText.FixChoice(fix, subject is { } id ? TitleOf(id) : "the task", end);
-    }
-
-    /// <summary>Selects another task of the canvas, such as the one whose checkout a block is on.</summary>
-    private void Show(TaskId task)
-    {
-        if (_canvas.Nodes.FirstOrDefault(node => node.Id == task) is { } node)
-        {
-            _canvas.Inspect(node);
-        }
     }
 
     /// <summary>

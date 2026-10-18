@@ -5,18 +5,6 @@ internal static partial class RunReducer
     internal static RunProblem? AppendProblem(RunRecord record, RunEvent e)
     {
         if (record.Schema != 3) return null;
-        var cause = e switch
-        {
-            RunEvent.Planned { Plan: MaterializationPlan.Preparation preparation } => preparation.Cause,
-            RunEvent.Reserved reserved => reserved.Attempt.Cause,
-            _ => null,
-        };
-        if (cause is AttemptCause.Continue continued && record.Closures.TryGetValue(continued.Previous, out var end) &&
-            (end is AttemptEnd.Recovered { Outcome: RecoveryOutcome.Stopped } or
-                AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Interrupted } ||
-                end is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } && record.ReviewOf(continued.Previous) is not null) &&
-            !record.Baselines.ContainsKey((continued.Previous, continued.Confirmation)))
-            return RunProblem.RecoveryEvidenceInsufficient;
         if (e is RunEvent.GitIntended intended && record.Plans.GetValueOrDefault(intended.Plan) is MaterializationPlan.Restoration &&
             RestorationSuperseded(record, intended.Plan) || e is RunEvent.GitObserved observed &&
             record.GitIntents.TryGetValue(observed.Mutation, out var oldIntent) &&
@@ -28,7 +16,7 @@ internal static partial class RunReducer
             launch.Attempt == attempt.Attempt && record.Settling(launch)) &&
             (attempt.End is not AttemptEnd.Recovered || HasUndisposedSettlement(record, attempt.Attempt)))
             return RunProblem.SettlementPending;
-        // The claim's rechecks run before this transaction, so a claim or drift block recorded since still holds the consumer.
+        // A first claim waits while a producer it depends on still has an unresolved claim.
         if (e is RunEvent.TurnClaimed { Key.Turn: 1 } claim && ProducerHold(record, claim.Inputs))
             return RunProblem.UnresolvedOwnership;
         return null;

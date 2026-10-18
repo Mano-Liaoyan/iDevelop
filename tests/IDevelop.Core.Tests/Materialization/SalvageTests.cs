@@ -711,7 +711,7 @@ public sealed class SalvageTests
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
         {
             if (resolution ? step.StartsWith("journal.maintenance-resolve-", StringComparison.Ordinal) && step.EndsWith("." + side, StringComparison.Ordinal)
-                : step == "journal.salvage-index-lock-blocked." + side) throw new Crash();
+                : step == "journal.salvage-observe-blocked." + side) throw new Crash();
         }).Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
         if (!resolution) File.Delete(indexLock);
         var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
@@ -765,7 +765,7 @@ public sealed class SalvageTests
     [InlineData("index-lock")]
     [InlineData("task-lock")]
     [InlineData("ownership")]
-    public async Task An_index_lock_is_retained_with_evidence_and_salvage_proceeds_after_external_removal(string mode)
+    public async Task An_index_lock_blocks_salvage_and_salvage_proceeds_after_external_removal(string mode)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await FailedWriter(f);
@@ -791,10 +791,8 @@ public sealed class SalvageTests
                 Assert.Equal(mode == "ownership" ? "UncertainOwnership" : "DirtyWorktree", blocked.Block.Problem.ToString());
                 if (mode == "index-lock")
                 {
-                    Assert.Equal("An index.lock exists in the writer checkout; it is retained and was not removed.", blocked.Block.Detail);
-                    var evidence = Assert.Single(blocked.Block.Evidence);
-                    Assert.Equal("lock\n", System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-                        evidence.RelativePath, evidence.Content, evidence.ByteLength)));
+                    Assert.Equal("An index.lock exists in the writer checkout.", blocked.Block.Detail);
+                    Assert.Equal("lock\n", File.ReadAllText(indexLock));
                     Assert.Equal(0, f.Read().Plans.Values.Count(plan => plan is MaterializationPlan.Salvage));
                 }
             }
@@ -1039,38 +1037,4 @@ public sealed class SalvageTests
         Assert.Equal("unfinished\n", f.Git.Git("show", retained.Commit.Hex + ":new.txt"));
     }
 
-    [Fact]
-    public async Task Changed_index_lock_bytes_after_recheck_are_retained_as_salvage_drift_evidence()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Git.Write("result.txt", "done\n", writer.Checkout);
-        await f.Close(writer);
-        var lockPath = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout)) + ".lock";
-        var operation = f.Op();
-        File.WriteAllText(lockPath, "first\n");
-        var first = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
-        Assert.Equal(MaterializationProblem.DirtyWorktree, first.Problem);
-        Assert.Equal("first\n", LockEvidence(first));
-        var key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked.")));
-        File.WriteAllText(lockPath, "second\n");
-        var second = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt)).Block;
-        Assert.Equal(MaterializationProblem.DirtyWorktree, second.Problem);
-        Assert.Equal("second\n", LockEvidence(second));
-        Assert.Equal(new[] { (MaterializationProblem.DirtyWorktree, true), (MaterializationProblem.DirtyWorktree, false) },
-            f.Read().Blocks.OrderBy(pair => f.Read().Receipts[pair.Key].Sequence).Select(pair => (pair.Value.Block.Problem, pair.Value.Resolved)));
-        File.Delete(lockPath);
-        key = Assert.Single(f.Read().Blocks, pair => !pair.Value.Resolved).Key;
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(key, "Rechecked second lock.")));
-        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), operation, writer.Execution.Launch.Attempt));
-        Assert.Equal("done\n", f.Git.Git("show", retained.Commit.Hex + ":result.txt"));
-
-        string LockEvidence(MaterializationBlock block)
-        {
-            var file = Assert.Single(block.Evidence);
-            return System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-                file.RelativePath, file.Content, file.ByteLength));
-        }
-    }
 }

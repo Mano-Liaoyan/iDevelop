@@ -158,7 +158,8 @@ public sealed class SessionContinuityTests : IDisposable
     public async Task A_run_s_Continue_of_a_Pi_attempt_whose_checkout_moved_is_refused_and_nothing_launches()
     {
         await using var f = new TurnFixture(client: ClientId.Pi, model: "deepseek/deepseek-flash");
-        var (previous, confirmation, _) = await RecoveryLaunchTests.Baselined(f);
+        var previous = (await RecoveryLaunchTests.Interrupted(f)).Address.Launch.Attempt;
+        var confirmation = f.Preparation.Op();
         MoveRecordedCheckout(f.Folder(new(previous, 1)), f.Checkout);
         var launches = f.Launches;
         FakeAgents.Install(f.Fakes, ClientId.Pi, FakeAgents.Resuming(ClientId.Pi, "session-1")

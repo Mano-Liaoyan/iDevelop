@@ -11,7 +11,7 @@ public sealed class RecoveryLaunchTests
 {
     /// <summary>
     /// A turn whose client wrote keep.txt is interrupted by closing the project and closed as interrupted, and the window
-    /// opens again. Nothing is preserved yet.
+    /// opens again.
     /// </summary>
     internal static async Task<SettledTurn> Interrupted(TurnFixture f)
     {
@@ -30,26 +30,12 @@ public sealed class RecoveryLaunchTests
         return turn;
     }
 
-    /// <summary>An interrupted attempt with E3a.3b's recovery baseline over its preserved checkout.</summary>
-    internal static async Task<(AttemptId Previous, OperationId Confirmation, OperationId Preservation)> Baselined(TurnFixture f)
-    {
-        var previous = (await Interrupted(f)).Address.Launch.Attempt;
-        var p = f.Preparation;
-        var preservation = p.Op();
-        Assert.IsType<Preservation.Preserved>(await p.Materializer().Preserve(p.Lease(T), preservation, previous));
-        var confirmation = p.Op();
-        var baseline = Assert.IsType<RecoveryBaselining.Recorded>(p.Materializer().RecordRecoveryBaseline(p.Lease(T), p.Op(), previous,
-            confirmation, preservation));
-        Assert.Equal("session-1", baseline.Receipt.Baseline.Session);
-        p.Release(T);
-        return (previous, confirmation, preservation);
-    }
-
     [Fact]
-    public async Task Interrupted_fix_continue_launches_once_with_the_stored_session()
+    public async Task An_interrupted_attempt_continues_once_in_its_checkout_with_its_session()
     {
         await using var f = new TurnFixture();
-        var (previous, confirmation, _) = await Baselined(f);
+        var previous = (await Interrupted(f)).Address.Launch.Attempt;
+        var confirmation = f.Preparation.Op();
         var launches = f.Launches;
         await f.Reopen();
         var reconciled = Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit, f.Preparation.Op(), new(previous, 1))
@@ -78,33 +64,6 @@ public sealed class RecoveryLaunchTests
         Assert.Equal("keep\n", File.ReadAllText(Path.Combine(f.Evidence, "continue-keep.txt")));
         Assert.IsType<TurnStart.Existing>(await f.Runs.StartTurn(f.Preparation.Permit, intent).WaitAsync(Bound));
         Assert.Equal(launches + 1, f.Launches);
-    }
-
-    [Fact]
-    public async Task Interrupted_fix_with_a_changing_baseline_never_launches()
-    {
-        await using var f = new TurnFixture();
-        var previous = (await Interrupted(f)).Address.Launch.Attempt;
-        var launches = f.Launches;
-        var p = f.Preparation;
-        File.WriteAllText(Path.Combine(f.Checkout, "keep.txt"), "first\n");
-        var preservation = p.Op();
-        var diverged = Assert.IsType<Preservation.Blocked>(await p.Materializer(probe: point =>
-        {
-            if (point == "git.preserve-observe-1.after") File.WriteAllText(Path.Combine(f.Checkout, "keep.txt"), "second\n");
-        }).Preserve(p.Lease(T), preservation, previous));
-        Assert.Equal("DirtyWorktree", diverged.Block.Problem.ToString());
-        var confirmation = p.Op();
-        Assert.Equal("RecoveryEvidenceInsufficient", Assert.IsType<RecoveryBaselining.Rejected>(p.Materializer()
-            .RecordRecoveryBaseline(p.Lease(T), p.Op(), previous, confirmation, preservation)).Reason.Problem.ToString());
-        p.Release(T);
-        FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Resuming(f.Client, "session-1")
-            .Print(FakeAgents.SessionLine(f.Client, "session-1")).Print(FakeAgents.ReplyLines(f.Client, "Done.")));
-        var refused = Assert.IsType<TurnStart.Refused>(await f.Runs.StartTurn(f.Preparation.Permit,
-            new TurnIntent.First(p.Op(), T, new AttemptCause.Continue(previous, confirmation))).WaitAsync(Bound));
-        Assert.Equal("RecoveryEvidenceInsufficient", refused.Reason.Problem.ToString());
-        Assert.Equal(0, p.Read().Attempts.Values.Count(attempt => attempt.Cause is AttemptCause.Continue));
-        Assert.Equal(launches, f.Launches);
     }
 
     [Fact]
