@@ -147,6 +147,9 @@ _Avoid_: edit, which changes only the document
 
 ### Agents
 
+**Node**:
+An abstraction of an agent: the model and effort it chooses, its system prompt, its instructions and skills, its conversation with a person, the input it reads from earlier agents or a person, and the output it leaves for later agents and the person. The owner set this on 2026-10-18 ([ADR 0031](docs/adr/0031-a-node-is-an-agent-and-a-git-commit-hand-off-is-not-a-requirement.md)).
+
 **Skill choice**:
 The skills a node's agent may use, by its client's own names, kept in the task's agent settings. No choice means every skill the client loads. A choice holds exactly its skills: an allow-list for Claude Code and Pi, and for Codex every other listed skill turned off. Antigravity CLI takes none. A chosen skill that is no longer installed is skipped, and a skill list that can't be read leaves the choice unchecked rather than stopping the task.
 _Avoid_: allow-list, which only two clients take
