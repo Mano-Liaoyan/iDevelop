@@ -33,6 +33,13 @@
         <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
       </MenuItem.Icon>
     </MenuItem>
+    <MenuItem Header="Cancel"
+              Command="{Binding Node.CancelInRunCommand}" IsVisible="{Binding ShowCancelInRun}"
+              AutomationProperties.AutomationId="NodeMenuCancelInRun">
+      <MenuItem.Icon>
+        <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" />
+      </MenuItem.Icon>
+    </MenuItem>
     <MenuItem Header="Retry…"
               Command="{Binding Node.RetryCommand}" IsVisible="{Binding ShowRetry}"
               AutomationProperties.AutomationId="NodeMenuRetry">
