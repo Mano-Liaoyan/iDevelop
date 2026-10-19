@@ -299,22 +299,21 @@ public sealed class CarriedResultTests
     }
 
     [AvaloniaFact]
-    public void A_node_s_preflight_says_why_it_cannot_use_an_earlier_result_whose_code_conflicts_with_the_base()
+    public void A_node_s_preflight_uses_an_earlier_result_as_its_report_after_the_branch_changed_its_file()
     {
         using var f = Join();
         var shell = f.Window();
         RunNode(shell, "B");
         File.WriteAllText(Path.Combine(f.Project, "out-b.txt"), "other\n");
         f.Run("add", "out-b.txt");
-        f.Run("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Conflict with B");
+        f.Run("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Change B's file");
 
         OpenPreflight(shell, "A");
 
-        Assert.Equal([WorkflowRunText.Unbroken("Can't use \"B\"'s result from an earlier run: its code conflicts with this base in out-b.txt. The tasks after it wait until it runs\u00A0again.")],
-            shell.TextsOf("PreflightCarriedResult"));
+        // A carried result brings its report and artifacts, so the branch's own change to B's file never stops it.
+        Assert.Equal([WorkflowRunText.Unbroken("Uses \"B\"'s result from an earlier\u00A0run.")], shell.TextsOf("PreflightCarriedResult"));
         Start(shell, "A");
-        Assert.Equal((1, 1, 0), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
-        Assert.Equal("Waits for \"B\"", shell.CardText("C", "CardStatus"));
+        Assert.Equal((1, 1, 1), (f.Launches("A"), f.Launches("B"), f.Launches("C")));
     }
 
     [AvaloniaFact]

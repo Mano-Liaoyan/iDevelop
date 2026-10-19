@@ -14,9 +14,8 @@ public sealed class ApprovalTests
     internal static ApprovalFixture ChainAnswers(ApprovalFixture f) =>
         f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(B, Writes(B, "out-b.txt", "B\n")).Answer(X, Reports(X));
 
-    internal static async Task<WorkflowStart.Started> Start(ApprovalFixture f, RunPreflight preview, BaseChoice choice, OperationId command,
-        ProjectRuns? window = null) =>
-        Assert.IsType<WorkflowStart.Started>(await (window ?? f.Runs).StartWorkflow(f.Workflow, new(preview, choice, command)).WaitAsync(Bound));
+    internal static async Task<WorkflowStart.Started> Start(ApprovalFixture f, RunPreflight preview, OperationId command, ProjectRuns? window = null) =>
+        Assert.IsType<WorkflowStart.Started>(await (window ?? f.Runs).StartWorkflow(f.Workflow, new(preview, command)).WaitAsync(Bound));
 
     internal static async Task<RunView> Completed(WorkflowRunCoordinator coordinator)
     {
@@ -31,7 +30,7 @@ public sealed class ApprovalTests
         await f.Open();
         var preview = f.Preflight();
 
-        var started = await Start(f, preview, BaseChoice.Head, Command(1));
+        var started = await Start(f, preview, Command(1));
 
         Assert.False(started.Existing);
         Assert.IsType<RunCommand.Accepted>(started.Resume);
@@ -56,7 +55,7 @@ public sealed class ApprovalTests
     }
 
     [Fact]
-    public async Task A_snapshot_base_carries_uncommitted_work_and_leaves_the_person_s_branch_index_and_files_alone()
+    public async Task A_run_starts_from_HEAD_without_the_uncommitted_work_and_leaves_the_person_s_branch_index_and_files_alone()
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         Uncommitted(f);
@@ -65,19 +64,16 @@ public sealed class ApprovalTests
         var preview = f.Preflight();
         Assert.Equal<string>([".gitignore", "notes.txt", "plan.txt", "staged.txt"], preview.Base!.Changed);
         Assert.Equal<string>(["secret.log"], preview.Base.Ignored);
-        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], preview.Choices);
+        Assert.True(preview.Confirmable);
 
-        var started = await Start(f, preview, BaseChoice.Snapshot, Command(2));
+        var started = await Start(f, preview, Command(2));
         await Completed(started.Coordinator);
 
         var run = Assert.Single(f.ApprovedRuns());
-        var record = f.Read(run);
-        Assert.Equal(BaseChoice.Snapshot, record.Base.Choice);
-        Assert.NotEqual(Head, record.Base.Commit);
-        Assert.Equal($"{preview.Base.WorkTree.Hex}\n{Head.Hex}\n", f.GitText("show", "-s", "--format=%T%n%P", record.Base.Commit.Hex));
-        Assert.Equal("draft\n", f.ResultFile(run, A, "plan.txt"));
-        Assert.Equal("staged\n", f.ResultFile(run, A, "staged.txt"));
-        Assert.Equal("notes\n", f.ResultFile(run, B, "notes.txt"));
+        Assert.Equal(new RunBase(Head, BaseChoice.Head), f.Read(run).Base);
+        Assert.Equal(f.GitText("show", "HEAD:plan.txt"), f.ResultFile(run, A, "plan.txt"));
+        Assert.Null(f.ResultFile(run, A, "staged.txt"));
+        Assert.Null(f.ResultFile(run, B, "notes.txt"));
         Assert.Equal("A\n", f.ResultFile(run, B, "out-a.txt"));
         Assert.Null(f.ResultFile(run, A, "secret.log"));
         Assert.Equal(index, f.Index());
@@ -98,7 +94,7 @@ public sealed class ApprovalTests
         var preview = f.Preflight();
         await f.Reopen();
 
-        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], preview.Choices);
+        Assert.True(preview.Confirmable);
         Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs")));
         Assert.Equal(0, f.TotalLaunches);
         Assert.Equal(index, f.Index());
@@ -112,18 +108,18 @@ public sealed class ApprovalTests
         f.Answer(A, Writes(A, "out-a.txt", "A\n")).Answer(X, Reports(X));
         await f.Open();
         var preview = f.Preflight();
-        var first = await Start(f, preview, BaseChoice.Head, Command(3));
+        var first = await Start(f, preview, Command(3));
         await first.Coordinator.Until(view => view.Status == RunStatus.Waiting).WaitAsync(Bound);
         var run = first.Coordinator.Address.Run;
         f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
 
         var edited = f.Preflight();
-        var busy = Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(edited, BaseChoice.Head, Command(4))).WaitAsync(Bound));
+        var busy = Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(edited, Command(4))).WaitAsync(Bound));
 
         Assert.Equal(run, edited.Active);
         Assert.Equal(run, busy.Active);
         f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X"));
-        var same = await Start(f, f.Preflight(), BaseChoice.Head, Command(5));
+        var same = await Start(f, f.Preflight(), Command(5));
         Assert.True(same.Existing);
         Assert.Equal(run, same.Coordinator.Address.Run);
         Assert.Equal([run], f.ApprovedRuns());
@@ -140,7 +136,7 @@ public sealed class ApprovalTests
         using (var held = new Turns.TurnFixture.ProbeBarrier("approval.approved.after"))
         {
             f.Runs.Probe = held.Probe;
-            start = f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(6)));
+            start = f.Runs.StartWorkflow(f.Workflow, new(preview, Command(6)));
             await held.Reached.Task.WaitAsync(Bound);
             await f.Reopen();
         }
@@ -148,7 +144,7 @@ public sealed class ApprovalTests
         var unopened = Assert.IsType<WorkflowStart.Unopened>(await start.WaitAsync(Bound));
         Assert.Equal(RunProblem.RunStopped, unopened.Reason.Problem);
         Assert.Equal(0, f.TotalLaunches);
-        var again = await Start(f, f.Preflight(), BaseChoice.Head, Command(6));
+        var again = await Start(f, f.Preflight(), Command(6));
         Assert.True(again.Existing);
         Assert.Equal(unopened.Run, again.Coordinator.Address.Run);
         await Completed(again.Coordinator);

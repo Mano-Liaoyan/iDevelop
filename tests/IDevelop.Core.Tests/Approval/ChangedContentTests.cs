@@ -12,9 +12,9 @@ public sealed class ChangedContentTests
 {
     private static OperationId Command(int n) => new(Guid.Parse($"00000000-0000-0000-0000-00000000e{n:D3}"));
 
-    private static async Task<RunPreflight> Refreshed(ApprovalFixture f, RunPreflight preview, BaseChoice choice, OperationId command)
+    private static async Task<RunPreflight> Refreshed(ApprovalFixture f, RunPreflight preview, OperationId command)
     {
-        var changed = Assert.IsType<WorkflowStart.Changed>(await f.Runs.StartWorkflow(f.Workflow, new(preview, choice, command)).WaitAsync(Bound));
+        var changed = Assert.IsType<WorkflowStart.Changed>(await f.Runs.StartWorkflow(f.Workflow, new(preview, command)).WaitAsync(Bound));
         Assert.Empty(f.ApprovedRuns());
         Assert.Empty(Intents(f.Project));
         Assert.Equal(0, f.TotalLaunches);
@@ -36,11 +36,11 @@ public sealed class ChangedContentTests
         var preview = f.Preflight();
         f.Workflow = Edit(f.Workflow, new WorkflowEdit.EditTitle(X, "X checks"));
 
-        var current = await Refreshed(f, preview, BaseChoice.Head, Command(1));
+        var current = await Refreshed(f, preview, Command(1));
 
         Assert.Equal(Revision.Capture(f.Workflow).Id, current.Revision.Id);
         Assert.NotEqual(preview.Revision.Id, current.Revision.Id);
-        var started = await Start(f, current, BaseChoice.Head, Command(1));
+        var started = await Start(f, current, Command(1));
         await Completed(started.Coordinator);
         Assert.Equal("X checks", f.Read(Assert.Single(f.ApprovedRuns())).Revision.Snapshot.Tasks[X].Title);
     }
@@ -53,7 +53,7 @@ public sealed class ChangedContentTests
         var preview = f.Preflight();
         f.Workflow = Edit(f.Workflow, new WorkflowEdit.MoveTasks([new(A, new(400, 300))]));
 
-        var started = await Start(f, preview, BaseChoice.Head, Command(2));
+        var started = await Start(f, preview, Command(2));
 
         Assert.False(started.Existing);
         Assert.Equal(preview.Revision.Id, f.Read(Assert.Single(f.ApprovedRuns())).Revision.Id);
@@ -68,14 +68,14 @@ public sealed class ChangedContentTests
         f.Git.Write("later.txt", "later\n");
         var later = f.Git.Commit("later");
 
-        var current = await Refreshed(f, preview, BaseChoice.Head, Command(3));
+        var current = await Refreshed(f, preview, Command(3));
 
         Assert.Equal(later, current.Base!.Head);
-        Assert.Equal(later, f.Read((await Start(f, current, BaseChoice.Head, Command(3))).Coordinator.Address.Run).Base.Commit);
+        Assert.Equal(later, f.Read((await Start(f, current, Command(3))).Coordinator.Address.Run).Base.Commit);
     }
 
     [Fact]
-    public async Task A_file_edit_refreshes_a_snapshot_preview_but_not_a_HEAD_one()
+    public async Task An_edit_of_uncommitted_work_keeps_the_preview_current_since_the_run_starts_from_HEAD()
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         Uncommitted(f);
@@ -83,24 +83,21 @@ public sealed class ChangedContentTests
         var preview = f.Preflight();
         f.Git.Write("notes.txt", "notes again\n");
 
-        var current = await Refreshed(f, preview, BaseChoice.Snapshot, Command(4));
-
-        Assert.NotEqual(preview.Base!.WorkTree, current.Base!.WorkTree);
-        var started = await Start(f, preview, BaseChoice.Head, Command(5));
+        var started = await Start(f, preview, Command(5));
         Assert.Equal(new RunBase(Head, BaseChoice.Head), f.Read(started.Coordinator.Address.Run).Base);
     }
 
     [Fact]
-    public async Task Work_that_appears_after_a_clean_preview_refreshes_it_with_the_snapshot_choice()
+    public async Task Work_that_appears_after_a_clean_preview_refreshes_it_to_name_that_work()
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         await f.Open();
         var preview = f.Preflight();
         f.Git.Write("notes.txt", "notes\n");
 
-        var current = await Refreshed(f, preview, BaseChoice.Head, Command(6));
+        var current = await Refreshed(f, preview, Command(6));
 
         Assert.Equal<string>(["notes.txt"], current.Base!.Changed);
-        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], current.Choices);
+        Assert.True(current.Confirmable);
     }
 }

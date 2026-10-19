@@ -147,13 +147,7 @@
 
               <StackPanel Spacing="8" IsVisible="{Binding HeadLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock Classes="sheetCaption" Text="Start From" />
-                <StackPanel Spacing="4" IsVisible="{Binding OffersSnapshot}">
-                  <RadioButton GroupName="PreflightBase" IsChecked="{Binding UseHead}" Content="{Binding HeadLabel}"
-                               AutomationProperties.AutomationId="PreflightHead" />
-                  <RadioButton GroupName="PreflightBase" IsChecked="{Binding UseSnapshot}" Content="{Binding SnapshotLabel}"
-                               AutomationProperties.AutomationId="PreflightSnapshot" />
-                </StackPanel>
-                <TextBlock Text="{Binding HeadLabel}" FontSize="13" Foreground="{DynamicResource TextBrush}" IsVisible="{Binding !OffersSnapshot}"
+                <TextBlock Text="{Binding HeadLabel}" FontSize="13" Foreground="{DynamicResource TextBrush}"
                            AutomationProperties.AutomationId="PreflightBase" />
                 <TextBlock Classes="note" Text="{Binding ChangedNote}"
                            IsVisible="{Binding ChangedNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

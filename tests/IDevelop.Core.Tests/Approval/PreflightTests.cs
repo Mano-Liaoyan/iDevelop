@@ -28,7 +28,7 @@ public sealed class PreflightTests
         Assert.Equal(Head, preview.Base!.Head);
         Assert.Equal("refs/heads/main", preview.Base.Branch);
         Assert.Empty(preview.Base.Changed);
-        Assert.Equal<BaseChoice>([BaseChoice.Head], preview.Choices);
+        Assert.True(preview.Confirmable);
         Assert.Empty(preview.Gaps);
         Assert.Null(preview.Active);
         Assert.Equal([A, B, X], preview.Tasks.Select(task => task.Task));
@@ -48,9 +48,9 @@ public sealed class PreflightTests
     private static OperationId Command(int n) => new(Guid.Parse($"00000000-0000-0000-0000-00000000f{n:D3}"));
 
     /// <summary>Confirming shows the refusal, and nothing is recorded or launched.</summary>
-    private static async Task AssertRefused(ApprovalFixture f, RunPreflight preview, BaseChoice choice, ProjectRuns? window = null)
+    private static async Task AssertRefused(ApprovalFixture f, RunPreflight preview, ProjectRuns? window = null)
     {
-        var refused = Assert.IsType<WorkflowStart.Refused>(await (window ?? f.Runs).StartWorkflow(f.Workflow, new(preview, choice, Command(1))).WaitAsync(Bound));
+        var refused = Assert.IsType<WorkflowStart.Refused>(await (window ?? f.Runs).StartWorkflow(f.Workflow, new(preview, Command(1))).WaitAsync(Bound));
         Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
         Assert.Equal(preview.Revision.Id, refused.Current!.Revision.Id);
         Assert.Equal(preview.Gaps.Length, refused.Current.Gaps.Length);
@@ -72,55 +72,42 @@ public sealed class PreflightTests
 
         Assert.Equal<PreflightGap>([new PreflightGap.Task(A, new StartProblem.NoAgent()), new PreflightGap.Task(B, new StartProblem.FieldMissing("Brief")),
             new PreflightGap.Task(X, new StartProblem.ClientMissing(ClientId.Pi, "No pi command was found on PATH."))], preview.Gaps);
-        Assert.Empty(preview.Choices);
+        Assert.False(preview.Confirmable);
         Assert.Equal((WorkKind.Person, (ExecutionSettings?)null), (preview.Tasks[2].Kind, preview.Tasks[2].Settings));
-        await AssertRefused(f, preview, BaseChoice.Head);
+        await AssertRefused(f, preview);
     }
 
     [UnixFact]
-    public async Task A_join_needs_Git_2_43_while_a_single_input_does_not()
+    public async Task An_older_Git_is_no_gap_even_for_a_join()
     {
         await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D)], (A, B), (A, C), (B, D), (C, D)));
-        await f.Open();
-        f.Runs.GitEnvironment = GitVersion(f, "git version 2.42.0");
-
-        var preview = f.Preflight();
-
-        Assert.Equal<PreflightGap>([new PreflightGap.Join(D, "Joins need Git 2.43 or later. Installed: git version 2.42.0.")], preview.Gaps);
-        f.Workflow = Graph([Agent(A), Agent(B)], (A, B));
-        Assert.Empty(f.Preflight().Gaps);
-    }
-
-    [UnixFact]
-    public async Task A_gap_that_appears_after_the_preview_refuses_with_the_refreshed_preview()
-    {
-        await using var f = new ApprovalFixture(Graph([Agent(A), Agent(B), Agent(C), Agent(D)], (A, B), (A, C), (B, D), (C, D)));
-        await f.Open();
-        var preview = f.Preflight();
-        Assert.Empty(preview.Gaps);
-        f.Runs.GitEnvironment = GitVersion(f, "git version 2.42.0");
-
-        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(3))).WaitAsync(Bound));
-
-        Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
-        Assert.Equal<PreflightGap>([new PreflightGap.Join(D, "Joins need Git 2.43 or later. Installed: git version 2.42.0.")], refused.Current!.Gaps);
-        Assert.Empty(f.ApprovedRuns());
-        Assert.Equal(0, f.TotalLaunches);
-    }
-
-    [UnixFact]
-    public async Task Git_older_than_2_39_is_a_gap()
-    {
-        await using var f = new ApprovalFixture(Chain());
         await f.Open();
         f.Runs.GitEnvironment = GitVersion(f, "git version 2.38.1");
 
         var preview = f.Preflight();
 
-        Assert.Equal(new PreflightGit.Refused(MaterializationProblem.GitVersionUnsupported, "git version 2.38.1"), preview.Git);
-        Assert.Null(preview.Base);
-        Assert.Equal<PreflightGap>([new PreflightGap.Git(MaterializationProblem.GitVersionUnsupported, "git version 2.38.1")], preview.Gaps);
-        await AssertRefused(f, preview, BaseChoice.Head);
+        Assert.Equal(new PreflightGit.Ready("git version 2.38.1"), preview.Git);
+        Assert.Empty(preview.Gaps);
+        Assert.True(preview.Confirmable);
+    }
+
+    [Fact]
+    public async Task A_gap_that_appears_after_the_preview_refuses_with_the_refreshed_preview()
+    {
+        await using var f = new ApprovalFixture(Chain());
+        await f.Open();
+        var preview = f.Preflight();
+        Assert.Empty(preview.Gaps);
+        var run = Guid.Parse("00000000-0000-0000-0000-0000000000de");
+        var folder = Directory.CreateDirectory(Path.Combine(f.Project, ".idp", "runs", f.Workflow.Id.ToString(), run.ToString("D"))).FullName;
+        File.WriteAllText(Path.Combine(folder, "events.jsonl"), "{}\n");
+
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, Command(3))).WaitAsync(Bound));
+
+        Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
+        Assert.Equal<PreflightGap>([new PreflightGap.Records($"Run {run:D}: InvalidData.")], refused.Current!.Gaps);
+        Assert.Empty(ChangedContentTests.Intents(f.Project));
+        Assert.Equal(0, f.TotalLaunches);
     }
 
     [Fact]
@@ -139,7 +126,7 @@ public sealed class PreflightTests
             Assert.Equal(MaterializationProblem.NotRepositoryRoot, refused.Problem);
             Assert.Equal(Path.GetFullPath(f.Project), Path.GetFullPath(refused.Detail));
             Assert.Single(preview.Gaps);
-            await AssertRefused(f, preview, BaseChoice.Head, window);
+            await AssertRefused(f, preview, window);
         }
     }
 
@@ -154,11 +141,11 @@ public sealed class PreflightTests
 
         Assert.Null(preview.Base);
         Assert.Equal<PreflightGap>([new PreflightGap.NoCommit()], preview.Gaps);
-        await AssertRefused(f, preview, BaseChoice.Snapshot);
+        await AssertRefused(f, preview);
     }
 
     [Fact]
-    public async Task An_unmerged_index_offers_only_HEAD()
+    public async Task An_unmerged_index_lists_its_paths_as_changed()
     {
         await using var f = new ApprovalFixture(Chain());
         f.GitText("checkout", "-q", "-b", "side");
@@ -172,10 +159,8 @@ public sealed class PreflightTests
 
         var preview = f.Preflight();
 
-        Assert.Equal<string>(["plan.txt"], preview.Base!.Unmerged);
-        Assert.Equal<string>(["plan.txt"], preview.Base.Changed);
-        Assert.Equal<BaseChoice>([BaseChoice.Head], preview.Choices);
-        await AssertRefused(f, preview, BaseChoice.Snapshot);
+        Assert.Equal<string>(["plan.txt"], preview.Base!.Changed);
+        Assert.True(preview.Confirmable);
     }
 
     [Fact]
@@ -196,7 +181,7 @@ public sealed class PreflightTests
     }
 
     [Fact]
-    public async Task A_matching_standalone_report_is_listed_for_each_base_it_matches()
+    public async Task A_standalone_report_that_matches_HEAD_is_listed()
     {
         await using var f = new ApprovalFixture(Chain());
         f.Answer(X, Reports(X));
@@ -212,7 +197,7 @@ public sealed class PreflightTests
 
         var preview = f.Preflight();
 
-        Assert.Equal<PreflightReport>([new(X, attempt.Id, "X ready.\n", [BaseChoice.Head])], preview.Reusable);
+        Assert.Equal<PreflightReport>([new(X, attempt.Id, "X ready.\n")], preview.Reusable);
         f.Workflow = Connections.Connect(f.Workflow, A, X, ConnectionKind.Context);
         Assert.Empty(f.Preflight().Reusable);
     }
@@ -230,7 +215,7 @@ public sealed class PreflightTests
         Assert.Null(preview.Base);
         Assert.Equal<PreflightGap>([new PreflightGap.Git(MaterializationProblem.DirtyWorktree,
             "The index marks plan.txt skip-worktree, and the work tree has no such file.")], preview.Gaps);
-        await AssertRefused(f, preview, BaseChoice.Head);
+        await AssertRefused(f, preview);
     }
 
     [Fact]
@@ -245,7 +230,7 @@ public sealed class PreflightTests
         var preview = f.Preflight();
 
         Assert.Equal<PreflightGap>([new PreflightGap.Records($"Run {run:D}: InvalidData.")], preview.Gaps);
-        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(2))).WaitAsync(Bound));
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, Command(2))).WaitAsync(Bound));
         Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
         Assert.Equal(0, f.TotalLaunches);
     }

@@ -50,7 +50,7 @@ public sealed class WorkflowRunTests
         Assert.Equal(["Codex · GPT-5.5 · high", "Codex · GPT-5.5 · high"], shell.TextsOf("PreflightAgent"));
         Assert.Equal(["After \"A\""], shell.TextsOf("PreflightInputs"));
         Assert.Equal($"HEAD, {f.Head()} on main", shell.Text("PreflightBase"));
-        Assert.False(preflight.OffersSnapshot);
+        Assert.Null(preflight.ChangedNote);
         Assert.Equal("Ignored files never reach a task.", shell.Text("PreflightIgnored"));
         Assert.Equal("Each task works in its own checkout under .worktrees/, on a branch under idp/. Your branch, index, and files stay as they are.",
             shell.Text("PreflightIsolation"));
@@ -92,7 +92,7 @@ public sealed class WorkflowRunTests
     }
 
     [AvaloniaFact]
-    public void Uncommitted_work_offers_HEAD_or_a_snapshot_and_the_run_starts_from_the_snapshot_it_chose()
+    public void Uncommitted_work_is_named_and_the_run_starts_from_HEAD_without_it()
     {
         using var f = Chain();
         f.Answer("A", f.Says("A ready.")).Answer("B", f.Says("B ready."));
@@ -101,18 +101,18 @@ public sealed class WorkflowRunTests
 
         var preflight = shell.OpenPreflight();
 
-        Assert.True(preflight.OffersSnapshot);
-        Assert.Equal($"HEAD, {f.Head()} on main", ((RadioButton)shell.Find<RadioButton>("PreflightHead")).Content);
-        Assert.Equal("1 path differs from HEAD: base.txt. A snapshot takes them along without changing your branch, index, or files.",
+        Assert.Equal($"HEAD, {f.Head()} on main", shell.Text("PreflightBase"));
+        Assert.False(shell.Has<Control>("PreflightSnapshot"));
+        Assert.Equal("1 path differs from HEAD: base.txt. Agents don't see uncommitted edits. Commit them first for the run to use them.",
             shell.Text("PreflightChanged"));
-        shell.Click(shell.Find<RadioButton>("PreflightSnapshot"));
+        Assert.Equal(preflight.ChangedNote, shell.Text("PreflightChanged"));
         shell.Click(shell.Find<Button>("PreflightStart"));
         shell.WaitUntil(() => shell.WorkflowRun is not null, "the run starts");
         shell.WaitForStatus("Completed");
 
         var run = shell.WorkflowRun!;
         var record = Assert.IsType<RunRead.Loaded>(RunStore.Open(f.Project).Read(run.Workflow, run.Address.Run)).Record;
-        Assert.Equal(BaseChoice.Snapshot, record.Base.Choice);
+        Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim()), BaseChoice.Head), record.Base);
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(f.Project, "base.txt")));
         Assert.Equal(" M base.txt\n", f.Run("status", "--porcelain", "--untracked-files=no"));
     }

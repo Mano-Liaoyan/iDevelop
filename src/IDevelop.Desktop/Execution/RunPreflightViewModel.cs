@@ -17,8 +17,8 @@ public sealed record PreflightGapRow(string Text, ICommand? ShowCommand)
 }
 
 /// <summary>
-/// A result from an earlier run that a node's run uses instead of running its task again (#90), or one it cannot use on
-/// the chosen base and why.
+/// A result from an earlier run that a node's run uses instead of running its task again (#90), or one it cannot use and
+/// why.
 /// </summary>
 public sealed record PreflightCarriedRow(string Text, bool IsUsed);
 
@@ -28,19 +28,15 @@ public sealed record PreflightCarriedRow(string Text, bool IsUsed);
 /// </summary>
 public sealed class PreflightInclusionRow : ObservableObject
 {
-    private readonly ImmutableArray<BaseChoice> _bases;
-    private readonly Func<BaseChoice> _choice;
     private bool _isIncluded;
 
-    internal PreflightInclusionRow(ReportInclusion inclusion, string label, string? report, string? note, ImmutableArray<BaseChoice> bases,
-        Func<BaseChoice> choice)
+    internal PreflightInclusionRow(ReportInclusion inclusion, string label, string? report, string? note, bool isAvailable)
     {
         Inclusion = inclusion;
         Label = label;
         Report = report;
         Note = note;
-        _bases = bases;
-        _choice = choice;
+        IsAvailable = isAvailable;
     }
 
     public string Label { get; }
@@ -51,8 +47,8 @@ public sealed class PreflightInclusionRow : ObservableObject
     /// <summary>What including it does besides, or why it cannot be included.</summary>
     public string? Note { get; }
 
-    /// <summary>The run can include it on the chosen base.</summary>
-    public bool IsAvailable => _bases.Contains(_choice());
+    /// <summary>The run can include it.</summary>
+    public bool IsAvailable { get; }
 
     public bool IsIncluded
     {
@@ -61,8 +57,6 @@ public sealed class PreflightInclusionRow : ObservableObject
     }
 
     internal ReportInclusion Inclusion { get; }
-
-    internal void OnChoiceChanged() => OnPropertyChanged(nameof(IsAvailable));
 }
 
 /// <summary>
@@ -83,7 +77,6 @@ public sealed class RunPreflightViewModel : ObservableObject
     private bool _starting;
     private bool _opening;
     private bool _detached;
-    private bool _useSnapshot;
     private string? _notice;
     private RunId? _active;
 
@@ -117,44 +110,14 @@ public sealed class RunPreflightViewModel : ObservableObject
 
     public bool HasGaps => Gaps.Count > 0;
 
-    /// <summary>The project has uncommitted work, so the person picks HEAD or a snapshot of that work.</summary>
-    public bool OffersSnapshot => _preview?.Choices.Contains(BaseChoice.Snapshot) ?? false;
-
-    public bool UseSnapshot
-    {
-        get => _useSnapshot;
-        set
-        {
-            if (SetProperty(ref _useSnapshot, value))
-            {
-                OnPropertyChanged(nameof(UseHead));
-                OnPropertyChanged(nameof(Carried));
-                foreach (var row in Inclusions)
-                {
-                    row.OnChoiceChanged();
-                }
-
-                _start.NotifyCanExecuteChanged();
-            }
-        }
-    }
-
-    public bool UseHead
-    {
-        get => !UseSnapshot;
-        set => UseSnapshot = !value;
-    }
-
-    /// <summary>"HEAD, a1b2c3d on main", the commit a run starts from without a snapshot.</summary>
+    /// <summary>"HEAD, a1b2c3d on main", the commit the run starts from.</summary>
     public string? HeadLabel => _preview?.Base is { } found
         ? $"HEAD, {Short(found.Head)}{(found.Branch is { } branch ? $" on {branch.Replace("refs/heads/", "", StringComparison.Ordinal)}" : "")}"
         : null;
 
-    public string SnapshotLabel => "A snapshot of the uncommitted work";
-
-    /// <summary>What differs from HEAD, which only a snapshot takes along, or null for a clean project.</summary>
+    /// <summary>What differs from HEAD, which the run's agents do not see, or null for a clean project.</summary>
     public string? ChangedNote => _preview?.Base is { Changed: { IsEmpty: false } changed }
-        ? $"{Count(changed.Length, "path")} {(changed.Length == 1 ? "differs" : "differ")} from HEAD: {List(changed)}. A snapshot takes them along without changing your branch, index, or files."
+        ? $"{Count(changed.Length, "path")} {(changed.Length == 1 ? "differs" : "differ")} from HEAD: {List(changed)}. Agents don't see uncommitted edits. Commit them first for the run to use them."
         : null;
 
     public string? IgnoredNote => _preview?.Base is { } found
@@ -175,8 +138,8 @@ public sealed class RunPreflightViewModel : ObservableObject
     public bool HasInclusions => Inclusions.Count > 0;
 
     /// <summary>
-    /// The results of earlier runs a node's run uses for the tasks before it that it does not run, on the chosen base, and
-    /// the ones it cannot use there (#90). Run Workflow uses none.
+    /// The results of earlier runs a node's run uses for the tasks before it that it does not run, and the ones it cannot
+    /// use (#90). Run Workflow uses none.
     /// </summary>
     public IReadOnlyList<PreflightCarriedRow> Carried => _preview is { } preview ? [.. preview.Carried.Select(row => CarriedRow(preview, row))] : [];
 
@@ -192,7 +155,7 @@ public sealed class RunPreflightViewModel : ObservableObject
 
     public bool IsStarting => _starting;
 
-    public bool CanStart => IsReady && !_starting && !HasGaps && _preview!.Choices.Contains(Choice);
+    public bool CanStart => IsReady && !_starting && !HasGaps && _preview!.Confirmable;
 
     /// <summary>Another run of this workflow is active, so Start would not approve a new one. This shows that run instead.</summary>
     public bool ShowsActive => _active is not null;
@@ -203,7 +166,6 @@ public sealed class RunPreflightViewModel : ObservableObject
 
     public ICommand ShowActiveCommand => _showActive;
 
-    private BaseChoice Choice => UseSnapshot ? BaseChoice.Snapshot : BaseChoice.Head;
 
     /// <summary>The sheet closed. A Start in flight still shows its run.</summary>
     internal void Detach() => _detached = true;
@@ -230,10 +192,6 @@ public sealed class RunPreflightViewModel : ObservableObject
         _preview = preview;
         _checking = false;
         _active ??= preview.Active;
-        if (!preview.Choices.Contains(Choice))
-        {
-            _useSnapshot = false;
-        }
 
         // A new preview keeps what the person included, when it still offers the same report.
         var included = Inclusions.Where(row => row.IsIncluded).Select(row => row.Inclusion).ToHashSet();
@@ -245,7 +203,7 @@ public sealed class RunPreflightViewModel : ObservableObject
 
         foreach (var property in new[]
         {
-            nameof(IsChecking), nameof(IsReady), nameof(Tasks), nameof(Gaps), nameof(HasGaps), nameof(OffersSnapshot), nameof(UseSnapshot), nameof(UseHead),
+            nameof(IsChecking), nameof(IsReady), nameof(Tasks), nameof(Gaps), nameof(HasGaps),
             nameof(HeadLabel), nameof(ChangedNote), nameof(IgnoredNote), nameof(SubmodulesNote), nameof(WorktreeNote), nameof(Inclusions), nameof(HasInclusions),
             nameof(Carried), nameof(HasEarlierResults),
             nameof(CanStart), nameof(ShowsActive),
@@ -267,7 +225,7 @@ public sealed class RunPreflightViewModel : ObservableObject
 
         SetStarting(true);
         Notice = null;
-        var confirmation = new RunConfirmation(_preview!, Choice, _command)
+        var confirmation = new RunConfirmation(_preview!, _command)
         {
             Include = [.. Inclusions.Where(row => row.IsIncluded && row.IsAvailable).Select(row => row.Inclusion)],
         };
@@ -391,41 +349,35 @@ public sealed class RunPreflightViewModel : ObservableObject
                 : planner.Status == AttemptStatus.WaitingForInput ? "It waits for you. Including it marks it done when the run starts."
                 : null;
             yield return new(new ReportInclusion(planner.Task, planner.Source, planner.Turn),
-                $"Include {Title(preview, planner.Task)}'s plan instead of running it again", Excerpt(planner.Report), note, planner.Bases, () => Choice);
+                $"Include {Title(preview, planner.Task)}'s plan instead of running it again", Excerpt(planner.Report), note, planner.Problem is null);
         }
 
         foreach (var report in preview.Reusable.Where(report => preview.Planners.All(planner => planner.Task != report.Task)))
         {
             yield return new(new ReportInclusion(report.Task, report.Source, 1),
-                $"Reuse {Title(preview, report.Task)}'s earlier report instead of running it again", Excerpt(report.Report), null, report.Bases, () => Choice);
+                $"Reuse {Title(preview, report.Task)}'s earlier report instead of running it again", Excerpt(report.Report), null, true);
         }
     }
 
     /// <summary>
-    /// "Uses "B"'s result from an earlier run." for a result the run carries on the chosen base, else why it cannot, after
-    /// which the tasks after it wait until it runs again (#90).
+    /// "Uses "B"'s result from an earlier run." for a result the run carries, else why it cannot, after which the tasks
+    /// after it wait until it runs again (#90).
     /// </summary>
     private PreflightCarriedRow CarriedRow(RunPreflight preview, PreflightCarried row)
     {
         var task = Title(preview, row.Task);
-        if (row.Bases.Contains(Choice))
-        {
-            return new(WorkflowRunText.Unbroken($"Uses {task}'s result from an earlier\u00A0run."), true);
-        }
-
         var why = row.Refusal switch
         {
-            CarryRefusal.Conflict conflict => $"its code conflicts with this base{In(conflict.Paths)}",
-            CarryRefusal.JoinConflict join => $"the results it used conflict with each other on this base{In(join.Paths)}",
+            null => null,
             CarryRefusal.InputRuns runs => $"it used a result of {Title(preview, runs.Input)}, which this run runs again",
             CarryRefusal.InputRefused refused => $"it used a result of {Title(preview, refused.Input)}, which this run cannot use either",
             CarryRefusal.Unavailable unavailable => unavailable.Detail.TrimEnd('.'),
-            _ => "this base does not offer it",
+            _ => "the run cannot use it",
         };
-        return new(WorkflowRunText.Unbroken($"Can't use {task}'s result from an earlier run: {why}. The tasks after it wait until it runs\u00A0again."), false);
+        return why is null
+            ? new(WorkflowRunText.Unbroken($"Uses {task}'s result from an earlier\u00A0run."), true)
+            : new(WorkflowRunText.Unbroken($"Can't use {task}'s result from an earlier run: {why}. The tasks after it wait until it runs\u00A0again."), false);
     }
-
-    private static string In(IReadOnlyList<string> paths) => paths.Count == 0 ? "" : $" in {List(paths)}";
 
     /// <summary>The report's first three lines that have text.</summary>
     private static string? Excerpt(string? report)
@@ -451,7 +403,7 @@ public sealed class RunPreflightViewModel : ObservableObject
             yield return gap switch
             {
                 PreflightGap.Task task => new($"{Title(preview, task.Id)}: {RunText.Describe(task.Problem)}", ShowNode(task.Id)),
-                PreflightGap.Join join => new($"{Title(preview, join.Id)}: {join.Detail}", ShowNode(join.Id)),
+
                 PreflightGap.NoCommit => new("The project has no commit yet. Commit once, then run the workflow.", null),
                 PreflightGap.Git git => new(git.Problem == MaterializationProblem.NotRepositoryRoot
                     ? $"Workflow runs need the project folder to be a Git repository's root. {git.Detail}" : git.Detail, null),

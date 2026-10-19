@@ -103,7 +103,7 @@ public sealed class PlannerInclusionTests
     internal static TaskId Added(ApprovalFixture f, string title) => f.Workflow.Tasks.Values.Single(task => task.Title == title).Id;
 
     internal static RunConfirmation Including(RunPreflight preview, OperationId command, params PreflightPlanner[] planners) =>
-        new(preview, BaseChoice.Head, command) { Include = [.. planners.Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))] };
+        new(preview, command) { Include = [.. planners.Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))] };
 
     [Fact]
     public async System.Threading.Tasks.Task A_Chat_planner_s_two_turns_are_included_without_running_it_again()
@@ -114,7 +114,6 @@ public sealed class PlannerInclusionTests
         var preview = f.Preflight();
         var planner = Assert.Single(preview.Planners);
         Assert.Equal((X, waiting.Id, 2, AttemptStatus.WaitingForInput), (planner.Task, planner.Source, planner.Turn, planner.Status));
-        Assert.Equal<BaseChoice>([BaseChoice.Head], planner.Bases);
         Assert.Null(planner.Problem);
         Assert.Equal(2, f.TotalLaunches);
 
@@ -152,39 +151,34 @@ public sealed class PlannerInclusionTests
         Assert.Empty(preview.Planners);
 
         var started = Assert.IsType<WorkflowStart.Started>(await f.Runs.StartWorkflow(f.Workflow,
-            new(preview, BaseChoice.Head, Confirm) { Include = [new(X, reusable.Source, 1)] }).WaitAsync(Bound));
+            new(preview, Confirm) { Include = [new(X, reusable.Source, 1)] }).WaitAsync(Bound));
         await Completed(started.Coordinator);
 
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
         var result = f.Read(started.Coordinator.Address.Run).CurrentResults[X];
         Assert.Equal(("X ready.\n", new AttemptSource.Standalone(X, attempt.Id)), (result.Report, Assert.IsType<ResultOrigin.Reused>(result.Origin).Source));
         var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow,
-            new(f.Preflight(), BaseChoice.Head, new(Guid.NewGuid())) { Include = [new(X, reusable.Source, 2)] }).WaitAsync(Bound));
+            new(f.Preflight(), new(Guid.NewGuid())) { Include = [new(X, reusable.Source, 2)] }).WaitAsync(Bound));
         Assert.Equal((ApprovalProblem.InclusionRefused, "ReuseUnverifiable"), (refused.Problem, refused.Detail));
         Assert.Single(Intents(f.Project));
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_planner_that_read_uncommitted_work_is_included_on_the_snapshot_base()
+    public async System.Threading.Tasks.Task A_planner_that_read_uncommitted_work_cannot_be_included_in_a_run_from_HEAD()
     {
         await using var f = Fixture();
         f.Git.Write("notes.txt", "notes\n");
         await f.Open();
-        var waiting = await PlanTwoTurns(f);
+        await PlanTwoTurns(f);
         var preview = f.Preflight();
         var planner = Assert.Single(preview.Planners);
-        Assert.Equal<BaseChoice>([BaseChoice.Snapshot], planner.Bases);
+        Assert.NotNull(planner.Problem);
 
-        var started = Assert.IsType<WorkflowStart.Started>(await f.Runs.StartWorkflow(f.Workflow,
-            Including(preview, Confirm, planner) with { Choice = BaseChoice.Snapshot }).WaitAsync(Bound));
-        await Completed(started.Coordinator);
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, Confirm, planner)).WaitAsync(Bound));
 
-        var record = f.Read(started.Coordinator.Address.Run);
-        Assert.Equal(BaseChoice.Snapshot, record.Base.Choice);
-        Assert.Equal((X, waiting.Result), (record.CurrentResults[X].Task, record.CurrentResults[X].Report));
-        Assert.IsType<ResultOrigin.Included>(record.CurrentResults[X].Origin);
-        Assert.Equal("notes\n", f.ResultFile(record.Id, Added(f, "N1"), "notes.txt"));
-        Assert.Equal(2, f.TotalLaunches - f.Launches("N1") - f.Launches("N2"));
+        Assert.Equal(ApprovalProblem.InclusionRefused, refused.Problem);
+        Assert.Empty(f.ApprovedRuns());
+        Assert.Equal(AttemptStatus.WaitingForInput, f.Runs.Latest[X].Status);
     }
 
     [Fact]
@@ -206,7 +200,7 @@ public sealed class PlannerInclusionTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_planner_is_included_once_and_only_on_the_base_whose_files_it_read()
+    public async System.Threading.Tasks.Task A_planner_is_included_once_and_uncommitted_work_since_it_ran_does_not_stop_it()
     {
         await using var f = Fixture();
         await f.Open();
@@ -214,15 +208,12 @@ public sealed class PlannerInclusionTests
         f.Git.Write("notes.txt", "notes\n");
         var preview = f.Preflight();
         var planner = Assert.Single(preview.Planners);
-        Assert.Equal<BaseChoice>([BaseChoice.Head, BaseChoice.Snapshot], preview.Choices);
-        Assert.Equal<BaseChoice>([BaseChoice.Head], planner.Bases);
+        Assert.True(preview.Confirmable);
+        Assert.Null(planner.Problem);
 
-        var snapshot = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow,
-            Including(preview, Confirm, planner) with { Choice = BaseChoice.Snapshot }).WaitAsync(Bound));
         var twice = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, Confirm, planner, planner))
             .WaitAsync(Bound));
 
-        Assert.Equal((ApprovalProblem.InclusionRefused, "ReuseUnverifiable"), (snapshot.Problem, snapshot.Detail));
         Assert.Equal(ApprovalProblem.NotConfirmable, twice.Problem);
         Assert.Empty(f.ApprovedRuns());
         Assert.Equal(AttemptStatus.WaitingForInput, f.Runs.Latest[X].Status);
@@ -240,7 +231,6 @@ public sealed class PlannerInclusionTests
         f.Workflow = Edit(f.Workflow, new WorkflowEdit.SetExecution(X, new(ClientId.Codex) { Model = "gpt-6.1-sol", Reasoning = "high" }));
         var preview = f.Preflight();
         var planner = Assert.Single(preview.Planners);
-        Assert.Empty(planner.Bases);
         Assert.Equal(RunProblem.ReuseUnverifiable, planner.Problem);
 
         var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, Including(preview, Confirm, planner)).WaitAsync(Bound));

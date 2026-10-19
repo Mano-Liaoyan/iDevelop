@@ -137,6 +137,13 @@ internal sealed class ApprovalFixture : IAsyncDisposable
         return shown.ExitCode == 0 ? shown.Text : null;
     }
 
+    /// <summary>
+    /// Fast-forwards the branch to <paramref name="task"/>'s result in <paramref name="run"/>, so the earlier run's work is in
+    /// the branch, as a finished run's merge puts it there (#148).
+    /// </summary>
+    public void MergeResult(RunId run, TaskId task) =>
+        GitText("merge", "-q", "--ff-only", Assert.IsType<CodeOutput.Produced>(Read(run).CurrentResults[task].Code).Code.Commit.Hex);
+
     public byte[] Index() => File.ReadAllBytes(Path.Combine(Project, ".git", "index"));
 
     public string Text(string relative) => File.ReadAllText(Git.PathOf(relative));

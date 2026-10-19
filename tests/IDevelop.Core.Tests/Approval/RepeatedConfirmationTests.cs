@@ -16,8 +16,8 @@ public sealed class RepeatedConfirmationTests
         await f.Open();
         var preview = f.Preflight();
 
-        var starts = await Task.WhenAll(Start(f, preview, BaseChoice.Head, Command(1)), Start(f, preview, BaseChoice.Head, Command(1)),
-            Start(f, f.Preflight(), BaseChoice.Head, Command(2)));
+        var starts = await Task.WhenAll(Start(f, preview, Command(1)), Start(f, preview, Command(1)),
+            Start(f, f.Preflight(), Command(2)));
 
         var run = Assert.Single(starts.Select(start => start.Coordinator.Address.Run).Distinct());
         Assert.Equal(1, starts.Count(start => !start.Existing));
@@ -28,7 +28,7 @@ public sealed class RepeatedConfirmationTests
 
         foreach (var command in new[] { Command(1), Command(2) })
         {
-            var again = await Start(f, preview, BaseChoice.Head, command);
+            var again = await Start(f, preview, command);
             Assert.True(again.Existing);
             Assert.Equal(run, again.Coordinator.Address.Run);
             Assert.Equal(RunProblem.RunStopped, Assert.IsType<RunCommand.Refused>(again.Resume).Reason.Problem);
@@ -44,13 +44,13 @@ public sealed class RepeatedConfirmationTests
         f.Answer(A, Writes(A, "out-a.txt", "A\n"), Writes(A, "out-a.txt", "A\n"))
             .Answer(B, Writes(B, "out-b.txt", "B\n"), Writes(B, "out-b.txt", "B\n")).Answer(X, Reports(X), Reports(X));
         await f.Open();
-        var first = await Start(f, f.Preflight(), BaseChoice.Head, Command(3));
+        var first = await Start(f, f.Preflight(), Command(3));
         await Completed(first.Coordinator);
 
         var again = f.Preflight();
         Assert.Equal((0, 0), (again.Base!.Changed.Length, again.Base.Ignored.Length));
-        Assert.Equal<BaseChoice>([BaseChoice.Head], again.Choices);
-        var second = await Start(f, again, BaseChoice.Head, Command(4));
+        Assert.True(again.Confirmable);
+        var second = await Start(f, again, Command(4));
 
         Assert.False(second.Existing);
         Assert.NotEqual(first.Coordinator.Address.Run, second.Coordinator.Address.Run);
@@ -66,8 +66,8 @@ public sealed class RepeatedConfirmationTests
         await f.Open();
         var second = await f.Window();
 
-        var starts = await Task.WhenAll(Start(f, f.Preflight(), BaseChoice.Head, Command(5)),
-            Start(f, second.Preflight(f.Workflow), BaseChoice.Head, Command(6), second));
+        var starts = await Task.WhenAll(Start(f, f.Preflight(), Command(5)),
+            Start(f, second.Preflight(f.Workflow), Command(6), second));
 
         var run = Assert.Single(starts.Select(start => start.Coordinator.Address.Run).Distinct());
         var controlled = Assert.Single(starts, start => start.Coordinator.Controlled);
@@ -84,7 +84,7 @@ public sealed class RepeatedConfirmationTests
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         await f.Open();
 
-        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), BaseChoice.Head, default)).WaitAsync(Bound));
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), default)).WaitAsync(Bound));
 
         Assert.Equal(ApprovalProblem.ConfirmationRequired, refused.Problem);
         Assert.Empty(f.ApprovedRuns());

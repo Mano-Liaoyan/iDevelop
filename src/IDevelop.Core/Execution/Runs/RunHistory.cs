@@ -60,8 +60,8 @@ internal abstract record TaskHistory
 /// <summary>
 /// The results that a workflow's settled runs left its tasks, judged against the workflow as it is now (#90). A result from
 /// an earlier run counts as complete when it was its run's current, non-stale result, no later run ran the task, the task's
-/// definition and the connections into it are unchanged, and each result it took counts by the same rule. Whether its code
-/// still applies to the run's base is the one condition this does not check: carrying it replays it there.
+/// definition and the connections into it are unchanged, and each result it took counts by the same rule.
+/// Carrying it brings its report and artifacts; the earlier run's work is already in the branch a run starts from.
 /// </summary>
 internal sealed class RunHistory
 {
