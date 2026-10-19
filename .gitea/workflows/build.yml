@@ -1,10 +1,12 @@
-# Builds and tests on Linux for every push and pull request, on the self-hosted Gitea runner.
+# Builds and tests on Linux for every push to main and every pull request, on the self-hosted Gitea runner. A branch
+# builds once, through its pull request, not again for its push.
 # Gitea runs only this directory's workflows; .github/workflows/dotnet.yml builds Windows and macOS on GitHub for
 # release tags.
 name: Build and test
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
