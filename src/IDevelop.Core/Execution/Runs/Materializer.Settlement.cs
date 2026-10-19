@@ -289,9 +289,9 @@ internal sealed partial class Materializer
     }
 
     /// <summary>
-    /// The run's shared refs the journal does not explain at the capture, with the snapshot it judged. A turn prepared since
-    /// ADR 0032 keeps no shared-ref snapshot, so each run ref is judged by the journal alone; an earlier journal's prepared
-    /// snapshot still judges refs/stash.
+    /// The run's shared refs the journal does not explain at the capture. <paramref name="after"/> is the live snapshot of
+    /// those refs that the capture records as its evidence. A turn prepared since ADR 0032 keeps no shared-ref snapshot, so
+    /// each run ref is judged by the journal alone; an earlier journal's prepared snapshot still judges refs/stash.
     /// </summary>
     private ImmutableArray<string> UnexplainedRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
         out SortedDictionary<string, CommitId> after)
