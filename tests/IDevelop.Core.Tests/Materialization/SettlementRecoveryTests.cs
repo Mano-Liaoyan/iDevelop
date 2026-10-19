@@ -10,15 +10,14 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class SettlementRecoveryTests
 {
     [Fact]
-    public async AsyncTask A_crash_after_matching_captures_closes_once_after_takeover()
+    public async AsyncTask A_crash_after_the_capture_closes_once_after_takeover()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         await ProcessCrash(f, ready, "journal.capture-disposition.before");
         var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
         Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-        Assert.Equal(new[] { false, false }, f.Read().Captures[closed.Capture].Select(o => o.Recovery));
-        Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+        Assert.False(Assert.Single(f.Read().Captures[closed.Capture]).Recovery);
         CloseAndPublish(f, ready, f.Read().Captures[closed.Capture][0].Log);
         var sequence = f.Read().Sequence;
         SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
@@ -29,7 +28,7 @@ public sealed class SettlementRecoveryTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async AsyncTask Recovery_retains_index_trees_only_when_the_first_observation_has_one(bool retained)
+    public async AsyncTask Recovery_disposes_a_recorded_capture_with_or_without_an_index_tree(bool retained)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (ready, log) = await Ready(f);
@@ -37,7 +36,7 @@ public sealed class SettlementRecoveryTests
         CaptureObservation? first = null;
         await Assert.ThrowsAsync<SettlementCrash>(() => f.Materializer(probe: point =>
         {
-            if (point != "journal.capture-2.before") return;
+            if (point != "journal.capture-disposition.before") return;
             first = Assert.Single(Assert.Single(f.Read().Captures).Value);
             throw new SettlementCrash();
         }).Settle(f.Lease(T), new OperationId(capture.Value), ready.Execution.Launch, log).AsTask());
@@ -53,78 +52,8 @@ public sealed class SettlementRecoveryTests
         recovery.ReleaseControl();
         var closed = Assert.IsType<Settlement.Closed>(await recovery.Materializer().RecoverSettlement(recovery.Lease(T), recovery.Op(), other.Execution.Launch));
         Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-        var pair = recovery.Read().Captures[closed.Capture];
-        Assert.Equal(2, pair.Count);
-        Assert.True(pair[1].Recovery);
-        Assert.Equal(observation.IndexTree, pair[1].IndexTree);
-        Assert.Equal(canonical, RunJournal.Canonical(pair[0]));
-        var pins = IDevelop.Core.Tests.Git.GitFixture.Read(recovery.Git.Open().RefSnapshot(RunLayout.PinPrefix(recovery.Read().RunKey!)));
-        Assert.Equal(retained, pins.ContainsKey(RunLayout.CaptureIndexPin(recovery.Read().RunKey!, recovery.Read().TaskKeys[T], other.Execution.Launch, 2)));
-    }
-
-    [Fact]
-    public async AsyncTask A_changed_recovery_capture_keeps_both_observations_and_blocks()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (ready, log) = await Ready(f);
-        await Crash(f, ready, log, f.Op(), "journal.capture-1.after");
-        var first = Assert.Single(Assert.Single(f.Read().Captures).Value);
-        var bytes = RunJournal.Canonical(first);
-        f.ReleaseControl();
-        f.Git.Write("result.txt", "late\n", ready.Checkout);
-        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
-        var diverged = Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition);
-        Assert.Equal("DirtyWorktree", diverged.Problem.ToString());
-        Assert.Equal(new[] { "result.txt" }, diverged.Paths);
-        var pair = f.Read().Captures[closed.Capture];
-        Assert.Equal(2, pair.Count);
-        Assert.True(pair[1].Recovery);
-        Assert.Equal(bytes, RunJournal.Canonical(pair[0]));
-        Assert.Equal(new[] { "done\n", "late\n" }, pair.Select(o => f.Git.Git("show", o.Candidate.Hex + ":result.txt")));
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
-            TerminalAttemptOutcome.Succeeded, log));
-        Assert.Equal("DirtyWorktree", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), f.Op(),
-            ready.Execution.Launch.Attempt)).Block.Problem.ToString());
-        Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
-        var sequence = f.Read().Sequence;
-        SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
-        Assert.Equal(sequence, f.Read().Sequence);
-        Assert.Single(f.Read().Claims);
-        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (valid, checkpoint) = await Ready(control);
-        Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(
-            control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint)).Disposition);
-        CloseAndPublish(control, valid, checkpoint);
-    }
-
-    [Fact]
-    public async AsyncTask A_recovery_capture_waits_for_the_interval_from_the_first_capture()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (ready, log) = await Ready(f);
-        var clock = new ManualTimeProvider();
-        var operation = f.Op();
-        var firstTry = f.Materializer(clock: clock, probe: point =>
-        {
-            if (point == "journal.capture-2.before") throw new SettlementCrash();
-        }).Settle(f.Lease(T), operation, ready.Execution.Launch, log).AsTask();
-        var first = Assert.Single(Assert.Single(f.Read().Captures).Value);
-        Assert.False(firstTry.IsCompleted);
-        clock.Advance(TimeSpan.FromMilliseconds(250));
-        await Assert.ThrowsAsync<SettlementCrash>(() => firstTry);
-        var bytes = RunJournal.Canonical(first);
-        var retryClock = new ManualTimeProvider();
-        retryClock.Advance(first.Completed + TimeSpan.FromMilliseconds(249) - retryClock.GetUtcNow());
-        var retry = f.Materializer(clock: retryClock).Settle(f.Lease(T), operation, ready.Execution.Launch, log).AsTask();
-        Assert.False(retry.IsCompleted);
-        Assert.Single(f.Read().Captures[first.Capture]);
-        retryClock.Advance(TimeSpan.FromMilliseconds(1));
-        var closed = Assert.IsType<Settlement.Closed>(await retry.WaitAsync(TimeSpan.FromSeconds(10)));
-        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-        Assert.Equal(2, f.Read().Captures[first.Capture].Count);
-        Assert.True(f.Read().Captures[first.Capture][1].Recovery);
-        Assert.Equal(first.Completed + TimeSpan.FromMilliseconds(250), f.Read().Captures[first.Capture][1].Started);
-        Assert.Equal(bytes, RunJournal.Canonical(f.Read().Captures[first.Capture][0]));
+        Assert.Equal(canonical, RunJournal.Canonical(Assert.Single(recovery.Read().Captures[closed.Capture])));
+        Assert.Single(recovery.Read().TurnClosures);
     }
 
     [Fact]
@@ -152,7 +81,7 @@ public sealed class SettlementRecoveryTests
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, checkpoint) = await Ready(control);
         var matched = Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-        Assert.Equal(2, control.Read().Captures[matched.Capture].Count);
+        Assert.Single(control.Read().Captures[matched.Capture]);
         CloseAndPublish(control, valid, checkpoint);
     }
 
@@ -420,11 +349,12 @@ public sealed class SettlementRecoveryTests
         var (ready, log) = await Ready(f);
         var operation = f.Op();
         await Crash(f, ready, log, operation, "journal.capture-disposition.before");
-        var template = Assert.Single(f.Read().Captures).Value;
+        var template = Assert.Single(Assert.Single(f.Read().Captures).Value);
         using var target = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, checkpoint) = await Ready(target);
-        var first = template[0] with { Launch = valid.Execution.Launch, Log = checkpoint };
-        var second = template[1] with { Launch = first.Launch, Log = checkpoint };
+        var first = template with { Launch = valid.Execution.Launch, Log = checkpoint };
+        // A journal written before ADR 0032 may hold a second, recovery observation for a fenced launch.
+        var second = CaptureTests.LegacySecond(first);
         Assert.Equal("InvalidData", ProblemName(target.Store.Record(target.Permit, target.Op(), new RunEvent.TurnCaptured(first with { Recovery = true }))));
         Assert.IsType<RunDecision.Recorded>(target.Store.Record(target.Permit, target.Op(), new RunEvent.TurnCaptured(first)));
         target.ReleaseControl();
@@ -477,15 +407,15 @@ public sealed class SettlementRecoveryTests
         var (ready, log) = await Ready(f);
         var operation = f.Op();
         await Crash(f, ready, log, operation, "journal.capture-1.after");
-        await Crash(f, ready, log, operation, "journal.capture-2.after");
+        await Crash(f, ready, log, operation, "journal.capture-disposition.after");
         var capture = Assert.Single(f.Read().Captures).Key;
         var root = new OperationId(capture.Value);
-        Assert.True(f.Read().Captures[capture][1].Recovery);
+        Assert.Single(f.Read().Captures[capture]);
         var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
         Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
         Assert.Equal(OperationIds.Derive(operation, "capture-1"), Assert.Single(f.Read().Receipts.Values, e =>
             e.Event is RunEvent.TurnCaptured { Observation.Ordinal: 1 }).Operation);
-        foreach (var step in new[] { "capture-2", "capture-disposition", "close-turn" })
+        foreach (var step in new[] { "capture-disposition", "close-turn" })
             Assert.True(f.Read().Receipts.ContainsKey(OperationIds.Derive(root, step)));
         Assert.Single(f.Read().Dispositions);
         Assert.Single(f.Read().TurnClosures);
@@ -507,8 +437,7 @@ public sealed class SettlementRecoveryTests
             attempt.Append(new AttemptEvent.HandedToTerminal(At, ready.Checkout, "codex resume fixture"));
         f.ReleaseControl();
         Assert.Equal("EvidenceMismatch", Rejection(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch)));
-        var failure = Assert.IsType<CaptureDisposition.Failed>(Assert.Single(f.Read().Dispositions).Value.Disposition);
-        Assert.Equal("EvidenceMismatch", failure.Detail);
+        Assert.IsType<CaptureDisposition.Matched>(Assert.Single(f.Read().Dispositions).Value.Disposition);
         Assert.Single(f.Read().Captures[first.Capture]);
         Assert.Equal(canonical, RunJournal.Canonical(f.Read().Captures[first.Capture][0]));
         Assert.Empty(f.Read().TurnClosures);
@@ -518,7 +447,7 @@ public sealed class SettlementRecoveryTests
         control.ReleaseControl();
         var closed = Assert.IsType<Settlement.Closed>(await control.Materializer().RecoverSettlement(control.Lease(T), control.Op(), valid.Execution.Launch));
         Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-        Assert.Equal(2, control.Read().Captures[closed.Capture].Count);
+        Assert.Single(control.Read().Captures[closed.Capture]);
         Assert.Single(control.Read().TurnClosures);
     }
 
@@ -554,56 +483,15 @@ public sealed class SettlementRecoveryTests
         CloseAndPublish(published, valid, checkpoint);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async AsyncTask Recovery_outbox_failure_evidence_is_bound_to_the_capture(bool takeover)
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (ready, log) = await Ready(f);
-        WriteOutbox(ready);
-        var operation = new OperationId(Id(9000));
-        await Crash(f, ready, log, operation, "journal.capture-1.after");
-        var first = Assert.Single(Assert.Single(f.Read().Captures).Value);
-        File.WriteAllText(Path.Combine(ready.Checkout, ready.Execution.OutboxPath, "manifest.json"), "{\"schema\":0,\"artifacts\":[]}");
-        if (takeover) f.ReleaseControl();
-        var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
-        var failure = Assert.IsType<CaptureDisposition.Failed>(closed.Disposition);
-        Assert.Equal("InputUnavailable", failure.Problem.ToString());
-        Assert.Equal("Attempt 00000000-0000-0000-0000-000000000102, manifest .idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json: The outbox manifest must contain schema 1 and an artifacts array only.", failure.Detail);
-        var evidence = Assert.Single(failure.Evidence);
-        Assert.Equal("evidence/e047f4d7-3c7c-8b55-861e-aea8c9c4c997/outbox-rejection.txt", evidence.RelativePath);
-        Assert.Equal(failure.Detail, System.Text.Encoding.UTF8.GetString(RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-            evidence.RelativePath, evidence.Content, evidence.ByteLength)));
-        Assert.Single(f.Read().Captures[first.Capture]);
-        Assert.Equal(new byte[] { 67, 0, 127 }, RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-            first.Artifacts[0].StoredPath, first.Artifacts[0].Content, 3));
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
-            TerminalAttemptOutcome.Succeeded, log));
-        Assert.Equal(failure.Detail, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt)).Block.Detail);
-        Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
-        var sequence = f.Read().Sequence;
-        SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
-        Assert.Equal(sequence, f.Read().Sequence);
-        using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (valid, checkpoint) = await Ready(control);
-        WriteOutbox(valid);
-        var match = Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-        Assert.IsType<CaptureDisposition.Matched>(match.Disposition);
-        Assert.Equal(2, control.Read().Captures[match.Capture].Count);
-        CloseAndPublish(control, valid, checkpoint);
-    }
-
     public static IEnumerable<object[]> CrashPoints()
     {
         foreach (var point in new[] { "journal.root-exit.before", "journal.root-exit.after", "git.capture-1.before", "git.capture-1.after",
             "journal.capture-1.before", "journal.capture-1.after", "git.pin.before", "git.pin.after", "refs.snapshot.after",
-            "outbox.before", "outbox.after", "artifact.payload.before", "artifact.payload.after", "git.capture-2.before", "git.capture-2.after", "journal.capture-2.before",
-            "journal.capture-2.after", "journal.capture-disposition.before", "journal.capture-disposition.after", "journal.close-turn.before", "journal.close-turn.after" })
-            foreach (var takeover in new[] { false, true }) yield return [point, takeover, false, false];
-        foreach (var point in new[] { "git.capture-2.before", "git.capture-2.after", "git.pin.before", "git.pin.after", "refs.snapshot.after",
-            "outbox.before", "outbox.after", "artifact.payload.before", "artifact.payload.after", "journal.capture-2.before", "journal.capture-2.after",
+            "outbox.before", "outbox.after", "artifact.payload.before", "artifact.payload.after",
             "journal.capture-disposition.before", "journal.capture-disposition.after", "journal.close-turn.before", "journal.close-turn.after" })
+            foreach (var takeover in new[] { false, true }) yield return [point, takeover, false, false];
+        // Recovery of a recorded capture disposes it without observing the worktree again.
+        foreach (var point in new[] { "journal.capture-disposition.before", "journal.capture-disposition.after", "journal.close-turn.before", "journal.close-turn.after" })
             foreach (var takeover in new[] { false, true }) yield return [point, takeover, true, false];
         foreach (var point in new[] { "journal.capture-disposition.before", "journal.capture-disposition.after", "journal.close-turn.before", "journal.close-turn.after" })
             foreach (var takeover in new[] { false, true }) yield return [point, takeover, true, true];
@@ -668,18 +556,14 @@ public sealed class SettlementRecoveryTests
         else
         {
             Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-            Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+            var observation = Assert.Single(f.Read().Captures[closed.Capture]);
             Assert.Equal(new byte[] { 67, 0, 127 }, RunStorage.Read(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-                f.Read().Captures[closed.Capture][1].Artifacts[0].StoredPath, f.Read().Captures[closed.Capture][1].Artifacts[0].Content, 3));
+                observation.Artifacts[0].StoredPath, observation.Artifacts[0].Content, 3));
             if (firstBytes is not null) Assert.Equal(firstBytes, RunJournal.Canonical(f.Read().Captures[closed.Capture][0]));
         }
         var retainedPins = IDevelop.Core.Tests.Git.GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!)));
         Assert.Contains(RunLayout.RootPin(f.Read().RunKey!, f.Read().TaskKeys[T], launch), retainedPins.Keys);
-        if (!missing)
-        {
-            Assert.Contains(RunLayout.CapturePin(f.Read().RunKey!, f.Read().TaskKeys[T], launch, 1), retainedPins.Keys);
-            Assert.Contains(RunLayout.CapturePin(f.Read().RunKey!, f.Read().TaskKeys[T], launch, 2), retainedPins.Keys);
-        }
+        if (!missing) Assert.Contains(RunLayout.CapturePin(f.Read().RunKey!, f.Read().TaskKeys[T], launch, 1), retainedPins.Keys);
         var sequence = f.Read().Sequence;
         SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch));
         Assert.Equal(sequence, f.Read().Sequence);
@@ -746,50 +630,6 @@ public sealed class SettlementRecoveryTests
         var sequence = f.Read().Sequence;
         if (takeover) Assert.Equal("UnresolvedOwnership", Rejection(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch)));
         else Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
-        Assert.Equal(sequence, f.Read().Sequence);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async AsyncTask An_interrupted_recovery_wait_preserves_the_first_capture_and_waits_again(bool takeover)
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var (ready, log) = await Ready(f);
-        var operation = f.Op();
-        await Crash(f, ready, log, operation, "journal.capture-1.after");
-        var first = Assert.Single(Assert.Single(f.Read().Captures).Value);
-        var bytes = RunJournal.Canonical(first);
-        var stale = RunStorage.SafePath(new RunStorage(f.Git.Folder, W, f.RunId).Folder,
-            RunStorage.CapturePath(first.Capture, 2, "stale.txt"));
-        Directory.CreateDirectory(Path.GetDirectoryName(stale)!);
-        File.WriteAllText(stale, "stale\n");
-        var sequence = f.Read().Sequence;
-        var clock = new ManualTimeProvider();
-        clock.Advance(first.Completed - clock.GetUtcNow());
-        using var cancel = new CancellationTokenSource();
-        var waiting = f.Materializer(clock: clock).RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch, cancel.Token).AsTask();
-        Assert.False(waiting.IsCompleted);
-        cancel.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
-        Assert.Equal(sequence, f.Read().Sequence);
-        Assert.Single(f.Read().Captures[first.Capture]);
-        if (takeover) f.ReleaseControl();
-        var rerun = f.Materializer(clock: clock).RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch).AsTask();
-        clock.Advance(TimeSpan.FromMilliseconds(249));
-        Assert.False(rerun.IsCompleted);
-        Assert.Single(f.Read().Captures[first.Capture]);
-        Assert.Equal("stale\n", File.ReadAllText(stale));
-        clock.Advance(TimeSpan.FromMilliseconds(1));
-        var closed = Assert.IsType<Settlement.Closed>(await rerun.WaitAsync(TimeSpan.FromSeconds(10)));
-        Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-        Assert.Equal(2, f.Read().Captures[first.Capture].Count);
-        Assert.False(File.Exists(stale));
-        Assert.True(f.Read().Captures[first.Capture][1].Recovery);
-        Assert.Equal(bytes, RunJournal.Canonical(f.Read().Captures[first.Capture][0]));
-        CloseAndPublish(f, ready, log);
-        sequence = f.Read().Sequence;
-        SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
         Assert.Equal(sequence, f.Read().Sequence);
     }
 

@@ -110,8 +110,8 @@ public sealed class TurnLifetimeTests
 
         Assert.Equal(CleanupResult.Completed, turn.Cleanup!.Result);
         AssertGone(writer);
-        Assert.Equal(["par", "par"], f.Preparation.Read().Captures[turn.Capture.Capture]
-            .Select(capture => f.Preparation.Git.Git("show", capture.Candidate.Hex + ":result.txt")));
+        Assert.Equal("par", f.Preparation.Git.Git("show",
+            Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
         f.Publish(turn);
         Assert.Single(f.Preparation.Read().Results);
         var ready = Assert.IsType<Preparation.Ready>(await f.Preparation.Prepare(U));

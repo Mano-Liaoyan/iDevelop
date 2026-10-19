@@ -35,7 +35,7 @@ internal sealed partial class Materializer
             VerifyRepository(record, repository);
             var storage = new RunStorage(_project, workflow, run);
             var refreshPair = record.Plans.SingleOrDefault(pair => pair.Value is MaterializationPlan.Refresh refresh && refresh.Launch == key);
-            VerifyCheckout(repository, old.Location, keepChanges: true, record);
+            VerifyWorktree(repository, old.Location, record);
             var changed = record.Inputs[old.Inputs].Review is { } review && record.CurrentResults.GetValueOrDefault(review.Subject)?.Id != review.SubjectResult;
             if (record.Preparations.TryGetValue(key, out var existing))
             {
@@ -47,7 +47,6 @@ internal sealed partial class Materializer
                         refreshPair.Value is MaterializationPlan.Refresh refreshed ? refreshed.Sources :
                             record.Plans.Values.OfType<MaterializationPlan.Preparation>().Single(plan => plan.Attempt == key.Attempt).Sources,
                         existingJoin.Join);
-                VerifyDelivery(record, existing, repository);
                 ResolveMaintenanceBlocks(permit, operation, "Prepared.");
                 return new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner));
             }
@@ -98,8 +97,10 @@ internal sealed partial class Materializer
                 var retained = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId);
                 RequirePublication(_refs.Publish(permit, operation, planId, "refresh-retain", repository,
                     new(retained, null, old.Location.AttemptBase)), new BlockScope.Refs([retained]));
-                RequirePublication(_refs.Publish(permit, operation, planId, "refresh-branch", repository,
-                    new(old.Location.Owner.Branch, old.Location.AttemptBase, input.CodeBase)), new BlockScope.Checkout([], Branch: true));
+                // A reviewer's worktree written before ADR 0032 is on a branch, which moves with it. A detached one has none.
+                if (old.Location.Owner.Branch is { } branch)
+                    RequirePublication(_refs.Publish(permit, operation, planId, "refresh-branch", repository,
+                        new(branch, old.Location.AttemptBase, input.CodeBase)), new BlockScope.Checkout([], Branch: true));
                 var reset = new GitMutation.ResetCheckout(task, input.CodeBase);
                 if (!PublicationObserved(record, planId, reset))
                 {
@@ -108,7 +109,7 @@ internal sealed partial class Materializer
                     VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(input.CodeBase)));
                     var result = Mutate("refresh-reset", () =>
                     {
-                        VerifyResetHead(repository, checkout, old.Location.Owner.Branch, input.CodeBase);
+                        if (old.Location.Owner.Branch is { } reset) VerifyResetHead(repository, checkout, reset, input.CodeBase);
                         return repository.ResetCheckout(checkout, input.CodeBase);
                     });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
@@ -116,13 +117,11 @@ internal sealed partial class Materializer
                         new RunEvent.GitObserved(intended, new(false, input.CodeBase.Hex))));
                 }
                 var location = old.Location with { AttemptBase = input.CodeBase };
-                VerifyCheckout(repository, location, keepChanges: false, Read(workflow, run));
                 Mutate("refresh-delivery", () => Deliver(record, input, repository, location.Owner, storage));
                 var refreshedPrompt = Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], input, attempt.Id, prompt);
                 execution = execution with { Inputs = input.Id, Location = location, Prompt = refreshedPrompt, PromptHash = Revision.Hash(refreshedPrompt) };
             }
-            var refs = Snapshot(storage, operation, repository, record);
-            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, null)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }

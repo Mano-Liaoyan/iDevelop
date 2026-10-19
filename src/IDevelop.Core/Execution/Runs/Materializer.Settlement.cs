@@ -48,10 +48,11 @@ internal sealed partial class Materializer
             }
             var repository = OpenRepository();
             var location = record.Preparations[launch].Location;
-            var tip = Value(repository.ReadRef(location.Owner.Branch)) ??
+            var tip = CheckoutTip(repository, location) ??
                 throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new BlockScope.Checkout([], Branch: true));
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
-            var ownership = RefOwnership.Accepts(record, repository, location.Owner.Branch, tip)
+            // A read-only worktree commits nothing, so its HEAD stays at the merge of its predecessors.
+            var ownership = (location.Owner.Branch is { } branch ? RefOwnership.Accepts(record, repository, branch, tip) : tip == location.AttemptBase)
                 ? TipOwnership.Explained : TipOwnership.Unexplained;
             var pin = RunLayout.RootPin(record.RunKey!, record.TaskKeys[location.Owner.Task], launch);
             Pin(repository, pin, tip);
@@ -121,7 +122,10 @@ internal sealed partial class Materializer
     public ValueTask<Settlement> RecoverSettlement(RunLease lease, OperationId operation, LaunchKey launch,
         CancellationToken cancellation = default) => SettleCore(lease, operation, launch, null, true, cancellation);
 
-    private async ValueTask<Settlement> SettleCore(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint? log,
+    private ValueTask<Settlement> SettleCore(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint? log,
+        bool recovery, CancellationToken cancellation) => ValueTask.FromResult(SettleNow(lease, operation, launch, log, recovery, cancellation));
+
+    private Settlement SettleNow(RunLease lease, OperationId operation, LaunchKey launch, LogCheckpoint? log,
         bool recovery, CancellationToken cancellation)
     {
         using var authority = lease.Use();
@@ -174,46 +178,33 @@ internal sealed partial class Materializer
                 {
                     if (observations.Count == 0 && _store.TurnEvidenceProblem(record, launch, log!) is { } rejection)
                         return new Settlement.Rejected(rejection);
-                    var recoveringPair = observations.Count == 1;
-                    GitRepository? repository = null;
-                    for (var ordinal = observations.Count + 1; ordinal <= 2; ordinal++)
+                    // A turn ends with one capture. A journal written before ADR 0032 may already hold the first of two.
+                    if (observations.Count == 0)
                     {
                         cancellation.ThrowIfCancellationRequested();
-                        if (ordinal == 2)
-                        {
-                            var remaining = observations[0].Completed + TimeSpan.FromMilliseconds(250) - _clock.GetUtcNow();
-                            if (remaining > TimeSpan.Zero) await Task.Delay(remaining, _clock, cancellation);
-                        }
                         ImmutableArray<EvidenceFile> evidence = [];
-                        CaptureObservation observation;
                         try
                         {
                             var storage = new RunStorage(_project, permit.Workflow, permit.Run);
-                            var folder = RunStorage.SafePath(storage.Folder, $"captures/{capture.Value:D}/{ordinal}");
+                            var folder = RunStorage.SafePath(storage.Folder, $"captures/{capture.Value:D}/1");
                             if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
-                            repository ??= OpenRepository();
+                            var repository = OpenRepository();
                             record = Read(permit.Workflow, permit.Run);
-                            observation = Mutate("capture-" + ordinal, () => ObserveCapture(repository, record,
-                                capture, ordinal, launch, log!, ordinal == 1 || !recoveringPair || observations[0].IndexTree is not null,
-                                ref evidence)) with { Recovery = ordinal == 2 && recoveringPair };
+                            var observation = Mutate("capture-1", () => ObserveCapture(repository, record, capture, launch, log!, ref evidence));
+                            record = DecisionRecord(Journal("capture-1", () => _store.Record(permit,
+                                OperationIds.Derive(operation, "capture-1"), new RunEvent.TurnCaptured(observation))));
+                            observations = record.Captures.GetValueOrDefault(capture, []);
                         }
                         catch (MaterializationFailure failed)
                         {
                             disposition = new CaptureDisposition.Failed(failed.Problem, failed.Message, evidence);
-                            break;
                         }
                         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                         {
                             disposition = new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable, error.Message, evidence);
-                            break;
                         }
-                        var number = ordinal;
-                        record = DecisionRecord(Journal("capture-" + ordinal, () => _store.Record(permit,
-                            OperationIds.Derive(number == 1 ? operation : captureOperation, "capture-" + number),
-                            new RunEvent.TurnCaptured(observation))));
-                        observations = record.Captures.GetValueOrDefault(capture, []);
                     }
-                    disposition ??= DisposeCapture(record, observations[0], observations[1]);
+                    disposition ??= DisposeCapture(record, observations[^1]);
                 }
                 disposed = new(capture, launch, disposition);
                 var decision = Journal("capture-disposition", () => _store.Record(permit,
@@ -229,9 +220,14 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new Settlement.Rejected(refused.Reason); }
     }
 
-    private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id,
-        int ordinal, LaunchKey launch, LogCheckpoint log, bool retainIndex, ref ImmutableArray<EvidenceFile> evidence)
+    /// <summary>
+    /// Captures the worktree once its turn's client exited. An editing task's capture is the one commit its turn ends with,
+    /// on the turn's branch tip. A read-only task's worktree has no branch, and its capture records the files without a commit.
+    /// </summary>
+    private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id, LaunchKey launch,
+        LogCheckpoint log, ref ImmutableArray<EvidenceFile> evidence)
     {
+        const int ordinal = 1;
         var started = _clock.GetUtcNow();
         var prepared = record.Preparations[launch];
         try { VerifyOwnedCheckout(repository, prepared.Location, record); }
@@ -243,7 +239,7 @@ internal sealed partial class Materializer
             throw Fault(MaterializationProblem.DirtyWorktree, "The writer index has unresolved stages.", BlockScope.Checkout.Whole);
         var tracked = Value(repository.TrackedFiles(checkout, ".idp/inputs", ".idp/outbox", ".worktrees"));
         if (!tracked.IsEmpty) throw Fault(MaterializationProblem.DirtyWorktree, "Tracked execution data: " + string.Join(", ", tracked), new BlockScope.Checkout(tracked));
-        var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
+        var tip = CheckoutTip(repository, prepared.Location);
         var head = Value(repository.SymbolicHead(checkout));
         var storage = new RunStorage(_project, record.Workflow, record.Id);
         EvidenceFile? index = null;
@@ -274,43 +270,40 @@ internal sealed partial class Materializer
             $"{definition.Title}\n\nIDP-Run: {record.Id.Value:D}\nIDP-Task: {task.Value:D}\nIDP-Attempt: {launch.Attempt.Value:D}\n",
             "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", DateTimeOffset.FromUnixTimeSeconds(root.At.ToUnixTimeSeconds()));
         TreeId? indexTree = null;
-        if (index is not null && retainIndex)
+        CommitId? candidate = null;
+        if (index is not null) indexTree = Value(repository.WriteTree(GitRepository.ParseIndex(indexBytes!)));
+        if (prepared.Location.Owner.Branch is not null)
         {
-            indexTree = Value(repository.WriteTree(GitRepository.ParseIndex(indexBytes!)));
-            var indexRecipe = recipe with { Tree = indexTree.Value, Parents = [], Message = "Index of " + recipe.Message };
-            var indexCommit = Value(repository.CreateCommit(indexRecipe));
-            Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, ordinal), indexCommit);
+            if (indexTree is { } staged)
+            {
+                var indexCommit = Value(repository.CreateCommit(recipe with { Tree = staged, Parents = [], Message = "Index of " + recipe.Message }));
+                Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, ordinal), indexCommit);
+            }
+            candidate = Value(repository.CreateCommit(recipe));
+            Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate.Value);
         }
-        var candidate = Value(repository.CreateCommit(recipe));
-        Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate);
         return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
             logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
     }
 
-    private CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation first, CaptureObservation second)
+    /// <summary>The commit a worktree is on: its branch's tip, or a read-only worktree's detached HEAD.</summary>
+    private static CommitId? CheckoutTip(GitRepository repository, ExecutionLocation location) => location.Owner.Branch is { } branch
+        ? Value(repository.ReadRef(branch))
+        : Value(repository.ResolveCheckoutHead(Checkout(repository, location.Owner)));
+
+    /// <summary>A capture matches its turn when the worktree is still on the commit and HEAD the client's exit left.</summary>
+    private static CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation capture)
     {
-        var root = record.RootExits[first.Launch];
+        var root = record.RootExits[capture.Launch];
         ImmutableArray<string> refs = [];
-        if (first.Tip != root.Tip || second.Tip != root.Tip)
-            refs = refs.Add(record.Preparations[first.Launch].Location.Owner.Branch);
-        if (first.Head != root.Head || second.Head != root.Head) refs = refs.Add("HEAD");
+        if (capture.Tip != root.Tip)
+            refs = refs.Add(record.Preparations[capture.Launch].Location.Owner.Branch ?? "HEAD");
+        if (capture.Head != root.Head && !refs.Contains("HEAD")) refs = refs.Add("HEAD");
         if (!refs.IsEmpty) return new CaptureDisposition.Diverged(MaterializationProblem.UncertainOwnership, [],
             [.. refs.Order(StringComparer.Ordinal)], "The branch tip or HEAD differs from the root observation.");
-        refs = [.. first.UnexplainedRefs.Union(second.UnexplainedRefs, StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        refs = [.. capture.UnexplainedRefs.Order(StringComparer.Ordinal)];
         if (!refs.IsEmpty) return new CaptureDisposition.Diverged(MaterializationProblem.UncertainOwnership, [], refs,
             "The capture contains unexplained shared refs.");
-        if (!CaptureComparison.Content(first, second))
-        {
-            var differences = new List<string>();
-            if (!RunReducer.Same(first.Recipe, second.Recipe)) differences.Add("recipe");
-            if (first.Candidate != second.Candidate) differences.Add("candidate");
-            if (!CaptureComparison.Index(first, second)) differences.Add("index");
-            if (first.Report != second.Report) differences.Add("report");
-            if (!CaptureComparison.Artifacts(first, second)) differences.Add("artifacts");
-            return new CaptureDisposition.Diverged(MaterializationProblem.DirtyWorktree,
-                Value(OpenRepository().DiffTreePaths(first.Recipe.Tree, second.Recipe.Tree)), [],
-                "The captures differ in " + string.Join(", ", differences) + ".");
-        }
         return new CaptureDisposition.Matched();
     }
 }

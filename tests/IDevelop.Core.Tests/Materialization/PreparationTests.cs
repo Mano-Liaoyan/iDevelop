@@ -98,7 +98,7 @@ public sealed class PreparationTests
         }
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The index hides changes to outside/kept.bin with assume-unchanged or skip-worktree.", block.Detail);
-        Assert.Equal(writer.Execution.Location.AttemptBase.Hex, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal(writer.Execution.Location.AttemptBase.Hex, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!))?.Hex);
         Assert.Empty(f.Read().Results);
         Assert.Empty(f.Read().Salvages);
         Assert.Equal(bytes, File.ReadAllBytes(index));
@@ -183,19 +183,9 @@ public sealed class PreparationTests
             await Assert.ThrowsAsync<Crash>(async () => await Materializer(step => { if (step == point) throw new Crash(); })
                 .Prepare(f.Lease(T), operation, cause));
         var outcome = await Materializer().Prepare(f.Lease(T), operation, cause);
-        if (continuation)
-        {
-            var continued = Assert.IsType<Preparation.Ready>(outcome);
-            Assert.Equal(ready.Execution.Location.Owner, continued.Execution.Location.Owner);
-            Assert.Equal(continued, await Materializer().Prepare(f.Lease(T), operation, cause));
-        }
-        else
-        {
-            var blocked = Assert.IsType<Preparation.Blocked>(outcome);
-            Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-            Assert.Equal("The checkout tip or contents differ from the recorded attempt base.", blocked.Block.Detail);
-            Assert.Equal(blocked, await Materializer().Prepare(f.Lease(T), operation, cause));
-        }
+        var continued = Assert.IsType<Preparation.Ready>(outcome);
+        Assert.Equal(ready.Execution.Location.Owner, continued.Execution.Location.Owner);
+        Assert.Equal(continued, await Materializer().Prepare(f.Lease(T), operation, cause));
         Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n", f.Git.Run(checkout, "rev-parse", "HEAD").Text);
         Assert.Equal("B\n", File.ReadAllText(Path.Combine(checkout, "b.txt")));
         Assert.Equal("commit\n", f.Git.Run(checkout, "cat-file", "-t", "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67").Text);
@@ -224,26 +214,6 @@ public sealed class PreparationTests
         Assert.Equal("mine\n", File.ReadAllText(f.Git.PathOf("saved")));
     }
 
-    [Theory]
-    [InlineData("--assume-unchanged")]
-    [InlineData("--skip-worktree")]
-    public async Task Hidden_index_entries_block_clean_preparation_and_preserve_bytes(string flag)
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        await f.Close(ready);
-        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-index", flag, "a.txt").ExitCode);
-        f.Git.Write("a.txt", "hidden edit\n", ready.Checkout);
-        var index = GitFixture.Read(f.Git.Open().IndexPath(ready.Checkout));
-        var bytes = File.ReadAllBytes(index);
-        var blocked = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(ready.Execution.Launch.Attempt, f.Op())));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("The index hides changes to a.txt with assume-unchanged or skip-worktree.", blocked.Block.Detail);
-        Assert.Equal(bytes, File.ReadAllBytes(index));
-        Assert.Equal("hidden edit\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
-    }
-
     private static Workflow Linear(bool context = false)
     {
         var workflow = Connect(FixtureWorkflow(Writer(T), Writer(U), Writer(C)), T, U);
@@ -255,7 +225,7 @@ public sealed class PreparationTests
     {
         using var f = new PreparationFixture(Linear(), new("81ddb7c330112c7f16700ed002803a04b0bce693"));
         await f.Publish(T, f.A, artifact: true);
-        f.Git.Git("update-ref", f.Read().Preparations[new(A1, 1)].Location.Owner.Branch, "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
+        f.Git.Git("update-ref", f.Read().Preparations[new(A1, 1)].Location.Owner.Branch!, "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
         var operation = f.Op();
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, operation));
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", ready.Execution.Location.AttemptBase.Hex);
@@ -409,18 +379,6 @@ public sealed class PreparationTests
             Assert.Single(f.Read().Preparations);
             Assert.Equal("UncertainOwnership", Assert.Single(f.Read().Blocks).Value.Block.Problem.ToString());
         }
-    }
-
-    [Fact]
-    public async Task Dirty_retry_checkout_is_preserved_and_blocked()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var original = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(original.Execution.Location.Owner.Task), f.Op(), original.Execution.Launch.Attempt, RecoveryOutcome.NotStarted, f.Op(), "Did not launch."));
-        f.Git.Write("left.txt", "unfinished\n", original.Checkout);
-        var retry = Assert.IsType<Preparation.Blocked>(await f.Prepare(T, cause: new AttemptCause.Retry(original.Execution.Launch.Attempt, f.Op())));
-        Assert.Equal("DirtyWorktree", retry.Block.Problem.ToString());
-        Assert.Equal("unfinished\n", File.ReadAllText(Path.Combine(original.Checkout, "left.txt")));
     }
 
     private static int Count(string text, string section) => text.Split(section, StringSplitOptions.None).Length - 1;

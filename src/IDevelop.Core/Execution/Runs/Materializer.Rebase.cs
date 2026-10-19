@@ -139,11 +139,11 @@ internal sealed partial class Materializer
             RequirePublication(_refs.Publish(permit, approval, planId, "rebase-retain", repository, new(plan.Ref, null, plan.Commit)),
                 new BlockScope.Refs([plan.Ref]));
             step = "rebase-branch";
-            var branch = new GitMutation.MoveRef(new(location.Owner.Branch, plan.From, plan.Commit));
+            var branch = new GitMutation.MoveRef(new(location.Owner.Branch!, plan.From, plan.Commit));
             if (!PublicationObserved(Read(workflow, run), planId, branch))
             {
                 // Before the branch moves, the checkout must still be the clean result the person saw.
-                if (Value(repository.ReadRef(location.Owner.Branch)) == plan.From) VerifyRebaseHead(repository, checkout, location.Owner.Branch, plan.From);
+                if (Value(repository.ReadRef(location.Owner.Branch!)) == plan.From) VerifyRebaseHead(repository, checkout, location.Owner.Branch!, plan.From);
                 VerifyRebaseFiles(repository, checkout, oldTree, null);
                 VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(plan.Commit)));
                 RequirePublication(_refs.Publish(permit, approval, planId, "rebase-branch", repository, branch.Change),
@@ -155,7 +155,7 @@ internal sealed partial class Materializer
             if (!PublicationObserved(record, planId, reset))
             {
                 var intended = OperationIds.Derive(approval, "rebase-reset-intent");
-                VerifyResetHead(repository, checkout, location.Owner.Branch, plan.Commit);
+                VerifyResetHead(repository, checkout, location.Owner.Branch!, plan.Commit);
                 // A reset the journal intended may have run before a crash; either the old clean files or the candidate's pass.
                 var adopted = VerifyRebaseFiles(repository, checkout, oldTree, record.GitIntents.ContainsKey(intended) ? plan.Recipe.Tree : null);
                 if (!adopted) VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(plan.Commit)));
@@ -165,7 +165,7 @@ internal sealed partial class Materializer
                 {
                     var result = Mutate("rebase-reset", () =>
                     {
-                        VerifyResetHead(repository, checkout, location.Owner.Branch, plan.Commit);
+                        VerifyResetHead(repository, checkout, location.Owner.Branch!, plan.Commit);
                         return repository.ResetCheckout(checkout, plan.Commit);
                     });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
@@ -227,11 +227,11 @@ internal sealed partial class Materializer
         var claimed = record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed { Key: var key } && key == new LaunchKey(code.Attempt, 1)).Sequence;
         if (record.Receipts.Values.Any(entry => entry.Sequence > claimed && entry.Event is RunEvent.TurnClaimed { Key: var later } &&
                 later.Attempt != code.Attempt && record.Preparations[later].Location.Owner == location.Owner) ||
-            Value(repository.ReadRef(location.Owner.Branch)) != code.Commit)
+            Value(repository.ReadRef(location.Owner.Branch!)) != code.Commit)
             throw new Refusal(new(RunProblem.StartConflict, Task: task));
         VerifyOwnedCheckout(repository, location, record);
         var checkout = Checkout(repository, location.Owner);
-        VerifyResetHead(repository, checkout, location.Owner.Branch, code.Commit);
+        VerifyResetHead(repository, checkout, location.Owner.Branch!, code.Commit);
         if (File.Exists(Value(repository.IndexPath(checkout)) + ".lock"))
             throw Fault(MaterializationProblem.DirtyWorktree, "An index lock holds the checkout.", new BlockScope.Checkout([], IndexLock: true));
         VerifyRebaseFiles(repository, checkout, code.Tree, null);
@@ -303,7 +303,7 @@ internal sealed partial class Materializer
                 _ => throw new InvalidOperationException(),
             },
             // The checkout is the stale result, clean, so the preview binds its trees rather than the index's bytes.
-            checkout = new { Branch = code.Commit, SymbolicHead = location.Owner.Branch, Files = code.Tree, IndexTree = code.Tree },
+            checkout = new { Branch = code.Commit, SymbolicHead = location.Owner.Branch!, Files = code.Tree, IndexTree = code.Tree },
             report = Revision.Hash(source.Report),
             artifacts = source.Artifacts,
         }));
@@ -396,7 +396,7 @@ internal sealed partial class Materializer
     private static void VerifyRebased(GitRepository repository, string checkout, ExecutionLocation location, MaterializationPlan.Rebase plan, RunRecord record)
     {
         VerifyOwnedCheckout(repository, location, record);
-        VerifyResetHead(repository, checkout, location.Owner.Branch, plan.Commit);
+        VerifyResetHead(repository, checkout, location.Owner.Branch!, plan.Commit);
         if (Value(repository.ReadRef(plan.Ref)) != plan.Commit)
             throw Fault(MaterializationProblem.UncertainOwnership, "The rebase retention ref changed.", new BlockScope.Refs([plan.Ref]));
         if (Value(repository.Capture(checkout)).Tree != plan.Recipe.Tree || Value(repository.ReadIndexTree(checkout)) != plan.Recipe.Tree ||

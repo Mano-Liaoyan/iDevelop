@@ -616,6 +616,14 @@ internal sealed partial class GitRepository
     public GitResult AddWorktree(string relativePath, string branchShortName, CommitId start) =>
         Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", "-b", branchShortName, relativePath, start.Hex]);
 
+    /// <summary>Adds a read-only task's worktree, detached at <paramref name="start"/> with no branch of its own.</summary>
+    public GitResult AddDetachedWorktree(string relativePath, CommitId start) =>
+        Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", "--detach", relativePath, start.Hex]);
+
+    /// <summary>Moves a detached worktree to <paramref name="commit"/>, which Git refuses when a local change would be lost.</summary>
+    public GitResult DetachHead(string checkout, CommitId commit) =>
+        Git(checkout, GitOperation.Worktree, ["checkout", "--detach", "--no-recurse-submodules", commit.Hex]);
+
     public GitResult AddWorktreeForExistingBranch(string path, string branch) => Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", path, branch]);
 
     public GitResult LockWorktree(string path, string reason)

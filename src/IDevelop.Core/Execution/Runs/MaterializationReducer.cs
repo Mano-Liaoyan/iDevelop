@@ -125,7 +125,7 @@ internal static partial class RunReducer
                 {
                     return Reject(stale.Problem);
                 }
-                if (!MatchesOwner(record, attempt.Task, prepared.Location.Owner) ||
+                if (!MatchesOwner(record, attempt, prepared.Location.Owner) ||
                     prepared.Location.AttemptBase != AttemptBase(record, attempt, inputs) || prepared.PromptHash != Revision.Hash(prepared.Prompt) ||
                     prepared.OutboxPath != (Editable(record, attempt) ? RunLayout.Outbox(attempt.Id) : ""))
                 {
@@ -252,7 +252,7 @@ internal static partial class RunReducer
         var owner = record.Preparations[new(plan.Attempt, 1)].Location.Owner;
         return intended.Mutation switch
         {
-            GitMutation.RestoreRef m => plan.To.Branch is { } target && m.Change == new RefChange(owner.Branch, plan.From.Branch, target),
+            GitMutation.RestoreRef m => plan.To.Branch is { } target && owner.Branch is { } restored && m.Change == new RefChange(restored, plan.From.Branch, target),
             GitMutation.RestoreFiles m => m.Task == plan.Task && Same(m.Paths, plan.Paths),
             GitMutation.RemoveIndexLock m => m.Task == plan.Task && Same(m.Lock, plan.From.IndexLock),
             _ => false,
@@ -270,9 +270,11 @@ internal static partial class RunReducer
 
     private static bool KnownTask(RunRecord record, TaskId task) => record.Revisions.Values.Any(revision => revision.Snapshot.Tasks.ContainsKey(task));
 
-    private static bool MatchesOwner(RunRecord record, TaskId task, WorktreeOwner owner) =>
-        record.RunKey is { } run && record.TaskKeys.TryGetValue(task, out var key) && owner.Task == task &&
-        owner.RelativePath == RunLayout.TaskCheckout(run, key) && owner.Branch == RunLayout.TaskBranch(run, key);
+    /// <summary>An editing task's worktree is on the task's branch, and a read-only task's worktree may have no branch (ADR 0032).</summary>
+    private static bool MatchesOwner(RunRecord record, RunAttempt attempt, WorktreeOwner owner) =>
+        record.RunKey is { } run && record.TaskKeys.TryGetValue(attempt.Task, out var key) && owner.Task == attempt.Task &&
+        owner.RelativePath == RunLayout.TaskCheckout(run, key) &&
+        (owner.Branch == RunLayout.TaskBranch(run, key) || owner.Branch is null && !Editable(record, attempt));
 
     internal static CommitId? AttemptBase(RunRecord record, RunAttempt attempt, InputRecord inputs)
     {
@@ -392,7 +394,7 @@ internal static partial class RunReducer
                         record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
                         !record.RootExits.TryGetValue(launch, out var root) || !record.Captures.TryGetValue(capture, out var observations) ||
                         !record.TurnClosures.TryGetValue(launch, out var turn) ||
-                        observations.Count != 2 || observations.Any(o => o.Log != turn || o.Report != publication.Report))
+                        observations.Count is not (1 or 2) || observations.Any(o => o.Log != turn || o.Report != publication.Report))
                         return RunProblem.OutcomeMismatch;
                     var first = observations[0];
                     if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||

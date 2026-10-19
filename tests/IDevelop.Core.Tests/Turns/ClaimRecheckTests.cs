@@ -211,26 +211,6 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
-    public async Task Changed_delivered_inputs_block_the_first_claim()
-    {
-        await using var f = new TurnFixture(configure: Consumer);
-        await f.Open();
-        await Published(f);
-        f.Runs.Probe = point =>
-        {
-            if (point != "runner.claim.before") return;
-            var prepared = f.Preparation.Read().Preparations.Values.Single(p => p.Location.Owner.Task == U);
-            var report = Directory.EnumerateFiles(Path.Combine(f.Preparation.Git.Folder, prepared.Location.Owner.RelativePath, ".idp", "inputs"),
-                "report.md", SearchOption.AllDirectories).Single();
-            File.WriteAllText(report, "Changed.\n");
-        };
-        var blocked = Assert.IsType<TurnStart.Blocked>(await Begin(f, Start(f, U))).Block;
-        Assert.Equal(U, blocked.Task);
-        Assert.Equal(0, f.Claims(U));
-        Assert.Equal(1, f.Launches);
-    }
-
-    [Fact]
     public async Task Reserved_inputs_superseded_before_first_claim()
     {
         await using var f = new TurnFixture(readOnly: true, configure: workflow =>

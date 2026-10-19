@@ -55,7 +55,7 @@ internal static partial class RunValidation
 {
     private static bool Capture(CaptureObservation observation) => observation.Capture.Value != Guid.Empty &&
         (!observation.Recovery || observation.Ordinal == 2) && Key(observation.Launch) && Checkpoint(observation.Log) && observation.Completed >= observation.Started &&
-        Recipe(observation.Recipe) && Revision.IsCommit(observation.Candidate.Hex) &&
+        Recipe(observation.Recipe) && (observation.Candidate is null || Revision.IsCommit(observation.Candidate.Value.Hex)) &&
         (observation.Tip is null || Revision.IsCommit(observation.Tip.Value.Hex)) &&
         (observation.Head is null || !string.IsNullOrWhiteSpace(observation.Head)) &&
         (observation.Index is null || Evidence(observation.Index) &&

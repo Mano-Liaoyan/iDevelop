@@ -47,7 +47,11 @@ internal abstract record CodeOutput
     internal sealed record Forwarded(InputId Inputs) : CodeOutput;
 }
 
-internal sealed record WorktreeOwner(TaskId Task, string RelativePath, string Branch);
+/// <summary>
+/// A task's worktree in a run. An editing task's worktree is on its own <paramref name="Branch"/>, and a read-only task's
+/// worktree is detached at the merge of its predecessors, with no branch (ADR 0032).
+/// </summary>
+internal sealed record WorktreeOwner(TaskId Task, string RelativePath, string? Branch);
 
 internal sealed record ExecutionLocation(WorktreeOwner Owner, CommitId AttemptBase);
 

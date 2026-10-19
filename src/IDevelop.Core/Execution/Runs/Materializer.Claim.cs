@@ -22,11 +22,9 @@ internal sealed partial class Materializer
             if (LeaseProblem(lease, attempt.Task) is { } mismatch) return new ClaimCheck.Rejected(new(mismatch));
             inputs = prepared.Inputs;
             VerifyRepository(record, repository);
-            var keepChanges = attempt.Cause is AttemptCause.Continue || launch.Turn > 1;
-            VerifyCheckout(repository, prepared.Location, keepChanges, record);
-            VerifyDelivery(record, prepared, repository);
+            VerifyWorktree(repository, prepared.Location, record);
             // A turn that keeps the attempt's changes waits on an earlier block on its own checkout.
-            if (keepChanges && RunReducer.AttemptDrift(record, id => id == attempt.Id, operation) is { } held)
+            if ((attempt.Cause is AttemptCause.Continue || launch.Turn > 1) && RunReducer.AttemptDrift(record, id => id == attempt.Id, operation) is { } held)
                 return new ClaimCheck.Blocked(held.Value.Block);
             if (launch.Turn == 1 && ProducerStepPending(record, record.Inputs[prepared.Inputs]) is { } pending) return new ClaimCheck.Rejected(pending);
             return Journal("claim", () => _store.Claim(lease, OperationIds.Derive(operation, "claim"), launch,

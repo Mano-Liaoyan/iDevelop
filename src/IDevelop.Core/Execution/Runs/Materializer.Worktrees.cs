@@ -48,13 +48,23 @@ internal sealed partial class Materializer
         var checkout = RunStorage.SafePath(repository.ProjectFolder, owner.RelativePath);
         var worktrees = Value(repository.Worktrees());
         var registered = worktrees.SingleOrDefault(worktree => SamePath(worktree.Path, checkout));
-        if (registered is null)
+        if (registered is null && owner.Branch is null)
         {
-            var branch = Value(repository.ReadRef(owner.Branch));
+            if (Directory.Exists(checkout) && Directory.EnumerateFileSystemEntries(checkout).Any())
+                throw Fault(MaterializationProblem.UncertainOwnership, "The occupied checkout is not a matching creation intent.", new BlockScope.Ownership());
+            var intentId = OperationIds.Derive(operation, "create-worktree-intent");
+            Journal("create-worktree-intent", () => _store.Record(permit, intentId,
+                new RunEvent.GitIntended(plan, new GitMutation.CreateWorktree(owner, location.AttemptBase, false))));
+            var result = Mutate("create-worktree", () => repository.AddDetachedWorktree(owner.RelativePath, location.AttemptBase));
+            if (result.ExitCode != 0) throw Fault(MaterializationProblem.UncertainOwnership, result.Stderr, new BlockScope.Ownership());
+        }
+        else if (registered is null)
+        {
+            var branch = Value(repository.ReadRef(owner.Branch!));
             var existing = branch is not null;
             var oldIntent = record.GitIntents.Values.Select(intent => intent.Mutation).OfType<GitMutation.CreateWorktree>()
                 .FirstOrDefault(create => create.Owner == owner && create.Start == branch);
-            if (!RefOwnership.Accepts(record, repository, owner.Branch, branch) ||
+            if (!RefOwnership.Accepts(record, repository, owner.Branch!, branch) ||
                 existing && (oldIntent is null || Directory.Exists(checkout) && Directory.EnumerateFileSystemEntries(checkout).Any()))
                 throw Fault(MaterializationProblem.UncertainOwnership, "The branch or occupied checkout is not a matching creation intent.", new BlockScope.Ownership());
             if (worktrees.Any(worktree => worktree.Branch == owner.Branch))
@@ -76,7 +86,7 @@ internal sealed partial class Materializer
             create.Owner == owner && !record.GitObservations.ContainsKey(pair.Key)))
         {
             var create = (GitMutation.CreateWorktree)pair.Value.Mutation;
-            var tip = Value(repository.ReadRef(owner.Branch));
+            var tip = owner.Branch is { } created ? Value(repository.ReadRef(created)) : Value(repository.ResolveCheckoutHead(checkout));
             if (tip != create.Start) throw Fault(MaterializationProblem.UncertainOwnership, "Unobserved creation has an unexpected branch tip.", new BlockScope.Checkout([], Branch: true));
             Journal("worktree-observed", () => _store.Record(permit, OperationIds.Derive(operation, $"worktree-observed-{pair.Key.Value:D}"),
                 new RunEvent.GitObserved(pair.Key, new(create.ExistingBranch, tip?.Hex))));
@@ -90,6 +100,12 @@ internal sealed partial class Materializer
             var result = Mutate("lock-worktree", () => repository.LockWorktree(owner.RelativePath, reason));
             if (result.ExitCode != 0) throw Fault(MaterializationProblem.UncertainOwnership, result.Stderr, new BlockScope.Ownership());
         }
+        // A read-only worktree follows the merge of its predecessors, which a later attempt may start from.
+        if (owner.Branch is null && Value(repository.ResolveCheckoutHead(checkout)) != location.AttemptBase)
+        {
+            var result = Mutate("detach-worktree", () => repository.DetachHead(checkout, location.AttemptBase));
+            if (result.ExitCode != 0) throw Fault(MaterializationProblem.DirtyWorktree, result.Stderr, BlockScope.Checkout.Whole);
+        }
         if (File.Exists(Path.Combine(checkout, ".gitmodules")))
         {
             var result = Mutate("submodules", () => repository.InitializeSubmodules(checkout));
@@ -97,6 +113,10 @@ internal sealed partial class Materializer
         }
     }
 
+    /// <summary>
+    /// Whether Git registers the task's worktree in this repository as the run recorded it: on the task's branch, or for a
+    /// read-only task, detached. <paramref name="requireBranch"/> false accepts any HEAD.
+    /// </summary>
     private static void VerifyRegistration(GitRepository repository, ExecutionLocation location, RunRecord record, bool requireBranch = true)
     {
         var owner = location.Owner;
@@ -109,18 +129,10 @@ internal sealed partial class Materializer
             throw Fault(MaterializationProblem.UncertainOwnership, "Registration, common directory, symbolic HEAD and recorded worktree owner do not agree.", new BlockScope.Ownership());
     }
 
-    private static void VerifyCheckout(GitRepository repository, ExecutionLocation location, bool keepChanges, RunRecord record)
+    /// <summary>Whether the task's worktree is registered as the run recorded it and still holds the run's ownership lock.</summary>
+    private static void VerifyWorktree(GitRepository repository, ExecutionLocation location, RunRecord record)
     {
         VerifyRegistration(repository, location, record);
-        var branch = repository.ReadRef(location.Owner.Branch);
-        if (branch is GitRead<CommitId?>.Failed failed)
-            throw Fault(failed.Problem, failed.Detail, new BlockScope.Checkout([], Branch: true));
-        var tip = Value(branch);
-        if (tip is null) throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new BlockScope.Checkout([], Branch: true));
-        if (!RefOwnership.Accepts(record, repository, location.Owner.Branch, tip))
-            throw Fault(MaterializationProblem.UncertainOwnership, "The task branch differs from its journaled state.", new BlockScope.Checkout([], Branch: true));
-        if (!keepChanges && (tip != location.AttemptBase || Value(repository.Status(Checkout(repository, location.Owner))).Length != 0))
-            throw Fault(MaterializationProblem.DirtyWorktree, "The checkout tip or contents differ from the recorded attempt base.", BlockScope.Checkout.Whole);
         VerifyOwnedCheckout(repository, location, record);
     }
 

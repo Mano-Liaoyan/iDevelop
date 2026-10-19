@@ -63,7 +63,7 @@ public sealed class TurnEndOwnershipTests
         else Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, operation, writer.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, log));
-        var foreign = beforeCapture ? GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch))!.Value
+        var foreign = beforeCapture ? GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!))!.Value
             : CommitFile(f, writer, "foreign.txt", "foreign\n");
 
         Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
@@ -71,9 +71,9 @@ public sealed class TurnEndOwnershipTests
         Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
             f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.Empty(f.Read().Results);
-        Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
-        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[settled.Capture][0].Candidate.Hex + ":result.txt"));
-        Assert.Equal(foreign, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch)));
+        Assert.Single(f.Read().Captures[settled.Capture]);
+        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[settled.Capture][0].Candidate!.Value.Hex + ":result.txt"));
+        Assert.Equal(foreign, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!)));
         Assert.Equal("foreign\n", f.Git.Git("show", foreign.Hex + ":foreign.txt"));
 
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
@@ -98,9 +98,9 @@ public sealed class TurnEndOwnershipTests
             f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.IsType<GitAncestry.No>(f.Git.Open().IsAncestor(writerTip, foreign));
         Assert.IsType<GitAncestry.Yes>(f.Git.Open().IsAncestor(writer.Execution.Location.AttemptBase, foreign));
-        Assert.Equal(foreign, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch)));
+        Assert.Equal(foreign, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!)));
         Assert.Equal("foreign\n", File.ReadAllText(Path.Combine(writer.Checkout, "foreign.txt")));
-        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[capture][0].Candidate.Hex + ":result.txt"));
+        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[capture][0].Candidate!.Value.Hex + ":result.txt"));
         Assert.Empty(f.Read().Results);
 
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
@@ -121,7 +121,7 @@ public sealed class TurnEndOwnershipTests
         var writerTip = CommitFile(f, writer, "result.txt", "writer\n");
         await f.Close(writer);
         var repository = f.Git.Open();
-        var branch = writer.Execution.Location.Owner.Branch;
+        var branch = writer.Execution.Location.Owner.Branch!;
         var basis = writer.Execution.Location.AttemptBase;
         Assert.True(RefOwnership.Accepts(f.Read(), repository, branch, writerTip));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", basis.Hex).ExitCode);
@@ -138,7 +138,7 @@ public sealed class TurnEndOwnershipTests
         Assert.Equal(basis, GitFixture.Read(repository.ReadRef(branch)));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
         Assert.False(File.Exists(Path.Combine(writer.Checkout, "result.txt")));
-        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[f.Read().Settlements[writer.Execution.Launch]][0].Candidate.Hex + ":result.txt"));
+        Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[f.Read().Settlements[writer.Execution.Launch]][0].Candidate!.Value.Hex + ":result.txt"));
 
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
         Recheck(f, sibling.Execution.Launch.Attempt);
@@ -168,30 +168,6 @@ public sealed class TurnEndOwnershipTests
     }
 
     [Fact]
-    public async Task A_stash_created_after_settlement_blocks_publication_and_keeps_the_first_capture()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var x = await PrepareAndClaim(f, T);
-        f.Git.Write("x.txt", "X\n", x.Checkout);
-        await f.Close(x);
-        f.Git.Write("stash.txt", "stash\n", x.Checkout);
-        Assert.Equal(0, f.Git.Run(x.Checkout, "stash", "push", "--include-untracked", "--", "stash.txt").ExitCode);
-        var stash = GitFixture.Read(f.Git.Open().ReadRef("refs/stash"));
-        Assert.NotNull(stash);
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
-            f.Lease(T), f.Op(), x.Execution.Launch.Attempt)).Block.Problem.ToString());
-        Assert.Empty(f.Read().Results);
-        Assert.Equal("X\n", f.Git.Git("show", f.Read().Captures[f.Read().Settlements[x.Execution.Launch]][0].Candidate.Hex + ":x.txt"));
-        Assert.Equal(stash, GitFixture.Read(f.Git.Open().ReadRef("refs/stash")));
-
-        Assert.Equal(0, f.Git.Run(x.Checkout, "update-ref", "-d", "refs/stash").ExitCode);
-        Recheck(f, x.Execution.Launch.Attempt);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), x.Execution.Launch.Attempt));
-        Assert.Equal("X\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":x.txt"));
-        Assert.Single(f.Read().Results);
-    }
-
-    [Fact]
     public async Task A_process_crash_after_the_first_capture_is_recovered_by_one_matching_capture()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
@@ -213,14 +189,13 @@ public sealed class TurnEndOwnershipTests
             Assert.Equal(new[] { writer.Execution.Launch }, owned.Fenced);
             Assert.Equal(new[] { writer.Execution.Launch }, f.Read().Fenced);
             var observation = Assert.Single(Assert.Single(f.Read().Captures).Value);
-            Assert.Equal("done\n", f.Git.Git("show", observation.Candidate.Hex + ":result.txt"));
+            Assert.Equal("done\n", f.Git.Git("show", observation.Candidate!.Value.Hex + ":result.txt"));
             foreach (var retry in new[] { operation, f.Op() })
                 Assert.Equal("UnresolvedOwnership", Assert.IsType<Settlement.Rejected>(await f.Materializer().Settle(
                     lease, retry, writer.Execution.Launch, observation.Log)).Reason.Problem.ToString());
             var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(lease, f.Op(), writer.Execution.Launch));
             Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
-            Assert.True(f.Read().Captures[closed.Capture][1].Recovery);
-            Assert.Equal(2, f.Read().Captures[closed.Capture].Count);
+            Assert.Equal(RunJournal.Canonical(observation), RunJournal.Canonical(Assert.Single(f.Read().Captures[closed.Capture])));
             Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(owned.Permit, f.Op(), writer.Execution.Launch.Attempt,
                 TerminalAttemptOutcome.Succeeded, observation.Log));
             var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(lease, f.Op(), writer.Execution.Launch.Attempt));
@@ -302,6 +277,6 @@ public sealed class TurnEndOwnershipTests
         f.Git.Write(path, bytes, ready.Checkout);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "--", path).ExitCode);
         Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", path).ExitCode);
-        return GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))!.Value;
+        return GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!))!.Value;
     }
 }

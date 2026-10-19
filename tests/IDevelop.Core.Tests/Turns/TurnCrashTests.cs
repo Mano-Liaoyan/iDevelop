@@ -76,9 +76,7 @@ public sealed class TurnCrashTests
             else
             {
                 Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-                Assert.Equal(2, f.Preparation.Read().Captures[turn.Capture.Capture].Count);
-                Assert.Equal(point == "journal.capture-1.after" ? new[] { false, true } : new[] { false, false },
-                    f.Preparation.Read().Captures[turn.Capture.Capture].Select(capture => capture.Recovery));
+                Assert.False(Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Recovery);
             }
         }
         Assert.Equal(launches, f.Launches);

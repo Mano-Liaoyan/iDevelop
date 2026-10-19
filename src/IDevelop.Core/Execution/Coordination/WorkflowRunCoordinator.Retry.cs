@@ -103,7 +103,8 @@ internal sealed partial class WorkflowRunCoordinator
         using var lease = taken.Lease;
         var materializer = Commanded();
         RetryReply Refused(RunRejection reason) => new RetryReply.Refused(reason);
-        if (record.Preparations.ContainsKey(new(previous, 1)))
+        // A read-only task's worktree has no branch to salvage onto, and its Retry works in that worktree (ADR 0032).
+        if (record.Preparations.TryGetValue(new(previous, 1), out var prepared) && prepared.Location.Owner.Branch is not null)
         {
             _runs.Probe?.Invoke("coordinator.retry.salvage");
             switch (await materializer.Salvage(lease, OperationIds.Derive(confirmation, "retry/salvage"), previous).ConfigureAwait(false))
