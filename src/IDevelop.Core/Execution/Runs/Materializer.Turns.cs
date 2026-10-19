@@ -49,6 +49,7 @@ internal sealed partial class Materializer
                             record.Plans.Values.OfType<MaterializationPlan.Preparation>().Single(plan => plan.Attempt == key.Attempt).Sources,
                         existingJoin.Join);
                 ResolveMaintenanceBlocks(permit, operation, "Prepared.");
+                ResolveEarlierCaptureBlocks(permit, operation, key);
                 return new Preparation.Ready(existing, Checkout(repository, existing.Location.Owner));
             }
             var execution = old with { Launch = key, Prompt = prompt, PromptHash = Revision.Hash(prompt) };
@@ -116,6 +117,7 @@ internal sealed partial class Materializer
             }
             Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
+            ResolveEarlierCaptureBlocks(permit, operation, key);
             return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
@@ -123,6 +125,22 @@ internal sealed partial class Materializer
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
+    }
+
+    /// <summary>
+    /// Resolves the blocks of the attempt's earlier turns whose capture could not be taken, once a later turn is prepared.
+    /// Only the capture of the attempt's last turn holds its result, as its commit is the result's code.
+    /// </summary>
+    private void ResolveEarlierCaptureBlocks(CoordinatorPermit permit, OperationId operation, LaunchKey launch)
+    {
+        var record = Read(permit.Workflow, permit.Run);
+        for (var turn = 1; turn < launch.Turn; turn++)
+        {
+            var captureBlock = RunReducer.CaptureBlock(new(launch.Attempt, turn));
+            foreach (var pair in record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == captureBlock))
+                Journal("capture-resolve", () => _store.Record(permit, OperationIds.Derive(operation, "capture-resolve-" + pair.Key.Value.ToString("D")),
+                    new RunEvent.BlockResolved(pair.Key, "A later turn of the attempt was prepared.")));
+        }
     }
 
     private static void VerifyIgnoredObstructions(GitRepository repository, string checkout, ImmutableArray<string> targetPaths)
