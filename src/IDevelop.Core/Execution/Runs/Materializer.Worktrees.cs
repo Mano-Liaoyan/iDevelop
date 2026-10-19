@@ -106,11 +106,15 @@ internal sealed partial class Materializer
         {
             var intended = OperationIds.Derive(operation, "retry-merge-intent");
             var tip = Value(repository.ReadRef(own));
-            if (tip == earlier)
+            // The branch is where a result or an earlier Retry's move left it; a failed attempt commits nothing to it.
+            var placed = record.GitIntents.Where(pair => pair.Key != intended && record.GitObservations.ContainsKey(pair.Key))
+                .Select(pair => pair.Value.Mutation).OfType<GitMutation.MoveRef>().Where(move => move.Change.Ref == own)
+                .Select(move => (CommitId?)move.Change.Target).Append(earlier);
+            if (tip != location.AttemptBase && placed.Contains(tip))
             {
                 if (!record.GitIntents.ContainsKey(intended))
                     Journal("retry-merge-intent", () => _store.Record(permit, intended,
-                        new RunEvent.GitIntended(plan, new GitMutation.MoveRef(new(own, earlier, location.AttemptBase)))));
+                        new RunEvent.GitIntended(plan, new GitMutation.MoveRef(new(own, tip, location.AttemptBase)))));
                 var result = Mutate("retry-merge", () => repository.KeepReset(checkout, location.AttemptBase));
                 if (result.ExitCode != 0) throw Fault(MaterializationProblem.DirtyWorktree, result.Stderr.Trim(), BlockScope.Checkout.Whole);
                 tip = location.AttemptBase;

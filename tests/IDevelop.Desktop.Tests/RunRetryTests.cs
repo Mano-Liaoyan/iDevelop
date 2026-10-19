@@ -127,7 +127,7 @@ public sealed class RunRetryTests
 
         shell.Click(shell.InView<Button>("RetryTask"));
 
-        Assert.Equal("Retry runs \"A\" again in a fresh session, in its worktree with its earlier change. The tasks after it go out of " +
+        Assert.Equal("Retry runs \"A\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
             "date and run again once it has a new result.", shell.Text("RetryConfirmation"));
         shell.Click(shell.InView<Button>("KeepRetry"));
         Assert.Equal(1, f.Launches("A"));

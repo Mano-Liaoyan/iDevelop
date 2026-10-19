@@ -98,6 +98,35 @@ public sealed class RerunTests
         Assert.Equal(("A2 B1\n", "B2\n"), (f.ResultFile(B, "shared.txt"), f.ResultFile(B, "b.txt")));
     }
 
+    /// <summary>
+    /// Implement's rerun fails, so it shows Failed and offers Retry. Architect is retried again, and the person's Retry of
+    /// Implement merges Architect's newest design into its earlier change, from where the failed rerun left its branch,
+    /// with the files that rerun left.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_rerun_shows_failed_and_its_retry_takes_the_newest_inputs()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B), Agent(C)], (A, B)));
+        f.Answer(A, Writes(A, "design.md", "v1\n"), Writes(A, "design.md", "v2\n"), Writes(A, "design.md", "v3\n"))
+            .Answer(B, Writes(B, "parser.cs", "P1\n"), Fails(B), Sees(f, B, "parser.cs", "P2\n", "design.md", "parser.cs", "half.txt"))
+            .Answer(C, Fails(C));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[B].State == TaskState.Done);
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, A, f.Preparation.Op()).WaitAsync(Bound));
+        var failed = await f.Until(view => view.Tasks[B].State == TaskState.Failed && f.Launches(B) == 2);
+        Assert.True(WorkflowRunCoordinator.OffersRetry(failed.Snapshot!, failed.Tasks[B]));
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, A, f.Preparation.Op()).WaitAsync(Bound));
+        await f.Until(view => f.Launches(A) == 3 && view.Tasks[A].State == TaskState.Done);
+        Assert.Equal(TaskState.Failed, f.View.Tasks[B].State);
+
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, B, f.Preparation.Op()).WaitAsync(Bound));
+
+        await f.Until(view => view.Tasks[B].State == TaskState.Done && f.Launches(B) == 3);
+        Assert.Equal(("v3\n", "P1\n", "half\n"), (Saw(f, B, "design.md"), Saw(f, B, "parser.cs"), Saw(f, B, "half.txt")));
+        Assert.Equal(("v3\n", "P2\n"), (f.ResultFile(B, "design.md"), f.ResultFile(B, "parser.cs")));
+    }
+
     /// <summary>The same conflict goes to the workflow's Merge node, whose agent resolves it before Implement starts.</summary>
     [Fact]
     public async Task A_conflict_in_the_merge_into_the_earlier_change_goes_to_the_merge_node()

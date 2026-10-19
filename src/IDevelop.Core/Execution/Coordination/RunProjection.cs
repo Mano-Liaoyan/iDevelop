@@ -189,8 +189,7 @@ internal static class RunProjection
                 ? (ImmutableHashSet<ResultId>.Empty, ImmutableDictionary<TaskId, ResultRecord>.Empty) : (record.StaleResults, record.CurrentResults);
             ImmutableSortedSet<TaskId> stale = [.. provided.Where(binding => binding.Kind == ConnectionKind.Dependency &&
                 current.GetValueOrDefault(binding.Edge.From) is { } newest && results.Contains(newest.Id)).Select(binding => binding.Edge.From)];
-            var changed = provided.Any(binding => current.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result) && record.ReviewOf(id) is null &&
-                record.Revisions[record.Attempts[id].Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent;
+            var changed = provided.Any(binding => current.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result) && record.ReviewOf(id) is null;
             return stale.IsEmpty ? new(task, TaskState.Ready) { Attempt = id, Reruns = changed } : new(task, TaskState.Pending) { Attempt = id, HeldBy = stale };
         }
         if (!record.TurnClosures.ContainsKey(last))

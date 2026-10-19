@@ -612,9 +612,9 @@ public sealed class RunReviewTests
     }
 
     /// <summary>
-    /// <c>D → A → Review → Approval</c>, waiting for the person's approval. The person retries D, which is done, so A, its
-    /// review, and the approval go out of date: A runs again by itself on D's new result, the review runs again on A's new
-    /// change, and the approval asks again (#125).
+    /// <c>D → A → Review → Approval</c>, waiting for the person's approval after one fix round. The person retries D, which
+    /// is done, so A, its review, and the approval go out of date: A runs again by itself on D's new result as a Retry of its
+    /// fix, the review runs again on A's new change, and the approval asks again (#125).
     /// </summary>
     [Fact]
     public async Task A_retried_plan_reruns_the_implementer_and_its_review_and_the_approval_asks_again()
@@ -623,8 +623,10 @@ public sealed class RunReviewTests
             Reviewer(R), new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" }], (D, A), (A, R), (R, G));
         await using var f = new RunConversationFixture(workflow);
         Routed(f).Answer(D, Writes(f, D, 1, "plan.md", "v1\n", "D ready.\n"), Writes(f, D, 2, "plan.md", "v2\n", "D again.\n"))
-            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"), Writes(f, A, 2, "calc.txt", "a * b\n", "A again.\n"))
-            .Answer(R, Reads(f, 1, Approve), Reads(f, 2, Approve));
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")),
+                Writes(f, A, 3, "calc.txt", "a * b\n", "A again.\n"))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve), Reads(f, 3, Approve));
         await f.Open();
         await f.Resume();
         var waiting = await f.Until(view => view.Tasks[G].Gate is { Status: GateStatus.Waiting });
@@ -633,8 +635,8 @@ public sealed class RunReviewTests
         Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, D, new(Guid.NewGuid())).WaitAsync(Bound));
 
         await f.Until(view => Requests(f) == 2 && view.Tasks[G].Gate is { Status: GateStatus.Waiting });
-        Assert.Equal((2, 2, 2), (f.Launches(D), f.Launches(A), f.Launches(R)));
-        Assert.Equal("a * b\n", File.ReadAllText(Path.Combine(f.Evidence, "review-2.calc.txt")));
+        Assert.Equal((2, 3, 3), (f.Launches(D), f.Launches(A), f.Launches(R)));
+        Assert.Equal("a * b\n", File.ReadAllText(Path.Combine(f.Evidence, "review-3.calc.txt")));
         var record = f.Read();
         Assert.DoesNotContain(record.CurrentResults.Values, result => record.StaleResults.Contains(result.Id));
         Assert.Equal(RunPhase.Approved, record.Phase);

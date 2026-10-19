@@ -37,8 +37,8 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>What Retry does, which the person confirms. A done task's Retry warns that the tasks after it go out of date (ADR 0034).</summary>
     public string RetryConfirmation => RunTask is { State: TaskState.Done }
-        ? $"Retry runs \"{Title}\" again in a fresh session, in its worktree with its earlier change. The tasks after it go out of date " +
-          "and run again once it has a new result."
+        ? $"Retry runs \"{Title}\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
+          "date and run again once it has a new result."
         : $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. The tasks after it run once it has a result.";
 
     /// <summary>Shows the task in the inspector, which asks for the confirmation.</summary>
