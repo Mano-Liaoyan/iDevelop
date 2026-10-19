@@ -78,7 +78,7 @@ public sealed class ReviewMaterializationTests
         var (review, fix, first, repaired) = await FixedWriter(f);
         var original = f.Read().Preparations[new(A1, 1)];
         Assert.Equal(".worktrees/93f23689/90d5b0a2", fix.Execution.Location.Owner.RelativePath);
-        Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2", fix.Execution.Location.Owner.Branch);
+        Assert.Equal("refs/heads/idp/93f23689/task/90d5b0a2", fix.Execution.Location.Owner.Branch!);
         Assert.Equal(original.Location.Owner, fix.Execution.Location.Owner);
         Assert.Equal(First, fix.Execution.Location.AttemptBase.Hex);
         Assert.Equal(first.Id, repaired.Supersedes);
@@ -123,7 +123,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal(before.Inputs.Count, f.Read().Inputs.Count);
         Assert.Empty(f.Read().Plans.Values.OfType<MaterializationPlan.Refresh>());
         Assert.Equal("reviewer edits\n", File.ReadAllText(Path.Combine(review.Checkout, "a.txt")));
-        Assert.Equal(First, GitFixture.Read(f.Git.Open().ReadRef(review.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal(First, f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
         Assert.Equal(first.Id, f.Read().Inputs[review.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(repaired.Id, f.Read().CurrentResults[T].Id);
         f.Git.Write("a.txt", "A\n", review.Checkout);
@@ -267,9 +267,7 @@ public sealed class ReviewMaterializationTests
         Assert.Equal("767f6c4b2e37787915d125cafad11d34f8620668", ready.Execution.Location.AttemptBase.Hex);
         Assert.Equal("Fixed\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
         Assert.Equal("approved\n", File.ReadAllText(Path.Combine(ready.Checkout, "plan.txt")));
-        Assert.Equal("refs/idp/93f23689/pin/c67f2fc3/00000000-0000-0000-0000-000000000109/1/capture-1\n" +
-            "refs/idp/93f23689/pin/c67f2fc3/00000000-0000-0000-0000-000000000109/1/capture-2\n" +
-            "refs/idp/93f23689/pin/c67f2fc3/00000000-0000-0000-0000-000000000109/1/root\n" +
+        Assert.Equal("refs/idp/93f23689/pin/c67f2fc3/00000000-0000-0000-0000-000000000109/1/root\n" +
             "refs/idp/93f23689/resalvage/c67f2fc3/00000000-0000-0000-0000-000000000109/3e518864-e0d7-82d3-9b24-f6c4cb9835c6",
             f.Git.Git("for-each-ref", "--contains", "76e13b8982291f82ffbee6a1302464dedddae3f5", "--format=%(refname)").Trim());
         Assert.Equal("A\n", f.Git.Git("show", "76e13b8982291f82ffbee6a1302464dedddae3f5:a.txt"));
@@ -321,7 +319,7 @@ public sealed class ReviewMaterializationTests
                 .PrepareTurn(baseline.Lease(reviewer.Execution.Location.Owner.Task), baseline.Op(), new(reviewer.Execution.Launch.Attempt, 2), "Review the fix."));
         }
         Assert.Contains("git.refresh-reset.after", steps);
-        Assert.Contains("git.refresh-branch.after", steps);
+        Assert.DoesNotContain(steps, step => step.StartsWith("git.refresh-branch.", StringComparison.Ordinal));
         Assert.Contains("git.refresh-retain.after", steps);
         Assert.Contains("git.refresh-capture.after", steps);
         foreach (var point in steps.Distinct())
@@ -381,7 +379,7 @@ public sealed class ReviewMaterializationTests
                 new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         }
         Assert.Contains("git.refresh-reset.after", steps);
-        Assert.Contains("git.refresh-branch.after", steps);
+        Assert.DoesNotContain(steps, step => step.StartsWith("git.refresh-branch.", StringComparison.Ordinal));
         Assert.Contains("git.refresh-retain.after", steps);
         Assert.Contains("git.refresh-capture.after", steps);
         foreach (var point in steps.Distinct())
@@ -415,15 +413,14 @@ public sealed class ReviewMaterializationTests
         Assert.Equal("ad71d2166357a1557cf40534643d9bf04099cfe9", f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
-        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Equal("The task branch differs from its journaled state.", blocked.Block.Detail);
+        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
+        Assert.Equal("The reviewer checkout must be clean before refreshing its inputs.", blocked.Block.Detail);
         Assert.Equal("reviewer note\n", File.ReadAllText(Path.Combine(review.Checkout, "note.txt")));
-        Assert.Equal("ad71d2166357a1557cf40534643d9bf04099cfe9", GitFixture.Read(f.Git.Open().ReadRef(review.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("ad71d2166357a1557cf40534643d9bf04099cfe9", f.Git.Run(review.Checkout, "rev-parse", "HEAD").Text.Trim());
     }
 
     [Theory]
     [InlineData("journal.refresh-reset-intent.after")]
-    [InlineData("git.refresh-branch.after")]
     public async Task Refresh_resumed_under_a_foreign_head_blocks_and_keeps_the_foreign_branch(string point)
     {
         using var f = new PreparationFixture(Workflow());

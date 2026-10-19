@@ -38,8 +38,8 @@ public sealed class OwnershipFenceTests
                 Assert.Equal(U, Assert.IsType<Publication.Accepted>(published).Result.Task);
                 Assert.Equal(U, Assert.Single(f.Read().Results).Task);
             }
-            Assert.Equal(foreign, f.Git.Run(t.Checkout, "rev-parse", t.Execution.Location.Owner.Branch).Text.Trim());
-            Assert.Equal("foreign\n", f.Git.Run(t.Checkout, "show", t.Execution.Location.Owner.Branch + ":foreign.txt").Text);
+            Assert.Equal(foreign, f.Git.Run(t.Checkout, "rev-parse", t.Execution.Location.Owner.Branch!).Text.Trim());
+            Assert.Equal("foreign\n", f.Git.Run(t.Checkout, "show", t.Execution.Location.Owner.Branch! + ":foreign.txt").Text);
             Assert.Equal("foreign\n", File.ReadAllText(Path.Combine(t.Checkout, "foreign.txt")));
         }
     }

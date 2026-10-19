@@ -28,7 +28,7 @@ public sealed class RootExitTests
         Assert.Equal(TipOwnership.Explained, observed.Ownership);
         Assert.Single(f.Read().RootExits);
         var sequence = f.Read().Sequence;
-        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-ref", "-d", ready.Execution.Location.Owner.Branch).ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "update-ref", "-d", ready.Execution.Location.Owner.Branch!).ExitCode);
         Assert.Equal(observed, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), operation,
             ready.Execution.Launch, new RootExit.Exited(int.MinValue))).Observation);
         Assert.Equal(sequence, f.Read().Sequence);
@@ -49,8 +49,8 @@ public sealed class RootExitTests
             Assert.Equal(TipOwnership.Explained, observed.Ownership);
             if (!before) Commit(f, writer);
             var repository = f.Git.Open();
-            var tip = GitFixture.Read(repository.ReadRef(writer.Execution.Location.Owner.Branch));
-            Assert.Equal(before, RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch, tip));
+            var tip = GitFixture.Read(repository.ReadRef(writer.Execution.Location.Owner.Branch!));
+            Assert.Equal(before, RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch!, tip));
             var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
             await f.Close(sibling, assertMatched: before);
             var publication = f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt);
@@ -75,14 +75,14 @@ public sealed class RootExitTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Claim(f, writer);
         var repository = f.Git.Open();
-        Assert.True(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch, f.A));
+        Assert.True(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch!, f.A));
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "HEAD~1").ExitCode);
         var observed = Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(),
             writer.Execution.Launch, new RootExit.Exited(1))).Observation;
         Assert.Equal("81ddb7c330112c7f16700ed002803a04b0bce693", observed.Tip.Hex);
         Assert.Equal(TipOwnership.Unexplained, observed.Ownership);
-        Assert.False(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch, observed.Tip));
-        Assert.True(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch, f.A));
+        Assert.False(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch!, observed.Tip));
+        Assert.True(RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch!, f.A));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class RootExitTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Claim(f, writer);
-        Assert.Equal(0, f.Git.Run(writer.Checkout, "update-ref", "-d", writer.Execution.Location.Owner.Branch).ExitCode);
+        Assert.Equal(0, f.Git.Run(writer.Checkout, "update-ref", "-d", writer.Execution.Location.Owner.Branch!).ExitCode);
         var fenced = Assert.IsType<RootObservation.Fenced>(f.Materializer().ObserveRootExit(f.Lease(T), f.Op(),
             writer.Execution.Launch, new RootExit.NotStarted("Root creation failed.")));
         Assert.Equal(writer.Execution.Launch, fenced.Launch);
@@ -126,7 +126,7 @@ public sealed class RootExitTests
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var observation = new RunEvent.RootExitObserved(writer.Execution.Launch, new RootExit.Exited(0), At, f.A,
-            writer.Execution.Location.Owner.Branch, TipOwnership.Explained);
+            writer.Execution.Location.Owner.Branch!, TipOwnership.Explained);
         Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Record(f.Permit, f.Op(), observation)));
         Claim(f, writer);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), observation));
@@ -176,7 +176,7 @@ public sealed class RootExitTests
         f.Claim(reservation);
         var prepared = f.Read().Preparations[new(A1, 1)];
         var observation = new RunEvent.RootExitObserved(prepared.Launch, new RootExit.Exited(int.MaxValue), At, Base,
-            prepared.Location.Owner.Branch, TipOwnership.Explained);
+            prepared.Location.Owner.Branch!, TipOwnership.Explained);
         var invalid = damage switch
         {
             "attempt" => observation with { Launch = new(default, 1) },
@@ -263,7 +263,7 @@ public sealed class RootExitTests
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), attempt.Id, TerminalAttemptOutcome.Failed, checkpoint));
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed));
         var prefix = RunLayout.PinPrefix(f.Read().RunKey!);
-        Assert.Equal(5, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
+        Assert.Equal(3, Assert.IsType<PinRelease.Released>(f.Materializer().ReleasePins(f.Permit, f.Op())).Count);
         Assert.Empty(GitFixture.Read(f.Git.Open().RefSnapshot(prefix)));
         Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RootObservation.Rejected>(f.Materializer().ObserveRootExit(
             f.Lease(T), f.Op(), writer.Execution.Launch, new RootExit.Exited(1))).Reason.Problem);
@@ -287,7 +287,7 @@ public sealed class RootExitTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Claim(f, ready);
         var launch = ready.Execution.Launch;
-        var tip = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))!.Value;
+        var tip = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!))!.Value;
         var head = GitFixture.Read(f.Git.Open().SymbolicHead(ready.Checkout));
         var recorded = new RunEvent.RootExitObserved(launch, new RootExit.Exited(0), At.AddSeconds(1), tip, head, TipOwnership.Explained);
         var outcome = f.Materializer(probe: point =>
@@ -433,7 +433,7 @@ public sealed class RootExitTests
             var log = f.ObserveAndLog(ready);
             var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(lease, f.Op(), launch, log));
             Assert.Equal("Matched", settled.Disposition.GetType().Name);
-            Assert.Equal(2, f.Read().Captures[settled.Capture].Count);
+            Assert.Single(f.Read().Captures[settled.Capture]);
         }
     }
 

@@ -160,7 +160,7 @@ public sealed class OwnershipTests
         await f.UntilStatus(RunStatus.Completed);
         var disposition = Assert.Single(f.Read().Dispositions).Value.Disposition;
         Assert.IsType<CaptureDisposition.Matched>(disposition);
-        Assert.Equal(2, Assert.Single(f.Read().Captures).Value.Count);
+        Assert.Single(Assert.Single(f.Read().Captures).Value);
         Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
         Assert.Equal(1, f.Launches(A));
     }

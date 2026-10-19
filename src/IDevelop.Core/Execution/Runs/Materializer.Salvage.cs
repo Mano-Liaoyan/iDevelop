@@ -166,7 +166,7 @@ internal sealed partial class Materializer
     {
         VerifyOwnedCheckout(repository, location, record);
         var checkout = Checkout(repository, location.Owner);
-        var branch = Value(repository.ReadRef(location.Owner.Branch));
+        var branch = Value(repository.ReadRef(location.Owner.Branch!));
         var head = Value(repository.ResolveCheckoutHead(checkout));
         var symbolicHead = Value(repository.SymbolicHead(checkout));
         if (File.Exists(Value(repository.IndexPath(checkout)) + ".lock"))

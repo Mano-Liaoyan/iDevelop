@@ -80,7 +80,7 @@ public sealed class E2JournalTests
         var accepted = Assert.IsType<Publication.Accepted>(current.Materializer().Publish(current.Lease(T), current.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("done\n", current.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Single(current.Read().RootExits);
-        Assert.Equal(2, Assert.Single(current.Read().Captures).Value.Count);
+        Assert.Single(Assert.Single(current.Read().Captures).Value);
         Assert.IsType<CaptureDisposition.Matched>(Assert.Single(current.Read().Dispositions).Value.Disposition);
         var capture = Assert.Single(current.Read().Settlements).Value;
         Assert.Equal(capture, Assert.Single(current.Read().Plans.Values.OfType<MaterializationPlan.Publication>()).Capture);

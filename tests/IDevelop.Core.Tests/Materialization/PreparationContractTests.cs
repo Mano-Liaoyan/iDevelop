@@ -25,10 +25,7 @@ public sealed class PreparationContractTests
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout,
             ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/report.md")));
         var prepared = f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution == ready.Execution);
-        var snapshot = File.ReadAllText(Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, prepared.SharedRefs.RelativePath));
-        Assert.Contains("refs/idp/93f23689/base", snapshot);
-        Assert.Contains("refs/heads/idp/93f23689/task/90d5b0a2", snapshot);
-        Assert.Contains("adfe40b30c176fb407933286f51d15ea9b54cdc3", snapshot);
+        Assert.Null(prepared.SharedRefs);
     }
 
     [Fact]

@@ -52,31 +52,10 @@ internal sealed partial class Materializer
         }
     }
 
-    private static void VerifyDelivery(RunRecord record, PreparedExecution execution, GitRepository repository)
-    {
-        var checkout = Checkout(repository, execution.Location.Owner);
-        foreach (var file in record.Inputs[execution.Inputs].Files)
-        {
-            RunStorage.Read(checkout, file.RelativePath, file.Content, file.ByteLength);
-            if (repository.CheckIgnore(checkout, file.RelativePath).ExitCode != 0 ||
-                repository.CheckIgnore(repository.ProjectFolder, file.RelativePath).ExitCode != 0)
-                throw Fault(MaterializationProblem.InputUnavailable, "Delivered input is not ignored: " + file.RelativePath, new BlockScope.Operation());
-        }
-        if (execution.OutboxPath.Length != 0 && !Directory.Exists(RunStorage.SafePath(checkout, execution.OutboxPath)))
-            throw Fault(MaterializationProblem.InputUnavailable, "The prepared outbox is absent.", new BlockScope.Operation());
-        VerifyOutbox(repository, checkout, execution.OutboxPath);
-    }
-
     private static void VerifyOutbox(GitRepository repository, string checkout, string outbox)
     {
         if (outbox.Length != 0 && (repository.CheckIgnore(checkout, outbox + "/manifest.json").ExitCode != 0 ||
             repository.CheckIgnore(repository.ProjectFolder, outbox + "/manifest.json").ExitCode != 0))
             throw Fault(MaterializationProblem.InputUnavailable, "The outbox is not ignored: " + outbox, new BlockScope.Operation());
-    }
-
-    private static EvidenceFile Snapshot(RunStorage storage, OperationId operation, GitRepository repository, RunRecord record)
-    {
-        var refs = SharedRefSnapshot(repository, record);
-        return storage.WriteEvidence(operation, "shared-refs.json", Encoding.UTF8.GetBytes(RunJournal.Canonical(refs)));
     }
 }

@@ -172,8 +172,8 @@ public sealed class TurnLifecycleTests
         var turn = await f.Settled(running);
         Assert.Equal("Cancelled", turn.Attempt.Status.ToString());
         Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-        Assert.Equal(new[] { "partial\n", "partial\n" }, f.Preparation.Read().Captures[turn.Capture.Capture]
-            .Select(capture => f.Preparation.Git.Git("show", capture.Candidate.Hex + ":result.txt")));
+        Assert.Equal("partial\n", f.Preparation.Git.Git("show",
+            Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
             turn.Address.Launch.Attempt, TerminalAttemptOutcome.Cancelled, turn.Log));
         Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Preparation.Materializer()

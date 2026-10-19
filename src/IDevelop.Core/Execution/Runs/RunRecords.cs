@@ -140,8 +140,12 @@ internal abstract record RootExit
 
 internal readonly record struct CaptureId(Guid Value);
 
+/// <summary>
+/// What a turn left in its worktree when it ended: the commit an editing task's turn ends with, its report, and its
+/// artifacts. A turn takes one capture. Journals written before ADR 0032 hold two per turn, and they still read.
+/// </summary>
 internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, LaunchKey Launch, LogCheckpoint Log,
-    DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId Candidate, CommitId? Tip, string? Head,
+    DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId? Candidate, CommitId? Tip, string? Head,
     EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, EvidenceFile SharedRefs, ImmutableArray<string> UnexplainedRefs)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -289,7 +293,8 @@ internal abstract record RunEvent
 
     internal sealed record GitObserved(OperationId Mutation, GitObservation Observation) : RunEvent;
 
-    internal sealed record Prepared(PreparedExecution Execution, EvidenceFile SharedRefs) : RunEvent;
+    /// <param name="SharedRefs">The shared-ref snapshot an earlier journal took when it prepared the turn. A new turn takes none.</param>
+    internal sealed record Prepared(PreparedExecution Execution, EvidenceFile? SharedRefs) : RunEvent;
 
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
 

@@ -616,6 +616,13 @@ internal sealed partial class GitRepository
     public GitResult AddWorktree(string relativePath, string branchShortName, CommitId start) =>
         Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", "-b", branchShortName, relativePath, start.Hex]);
 
+    /// <summary>Adds a read-only task's worktree, detached at <paramref name="start"/> with no branch of its own.</summary>
+    public GitResult AddDetachedWorktree(string relativePath, CommitId start) =>
+        Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", "--detach", relativePath, start.Hex]);
+
+    /// <summary>Removes untracked files and folders that Git does not ignore, which keeps ignored ones such as delivered inputs.</summary>
+    public GitResult CleanUntracked(string checkout) => Git(checkout, GitOperation.Worktree, ["clean", "-fdq"]);
+
     public GitResult AddWorktreeForExistingBranch(string path, string branch) => Git(ProjectFolder, GitOperation.Worktree, ["worktree", "add", path, branch]);
 
     public GitResult LockWorktree(string path, string reason)

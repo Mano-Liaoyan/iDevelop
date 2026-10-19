@@ -80,7 +80,7 @@ internal sealed partial class Materializer
                 CopyCarriedArtifacts(workflow, run, record, attempt, frozen, plan.Result);
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
-                VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+                VerifyWorktree(repository, prepared.Location, record);
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, plan.VerifiedTip);
                 step = "commit";
                 if (Value(Mutate("commit", () => repository.CreateCommit(plan.Recipe))) != plan.Commit)
@@ -90,7 +90,7 @@ internal sealed partial class Materializer
             {
                 step = "ownership";
                 VerifyPublicationRefs(record, repository, prepared, operation, workflow, run, ref evidence);
-                VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
+                VerifyWorktree(repository, prepared.Location, record);
                 VerifyPublicationParent(repository, prepared.Location.AttemptBase, root.Tip);
                 step = "capture";
                 VerifyPublicationBaseline(repository, checkout, frozen.Recipe.Tree, frozen.Index?.Content, true, permit, operation, ref evidence, frozen.IndexTree);
@@ -102,7 +102,7 @@ internal sealed partial class Materializer
                 if (commit != frozen.Candidate)
                     throw Fault(MaterializationProblem.UncertainOwnership, "The frozen publication recipe produced a different commit.", new BlockScope.Operation());
                 plan = new(attempt, result, record.CurrentResults.GetValueOrDefault(task)?.Id, root.Tip, frozen.Index?.Content,
-                    frozen.Recipe, frozen.Candidate, frozen.Report!, artifacts) { Capture = frozen.Capture };
+                    frozen.Recipe, frozen.Candidate!.Value, frozen.Report!, artifacts) { Capture = frozen.Capture };
                 step = "plan";
                 var plannedOperation = OperationIds.Derive(operation, "plan");
                 Journal("plan", () => _store.Record(permit, plannedOperation, new RunEvent.Planned(plan)));
@@ -110,7 +110,7 @@ internal sealed partial class Materializer
             }
             evidence = [];
             step = "branch";
-            var branch = new GitMutation.MoveRef(new(prepared.Location.Owner.Branch, plan.VerifiedTip, plan.Commit));
+            var branch = new GitMutation.MoveRef(new(prepared.Location.Owner.Branch!, plan.VerifiedTip, plan.Commit));
             VerifyPendingPublicationMove(branch);
             RequirePublication(_refs.Publish(permit, operation, planId, "branch", repository, branch.Change), new BlockScope.Checkout([], Branch: true));
             step = "index";
@@ -123,7 +123,7 @@ internal sealed partial class Materializer
                     new RunEvent.GitIntended(planId, new GitMutation.AlignIndex(task, plan.IndexBefore, plan.Recipe.Tree))));
                 var aligned = Mutate("align-index", () =>
                 {
-                    VerifyCheckout(repository, prepared.Location, keepChanges: true, Read(workflow, run));
+                    VerifyWorktree(repository, prepared.Location, Read(workflow, run));
                     return repository.AlignIndex(checkout, plan.IndexBefore, plan.Recipe.Tree);
                 });
                 if (aligned is IndexAlignment.Unexpected)
@@ -193,12 +193,13 @@ internal sealed partial class Materializer
         switch (record.Dispositions[capture].Disposition)
         {
             case CaptureDisposition.Diverged diverged:
-                if (diverged.Problem == MaterializationProblem.UncertainOwnership)
+                // A journal written before ADR 0032 kept a shared-ref snapshot when it prepared the turn and at each of two captures.
+                if (diverged.Problem == MaterializationProblem.UncertainOwnership && record.Captures[capture] is [var one, var two] &&
+                    record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
+                        .Single(entry => entry.Execution.Launch == one.Launch).SharedRefs is { } prepared)
                 {
                     var observations = record.Captures[capture];
-                    var prepared = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
-                        .Single(entry => entry.Execution.Launch == observations[0].Launch).SharedRefs;
-                    evidence = [prepared, .. observations.Select(observation => observation.SharedRefs)];
+                    evidence = [prepared, one.SharedRefs, two.SharedRefs];
                     var storage = new RunStorage(_project, record.Workflow, record.Id);
                     var snapshots = evidence.Select(file => JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(
                         RunStorage.Read(storage.Folder, file.RelativePath, file.Content, file.ByteLength), RunJournal.Options) ??
@@ -207,6 +208,8 @@ internal sealed partial class Materializer
                         $"observation 1 {Tip(snapshots[1], name)}, observation 2 {Tip(snapshots[2], name)}");
                     throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join("; ", detail), DivergedScope(record, observations[0].Launch, diverged));
                 }
+                if (diverged.Problem == MaterializationProblem.UncertainOwnership)
+                    evidence = [.. record.Captures[capture].Select(observation => observation.SharedRefs)];
                 throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)),
                     DivergedScope(record, record.Captures[capture][0].Launch, diverged));
             case CaptureDisposition.Failed failed:
@@ -219,7 +222,7 @@ internal sealed partial class Materializer
     {
         var branch = record.Preparations[launch].Location.Owner.Branch;
         return diverged.Refs.All(name => name == branch || name == "HEAD")
-            ? new BlockScope.Checkout(diverged.Paths, diverged.Refs.Contains(branch), diverged.Refs.Contains("HEAD"))
+            ? new BlockScope.Checkout(diverged.Paths, branch is not null && diverged.Refs.Contains(branch), diverged.Refs.Contains("HEAD"))
             : new BlockScope.Refs(diverged.Refs);
     }
 
@@ -313,8 +316,8 @@ internal sealed partial class Materializer
         var checkout = Checkout(repository, prepared.Location.Owner);
         var capture = Mutate("verify-capture", () => repository.Capture(checkout));
         var record = Read(workflow, run);
-        VerifyCheckout(repository, prepared.Location, keepChanges: true, record);
-        if (Value(repository.ReadRef(prepared.Location.Owner.Branch)) != plan.Commit)
+        VerifyWorktree(repository, prepared.Location, record);
+        if (Value(repository.ReadRef(prepared.Location.Owner.Branch!)) != plan.Commit)
             throw Fault(MaterializationProblem.UncertainOwnership, "Publication branch or result ref changed.", new BlockScope.Checkout([], Branch: true));
         var resultRef = RunLayout.ResultRef(record.RunKey!, record.TaskKeys[prepared.Location.Owner.Task], plan.Attempt);
         if (Value(repository.ReadRef(resultRef)) != plan.Commit)

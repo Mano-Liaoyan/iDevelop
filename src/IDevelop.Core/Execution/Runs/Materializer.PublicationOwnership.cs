@@ -23,6 +23,10 @@ internal sealed partial class Materializer
             $"Attempt {prepared.Launch.Attempt.Value:D}: unexplained shared ref {name}, {previous?.Hex ?? "absent"} to {current?.Hex ?? "absent"}.", new BlockScope.Refs(names));
     }
 
+    private static EvidenceFile? PreparedSnapshot(RunRecord record, PreparedExecution prepared) =>
+        record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
+            .Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
+
     private static SortedDictionary<string, CommitId> SharedRefSnapshot(GitRepository repository, RunRecord record) =>
         Value(repository.RefSnapshot(["refs/stash", $"refs/heads/idp/{record.RunKey}/", $"refs/idp/{record.RunKey}/"],
             RunLayout.PinPrefix(record.RunKey!)));
@@ -31,10 +35,11 @@ internal sealed partial class Materializer
         out byte[] bytes,
         out SortedDictionary<string, CommitId> before, out SortedDictionary<string, CommitId> after)
     {
-        var snapshot = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
-            .Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
+        // A turn prepared since ADR 0032 keeps no shared-ref snapshot, so each run ref is judged by the journal alone.
+        var snapshot = PreparedSnapshot(record, prepared);
         var storage = new RunStorage(_project, record.Workflow, record.Id);
-        bytes = RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
+        bytes = snapshot is null ? Encoding.UTF8.GetBytes(RunJournal.Canonical(new SortedDictionary<string, CommitId>()))
+            : RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
         before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
             throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.", new BlockScope.Operation());
         // The budget runs on the materializer's clock, as the journal's retries do.
@@ -63,7 +68,7 @@ internal sealed partial class Materializer
             CommitId? current = after.TryGetValue(name, out var tip) ? tip : null;
             if (name == "refs/stash")
             {
-                if (previous == current) continue;
+                if (snapshot is null || previous == current) continue;
             }
             else if (RefOwnership.Accepts(record, repository, name, current)) continue;
             unexplained.Add(name);

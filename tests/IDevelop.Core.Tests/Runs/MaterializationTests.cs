@@ -179,7 +179,7 @@ public sealed class MaterializationTests
             Result = new(Id(301)),
         }))));
         Assert.Equal(RunProblem.InputConflict, Problem(f.Store.AcceptPublication(f.Permit, f.Op(), operation)));
-        ObserveMove(f, operation, f.Read().Preparations[new(A1, 1)].Location.Owner.Branch, Base, WriterCommit);
+        ObserveMove(f, operation, f.Read().Preparations[new(A1, 1)].Location.Owner.Branch!, Base, WriterCommit);
         Assert.Equal(RunProblem.InputConflict, Problem(f.Store.AcceptPublication(f.Permit, f.Op(), operation)));
         ObserveMove(f, operation, $"refs/idp/{f.Read().RunKey}/result/{f.Read().TaskKeys[T]}/{A1.Value:D}", null, WriterCommit);
         Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
@@ -240,7 +240,7 @@ public sealed class MaterializationTests
         };
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(replacement.Attempt.Id, 1)].Location.Owner.Branch, WriterCommit, OtherCommit);
+        ObserveMove(f, operation, record.Preparations[new(replacement.Attempt.Id, 1)].Location.Owner.Branch!, WriterCommit, OtherCommit);
         ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[T]}/{replacement.Attempt.Id.Value:D}", null, OtherCommit);
         Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
         Assert.Equal(RunProblem.StaleInput, Problem(f.Store.Plan(f.Lease(U), f.Op(), record.Revision.Id,
@@ -300,7 +300,7 @@ public sealed class MaterializationTests
         var plan = Publication(reserved, f.NextResultId(), WriterCommit);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(plan)));
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(A1, 1)].Location.Owner.Branch, Base, WriterCommit);
+        ObserveMove(f, operation, record.Preparations[new(A1, 1)].Location.Owner.Branch!, Base, WriterCommit);
         ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[T]}/{A1.Value:D}", null, WriterCommit);
         Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
         Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Plan(f.Lease(T), f.Op(), record.Revision.Id, new AttemptCause.Retry(A1, f.Op()))));
@@ -373,7 +373,7 @@ public sealed class MaterializationTests
         f.Claim(reservation);
         var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
-            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch, TipOwnership.Explained)));
+            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, TipOwnership.Explained)));
         var log = f.WriteLog(reservation, report: report);
         var capture = new CaptureId(reservation.Attempt.Id.Value);
         foreach (var ordinal in new[] { 1, 2 })
@@ -383,7 +383,7 @@ public sealed class MaterializationTests
                 { StoredPath = RunStorage.CapturePath(capture, ordinal, "artifacts/" + artifact.Name) }).ToImmutableArray();
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(new(capture, ordinal,
                 prepared.Launch, log, at, at, Recipe(prepared.Location.AttemptBase), candidate ?? WriterCommit,
-                prepared.Location.AttemptBase, prepared.Location.Owner.Branch, null, report, frozenArtifacts,
+                prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, null, report, frozenArtifacts,
                 new(RunStorage.CapturePath(capture, ordinal, "refs.json"), Prompt, 10), []))));
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(capture, prepared.Launch,
@@ -401,7 +401,7 @@ public sealed class MaterializationTests
         var publication = Publication(reservation, f.NextResultId(), commit, report, artifacts);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(reservation.Attempt.Id, 1)].Location.Owner.Branch, publication.VerifiedTip, commit);
+        ObserveMove(f, operation, record.Preparations[new(reservation.Attempt.Id, 1)].Location.Owner.Branch!, publication.VerifiedTip, commit);
         ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[reservation.Attempt.Task]}/{reservation.Attempt.Id.Value:D}", null, commit);
         return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation)).Event).Result;
     }

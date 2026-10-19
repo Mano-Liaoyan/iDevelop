@@ -111,7 +111,7 @@ public sealed class StopTests
         {
             if (point != "runner.claim.before" || changed || f.Read().Results.IsEmpty) return;
             changed = true;
-            ChangeDeliveredReport(f, B);
+            UnlockWorktree(f, B);
         };
         await f.Resume();
         var stuck = await f.UntilStatus(RunStatus.NeedsAttention);
@@ -132,9 +132,9 @@ public sealed class StopTests
         using var claim = new TurnFixture.ProbeBarrier("runner.claim.before");
         f.Runs.Probe = point =>
         {
-            // B's claim waits here; by the time it checks its delivered inputs, the run is stopping and they changed.
+            // B's claim waits here; by the time it checks its worktree, the run is stopping and the ownership lock is gone.
             if (point != "runner.claim.before" || f.Read().Results.IsEmpty) return;
-            ChangeDeliveredReport(f, B);
+            UnlockWorktree(f, B);
             claim.Probe(point);
         };
         await f.Resume();
@@ -149,10 +149,9 @@ public sealed class StopTests
         Assert.Equal(0, f.Launches(B));
     }
 
-    /// <summary>Changes the report that <paramref name="task"/>'s prepared checkout received from the task before it.</summary>
-    private static void ChangeDeliveredReport(CoordinatorFixture f, TaskId task) =>
-        File.WriteAllText(Directory.EnumerateFiles(Path.Combine(f.Checkout(task), ".idp", "inputs"), "report.md", SearchOption.AllDirectories).Single(),
-            "Changed.\n");
+    /// <summary>Removes the ownership lock from <paramref name="task"/>'s prepared worktree, so its claim cannot verify the worktree.</summary>
+    private static void UnlockWorktree(CoordinatorFixture f, TaskId task) =>
+        Assert.Equal(0, f.Preparation.Git.Run(f.Preparation.Git.Folder, "worktree", "unlock", f.Checkout(task)).ExitCode);
 
     [Fact]
     public async Task Stop_lets_a_settling_success_publish()

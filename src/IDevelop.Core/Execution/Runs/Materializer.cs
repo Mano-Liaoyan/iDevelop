@@ -93,10 +93,7 @@ internal sealed partial class Materializer
                 if (record.Inputs[completed.Execution.Inputs].Code is CodeSelection.Joined joined)
                     VerifyJoin(record, repository, task, completed.Execution.Inputs, record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                         .Single(plan => plan.Attempt == original.Id).Sources, joined.Join);
-                VerifyCheckout(repository, completed.Execution.Location, cause is AttemptCause.Continue, record);
-                VerifyDelivery(record, completed.Execution, repository);
-                RunStorage.Read(new RunStorage(_project, workflow, run).Folder, completed.SharedRefs.RelativePath,
-                    completed.SharedRefs.Content, completed.SharedRefs.ByteLength);
+                VerifyWorktree(repository, completed.Execution.Location, record);
                 ResolveMaintenanceBlocks(permit, operation, "Prepared.");
                 return new Preparation.Ready(completed.Execution, Checkout(repository, completed.Execution.Location.Owner));
             }
@@ -135,19 +132,16 @@ internal sealed partial class Materializer
             record = DecisionRecord(Journal("reserve", () => _store.Reserve(lease,
                 OperationIds.Derive(operation, "reserve"), planId, join)));
             attempt = plan.Attempt;
-            var owner = new WorktreeOwner(task, RunLayout.TaskCheckout(record.RunKey!, record.TaskKeys[task]),
-                RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[task]));
+            var definition = record.Revisions[plan.Revision].Snapshot.Tasks[task];
+            var owner = Owner(record, task, definition);
             var input = record.Inputs[plan.Inputs];
             var start = RunReducer.AttemptBase(record, record.Attempts[plan.Attempt], input) ??
                 throw new Refusal(new(RunProblem.InputConflict));
             var location = new ExecutionLocation(owner, start);
             step = "worktree";
             EnsureCheckout(permit, operation, planId, repository, location, record);
-            step = "checkout";
-            VerifyCheckout(repository, location, cause is AttemptCause.Continue, Read(workflow, run));
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
-            var definition = record.Revisions[plan.Revision].Snapshot.Tasks[task];
             var outbox = definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.Outbox(plan.Attempt) : "";
             if (outbox.Length != 0) Directory.CreateDirectory(RunStorage.SafePath(Checkout(repository, owner), outbox));
             VerifyOutbox(repository, Checkout(repository, owner), outbox);
@@ -155,12 +149,10 @@ internal sealed partial class Materializer
             var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]),
                 RunReducer.FixArtifacts(record, plan.Attempt));
             var execution = new PreparedExecution(new(plan.Attempt, 1), input.Id, location, prompt, Revision.Hash(prompt), outbox);
-            step = "shared-refs";
-            var refs = Snapshot(storage, operation, repository, record);
             step = "prepared";
             // A sibling result may supersede an input while Git and file delivery run.
             if (RunReducer.InputProblem(Read(workflow, run), input, true) is { } stale) return new Preparation.Rejected(stale);
-            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, refs)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, null)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, owner));
         }
@@ -169,6 +161,15 @@ internal sealed partial class Materializer
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
     }
+
+    /// <summary>
+    /// The task's worktree in this run. Each attempt of a task, a Retry's included, works in the worktree its first attempt
+    /// got. An editing task's worktree is on a branch of its own, and a read-only task's worktree has none (ADR 0032).
+    /// </summary>
+    private static WorktreeOwner Owner(RunRecord record, TaskId task, TaskDefinition definition) =>
+        record.Preparations.Values.FirstOrDefault(prepared => prepared.Location.Owner.Task == task)?.Location.Owner ??
+        new(task, RunLayout.TaskCheckout(record.RunKey!, record.TaskKeys[task]),
+            definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[task]) : null);
 
     private GitRepository OpenRepository() => GitRepository.Open(_project, _environment) switch
     {

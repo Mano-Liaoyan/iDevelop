@@ -49,8 +49,8 @@ internal static partial class RunValidation
         RunEvent.Planned { Plan: var plan } => Plan(plan),
         RunEvent.GitIntended intent => intent.Plan.Value != Guid.Empty && Mutation(intent.Mutation),
         RunEvent.GitObserved observed => observed.Mutation.Value != Guid.Empty,
-        RunEvent.Prepared { Execution: var execution, SharedRefs: var refs } => Evidence(refs) &&
-            StoredEvidence(refs.RelativePath) && Key(execution.Launch) && execution.Inputs.Value != Guid.Empty &&
+        RunEvent.Prepared { Execution: var execution, SharedRefs: var refs } => (refs is null || Evidence(refs) &&
+            StoredEvidence(refs.RelativePath)) && Key(execution.Launch) && execution.Inputs.Value != Guid.Empty &&
             Owner(execution.Location.Owner) && Revision.IsCommit(execution.Location.AttemptBase.Hex) &&
             execution.Prompt is not null && Revision.IsHash(execution.PromptHash.Sha256) && execution.OutboxPath is not null,
         RunEvent.Blocked { Block: var block } => block.Operation.Value != Guid.Empty && block.Task.Value != Guid.Empty &&
@@ -173,7 +173,8 @@ internal static partial class RunValidation
 
     private static bool Evidence(EvidenceFile file) => Path(file.RelativePath) && Revision.IsHash(file.Content.Sha256) && file.ByteLength >= 0;
 
-    private static bool Owner(WorktreeOwner owner) => owner.Task.Value != Guid.Empty && Path(owner.RelativePath) && Reference(owner.Branch);
+    private static bool Owner(WorktreeOwner owner) => owner.Task.Value != Guid.Empty && Path(owner.RelativePath) &&
+        (owner.Branch is null || Reference(owner.Branch));
 
     private static bool Recipe(CommitRecipe recipe) => Revision.IsCommit(recipe.Tree.Hex) && !recipe.Parents.IsDefault &&
         recipe.Parents.All(parent => Revision.IsCommit(parent.Hex)) && recipe.Message is not null &&

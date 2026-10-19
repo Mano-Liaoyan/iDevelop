@@ -62,8 +62,8 @@ internal sealed partial class Materializer
                 step = "retry-plan";
                 Journal("retry-plan", () => _store.Record(permit, planId, new RunEvent.Planned(plan)));
             }
-            if (!RefOwnership.Accepts(Read(workflow, run), repository, prepared.Location.Owner.Branch,
-                Value(repository.ReadRef(prepared.Location.Owner.Branch))))
+            if (!RefOwnership.Accepts(Read(workflow, run), repository, prepared.Location.Owner.Branch!,
+                Value(repository.ReadRef(prepared.Location.Owner.Branch!))))
                 throw Fault(MaterializationProblem.UncertainOwnership, "The retry branch moved outside the recorded reset.", new BlockScope.Checkout([], Branch: true));
             var reset = new GitMutation.ResetCheckout(task, plan.To);
             if (!PublicationObserved(Read(workflow, run), planId, reset))
@@ -71,14 +71,14 @@ internal sealed partial class Materializer
                 step = "retry-inventory";
                 record = Read(workflow, run);
                 var intended = OperationIds.Derive(operation, "retry-reset-intent");
-                var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch));
+                var tip = Value(repository.ReadRef(prepared.Location.Owner.Branch!));
                 var targetTree = Value(repository.ReadCommit(plan.To)).Tree;
                 var targetPaths = Value(repository.TreeFiles(plan.To));
                 var remaining = salvage.Untracked.Where(file => !targetPaths.Contains(file.RelativePath)).ToImmutableArray();
                 var capture = Value(Mutate("retry-resume-capture", () => repository.Capture(checkout, [.. remaining.Select(file => file.RelativePath)])));
                 var adopted = record.GitIntents.ContainsKey(intended) && tip == plan.To && capture.Tree == targetTree &&
                     RunReducer.Same(Untracked(repository, checkout), remaining) && capture.IndexBefore == capture.IndexAfter &&
-                    Value(repository.ReadIndexTree(checkout)) == targetTree && Value(repository.SymbolicHead(checkout)) == prepared.Location.Owner.Branch;
+                    Value(repository.ReadIndexTree(checkout)) == targetTree && Value(repository.SymbolicHead(checkout)) == prepared.Location.Owner.Branch!;
                 if (!adopted)
                 {
                     if (tip != plan.From && !(record.GitIntents.ContainsKey(intended) && tip == plan.To))
@@ -90,7 +90,7 @@ internal sealed partial class Materializer
                 Journal("retry-reset-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(planId, reset)));
                 if (!adopted)
                 {
-                    var attach = new GitMutation.AttachHead(task, prepared.Location.Owner.Branch);
+                    var attach = new GitMutation.AttachHead(task, prepared.Location.Owner.Branch!);
                     if (Value(repository.Worktrees()).Any(worktree => worktree.Branch == attach.Branch && !SamePath(worktree.Path, checkout)))
                         throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is registered at another checkout.", new BlockScope.Ownership());
                     var attachObserved = PublicationObserved(Read(workflow, run), planId, attach);
@@ -99,7 +99,7 @@ internal sealed partial class Materializer
                         Value(repository.ResolveCheckoutHead(checkout)) != salvage.ObservedTip))
                         throw Fault(MaterializationProblem.UncertainOwnership, "The retry HEAD moved outside the recorded attachment.", new BlockScope.Checkout([], Head: true));
                     RequirePublication(_refs.Publish(permit, operation, planId, "retry-branch", repository,
-                        new(prepared.Location.Owner.Branch, plan.From, plan.To)), new BlockScope.Checkout([], Branch: true));
+                        new(prepared.Location.Owner.Branch!, plan.From, plan.To)), new BlockScope.Checkout([], Branch: true));
                     if (!attachObserved)
                     {
                         var attachIntent = OperationIds.Derive(operation, "retry-attach-intent");
@@ -117,7 +117,7 @@ internal sealed partial class Materializer
                     }
                     var result = Mutate("retry-reset", () =>
                     {
-                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
+                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch!, plan.To);
                         return repository.ResetCheckout(checkout, plan.To);
                     });
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
@@ -125,7 +125,7 @@ internal sealed partial class Materializer
                 Journal("retry-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "retry-reset-observed"),
                     new RunEvent.GitObserved(intended, new(adopted, plan.To.Hex))));
             }
-            VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
+            VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch!, plan.To);
             var remove = new GitMutation.RemovePaths(task, plan.Remove);
             if (!PublicationObserved(Read(workflow, run), planId, remove))
             {
@@ -138,7 +138,7 @@ internal sealed partial class Materializer
                     if (Value(repository.TrackedFiles(checkout, file.RelativePath)).Contains(file.RelativePath)) continue;
                     var removed = Mutate("retry-remove-" + file.RelativePath, () =>
                     {
-                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch, plan.To);
+                        VerifyResetHead(repository, checkout, prepared.Location.Owner.Branch!, plan.To);
                         return repository.RemovePath(checkout, file.RelativePath, file.Content, GitPathType.RegularFile);
                     });
                     if (removed == PathRemoval.Unexpected) throw Fault(MaterializationProblem.DirtyWorktree, "A salvaged path changed before removal: " + file.RelativePath, new BlockScope.Checkout([file.RelativePath]));

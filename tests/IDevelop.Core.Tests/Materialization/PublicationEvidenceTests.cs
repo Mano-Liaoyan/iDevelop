@@ -17,7 +17,7 @@ public sealed class PublicationEvidenceTests
         var result = new ResultId(Id(300));
         var artifact = Assert.Single(frozen.Artifacts) with { StoredPath = RunStorage.ArtifactPath(result, "payload") };
         var plan = new MaterializationPlan.Publication(ready.Execution.Launch.Attempt, result, null, frozen.Tip!.Value,
-            frozen.Index?.Content, frozen.Recipe, frozen.Candidate, "B ready.\n", [artifact]) { Capture = capture };
+            frozen.Index?.Content, frozen.Recipe, frozen.Candidate!.Value, "B ready.\n", [artifact]) { Capture = capture };
         var invalid = new (MaterializationPlan.Publication Plan, string Problem)[]
         {
             (plan with { Capture = null }, "OutcomeMismatch"),

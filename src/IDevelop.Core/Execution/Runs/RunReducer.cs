@@ -257,11 +257,11 @@ internal static partial class RunReducer
                         record.TurnClosures.ContainsKey(disposed.Launch) || record.Closures.ContainsKey(disposed.Launch.Attempt) ||
                         record.Dispositions.ContainsKey(disposed.Capture) || CaptureForAnotherId(record, disposed.Launch, disposed.Capture) ||
                         disposed.Disposition is CaptureDisposition.Failed && pair.Count > 1 ||
-                        disposed.Disposition is not CaptureDisposition.Failed && pair.Count != 2)
+                        disposed.Disposition is not CaptureDisposition.Failed && pair.Count is not (1 or 2))
                         return Reject(RunProblem.InvalidClaim);
                     if (pair.Any(prior => prior.Launch != disposed.Launch) ||
                         disposed.Disposition is CaptureDisposition.Matched &&
-                        !CaptureComparison.Matches(pair[0], pair[1], record.RootExits[disposed.Launch]))
+                        !CaptureComparison.Matches(pair[0], pair[^1], record.RootExits[disposed.Launch]))
                         return Reject(RunProblem.EvidenceMismatch);
                     record = record with
                     {

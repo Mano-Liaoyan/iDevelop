@@ -277,7 +277,7 @@ public sealed class ProjectionTests
 
         var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
-            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch, TipOwnership.Explained)));
+            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, TipOwnership.Explained)));
 
         var exited = View(f, holds: held).Tasks[T];
         Assert.Equal((TaskState.Uncertain, true, RunProblem.EvidenceMismatch), (exited.State, exited.RootExited, exited.Refusal!.Problem));

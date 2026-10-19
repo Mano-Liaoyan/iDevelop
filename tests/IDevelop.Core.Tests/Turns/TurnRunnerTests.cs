@@ -348,7 +348,7 @@ public sealed class TurnRunnerTests
         f.Runs.Probe = null;
         var settled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit, f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
         Assert.IsType<CaptureDisposition.Matched>(settled.Capture.Disposition);
-        Assert.Equal(2, Assert.Single(f.Preparation.Read().Captures).Value.Count);
+        Assert.Single(Assert.Single(f.Preparation.Read().Captures).Value);
         Assert.Equal(1, f.Launches);
         var result = f.Publish(settled);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
@@ -365,7 +365,10 @@ public sealed class TurnRunnerTests
         await f.Open(rule);
         if (receipt == "Blocked") f.Runs.Probe = point =>
         {
-            if (point == "journal.capture-1.after") File.WriteAllText(Path.Combine(f.Checkout, "result.txt"), "late\n");
+            if (point != "git.capture-1.before") return;
+            File.WriteAllText(Path.Combine(f.Checkout, "late.txt"), "late\n");
+            Assert.Equal(0, f.Preparation.Git.Run(f.Checkout, "add", "--", "late.txt").ExitCode);
+            Assert.Equal(0, f.Preparation.Git.Run(f.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "late").ExitCode);
         };
         var turn = await f.Settled(await f.Start());
         Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());

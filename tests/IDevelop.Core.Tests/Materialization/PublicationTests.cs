@@ -19,7 +19,7 @@ public sealed class PublicationTests
         var repository = f.Git.Open();
         var indexPath = GitFixture.Read(repository.IndexPath(ready.Checkout));
         var index = File.ReadAllBytes(indexPath);
-        var branch = GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch));
+        var branch = GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch!));
         var moves = f.Read().GitIntents.Count;
         Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "result.txt").ExitCode);
         var operation = f.Op();
@@ -27,7 +27,7 @@ public sealed class PublicationTests
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal("Writer files or index changed after the turn-end capture.", blocked.Block.Detail);
         Assert.Equal(0, f.Read().GitIntents.Count - moves);
-        Assert.Equal(branch, GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch)));
+        Assert.Equal(branch, GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch!)));
         Assert.Empty(f.Read().Results);
         Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
         File.WriteAllBytes(indexPath, index);
@@ -51,7 +51,7 @@ public sealed class PublicationTests
         var operation = f.Op();
         var result = new ResultId(OperationIds.Derive(operation, "result").Value);
         var plan = new MaterializationPlan.Publication(ready.Execution.Launch.Attempt, result, null,
-            record.RootExits[ready.Execution.Launch].Tip, first.Index?.Content, first.Recipe, first.Candidate, first.Report!, [])
+            record.RootExits[ready.Execution.Launch].Tip, first.Index?.Content, first.Recipe, first.Candidate!.Value, first.Report!, [])
         { Capture = capture };
         Assert.Equal("OutcomeMismatch", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
             new RunEvent.Planned(plan with { Capture = new(Id(9900)) }))).Reason.Problem.ToString());
@@ -205,7 +205,7 @@ public sealed class PublicationTests
         if (ownCommit) Assert.Equal("new\n", File.ReadAllText(Path.Combine(ready.Checkout, "new.txt")));
         Assert.Equal(bytes, File.ReadAllBytes(index));
         Assert.Equal(ownCommit ? "2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67" : "adfe40b30c176fb407933286f51d15ea9b54cdc3",
-            GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+            GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!))?.Hex);
         Assert.Equal("A\n", f.Git.Git("show", "adfe40b30c176fb407933286f51d15ea9b54cdc3:a.txt"));
         Assert.Equal(blocked, f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
     }
@@ -218,7 +218,7 @@ public sealed class PublicationTests
         f.Git.Write("result.txt", "done\n", ready.Checkout);
         await f.Close(ready);
         var repository = f.Git.Open();
-        var tip = GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch));
+        var tip = GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch!));
         var index = GitFixture.Read(repository.IndexPath(ready.Checkout));
         var bytes = File.ReadAllBytes(index);
         f.Git.Write("result.txt", "late\n", ready.Checkout);
@@ -226,7 +226,7 @@ public sealed class PublicationTests
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal("Writer files or index changed after the turn-end capture.", blocked.Block.Detail);
         Assert.Equal("late\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
-        Assert.Equal(tip, GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch)));
+        Assert.Equal(tip, GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch!)));
         Assert.Equal(bytes, File.ReadAllBytes(index));
         Assert.Empty(f.Read().Results);
         f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -257,7 +257,7 @@ public sealed class PublicationTests
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
         Assert.Equal(detail, blocked.Block.Detail);
         var repository = f.Git.Open();
-        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", GitFixture.Read(repository.ReadRef(ready.Execution.Location.Owner.Branch!))?.Hex);
         Assert.Null(GitFixture.Read(repository.ReadRef(RunLayout.ResultRef(f.Read().RunKey!, f.Read().TaskKeys[T], ready.Execution.Launch.Attempt))));
         Assert.Empty(f.Read().Results);
         Assert.Equal(blocked, f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), Operation, ready.Execution.Launch.Attempt));
@@ -275,7 +275,7 @@ public sealed class PublicationTests
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", code.Commit.Hex);
         Assert.Equal("435dc9f6defa1902ff86e44aca393b16fdf82718", code.Tree.Hex);
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", code.AttemptBase.Hex);
-        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!))?.Hex);
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", GitFixture.Read(f.Git.Open().ReadRef(code.ResultRef))?.Hex);
         Assert.Equal("", f.Git.Run(ready.Checkout, "status", "--porcelain").Text);
         Assert.Equal("435dc9f6defa1902ff86e44aca393b16fdf82718", GitFixture.Read(f.Git.Open().ReadIndexTree(ready.Checkout)).Hex);
@@ -303,7 +303,7 @@ public sealed class PublicationTests
         Assert.Equal(OperationIds.Derive(Operation, "plan"), blocked.Block.Operation);
         Assert.Empty(f.Read().Results);
         Assert.Equal("late\n", File.ReadAllText(late));
-        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch))?.Hex);
+        Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!))?.Hex);
         File.Delete(late);
         var sequence = f.Read().Sequence;
         Assert.Equal(blocked, f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
@@ -557,22 +557,21 @@ public sealed class PublicationTests
     }
 
     [Fact]
-    public async Task A_diverged_capture_blocks_once_with_its_changed_paths_and_a_matching_control_publishes()
+    public async Task A_diverged_capture_blocks_once_with_its_changed_refs_and_a_matching_control_publishes()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "first\n", ready.Checkout);
         var log = f.ObserveAndLog(ready);
-        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: step =>
-        {
-            if (step == "journal.capture-1.after") f.Git.Write("result.txt", "second\n", ready.Checkout);
-        }).Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
-        Assert.Equal("DirtyWorktree", Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition).Problem.ToString());
+        CommitAfterRootExit(f, ready);
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        Assert.Equal("UncertainOwnership", Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition).Problem.ToString());
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Contains("result.txt", blocked.Block.Detail);
-        Assert.Equal(blocked, f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Contains(ready.Execution.Location.Owner.Branch!, blocked.Block.Detail);
+        Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
+            f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt)).Block));
         Assert.Single(f.Read().Blocks);
         Assert.Equal(0, f.Read().Plans.Values.Count(plan => plan is MaterializationPlan.Publication));
         Assert.Empty(f.Read().Results);
@@ -591,33 +590,30 @@ public sealed class PublicationTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         f.Git.Write("result.txt", "first\n", ready.Checkout);
         var log = f.ObserveAndLog(ready);
-        var clock = new ManualTimeProvider();
-        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(clock: clock, probe: step =>
-        {
-            if (step != "journal.capture-1.after") return;
-            f.Git.Write("result.txt", "second\n", ready.Checkout);
-            clock.Advance(TimeSpan.FromMilliseconds(250));
-        }).Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
+        CommitAfterRootExit(f, ready);
+        var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
         var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
-        Assert.Equal("DirtyWorktree", diverged.Problem.ToString());
-        Assert.Equal(new[] { "result.txt" }, diverged.Paths);
+        Assert.Equal("UncertainOwnership", diverged.Problem.ToString());
+        Assert.Empty(diverged.Paths);
+        Assert.Equal(new[] { ready.Execution.Location.Owner.Branch! }, diverged.Refs);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
-        Assert.Equal("The captures differ in recipe, candidate. Paths or refs: result.txt", blocked.Block.Detail);
+        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
+        Assert.Equal("The branch tip or HEAD differs from the root observation. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", blocked.Block.Detail);
         Assert.Equal(Operation, blocked.Block.Operation);
         var firstId = Assert.Single(f.Read().Blocks).Key;
         var sequence = f.Read().Sequence;
         var next = new OperationId(Id(2001));
-        Assert.Equal(blocked, f.Materializer().Publish(f.Lease(T), next, ready.Execution.Launch.Attempt));
+        Assert.Equal(RunJournal.Canonical(blocked.Block), RunJournal.Canonical(Assert.IsType<Publication.Blocked>(
+            f.Materializer().Publish(f.Lease(T), next, ready.Execution.Launch.Attempt)).Block));
         Assert.Equal(sequence, f.Read().Sequence);
         Assert.Single(f.Read().Blocks);
         Assert.Empty(f.Read().Results);
 
         Recheck(f, firstId);
         var reblocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), next, ready.Execution.Launch.Attempt));
-        Assert.Equal("DirtyWorktree", reblocked.Block.Problem.ToString());
-        Assert.Equal("The captures differ in recipe, candidate. Paths or refs: result.txt", reblocked.Block.Detail);
+        Assert.Equal("UncertainOwnership", reblocked.Block.Problem.ToString());
+        Assert.Equal("The branch tip or HEAD differs from the root observation. Paths or refs: refs/heads/idp/93f23689/task/90d5b0a2", reblocked.Block.Detail);
         Assert.Equal(next, reblocked.Block.Operation);
         var record = f.Read();
         Assert.Equal(sequence + 2, record.Sequence);
@@ -647,7 +643,7 @@ public sealed class PublicationTests
         var record = f.Read();
         var moves = record.GitIntents.Count;
         var sequence = record.Sequence;
-        var branch = ready.Execution.Location.Owner.Branch;
+        var branch = ready.Execution.Location.Owner.Branch!;
         var drift = new MaterializationBlock(new(Id(2001)), T, ready.Execution.Launch.Attempt,
             MaterializationProblem.DirtyWorktree, ready.Execution.Inputs, [], "Concurrent salvage observed drift.") { Scope = BlockScope.Checkout.Whole };
         var blockId = new OperationId(Id(9000));
@@ -773,7 +769,7 @@ public sealed class PublicationTests
             }).Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
             f.Git.Write("result.txt", "late\n", ready.Checkout);
             var moves = f.Read().GitIntents.Count;
-            var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch));
+            var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!));
             var outcome = f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt);
             if (point == "journal.accepted.after")
             {
@@ -781,13 +777,13 @@ public sealed class PublicationTests
                 Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(original.Result.Code).Code.Commit.Hex + ":result.txt"));
                 Assert.Single(f.Read().Results);
                 Assert.Equal(0, f.Read().GitIntents.Count - moves);
-                Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch)));
+                Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!)));
                 continue;
             }
             var blocked = Assert.IsType<Publication.Blocked>(outcome);
             Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
             Assert.Equal(0, f.Read().GitIntents.Count - moves);
-            Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch)));
+            Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!)));
             Assert.Empty(f.Read().Results);
             Assert.Equal("late\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
             f.Git.Write("result.txt", "done\n", ready.Checkout);
@@ -806,7 +802,7 @@ public sealed class PublicationTests
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = await ChangedWriter(f, artifact: true);
-        var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch));
+        var branch = GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!));
         Assert.Throws<Crash>(() => f.Materializer(probe: step =>
         {
             if (step == "journal.plan.after") throw new Crash();
@@ -823,7 +819,7 @@ public sealed class PublicationTests
         var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
         Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
         Assert.Empty(f.Read().Results);
-        Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch)));
+        Assert.Equal(branch, GitFixture.Read(f.Git.Open().ReadRef(ready.Execution.Location.Owner.Branch!)));
         Assert.StartsWith($"Attempt {ready.Execution.Launch.Attempt.Value:D}, capture path {captureArtifact.StoredPath}, result path {resultArtifact.StoredPath}: ", blocked.Block.Detail);
         File.WriteAllBytes(path, [67, 0, 127]);
         var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), Operation, ready.Execution.Launch.Attempt));
@@ -859,6 +855,13 @@ public sealed class PublicationTests
         Assert.Equal(accepted, replay);
         Assert.Equal(sequence, f.Read().Sequence);
         Assert.False(Assert.Single(f.Read().Blocks).Value.Resolved);
+    }
+
+    private static void CommitAfterRootExit(PreparationFixture f, Preparation.Ready ready)
+    {
+        f.Git.Write("late.txt", "late\n", ready.Checkout);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "add", "late.txt").ExitCode);
+        Assert.Equal(0, f.Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "late").ExitCode);
     }
 
     private static void Recheck(PreparationFixture f, OperationId block) =>
