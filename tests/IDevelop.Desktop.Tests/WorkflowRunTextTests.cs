@@ -193,4 +193,61 @@ public sealed class WorkflowRunTextTests
         Assert.Equal("1 of 3 done", WorkflowRunText.Progress(Completed(parse, render with { State = TaskState.Failed }, ship)));
         Assert.Null(WorkflowRunText.Progress(Completed(render)));
     }
+
+    private static readonly CommitId Commit = new(new string('a', 40));
+
+    private static MergeConflict Conflict(MergeTarget target) => new(target, Commit, Commit, Commit, ["settings.txt"], "## The conflict");
+
+    private static TaskView Conflicting(TaskId? mergedBy)
+    {
+        var evidence = new ConflictEvidence([], 1, ["settings.txt"], [], [], new("a", new(new string('0', 64)), 0), new("b", new(new string('0', 64)), 0),
+            "2.47.0", [], Commit) { Merge = Conflict(new MergeTarget.Join(Task)) };
+        return new TaskView(Task, TaskState.Blocked)
+        {
+            Block = new(new(Guid.NewGuid()), Task, null, MaterializationProblem.FanInConflict, null, [], "Merge step 1 of 1 conflicts in settings.txt.", evidence)
+            { Scope = new BlockScope.Operation() },
+            MergedBy = mergedBy,
+        };
+    }
+
+    [Fact]
+    public void A_conflict_between_predecessors_names_the_merge_node_that_merges_it_or_asks_the_person()
+    {
+        var merged = Conflicting(TestTasks.Design);
+        Assert.Equal((NodeState.Idle, "Waits for \"A\""), WorkflowRunText.Of(merged, Title));
+        Assert.Equal("The work it starts from conflicts in settings.txt. \"A\" merges it, and it starts once the merge is committed.",
+            WorkflowRunText.Detail(merged, Title));
+        Assert.Null(WorkflowRunText.Needs(merged, Title));
+
+        var asks = Conflicting(null);
+        Assert.Equal((NodeState.Failed, "Conflict"), WorkflowRunText.Of(asks, Title));
+        Assert.Equal("The work it starts from conflicts in settings.txt, and no Merge node takes the conflict. Add a Merge node and run it to merge\u00A0them.",
+            WorkflowRunText.Detail(asks, Title));
+        Assert.IsType<Attention.Problem>(WorkflowRunText.Needs(asks, Title));
+    }
+
+    [Fact]
+    public void A_merge_nodes_agent_merges_and_a_merge_it_left_unfinished_asks_for_a_retry()
+    {
+        var conflict = Conflict(new MergeTarget.Join(TestTasks.Design));
+        Assert.Equal((NodeState.Running, "Merging"), WorkflowRunText.Of(new TaskView(Task, TaskState.Running) { Merge = conflict }, Title));
+
+        var markers = new TaskView(Task, TaskState.Failed)
+        {
+            Merge = conflict, End = new AttemptEnd.Logged(TerminalAttemptOutcome.Succeeded, new(1, new(new string('0', 64)))),
+        };
+        Assert.Equal((NodeState.Failed, "Not merged"), WorkflowRunText.Of(markers, Title));
+        Assert.Equal("Its agent left conflict markers in settings.txt, so the merge was not committed. Retry it.", WorkflowRunText.Detail(markers, Title));
+    }
+
+    [Fact]
+    public void The_final_merge_says_what_it_waits_for()
+    {
+        Assert.Equal("The run's work waits to merge into main. Commit or stash your changes to root.txt, and it merges. iDevelop never touches them.",
+            WorkflowRunText.Merging(new BranchMergeWait.Uncommitted("refs/heads/main", "/project", ["root.txt"]), Title));
+        Assert.Equal("The run's work conflicts with main in a.txt and b.txt. Merge it into main yourself, or add a Merge node and run\u00A0it.",
+            WorkflowRunText.Merging(new BranchMergeWait.Conflict("refs/heads/main", ["a.txt", "b.txt"], null), Title));
+        Assert.Equal("\"A\" merges the run's work into main, which conflicts in a.txt.",
+            WorkflowRunText.Merging(new BranchMergeWait.Conflict("refs/heads/main", ["a.txt"], TestTasks.Design), Title));
+    }
 }

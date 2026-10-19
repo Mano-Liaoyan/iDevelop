@@ -99,8 +99,15 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     public bool HasActivity => IsActive && View.Tasks.Values.Any(WorkflowRunText.Busy);
 
     /// <summary>A task of the run waits for the person: a reply, a question, or an approval.</summary>
-    public bool IsWaitingForPerson => IsActive && View.Tasks.Values.Any(task => task.State == TaskState.Waiting &&
-        (task.Gate is { Status: GateStatus.Waiting } || task.Status == AttemptStatus.WaitingForInput));
+    public bool IsWaitingForPerson => IsActive && (View.Tasks.Values.Any(task => task.State == TaskState.Waiting &&
+        (task.Gate is { Status: GateStatus.Waiting } || task.Status == AttemptStatus.WaitingForInput)) ||
+        View.Merge is BranchMergeWait.Uncommitted or BranchMergeWait.Conflict { Node: null });
+
+    /// <summary>
+    /// The run waits on a merge conflict that no Merge node takes, so a Merge node the person adds to the workflow runs in it
+    /// and takes the conflict.
+    /// </summary>
+    public bool WaitsForMergeNode => IsControlled && WorkflowRunCoordinator.WaitsForMergeNode(View);
 
     public bool CanStop => IsControlled && View.Phase == RunPhase.Approved && !_busy;
 
@@ -133,6 +140,16 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     }
 
     internal Task<RunCommand> ResumeAsync() => Command(() => Coordinator.Resume(Address));
+
+    /// <summary>
+    /// Adds the document's Merge node <paramref name="node"/> to the run, which waits on a conflict that no Merge node takes,
+    /// once per node in this view model.
+    /// </summary>
+    internal Task<RunCommand> AddMergeAsync(Workflow document, TaskId node)
+    {
+        var confirmation = _joins.TryGetValue(node, out var known) ? known : _joins[node] = new OperationId(Guid.NewGuid());
+        return Command(() => Coordinator.AddMerge(Address, document, node, confirmation));
+    }
 
     public void Dispose()
     {
@@ -229,6 +246,12 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
         if (WorkflowRunText.Working(tasks, _title) is { } working)
         {
             return working;
+        }
+
+        // The run's finished work waits to merge into the branch it started from.
+        if (View.Merge is { } merge)
+        {
+            return WorkflowRunText.Merging(merge, _title);
         }
 
         if (tasks.FirstOrDefault(task => task.State == TaskState.Waiting && task.Gate is { Status: GateStatus.Waiting }) is { } gate)

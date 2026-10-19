@@ -31,6 +31,7 @@ internal static class RecoveryText
             AttemptCause.Retry => "Retry",
             AttemptCause.Continue => "Continuation",
             AttemptCause.ReviewFix fix => $"Fix round {fix.Link.Round}",
+            AttemptCause.Merge => "Merge",
             _ => "Attempt",
         };
         var turn = evidence.Turn is { } number and > 1 ? $", turn {number}" : "";

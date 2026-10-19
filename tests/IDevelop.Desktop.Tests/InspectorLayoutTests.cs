@@ -252,7 +252,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var strong = ((ISolidColorBrush)Application.Current!.FindResource(ThemeVariant.Light, "TextStrongBrush")!).Color;
         Assert.Equal(
-            [("Implement", strong), ("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong)],
+            [("Implement", strong), ("Implement", strong), ("Plan", strong), ("Architect", strong), ("Review", strong), ("Approval", strong), ("Merge", strong)],
             labels);
     }
 
@@ -271,7 +271,7 @@ public sealed class InspectorLayoutTests : IDisposable
         var more = Shell.ById<Button>(shell.Window, "BlueprintMore").Where(button => button.IsEffectivelyVisible).ToArray();
 
         Assert.NotEmpty(counts);
-        Assert.Equal(5, more.Length);
+        Assert.Equal(6, more.Length);
         Assert.All(more.Append(shell.Find<Button>("InspectorTools")), control => Assert.Equal(edge, shell.Bounds(control).Right, 1));
         // A glyph's drawing ends inside its button, so a count's digits end there too, which the next test sees in pixels.
         Assert.All(counts, count => Assert.Equal(edge - InspectorGrid.GlyphInkInset, shell.Bounds(count).Right, 1));
@@ -345,7 +345,7 @@ public sealed class InspectorLayoutTests : IDisposable
 
         var entries = shell.Find<Control>("Inspector").GetVisualDescendants().OfType<InspectorRow>()
             .Where(row => row.IsEffectivelyVisible && row.Classes.Contains("entry")).ToArray();
-        Assert.Equal(6, entries.Length);
+        Assert.Equal(7, entries.Length);
         Assert.All(entries, row => Assert.Equal(InspectorGrid.LineHeight, row.Bounds.Height, 0.5));
         var margins = entries.Select(row => row.Margin).ToList();
 

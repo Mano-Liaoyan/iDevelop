@@ -52,8 +52,8 @@ public sealed class WorkflowRunTests
         Assert.Equal($"HEAD, {f.Head()} on main", shell.Text("PreflightBase"));
         Assert.Null(preflight.ChangedNote);
         Assert.Equal("Ignored files never reach a task.", shell.Text("PreflightIgnored"));
-        Assert.Equal("Each task works in its own checkout under .worktrees/, on a branch under idp/. Your branch, index, and files stay as they are.",
-            shell.Text("PreflightIsolation"));
+        Assert.Equal("Each task works in its own checkout under .worktrees/, on a branch under idp/. Your branch, index, and files stay as they are " +
+            "until the run finishes. Then its work merges into main, once your folder has no uncommitted change.", shell.Text("PreflightIsolation"));
         Assert.True(shell.Find<Button>("PreflightStart").IsEffectivelyEnabled);
 
         shell.Click(shell.Find<Button>("PreflightCancel"));
@@ -108,11 +108,14 @@ public sealed class WorkflowRunTests
         Assert.Equal(preflight.ChangedNote, shell.Text("PreflightChanged"));
         shell.Click(shell.Find<Button>("PreflightStart"));
         shell.WaitUntil(() => shell.WorkflowRun is not null, "the run starts");
-        shell.WaitForStatus("Completed");
+        // The finished run's work waits to merge into main while base.txt has an uncommitted change, and never touches it.
+        shell.WaitForStatus("Waiting");
+        Assert.Equal("The run's work waits to merge into main. Commit or stash your changes to base.txt, and it merges. iDevelop never touches them.",
+            shell.WorkflowRun!.Activity);
 
         var run = shell.WorkflowRun!;
         var record = Assert.IsType<RunRead.Loaded>(RunStore.Open(f.Project).Read(run.Workflow, run.Address.Run)).Record;
-        Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim())), record.Base);
+        Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim())) { Branch = "refs/heads/main" }, record.Base);
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(f.Project, "base.txt")));
         Assert.Equal(" M base.txt\n", f.Run("status", "--porcelain", "--untracked-files=no"));
     }

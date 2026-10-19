@@ -132,8 +132,15 @@ public sealed class RunPreflightViewModel : ObservableObject
         ? $"Each task's checkout initializes its own submodules: {List([.. submodules.Select(submodule => submodule.Path)])}."
         : null;
 
+    /// <summary>
+    /// Where the run's tasks work, and that the run's finished work merges into the branch it starts from, which waits
+    /// while the person's folder has uncommitted changes. A detached HEAD names no branch to merge into.
+    /// </summary>
     public string? WorktreeNote => _preview is { } preview
-        ? $"Each task works in its own checkout under {preview.Worktrees.Checkouts}/, on a branch under {preview.Worktrees.Branches}. Your branch, index, and files stay as they are."
+        ? $"Each task works in its own checkout under {preview.Worktrees.Checkouts}/, on a branch under {preview.Worktrees.Branches}. " +
+            (preview.Base?.Branch is { } branch
+                ? $"Your branch, index, and files stay as they are until the run finishes. Then its work merges into {MergeMarkers.BranchName(branch)}, once your folder has no uncommitted change."
+                : "Your branch, index, and files stay as they are. HEAD is detached, so the run's work merges into no branch.")
         : null;
 
     /// <summary>Earlier reports the run can include instead of running their tasks again. Listing one includes nothing.</summary>
