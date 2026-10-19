@@ -110,10 +110,13 @@ internal sealed partial class WorkflowRunCoordinator
             });
     }
 
-    /// <summary>Whether the task's newest attempt has not started and took a result that is no longer current.</summary>
+    /// <summary>
+    /// Whether the task's newest attempt has not started, fixes no review round, and took a result that is no longer
+    /// current, so it starts again with the new inputs.
+    /// </summary>
     private static bool InputsMoved(RunRecord record, TaskId task) =>
         RunProjection.LatestAttempts(record).GetValueOrDefault(task) is var latest && latest != default &&
-        !record.Closures.ContainsKey(latest) && !record.Claims.Keys.Any(key => key.Attempt == latest) &&
+        !record.Closures.ContainsKey(latest) && !record.Claims.Keys.Any(key => key.Attempt == latest) && record.ReviewOf(latest) is null &&
         record.Inputs[record.Attempts[latest].InitialInputs].Bindings.OfType<InputBinding.Provided>()
             .Any(binding => record.CurrentResults.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result);
 

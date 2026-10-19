@@ -106,7 +106,8 @@ internal sealed partial class Materializer
         {
             var intended = OperationIds.Derive(operation, "retry-merge-intent");
             var tip = Value(repository.ReadRef(own));
-            // The branch is where a result or an earlier Retry's move left it; a failed attempt commits nothing to it.
+            // The branch is where a result or an earlier Retry's move left it. A failed attempt whose agent committed by
+            // itself left it elsewhere, and that start is blocked for the person.
             var placed = record.GitIntents.Where(pair => pair.Key != intended && record.GitObservations.ContainsKey(pair.Key))
                 .Select(pair => pair.Value.Mutation).OfType<GitMutation.MoveRef>().Where(move => move.Change.Ref == own)
                 .Select(move => (CommitId?)move.Change.Target).Append(earlier);
