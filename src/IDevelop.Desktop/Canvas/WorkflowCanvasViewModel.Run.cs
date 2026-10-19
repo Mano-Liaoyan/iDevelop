@@ -86,6 +86,7 @@ public sealed partial class WorkflowCanvasViewModel
         foreach (var node in Nodes)
         {
             node.ShowRunTask(run?.View.Tasks.GetValueOrDefault(node.Id), run?.IsActive ?? false, adopted, Name);
+            node.NotifyRunCommands();
         }
 
         ShowActivity();

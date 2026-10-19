@@ -42,6 +42,17 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>
+    /// The run's view changed, which can change whether this window controls it or whether it still takes commands, while
+    /// the task's own view stays the same, so Cancel and Retry follow it.
+    /// </summary>
+    internal void NotifyRunCommands()
+    {
+        OnPropertyChanged(nameof(ShowsRunCancel));
+        _cancelInRun.NotifyCanExecuteChanged();
+        NotifyRetry();
+    }
+
+    /// <summary>
     /// Asks the run's conversation of the task which turn it is on, and cancels that turn, so a Cancel that arrives after
     /// the task moved on is refused as stale and cancels nothing it did not see.
     /// </summary>
@@ -54,20 +65,26 @@ public sealed partial class TaskNodeViewModel
 
         _cancellingInRun = true;
         _cancelInRun.NotifyCanExecuteChanged();
-        ConversationCommandResult result;
+        string? problem;
         try
         {
             using var session = _canvas.Runs.OpenConversation(run.Coordinator, Id);
-            result = session.Snapshot is { Current: { } turn, Actions.Cancel.Enabled: true }
+            var snapshot = session.Snapshot;
+            var result = snapshot is { Current: { } turn, Actions.Cancel.Enabled: true }
                 ? await session.CancelAsync(turn, CancellationToken.None)
-                : new ConversationCommandResult(CommandOutcome.Refused, session.Snapshot.Actions.Cancel.Reason);
+                : new ConversationCommandResult(CommandOutcome.Refused, snapshot.Actions.Cancel.Reason);
+            problem = result.Outcome == CommandOutcome.Applied ? null : result.Detail;
+        }
+        catch (Exception error)
+        {
+            problem = error.Message;
         }
         finally
         {
             _cancellingInRun = false;
+            _cancelInRun.NotifyCanExecuteChanged();
         }
 
-        _cancelInRun.NotifyCanExecuteChanged();
-        _canvas.Notice(result.Outcome == CommandOutcome.Applied ? null : result.Detail);
+        _canvas.Notice(problem);
     }
 }

@@ -107,6 +107,7 @@ public sealed class RunCancelTests
 
         shell.RightClick(shell.Header(shell.Node("Implement")));
         Assert.Contains("Cancel", shell.MenuHeaders());
+        Assert.DoesNotContain("Cancel Run", shell.MenuHeaders());
         shell.Click(shell.MenuItem("NodeMenuCancelInRun"));
 
         shell.WaitForCard("Implement", "Cancelled");
