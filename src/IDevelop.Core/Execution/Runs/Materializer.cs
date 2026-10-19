@@ -236,6 +236,17 @@ internal sealed partial class Materializer
         catch (Refusal refused) { return new Preparation.Rejected(refused.Reason); }
     }
 
+    private void ResolveMaintenanceBlocks(CoordinatorPermit permit, OperationId operation, string reason, Func<BlockScope, bool>? scope = null)
+    {
+        var workflow = permit.Workflow;
+        var run = permit.Run;
+        foreach (var pair in Read(workflow, run).Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Operation == operation &&
+            (scope is null || scope(pair.Value.Block.Scope)))
+            .OrderBy(pair => pair.Key.Value))
+            Journal("maintenance-resolve-" + pair.Key.Value.ToString("D"), () => _store.Record(permit,
+                OperationIds.Derive(operation, "maintenance-resolve-" + pair.Key.Value.ToString("D")), new RunEvent.BlockResolved(pair.Key, reason)));
+    }
+
     private RunProblem? LeaseProblem(RunLease lease, TaskId? task = null)
     {
         if (!lease.Held) return RunProblem.TaskBusy;

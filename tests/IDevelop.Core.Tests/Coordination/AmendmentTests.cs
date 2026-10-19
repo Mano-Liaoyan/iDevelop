@@ -79,8 +79,12 @@ public sealed class AmendmentTests
     {
         await using var f = Fixture();
         await f.Open();
+        // One root at a time, and B's preparation held, so the run stays open until the amendment is recorded.
+        f.Runs.ClientRoots = 1;
         var original = f.Read().Revision.Id;
+        var (reached, release) = HoldSecondPreparation(f);
         await f.Resume();
+        await reached.Task.WaitAsync(Bound);
         await f.Until(view => view.Tasks[A].State == TaskState.Done);
         var (_, _, proposal) = Proposed(f);
         var added = proposal.Nodes.Single(node => node.Name == "new-1").Id;
@@ -92,6 +96,7 @@ public sealed class AmendmentTests
         }).WaitAsync(Bound);
 
         Assert.IsType<RunCommand.Accepted>(amended);
+        release.TrySetResult();
         await f.UntilStatus(RunStatus.Completed);
         var record = f.Read();
         Assert.Equal(chosen, record.Revision.Snapshot.Tasks[added].Execution);

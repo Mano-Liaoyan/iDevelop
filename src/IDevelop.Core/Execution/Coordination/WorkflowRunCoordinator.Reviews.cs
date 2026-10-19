@@ -210,8 +210,7 @@ internal sealed partial class WorkflowRunCoordinator
         Recover(address, review, FixChoice.Continue, confirmation, wait);
 
     /// <summary>
-    /// Retry fix: the interrupted round starts again in a fresh session. The fix's unfinished work is salvaged first, and a
-    /// checked reset puts the checkout back at the subject's latest accepted result.
+    /// Retry fix: the interrupted round starts again in a fresh session, in the subject's worktree with its files as they are.
     /// </summary>
     internal Task<FixReply> RetryFix(RunAddress address, TaskId review, OperationId confirmation, CancellationToken wait = default) =>
         Recover(address, review, FixChoice.Retry, confirmation, wait);
@@ -282,7 +281,7 @@ internal sealed partial class WorkflowRunCoordinator
         }
         var cause = Cause(recovery.Fix);
         _live[subject] = new(LiveStage.Settling);
-        Background(() => Replace(record, review, recovery.Fix, cause, confirmation), reply =>
+        Background(() => Replace(record, review, recovery.Fix, cause), reply =>
         {
             _live.Remove(subject);
             complete(reply);
@@ -310,32 +309,16 @@ internal sealed partial class WorkflowRunCoordinator
     };
 
     /// <summary>
-    /// Under the subject's task lease: salvages and resets the checkout for Retry, then reserves and prepares the
-    /// replacement, which a Continue starts in the checkout as it is. Each step derives its operation from the confirmation, so a
-    /// repeat after a crash or a refusal converges on the same records.
+    /// Under the subject's task lease: reserves and prepares the replacement, which a Continue fix and a Retry fix both start
+    /// in the subject's worktree with its files as they are. Its operation derives from the confirmation, so a repeat after
+    /// a crash or a refusal converges on the same records.
     /// </summary>
-    private async Task<FixReply> Replace(RunRecord record, RestingReview review, AttemptId fix, AttemptCause cause, OperationId confirmation)
+    private async Task<FixReply> Replace(RunRecord record, RestingReview review, AttemptId fix, AttemptCause cause)
     {
         if (_permit!.TakeTask(review.Subject) is not LeaseTake.Taken taken) return new FixReply.Refused(new(RunProblem.TaskBusy));
         using var lease = taken.Lease;
         var materializer = Commanded();
         FixReply Refused(RunRejection reason) => new FixReply.Refused(reason);
-        if (cause is not AttemptCause.Continue)
-        {
-            _runs.Probe?.Invoke("coordinator.retry-fix.salvage");
-            switch (await materializer.Salvage(lease, OperationIds.Derive(confirmation, "retry-fix/salvage"), fix).ConfigureAwait(false))
-            {
-                case Salvage.Blocked blocked: return new FixReply.Blocked(blocked.Block);
-                case Salvage.Rejected rejected: return Refused(rejected.Reason);
-                case Salvage.Retained retained:
-                    switch (materializer.ResetForRetry(lease, OperationIds.Derive(confirmation, "retry-fix/reset"), retained.Receipt.Plan, confirmation))
-                    {
-                        case RetryReset.Blocked blocked: return new FixReply.Blocked(blocked.Block);
-                        case RetryReset.Rejected rejected: return Refused(rejected.Reason);
-                    }
-                    break;
-            }
-        }
         // The prompt reads the review's records as the reserved attempt will, before the attempt exists.
         var prompt = RunReviews.ReplacementPrompt(record, review.Log, fix, cause, Log, Address.Project);
         return await materializer.Prepare(lease, RunOperations.First(Address.Run, review.Subject, cause), cause, prompt).ConfigureAwait(false) switch

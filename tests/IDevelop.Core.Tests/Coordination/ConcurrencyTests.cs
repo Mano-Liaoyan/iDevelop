@@ -317,18 +317,6 @@ public sealed class ConcurrencyTests
         // The closure is recorded, and the run finishes its publication once the repository is free.
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal("A\n", f.ResultFile(A, "a.txt"));
-
-        // The coordinator's own commands for a person, such as the rebase preview, wait as briefly.
-        RebasePreviewRead preview;
-        waited.Restart();
-        using (var held = f.Preparation.Git.Open().TakeMutationLock())
-        {
-            Assert.NotNull(held);
-            preview = await f.Coordinator.ReviewUpdatedInputs(f.Address, A).WaitAsync(Bound);
-            waited.Stop();
-        }
-        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(10), $"The preview waited {waited.Elapsed}.");
-        Assert.Equal(RunProblem.JournalBusy, Assert.IsType<RebasePreviewRead.Rejected>(preview).Reason.Problem);
     }
 
     [Fact]

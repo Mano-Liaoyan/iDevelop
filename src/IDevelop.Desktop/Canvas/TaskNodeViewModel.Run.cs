@@ -27,7 +27,6 @@ public sealed partial class TaskNodeViewModel
     private string? _runWorkflow;
     private GateViewModel? _gate;
     private RecoveryViewModel? _recovery;
-    private UpdatedInputsViewModel? _updatedInputs;
     private readonly Dictionary<(AttemptId Fix, FixChoice Choice), OperationId> _fixChoices = [];
     private bool _choosingFix;
     private AttemptRecord? _runReview;
@@ -120,22 +119,11 @@ public sealed partial class TaskNodeViewModel
         }
     }
 
-    /// <summary>The task's stale result in the run, with Review updated inputs and Approve rebase, or null.</summary>
-    public UpdatedInputsViewModel? UpdatedInputs
-    {
-        get => _updatedInputs;
-        private set
-        {
-            var old = _updatedInputs;
-            if (SetProperty(ref _updatedInputs, value))
-            {
-                old?.Dispose();
-            }
-        }
-    }
-
-    /// <summary>The run needs the person's choice in this task's inspector rather than in its conversation.</summary>
-    private bool NeedsRunPanel => Recovery is not null || UpdatedInputs is not null || RunFix is not null;
+    /// <summary>
+    /// The run needs the person in this task's inspector rather than in its conversation: a recovery, an interrupted fix,
+    /// or a stale result, whose inspector says why it needs attention.
+    /// </summary>
+    private bool NeedsRunPanel => Recovery is not null || RunFix is not null || _runActive && RunTask is { State: TaskState.Stale };
 
     /// <summary>The review's fix round that closing iDevelop interrupted in the canvas's active run, or null.</summary>
     private FixRecovery? RunFix => _runActive ? RunTask?.Fix : null;
@@ -236,9 +224,9 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>
-    /// The Recovery and Updated inputs sections follow the task's state while the run is active. A shown section stays
-    /// while the task settles, as it does while the section's own command or a reconciliation runs, so what the person
-    /// typed and the command's outcome stay with it.
+    /// The Recovery section follows the task's state while the run is active. A shown section stays while the task
+    /// settles, as it does while the section's own command or a reconciliation runs, so what the person typed and the
+    /// command's outcome stay with it.
     /// </summary>
     private void ShowPanels()
     {
@@ -258,18 +246,6 @@ public sealed partial class TaskNodeViewModel
             else
             {
                 Recovery = new RecoveryViewModel(run, task);
-            }
-        }
-
-        if (_updatedInputs is null || !settling)
-        {
-            if (run is null || task is not { State: TaskState.Stale })
-            {
-                UpdatedInputs = null;
-            }
-            else if (_updatedInputs is not { } current || !current.Shows(run, task))
-            {
-                UpdatedInputs = new UpdatedInputsViewModel(run, task.Task, TitleOf, task.CarriesCode);
             }
         }
 

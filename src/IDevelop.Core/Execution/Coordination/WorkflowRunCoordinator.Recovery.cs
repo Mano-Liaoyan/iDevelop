@@ -114,6 +114,41 @@ internal sealed partial class WorkflowRunCoordinator
         }
         return identity;
     }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> off the loop for the controlling window and answers with <paramref name="finish"/> of its
+    /// outcome, on the loop. With <paramref name="mark"/> the task counts as settling while it runs, so nothing else starts it.
+    /// The work gets the task's turn whose settlement stayed unresolved, read on the loop, so it can use the lease that turn
+    /// still holds.
+    /// </summary>
+    private Task<T> Request<T, TWork>(RunAddress address, TaskId task, Func<string, T> unavailable, Func<RunRejection, T> refused, bool mark,
+        Func<UnresolvedTurn?, Task<TWork>> work, Func<TWork, T> finish, CancellationToken wait)
+    {
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!Post(() =>
+            {
+                if (_permit is null) done.TrySetResult(unavailable(ElsewhereMessage));
+                else if (!Same(address)) done.TrySetResult(refused(new(RunProblem.IdentityMismatch)));
+                else if (_live.ContainsKey(task)) done.TrySetResult(refused(new(RunProblem.TaskBusy)));
+                else
+                {
+                    if (mark) _live[task] = new(LiveStage.Settling);
+                    var held = _unresolved.GetValueOrDefault(task);
+                    Background(() => work(held), outcome =>
+                    {
+                        if (mark) _live.Remove(task);
+                        done.TrySetResult(finish(outcome));
+                    }, error =>
+                    {
+                        if (mark) _live.Remove(task);
+                        _problem = error.Message;
+                        done.TrySetResult(refused(new(RunProblem.StorageUnavailable)));
+                    });
+                }
+            }))
+            done.TrySetResult(refused(new(RunProblem.RunStopped)));
+        return done.Task.WaitAsync(wait);
+    }
 }
 
 /// <summary>What one attempt of a task left as evidence, for a person to judge a block or an unresolved turn.</summary>

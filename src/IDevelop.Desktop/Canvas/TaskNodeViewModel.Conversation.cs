@@ -23,7 +23,7 @@ public sealed partial class TaskNodeViewModel
     public ICommand OpenConversationCommand => _openConversation;
 
     /// <summary>What the card's attention glyph does: it opens an agent's conversation, or selects an approval, whose request the inspector shows.</summary>
-    /// <summary>A task whose recovery, updated inputs, or interrupted fix waits for the person shows its inspector, which offers the choice.</summary>
+    /// <summary>A task whose recovery or interrupted fix waits for the person shows its inspector, which offers the choice.</summary>
     public ICommand AttendCommand => HasAgent && !NeedsRunPanel ? _openConversation : SelectCommand;
 
     public string AttendHelp => !HasAgent ? "Shows the approval request" : NeedsRunPanel ? "Shows what the run needs from you" : "Opens the conversation";

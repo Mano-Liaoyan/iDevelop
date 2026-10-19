@@ -135,7 +135,7 @@ internal static class RunProjection
             var state = block is not null ? TaskState.Blocked : record.StaleResults.Contains(current.Id) ? TaskState.Stale : TaskState.Done;
             return new(task, state)
             {
-                Attempt = attempt, Result = current.Id, Block = block, CarriesCode = current.Code is CodeOutput.Produced,
+                Attempt = attempt, Result = current.Id, Block = block,
                 Carried = current.Origin is ResultOrigin.Carried,
             };
         }

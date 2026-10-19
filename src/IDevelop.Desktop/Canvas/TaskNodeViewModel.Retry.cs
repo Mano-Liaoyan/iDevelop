@@ -36,8 +36,8 @@ public sealed partial class TaskNodeViewModel
     public bool ConfirmingRetry => ShowsRetry && _confirmingRetry;
 
     /// <summary>What Retry does, which the person confirms.</summary>
-    public string RetryConfirmation => $"Retry runs \"{Title}\" again in a fresh session. Its unfinished work is saved first, and its checkout " +
-        "goes back to where its last attempt started. The tasks after it run once it has a result.";
+    public string RetryConfirmation => $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. " +
+        "The tasks after it run once it has a result.";
 
     /// <summary>Shows the task in the inspector, which asks for the confirmation.</summary>
     public ICommand RetryCommand => _retry;

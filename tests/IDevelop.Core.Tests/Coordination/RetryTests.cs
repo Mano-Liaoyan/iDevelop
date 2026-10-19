@@ -12,7 +12,7 @@ public sealed class RetryTests
         .Print(FakeAgents.SessionLine(ClientId.Codex, "session-" + Name(task))).Write(file, text).Exit(1);
 
     [Fact]
-    public async Task A_failed_task_s_retry_starts_a_fresh_attempt_and_the_run_goes_on()
+    public async Task A_failed_task_s_retry_starts_a_fresh_attempt_in_its_worktree_with_its_files_and_the_run_goes_on()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
         f.Answer(A, Fails(A, "half.txt", "half\n"), Writes(A, "result.txt", "done\n")).Answer(B, Writes(B, "b.txt", "B\n"));
@@ -30,9 +30,12 @@ public sealed class RetryTests
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal([2, 1], new[] { f.Launches(A), f.Launches(B) });
         Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
-        // The failed attempt's unfinished work is saved, and the retry starts from a checkout without it.
-        Assert.Single(f.Read().Salvages);
-        Assert.Null(f.ResultFile(A, "half.txt"));
+        // The retry continues in the failed attempt's worktree with the files it left there.
+        var record = f.Read();
+        Assert.Equal(record.Preparations[new(previous, 1)].Location.Owner, record.Preparations[new(reply.Attempt, 1)].Location.Owner);
+        Assert.Equal("half\n", f.ResultFile(A, "half.txt"));
+        Assert.Empty(record.Salvages);
+        Assert.DoesNotContain(record.GitIntents.Values, intent => intent.Mutation is GitMutation.ResetCheckout);
     }
 
     [Fact]

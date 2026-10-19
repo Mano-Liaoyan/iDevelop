@@ -292,6 +292,6 @@ public sealed class ProjectionTests
         f.Approve();
         f.Complete(f.Reserve(T), report: "T ready.\n");
 
-        Assert.Equal((TaskState.Done, false), (View(f).Tasks[T].State, View(f).Tasks[T].CarriesCode));
+        Assert.Equal(TaskState.Done, View(f).Tasks[T].State);
     }
 }

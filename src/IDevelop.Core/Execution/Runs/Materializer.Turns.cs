@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using IDevelop.Workflows;
 
 namespace IDevelop.Execution;
@@ -130,5 +131,20 @@ internal sealed partial class Materializer
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
+    }
+
+    private static void VerifyResetHead(GitRepository repository, string checkout, string branch, CommitId target)
+    {
+        if (Value(repository.SymbolicHead(checkout)) != branch || Value(repository.ReadRef(branch)) != target)
+            throw Fault(MaterializationProblem.UncertainOwnership, "The reset HEAD or task branch differs from its recorded target.", new BlockScope.Checkout([], Branch: true, Head: true));
+    }
+
+    private static void VerifyIgnoredObstructions(GitRepository repository, string checkout, ImmutableArray<string> targetPaths)
+    {
+        var ignored = Value(repository.IgnoredFiles(checkout));
+        var obstructed = targetPaths.Where(path => ignored.Any(file => path == file ||
+            path.StartsWith(file + "/", StringComparison.Ordinal) || file.StartsWith(path + "/", StringComparison.Ordinal))).ToImmutableArray();
+        if (!obstructed.IsEmpty)
+            throw Fault(MaterializationProblem.DirtyWorktree, "Ignored files obstruct the reset target and must be preserved.", new BlockScope.Checkout(obstructed));
     }
 }

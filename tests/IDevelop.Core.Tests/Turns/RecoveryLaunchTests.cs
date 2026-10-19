@@ -97,10 +97,8 @@ public sealed class RecoveryLaunchTests
         Assert.IsType<Release.Released>(Assert.IsType<TurnSettlement.Settled>(reconciled.Settlement).Turn.Release());
         Assert.Equal(launches, f.Launches);
         var p = f.Preparation;
-        var salvage = Assert.IsType<Salvage.Retained>(await p.Materializer().Salvage(p.Lease(T), p.Op(), previous));
-        Assert.IsType<RetryReset.Reset>(p.Materializer().ResetForRetry(p.Lease(T), p.Op(), salvage.Receipt.Plan, p.Op()));
-        p.Release(T);
-        Assert.False(File.Exists(Path.Combine(f.Checkout, "keep.txt")));
+        // The retry continues with the files the interrupted attempt left.
+        Assert.True(File.Exists(Path.Combine(f.Checkout, "keep.txt")));
         // Only a fresh thread matches, so a resumed session would fail the turn.
         FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Fresh(f.Client)
             .Print(FakeAgents.SessionLine(f.Client, "session-2")).Print(FakeAgents.ReplyLines(f.Client, "Done.")));

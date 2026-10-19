@@ -65,7 +65,7 @@ public sealed class WorkflowRunTextTests
 
         Assert.Equal((NodeState.Waiting, "Fix interrupted"), WorkflowRunText.Of(fix, Title));
         Assert.Equal(new Attention.Waiting("Fix interrupted"), WorkflowRunText.Needs(fix, Title));
-        Assert.Equal(new Attention.Problem("Inputs changed: A task before it handed on a newer result after this one finished."), WorkflowRunText.Needs(stale, Title));
+        Assert.Equal(new Attention.Problem("Inputs changed: A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays."), WorkflowRunText.Needs(stale, Title));
         Assert.Null(WorkflowRunText.Needs(new TaskView(Task, TaskState.Waiting) { Status = AttemptStatus.InReview }, Title));
     }
 
@@ -89,14 +89,6 @@ public sealed class WorkflowRunTextTests
         Assert.Equal("Stopping waits for you to close \"B\" as stopped.", WorkflowRunText.Stopping([new TaskView(Task, TaskState.Uncertain)], Title));
         Assert.Equal("Stopping waits for \"B\" to settle. Open the project again to retry.",
             WorkflowRunText.Stopping([new TaskView(Task, TaskState.Uncertain) { RootExited = true }], Title));
-    }
-
-    [Fact]
-    public void Every_update_shows()
-    {
-        string[] paths = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"];
-
-        Assert.Equal(string.Join("\n", paths), RecoveryText.CandidatePaths(new RebaseCandidate.Clean(new(new string('1', 40)), new(new string('2', 40)), [.. paths])));
     }
 
     [Fact]

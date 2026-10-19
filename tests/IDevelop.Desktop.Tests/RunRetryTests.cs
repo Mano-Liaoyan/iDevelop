@@ -52,8 +52,8 @@ public sealed class RunRetryTests
 
         shell.Click(shell.InView<Button>("RetryTask"));
 
-        Assert.Equal("Retry runs \"A\" again in a fresh session. Its unfinished work is saved first, and its checkout goes back to where its " +
-            "last attempt started. The tasks after it run once it has a result.", shell.Text("RetryConfirmation"));
+        Assert.Equal("Retry runs \"A\" again in a fresh session, with the files its last attempt left. The tasks after it run once it " +
+            "has a result.", shell.Text("RetryConfirmation"));
         Assert.False(Shows(shell, "RetryTask"));
         Assert.Equal(1, f.Launches("A"));
 

@@ -10,7 +10,7 @@ internal abstract record RetryReply
     /// <summary>The new attempt is reserved and prepared. It starts at once, or once a client slot is free at the run's bound.</summary>
     internal sealed record Reserved(AttemptId Attempt) : RetryReply;
 
-    /// <summary>A recorded block holds the task's checkout, such as a salvage whose observations differ.</summary>
+    /// <summary>A recorded block holds the task's preparation, such as a worktree that no longer matches the run's records.</summary>
     internal sealed record Blocked(MaterializationBlock Block) : RetryReply;
 
     internal sealed record Refused(RunRejection Reason) : RetryReply;
@@ -24,9 +24,9 @@ internal sealed partial class WorkflowRunCoordinator
 {
     /// <summary>
     /// Retries <paramref name="task"/>, whose newest attempt ended without a result, as the person confirmed under
-    /// <paramref name="confirmation"/>. The attempt's unfinished work is salvaged, a checked reset puts the checkout back
-    /// where the attempt started, and the new attempt is reserved with <see cref="AttemptCause.Retry"/>. Repeating the
-    /// confirmation returns the same attempt; it makes one attempt per confirmation.
+    /// <paramref name="confirmation"/>. The new attempt is reserved with <see cref="AttemptCause.Retry"/> and continues in the
+    /// failed attempt's worktree with its files as they are (ADR 0032). Repeating the confirmation returns the same attempt;
+    /// it makes one attempt per confirmation.
     /// </summary>
     internal Task<RetryReply> Retry(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) =>
         Converse<RetryReply>(address, (record, complete) => RetryCore(record, task, confirmation, complete), command => command switch
@@ -80,7 +80,7 @@ internal sealed partial class WorkflowRunCoordinator
         var previous = view.Attempt!.Value;
         var cause = new AttemptCause.Retry(previous, confirmation);
         _live[task] = new(LiveStage.Settling);
-        Background(() => Reserve(record, task, previous, cause, confirmation), reply =>
+        Background(() => Reserve(task, cause), reply =>
         {
             _live.Remove(task);
             if (reply is RetryReply.Reserved) _holds.Remove(task);
@@ -94,32 +94,15 @@ internal sealed partial class WorkflowRunCoordinator
     }
 
     /// <summary>
-    /// Under the task's lease: salvages and resets the checkout the previous attempt left, then reserves and prepares the
-    /// retry. Each step derives its operation from the confirmation, so a repeat after a crash or a refusal converges.
+    /// Under the task's lease: reserves and prepares the retry in the task's worktree. Its operation derives from the
+    /// confirmation, so a repeat after a crash or a refusal converges.
     /// </summary>
-    private async Task<RetryReply> Reserve(RunRecord record, TaskId task, AttemptId previous, AttemptCause.Retry cause, OperationId confirmation)
+    private async Task<RetryReply> Reserve(TaskId task, AttemptCause.Retry cause)
     {
         if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RetryReply.Refused(new(RunProblem.TaskBusy));
         using var lease = taken.Lease;
         var materializer = Commanded();
         RetryReply Refused(RunRejection reason) => new RetryReply.Refused(reason);
-        // A read-only task's worktree has no branch to salvage onto, and its Retry works in that worktree (ADR 0032).
-        if (record.Preparations.TryGetValue(new(previous, 1), out var prepared) && prepared.Location.Owner.Branch is not null)
-        {
-            _runs.Probe?.Invoke("coordinator.retry.salvage");
-            switch (await materializer.Salvage(lease, OperationIds.Derive(confirmation, "retry/salvage"), previous).ConfigureAwait(false))
-            {
-                case Salvage.Blocked blocked: return new RetryReply.Blocked(blocked.Block);
-                case Salvage.Rejected rejected: return Refused(rejected.Reason);
-                case Salvage.Retained retained:
-                    switch (materializer.ResetForRetry(lease, OperationIds.Derive(confirmation, "retry/reset"), retained.Receipt.Plan, confirmation))
-                    {
-                        case RetryReset.Blocked blocked: return new RetryReply.Blocked(blocked.Block);
-                        case RetryReset.Rejected rejected: return Refused(rejected.Reason);
-                    }
-                    break;
-            }
-        }
         return await materializer.Prepare(lease, RunOperations.First(Address.Run, task, cause), cause, agents: _runs.AgentOffers).ConfigureAwait(false) switch
         {
             Preparation.Ready ready => new RetryReply.Reserved(ready.Execution.Launch.Attempt),
