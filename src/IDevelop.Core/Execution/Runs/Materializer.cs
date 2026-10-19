@@ -139,7 +139,9 @@ internal sealed partial class Materializer
                 throw new Refusal(new(RunProblem.InputConflict));
             var location = new ExecutionLocation(owner, start);
             step = "worktree";
-            EnsureCheckout(permit, operation, planId, repository, location, record);
+            // A Retry or a Continue of a Merge node's attempt keeps the files the failed attempt left, as every other Retry does.
+            var keeps = cause is AttemptCause.Retry or AttemptCause.Continue && RunReducer.MergeOf(record, cause) is not null;
+            EnsureCheckout(permit, operation, planId, repository, location, record, keeps);
             step = "delivery";
             Deliver(record, input, repository, owner, storage);
             var outbox = definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } ? RunLayout.Outbox(plan.Attempt) : "";
