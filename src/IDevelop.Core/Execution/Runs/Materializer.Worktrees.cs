@@ -100,11 +100,21 @@ internal sealed partial class Materializer
             var result = Mutate("lock-worktree", () => repository.LockWorktree(owner.RelativePath, reason));
             if (result.ExitCode != 0) throw Fault(MaterializationProblem.UncertainOwnership, result.Stderr, new BlockScope.Ownership());
         }
-        // A read-only worktree follows the merge of its predecessors, which a later attempt may start from.
-        if (owner.Branch is null && Value(repository.ResolveCheckoutHead(checkout)) != location.AttemptBase)
+        // A read-only worktree commits nothing, so each attempt starts exactly at the merge of its predecessors, without
+        // what an earlier attempt left in it. Ignored files, such as delivered inputs, stay.
+        if (owner.Branch is null && (Value(repository.ResolveCheckoutHead(checkout)) != location.AttemptBase ||
+            Value(repository.Status(checkout)).Length != 0))
         {
-            var result = Mutate("detach-worktree", () => repository.DetachHead(checkout, location.AttemptBase));
-            if (result.ExitCode != 0) throw Fault(MaterializationProblem.DirtyWorktree, result.Stderr, BlockScope.Checkout.Whole);
+            var reset = new GitMutation.ResetCheckout(owner.Task, location.AttemptBase);
+            var intended = OperationIds.Derive(operation, "read-only-reset-intent");
+            if (!record.GitIntents.ContainsKey(intended))
+                Journal("read-only-reset-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(plan, reset)));
+            var result = Mutate("read-only-reset", () => repository.ResetCheckout(checkout, location.AttemptBase));
+            if (result.ExitCode == 0) result = Mutate("read-only-clean", () => repository.CleanUntracked(checkout));
+            if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
+            if (!Read(workflow, run).GitObservations.ContainsKey(intended))
+                Journal("read-only-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "read-only-reset-observed"),
+                    new RunEvent.GitObserved(intended, new(false, location.AttemptBase.Hex))));
         }
         if (File.Exists(Path.Combine(checkout, ".gitmodules")))
         {

@@ -49,7 +49,8 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             var location = record.Preparations[launch].Location;
             var tip = CheckoutTip(repository, location) ??
-                throw Fault(MaterializationProblem.UncertainOwnership, "The task branch is absent.", new BlockScope.Checkout([], Branch: true));
+                throw Fault(MaterializationProblem.UncertainOwnership, location.Owner.Branch is null ? "The worktree's HEAD is absent." : "The task branch is absent.",
+                    new BlockScope.Checkout([], Branch: true));
             var head = Value(repository.SymbolicHead(Checkout(repository, location.Owner)));
             // A read-only worktree commits nothing, so its HEAD stays at the merge of its predecessors.
             var ownership = (location.Owner.Branch is { } branch ? RefOwnership.Accepts(record, repository, branch, tip) : tip == location.AttemptBase)

@@ -1,5 +1,6 @@
 using IDevelop.Execution;
 using IDevelop.Nodes;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
 using static IDevelop.Core.Tests.Coordination.RunReviewTests;
@@ -80,5 +81,27 @@ public sealed class NodeWorktreeTests
         Assert.Equal(MaterializationProblem.FanInConflict, block.Problem);
         Assert.Equal(["settings.txt"], block.Conflict!.Paths.ToArray());
         Assert.Equal(0, f.Launches(D));
+    }
+
+    [Fact]
+    public async Task A_read_only_retry_starts_at_the_merge_without_what_the_failed_attempt_left()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(D, readOnly: true)], (A, D)));
+        var strays = FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-D")).Write("stray.txt", "stray\n").Exit(1);
+        f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(D, strays, Reports(D));
+        await f.Open();
+        await f.Resume();
+        var failed = await f.UntilStatus(RunStatus.NeedsAttention);
+        Assert.Equal(TaskState.Failed, failed.Tasks[D].State);
+        Assert.True(File.Exists(Path.Combine(f.Checkout(D), "stray.txt")));
+
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, D, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+
+        Assert.Equal(2, f.Launches(D));
+        Assert.False(File.Exists(Path.Combine(f.Checkout(D), "stray.txt")));
+        Assert.Equal("A\n", File.ReadAllText(Path.Combine(f.Checkout(D), "a.txt")));
+        Assert.Empty(f.Read().Salvages);
+        Assert.Single(f.Read().Preparations.Values.Where(prepared => prepared.Location.Owner.Task == D).Select(prepared => prepared.Location.Owner).Distinct());
     }
 }

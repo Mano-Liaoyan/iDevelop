@@ -18,7 +18,7 @@ In Plan → Implement → Review → Approval, plus Plan → Docs → Review:
 - **One commit at the end of a turn.** When Implement's client exits, iDevelop captures its worktree once, as one commit on the branch's tip. The commit of the attempt's last turn becomes the branch's tip and Implement's result. A read-only node's capture records its files and commits nothing.
 - **The merge of predecessors.** Review starts once Implement and Docs have results. When they hand on different commits, `git merge-tree` merges them into one commit, and Review's worktree starts there, so it sees both nodes' edits. With one predecessor commit, the worktree starts at that commit.
 - **A conflict blocks.** If Implement's and Docs' commits conflict, Review is blocked with the conflicting paths until #148's Merge node resolves them.
-- **A Retry stays.** A Retry of Implement continues in Implement's worktree. A read-only node's later attempt moves its detached worktree to the merge it starts from.
+- **A Retry stays.** A Retry of Implement continues in Implement's worktree. A read-only node's later attempt resets its detached worktree to the merge it starts from, without the files an earlier attempt left, since a read-only node commits nothing.
 
 ## The repository lock stays
 
