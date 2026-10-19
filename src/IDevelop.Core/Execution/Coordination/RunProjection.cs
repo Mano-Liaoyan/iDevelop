@@ -49,11 +49,25 @@ internal static class RunProjection
                 log(record.Attempts[review]) is { Status: AttemptStatus.InReview } reviewer)
                 progress[task] = view with { Fix = RunReviews.Recovery(record, reviewer, log) };
         }
+        var predecessors = RunScope.Predecessors(snapshot);
+        // A result that went out of date runs again by itself, as a Retry does, once every task before it is done, and
+        // waits for them until then (ADR 0020, #125).
+        foreach (var (task, view) in progress.ToArray())
+        {
+            if (view is not { State: TaskState.Stale, Attempt: not null }) continue;
+            ImmutableSortedSet<TaskId> waiting = [.. predecessors[task].Where(predecessor => progress.GetValueOrDefault(predecessor) is not { State: TaskState.Done })];
+            progress[task] = holds.GetValueOrDefault(task) switch
+            {
+                TaskHold.Refused refused => view with { State = TaskState.Refused, Refusal = refused.Reason, Problem = refused.Problem },
+                TaskHold.Blocked blocked => view with { State = TaskState.Blocked, Block = blocked.Block },
+                _ when !waiting.IsEmpty => view with { State = TaskState.Pending, HeldBy = waiting },
+                _ => view with { State = TaskState.Ready, Reruns = true },
+            };
+        }
         var plan = Schedule.Of(snapshot, progress, view => view.State == TaskState.Done);
         // Only the tasks the person ran and those after them start (#90); Run Workflow runs every root.
         var flow = RunScope.InFlow(record);
         var dormant = RunScope.Dormant(snapshot, flow, task => !progress.ContainsKey(task));
-        var predecessors = RunScope.Predecessors(snapshot);
         // The dependency predecessors that have not handed on a result, which the task waits for.
         ImmutableSortedSet<TaskId> Holders(TaskId task) =>
             [.. predecessors[task].Where(predecessor => progress.GetValueOrDefault(predecessor) is not { State: TaskState.Done })];
@@ -163,19 +177,20 @@ internal static class RunProjection
         {
             // A successful closure without a result waits for its publication or report acceptance.
             return new(task, end is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } ? TaskState.Settling : TaskState.Failed)
-            { Attempt = id, End = end };
+            { Attempt = id, End = end, Fixes = record.ReviewOf(id) is not null };
         }
         if (LastLaunch(record, id) is not { } last)
         {
-            // A reserved start whose producer's current result, the one it took, went stale waits for that producer, as a
-            // start not yet reserved does, because its first claim would be refused (#85).
-            var dependencies = record.Inputs[record.Attempts[id].InitialInputs].Bindings.OfType<InputBinding.Provided>()
-                .Where(binding => binding.Kind == ConnectionKind.Dependency).ToArray();
-            var (results, current) = dependencies.Length == 0
+            // A reserved start whose producer's current result, the one it took or a newer one, went stale waits for that
+            // producer, as a start not yet reserved does, because its first claim would be refused (#85). Once a producer has
+            // a newer current result, the start prepares again by itself with the new inputs (#125).
+            var provided = record.Inputs[record.Attempts[id].InitialInputs].Bindings.OfType<InputBinding.Provided>().ToArray();
+            var (results, current) = provided.Length == 0
                 ? (ImmutableHashSet<ResultId>.Empty, ImmutableDictionary<TaskId, ResultRecord>.Empty) : (record.StaleResults, record.CurrentResults);
-            ImmutableSortedSet<TaskId> stale = [.. dependencies.Where(binding => results.Contains(binding.Result) &&
-                current.GetValueOrDefault(binding.Edge.From)?.Id == binding.Result).Select(binding => binding.Edge.From)];
-            return stale.IsEmpty ? new(task, TaskState.Ready) { Attempt = id } : new(task, TaskState.Pending) { Attempt = id, HeldBy = stale };
+            ImmutableSortedSet<TaskId> stale = [.. provided.Where(binding => binding.Kind == ConnectionKind.Dependency &&
+                current.GetValueOrDefault(binding.Edge.From) is { } newest && results.Contains(newest.Id)).Select(binding => binding.Edge.From)];
+            var changed = provided.Any(binding => current.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result) && record.ReviewOf(id) is null;
+            return stale.IsEmpty ? new(task, TaskState.Ready) { Attempt = id, Reruns = changed } : new(task, TaskState.Pending) { Attempt = id, HeldBy = stale };
         }
         if (!record.TurnClosures.ContainsKey(last))
             return new(task, record.RootExits.ContainsKey(last) ? TaskState.Settling : TaskState.Uncertain) { Attempt = id };

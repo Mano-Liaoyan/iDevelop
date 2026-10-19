@@ -203,7 +203,7 @@ public sealed class MaterializationTests
     }
 
     [Fact]
-    public void Changed_writer_sources_refuse_a_retry_of_a_consumer()
+    public void A_retry_of_a_consumer_takes_its_writer_s_changed_sources()
     {
         using var f = new RunFixtures(Connect(FixtureWorkflow(Writer(T), Task(U)), T, U));
         f.Approve();
@@ -214,8 +214,10 @@ public sealed class MaterializationTests
         var replacement = f.Reserve(cause: new AttemptCause.Retry(writer.Attempt.Id, f.Op()));
         Accept(f, replacement, OtherCommit, "Updated.", supersedes: old.Id, tip: WriterCommit);
         var record = f.Read();
-        Assert.Equal(RunProblem.StaleInput, Problem(f.Store.Plan(f.Lease(U), f.Op(), record.Revision.Id,
-            new AttemptCause.Retry(consumer.Attempt.Id, f.Op()))));
+        var planned = Assert.IsType<RunDecision.Recorded>(f.Store.Plan(f.Lease(U), f.Op(), record.Revision.Id,
+            new AttemptCause.Retry(consumer.Attempt.Id, f.Op())));
+        var plan = Assert.IsType<MaterializationPlan.Preparation>(Assert.IsType<RunEvent.Planned>(planned.Event).Plan);
+        Assert.Equal(OtherCommit, Assert.Single(plan.Sources).Commit);
         Assert.Equal("2222222222222222222222222222222222222222", consumer.Inputs.CodeBase.Hex);
     }
 

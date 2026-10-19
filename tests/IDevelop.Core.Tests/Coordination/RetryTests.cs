@@ -62,7 +62,7 @@ public sealed class RetryTests
     }
 
     [Fact]
-    public async Task Retry_refuses_a_task_that_has_a_result_or_has_not_ended_and_one_without_confirmation()
+    public async Task Retry_refuses_one_without_confirmation()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
         f.Answer(A, Writes(A, "result.txt", "done\n")).Answer(B, Fails(B, "half.txt", "half\n"));
@@ -72,8 +72,6 @@ public sealed class RetryTests
 
         Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<RetryReply.Refused>(
             await f.Coordinator.Retry(f.Address, B, new OperationId(Guid.Empty)).WaitAsync(Bound)).Reason.Problem);
-        Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RetryReply.Refused>(
-            await f.Coordinator.Retry(f.Address, A, f.Preparation.Op()).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal([1, 1], new[] { f.Launches(A), f.Launches(B) });
         Assert.Equal(TaskState.Failed, f.State(B));
     }

@@ -10,7 +10,7 @@ using static IDevelop.Desktop.Tests.WorkflowRunFixture;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// Retry of a run's task that ended without a result (#123): the card, its menu, and the inspector offer it, the
+/// Retry of a run's task that ended without a result (#123) or is done (#125): the card, its menu, and the inspector offer it, the
 /// inspector asks first, and the confirmed retry runs the task again and the run goes on.
 /// </summary>
 [Collection(ProcessCollection.Name)]
@@ -112,6 +112,25 @@ public sealed class RunRetryTests
 
         Assert.Equal("A", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.True(Shows(shell, "RetryConfirmation"));
+    }
+
+    [AvaloniaFact]
+    public void A_done_task_offers_Retry_and_warns_that_the_tasks_after_it_go_out_of_date()
+    {
+        using var f = new WorkflowRunFixture(Task(A, "A", 105), Task(B, "B", 405), Dependency(A, B));
+        f.Answer("A", f.Writes("out-a.txt", "A\n", "A ready.")).Answer("B", Fails());
+        var shell = f.Window();
+        shell.StartRun();
+        shell.WaitForStatus("Needs attention");
+        shell.WaitForCard("B", "Failed");
+        Select(shell, "A");
+
+        shell.Click(shell.InView<Button>("RetryTask"));
+
+        Assert.Equal("Retry runs \"A\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
+            "date and run again once it has a new result.", shell.Text("RetryConfirmation"));
+        shell.Click(shell.InView<Button>("KeepRetry"));
+        Assert.Equal(1, f.Launches("A"));
     }
 
     [AvaloniaFact]

@@ -41,31 +41,21 @@ public sealed class WorkflowRunReviewTests
     }
 
     [AvaloniaFact]
-    public void A_consumer_an_accepted_fix_made_stale_needs_attention_with_no_rebase_controls()
+    public void A_consumer_an_accepted_fix_made_stale_runs_again_by_itself_and_the_run_completes()
     {
         using var f = Reviewed(TaskAt(D, "D", 405, 300, WorkflowRunFixture.Codex, "Build D."), Dependency(A, D));
         f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)))
-            .Answer("D", f.Writes("d.txt", "D\n", "D ready."));
+            .Answer("D", f.Writes("d.txt", "D\n", "D ready."), f.Writes("d.txt", "D again\n", "D again."));
         var shell = f.Window();
         shell.StartRun();
 
-        shell.WaitForCard("D", "Inputs changed");
-        shell.WaitForStatus("Needs attention");
-        Assert.Equal(["Succeeded", "Succeeded", "Succeeded"], new[] { "A", "Review", "B" }.Select(title => shell.CardText(title, "CardStatus")));
-        Assert.True(shell.InCard<Button>("D", "CardAttention").IsEffectivelyEnabled);
-        shell.Click(shell.InCard<Button>("D", "CardAttention"));
-        Assert.Equal("D", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
-        Assert.Null(shell.Window.ViewModel.Conversation);
-        Assert.Equal("A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays.", shell.Text("RunTaskDetail"));
+        shell.WaitForStatus("Completed");
+        Assert.Equal(["Succeeded", "Succeeded", "Succeeded", "Succeeded"], new[] { "A", "Review", "B", "D" }.Select(title => shell.CardText(title, "CardStatus")));
         Assert.False(shell.Has<Button>("ReviewUpdatedInputs"));
         Assert.False(shell.Has<Button>("ApproveRebase"));
-        Assert.Equal("a - b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
-        Assert.Equal((2, 2, 1, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
-        foreach (var size in new double[] { 280, 320, 520 })
-        {
-            shell.SizeInspector(size);
-            InspectorLayoutTests.AssertLaidOut(shell);
-        }
+        // D ran again in its worktree with A's fix merged in.
+        Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
+        Assert.Equal((2, 2, 1, 2), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
     }
 
     [AvaloniaFact]

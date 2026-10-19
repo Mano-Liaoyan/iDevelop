@@ -33,7 +33,8 @@ internal sealed partial class WorkflowRunCoordinator
     {
         var revision = view.Attempt is { } reserved ? record.Attempts[reserved].Revision : record.Revision.Id;
         var definition = record.Revisions[revision].Snapshot.Tasks[view.Task];
-        if (definition.Blueprint.Work is not WorkSpec.Review || cause is not AttemptCause.Initial) return null;
+        // A review whose result went out of date runs again from its opening prompt, on its subject's newest change (#125).
+        if (definition.Blueprint.Work is not WorkSpec.Review || cause is not (AttemptCause.Initial or AttemptCause.Retry)) return null;
         var subject = RunReviews.Subject(record, view.Task, revision, Log, Address.Project);
         return ReviewWork.Instance.Next(new NodeContext(definition, "") { Subject = subject }, null) is NodeStep.RunTurn turn
             ? turn.Prompt : throw new InvalidOperationException("The review has no task to review.");

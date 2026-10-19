@@ -306,7 +306,7 @@ internal sealed partial class RunStore
                     return new Mutation.Rejected(rejection);
                 }
                 bindings = capture.Inputs!.Bindings;
-                sources = InputMaterial.Sources(record, bindings);
+                sources = InputMaterial.Sources(record, task, revision, cause, bindings);
                 review = InputMaterial.Review(record.Revisions[revision].Snapshot, task, bindings);
             }
             var proposes = record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Proposes: true };

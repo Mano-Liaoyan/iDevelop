@@ -154,6 +154,7 @@ internal static class WorkflowRunText
             1 => $"Waits for \"{title(task.HeldBy.Min)}\"",
             var count => $"Waits for {count} tasks",
         }),
+        TaskState.Ready when task.Reruns => (NodeState.Idle, "Runs again"),
         TaskState.Ready => (NodeState.Idle, "Ready"),
         TaskState.Starting => (NodeState.Running, "Starting"),
         TaskState.Running when !task.Background.IsEmpty => (NodeState.Running, RunText.Background(task.Background)),
@@ -199,6 +200,8 @@ internal static class WorkflowRunText
     {
         TaskState.Pending or TaskState.Ready or TaskState.Unsupported or TaskState.Unrequested when !active => null,
         TaskState.Pending when !task.HeldBy.IsEmpty => Waits(task.HeldBy, title, tasks),
+        // A result that went out of date, or an unstarted attempt whose inputs changed, runs again by itself (ADR 0034).
+        TaskState.Ready when task.Reruns => "A task before it handed on a newer result, so it runs again with it.",
         TaskState.Blocked when Conflict(task) is { } conflict => task.MergedBy is { } merge
             ? $"The work it starts from conflicts in {Files(conflict.Paths)}. \"{title(merge)}\" merges it, and it starts once the merge is committed."
             : $"The work it starts from conflicts in {Files(conflict.Paths)}, and no Merge node takes the conflict. Open the conflict's worktree, " +
@@ -211,6 +214,7 @@ internal static class WorkflowRunText
         // A run's task starts a new conversation with Retry, which starts a fresh attempt (#92).
         TaskState.Refused when task.Problem is StartProblem.SessionFolderMoved moved => $"{RunText.Describe(moved)} Retry starts a new attempt.",
         TaskState.Refused when task.Problem is { } problem => RunText.Describe(problem),
+        TaskState.Refused when task.Refusal is { Problem: RunProblem.StaleInput } => "Its inputs changed before it started.",
         TaskState.Refused when task.Refusal is { } refusal => Problem(refusal),
         TaskState.Uncertain => "Its turn's end was not recorded, so the run never starts it again by itself.",
         TaskState.Failed when task.End is AttemptEnd.Recovered { Reason: var reason } => reason,

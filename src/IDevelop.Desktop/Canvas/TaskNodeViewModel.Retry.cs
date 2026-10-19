@@ -7,7 +7,7 @@ using IDevelop.Execution;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
-/// Retry of a task the canvas's run owns, once its newest attempt ended without a result. The card, the card menu,
+/// Retry of a task the canvas's run owns, once its newest attempt ended without a result or it is done. The card, the card menu,
 /// and the inspector offer it; the inspector asks for the confirmation, which says what Retry does before anything moves.
 /// </summary>
 public sealed partial class TaskNodeViewModel
@@ -23,8 +23,8 @@ public sealed partial class TaskNodeViewModel
     private bool _retrying;
 
     /// <summary>
-    /// The active run, which this window controls, holds the task's attempt that ended without a result: failed, cancelled,
-    /// or closed by recovery. Only a person starts a Retry, and only while the run is active (ADR 0005).
+    /// The active run, which this window controls, holds the task's attempt that ended without a result, failed, cancelled,
+    /// or closed by recovery, or the task is done. Only a person starts a Retry, and only while the run is active (ADR 0005).
     /// </summary>
     public bool ShowsRetry => _runActive && _canvas.Run?.View is { Phase: RunPhase.Approved, Controlled: true, Snapshot: { } snapshot } &&
         WorkflowRunCoordinator.OffersRetry(snapshot, RunTask);
@@ -35,9 +35,11 @@ public sealed partial class TaskNodeViewModel
     /// <summary>The inspector asks whether to retry the task.</summary>
     public bool ConfirmingRetry => ShowsRetry && _confirmingRetry;
 
-    /// <summary>What Retry does, which the person confirms.</summary>
-    public string RetryConfirmation => $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. " +
-        "The tasks after it run once it has a result.";
+    /// <summary>What Retry does, which the person confirms. A done task's Retry warns that the tasks after it go out of date (ADR 0034).</summary>
+    public string RetryConfirmation => RunTask is { State: TaskState.Done }
+        ? $"Retry runs \"{Title}\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
+          "date and run again once it has a new result."
+        : $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. The tasks after it run once it has a result.";
 
     /// <summary>Shows the task in the inspector, which asks for the confirmation.</summary>
     public ICommand RetryCommand => _retry;
@@ -96,7 +98,7 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>
-    /// One confirmation per failed attempt, so a repeat, or a retry after a busy refusal, reserves one attempt; the run's
+    /// One confirmation per ended attempt, so a repeat, or a retry after a busy refusal, reserves one attempt; the run's
     /// next decision starts it.
     /// </summary>
     private async Task RetryAsync()

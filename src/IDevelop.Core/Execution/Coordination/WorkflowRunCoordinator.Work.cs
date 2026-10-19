@@ -13,6 +13,10 @@ internal sealed partial class WorkflowRunCoordinator
             // A start's block that the journal shows resolved by now no longer holds the task.
             if (hold is TaskHold.Blocked blocked && record.Blocks.Values.Any(state => state.Resolved && RunReducer.Same(state.Block, blocked.Block)))
                 _holds.Remove(task);
+            // A start refused while a producer settled, or on inputs that changed since, starts again once the producer's
+            // newer result is current, with the new inputs (#125).
+            else if (hold is TaskHold.Refused { Reason.Problem: RunProblem.UnresolvedOwnership or RunProblem.StaleInput } && InputsMoved(record, task))
+                _holds.Remove(task);
         }
         ReleaseClosed(record);
         var view = Project(record);
@@ -61,6 +65,8 @@ internal sealed partial class WorkflowRunCoordinator
         AdvanceReviews(record, view, free);
     }
 
+    internal const string InputsChangedReason = "Its inputs changed before it started.";
+
     /// <summary>Starts each ready task, in task order, up to <paramref name="free"/> of them, and returns how many started.</summary>
     private int StartReady(RunRecord record, RunView view, int free)
     {
@@ -70,31 +76,59 @@ internal sealed partial class WorkflowRunCoordinator
             if (started >= free) break;
             // A reserved fix of a review round resumes from its review, which knows its prompt. A Merge node's own step
             // hands on as a request does, and only its attempts that resolve a conflict start here.
-            if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || FixesReview(record, next)) continue;
+            if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || !next.Reruns && FixesReview(record, next)) continue;
+            // A task that runs again by itself starts a Retry of its newest attempt, under a confirmation every window
+            // derives the same way: of the attempt that published its out-of-date result, or of its unstarted attempt
+            // whose inputs changed, which closes as not started first (#125).
+            var rerun = next is { Reruns: true, Attempt: { } previous } ? new AttemptCause.Retry(previous, RunOperations.Rerun(Address.Run, previous)) : null;
             if (record.Revision.Snapshot.Tasks[next.Task].Blueprint.Work is WorkSpec.Merge && (next.Attempt is not { } merge || !RunReducer.Merges(record, merge)))
                 continue;
-            Start(record, next);
+            Start(record, next, rerun);
             started++;
         }
         return started;
     }
 
-    private void Start(RunRecord record, TaskView next)
+    private void Start(RunRecord record, TaskView next, AttemptCause.Retry? rerun = null)
     {
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
-        var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
+        var cause = rerun ?? (next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial());
         var operation = RunOperations.First(Address.Run, task, cause);
         var revision = record.Revision.Id;
+        var unstarted = rerun is not null && !record.Closures.ContainsKey(rerun.Previous) ? rerun : null;
+        var prompt = FirstPrompt(record, next, cause);
         _live[task] = new(LiveStage.Starting);
         _runs.Probe?.Invoke("coordinator.dispatch");
-        Background(() => StartTurn(new TurnIntent.First(operation, task, cause, FirstPrompt(record, next, cause))),
+        Background(async () => unstarted is not null && CloseChanged(task, unstarted) is { } refusal
+                ? new TurnStart.Refused(refusal) : await StartTurn(new TurnIntent.First(operation, task, cause, prompt)).ConfigureAwait(false),
             start => Started(task, start, revision), error =>
             {
                 _live.Remove(task);
                 _problem = error.Message;
                 HoldStart(task, new TaskHold.Refused(new(RunProblem.StorageUnavailable), null, Transient: true));
             });
+    }
+
+    /// <summary>
+    /// Whether the task's newest attempt has not started, fixes no review round, and took a result that is no longer
+    /// current, so it starts again with the new inputs.
+    /// </summary>
+    private static bool InputsMoved(RunRecord record, TaskId task) =>
+        RunProjection.LatestAttempts(record).GetValueOrDefault(task) is var latest && latest != default &&
+        !record.Closures.ContainsKey(latest) && !record.Claims.Keys.Any(key => key.Attempt == latest) && record.ReviewOf(latest) is null &&
+        record.Inputs[record.Attempts[latest].InitialInputs].Bindings.OfType<InputBinding.Provided>()
+            .Any(binding => record.CurrentResults.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result);
+
+    /// <summary>Under the task's lease, closes the unstarted attempt a rerun replaces as not started, since its inputs changed.</summary>
+    private RunRejection? CloseChanged(TaskId task, AttemptCause.Retry rerun)
+    {
+        if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new(RunProblem.TaskBusy);
+        using (taken.Lease)
+        {
+            return _store.Recover(taken.Lease, RunOperations.NotStarted(rerun.Confirmation, rerun.Previous), rerun.Previous,
+                RecoveryOutcome.NotStarted, rerun.Confirmation, InputsChangedReason) is RunDecision.Rejected rejected ? rejected.Reason : null;
+        }
     }
 
     /// <summary>A refused or blocked start holds its task only while the run goes on. Once it stops, the stop closes the attempt.</summary>
@@ -134,7 +168,11 @@ internal sealed partial class WorkflowRunCoordinator
             case TurnStart.Refused refused:
                 _live.Remove(task);
                 if (refused.Reason.Problem != RunProblem.RunStopped)
+                    // A start whose inputs changed before its claim prepares again with the new ones once the hold clears,
+                    // unless it fixes a review round, which its review goes on with (#125).
                     HoldStart(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem) ||
+                        refused.Reason.Problem == RunProblem.StaleInput && Record() is { } now &&
+                            RunProjection.LatestAttempts(now).GetValueOrDefault(task) is var latest && (latest == default || now.ReviewOf(latest) is null) ||
                         refused.Reason.Problem == RunProblem.RevisionConflict && dispatched is { } before && Record()?.Revision.Id != before));
                 break;
         }

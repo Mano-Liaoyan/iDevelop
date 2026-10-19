@@ -712,6 +712,9 @@ internal sealed partial class GitRepository
         AtomicFile.Replace(path, [.. contents, .. Encoding.UTF8.GetBytes(separator + string.Join('\n', missing) + "\n")]);
     }
 
+    /// <summary>Moves the checkout's branch to <paramref name="commit"/> and keeps its local changes, or fails without a change where they would be lost.</summary>
+    public GitResult KeepReset(string checkout, CommitId commit) => Git(checkout, GitOperation.Worktree, ["reset", "--keep", "--no-recurse-submodules", commit.Hex]);
+
     /// <summary>Call only after verifying quiescence, ownership, and an unchanged inventory.</summary>
     public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, GitOperation.Worktree, ["reset", "--hard", "--no-recurse-submodules", commit.Hex]);
 

@@ -143,6 +143,15 @@ internal sealed record TaskView(TaskId Task, TaskState State)
     /// </summary>
     public bool RootExited { get; init; }
 
+    /// <summary>While <see cref="TaskState.Failed"/>: its newest attempt fixed a review round, which its review goes on with.</summary>
+    public bool Fixes { get; init; }
+
+    /// <summary>
+    /// While <see cref="TaskState.Ready"/>: the task runs again by itself, as a Retry of its newest attempt. Its result went
+    /// out of date and every task before it is done, or its attempt had not started when its inputs changed (#125).
+    /// </summary>
+    public bool Reruns { get; init; }
+
     /// <summary>The task's current result comes from an earlier run, which this run carried instead of running the task (#90).</summary>
     public bool Carried { get; init; }
 

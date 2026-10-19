@@ -538,9 +538,14 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public bool Settling(LaunchKey launch) => RootExits.ContainsKey(launch) &&
         !TurnClosures.ContainsKey(launch) && !Closures.ContainsKey(launch.Attempt);
 
+    /// <summary>
+    /// The review round <paramref name="attempt"/> fixes: a fix's own, or the round of the fix that a Retry or a Continue
+    /// takes over. A Retry of an attempt that published a result redoes the task, and fixes no round (#125).
+    /// </summary>
     public ReviewLink? ReviewOf(AttemptId attempt) => Attempts[attempt].Cause switch
     {
         AttemptCause.ReviewFix fix => fix.Link,
+        AttemptCause.Retry retry when Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == retry.Previous) => null,
         AttemptCause.Retry retry => ReviewOf(retry.Previous),
         AttemptCause.Continue continued => ReviewOf(continued.Previous),
         _ => null,

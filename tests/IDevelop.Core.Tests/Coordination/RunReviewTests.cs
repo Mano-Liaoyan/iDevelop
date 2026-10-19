@@ -584,7 +584,7 @@ public sealed class RunReviewTests
     }
 
     [Fact]
-    public async Task An_accepted_fix_makes_another_consumer_of_the_subject_stale()
+    public async Task An_accepted_fix_makes_another_consumer_of_the_subject_run_again()
     {
         var workflow = Runs.RunFixtures.Connect(Reviewed().Must(TestNodes.Place(RunConversationFixture.Agent(D, ConversationMode.Autonomous), new CanvasPoint(0, 300))), A, D);
         await using var f = new RunConversationFixture(workflow);
@@ -592,20 +592,54 @@ public sealed class RunReviewTests
                 Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")))
             .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve))
             .Answer(B, Writes(f, B, 1, "b.txt", "B\n", "B ready.\n"))
-            .Answer(D, Writes(f, D, 1, "d.txt", "D\n", "D ready.\n"));
+            .Answer(D, Writes(f, D, 1, "d.txt", "D\n", "D ready.\n"), Writes(f, D, 2, "d.txt", "D again\n", "D again.\n"));
         await f.Open();
         await f.Resume();
-        var stuck = await f.Until(view => view.Status == RunStatus.NeedsAttention && view.Tasks[B].State == TaskState.Done);
+        var done = await f.Until(view => view.Status == RunStatus.Completed);
 
         var record = f.Read();
-        long Claim(TaskId task, int turn = 1, int? round = null) => record.Receipts.Values.Single(entry => entry.Event is RunEvent.TurnClaimed claimed &&
+        long Claim(TaskId task, int turn = 1, int? round = null) => record.Receipts.Values.Where(entry => entry.Event is RunEvent.TurnClaimed claimed &&
             claimed.Key.Turn == turn && record.Attempts[claimed.Key.Attempt].Task == task &&
-            (round is null ? record.Attempts[claimed.Key.Attempt].Cause is not AttemptCause.ReviewFix : record.ReviewOf(claimed.Key.Attempt)?.Round == round)).Sequence;
+            (round is null ? record.Attempts[claimed.Key.Attempt].Cause is not AttemptCause.ReviewFix : record.ReviewOf(claimed.Key.Attempt)?.Round == round)).Min(entry => entry.Sequence);
         // Once A is done, the review's first turn and D are both ready, and both start at once, so D consumes A's first result.
         Assert.True(Claim(D) < Claim(A, round: 1));
         Assert.True(Claim(A, round: 1) < Claim(R, turn: 2));
-        Assert.Equal((TaskState.Stale, TaskState.Done, TaskState.Done), (stuck.Tasks[D].State, stuck.Tasks[R].State, stuck.Tasks[A].State));
-        Assert.Equal((2, 2, 1, 1), (f.Launches(A), f.Launches(R), f.Launches(B), f.Launches(D)));
+        // D's result went out of date when the fix was accepted, so D runs again by itself on A's newest result (#125).
+        Assert.Equal((TaskState.Done, TaskState.Done, TaskState.Done), (done.Tasks[D].State, done.Tasks[R].State, done.Tasks[A].State));
+        Assert.Equal((2, 2, 1, 2), (f.Launches(A), f.Launches(R), f.Launches(B), f.Launches(D)));
+        record = f.Read();
+        Assert.Equal(record.CurrentResults[A].Id, record.Inputs[record.CurrentResults[D].Inputs].Bindings.OfType<InputBinding.Provided>().Single().Result);
+    }
+
+    /// <summary>
+    /// <c>D → A → Review → Approval</c>, waiting for the person's approval after one fix round. The person retries D, which
+    /// is done, so A, its review, and the approval go out of date: A runs again by itself on D's new result as a Retry of its
+    /// fix, the review runs again on A's new change, and the approval asks again (#125).
+    /// </summary>
+    [Fact]
+    public async Task A_retried_plan_reruns_the_implementer_and_its_review_and_the_approval_asks_again()
+    {
+        var workflow = Graph([RunConversationFixture.Agent(D, ConversationMode.Autonomous), RunConversationFixture.Agent(A, ConversationMode.Autonomous),
+            Reviewer(R), new TaskDefinition(G, BuiltInBlueprints.Approval) { Title = "Gate" }], (D, A), (A, R), (R, G));
+        await using var f = new RunConversationFixture(workflow);
+        Routed(f).Answer(D, Writes(f, D, 1, "plan.md", "v1\n", "D ready.\n"), Writes(f, D, 2, "plan.md", "v2\n", "D again.\n"))
+            .Answer(A, Writes(f, A, 1, "calc.txt", "a - b\n", "A ready.\n"),
+                Writes(f, A, 2, "calc.txt", "a + b\n", Answers("""[{"id": "1", "answer": "fixed", "note": "It adds now."}]""")),
+                Writes(f, A, 3, "calc.txt", "a * b\n", "A again.\n"))
+            .Answer(R, Reads(f, 1, Changes1), Reads(f, 2, Approve), Reads(f, 3, Approve));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Tasks[G].Gate is { Status: GateStatus.Waiting });
+        Assert.True(WorkflowRunCoordinator.OffersRetry(waiting.Snapshot!, waiting.Tasks[D]));
+
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, D, new(Guid.NewGuid())).WaitAsync(Bound));
+
+        await f.Until(view => Requests(f) == 2 && view.Tasks[G].Gate is { Status: GateStatus.Waiting });
+        Assert.Equal((2, 3, 3), (f.Launches(D), f.Launches(A), f.Launches(R)));
+        Assert.Equal("a * b\n", File.ReadAllText(Path.Combine(f.Evidence, "review-3.calc.txt")));
+        var record = f.Read();
+        Assert.DoesNotContain(record.CurrentResults.Values, result => record.StaleResults.Contains(result.Id));
+        Assert.Equal(RunPhase.Approved, record.Phase);
     }
 
     [Fact]
