@@ -8,14 +8,16 @@ namespace IDevelop.Desktop.Canvas;
 
 /// <summary>
 /// Retry of a task the canvas's run owns, once its newest attempt ended without a result or it is done. The card, the card menu,
-/// and the inspector offer it; the inspector asks for the confirmation, which says what Retry does before anything moves.
+/// and the inspector offer it; the inspector asks for the confirmation, which says what Retry does before anything moves, and
+/// takes an optional note to the agent.
 /// </summary>
 public sealed partial class TaskNodeViewModel
 {
     private static readonly string[] RetryDependents =
-        [nameof(ShowsRetry), nameof(ShowsRetryButton), nameof(ConfirmingRetry), nameof(RetryConfirmation)];
+        [nameof(ShowsRetry), nameof(ShowsRetryButton), nameof(ConfirmingRetry), nameof(RetryConfirmation), nameof(RetryNote)];
 
-    private readonly Dictionary<AttemptId, OperationId> _retries = [];
+    private readonly Dictionary<(AttemptId, string), OperationId> _retries = [];
+    private string _retryNote = "";
     private RelayCommand _retry = null!;
     private RelayCommand _confirmRetry = null!;
     private RelayCommand _keepRetry = null!;
@@ -40,6 +42,16 @@ public sealed partial class TaskNodeViewModel
         ? $"Retry runs \"{Title}\" again in a fresh session, with the newest work of the tasks before it. The tasks after it go out of " +
           "date and run again once it has a new result."
         : $"Retry runs \"{Title}\" again in a fresh session, with the files its last attempt left. The tasks after it run once it has a result.";
+
+    /// <summary>
+    /// The person's optional note to the agent, which ends its first prompt. When the task feeds a sent-back Approval node,
+    /// the confirmation opens with the send back's reason.
+    /// </summary>
+    public string RetryNote
+    {
+        get => _retryNote;
+        set => SetProperty(ref _retryNote, value);
+    }
 
     /// <summary>Shows the task in the inspector, which asks for the confirmation.</summary>
     public ICommand RetryCommand => _retry;
@@ -76,6 +88,11 @@ public sealed partial class TaskNodeViewModel
     private void AskRetry()
     {
         _canvas.Inspect(this);
+        if (!_confirmingRetry)
+        {
+            RetryNote = _canvas.Run?.View is { Snapshot: { } snapshot } view ? WorkflowRunCoordinator.SentBackNote(snapshot, view, Id) ?? "" : "";
+        }
+
         SetConfirmingRetry(true);
     }
 
@@ -98,8 +115,8 @@ public sealed partial class TaskNodeViewModel
     }
 
     /// <summary>
-    /// One confirmation per ended attempt, so a repeat, or a retry after a busy refusal, reserves one attempt; the run's
-    /// next decision starts it.
+    /// One confirmation per ended attempt and note, so a repeat, or a retry after a busy refusal, reserves one attempt; the
+    /// run's next decision starts it.
     /// </summary>
     private async Task RetryAsync()
     {
@@ -108,14 +125,15 @@ public sealed partial class TaskNodeViewModel
             return;
         }
 
-        var confirmation = _retries.TryGetValue(previous, out var known) ? known : _retries[previous] = new OperationId(Guid.NewGuid());
+        var note = RetryNote.Trim();
+        var confirmation = _retries.TryGetValue((previous, note), out var known) ? known : _retries[(previous, note)] = new OperationId(Guid.NewGuid());
         var (coordinator, address) = (run.Coordinator, run.Address);
         _retrying = true;
         _confirmRetry.NotifyCanExecuteChanged();
         RetryReply reply;
         try
         {
-            reply = await WorkflowRunViewModel.Retrying(() => coordinator.Retry(address, Id, confirmation),
+            reply = await WorkflowRunViewModel.Retrying(() => coordinator.Retry(address, Id, confirmation, note),
                 outcome => outcome is RetryReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
         }
         finally
@@ -126,6 +144,7 @@ public sealed partial class TaskNodeViewModel
         if (reply is RetryReply.Reserved)
         {
             _confirmingRetry = false;
+            RetryNote = "";
         }
 
         NotifyRetry();

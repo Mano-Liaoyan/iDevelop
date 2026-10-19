@@ -31,7 +31,14 @@ internal abstract record GateDecision
     }
 }
 
-internal sealed record GateState(GateRequest Request, GateDecision? Decision);
+/// <summary>
+/// A request and its answer. <see cref="AskedAgain"/> is set once the person asked again after sending it back: the request
+/// stays sent back in the run's history, and the node takes a new request on the same inputs.
+/// </summary>
+internal sealed record GateState(GateRequest Request, GateDecision? Decision)
+{
+    public bool AskedAgain { get; init; }
+}
 
 /// <summary>A person's answer to a request.</summary>
 internal abstract record GateAnswer

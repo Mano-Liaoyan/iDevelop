@@ -15,10 +15,61 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// Sends the request back with the person's reason. Its dependents stay held, and nothing is chosen to run again. A new
-    /// request follows only once the request's inputs are superseded.
+    /// request follows once the request's inputs are superseded, or once the person asks again.
     /// </summary>
     public Task<GateReply> SendBack(RunAddress address, GateResponse response, string reason, OperationId command, CancellationToken wait = default) =>
         Answer(address, response, new GateAnswer.SendBack(reason), command, wait);
+
+    /// <summary>
+    /// Asks again after the person sent <paramref name="request"/> back, as they confirmed under <paramref name="command"/>.
+    /// The request stays sent back in the run's history, and the node takes a new request on the same inputs (#126). A
+    /// repeat returns the recorded entry; a request that is not the node's newest sent-back one on current inputs is
+    /// <see cref="GateReply.Stale"/>.
+    /// </summary>
+    public async Task<GateReply> AskAgain(RunAddress address, GateId request, OperationId command, CancellationToken wait = default)
+    {
+        GateReply? reply = null;
+        var outcome = await Command(address, _ =>
+        {
+            reply = _store.AskGateAgain(_permit!, command, request) switch
+            {
+                RunDecision.Rejected { Reason: { Problem: RunProblem.StaleInput, Task: { } task } } =>
+                    new GateReply.Stale(Read() is { } record && RunReducer.LiveGate(record, task) is { Decision: null } open ? open.Request : null),
+                RunDecision.Rejected rejected => new GateReply.Refused(rejected.Reason),
+                RunDecision.Existing existing => new GateReply.Recorded(Asked(existing.Record, request), Repeat: true),
+                RunDecision.Created created => new GateReply.Recorded(Asked(created.Record, request), Repeat: false),
+                RunDecision.Recorded recorded => new GateReply.Recorded(Asked(recorded.Record, request), Repeat: false),
+                _ => throw new InvalidOperationException(),
+            };
+            return Accepted;
+        }, wait).ConfigureAwait(false);
+        return reply ?? outcome switch
+        {
+            RunCommand.Unavailable unavailable => new GateReply.Unavailable(unavailable.Message),
+            RunCommand.Refused refused => new GateReply.Refused(refused.Reason),
+            _ => throw new InvalidOperationException(),
+        };
+    }
+
+    private static RunEntry Asked(RunRecord record, GateId request) =>
+        record.Receipts.Values.First(entry => entry.Event is RunEvent.GateAskedAgain asked && asked.Request == request);
+
+    /// <summary>
+    /// The note a Retry of <paramref name="task"/> starts with: the reasons of the sent-back Approval nodes it feeds through its
+    /// dependency connections, each still on current inputs and not asked again, in the order the run lists them. Null
+    /// when it feeds none (#126).
+    /// </summary>
+    internal static string? SentBackNote(Workflow snapshot, RunView view, TaskId task)
+    {
+        var fed = new HashSet<TaskId>();
+        var next = new Queue<TaskId>([task]);
+        while (next.TryDequeue(out var from))
+            foreach (var (edge, kind) in snapshot.Connections)
+                if (edge.From == from && kind == ConnectionKind.Dependency && fed.Add(edge.To)) next.Enqueue(edge.To);
+        var reasons = view.Tasks.Values.Where(each => fed.Contains(each.Task) && each is { State: TaskState.SentBack, Gate.Reason: { } })
+            .Select(each => each.Gate!.Reason!).Distinct().ToArray();
+        return reasons.Length == 0 ? null : string.Join("\n\n", reasons);
+    }
 
     /// <summary>
     /// What approving <paramref name="request"/> hands on, input by input: each input's report under its task's title, as the

@@ -11,7 +11,7 @@ internal static partial class RunReducer
     /// <summary>
     /// Whether the inputs a request fixed were superseded: a provided result is stale or no longer its task's current one.
     /// Context that arrives later supersedes nothing, as for a reserved attempt. A node takes a newer request only once its
-    /// last one is superseded, or once the result of its approval is stale.
+    /// last one is superseded or asked again, or once the result of its approval is stale.
     /// </summary>
     internal static bool Superseded(RunRecord record, GateState gate)
     {
@@ -21,9 +21,11 @@ internal static partial class RunReducer
             stale.Contains(binding.Result) || current.GetValueOrDefault(binding.Edge.From)?.Id != binding.Result);
     }
 
-    /// <summary>The request the person can still answer, or that they sent back, while its inputs are current.</summary>
+    /// <summary>
+    /// The request the person can still answer, or that they sent back and did not ask again, while its inputs are current.
+    /// </summary>
     internal static GateState? LiveGate(RunRecord record, TaskId task) =>
-        LatestGate(record, task) is { Decision: null or GateDecision.SentBack } gate && !Superseded(record, gate) ? gate : null;
+        LatestGate(record, task) is { Decision: null or GateDecision.SentBack, AskedAgain: false } gate && !Superseded(record, gate) ? gate : null;
 
     /// <summary>A join that an Approval node's or a Merge node's request composes from its current inputs' code.</summary>
     private static bool GateJoin(RunRecord record, MaterializationPlan.Join join) =>
@@ -90,6 +92,19 @@ internal static partial class RunReducer
         if (gate.Request.Inputs != sent.Inputs) return (record, RunProblem.InputConflict);
         if (gate.Decision is not null || Superseded(record, gate)) return (record, RunProblem.StaleInput);
         return (Decide(record, sent.Request, new GateDecision.SentBack(sent.Reason, entry.Operation)), null);
+    }
+
+    /// <summary>
+    /// Ask again after a send back: only the node's newest request, sent back and still on current inputs, and only once.
+    /// It stays sent back, and the node takes a new request on the same inputs.
+    /// </summary>
+    private static (RunRecord Record, RunProblem? Problem) AskAgain(RunRecord record, RunEvent.GateAskedAgain asked)
+    {
+        if (record.Phase != RunPhase.Approved) return (record, RunProblem.RunStopped);
+        if (!record.Gates.TryGetValue(asked.Request, out var gate)) return (record, RunProblem.UnknownInput);
+        if (gate.Decision is not GateDecision.SentBack || gate.AskedAgain || LatestGate(record, gate.Request.Task) != gate || Superseded(record, gate))
+            return (record, RunProblem.StaleInput);
+        return (record with { Gates = record.Gates.SetItem(asked.Request, gate with { AskedAgain = true }) }, null);
     }
 
     private static RunRecord Decide(RunRecord record, GateId gate, GateDecision decision) =>

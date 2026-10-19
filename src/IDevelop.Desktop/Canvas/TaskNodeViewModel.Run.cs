@@ -143,11 +143,12 @@ public sealed partial class TaskNodeViewModel
             $"A run of the \"{RunWorkflowName}\" workflow is stopping and will not start this task.",
         (true, true) when NotStarted => $"A run of the \"{RunWorkflowName}\" workflow owns this task. It has not started it yet.",
         (true, true) => $"A run of the \"{RunWorkflowName}\" workflow owns this task. Talk to it through its conversation, or stop the run.",
-        (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate?.Status switch
+        (true, false) => $"A run of the \"{RunWorkflowName}\" workflow owns this approval. " + (_runTask?.Gate switch
         {
-            GateStatus.Waiting => "Answer its request below, or stop the run.",
-            GateStatus.Approved => "You approved its request.",
-            GateStatus.SentBack => "You sent its request back. It asks again once its inputs change.",
+            { Status: GateStatus.Waiting } => "Answer its request below, or stop the run.",
+            { Status: GateStatus.Approved } => "You approved its request.",
+            { Status: GateStatus.SentBack, AskedAgain: true } => "You asked again, so it opens a new request on the same inputs.",
+            { Status: GateStatus.SentBack } => "You sent its request back. Ask again below, or it asks again once its inputs change.",
             _ => "It asks for your approval once the tasks before it hand on.",
         }),
         (false, true) when NotStarted =>

@@ -24,7 +24,7 @@ internal static class RunJournal
 
     private static readonly HashSet<string> Events = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
         "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured",
-        "gateRequested", "gateSentBack", "requested", "layoutAllocated", "planned", "gitIntended", "gitObserved", "prepared", "blocked",
+        "gateRequested", "gateSentBack", "gateAskedAgain", "requested", "layoutAllocated", "planned", "gitIntended", "gitObserved", "prepared", "blocked",
         "blockResolved", "conflictResolved"];
 
     /// <summary>

@@ -41,7 +41,7 @@ The next turn of the same attempt, started by a reply or by text queued during a
 _Avoid_: Continue, which starts a new attempt
 
 **Retry**:
-A new attempt of a task with a fresh client session. A person starts it for a task that is done or whose newest attempt ended without a result, and the run starts it by itself for a task whose result went out of date, once every task before it is done, and for an unstarted attempt whose inputs changed. An editing task's Retry continues in its worktree with its earlier change, and the new work of the tasks before it merges in before its agent starts ([ADR 0034](docs/adr/0034-a-retry-merges-new-inputs-into-its-earlier-change-and-an-out-of-date-task-runs-again.md)). A step the coordinator tries again after a busy refusal is not a Retry.
+A new attempt of a task with a fresh client session. A person starts it for a task that is done or whose newest attempt ended without a result, and the run starts it by itself for a task whose result went out of date, once every task before it is done, and for an unstarted attempt whose inputs changed. An editing task's Retry continues in its worktree with its earlier change, and the new work of the tasks before it merges in before its agent starts ([ADR 0034](docs/adr/0034-a-retry-merges-new-inputs-into-its-earlier-change-and-an-out-of-date-task-runs-again.md)). A person's Retry takes an optional note that ends the agent's first prompt, which opens with the reason of a sent-back Approval node the task feeds ([ADR 0035](docs/adr/0035-ask-again-after-a-send-back-and-a-retry-note-to-the-agent.md)). A step the coordinator tries again after a busy refusal is not a Retry.
 _Avoid_: Resume, rerun
 
 **Close as stopped**:
@@ -118,12 +118,15 @@ A run approval's adoption of a report that a task produced on its own before the
 _Avoid_: import
 
 **Gate request**:
-An Approval node's durable request for a person's answer on one fixed set of inputs. It creates no attempt, and only superseded inputs give the node a new one.
+An Approval node's durable request for a person's answer on one fixed set of inputs. It creates no attempt, and superseded inputs or the person's Ask again give the node a new one.
 _Avoid_: approval attempt
 
 **Send back**:
 A person's answer that refuses a gate request with a reason. It holds the node's dependents and is final for that request.
 _Avoid_: reject, deny
+
+**Ask again**:
+The person's confirmed choice, after a send back, to open a new gate request on the same inputs. The sent-back request stays in the run's history with its reason ([ADR 0035](docs/adr/0035-ask-again-after-a-send-back-and-a-retry-note-to-the-agent.md)).
 
 ### Planning
 

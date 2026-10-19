@@ -29,10 +29,10 @@ internal sealed partial class WorkflowRunCoordinator
     /// Retries <paramref name="task"/>, whose newest attempt ended without a result, as the person confirmed under
     /// <paramref name="confirmation"/>. The new attempt is reserved with <see cref="AttemptCause.Retry"/> and continues in the
     /// failed attempt's worktree with its files as they are (ADR 0032). Repeating the confirmation returns the same attempt;
-    /// it makes one attempt per confirmation.
+    /// it makes one attempt per confirmation. A <paramref name="note"/> the person wrote ends the agent's first prompt (#126).
     /// </summary>
-    internal Task<RetryReply> Retry(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) =>
-        Converse<RetryReply>(address, (record, complete) => RetryCore(record, task, confirmation, complete), command => command switch
+    internal Task<RetryReply> Retry(RunAddress address, TaskId task, OperationId confirmation, string? note = null, CancellationToken wait = default) =>
+        Converse<RetryReply>(address, (record, complete) => RetryCore(record, task, confirmation, string.IsNullOrWhiteSpace(note) ? null : note.Trim(), complete), command => command switch
         {
             RunCommand.Unavailable unavailable => new RetryReply.Unavailable(unavailable.Message),
             RunCommand.Refused refused => new RetryReply.Refused(refused.Reason),
@@ -51,7 +51,7 @@ internal sealed partial class WorkflowRunCoordinator
             _ => false,
         };
 
-    private void RetryCore(RunRecord record, TaskId task, OperationId confirmation, Action<RetryReply> complete)
+    private void RetryCore(RunRecord record, TaskId task, OperationId confirmation, string? note, Action<RetryReply> complete)
     {
         RetryReply Refused(RunProblem problem) => new RetryReply.Refused(new(problem, Task: task));
         if (record.Phase != RunPhase.Approved)
@@ -88,7 +88,7 @@ internal sealed partial class WorkflowRunCoordinator
             return;
         }
         var previous = view.Attempt!.Value;
-        var cause = new AttemptCause.Retry(previous, confirmation);
+        var cause = new AttemptCause.Retry(previous, confirmation) { Note = note };
         _live[task] = new(LiveStage.Settling);
         Background(() => Reserve(task, cause), reply =>
         {

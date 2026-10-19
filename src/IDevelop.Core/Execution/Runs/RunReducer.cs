@@ -419,6 +419,15 @@ internal static partial class RunReducer
 
                     record = sentBack.Record;
                     break;
+                case RunEvent.GateAskedAgain asked:
+                    var askedAgain = AskAgain(record, asked);
+                    if (askedAgain.Problem is { } askProblem)
+                    {
+                        return Reject(askProblem);
+                    }
+
+                    record = askedAgain.Record;
+                    break;
                 case RunEvent.OwnershipFenced fenced:
                     if (fenced.Claims.IsEmpty || fenced.Claims.Distinct().Count() != fenced.Claims.Length ||
                         fenced.Claims.Any(key => !record.UnresolvedClaims.Contains(key) || record.Fenced.Contains(key)))
@@ -760,6 +769,7 @@ internal static partial class RunValidation
                 !Revision.IsHash(request.Revision.Sha256) || !Input(requested.Inputs) ? RunProblem.InvalidData : null,
             RunEvent.GateSentBack sent => sent.Request.Value == Guid.Empty || sent.Inputs.Value == Guid.Empty ? RunProblem.InvalidData :
                 string.IsNullOrWhiteSpace(sent.Reason) ? RunProblem.ConfirmationRequired : null,
+            RunEvent.GateAskedAgain asked => asked.Request.Value == Guid.Empty ? RunProblem.InvalidData : null,
             RunEvent.Abandoned abandoned => abandoned.Confirmation.Value == Guid.Empty || string.IsNullOrWhiteSpace(abandoned.Reason) ?
                 RunProblem.ConfirmationRequired : null,
             RunEvent.Settled settled => !Enum.IsDefined(settled.Outcome) ? RunProblem.InvalidData : null,
@@ -809,7 +819,8 @@ internal static partial class RunValidation
         Revision.IsHash(attempt.Revision.Sha256) && attempt.InitialInputs.Value != Guid.Empty && (attempt.Cause switch
         {
             AttemptCause.Initial => true,
-            AttemptCause.Retry retry => retry.Previous.Value != Guid.Empty && retry.Confirmation.Value != Guid.Empty,
+            AttemptCause.Retry retry => retry.Previous.Value != Guid.Empty && retry.Confirmation.Value != Guid.Empty &&
+                (retry.Note is null || !string.IsNullOrWhiteSpace(retry.Note)),
             AttemptCause.Continue continued => continued.Previous.Value != Guid.Empty && continued.Confirmation.Value != Guid.Empty,
             AttemptCause.ReviewFix fix => fix.Link.Attempt.Value != Guid.Empty && fix.Link.Review.Value != Guid.Empty &&
                 fix.Link.Round > 0 && fix.Link.Guidance >= 0,

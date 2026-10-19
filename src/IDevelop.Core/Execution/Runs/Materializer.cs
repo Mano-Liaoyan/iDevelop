@@ -82,7 +82,7 @@ internal sealed partial class Materializer
                 if (LeaseProblem(lease, original.Task) is { } mismatch) return new Preparation.Rejected(new(mismatch));
                 if (!RunReducer.Same(original.Cause, cause) ||
                     Prompt(record.Revisions[original.Revision].Snapshot.Tasks[task], record.Inputs[completed.Execution.Inputs],
-                        original.Id, basePrompt, RunPlanning.Context(record, original), RunReducer.FixArtifacts(record, original.Id)) != completed.Execution.Prompt)
+                        original.Id, basePrompt, RunPlanning.Context(record, original), RunReducer.FixArtifacts(record, original.Id), Note(original)) != completed.Execution.Prompt)
                     return new Preparation.Rejected(new(RunProblem.OperationConflict));
                 attempt = original.Id;
                 inputs = completed.Execution.Inputs;
@@ -149,7 +149,7 @@ internal sealed partial class Materializer
             VerifyOutbox(repository, Checkout(repository, owner), outbox);
             step = "prompt";
             var prompt = Prompt(definition, input, plan.Attempt, basePrompt, RunPlanning.Context(record, record.Attempts[plan.Attempt]),
-                RunReducer.FixArtifacts(record, plan.Attempt));
+                RunReducer.FixArtifacts(record, plan.Attempt), Note(record.Attempts[plan.Attempt]));
             var execution = new PreparedExecution(new(plan.Attempt, 1), input.Id, location, prompt, Revision.Hash(prompt), outbox);
             step = "prepared";
             // A sibling result may supersede an input while Git and file delivery run.
@@ -289,11 +289,13 @@ internal sealed partial class Materializer
         Path.GetFullPath(Path.Combine(repository.ProjectFolder, owner.RelativePath));
 
     /// <param name="planning">What a planner's first prompt lists, from <see cref="RunPlanning.Context"/>.</param>
+    /// <param name="note">The person's note to the agent with a Retry, which the prompt ends with (#126).</param>
     private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
-        PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default)
+        PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default, string? note = null)
     {
+        var ending = note is null ? "" : "\n\n" + RetryNote(note);
         // A Merge node's agent reads the conflict it resolves, and nothing else hands it input.
-        if (input.Conflict is { } conflict) return MergeWork.Prompt(new NodeContext(definition, "") { Conflict = conflict.Description });
+        if (input.Conflict is { } conflict) return MergeWork.Prompt(new NodeContext(definition, "") { Conflict = conflict.Description }) + ending;
         if (basePrompt is null && definition.Blueprint.Work is not WorkSpec.Agent)
             throw new Refusal(new(RunProblem.InvalidData));
         var template = (definition.Blueprint.Work as WorkSpec.Agent)?.Template;
@@ -302,8 +304,14 @@ internal sealed partial class Materializer
             prompt += "\n\n" + input.Text;
         if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
             prompt += "\n\n" + ArtifactInstructions.For(attempt, kept);
-        return prompt;
+        return prompt + ending;
     }
+
+    /// <summary>The note a Retry's first prompt ends with.</summary>
+    internal static string RetryNote(string note) => "## A note from the person with this retry\n\n" + note;
+
+    /// <summary>The note of <paramref name="attempt"/>'s Retry, or null.</summary>
+    private static string? Note(RunAttempt attempt) => (attempt.Cause as AttemptCause.Retry)?.Note;
 
     private static MaterializationFailure Fault(MaterializationProblem problem, string detail, BlockScope scope) => new(problem, detail, scope);
     private sealed class MaterializationFailure(MaterializationProblem problem, string detail, BlockScope scope) : Exception(detail)
