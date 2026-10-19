@@ -1008,21 +1008,21 @@ public sealed class GitRepositoryTests
     }
 
     [Fact]
-    public void Capture_takes_the_work_tree_and_leaves_the_index_and_uncaptured_paths_in_place()
+    public void Capture_takes_the_work_tree_and_a_reset_leaves_untracked_paths()
     {
         using var f = new GitFixture();
         var a = f.Diamond();
         var repository = f.Open();
         f.Write("folder/keep", "mine\n");
         f.Write("a.txt", "changed\n");
-        var salvage = Read(repository.Capture(f.Folder));
-        Assert.Equal("changed\n", f.Git("show", salvage.Tree.Hex + ":a.txt"));
-        Assert.Equal("78471d56e16a5aeb662aff8461f6882fb3c4c76d", salvage.Tree.Hex);
-        var saved = Read(repository.CreateCommit(new(salvage.Tree, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
+        var capture = Read(repository.Capture(f.Folder));
+        Assert.Equal("changed\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        Assert.Equal("78471d56e16a5aeb662aff8461f6882fb3c4c76d", capture.Tree.Hex);
+        var saved = Read(repository.CreateCommit(new(capture.Tree, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
             DateTimeOffset.Parse("2026-10-07T00:00:00Z"))));
         Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", saved.Hex);
-        Assert.IsType<RefMove.Moved>(repository.MoveRef(new("refs/idp/r/salvage/t/019a9d2e-0000-7000-8000-000000000001", null, saved)));
-        Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", Read(repository.ReadRef("refs/idp/r/salvage/t/019a9d2e-0000-7000-8000-000000000001"))?.Hex);
+        Assert.IsType<RefMove.Moved>(repository.MoveRef(new("refs/idp/r/test", null, saved)));
+        Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", Read(repository.ReadRef("refs/idp/r/test"))?.Hex);
         Assert.Equal(0, repository.ResetCheckout(f.Folder, a).ExitCode);
         Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal("mine\n", File.ReadAllText(f.PathOf("folder/keep")));

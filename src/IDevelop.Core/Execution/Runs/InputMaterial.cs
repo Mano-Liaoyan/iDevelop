@@ -35,7 +35,7 @@ internal static class InputMaterial
 
             var provided = (InputBinding.Provided)binding;
             var result = record.Results.Single(result => result.Id == provided.Result);
-            var prefix = $".idp/inputs/{inputs.Value:D}/{result.Id.Value:D}";
+            var prefix = $"{RunLayout.InputFolder(inputs)}/{result.Id.Value:D}";
             var reportPath = prefix + "/report.md";
             var bytes = Encoding.UTF8.GetBytes(result.Report);
             files.Add(new(result.Id, reportPath, Revision.Hash(bytes), bytes.LongLength));
