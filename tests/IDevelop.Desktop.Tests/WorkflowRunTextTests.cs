@@ -65,7 +65,7 @@ public sealed class WorkflowRunTextTests
 
         Assert.Equal((NodeState.Waiting, "Fix interrupted"), WorkflowRunText.Of(fix, Title));
         Assert.Equal(new Attention.Waiting("Fix interrupted"), WorkflowRunText.Needs(fix, Title));
-        Assert.Equal(new Attention.Problem("Inputs changed: A task before it handed on a newer result after this one finished."), WorkflowRunText.Needs(stale, Title));
+        Assert.Equal(new Attention.Problem("Inputs changed: A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays."), WorkflowRunText.Needs(stale, Title));
         Assert.Null(WorkflowRunText.Needs(new TaskView(Task, TaskState.Waiting) { Status = AttemptStatus.InReview }, Title));
     }
 

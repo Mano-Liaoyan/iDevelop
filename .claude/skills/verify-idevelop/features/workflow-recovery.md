@@ -23,7 +23,7 @@ Preconditions:
 - The preconditions of [Run a whole workflow](./workflow-run.md) hold, with a Git repository and a commit, and every task runs through the fake Codex.
 
 - **Close as stopped.** Start a run whose first turn waits for `$s.Gate`, wait for `Running`, and stop the app's process with `Stop-Process -Id $s.Process.Id -Force`. Run `$s = Start-IDevelop -Reopen` to open the same project again. The first card reads `Uncertain` and `RunStatus` reads `Paused`. Choose the first task: `RecoveryClient` names the client's process. Stop that process, type a reason into `RecoveryReason`, and run `Invoke-Element (Find-ById $s.Window 'CloseAsStopped')`. The card reads `Closed as stopped`, and `Stop Workflow` settles the run as `Stopped`.
-- **A stale task.** Use a writer, a review that asks for one change, a consumer of the review, and a second consumer of the writer. Once the fix is accepted, the second consumer reads `Inputs changed` and `RunStatus` reads `Needs attention`. Choose its attention glyph: `RunTaskDetail` reads `A task before it handed on a newer result after this one finished.`
+- **A stale task.** Use a writer, a review that asks for one change, a consumer of the review, and a second consumer of the writer. Once the fix is accepted, the second consumer reads `Inputs changed` and `RunStatus` reads `Needs attention`. Choose its attention glyph: `RunTaskDetail` reads `A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays.`
 
 ## Gotchas
 

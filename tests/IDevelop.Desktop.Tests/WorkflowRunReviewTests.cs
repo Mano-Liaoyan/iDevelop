@@ -56,12 +56,16 @@ public sealed class WorkflowRunReviewTests
         shell.Click(shell.InCard<Button>("D", "CardAttention"));
         Assert.Equal("D", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.Null(shell.Window.ViewModel.Conversation);
-        Assert.Equal("A task before it handed on a newer result after this one finished.", shell.Text("RunTaskDetail"));
+        Assert.Equal("A task before it handed on a newer result after this one finished. Stop Workflow ends the run, and finished work stays.", shell.Text("RunTaskDetail"));
         Assert.False(shell.Has<Button>("ReviewUpdatedInputs"));
         Assert.False(shell.Has<Button>("ApproveRebase"));
         Assert.Equal("a - b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
         Assert.Equal((2, 2, 1, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
-        InspectorLayoutTests.AssertLaidOut(shell);
+        foreach (var size in new double[] { 280, 320, 520 })
+        {
+            shell.SizeInspector(size);
+            InspectorLayoutTests.AssertLaidOut(shell);
+        }
     }
 
     [AvaloniaFact]

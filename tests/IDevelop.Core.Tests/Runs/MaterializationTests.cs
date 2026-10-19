@@ -331,6 +331,27 @@ public sealed class MaterializationTests
         return new(task, blueprint) { Title = "Plan", Execution = Task().Execution };
     }
 
+    [Fact]
+    public void A_rebase_an_earlier_build_left_unfinished_does_not_hold_the_run_from_stopping()
+    {
+        using var f = new RunFixtures(FixtureWorkflow(Task()));
+        f.Approve();
+        var result = f.Complete(f.Reserve());
+        var record = f.Read();
+        // An earlier journal's approved rebase recorded its plan, and the build that wrote it never recorded its result.
+        var plan = new MaterializationPlan.Rebase(T, result.Id, new(Guid.Parse("00000000-0000-0000-0000-00000000f101")), record.Inputs[result.Inputs],
+            record.Base.Commit, Recipe(record.Base.Commit), WriterCommit, "refs/idp/fixture/rebase", new(Guid.Parse("00000000-0000-0000-0000-00000000f102")),
+            new(new string('c', 64)));
+        record = record with { Plans = record.Plans.Add(new(Guid.Parse("00000000-0000-0000-0000-00000000f103")), plan) };
+        RunRecord Apply(RunRecord current, RunEvent e) => Assert.IsType<RunRead.Loaded>(RunReducer.Apply(W, Run, current,
+            new(current.Schema, current.Sequence + 1, new(Guid.NewGuid()), Prompt, At, e))).Record;
+
+        var stopping = Apply(record, new RunEvent.StopRequested());
+        var stopped = Apply(stopping, new RunEvent.Settled(RunOutcome.Stopped));
+
+        Assert.Equal(RunPhase.Stopped, stopped.Phase);
+    }
+
     private static CommitRecipe Recipe(CommitId parent) => new(Tree, [parent], "Fixture", "Test <test@example.invalid>",
         "Test <test@example.invalid>", At);
 

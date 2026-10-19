@@ -472,12 +472,6 @@ internal static partial class RunReducer
                     {
                         return Reject(RunProblem.UnfinishedPublication);
                     }
-                    if (record.Plans.Any(pair => pair.Value is MaterializationPlan.Rebase rebase &&
-                        !record.Results.Any(result => result.Id == rebase.Result) &&
-                        !record.Blocks.Values.Any(block => block.Block.Operation == pair.Key)))
-                    {
-                        return Reject(RunProblem.UnfinishedPublication);
-                    }
                     if (record.Attempts.Keys.Any(id => !record.Closures.ContainsKey(id)) || record.UnresolvedClaims.Length != 0)
                     {
                         return Reject(RunProblem.UnclosedAttempts);
