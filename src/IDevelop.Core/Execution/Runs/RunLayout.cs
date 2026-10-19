@@ -56,7 +56,6 @@ internal static class RunLayout
 
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 
-
     public static string Outbox(AttemptId attempt) => $".idp/outbox/{attempt.Value:D}";
 
     public static string InputFolder(InputId input) => $".idp/inputs/{input.Value:D}";

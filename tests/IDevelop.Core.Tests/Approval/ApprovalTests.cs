@@ -83,6 +83,25 @@ public sealed class ApprovalTests
     }
 
     [Fact]
+    public async Task An_approval_intent_of_schema_1_is_left_alone_and_blocks_nothing()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await f.Open();
+        var preview = f.Preflight();
+        var older = new ApprovalIntent(1, new(Guid.NewGuid()), Command(8), [Command(8)], preview.Revision, preview.Base!.Head);
+        var intents = new ApprovalIntents(f.Project, W);
+        intents.Write(older);
+        Assert.Empty(intents.All());
+
+        var started = await Start(f, preview, Command(9));
+
+        await Completed(started.Coordinator);
+        var run = Assert.Single(f.ApprovedRuns());
+        Assert.NotEqual(older.Run, run);
+        Assert.True(File.Exists(Path.Combine(f.Project, ".idp", "runs", W.ToString(), older.Run.ToString(), "approval.json")));
+    }
+
+    [Fact]
     public async Task Cancelling_the_preview_records_and_starts_nothing()
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));

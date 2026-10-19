@@ -35,7 +35,6 @@ public sealed class CarriedRecoveryTests
         Assert.Equal(73, racer.ExitCode);
     }
 
-
     [Theory]
     [InlineData("approval.pinned.after")]
     [InlineData("approval.carry.built")]

@@ -5,7 +5,6 @@ namespace IDevelop.Execution;
 
 internal static partial class RunReducer
 {
-
     /// <summary>The result and inputs ids a carried task takes in the event <paramref name="carrying"/>.</summary>
     internal static (ResultId Result, InputId Inputs) CarriedIds(OperationId carrying, TaskId task) =>
         (new(OperationIds.Derive(carrying, "carry/" + task.Value.ToString("D")).Value),

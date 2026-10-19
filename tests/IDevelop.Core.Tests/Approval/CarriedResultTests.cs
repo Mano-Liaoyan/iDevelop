@@ -80,6 +80,24 @@ public sealed class CarriedResultTests
     }
 
     [Fact]
+    public void A_node_whose_predecessor_s_earlier_result_cannot_be_carried_cannot_start()
+    {
+        var workflow = Join();
+        var earlier = new RunId(Guid.NewGuid());
+        var preview = new RunPreflight("project", Revision.Capture(workflow), new PreflightGit.Ready("git version 2.50.0"),
+            new PreflightBase(ApprovalFixture.Head, "refs/heads/main", [], [], []), [], null)
+        {
+            Node = C,
+            Carried = [new(A, earlier, new(Guid.NewGuid()), null), new(B, earlier, new(Guid.NewGuid()), new CarryRefusal.InputRuns(A))],
+        };
+
+        Assert.Equal([A], preview.Used.Select(row => row.Task));
+        Assert.False(preview.Starts);
+        Assert.False(preview.Confirmable);
+        Assert.True((preview with { Carried = [preview.Carried[0], preview.Carried[1] with { Refusal = null }] }).Confirmable);
+    }
+
+    [Fact]
     public async Task A_node_whose_predecessor_has_no_current_result_in_any_run_starts_nothing_and_names_it()
     {
         await using var f = JoinAnswers(new ApprovalFixture(Join()));

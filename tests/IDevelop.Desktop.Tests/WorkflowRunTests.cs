@@ -103,7 +103,7 @@ public sealed class WorkflowRunTests
 
         Assert.Equal($"HEAD, {f.Head()} on main", shell.Text("PreflightBase"));
         Assert.False(shell.Has<Control>("PreflightSnapshot"));
-        Assert.Equal("1 path differs from HEAD: base.txt. Agents don't see uncommitted edits. Commit them first for the run to use them.",
+        Assert.Equal("1 path differs from HEAD: base.txt. Agents don't see uncommitted edits. Commit it first for the run to use it.",
             shell.Text("PreflightChanged"));
         Assert.Equal(preflight.ChangedNote, shell.Text("PreflightChanged"));
         shell.Click(shell.Find<Button>("PreflightStart"));
@@ -115,6 +115,22 @@ public sealed class WorkflowRunTests
         Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim()), BaseChoice.Head), record.Base);
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(f.Project, "base.txt")));
         Assert.Equal(" M base.txt\n", f.Run("status", "--porcelain", "--untracked-files=no"));
+    }
+
+    [AvaloniaFact]
+    public void Several_uncommitted_paths_are_named_in_one_sentence()
+    {
+        // Windows drops a file name's trailing period, which this checks the sentence for.
+        if (OperatingSystem.IsWindows()) return;
+        using var f = Chain();
+        File.WriteAllText(Path.Combine(f.Project, "base.txt"), "changed\n");
+        File.WriteAllText(Path.Combine(f.Project, "notes."), "notes\n");
+        var shell = f.Window();
+
+        shell.OpenPreflight();
+
+        Assert.Equal("2 paths differ from HEAD: base.txt, notes. Agents don't see uncommitted edits. Commit them first for the run to use them.",
+            shell.Text("PreflightChanged"));
     }
 
     [AvaloniaFact]

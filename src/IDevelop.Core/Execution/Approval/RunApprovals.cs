@@ -296,7 +296,7 @@ internal sealed class RunApprovals
                 pending.FirstOrDefault(intent => intent.Matches(live, inclusions));
             foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run, repository);
             var chosen = adopted is null
-                ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
+                ? new ApprovalIntent(2, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
                     [confirmation.Command], live.Revision, live.Base!.Head) { Inclusions = inclusions, Node = live.Node }
                 : Confirmed(adopted, confirmation.Command);
             intents.Write(chosen);

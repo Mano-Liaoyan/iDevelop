@@ -82,7 +82,7 @@ public sealed class NodePreflightTests
         var node = f.Runs.Preflight(f.Workflow, A);
         var other = f.Runs.Preflight(f.Workflow, X);
         var whole = f.Preflight();
-        var intent = new ApprovalIntent(1, new(Guid.NewGuid()), Command(3), [Command(3)], node.Revision, node.Base!.Head) { Node = A };
+        var intent = new ApprovalIntent(2, new(Guid.NewGuid()), Command(3), [Command(3)], node.Revision, node.Base!.Head) { Node = A };
 
         Assert.True(intent.Matches(node, []));
         Assert.False(intent.Matches(other, []));

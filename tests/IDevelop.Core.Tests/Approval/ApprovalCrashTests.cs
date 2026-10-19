@@ -71,6 +71,31 @@ public sealed class ApprovalCrashTests
     }
 
     [Fact]
+    public async Task An_approved_base_survives_garbage_collection_before_its_first_preparation_once_the_branch_moved_off_it()
+    {
+        await using var f = ChainAnswers(new ApprovalFixture(Chain()));
+        await Crash(f, "approval.approved.after");
+        var run = Assert.Single(f.ApprovedRuns());
+        var approved = f.Read(run).Base.Commit;
+        Assert.Equal(Head, approved);
+        // The branch moves to a commit that does not descend from the base, and Git forgets every other way to it.
+        f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "--amend", "-m", "Rewritten");
+        Assert.NotEqual(Head.Hex + "\n", f.GitText("rev-parse", "HEAD"));
+        f.GitText("reflog", "expire", "--expire=now", "--all");
+        f.GitText("gc", "-q", "--prune=now");
+        Assert.Equal("commit\n", f.GitText("cat-file", "-t", approved.Hex));
+        await f.Open();
+
+        var started = await Start(f, f.Preflight(), First);
+
+        Assert.True(started.Existing);
+        await Completed(started.Coordinator);
+        Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
+        Assert.Equal(approved.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(f.Read(run).RunKey!)));
+        Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
+    }
+
+    [Fact]
     public async Task A_confirmation_that_finds_the_run_busy_keeps_the_pin_of_a_base_not_yet_prepared()
     {
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));

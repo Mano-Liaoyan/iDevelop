@@ -99,7 +99,6 @@ internal sealed partial class GitRepository
         {
             return new RepositoryOpen.Refused(MaterializationProblem.GitFailed, version.Stderr);
         }
-
         var prefix = Run(["rev-parse", "--show-prefix"], projectFolder, GitOperation.Metadata, limits, environment);
         if (prefix.ExitCode != 0 || prefix.Text.TrimEnd('\r', '\n').Length != 0)
         {
@@ -123,7 +122,6 @@ internal sealed partial class GitRepository
         return match.Success && System.Version.TryParse($"{match.Groups[1]}.{match.Groups[2]}.{match.Groups[3]}", out var version)
             ? version : null;
     }
-
 
     /// <summary>How long a step waits for the mutation lock unless it names its own patience.</summary>
     internal static readonly TimeSpan MutationPatience = TimeSpan.FromSeconds(1);

@@ -99,7 +99,10 @@ internal sealed class ApprovalIntents
         return null;
     }
 
-    /// <summary>Every readable intent, by run. An intent that cannot be read is left alone.</summary>
+    /// <summary>
+    /// Every readable intent of schema 2, by run. An intent that cannot be read, or one of schema 1 that a snapshot choice
+    /// shaped, is left alone and blocks nothing.
+    /// </summary>
     public ImmutableArray<ApprovalIntent> All()
     {
         if (!Directory.Exists(_folder)) return [];
@@ -110,7 +113,7 @@ internal sealed class ApprovalIntents
             if (!File.Exists(path) || !Guid.TryParse(Path.GetFileName(run), out var id)) continue;
             try
             {
-                if (JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), Options) is { Schema: 1 } intent && intent.Run.Value == id &&
+                if (JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), Options) is { Schema: 2 } intent && intent.Run.Value == id &&
                     !intent.Confirmations.IsDefaultOrEmpty)
                     intents.Add(intent);
             }

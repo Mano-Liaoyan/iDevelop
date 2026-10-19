@@ -117,8 +117,12 @@ public sealed class RunPreflightViewModel : ObservableObject
 
     /// <summary>What differs from HEAD, which the run's agents do not see, or null for a clean project.</summary>
     public string? ChangedNote => _preview?.Base is { Changed: { IsEmpty: false } changed }
-        ? $"{Count(changed.Length, "path")} {(changed.Length == 1 ? "differs" : "differ")} from HEAD: {List(changed)}. Agents don't see uncommitted edits. Commit them first for the run to use them."
+        ? $"{Count(changed.Length, "path")} {(changed.Length == 1 ? "differs" : "differ")} from HEAD: {Sentence(List(changed))} Agents don't see uncommitted edits. " +
+            (changed.Length == 1 ? "Commit it first for the run to use it." : "Commit them first for the run to use them.")
         : null;
+
+    /// <summary>Ends <paramref name="text"/> with one period, so a path that ends in one does not get a second.</summary>
+    private static string Sentence(string text) => text.EndsWith('.') ? text : text + ".";
 
     public string? IgnoredNote => _preview?.Base is { } found
         ? found.Ignored.IsEmpty ? "Ignored files never reach a task." : $"Ignored files never reach a task, such as {List(found.Ignored)}."
@@ -165,7 +169,6 @@ public sealed class RunPreflightViewModel : ObservableObject
     public ICommand CancelCommand { get; }
 
     public ICommand ShowActiveCommand => _showActive;
-
 
     /// <summary>The sheet closed. A Start in flight still shows its run.</summary>
     internal void Detach() => _detached = true;
@@ -403,7 +406,6 @@ public sealed class RunPreflightViewModel : ObservableObject
             yield return gap switch
             {
                 PreflightGap.Task task => new($"{Title(preview, task.Id)}: {RunText.Describe(task.Problem)}", ShowNode(task.Id)),
-
                 PreflightGap.NoCommit => new("The project has no commit yet. Commit once, then run the workflow.", null),
                 PreflightGap.Git git => new(git.Problem == MaterializationProblem.NotRepositoryRoot
                     ? $"Workflow runs need the project folder to be a Git repository's root. {git.Detail}" : git.Detail, null),
