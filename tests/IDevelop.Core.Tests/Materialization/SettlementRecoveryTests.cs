@@ -541,7 +541,7 @@ public sealed class SettlementRecoveryTests
         }
         var retainedPins = IDevelop.Core.Tests.Git.GitFixture.Read(f.Git.Open().RefSnapshot(RunLayout.PinPrefix(f.Read().RunKey!)));
         Assert.Contains(RunLayout.RootPin(f.Read().RunKey!, f.Read().TaskKeys[T], launch), retainedPins.Keys);
-        if (!missing) Assert.Contains(RunLayout.CapturePin(f.Read().RunKey!, f.Read().TaskKeys[T], launch, 1), retainedPins.Keys);
+        if (!missing) Assert.Contains(RunLayout.CapturePin(f.Read().RunKey!, f.Read().TaskKeys[T], launch), retainedPins.Keys);
         var sequence = f.Read().Sequence;
         SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch));
         Assert.Equal(sequence, f.Read().Sequence);

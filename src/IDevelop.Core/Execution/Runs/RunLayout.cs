@@ -28,12 +28,6 @@ internal static class RunLayout
 
     public static string JoinBranch(string run, string task) => $"refs/heads/idp/{run}/join/{task}";
 
-    public static string ResultRef(string run, string task, AttemptId attempt) => $"refs/idp/{run}/result/{task}/{attempt.Value:D}";
-
-    public static string RebaseRef(string run, string task, ResultId result) => $"refs/idp/{run}/rebase/{task}/{result.Value:D}";
-
-    public static string SalvageRef(string run, string task, AttemptId attempt) => $"refs/idp/{run}/salvage/{task}/{attempt.Value:D}";
-
     public static string ResalvageRef(string run, string task, AttemptId attempt, OperationId operation) =>
         $"refs/idp/{run}/resalvage/{task}/{attempt.Value:D}/{operation.Value:D}";
 
@@ -42,17 +36,11 @@ internal static class RunLayout
     public static string RootPin(string run, string task, LaunchKey launch) =>
         $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/root";
 
-    public static string CapturePin(string run, string task, LaunchKey launch, int ordinal) =>
-        $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-{ordinal}";
+    public static string CapturePin(string run, string task, LaunchKey launch) =>
+        $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture";
 
-    public static string CaptureIndexPin(string run, string task, LaunchKey launch, int ordinal) =>
-        $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-{ordinal}-index";
-
-    public static string PreservationPin(string run, string task, AttemptId attempt, OperationId operation, int ordinal) =>
-        $"{PinPrefix(run)}{task}/{attempt.Value:D}/preserve/{operation.Value:D}/{ordinal}";
-
-    public static string PreserveRef(string run, string task, OperationId operation) =>
-        $"refs/idp/{run}/preserve/{task}/{operation.Value:D}";
+    public static string CaptureIndexPin(string run, string task, LaunchKey launch) =>
+        $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-index";
 
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 

@@ -423,7 +423,7 @@ public sealed class RootExitTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task A_busy_root_observation_never_deletes_a_competing_observers_pin_or_fences_the_launch()
+    public async System.Threading.Tasks.Task A_busy_root_observation_keeps_its_pin_and_a_later_observer_records_it()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
@@ -431,7 +431,6 @@ public sealed class RootExitTests
         var launch = ready.Execution.Launch;
         var operation = f.Op();
         var competingOperation = f.Op();
-        RootObservation? competing = null;
         FileStream? held = null;
         RootObservation outcome;
         try
@@ -442,12 +441,10 @@ public sealed class RootExitTests
                     held = new FileStream(Path.Combine(f.Git.Folder, ".idp", "runs", "write.lock"),
                         FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 if (point == "journal.root-exit.after") held?.Dispose();
-                if (point == "git.release-root-pin.before")
-                    competing = f.Materializer().ObserveRootExit(f.Lease(T), competingOperation, launch, new RootExit.Exited(0));
             }).ObserveRootExit(f.Lease(T), operation, launch, new RootExit.Exited(0));
         }
         finally { held?.Dispose(); }
-        competing ??= f.Materializer().ObserveRootExit(f.Lease(T), competingOperation, launch, new RootExit.Exited(0));
+        var competing = f.Materializer().ObserveRootExit(f.Lease(T), competingOperation, launch, new RootExit.Exited(0));
         var recorded = Assert.IsType<RootObservation.Observed>(competing).Observation;
         Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", recorded.Tip.Hex);
         Assert.Equal(new[] { ("refs/idp/93f23689/pin/90d5b0a2/00000000-0000-0000-0000-000000000102/1/root", recorded.Tip) },

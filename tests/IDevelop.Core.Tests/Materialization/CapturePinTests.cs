@@ -25,8 +25,8 @@ public sealed class CapturePinTests
         var pins = GitFixture.Read(f.Git.Open().RefSnapshot(prefix));
         Assert.Equal(3, pins.Count);
         Assert.Equal(root, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/root"]);
-        Assert.Equal(observation.Candidate, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/capture-1"]);
-        var indexCommit = pins[RunLayout.CaptureIndexPin(record.RunKey!, taskKey, writer.Execution.Launch, 1)];
+        Assert.Equal(observation.Candidate, pins[$"{prefix}{taskKey}/{writer.Execution.Launch.Attempt.Value:D}/1/capture"]);
+        var indexCommit = pins[RunLayout.CaptureIndexPin(record.RunKey!, taskKey, writer.Execution.Launch)];
         Assert.Equal(observation.IndexTree, GitFixture.Read(f.Git.Open().ReadCommit(indexCommit)).Tree);
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
         Assert.Equal(3, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);
@@ -77,7 +77,7 @@ public sealed class CapturePinTests
             "gc", "--prune=now").ExitCode);
         Assert.Equal("staged\n", f.Git.Git("show", indexTree.Hex + ":result.txt"));
         Assert.Equal("done\n", f.Git.Git("show", observation.Recipe.Tree.Hex + ":result.txt"));
-        var pin = RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch, 1);
+        var pin = RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch);
         var commit = GitFixture.Read(f.Git.Open().ReadRef(pin));
         Assert.NotNull(commit);
         var retained = GitFixture.Read(f.Git.Open().ReadCommit(commit.Value));
@@ -114,7 +114,7 @@ public sealed class CapturePinTests
         RootExitTests.Claim(f, writer);
         var record = f.Read();
         var pin = step == "root" ? RunLayout.RootPin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch)
-            : RunLayout.CapturePin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch, 1);
+            : RunLayout.CapturePin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch);
         var locked = Path.Combine(f.Git.Folder, ".git", pin + ".lock");
         Directory.CreateDirectory(Path.GetDirectoryName(locked)!);
         File.WriteAllText(locked, "lock\n");
@@ -150,7 +150,7 @@ public sealed class CapturePinTests
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         var record = f.Read();
         var rootPin = RunLayout.RootPin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch);
-        var capturePin = RunLayout.CapturePin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch, 1);
+        var capturePin = RunLayout.CapturePin(record.RunKey!, record.TaskKeys[T], writer.Execution.Launch);
         var other = f.Git.Git("rev-parse", "HEAD~1").Trim();
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "update-ref", rootPin, other).ExitCode);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "update-ref", capturePin, other).ExitCode);

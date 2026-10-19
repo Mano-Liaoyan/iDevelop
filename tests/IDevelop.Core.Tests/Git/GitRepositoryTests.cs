@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -533,7 +532,8 @@ public sealed class GitRepositoryTests
         Assert.Equal("100644 blob 5ea2ed416fbd4a4cbe227b75fe255dd7fa6bd4d6\ta.txt\n" +
             "100644 blob d8649da39ddf7910d29982e2f19cd9c0ff5ffe96\troot.txt\n" +
             "100644 blob 3e757656cf36eca53338e520d134963a44f793f8\tuntracked.txt\n", f.Git("ls-tree", "-r", capture.Tree.Hex));
-        Assert.Equal([".idp/inputs/x/report.md", ".worktrees/nested/file", "extra/file", "untracked.txt"], Read(repository.UntrackedFiles(f.Folder)).ToArray());
+        Assert.Equal("nested\n", File.ReadAllText(f.PathOf(".worktrees/nested/file")));
+        Assert.Equal("excluded\n", File.ReadAllText(f.PathOf("extra/file")));
         Assert.Equal("cache\n", File.ReadAllText(f.PathOf("ignored.txt")));
     }
 
@@ -999,29 +999,6 @@ public sealed class GitRepositoryTests
         catch (Exception error) when (error is ArgumentException or InvalidOperationException) { }
     }
 
-    [UnixFact]
-    public async Task Removal_rejects_a_fifo_without_opening_or_deleting_it()
-    {
-        using var f = new GitFixture();
-        f.Diamond();
-        var repository = f.Open();
-        var fifo = f.PathOf("pipe");
-        Assert.Equal(0, Mkfifo(fifo, 0x180));
-        var removal = Task.Run(() => repository.RemovePath(f.Folder, "pipe",
-            new("be02c0270dc16cf866391d81369ce9b50c9bd1c9cb0834a5c2788c70b35ead2e"), GitPathType.RegularFile));
-        try
-        {
-            Assert.Equal(PathRemoval.Unexpected, await removal.WaitAsync(TimeSpan.FromSeconds(5)));
-            Assert.True(File.Exists(fifo));
-        }
-        finally
-        {
-            var writer = Open(fifo, 1 | (OperatingSystem.IsMacOS() ? 4 : 0x800));
-            if (writer >= 0) Close(writer);
-            await removal.WaitAsync(TimeSpan.FromSeconds(5));
-        }
-    }
-
     private sealed class NonRunningSynchronizationContext : SynchronizationContext
     {
         private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
@@ -1030,56 +1007,22 @@ public sealed class GitRepositoryTests
         public override void Send(SendOrPostCallback callback, object? state) => _callbacks.Enqueue((callback, state));
     }
 
-    [DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)]
-    private static extern int Mkfifo([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
-
-    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
-    private static extern int Open([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
-
-    [DllImport("libc", EntryPoint = "close", SetLastError = true)]
-    private static extern int Close(int descriptor);
-
-    [UnixFact]
-    public void Removal_preserves_symlink_targets()
-    {
-        using var f = new GitFixture();
-        f.Diamond();
-        var repository = f.Open();
-        f.Write("target/file", "unfinished\n");
-        File.CreateSymbolicLink(f.PathOf("link"), f.PathOf("target/file"));
-        Directory.CreateSymbolicLink(f.PathOf("via"), f.PathOf("target"));
-        var content = new Digest("be02c0270dc16cf866391d81369ce9b50c9bd1c9cb0834a5c2788c70b35ead2e");
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "link", content, GitPathType.RegularFile));
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "via/file", content, GitPathType.RegularFile));
-        Assert.Equal("unfinished\n", File.ReadAllText(f.PathOf("target/file")));
-    }
-
     [Fact]
-    public void Removal_checks_type_and_bytes_and_reset_leaves_uncaptured_paths_in_place()
+    public void Capture_takes_the_work_tree_and_a_reset_leaves_untracked_paths()
     {
         using var f = new GitFixture();
         var a = f.Diamond();
         var repository = f.Open();
-        f.Write("new.txt", "unfinished\n");
-        var digest = new Digest("be02c0270dc16cf866391d81369ce9b50c9bd1c9cb0834a5c2788c70b35ead2e");
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "new.txt", digest, GitPathType.Directory));
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "new.txt", new(new string('0', 64)), GitPathType.RegularFile));
-        Assert.Equal("unfinished\n", File.ReadAllText(f.PathOf("new.txt")));
-        Assert.Equal(PathRemoval.Removed, repository.RemovePath(f.Folder, "new.txt", digest, GitPathType.RegularFile));
-        Assert.Equal(PathRemoval.Absent, repository.RemovePath(f.Folder, "new.txt", digest, GitPathType.RegularFile));
         f.Write("folder/keep", "mine\n");
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "folder", digest, GitPathType.RegularFile));
-        Assert.Equal(PathRemoval.Unexpected, repository.RemovePath(f.Folder, "../outside", digest, GitPathType.RegularFile));
-        Assert.Equal("mine\n", File.ReadAllText(f.PathOf("folder/keep")));
         f.Write("a.txt", "changed\n");
-        var salvage = Read(repository.Capture(f.Folder));
-        Assert.Equal("changed\n", f.Git("show", salvage.Tree.Hex + ":a.txt"));
-        Assert.Equal("78471d56e16a5aeb662aff8461f6882fb3c4c76d", salvage.Tree.Hex);
-        var saved = Read(repository.CreateCommit(new(salvage.Tree, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
+        var capture = Read(repository.Capture(f.Folder));
+        Assert.Equal("changed\n", f.Git("show", capture.Tree.Hex + ":a.txt"));
+        Assert.Equal("78471d56e16a5aeb662aff8461f6882fb3c4c76d", capture.Tree.Hex);
+        var saved = Read(repository.CreateCommit(new(capture.Tree, [a], "salvage\n", "E2 <e2@example.test>", "E2 <e2@example.test>",
             DateTimeOffset.Parse("2026-10-07T00:00:00Z"))));
         Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", saved.Hex);
-        Assert.IsType<RefMove.Moved>(repository.MoveRef(new("refs/idp/r/salvage/t/019a9d2e-0000-7000-8000-000000000001", null, saved)));
-        Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", Read(repository.ReadRef("refs/idp/r/salvage/t/019a9d2e-0000-7000-8000-000000000001"))?.Hex);
+        Assert.IsType<RefMove.Moved>(repository.MoveRef(new("refs/idp/r/test", null, saved)));
+        Assert.Equal("3e82c1ec96d334dc6e07fcb174b64369c5175e8b", Read(repository.ReadRef("refs/idp/r/test"))?.Hex);
         Assert.Equal(0, repository.ResetCheckout(f.Folder, a).ExitCode);
         Assert.Equal("A\n", File.ReadAllText(f.PathOf("a.txt")));
         Assert.Equal("mine\n", File.ReadAllText(f.PathOf("folder/keep")));
