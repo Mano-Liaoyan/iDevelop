@@ -26,6 +26,17 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
+      # The desktop tests measure text, and pass with Roboto as the sans-serif font, as on the owner's machine. The
+      # runner image has only DejaVu, which is wider, so the inspector's buttons wrap at 280 px.
+      - name: Make Roboto the sans-serif font
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends fonts-roboto
+          cat > /etc/fonts/local.conf <<'XML'
+          <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig><alias><family>sans-serif</family><prefer><family>Roboto</family></prefer></alias></fontconfig>
+          XML
+          fc-cache -f > /dev/null
+          fc-match sans-serif
       # The job container runs as root, which ignores the file permissions some tests rely on to make a write fail,
       # so the rest runs as an unprivileged user, as on GitHub's runners.
       - run: |
