@@ -398,22 +398,6 @@ public sealed class GitRepositoryTests
         Assert.Equal(new Version(major, minor, patch), GitRepository.ParseVersion(text));
     }
 
-    [Theory]
-    [InlineData("git version 2.38.1")]
-    [InlineData("not a Git version")]
-    public void Unsupported_or_unknown_version_is_refused(string text)
-    {
-        var refused = Assert.IsType<RepositoryOpen.Refused>(GitRepository.CheckVersion(text));
-        Assert.Equal(MaterializationProblem.GitVersionUnsupported, refused.Problem);
-        Assert.Equal(text, refused.Detail);
-    }
-
-    [Fact]
-    public void Git_239_vendor_build_is_supported_for_general_operations()
-    {
-        Assert.Null(GitRepository.CheckVersion("git version 2.39.5 (Apple Git-154)"));
-    }
-
     [Fact]
     public void Open_requires_a_toplevel_and_discovers_linked_worktree_identity()
     {

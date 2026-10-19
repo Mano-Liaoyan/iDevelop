@@ -5,7 +5,7 @@ namespace IDevelop.Execution;
 
 public sealed partial class ProjectRuns
 {
-    private RunApprovals Approvals => new(_projectFolder, TurnStore, GitEnvironment, _clients.Current, Latest, MaterializerClock ?? TimeProvider,
+    private RunApprovals Approvals => new(_projectFolder, TurnStore, GitEnvironment, _clients.Current, Latest,
         point => Probe?.Invoke(point), (task, turn) => MarkDoneCore(task, turn).Problem, SkillsOf);
 
     /// <summary>

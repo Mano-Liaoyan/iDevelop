@@ -3,10 +3,10 @@ using System.Collections.Immutable;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// The person's confirmation of <paramref name="Preview"/> with the base they chose. <paramref name="Command"/> identifies
-/// the confirmation: repeating it returns the run it approved.
+/// The person's confirmation of <paramref name="Preview"/>, whose run starts from the current branch's HEAD.
+/// <paramref name="Command"/> identifies the confirmation: repeating it returns the run it approved.
 /// </summary>
-internal sealed record RunConfirmation(RunPreflight Preview, BaseChoice Choice, OperationId Command)
+internal sealed record RunConfirmation(RunPreflight Preview, OperationId Command)
 {
     /// <summary>The reports the preview offered that the person includes: planners from <see cref="RunPreflight.Planners"/>
     /// and other reports from <see cref="RunPreflight.Reusable"/>, at most one per task.</summary>
@@ -15,7 +15,7 @@ internal sealed record RunConfirmation(RunPreflight Preview, BaseChoice Choice, 
 
 internal enum ApprovalProblem
 {
-    /// <summary>The preview has gaps, or offers no such base.</summary>
+    /// <summary>The preview has gaps, or its node cannot start.</summary>
     NotConfirmable,
 
     /// <summary>The confirmation carries no command ID, so a repeat could not be told from a new confirmation.</summary>
@@ -27,11 +27,11 @@ internal enum ApprovalProblem
     /// <summary>Another confirmation of the workflow held the approval lock too long.</summary>
     ApprovalBusy,
 
-    /// <summary>Git failed while building the snapshot.</summary>
+    /// <summary>Git could not keep the run's base.</summary>
     GitFailed,
 
     /// <summary>
-    /// A report the person included cannot be: the preview did not offer it on this base, or its validation failed at
+    /// A report the person included cannot be: the preview did not offer it, or its validation failed at
     /// approval. Nothing was approved. The detail names the <see cref="RunProblem"/>. Running the planner again takes a
     /// confirmation without it.
     /// </summary>

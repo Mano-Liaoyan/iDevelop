@@ -8,19 +8,16 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// A confirmed approval, recorded before any of its side effects: the snapshot commit and the run's journal. A run folder
-/// that holds an intent and no journal is an approval that has not finished. Repeating any confirmation it lists, or
-/// confirming its content again, finishes it as the same run.
+/// A confirmed approval, recorded before any of its side effects: the base pin and the run's journal. A run folder that
+/// holds an intent and no journal is an approval that has not finished. Repeating any confirmation it lists, or confirming
+/// its content again, finishes it as the same run.
 /// </summary>
 /// <param name="Operation">The <see cref="RunStore.Approve"/> operation, derived from the first confirmation.</param>
 /// <param name="Confirmations">Every confirmation that approved through this intent, the first one first.</param>
-/// <param name="Snapshot">For a snapshot base, the work tree's tree the person confirmed.</param>
-/// <param name="Recorded">When the intent was recorded, in whole seconds: the snapshot commit's time, so a retry rebuilds the same commit.</param>
+/// <param name="Head">The current branch's HEAD the person confirmed, which the run starts from.</param>
 internal sealed record ApprovalIntent(int Schema, RunId Run, OperationId Operation, ImmutableArray<OperationId> Confirmations,
-    ApprovedRevision Revision, BaseChoice Choice, CommitId Head, TreeId? Snapshot, DateTimeOffset Recorded)
+    ApprovedRevision Revision, CommitId Head)
 {
-    private const string Identity = "iDevelop <idevelop@localhost>";
-
     /// <summary>The reports the confirmation included, by task. A waiting planner among them is marked done before the approval.</summary>
     public ImmutableArray<ReportInclusion> Inclusions { get; init; } = [];
 
@@ -28,21 +25,15 @@ internal sealed record ApprovalIntent(int Schema, RunId Run, OperationId Operati
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TaskId? Node { get; init; }
 
-    /// <summary>Whether the intent approves what <paramref name="live"/> shows with <paramref name="choice"/> and <paramref name="inclusions"/>.</summary>
-    public bool Matches(RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions) => live.Base is { } found &&
-        Revision.Id == live.Revision.Id && Choice == choice && Head == found.Head && (choice == BaseChoice.Head || Snapshot == found.WorkTree) &&
-        Inclusions.SequenceEqual(inclusions) && Node == live.Node;
-
-    /// <summary>The snapshot commit: the confirmed tree over HEAD, by iDevelop, at the intent's time.</summary>
-    public CommitRecipe SnapshotRecipe() => new(Snapshot ?? throw new InvalidOperationException("The intent has no snapshot."), [Head],
-        $"iDevelop run base for run {Run}\n\nA snapshot of the uncommitted work, which leaves the person's branch, index, and files as they were.\n",
-        Identity, Identity, Recorded);
+    /// <summary>Whether the intent approves what <paramref name="live"/> shows with <paramref name="inclusions"/>.</summary>
+    public bool Matches(RunPreflight live, ImmutableArray<ReportInclusion> inclusions) => live.Base is { } found &&
+        Revision.Id == live.Revision.Id && Head == found.Head && Inclusions.SequenceEqual(inclusions) && Node == live.Node;
 }
 
 /// <summary>
 /// The ref that keeps an approved run's base commit, <c>refs/idp/approvals/&lt;run-id&gt;</c>, from its approval until the
-/// run's own <c>refs/idp/&lt;run&gt;/base</c> holds it. A snapshot commit is referenced by nothing else, and the base ref
-/// is written only at the run's first preparation. <c>approvals</c> is never a run key, because run keys are hexadecimal,
+/// run's own <c>refs/idp/&lt;run&gt;/base</c> holds it, since the branch can move away from it before the run's first
+/// preparation writes the base ref. <c>approvals</c> is never a run key, because run keys are hexadecimal,
 /// and no ownership snapshot reads it.
 /// </summary>
 internal static class ApprovalPin
@@ -108,7 +99,10 @@ internal sealed class ApprovalIntents
         return null;
     }
 
-    /// <summary>Every readable intent, by run. An intent that cannot be read is left alone.</summary>
+    /// <summary>
+    /// Every readable intent of schema 2, by run. An intent that cannot be read, or one of schema 1 that a snapshot choice
+    /// shaped, is left alone and blocks nothing.
+    /// </summary>
     public ImmutableArray<ApprovalIntent> All()
     {
         if (!Directory.Exists(_folder)) return [];
@@ -119,7 +113,7 @@ internal sealed class ApprovalIntents
             if (!File.Exists(path) || !Guid.TryParse(Path.GetFileName(run), out var id)) continue;
             try
             {
-                if (JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), Options) is { Schema: 1 } intent && intent.Run.Value == id &&
+                if (JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), Options) is { Schema: 2 } intent && intent.Run.Value == id &&
                     !intent.Confirmations.IsDefaultOrEmpty)
                     intents.Add(intent);
             }
@@ -141,11 +135,7 @@ internal sealed class ApprovalIntents
     /// </summary>
     public void Remove(RunId run, GitRepository? repository)
     {
-        if (repository is not null)
-        {
-            ApprovalPin.Release(repository, run);
-            Carrying.Release(repository, run);
-        }
+        if (repository is not null) ApprovalPin.Release(repository, run);
         var folder = Path.Combine(_folder, run.ToString());
         // The artifacts it copied for the results it would have carried (#90) go with it; a run with a journal keeps them.
         var copied = Path.Combine(folder, "results");

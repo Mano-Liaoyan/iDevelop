@@ -37,7 +37,7 @@ public sealed class CarriedJournalTests
     private static RunHistory History(RunFixtures f) => RunHistory.Of(f.Store.Records(W), f.Workflow);
 
     /// <summary>What <paramref name="run"/>, started from <paramref name="node"/>, carries under <paramref name="operation"/>.</summary>
-    private static ImmutableArray<IncludedResult> Built(RunFixtures f, RunId run, TaskId node, OperationId operation) => Carrying.Build(null,
+    private static ImmutableArray<IncludedResult> Built(RunFixtures f, RunId run, TaskId node, OperationId operation) => Carrying.Build(
         new RunRecord(run, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [node] }, History(f), operation).Carried;
 
     private static RunDecision Approve(RunFixtures f, RunId run, OperationId operation, TaskId? node, ImmutableArray<IncludedResult> carried) =>
@@ -53,6 +53,8 @@ public sealed class CarriedJournalTests
         var operation = f.Op();
         var carried = Built(f, OtherRun, C, operation);
         Assert.Equal([T, U], carried.Select(item => item.Result.Task));
+        // A carried result brings its report and artifacts: the earlier run's work is already in the branch.
+        Assert.All(carried, item => Assert.Null(item.Result.Code));
 
         Assert.Equal(new RunRejection(RunProblem.UnsupportedResult), Refused(Approve(f, OtherRun, operation, null, carried)));
         // The order a chain needs: U's result took T's, so T comes first.
@@ -107,8 +109,6 @@ public sealed class CarriedJournalTests
             Result = carried[0].Result with { Artifacts = [new("notes", "results/elsewhere/notes", Revision.Hash("x"), 1)] }
         });
         Assert.Equal(new RunRejection(RunProblem.InputConflict, Task: T), Refused(Approve(f, OtherRun, operation, C, renamed)));
-        var coded = carried.SetItem(0, carried[0] with { Result = carried[0].Result with { Code = new CodeOutput.Forwarded(carried[0].Inputs.Id) } });
-        Assert.Equal(new RunRejection(RunProblem.InputConflict, Task: T), Refused(Approve(f, OtherRun, operation, C, coded)));
         Assert.Equal([Run], f.Store.Records(W).Select(record => record.Id));
     }
 
@@ -119,7 +119,7 @@ public sealed class CarriedJournalTests
         First(f);
         var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [C] };
         var operation = f.Op();
-        var carried = Carrying.Build(null, seed, History(f), operation).Carried;
+        var carried = Carrying.Build(seed, History(f), operation).Carried;
         var withT = RunReducer.WithCarried(seed, carried[0]);
         Assert.Null(RunReducer.CarriedProblem(withT, carried[1], operation));
 
@@ -142,7 +142,7 @@ public sealed class CarriedJournalTests
         foreach (var task in new[] { x, y, w, z }) f.Complete(f.Reserve(task));
         Settle(f, Run);
 
-        var build = Carrying.Build(null, new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [x] },
+        var build = Carrying.Build(new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [x] },
             History(f), f.Op());
 
         Assert.Empty(build.Carried);
@@ -165,7 +165,7 @@ public sealed class CarriedJournalTests
         f.Complete(f.Reserve(x, run: OtherRun), run: OtherRun);
         var record = f.Read(OtherRun);
 
-        var build = Carrying.Build(null, record with { Requested = [x, z] }, History(f), f.Op());
+        var build = Carrying.Build(record with { Requested = [x, z] }, History(f), f.Op());
 
         Assert.Empty(build.Carried);
         Assert.Equal(new CarryRefusal.InputRuns(x), build.Refused[q]);
@@ -180,7 +180,7 @@ public sealed class CarriedJournalTests
         f.Approve(run: OtherRun, node: D);
         var record = f.Read(OtherRun);
         var operation = f.Op();
-        var built = Carrying.Build(null, record with { Requested = [D, U] }, History(f), operation).Carried;
+        var built = Carrying.Build(record with { Requested = [D, U] }, History(f), operation).Carried;
         Assert.Equal([T], built.Select(item => item.Result.Task));
 
         Assert.Equal(new RunRejection(RunProblem.MissingDependencyResult, Task: T), Refused(f.Store.Request(f.PermitFor(OtherRun), f.Op(), U)));

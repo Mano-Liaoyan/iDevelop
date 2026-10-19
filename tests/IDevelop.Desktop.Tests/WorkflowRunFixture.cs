@@ -112,7 +112,7 @@ internal sealed class WorkflowRunFixture : IDisposable
     {
         _ = Clients();
         var workflowFile = Directory.EnumerateFiles(Path.Combine(Project, ".idp", "workflows"), "*.json").Single();
-        var approval = RunRacerProcess.Run(Git, "approve-crash", Project, workflowFile, Fakes.Folder, Guid.NewGuid().ToString("D"), "Head",
+        var approval = RunRacerProcess.Run(Git, "approve-crash", Project, workflowFile, Fakes.Folder, Guid.NewGuid().ToString("D"),
             "approval.opened.after");
         Assert.True(approval.Exit == 73, approval.Output);
         var folder = Assert.Single(RunFolders());

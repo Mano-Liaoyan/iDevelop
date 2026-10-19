@@ -8,9 +8,9 @@ namespace IDevelop.RunRacer;
 internal static class ApprovalRacer
 {
     /// <param name="args">
-    /// The mode, the project, the workflow file, the fake clients' folder, the confirmation, the base, the crash point, and
-    /// optionally <c>include</c>, which includes every planner the preview offers on the base, and <c>node:&lt;task&gt;</c>,
-    /// which confirms that node's Run instead of Run Workflow.
+    /// The mode, the project, the workflow file, the fake clients' folder, the confirmation, the crash point, and optionally
+    /// <c>include</c>, which includes every planner the preview offers, and <c>node:&lt;task&gt;</c>, which confirms that
+    /// node's Run instead of Run Workflow.
     /// </param>
     public static int Crash(string[] args)
     {
@@ -19,7 +19,7 @@ internal static class ApprovalRacer
         var clients = new ClientDirectory(CommandResolver.Create([args[3]], OperatingSystem.IsWindows() ? [".COM", ".EXE", ".BAT", ".CMD"] : []));
         clients.RefreshAsync().GetAwaiter().GetResult();
         var runs = ProjectRuns.Open(project, clients);
-        var crashPoint = args[6];
+        var crashPoint = args[5];
         runs.Probe = point =>
         {
             if (point != crashPoint) return;
@@ -27,16 +27,15 @@ internal static class ApprovalRacer
             Console.Out.Flush();
             Environment.Exit(73);
         };
-        var node = args.Skip(7).FirstOrDefault(arg => arg.StartsWith("node:", StringComparison.Ordinal)) is { } named
+        var node = args.Skip(6).FirstOrDefault(arg => arg.StartsWith("node:", StringComparison.Ordinal)) is { } named
             ? new TaskId(Guid.Parse(named["node:".Length..])) : (TaskId?)null;
         var preview = runs.Preflight(workflow, node);
         Console.WriteLine("Previewed");
         Console.Out.Flush();
-        var choice = Enum.Parse<BaseChoice>(args[5]);
-        var confirmation = new RunConfirmation(preview, choice, new OperationId(Guid.Parse(args[4])))
+        var confirmation = new RunConfirmation(preview, new OperationId(Guid.Parse(args[4])))
         {
-            Include = args.Skip(7).Contains("include")
-                ? [.. preview.Planners.Where(planner => planner.Bases.Contains(choice)).Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))]
+            Include = args.Skip(6).Contains("include")
+                ? [.. preview.Planners.Where(planner => planner.Problem is null).Select(planner => new ReportInclusion(planner.Task, planner.Source, planner.Turn))]
                 : [],
         };
         Console.WriteLine(runs.StartWorkflow(workflow, confirmation).GetAwaiter().GetResult());

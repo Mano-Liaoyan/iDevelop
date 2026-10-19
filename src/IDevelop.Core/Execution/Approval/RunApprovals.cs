@@ -4,8 +4,8 @@ using IDevelop.Workflows;
 namespace IDevelop.Execution;
 
 /// <summary>
-/// Run Workflow's preflight and its approval. <see cref="Inspect"/> records nothing; its snapshot of the work tree leaves
-/// only unreferenced loose objects in Git's object database.
+/// Run Workflow's preflight and its approval. A run starts from the current branch's HEAD. <see cref="Inspect"/> records
+/// nothing; finding what differs from HEAD leaves only unreferenced loose objects in Git's object database.
 /// </summary>
 internal sealed class RunApprovals
 {
@@ -15,7 +15,6 @@ internal sealed class RunApprovals
     private readonly RunStore _store;
     private readonly IReadOnlyDictionary<string, string> _environment;
     private readonly IReadOnlyDictionary<ClientId, ClientStatus> _clients;
-    private readonly TimeProvider _clock;
     private readonly Action<string>? _probe;
     private readonly IReadOnlyDictionary<TaskId, AttemptRecord> _latest;
     private readonly Func<TaskId, TurnKey, StartProblem?>? _finish;
@@ -25,7 +24,7 @@ internal sealed class RunApprovals
     /// <param name="finish">Marks a waiting standalone attempt done at its turn, or says why it cannot.</param>
     /// <param name="skills">The skills a client lists in the project, which a task with a skill choice needs.</param>
     public RunApprovals(string project, RunStore store, IReadOnlyDictionary<string, string>? environment,
-        IReadOnlyDictionary<ClientId, ClientStatus> clients, IReadOnlyDictionary<TaskId, AttemptRecord> latest, TimeProvider clock,
+        IReadOnlyDictionary<ClientId, ClientStatus> clients, IReadOnlyDictionary<TaskId, AttemptRecord> latest,
         Action<string>? probe = null, Func<TaskId, TurnKey, StartProblem?>? finish = null, Func<ExecutionSettings?, SkillListing?>? skills = null)
     {
         _skills = skills;
@@ -36,7 +35,6 @@ internal sealed class RunApprovals
         _store = store;
         _environment = environment ?? new Dictionary<string, string>();
         _clients = clients;
-        _clock = clock;
     }
 
     /// <param name="node">
@@ -68,11 +66,6 @@ internal sealed class RunApprovals
         {
             if (Gap(workflow.Tasks[task.Task]) is { } problem) gaps.Add(new PreflightGap.Task(task.Task, problem));
         }
-        if (repository is not null && (GitRepository.ParseVersion(repository.Version) is not { } version || version < new Version(2, 43, 0)))
-        {
-            foreach (var task in tasks.Where(task => task.Inputs.Count(input => input.Kind == ConnectionKind.Dependency) > 1))
-                gaps.Add(new PreflightGap.Join(task.Task, $"Joins need Git 2.43 or later. Installed: {repository.Version}."));
-        }
         PreflightBase? found = null;
         try { found = repository is null ? null : Base(repository, gaps); }
         catch (GitFailure failure) { gaps.Add(new PreflightGap.Git(failure.Problem, failure.Message)); }
@@ -83,12 +76,10 @@ internal sealed class RunApprovals
         ImmutableArray<PreflightCarried> carried = [];
         if (node is { } started && workflow.Tasks.ContainsKey(started))
         {
-            try { carried = Carried(repository, revision, found, started); }
+            try { carried = Carried(revision, found, started); }
             catch (IOException error) { gaps.Add(new PreflightGap.Records(error.Message)); }
-            catch (GitFailure failure) { gaps.Add(new PreflightGap.Git(failure.Problem, failure.Message)); }
-            var offered = found is null ? [] : RunPreflight.Offered(found);
             if (RunScope.Predecessors(workflow)[started].Order()
-                .Where(predecessor => !carried.Any(item => item.Task == predecessor && item.Bases.Any(offered.Contains))).ToImmutableArray() is { IsEmpty: false } missing)
+                .Where(predecessor => !carried.Any(item => item.Task == predecessor && item.Refusal is null)).ToImmutableArray() is { IsEmpty: false } missing)
                 gaps.Add(new PreflightGap.After(started, missing));
         }
         var preview = new RunPreflight(_project, revision, git, found, tasks, active) { Gaps = gaps.ToImmutable(), Node = node, Carried = carried };
@@ -96,8 +87,8 @@ internal sealed class RunApprovals
         // task after it asked for.
         return found is null ? preview : preview with
         {
-            Reusable = [.. Reusable(workflow, found, RunPreflight.Offered(found)).Where(report => node is null || report.Task == node)],
-            Planners = [.. Planners(workflow, found, RunPreflight.Offered(found)).Where(planner => node is null || planner.Task == node)],
+            Reusable = [.. Reusable(workflow, found).Where(report => node is null || report.Task == node)],
+            Planners = [.. Planners(workflow, found).Where(planner => node is null || planner.Task == node)],
         };
     }
 
@@ -105,40 +96,22 @@ internal sealed class RunApprovals
     private static readonly RunId PreviewRun = new(Guid.Parse("00000000-0000-0000-0000-00000000cccc"));
 
     /// <summary>
-    /// The results of earlier runs a run of <paramref name="node"/> would carry, with the bases each applies on, and the
-    /// needed ones it could not carry and why (#90). Replaying their code merges trees in Git's object database and writes
-    /// no ref. Throws <see cref="IOException"/> when a run record cannot be read.
+    /// The results of earlier runs a run of <paramref name="node"/> would carry as their reports and artifacts, and the needed
+    /// ones it could not carry and why (#90). Throws <see cref="IOException"/> when a run record cannot be read.
     /// </summary>
-    private ImmutableArray<PreflightCarried> Carried(GitRepository? repository, ApprovedRevision revision, PreflightBase? found, TaskId node)
+    private ImmutableArray<PreflightCarried> Carried(ApprovedRevision revision, PreflightBase? found, TaskId node)
     {
-        if (repository is null || found is null) return [];
+        if (found is null) return [];
         var history = RunHistory.Of(_store.Records(revision.Snapshot.Id), revision.Snapshot);
-        var builds = RunPreflight.Offered(found).Select(choice => (choice, Carrying.Build(repository,
-            Seed(PreviewRun, revision, new(choice == BaseChoice.Head ? found.Head : PreviewSnapshot(repository, found), choice), node),
-            history, PreviewConfirmation))).ToArray();
+        var build = Carrying.Build(Seed(PreviewRun, revision, new(found.Head, BaseChoice.Head), node), history, PreviewConfirmation);
         var rows = ImmutableArray.CreateBuilder<PreflightCarried>();
-        foreach (var task in builds.SelectMany(build => build.Item2.Carried.Select(item => item.Result.Task).Concat(build.Item2.Refused.Keys))
-            .Distinct().Order())
+        foreach (var task in build.Carried.Select(item => item.Result.Task).Concat(build.Refused.Keys).Distinct().Order())
         {
             var source = history.CurrentOf(task)!;
-            ImmutableArray<BaseChoice> bases = [.. builds.Where(build => build.Item2.Carried.Any(item => item.Result.Task == task)).Select(build => build.choice)];
-            var refusal = builds.Select(build => build.Item2.Refused.GetValueOrDefault(task)).FirstOrDefault(refused => refused is not null);
-            rows.Add(new(task, source.Run.Id, source.Result.Id, bases, refusal, source.Result.Code is CodeOutput.Produced));
+            rows.Add(new(task, source.Run.Id, source.Result.Id, build.Refused.GetValueOrDefault(task)));
         }
         return rows.ToImmutable();
     }
-
-    /// <summary>
-    /// A commit of the work tree over HEAD, as the snapshot base the approval would make, so the preview replays results on
-    /// commits and merges as the approval will. Nothing references it, as nothing references the preview's tree.
-    /// </summary>
-    private static CommitId PreviewSnapshot(GitRepository repository, PreflightBase found)
-    {
-        var time = Value(repository.CommitterTimestamps([found.Head]))[0];
-        return Value(repository.CreateCommit(new(found.WorkTree, [found.Head], "iDevelop preview of a snapshot base\n", PreviewIdentity, PreviewIdentity, time)));
-    }
-
-    private const string PreviewIdentity = "iDevelop <idevelop@localhost>";
 
     /// <summary>A run of <paramref name="node"/> on <paramref name="codeBase"/> as its approval begins, before it carries anything.</summary>
     private static RunRecord Seed(RunId run, ApprovedRevision revision, RunBase codeBase, TaskId node) =>
@@ -173,7 +146,6 @@ internal sealed class RunApprovals
         var headTree = Value(repository.ReadCommit(head)).Tree;
         ImmutableArray<string> changed = [.. Value(repository.DiffTreePaths(headTree, tree)).Where(path => !InData(path))];
         ImmutableArray<string> ignored = [.. Value(repository.IgnoredEntries(_project)).Where(path => !InData(path.TrimEnd('/'))).Order(StringComparer.Ordinal)];
-        ImmutableArray<string> unmerged = [.. Value(repository.UnmergedEntries(_project)).Select(entry => entry.Path).Distinct().Order(StringComparer.Ordinal)];
         ImmutableArray<PreflightSubmodule> submodules = [];
         switch (repository.SubmoduleStatus(_project))
         {
@@ -184,7 +156,7 @@ internal sealed class RunApprovals
                 gaps.Add(new PreflightGap.Submodules(failed.Detail));
                 break;
         }
-        return new(head, branch, tree, changed, ignored, unmerged, submodules);
+        return new(head, branch, changed, ignored, submodules);
     }
 
     /// <summary>One line of <c>git submodule status</c>: a state character, the commit, the path, and a description.</summary>
@@ -203,40 +175,26 @@ internal sealed class RunApprovals
         });
     }
 
-    /// <summary>
-    /// The newest standalone report of each task that E1's validator would let the run reuse, for each base it matches. A
-    /// snapshot is compared through its tree, because its commit is made only at approval.
-    /// </summary>
-    private ImmutableArray<PreflightReport> Reusable(Workflow workflow, PreflightBase found, ImmutableArray<BaseChoice> choices)
+    /// <summary>The newest standalone report of each task that E1's validator would let the run reuse from HEAD.</summary>
+    private ImmutableArray<PreflightReport> Reusable(Workflow workflow, PreflightBase found)
     {
-        var confirmation = new OperationId(Guid.Parse("00000000-0000-0000-0000-00000000aaaa"));
         var reports = ImmutableArray.CreateBuilder<PreflightReport>();
         foreach (var task in workflow.Tasks.Values.OrderBy(task => task.Id))
         {
             if (_latest.GetValueOrDefault(task.Id) is not { Status: AttemptStatus.Succeeded } attempt ||
                 workflow.Connections.Keys.Any(edge => edge.To == task.Id)) continue;
             var source = new AttemptSource.Standalone(task.Id, attempt.Id);
-            string? report = null;
-            var bases = ImmutableArray.CreateBuilder<BaseChoice>();
-            foreach (var choice in choices)
-            {
-                var commit = choice == BaseChoice.Head ? found.Head : new CommitId(found.WorkTree.Hex);
-                if (ReportReuse.Validate(_project, task, source, commit, confirmation) is { Rejection: null } reuse)
-                {
-                    report = reuse.Report;
-                    bases.Add(choice);
-                }
-            }
-            if (report is not null) reports.Add(new(task.Id, attempt.Id, report, bases.ToImmutable()));
+            if (ReportReuse.Validate(_project, task, source, found.Head, PreviewConfirmation) is { Rejection: null, Report: { } report })
+                reports.Add(new(task.Id, attempt.Id, report));
         }
         return reports.ToImmutable();
     }
 
     /// <summary>
-    /// Each read-only root planner's newest standalone attempt, with the bases on which the run could include its report.
-    /// A planner that waits for the person counts as finished, which a confirmation including it makes it.
+    /// Each read-only root planner's newest standalone attempt, and why the run could not include its report from HEAD, if
+    /// it could not. A planner that waits for the person counts as finished, which a confirmation including it makes it.
     /// </summary>
-    private ImmutableArray<PreflightPlanner> Planners(Workflow workflow, PreflightBase found, ImmutableArray<BaseChoice> choices)
+    private ImmutableArray<PreflightPlanner> Planners(Workflow workflow, PreflightBase found)
     {
         var planners = ImmutableArray.CreateBuilder<PreflightPlanner>();
         foreach (var task in workflow.Tasks.Values.OrderBy(task => task.Id))
@@ -244,17 +202,8 @@ internal sealed class RunApprovals
             if (task.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly, Proposes: true } ||
                 workflow.Connections.Keys.Any(edge => edge.To == task.Id) || _latest.GetValueOrDefault(task.Id) is not { } attempt) continue;
             var source = new AttemptSource.Standalone(task.Id, attempt.Id);
-            var bases = ImmutableArray.CreateBuilder<BaseChoice>();
-            RunProblem? problem = null;
-            foreach (var choice in choices)
-            {
-                var commit = choice == BaseChoice.Head ? found.Head : new CommitId(found.WorkTree.Hex);
-                var check = ReportReuse.ValidatePlanner(_project, workflow, task.Id, source, attempt.Turns.Count, commit, PreviewConfirmation, waiting: true);
-                if (check.Rejection is { } rejection) problem ??= rejection.Problem;
-                else bases.Add(choice);
-            }
-            planners.Add(new(task.Id, attempt.Id, attempt.Turns.Count, attempt.Status, attempt.Turns[^1].FinalText, bases.ToImmutable(),
-                bases.Count == 0 ? problem : null));
+            var check = ReportReuse.ValidatePlanner(_project, workflow, task.Id, source, attempt.Turns.Count, found.Head, PreviewConfirmation, waiting: true);
+            planners.Add(new(task.Id, attempt.Id, attempt.Turns.Count, attempt.Status, attempt.Turns[^1].FinalText, check.Rejection?.Problem));
         }
         return planners.ToImmutable();
     }
@@ -262,32 +211,31 @@ internal sealed class RunApprovals
     private static readonly OperationId PreviewConfirmation = new(Guid.Parse("00000000-0000-0000-0000-00000000aaaa"));
 
     /// <summary>
-    /// Why <paramref name="inclusions"/> cannot be approved with <paramref name="choice"/>: one task twice, or a report
-    /// <paramref name="live"/> does not offer on that base. A report that the confirmed preview offered and the live one
-    /// does not makes the preview stale instead.
+    /// Why <paramref name="inclusions"/> cannot be approved: one task twice, or a report <paramref name="live"/> does not
+    /// offer. A report that the confirmed preview offered and the live one does not makes the preview stale instead.
     /// </summary>
-    private static RunApproval? InclusionProblem(RunPreflight shown, RunPreflight live, BaseChoice choice, ImmutableArray<ReportInclusion> inclusions)
+    private static RunApproval? InclusionProblem(RunPreflight shown, RunPreflight live, ImmutableArray<ReportInclusion> inclusions)
     {
         if (inclusions.Select(inclusion => inclusion.Task).Distinct().Count() != inclusions.Length)
             return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "A task is included twice.") { Current = live };
         foreach (var inclusion in inclusions)
         {
-            if (Offers(live, choice, inclusion) is null) continue;
-            if (Offers(shown, choice, inclusion) is null) return new RunApproval.Changed(live);
-            return new RunApproval.Refused(ApprovalProblem.InclusionRefused, (Offers(live, choice, inclusion) ?? RunProblem.ReuseUnverifiable).ToString())
+            if (Offers(live, inclusion) is null) continue;
+            if (Offers(shown, inclusion) is null) return new RunApproval.Changed(live);
+            return new RunApproval.Refused(ApprovalProblem.InclusionRefused, (Offers(live, inclusion) ?? RunProblem.ReuseUnverifiable).ToString())
             { Current = live };
         }
         return null;
     }
 
-    /// <summary>Null when <paramref name="preview"/> offers <paramref name="inclusion"/> on <paramref name="choice"/>, else why not.</summary>
-    private static RunProblem? Offers(RunPreflight preview, BaseChoice choice, ReportInclusion inclusion)
+    /// <summary>Null when <paramref name="preview"/> offers <paramref name="inclusion"/>, else why not.</summary>
+    private static RunProblem? Offers(RunPreflight preview, ReportInclusion inclusion)
     {
         if (preview.Planners.FirstOrDefault(planner => planner.Task == inclusion.Task) is { } planner)
-            return planner.Source == inclusion.Source && planner.Turn == inclusion.Turn && planner.Bases.Contains(choice) ? null
+            return planner.Source == inclusion.Source && planner.Turn == inclusion.Turn && planner.Problem is null ? null
                 : planner.Problem ?? RunProblem.ReuseUnverifiable;
-        return preview.Reusable.Any(report => report.Task == inclusion.Task && report.Source == inclusion.Source && inclusion.Turn == 1 &&
-            report.Bases.Contains(choice)) ? null : RunProblem.ReuseUnverifiable;
+        return preview.Reusable.Any(report => report.Task == inclusion.Task && report.Source == inclusion.Source && inclusion.Turn == 1)
+            ? null : RunProblem.ReuseUnverifiable;
     }
 
     /// <summary>
@@ -310,16 +258,15 @@ internal sealed class RunApprovals
 
     /// <summary>
     /// Approves exactly one run for <paramref name="confirmation"/>, against <paramref name="current"/>, the workflow as the
-    /// document holds it now. Under the workflow's approval lock it records an <see cref="ApprovalIntent"/> before the
-    /// snapshot commit and the journal, so a confirmation repeated after a crash, or a new one of the same content,
-    /// finishes the same run.
+    /// document holds it now. The run starts from the current branch's HEAD. Under the workflow's approval lock it records
+    /// an <see cref="ApprovalIntent"/> before the base pin and the journal, so a confirmation repeated after a crash, or a
+    /// new one of the same content, finishes the same run.
     /// </summary>
     public RunApproval Approve(Workflow current, RunConfirmation confirmation)
     {
         if (confirmation.Command.Value == Guid.Empty)
             return new RunApproval.Refused(ApprovalProblem.ConfirmationRequired, "A confirmation needs its own command ID.");
         var live = Inspect(current, confirmation.Preview.Node);
-        var choice = confirmation.Choice;
         var intents = new ApprovalIntents(_project, live.Workflow);
         try
         {
@@ -332,51 +279,43 @@ internal sealed class RunApprovals
             var own = all.FirstOrDefault(intent => intent.Confirmations.Contains(confirmation.Command));
             if (own is not null && Approved(live.Workflow, own.Run) is { } ownRun)
                 return new RunApproval.Approved(own.Run, ownRun.Base, true);
-            if (!Current(confirmation.Preview, live, choice) || !SameCarried(confirmation.Preview, live, choice)) return new RunApproval.Changed(live);
-            if (!live.Gaps.IsEmpty || !live.Choices.Contains(choice) || repository is null)
-                return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "The preview has gaps or does not offer this base.") { Current = live };
+            if (!Current(confirmation.Preview, live) || !SameCarried(confirmation.Preview, live)) return new RunApproval.Changed(live);
+            if (!live.Confirmable || repository is null)
+                return new RunApproval.Refused(ApprovalProblem.NotConfirmable, "The preview has gaps or its node cannot start.") { Current = live };
             ImmutableArray<ReportInclusion> inclusions = [.. confirmation.Include.OrderBy(inclusion => inclusion.Task)];
-            if (InclusionProblem(confirmation.Preview, live, choice, inclusions) is { } refusal) return refusal;
+            if (InclusionProblem(confirmation.Preview, live, inclusions) is { } refusal) return refusal;
             if (Active(live.Workflow) is { } active)
             {
-                if (all.FirstOrDefault(intent => intent.Run == active.Id) is not { } approving || !approving.Matches(live, choice, inclusions))
+                if (all.FirstOrDefault(intent => intent.Run == active.Id) is not { } approving || !approving.Matches(live, inclusions))
                     return new RunApproval.Busy(active.Id);
                 intents.Write(Confirmed(approving, confirmation.Command));
                 return new RunApproval.Approved(active.Id, active.Base, true);
             }
             var pending = all.Where(intent => Approved(live.Workflow, intent.Run) is null).ToArray();
-            var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, choice, inclusions)) ??
-                pending.FirstOrDefault(intent => intent.Matches(live, choice, inclusions));
+            var adopted = pending.FirstOrDefault(intent => intent.Run == own?.Run && intent.Matches(live, inclusions)) ??
+                pending.FirstOrDefault(intent => intent.Matches(live, inclusions));
             foreach (var stale in pending.Where(intent => intent.Run != adopted?.Run)) intents.Remove(stale.Run, repository);
             var chosen = adopted is null
-                ? new ApprovalIntent(1, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
-                    [confirmation.Command], live.Revision, choice, live.Base!.Head, choice == BaseChoice.Snapshot ? live.Base.WorkTree : null,
-                    DateTimeOffset.FromUnixTimeSeconds(_clock.GetUtcNow().ToUnixTimeSeconds())) { Inclusions = inclusions, Node = live.Node }
+                ? new ApprovalIntent(2, new(OperationIds.Derive(confirmation.Command, "run").Value), OperationIds.Derive(confirmation.Command, "approve"),
+                    [confirmation.Command], live.Revision, live.Base!.Head) { Inclusions = inclusions, Node = live.Node }
                 : Confirmed(adopted, confirmation.Command);
             intents.Write(chosen);
             _probe?.Invoke("approval.intent.after");
             if (Finish(live, chosen.Inclusions) is { } unfinished) return unfinished;
             var codeBase = new RunBase(chosen.Head, BaseChoice.Head);
-            if (choice == BaseChoice.Snapshot)
-            {
-                if (repository.CreateCommit(chosen.SnapshotRecipe()) is not GitRead<CommitId>.Read commit)
-                    return new RunApproval.Refused(ApprovalProblem.GitFailed, "Git could not record the snapshot of the uncommitted work.");
-                codeBase = new RunBase(commit.Value, BaseChoice.Snapshot);
-                _probe?.Invoke("approval.snapshot.after");
-            }
             // Keep the base before the journal names it, so garbage collection cannot remove it before its first preparation.
             if (!ApprovalPin.Hold(repository, chosen.Run, codeBase.Commit))
                 return new RunApproval.Refused(ApprovalProblem.GitFailed, $"Git could not keep the run base under {ApprovalPin.Name(chosen.Run)}.");
             _probe?.Invoke("approval.pinned.after");
-            // The results the preview showed carried are replayed onto the base, kept, and copied before the journal names them.
+            // The results the preview showed carried bring their reports and artifacts, copied before the journal names them.
             var carried = CarryBuild.Empty;
             if (chosen.Node is { } node)
             {
                 var history = RunHistory.Of(_store.Records(live.Workflow), chosen.Revision.Snapshot);
-                carried = Carrying.Build(repository, Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation);
+                carried = Carrying.Build(Seed(chosen.Run, chosen.Revision, codeBase, node), history, chosen.Operation);
                 _probe?.Invoke("approval.carry.built");
-                if (Carrying.Keep(repository, _project, chosen.Run, live.Workflow, carried, history) is { } failure)
-                    return new RunApproval.Refused(ApprovalProblem.GitFailed, failure);
+                if (Carrying.Copy(_project, chosen.Run, live.Workflow, carried, history) is { } failure)
+                    return new RunApproval.Refused(ApprovalProblem.StorageUnavailable, failure);
                 _probe?.Invoke("approval.carry.kept");
             }
             var decision = _store.Approve(live.Workflow, chosen.Run, chosen.Operation, chosen.Revision, codeBase, chosen.Inclusions,
@@ -423,21 +362,20 @@ internal sealed class RunApprovals
         intent.Confirmations.Contains(command) ? intent : intent with { Confirmations = intent.Confirmations.Add(command) };
 
     /// <summary>
-    /// Whether <paramref name="preview"/> still shows what <paramref name="choice"/> approves: the same execution snapshot and
-    /// HEAD, a project that was not clean when the preview said so, and for a snapshot the same work tree.
+    /// Whether <paramref name="preview"/> still shows what the confirmation approves: the same execution snapshot and HEAD,
+    /// and a project that was not clean when the preview said so.
     /// </summary>
-    private static bool Current(RunPreflight preview, RunPreflight live, BaseChoice choice) =>
+    private static bool Current(RunPreflight preview, RunPreflight live) =>
         preview.Workflow == live.Workflow && preview.Revision.Id == live.Revision.Id && (preview.Base, live.Base) switch
         {
             (null, null) => true,
-            ({ } shown, { } found) => shown.Head == found.Head && (!shown.Changed.IsEmpty || found.Changed.IsEmpty) &&
-                (choice == BaseChoice.Head || shown.WorkTree == found.WorkTree),
+            ({ } shown, { } found) => shown.Head == found.Head && (!shown.Changed.IsEmpty || found.Changed.IsEmpty),
             _ => false,
         };
 
-    /// <summary>Whether <paramref name="preview"/> carries what <paramref name="live"/> does on <paramref name="choice"/>: the same tasks, from the same results.</summary>
-    private static bool SameCarried(RunPreflight preview, RunPreflight live, BaseChoice choice) =>
-        preview.CarriedOn(choice).Select(row => (row.Task, row.Run, row.Result)).SequenceEqual(live.CarriedOn(choice).Select(row => (row.Task, row.Run, row.Result)));
+    /// <summary>Whether <paramref name="preview"/> carries what <paramref name="live"/> does: the same tasks, from the same results.</summary>
+    private static bool SameCarried(RunPreflight preview, RunPreflight live) =>
+        preview.Used.Select(row => (row.Task, row.Run, row.Result)).SequenceEqual(live.Used.Select(row => (row.Task, row.Run, row.Result)));
 
     /// <summary>The run's record once its journal holds the approval, else null.</summary>
     private RunRecord? Approved(WorkflowId workflow, RunId run) => _store.Read(workflow, run) switch

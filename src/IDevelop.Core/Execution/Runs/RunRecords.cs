@@ -25,8 +25,13 @@ internal readonly record struct LaunchKey(AttemptId Attempt, int Turn);
 
 internal sealed record ApprovedRevision(RevisionId Id, Workflow Snapshot);
 
+/// <summary>
+/// What a run's base is, as its journal records it. A run approves the current branch's HEAD; <see cref="Snapshot"/> reads
+/// the snapshot base of an earlier journal, which the app reads until the journal keeps only the worktree events (#145).
+/// </summary>
 internal enum BaseChoice { Head, Snapshot }
 
+/// <summary>The commit a run starts from, the current branch's HEAD at its approval.</summary>
 internal sealed record RunBase(CommitId Commit, BaseChoice Choice);
 
 internal sealed record LogCheckpoint(long ByteLength, Digest Content);

@@ -62,7 +62,7 @@ public sealed class RunHistoryTests
         // The second run starts from U, whose attempt fails. T's carried result counts as the same result as before.
         var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
         var operation = f.Op();
-        var carried = Carrying.Build(null, seed, History(f), operation);
+        var carried = Carrying.Build(seed, History(f), operation);
         Assert.Equal([T], carried.Carried.Select(item => item.Result.Task));
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, OtherRun, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
             carried: carried.Carried));
@@ -195,7 +195,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
-            carried: Carrying.Build(null, seed, History(f), operation).Carried));
+            carried: Carrying.Build(seed, History(f), operation).Carried));
         f.Complete(f.Reserve(U, run: Third), run: Third);
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
         f.ReleaseControl();
@@ -205,8 +205,8 @@ public sealed class RunHistoryTests
     [Fact]
     public void A_predecessor_that_a_later_run_carried_ends_the_wait_of_a_task_that_run_could_not_start()
     {
-        // T → C ← U, and U → E ← D. U ran first. The second run starts from T and does not carry U, as when U's code
-        // conflicted then, so C waits for U. The third starts from D and carries U, which ends C's wait.
+        // T → C ← U, and U → E ← D. U ran first. The second run starts from T and carries nothing, as a run that could not
+        // carry U, so C waits for U. The third starts from D and carries U, which ends C's wait.
         var e = new TaskId(Guid.Parse("00000000-0000-0000-0000-000000000006"));
         var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Task(), Task(U), Task(C), Task(D), Task(e)), T, C), U, C), U, e), D, e);
         using var f = new RunFixtures(workflow);
@@ -221,7 +221,7 @@ public sealed class RunHistoryTests
         var operation = f.Op();
         var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [D] };
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: D,
-            carried: Carrying.Build(null, seed, History(f), operation).Carried));
+            carried: Carrying.Build(seed, History(f), operation).Carried));
         Settle(f, Third);
 
         Assert.Empty(History(f).WaitsFor(C));

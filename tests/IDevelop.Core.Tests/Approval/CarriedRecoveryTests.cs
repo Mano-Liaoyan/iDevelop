@@ -11,9 +11,10 @@ using RunFixtures = IDevelop.Core.Tests.Runs.RunFixtures;
 namespace IDevelop.Core.Tests.Approval;
 
 /// <summary>
-/// Carrying earlier results survives a crash at each of its steps (#90): an approval that replayed, kept, or recorded them
+/// Carrying earlier results survives a crash at each of its steps (#90): an approval that built, copied, or recorded them
 /// finishes as one run when the person confirms again, and a node run while a run is active carries what its tasks need
-/// once, however often it is repeated.
+/// once, however often it is repeated. A carried result brings its report and artifacts, and the earlier run's work is in
+/// the branch (#144).
 /// </summary>
 public sealed class CarriedRecoveryTests
 {
@@ -26,15 +27,13 @@ public sealed class CarriedRecoveryTests
         f.Install();
         var file = Path.Combine(f.Evidence, "workflow.json");
         File.WriteAllBytes(file, WorkflowFile.Serialize(f.Workflow));
-        using var racer = new Racer(f.Git.Environment, "approve-crash", f.Project, file, f.Fakes.Folder, First.Value.ToString("D"), "Head", point,
+        using var racer = new Racer(f.Git.Environment, "approve-crash", f.Project, file, f.Fakes.Folder, First.Value.ToString("D"), point,
             "node:" + node.Value.ToString("D"));
         Assert.Equal("Previewed", await racer.Line());
         Assert.Equal(point, await racer.Line());
         await racer.Exit();
         Assert.Equal(73, racer.ExitCode);
     }
-
-    private static string CarriedRefs(ApprovalFixture f, RunId run) => f.GitText("for-each-ref", "--format=%(refname) %(objectname)", RunLayout.CarriedPrefix(run));
 
     [Theory]
     [InlineData("approval.pinned.after")]
@@ -47,7 +46,8 @@ public sealed class CarriedRecoveryTests
         f.Answer(B, Writes(B, "out-b.txt", "B\n").Outbox("notes", [7, 8]));
         await f.Open();
         var (first, _) = await RunNode(f, B, 1);
-        // The base moves, so the carried code is a new commit the approval writes and keeps.
+        // B's work reaches the branch, and the branch moves on.
+        f.MergeResult(first, B);
         f.Git.Write("root.txt", "root moved\n");
         f.GitText("add", "root.txt");
         f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
@@ -58,7 +58,7 @@ public sealed class CarriedRecoveryTests
         await f.Open();
         var preview = f.Runs.Preflight(f.Workflow, A);
         Assert.Equal((B, first), (Assert.Single(preview.Carried).Task, Assert.Single(preview.Carried).Run));
-        var starts = await Task.WhenAll(Start(f, preview, BaseChoice.Head, AfterRestart), Start(f, preview, BaseChoice.Head, First));
+        var starts = await Task.WhenAll(Start(f, preview, AfterRestart), Start(f, preview, First));
 
         var second = Assert.Single(f.ApprovedRuns(), run => run != first);
         Assert.All(starts, start => Assert.Equal(second, start.Coordinator.Address.Run));
@@ -68,8 +68,8 @@ public sealed class CarriedRecoveryTests
         var carried = record.CurrentResults[B];
         Assert.Equal(new ResultOrigin.Carried(first, f.Read(first).CurrentResults[B].Id), carried.Origin);
         Assert.Single(record.Results, result => result.Origin is ResultOrigin.Carried);
-        var code = Assert.IsType<CodeOutput.Produced>(carried.Code).Code.Commit;
-        Assert.Equal($"{RunLayout.CarriedCode(second, carried.Id)} {code.Hex}\n", CarriedRefs(f, second));
+        Assert.Null(carried.Code);
+        Assert.Equal("", CarriedRefs(f));
         Assert.Equal(("B\n", "root moved\n"), (Copied(f, C, "out-b.txt"), Copied(f, C, "root.txt")));
         Assert.Equal([7, 8], File.ReadAllBytes(Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), second.ToString(),
             Assert.Single(carried.Artifacts).StoredPath)));
@@ -82,23 +82,20 @@ public sealed class CarriedRecoveryTests
         f.Answer(B, Writes(B, "out-b.txt", "B\n").Outbox("notes", [7, 8]));
         await f.Open();
         var (first, _) = await RunNode(f, B, 1);
-        f.Git.Write("root.txt", "root moved\n");
-        f.GitText("add", "root.txt");
-        f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
+        f.MergeResult(first, B);
         await f.Close();
         await Crash(f, A, "approval.carry.kept");
         var pending = Assert.Single(new ApprovalIntents(f.Project, RunFixtures.W).All(), intent => intent.Node == A).Run;
-        Assert.NotEqual("", CarriedRefs(f, pending));
         Assert.True(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), pending.ToString(), "results")));
 
         // Another confirmation with other content replaces the unfinished one.
         await f.Open();
         f.Workflow = RunFixtures.Edit(f.Workflow, new WorkflowEdit.EditTitle(A, "A2"));
-        var started = await Start(f, f.Runs.Preflight(f.Workflow, A), BaseChoice.Head, AfterRestart);
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, A), AfterRestart);
         await Completed(started.Coordinator);
 
         Assert.NotEqual(pending, started.Coordinator.Address.Run);
-        Assert.Equal("", CarriedRefs(f, pending));
+        Assert.Equal("", CarriedRefs(f));
         Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), pending.ToString())));
         Assert.Equal([1, 1, 1], Launches(f, A, B, C));
     }
@@ -119,7 +116,8 @@ public sealed class CarriedRecoveryTests
         await using var f = Held(out var gate);
         await f.Open();
         var (first, _) = await RunNode(f, B, 1);
-        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), BaseChoice.Head, new(Guid.NewGuid()));
+        f.MergeResult(first, B);
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), new(Guid.NewGuid()));
         var coordinator = started.Coordinator;
         await coordinator.Until(view => view.Tasks[D].State == TaskState.Running).WaitAsync(Bound);
 
@@ -138,25 +136,26 @@ public sealed class CarriedRecoveryTests
     }
 
     [Fact]
-    public async Task A_request_that_crashed_after_keeping_its_carried_results_records_them_once_when_repeated()
+    public async Task A_request_that_crashed_after_copying_its_carried_results_records_them_once_when_repeated()
     {
         await using var f = Held(out var gate);
         await f.Open();
-        await RunNode(f, B, 1);
+        var (first, _) = await RunNode(f, B, 1);
+        f.MergeResult(first, B);
         f.Git.Write("root.txt", "root moved\n");
         f.GitText("add", "root.txt");
         f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
-        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), BaseChoice.Head, new(Guid.NewGuid()));
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), new(Guid.NewGuid()));
         var coordinator = started.Coordinator;
         await coordinator.Until(view => view.Tasks[D].State == TaskState.Running).WaitAsync(Bound);
         var run = coordinator.Address.Run;
         var confirmation = new OperationId(Guid.NewGuid());
         var operation = RunOperations.Request(confirmation, A);
-        // What the crashed request had done: replayed, kept, and copied B's result, and recorded nothing.
+        // What the crashed request had done: built B's result and copied its artifacts, and recorded nothing.
         var record = f.Read(run);
         var history = RunHistory.Of(RunStore.Open(f.Project).Records(RunFixtures.W), record.Revision.Snapshot);
-        var crashed = Carrying.Build(f.Git.Open(), record with { Requested = [D, A] }, history, operation);
-        Assert.Null(Carrying.Keep(f.Git.Open(), f.Project, run, RunFixtures.W, crashed, history));
+        var crashed = Carrying.Build(record with { Requested = [D, A] }, history, operation);
+        Assert.Null(Carrying.Copy(f.Project, run, RunFixtures.W, crashed, history));
         Assert.DoesNotContain(f.Read(run).Receipts.Values, entry => entry.Event is RunEvent.Requested);
 
         Assert.Equal(new RunCommand.Accepted(), await coordinator.Request(coordinator.Address, A, confirmation).WaitAsync(Bound));
@@ -169,27 +168,25 @@ public sealed class CarriedRecoveryTests
         var requested = Assert.IsType<RunEvent.Requested>(record.Receipts.Values.Single(entry => entry.Event is RunEvent.Requested).Event);
         var carried = Assert.Single(requested.Carried!.Value);
         Assert.Equal(Assert.Single(crashed.Carried).Result, carried.Result, new Same<ResultRecord>());
-        Assert.Equal($"{RunLayout.CarriedCode(run, carried.Result.Id)} {Assert.IsType<CodeOutput.Produced>(carried.Result.Code).Code.Commit.Hex}\n",
-            f.GitText("for-each-ref", "--format=%(refname) %(objectname)", RunLayout.CarriedPrefix(run)));
+        Assert.Null(carried.Result.Code);
+        Assert.Equal("", CarriedRefs(f));
         Assert.Equal(("B\n", "root moved\n"), (Copied(f, C, "out-b.txt"), Copied(f, C, "root.txt")));
         Assert.Equal([1, 1, 1, 1], Launches(f, A, B, C, D));
     }
 
     [Fact]
-    public async Task A_request_the_journal_refuses_after_it_kept_its_carried_results_lets_go_of_them()
+    public async Task A_request_the_journal_refuses_after_it_copied_its_carried_results_lets_go_of_them()
     {
         await using var f = Held(out var gate);
         f.Answer(B, Writes(B, "out-b.txt", "B\n").Outbox("notes", [7, 8]));
         await f.Open();
-        await RunNode(f, B, 1);
-        f.Git.Write("root.txt", "root moved\n");
-        f.GitText("add", "root.txt");
-        f.GitText("-c", "commit.gpgSign=false", "commit", "-q", "-m", "Move the base");
-        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), BaseChoice.Head, new(Guid.NewGuid()));
+        var (first, _) = await RunNode(f, B, 1);
+        f.MergeResult(first, B);
+        var started = await Start(f, f.Runs.Preflight(f.Workflow, D), new(Guid.NewGuid()));
         var coordinator = started.Coordinator;
         await coordinator.Until(view => view.Tasks[D].State == TaskState.Running).WaitAsync(Bound);
         var run = coordinator.Address.Run;
-        // Once the request has kept B's replayed commit, the journal is busy for longer than the request waits.
+        // Once the request has copied B's artifacts, the journal is busy for longer than the request waits.
         FileStream? held = null;
         f.Runs.Probe = point =>
         {
@@ -201,7 +198,6 @@ public sealed class CarriedRecoveryTests
         var refused = Assert.IsType<RunCommand.Refused>(await coordinator.Request(coordinator.Address, A, confirmation).WaitAsync(Bound));
 
         Assert.Equal(RunProblem.JournalBusy, refused.Reason.Problem);
-        Assert.Equal("", CarriedRefs(f, run));
         var results = Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), run.ToString(), "results");
         Assert.False(Directory.Exists(results) && Directory.EnumerateFiles(results, "*", SearchOption.AllDirectories).Any());
         held!.Dispose();
@@ -211,7 +207,8 @@ public sealed class CarriedRecoveryTests
         File.WriteAllText(gate, "go");
         await Completed(coordinator);
         var carried = f.Read(run).CurrentResults[B];
-        Assert.Equal($"{RunLayout.CarriedCode(run, carried.Id)} {Assert.IsType<CodeOutput.Produced>(carried.Code).Code.Commit.Hex}\n", CarriedRefs(f, run));
+        Assert.Null(carried.Code);
+        Assert.Equal("", CarriedRefs(f));
         Assert.Equal([7, 8], File.ReadAllBytes(Path.Combine(f.Project, ".idp", "runs", RunFixtures.W.ToString(), run.ToString(),
             Assert.Single(carried.Artifacts).StoredPath)));
     }

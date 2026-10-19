@@ -136,8 +136,8 @@ internal sealed partial class WorkflowRunCoordinator
     /// </summary>
     /// <remarks>
     /// A dependency predecessor of the tasks it adds that the run cannot start and has no result of counts when an earlier
-    /// run left it a current result: the request carries that result, replayed onto the run's base, as a node's approval
-    /// does. One whose code conflicts with the base is not carried, so the task is refused for it.
+    /// run left it a current result: the request carries that result's report and artifacts, as a node's approval does.
+    /// One that took a result of a task the run runs again is not carried, so the task is refused for it.
     /// </remarks>
     public Task<RunCommand> Request(RunAddress address, TaskId task, OperationId confirmation, CancellationToken wait = default) => Command(address, record =>
     {
@@ -161,27 +161,21 @@ internal sealed partial class WorkflowRunCoordinator
         return new RunCommand.Refused(rejected.Reason);
     }, wait);
 
-    /// <summary>Removes the refs and copied artifacts of <paramref name="carried"/>, which no journal names.</summary>
-    private void Forget(ImmutableArray<IncludedResult> carried)
-    {
-        if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is RepositoryOpen.Opened opened)
-            Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, carried);
-    }
+    /// <summary>Removes the copied artifacts of <paramref name="carried"/>, which no journal names.</summary>
+    private void Forget(ImmutableArray<IncludedResult> carried) => Carrying.Forget(_store.Project, Address.Run, Address.Workflow, carried);
 
-    /// <summary>The results of earlier runs <paramref name="widened"/> needs, built, kept, and copied for the request <paramref name="operation"/> (#90).</summary>
+    /// <summary>The results of earlier runs <paramref name="widened"/> needs, built and copied for the request <paramref name="operation"/> (#90).</summary>
     private (ImmutableArray<IncludedResult> Carried, RunRejection? Problem) Carry(RunRecord widened, OperationId operation)
     {
         if (Carrying.Needed(widened).IsEmpty) return ([], null);
         try
         {
-            if (GitRepository.Open(_store.Project, _runs.GitEnvironment ?? new Dictionary<string, string>()) is not RepositoryOpen.Opened opened)
-                return ([], new(RunProblem.StorageUnavailable));
             var history = RunHistory.Of(_store.Records(Address.Workflow), widened.Revision.Snapshot);
-            var build = Carrying.Build(opened.Repository, widened, history, operation);
+            var build = Carrying.Build(widened, history, operation);
             if (build.Carried.IsEmpty) return ([], null);
-            if (Carrying.Keep(opened.Repository, _store.Project, Address.Run, Address.Workflow, build, history) is not null)
+            if (Carrying.Copy(_store.Project, Address.Run, Address.Workflow, build, history) is not null)
             {
-                Carrying.Forget(opened.Repository, _store.Project, Address.Run, Address.Workflow, build.Carried);
+                Carrying.Forget(_store.Project, Address.Run, Address.Workflow, build.Carried);
                 return ([], new(RunProblem.StorageUnavailable));
             }
             _runs.Probe?.Invoke("request.carry.kept");

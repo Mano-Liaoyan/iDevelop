@@ -33,7 +33,7 @@ public sealed class NodePreflightTests
         Assert.Equal(A, preview.Node);
         Assert.Equal([A, B], preview.Tasks.Select(task => task.Task));
         Assert.Empty(preview.Gaps);
-        Assert.Equal<BaseChoice>([BaseChoice.Head], preview.Choices);
+        Assert.True(preview.Confirmable);
         // Run Workflow checks the whole workflow, as before.
         var whole = f.Preflight();
         Assert.Null(whole.Node);
@@ -52,7 +52,7 @@ public sealed class NodePreflightTests
         var preview = f.Runs.Preflight(f.Workflow, AfterX);
 
         Assert.Equal<PreflightGap>([new PreflightGap.After(AfterX, [X])], preview.Gaps);
-        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, BaseChoice.Head, Command(1))).WaitAsync(Bound));
+        var refused = Assert.IsType<WorkflowStart.Refused>(await f.Runs.StartWorkflow(f.Workflow, new(preview, Command(1))).WaitAsync(Bound));
         Assert.Equal(ApprovalProblem.NotConfirmable, refused.Problem);
         Assert.Empty(f.ApprovedRuns());
     }
@@ -64,7 +64,7 @@ public sealed class NodePreflightTests
         await f.Open();
         var preview = f.Runs.Preflight(f.Workflow, A);
 
-        var started = await Start(f, preview, BaseChoice.Head, Command(2));
+        var started = await Start(f, preview, Command(2));
         await Completed(started.Coordinator);
 
         Assert.Equal([1, 1, 0], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
@@ -82,13 +82,12 @@ public sealed class NodePreflightTests
         var node = f.Runs.Preflight(f.Workflow, A);
         var other = f.Runs.Preflight(f.Workflow, X);
         var whole = f.Preflight();
-        var intent = new ApprovalIntent(1, new(Guid.NewGuid()), Command(3), [Command(3)], node.Revision, BaseChoice.Head, node.Base!.Head, null,
-            DateTimeOffset.UnixEpoch) { Node = A };
+        var intent = new ApprovalIntent(2, new(Guid.NewGuid()), Command(3), [Command(3)], node.Revision, node.Base!.Head) { Node = A };
 
-        Assert.True(intent.Matches(node, BaseChoice.Head, []));
-        Assert.False(intent.Matches(other, BaseChoice.Head, []));
-        Assert.False(intent.Matches(whole, BaseChoice.Head, []));
-        Assert.False((intent with { Node = null }).Matches(node, BaseChoice.Head, []));
+        Assert.True(intent.Matches(node, []));
+        Assert.False(intent.Matches(other, []));
+        Assert.False(intent.Matches(whole, []));
+        Assert.False((intent with { Node = null }).Matches(node, []));
     }
 
     [Fact]
@@ -101,10 +100,10 @@ public sealed class NodePreflightTests
         await f.Open();
         try
         {
-            var started = await Start(f, f.Runs.Preflight(f.Workflow, A), BaseChoice.Head, Command(4));
+            var started = await Start(f, f.Runs.Preflight(f.Workflow, A), Command(4));
             await started.Coordinator.Until(view => view.Tasks[A].State == TaskState.Running).WaitAsync(Bound);
 
-            var busy = Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), BaseChoice.Head, Command(5))).WaitAsync(Bound));
+            var busy = Assert.IsType<WorkflowStart.Busy>(await f.Runs.StartWorkflow(f.Workflow, new(f.Preflight(), Command(5))).WaitAsync(Bound));
 
             Assert.Equal(started.Coordinator.Address.Run, busy.Active);
             Assert.Single(f.ApprovedRuns());

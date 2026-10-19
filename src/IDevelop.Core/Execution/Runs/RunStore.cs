@@ -114,7 +114,7 @@ internal sealed partial class RunStore
     /// </summary>
     /// <param name="node">The node whose Run started the run, or null for Run Workflow, which runs every root (#90).</param>
     /// <param name="carried">
-    /// The results of earlier runs that a node's run takes for the tasks it does not run (#90), built and kept by
+    /// The results of earlier runs that a node's run takes for the tasks it does not run (#90), built and copied by
     /// <see cref="Carrying"/>. Each must still be its task's current result in the workflow's history.
     /// </param>
     public RunDecision Approve(WorkflowId workflow, RunId run, OperationId operation, ApprovedRevision revision, RunBase codeBase,
@@ -1042,7 +1042,7 @@ internal sealed partial class RunStore
     /// start, or a repeat, records nothing more.
     /// </summary>
     /// <param name="carried">
-    /// The results of earlier runs that the tasks it adds need (#90), built and kept by <see cref="Carrying"/>. Each must
+    /// The results of earlier runs that the tasks it adds need (#90), built and copied by <see cref="Carrying"/>. Each must
     /// still be its task's current result in the workflow's history.
     /// </param>
     public RunDecision Request(CoordinatorPermit permit, OperationId operation, TaskId task, ImmutableArray<IncludedResult> carried = default) =>

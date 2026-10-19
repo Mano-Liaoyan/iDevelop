@@ -8,53 +8,31 @@ internal abstract record CarryRefusal
 {
     private CarryRefusal() { }
 
-    /// <summary>The task's code does not apply to the run's base, so the task must run again.</summary>
-    internal sealed record Conflict(ImmutableArray<string> Paths) : CarryRefusal
-    {
-        public bool Equals(Conflict? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal);
-
-        public override int GetHashCode() => Paths.Length;
-    }
-
-    /// <summary>The results the task took code from do not join cleanly on the run's base.</summary>
-    internal sealed record JoinConflict(ImmutableArray<string> Paths) : CarryRefusal
-    {
-        public bool Equals(JoinConflict? other) => other is not null && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal);
-
-        public override int GetHashCode() => Paths.Length;
-    }
-
     /// <summary>It took a result from a task this run runs again, or from one whose result in this run is another one.</summary>
     internal sealed record InputRuns(TaskId Input) : CarryRefusal;
 
     /// <summary>A task it took a result from cannot be carried either.</summary>
     internal sealed record InputRefused(TaskId Input) : CarryRefusal;
 
-    /// <summary>Git cannot replay it here, such as an older Git that cannot merge, or a failed Git command.</summary>
+    /// <summary>The carried result does not fit the run, such as inputs the run's own materialization would not build.</summary>
     internal sealed record Unavailable(string Detail) : CarryRefusal;
 }
 
-/// <summary>
-/// The results a run carries from earlier runs, in the order their inputs need them, the Git commits that keep their code,
-/// and the needed tasks that it could not carry and why.
-/// </summary>
-internal sealed record CarryBuild(ImmutableArray<IncludedResult> Carried, ImmutableArray<(string Ref, CommitId Commit)> Kept,
-    ImmutableDictionary<TaskId, CarryRefusal> Refused)
+/// <summary>The results a run carries from earlier runs, in the order their inputs need them, and the needed tasks that it could not carry and why.</summary>
+internal sealed record CarryBuild(ImmutableArray<IncludedResult> Carried, ImmutableDictionary<TaskId, CarryRefusal> Refused)
 {
-    public static CarryBuild Empty { get; } = new([], [], ImmutableDictionary<TaskId, CarryRefusal>.Empty);
+    public static CarryBuild Empty { get; } = new([], ImmutableDictionary<TaskId, CarryRefusal>.Empty);
 }
 
 /// <summary>
 /// Carrying earlier results into a run that a node's Run started (#90). A run needs a result of each dependency predecessor
 /// of the tasks it may start that it cannot start itself. When the workflow's history has a current result of such a
-/// task, the run carries it, with every result that one took that the run has none of: its code replayed onto the run's
-/// base (ADR 0009), its report, and its artifacts. A code that conflicts
-/// with the base is not carried, and the task must run again. Run Workflow carries nothing.
+/// task, the run carries it, with every result that one took that the run has none of. A carried result brings its report
+/// and its artifacts. The earlier run's work is already in the branch the run starts from, so it brings no code. Run
+/// Workflow carries nothing.
 /// </summary>
 internal static class Carrying
 {
-    private const string Identity = "iDevelop <idevelop@localhost>";
-
     /// <summary>
     /// The tasks <paramref name="record"/> needs results of and cannot start: each dependency predecessor of a task it may
     /// start that is outside those tasks and has no result in the run, in task order.
@@ -70,12 +48,10 @@ internal static class Carrying
 
     /// <summary>
     /// Builds the results <paramref name="record"/> would carry for each of <see cref="Needed"/> that <paramref name="history"/>
-    /// has a current result of, under the event <paramref name="carrying"/>. It writes the commits the carried results name,
-    /// which <see cref="Keep"/> then keeps, so a preview merges exactly as the approval does, and nothing references
-    /// what a preview wrote. It records nothing.
+    /// has a current result of, under the event <paramref name="carrying"/>. It records and writes nothing, so a preview
+    /// builds exactly what the approval does.
     /// </summary>
-    /// <param name="repository">The project's repository, or null where no result needs Git, as for reports.</param>
-    public static CarryBuild Build(GitRepository? repository, RunRecord record, RunHistory history, OperationId carrying)
+    public static CarryBuild Build(RunRecord record, RunHistory history, OperationId carrying)
     {
         var needed = Needed(record);
         if (needed.IsEmpty) return CarryBuild.Empty;
@@ -97,7 +73,7 @@ internal static class Carrying
                     if (history.Root(record, own.Id) != history.Root(source.Run, binding.Result)) refused[task] = new CarryRefusal.InputRuns(input);
                 }
                 else if (flow.Contains(input)) refused[task] = new CarryRefusal.InputRuns(input);
-                // A task whose input cannot be carried is refused below, once the input's own replay is known too.
+                // A task whose input cannot be carried is refused below, once the input's own result is known too.
                 else Visit(input);
                 if (refused.ContainsKey(task)) return;
             }
@@ -108,8 +84,6 @@ internal static class Carrying
 
         var working = record;
         var carried = ImmutableArray.CreateBuilder<IncludedResult>();
-        var kept = ImmutableArray.CreateBuilder<(string, CommitId)>();
-        var merges = repository is not null && GitRepository.ParseVersion(repository.Version) is { } version && version >= new Version(2, 43, 0);
         foreach (var task in order)
         {
             var source = history.CurrentOf(task)!;
@@ -119,38 +93,31 @@ internal static class Carrying
                 refused[task] = new CarryRefusal.InputRefused(failed.Edge.From);
                 continue;
             }
-            switch (Replay(repository, working, source, task, carrying, merges))
+            switch (Carry(working, source, task, carrying))
             {
-                case (IncludedResult item, var commits, null):
+                case (IncludedResult item, null):
                     if (RunReducer.CarriedProblem(working, item, carrying) is { } problem)
                     {
                         refused[task] = new CarryRefusal.Unavailable($"The carried result does not fit the run: {problem}.");
                         continue;
                     }
                     carried.Add(item);
-                    kept.AddRange(commits);
                     working = RunReducer.WithCarried(working, item);
                     break;
-                case (_, _, { } refusal):
+                case (_, { } refusal):
                     refused[task] = refusal;
                     break;
             }
         }
-        return new(carried.ToImmutable(), kept.ToImmutable(), refused.ToImmutable());
+        return new(carried.ToImmutable(), refused.ToImmutable());
     }
 
     /// <summary>
-    /// Keeps each commit of <paramref name="build"/> under the run's carried refs, and copies each carried artifact from the
-    /// run that stored it, checked by its digest. Repeating it after a crash finds what it kept and copied. Null when done,
-    /// else what failed.
+    /// Copies each carried artifact of <paramref name="build"/> from the run that stored it, checked by its digest. Repeating
+    /// it after a crash finds what it copied. Null when done, else what failed.
     /// </summary>
-    public static string? Keep(GitRepository repository, string project, RunId run, WorkflowId workflow, CarryBuild build, RunHistory history)
+    public static string? Copy(string project, RunId run, WorkflowId workflow, CarryBuild build, RunHistory history)
     {
-        foreach (var (name, commit) in build.Kept)
-        {
-            if (repository.MoveRef(new(name, null, commit)) is not (RefMove.Moved or RefMove.AlreadyAtTarget))
-                return $"Git could not keep a carried result under {name}.";
-        }
         var storage = new RunStorage(project, workflow, run);
         foreach (var item in build.Carried)
         {
@@ -176,18 +143,14 @@ internal static class Carrying
     }
 
     /// <summary>
-    /// Removes the refs and the copied artifacts of <paramref name="carried"/>, which an event of <paramref name="run"/> that
-    /// was refused would have carried. Best effort: what stays only keeps a commit or a file that nothing names.
+    /// Removes the copied artifacts of <paramref name="carried"/>, which an event of <paramref name="run"/> that was refused
+    /// would have carried. Best effort: what stays is only a file that nothing names.
     /// </summary>
-    public static void Forget(GitRepository repository, string project, RunId run, WorkflowId workflow, ImmutableArray<IncludedResult> carried)
+    public static void Forget(string project, RunId run, WorkflowId workflow, ImmutableArray<IncludedResult> carried)
     {
         var storage = new RunStorage(project, workflow, run);
         foreach (var item in carried)
         {
-            foreach (var name in new[] { RunLayout.CarriedCode(run, item.Result.Id), RunLayout.CarriedJoin(run, item.Result.Id) })
-            {
-                if (repository.ReadRef(name) is GitRead<CommitId?>.Read { Value: { } commit }) repository.DeleteRef(name, commit);
-            }
             var copied = Path.Combine(storage.Folder, "results", item.Result.Id.Value.ToString("D"));
             try
             {
@@ -197,128 +160,29 @@ internal static class Carrying
         }
     }
 
-    /// <summary>Removes the refs that keep the commits of <paramref name="run"/>'s carried results, for a run that was never approved.</summary>
-    public static void Release(GitRepository repository, RunId run)
-    {
-        if (repository.RefSnapshot(RunLayout.CarriedPrefix(run)) is not GitRead<SortedDictionary<string, CommitId>>.Read refs) return;
-        foreach (var (name, commit) in refs.Value) repository.DeleteRef(name, commit);
-    }
-
-    /// <summary>The result <paramref name="working"/> would carry for <paramref name="task"/> from <paramref name="source"/>, with the commits to keep, or why not.</summary>
-    private static (IncludedResult? Item, ImmutableArray<(string, CommitId)> Kept, CarryRefusal? Refusal) Replay(GitRepository? repository, RunRecord working,
-        EarlierResult source, TaskId task, OperationId carrying, bool merges)
+    /// <summary>The result <paramref name="working"/> would carry for <paramref name="task"/> from <paramref name="source"/>: its report and artifacts, or why not.</summary>
+    private static (IncludedResult? Item, CarryRefusal? Refusal) Carry(RunRecord working, EarlierResult source, TaskId task, OperationId carrying)
     {
         var (resultId, inputsId) = RunReducer.CarriedIds(carrying, task);
         var snapshot = working.Revision.Snapshot;
-        var definition = snapshot.Tasks[task];
         var current = working.CurrentResults;
         ImmutableArray<InputBinding> bindings = [.. source.Run.Inputs[source.Result.Inputs].Bindings.Select(binding => binding switch
         {
             InputBinding.Provided provided => (InputBinding)(provided with { Result = current[provided.Edge.From].Id }),
             _ => binding,
         })];
-        var sources = InputMaterial.Sources(working, bindings);
-        var kept = ImmutableArray.CreateBuilder<(string, CommitId)>();
-        var runBase = working.Base.Commit;
-        JoinRecord? join = null;
-        ImmutableArray<CommitId> commits = [.. sources.Select(item => item.Commit).Distinct()];
-        if (commits.Length >= 2)
-        {
-            if (!merges) return (null, [], new CarryRefusal.Unavailable($"Joining carried results needs Git 2.43 or later. Installed: {repository?.Version}."));
-            var joined = Join(repository!, working, task, commits);
-            if (joined.Refusal is { } refusal) return (null, [], refusal);
-            join = new(RunReducer.CarriedJoinOperation(carrying, resultId), sources, joined.Commit, joined.Tree, RunLayout.CarriedJoin(working.Id, resultId));
-            kept.Add((join.Ref, join.Commit));
-        }
         InputRecord inputs;
         try
         {
-            inputs = InputMaterial.Build(working, inputsId, task, working.Revision.Id, bindings, sources, InputMaterial.Review(snapshot, task, bindings), join);
+            inputs = InputMaterial.Build(working, inputsId, task, working.Revision.Id, bindings, InputMaterial.Sources(working, bindings),
+                InputMaterial.Review(snapshot, task, bindings));
         }
-        catch (ArgumentException error) { return (null, [], new CarryRefusal.Unavailable(error.Message)); }
-        CodeOutput? code;
-        if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
-        {
-            if (source.Result.Code is not CodeOutput.Produced { Code: var owned })
-                return (null, [], new CarryRefusal.Unavailable("The earlier result has no code of its own."));
-            var oldBase = source.Run.Inputs[source.Result.Inputs].CodeBase;
-            var newBase = inputs.CodeBase;
-            var (commit, tree) = (owned.Commit, owned.Tree);
-            if (newBase != oldBase)
-            {
-                if (!merges) return (null, [], new CarryRefusal.Unavailable($"Replaying an earlier result needs Git 2.43 or later. Installed: {repository?.Version}."));
-                switch (repository!.MergeTrees(newBase, owned.Commit, runBase, oldBase))
-                {
-                    case TreeMerge.Clean clean:
-                        tree = clean.Tree;
-                        break;
-                    case TreeMerge.Conflicted conflicted:
-                        return (null, [], new CarryRefusal.Conflict(Paths(conflicted)));
-                    case TreeMerge.Failed failed:
-                        return (null, [], new CarryRefusal.Unavailable(failed.Detail));
-                }
-                if (repository.CommitterTimestamps([newBase, owned.Commit]) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
-                    return (null, [], new CarryRefusal.Unavailable("Git could not read the commits to replay."));
-                var recipe = new CommitRecipe(tree, [newBase], $"Carry an earlier result onto the run base\n\nIDP-Run: {working.Id.Value:D}\n" +
-                    $"IDP-Task: {task.Value:D}\nIDP-Carried-From: {owned.Commit.Hex}\n", Identity, Identity, times.Value.Max());
-                if (repository.CreateCommit(recipe) is not GitRead<CommitId>.Read created)
-                    return (null, [], new CarryRefusal.Unavailable("Git could not write the replayed commit."));
-                commit = created.Value;
-            }
-            var reference = RunLayout.CarriedCode(working.Id, resultId);
-            kept.Add((reference, commit));
-            code = new CodeOutput.Produced(new(task, owned.Attempt, newBase, commit, tree, reference));
-        }
-        else code = inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs.Id) : null;
+        catch (ArgumentException error) { return (null, new CarryRefusal.Unavailable(error.Message)); }
         var result = new ResultRecord(resultId, task, working.Revision.Id, inputsId, new ResultOrigin.Carried(source.Run.Id, source.Result.Id),
             source.Result.Report, null)
         {
-            Code = code,
             Artifacts = [.. source.Result.Artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(resultId, artifact.Name) })],
         };
-        return (new(result, inputs), kept.ToImmutable(), null);
+        return (new(result, inputs), null);
     }
-
-    /// <summary>
-    /// The join of a carried task's code inputs, merged as a run's own join merges them (<see cref="MergeJoins"/>): one
-    /// source after another, with the merge base Git finds from their history, the run base as the attribute source, and a
-    /// commit for each step.
-    /// </summary>
-    private static (CommitId Commit, TreeId Tree, CarryRefusal? Refusal) Join(GitRepository repository, RunRecord working, TaskId task,
-        ImmutableArray<CommitId> parents)
-    {
-        var runBase = working.Base.Commit;
-        if (repository.CommitterTimestamps(parents) is not GitRead<ImmutableArray<DateTimeOffset>>.Read times)
-            return (default, default, new CarryRefusal.Unavailable("Git could not read the commits to join."));
-        var timestamp = times.Value.Max();
-        var accumulator = parents[0];
-        TreeId tree = default;
-        for (var step = 1; step < parents.Length; step++)
-        {
-            switch (repository.MergeTrees(accumulator, parents[step], runBase))
-            {
-                case TreeMerge.Clean clean:
-                    tree = clean.Tree;
-                    if (step == parents.Length - 1) break;
-                    if (repository.CreateCommit(Recipe(tree, [accumulator, parents[step]])) is GitRead<CommitId>.Read partial) accumulator = partial.Value;
-                    else return (default, default, new CarryRefusal.Unavailable("Git could not write the join."));
-                    break;
-                case TreeMerge.Conflicted conflicted:
-                    return (default, default, new CarryRefusal.JoinConflict(Paths(conflicted)));
-                case TreeMerge.Failed failed:
-                    return (default, default, new CarryRefusal.Unavailable(failed.Detail));
-            }
-        }
-        return repository.CreateCommit(Recipe(tree, parents)) is GitRead<CommitId>.Read joined
-            ? (joined.Value, tree, null)
-            : (default, default, new CarryRefusal.Unavailable("Git could not write the join."));
-
-        CommitRecipe Recipe(TreeId merged, ImmutableArray<CommitId> ancestry) => new(merged, ancestry,
-            $"Join dependency results\n\nIDP-Run: {working.Id.Value:D}\nIDP-Task: {task.Value:D}\n", Identity, Identity, timestamp);
-    }
-
-    private static ImmutableArray<string> Paths(TreeMerge.Conflicted conflict) =>
-        [.. conflict.Stages.Select(entry => entry.Path).Concat(conflict.Messages
-            .Where(message => message.Type.StartsWith("CONFLICT", StringComparison.Ordinal)).SelectMany(message => message.Paths))
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 }
