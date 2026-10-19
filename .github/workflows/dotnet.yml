@@ -1,8 +1,11 @@
-name: Build and test
+# Builds and tests on Windows and macOS on GitHub, only for a release tag that Gitea's push mirror pushes here, or
+# when started by hand. Linux builds every push on Gitea (.gitea/workflows/build.yml).
+name: Build and test (Windows, macOS)
 
 on:
   push:
-  pull_request:
+    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-26-intel]
+        os: [windows-latest, macos-latest, macos-26-intel]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
