@@ -58,6 +58,9 @@ const apple = {
   'apple-purple': ['#CB30E0', '#DB34F2'],
   'apple-purple-strong': ['#B02FC2', '#EA8DFF'],
   'apple-purple-tile': ['#B02FC2', '#DB34F2'],
+  'apple-pink': ['#FF2D55', '#FF375F'],
+  'apple-pink-strong': ['#E7124D', '#FF8AC4'],
+  'apple-pink-tile': ['#E7124D', '#FF375F'],
   'apple-brown': ['#AC7F5E', '#B78A66'],
   'apple-brown-strong': ['#956D51', '#DBA679'],
   'apple-brown-tile': ['#956D51', '#B78A66'],
@@ -76,6 +79,7 @@ const kinds = [
   ['Architect', 'purple'],
   ['Review', 'mint'],
   ['Approval', 'brown'],
+  ['Merge', 'pink'],
   ['ReadOnlyAgent', 'gray'],
 ];
 const states = [

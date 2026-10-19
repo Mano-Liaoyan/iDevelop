@@ -16,7 +16,7 @@ namespace IDevelop.Desktop.Tests;
 /// <summary>The Add popover, opened from every entry point of the real main window.</summary>
 public sealed class AddNodeTests : IDisposable
 {
-    private static readonly string[] BuiltInRows = ["Add Implement", "Add Plan", "Add Architect", "Add Review", "Add Approval"];
+    private static readonly string[] BuiltInRows = ["Add Implement", "Add Plan", "Add Architect", "Add Review", "Add Approval", "Add Merge"];
 
     private readonly TempFolder _temp = AppTempFolder.New();
 
@@ -39,7 +39,7 @@ public sealed class AddNodeTests : IDisposable
     };
 
     [AvaloniaFact]
-    public void Right_clicking_empty_canvas_lists_the_five_built_ins_with_their_tiles_then_the_canvas_actions()
+    public void Right_clicking_empty_canvas_lists_the_six_built_ins_with_their_tiles_then_the_canvas_actions()
     {
         var shell = Shell.Open(_temp.Create("plan"));
         shell.Click(shell.Find<RadioButton>("ThemeLight"));
@@ -48,7 +48,7 @@ public sealed class AddNodeTests : IDisposable
 
         Assert.Equal([.. BuiltInRows, "Generate Workflow…", "Select All", "Fit to View", "Zoom to 100%"], shell.AddRows());
         Assert.Equal(
-            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval],
+            [NodeKind.Implement, NodeKind.Plan, NodeKind.Architect, NodeKind.Review, NodeKind.Approval, NodeKind.Merge],
             BuiltInRows.Select(row => TileKind(shell.AddRow(row[4..]))));
         var tile = shell.AddRow("Plan").GetVisualDescendants().OfType<KindTile>().Single();
         Assert.Equal(Color.Parse("#007EAE"), shell.ColorAt(tile, new Point(3, 12)));
@@ -113,7 +113,7 @@ public sealed class AddNodeTests : IDisposable
 
         var doubleClick = shell.InEditor(300, 250);
         shell.DoubleClick(doubleClick);
-        Assert.Equal(BuiltInRows, shell.AddRows().Take(5));
+        Assert.Equal(BuiltInRows, shell.AddRows().Take(6));
         Assert.True(Point.Distance(doubleClick, shell.Bounds(shell.AddPopover).TopLeft) <= 2, $"{shell.Bounds(shell.AddPopover)} is not at {doubleClick}");
         shell.Press(Key.Escape);
         Assert.False(shell.AddPopoverIsOpen);
@@ -122,7 +122,7 @@ public sealed class AddNodeTests : IDisposable
         shell.Click(pointer);
         shell.PressWithText(Key.N, "n");
 
-        Assert.Equal(BuiltInRows, shell.AddRows().Take(5));
+        Assert.Equal(BuiltInRows, shell.AddRows().Take(6));
         Assert.True(Point.Distance(pointer, shell.Bounds(shell.AddPopover).TopLeft) <= 2, $"{shell.Bounds(shell.AddPopover)} is not at {pointer}");
         Assert.Equal("", shell.Find<TextBox>("AddNodeSearch").Text);
         Assert.True(shell.Find<TextBox>("AddNodeSearch").IsFocused);
@@ -137,7 +137,7 @@ public sealed class AddNodeTests : IDisposable
 
         shell.RightClick(shell.InEditor(400, 300));
 
-        Assert.Equal([.. BuiltInRows, "Add Bug fix"], shell.AddRows().Take(6));
+        Assert.Equal([.. BuiltInRows, "Add Bug fix"], shell.AddRows().Take(7));
         Assert.Equal(["Built-in", "Project", "Actions"], Shell.Texts(shell.AddPopover).Where(text => text is "Built-in" or "Project" or "Personal" or "Actions"));
         var tile = shell.AddRow("Bug fix").GetVisualDescendants().OfType<KindTile>().Single();
         Assert.Equal((NodeKind.Implement, true), (tile.Kind, tile.IsLibrary));

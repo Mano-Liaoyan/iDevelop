@@ -74,6 +74,9 @@ public sealed record NodeContext(TaskDefinition Node, string Inputs)
 
     /// <summary>A review's subject, as the review reads it. Null for other nodes and for a review without one.</summary>
     public SubjectView? Subject { get; init; }
+
+    /// <summary>The merge conflict a Merge node's agent resolves, as its prompt describes it. Null for other nodes.</summary>
+    public string? Conflict { get; init; }
 }
 
 /// <summary>
@@ -130,5 +133,6 @@ public static class NodeWorks
         WorkKind.Agent => AgentWork.Instance,
         WorkKind.Review => ReviewWork.Instance,
         WorkKind.Person => PersonWork.Instance,
+        WorkKind.Merge => MergeWork.Instance,
     };
 }

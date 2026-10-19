@@ -352,6 +352,8 @@ public sealed partial class ProjectRuns : IAsyncDisposable
             {
                 case WorkSpec.Person:
                     return new SendProblem.CannotStart(new StartProblem.NoConversation());
+                case WorkSpec.Merge:
+                    return new SendProblem.CannotStart(new StartProblem.MergesInRun());
                 case WorkSpec.Review when _active.TryGetValue(task.Id, out var reviewing):
                     return reviewing.GuideProblem();
                 case WorkSpec.Review:
@@ -1172,6 +1174,7 @@ public sealed partial class ProjectRuns : IAsyncDisposable
                 new StartVerdict.Blocked(_stalls.GetValueOrDefault(task.Id) ?? new StartProblem.InReview(reviewing.TaskTitle)),
             _ when ReviewOf(task.Id) is { } review => new StartVerdict.Blocked(new StartProblem.UnderReview(review.TaskTitle)),
             _ when task.Blueprint.Work is WorkSpec.Review && ReviewProblem(task.Id, subject) is { } problem => new StartVerdict.Blocked(problem),
+            _ when task.Blueprint.Work is WorkSpec.Merge => new StartVerdict.Blocked(new StartProblem.MergesInRun()),
             _ => StartCheck.Evaluate(task, _projectFolder, _clients.Current, planning: planning, subject: subject, questions: _questions, skills: SkillsOf(task.Execution)),
         };
 

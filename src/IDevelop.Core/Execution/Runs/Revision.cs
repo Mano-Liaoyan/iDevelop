@@ -135,6 +135,10 @@ internal static class Revision
             case WorkSpec.Person:
                 writer.WriteString("kind", "person");
                 break;
+            case WorkSpec.Merge merge:
+                writer.WriteString("kind", "merge");
+                writer.WriteString("template", merge.Template.Text);
+                break;
         }
         writer.WriteEndObject();
         writer.WriteEndObject();

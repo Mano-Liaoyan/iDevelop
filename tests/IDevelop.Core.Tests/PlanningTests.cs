@@ -27,7 +27,7 @@ public sealed class PlanningTests : IDisposable
         new BlueprintKey("team.careful", 1), "Careful implement", BuiltInBlueprints.Implement.Work, BuiltInBlueprints.Implement.Fields,
         new NodeSettings(Haiku, ConversationMode.MayAsk));
 
-    /// <summary>The types a scripted proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-6</c>.</summary>
+    /// <summary>The types a scripted proposal may add, from <c>type-1</c>: the built-ins, then <see cref="Careful"/> as <c>type-7</c>.</summary>
     private static readonly ImmutableArray<Blueprint> Types = [.. BuiltInBlueprints.All, Careful];
 
     private const string FillsBothAndAddsOne = """
@@ -505,7 +505,7 @@ public sealed class PlanningTests : IDisposable
             ```idevelop
             {"status": "proposal",
              "fill": [{"slot": "slot-1", "fields": {"instructions": "Build the endpoint."}}],
-             "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-6"}]}
+             "add": [{"id": "build", "type": "type-1"}, {"id": "check", "type": "type-4"}, {"id": "sign", "type": "type-5"}, {"id": "careful", "type": "type-7"}]}
             ```
             """));
 

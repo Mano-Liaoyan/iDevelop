@@ -3,7 +3,7 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Canvas;
 
 /// <summary>What a node does, which its tile, wires, and ring show in the kind's hue and glyph.</summary>
-public enum NodeKind { Implement, Plan, Architect, Review, Approval, ReadOnlyAgent }
+public enum NodeKind { Implement, Plan, Architect, Review, Approval, Merge, ReadOnlyAgent }
 
 /// <param name="Icon">The resource key of the kind's glyph.</param>
 /// <param name="StyleClass">The style class that paints an element in the kind's hue.</param>
@@ -25,6 +25,7 @@ public static class NodeKinds
         [BuiltInBlueprints.Architect.Key.Id] = NodeKind.Architect,
         [BuiltInBlueprints.Review.Key.Id] = NodeKind.Review,
         [BuiltInBlueprints.Approval.Key.Id] = NodeKind.Approval,
+        [BuiltInBlueprints.Merge.Key.Id] = NodeKind.Merge,
     };
 
     /// <param name="lookup">Finds a blueprint the chain passes through, or returns null when this machine has none.</param>
@@ -51,6 +52,7 @@ public static class NodeKinds
         {
             WorkSpec.Review => NodeKind.Review,
             WorkSpec.Person => NodeKind.Approval,
+            WorkSpec.Merge => NodeKind.Merge,
             WorkSpec.Agent { Proposes: true } => NodeKind.Plan,
             WorkSpec.Agent { Access: AgentAccess.Edit } => NodeKind.Implement,
             WorkSpec.Agent => NodeKind.ReadOnlyAgent,
@@ -65,6 +67,7 @@ public static class NodeKinds
         NodeKind.Architect => new(kind, "Architect", "IconKindArchitect", "kind-architect"),
         NodeKind.Review => new(kind, "Review", "IconKindReview", "kind-review"),
         NodeKind.Approval => new(kind, "Approval", "IconKindApproval", "kind-approval"),
+        NodeKind.Merge => new(kind, "Merge", "IconKindMerge", "kind-merge"),
         NodeKind.ReadOnlyAgent => new(kind, "Read-only agent", "IconKindReadOnlyAgent", "kind-readonlyagent"),
     };
 

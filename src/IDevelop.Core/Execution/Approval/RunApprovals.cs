@@ -411,6 +411,7 @@ internal sealed class RunApprovals
             {
                 WorkSpec.Agent => WorkKind.Agent,
                 WorkSpec.Review => WorkKind.Review,
+                WorkSpec.Merge => WorkKind.Merge,
                 _ => WorkKind.Person,
             }, agent?.Access, agent?.Proposes ?? false, task.Execution, task.Conversation, inputs,
             !inputs.Any(input => input.Kind == ConnectionKind.Dependency));
