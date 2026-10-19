@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using IDevelop.Projects;
@@ -60,8 +59,6 @@ internal abstract record IndexAlignment
     internal sealed record Failed(string Detail) : IndexAlignment;
 }
 
-internal enum GitPathType { RegularFile, Directory, Link, Other }
-internal enum PathRemoval { Removed, Absent, Unexpected }
 internal enum GitOperation { Metadata, Worktree, Network }
 internal sealed record GitLimits(TimeSpan Metadata, TimeSpan Worktree, TimeSpan Network)
 {
@@ -256,8 +253,6 @@ internal sealed partial class GitRepository
         };
     }
 
-    public GitResult AttachHead(string checkout, string branch) => Git(checkout, GitOperation.Metadata, ["symbolic-ref", "HEAD", branch]);
-
     public GitRead<ImmutableArray<StageEntry>> UnmergedEntries(string checkout)
     {
         var result = Git(checkout, GitOperation.Worktree, ["ls-files", "-u", "-z"]);
@@ -281,8 +276,6 @@ internal sealed partial class GitRepository
         var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
     }
-
-    public GitRead<ImmutableArray<string>> UntrackedFiles(string checkout) => ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--exclude-standard", "-z"]));
 
     public GitRead<ImmutableArray<string>> IgnoredFiles(string checkout) =>
         ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]));
@@ -661,54 +654,6 @@ internal sealed partial class GitRepository
     /// <summary>Call only after verifying quiescence, ownership, and an unchanged inventory.</summary>
     public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, GitOperation.Worktree, ["reset", "--hard", "--no-recurse-submodules", commit.Hex]);
 
-    /// <summary>The caller holds ownership and proves quiescence; matching content alone does not exclude concurrent writers.</summary>
-    public PathRemoval RemovePath(string checkout, string relativePath, Digest expected, GitPathType expectedType)
-    {
-        if (expectedType != GitPathType.RegularFile || Path.IsPathRooted(relativePath))
-        {
-            return PathRemoval.Unexpected;
-        }
-        var parts = relativePath.Replace('\\', '/').Split('/');
-        if (parts.Any(part => part is "" or "." or ".." || part.Contains(':')))
-        {
-            return PathRemoval.Unexpected;
-        }
-        var path = checkout;
-        foreach (var part in parts)
-        {
-            path = Path.Combine(path, part);
-            if (File.Exists(path) || Directory.Exists(path))
-            {
-                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                {
-                    return PathRemoval.Unexpected;
-                }
-            }
-        }
-        if (Directory.Exists(path))
-        {
-            return PathRemoval.Unexpected;
-        }
-        if (!File.Exists(path))
-        {
-            return PathRemoval.Absent;
-        }
-        try
-        {
-            RegularFile.Verify(path);
-        }
-        catch (IOException)
-        {
-            return PathRemoval.Unexpected;
-        }
-        if (HashFile(path) != expected)
-        {
-            return PathRemoval.Unexpected;
-        }
-        File.Delete(path);
-        return PathRemoval.Removed;
-    }
-
     private GitResult Git(string checkout, GitOperation operation, string[] arguments, IReadOnlyDictionary<string, string>? overlay = null, byte[]? stdin = null,
         IReadOnlyDictionary<string, string>? pinnedGitEnvironment = null)
     {
@@ -871,8 +816,6 @@ internal sealed partial class GitRepository
             _process?.Dispose();
         }
     }
-
-    private static Digest? HashFile(string path) => File.Exists(path) ? new(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)))) : null;
 
     private static (string Name, string Email)? Identity(string text)
     {

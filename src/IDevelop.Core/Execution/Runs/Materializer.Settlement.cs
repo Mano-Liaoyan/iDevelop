@@ -274,10 +274,10 @@ internal sealed partial class Materializer
             if (indexTree is { } staged)
             {
                 var indexCommit = Value(repository.CreateCommit(recipe with { Tree = staged, Parents = [], Message = "Index of " + recipe.Message }));
-                Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, 1), indexCommit);
+                Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch), indexCommit);
             }
             candidate = Value(repository.CreateCommit(recipe));
-            Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, 1), candidate.Value);
+            Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch), candidate.Value);
         }
         return new(id, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
             logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
