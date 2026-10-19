@@ -176,6 +176,9 @@ internal abstract record BranchMergeWait
     internal sealed record Conflict(string Branch, ImmutableArray<string> Paths, TaskId? Node) : BranchMergeWait
     {
         public override string Branch { get; } = Branch;
+
+        /// <summary>The conflict itself, which the person resolves in its worktree and marks resolved when no Merge node takes it.</summary>
+        public MergeConflict? Merge { get; init; }
     }
 
     /// <summary>Git could not merge, for <paramref name="Detail"/>. The merge tries again.</summary>

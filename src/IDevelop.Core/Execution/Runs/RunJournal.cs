@@ -25,7 +25,7 @@ internal static class RunJournal
     private static readonly HashSet<string> Events = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
         "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured",
         "gateRequested", "gateSentBack", "requested", "layoutAllocated", "planned", "gitIntended", "gitObserved", "prepared", "blocked",
-        "blockResolved"];
+        "blockResolved", "conflictResolved"];
 
     /// <summary>
     /// Whether <paramref name="jsonl"/> is a journal of an earlier format: its first line names a schema before

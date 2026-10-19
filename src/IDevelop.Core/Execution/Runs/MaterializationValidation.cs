@@ -19,6 +19,7 @@ internal static partial class RunValidation
             !block.Evidence.IsDefault && block.Evidence.All(Evidence) && block.Detail is not null &&
             (block.Conflict is null || Conflict(block.Conflict)) && Scope(block.Scope),
         RunEvent.BlockResolved resolved => resolved.Block.Value != Guid.Empty && !string.IsNullOrWhiteSpace(resolved.Reason),
+        RunEvent.ConflictResolved resolved => MergeConflict(resolved.Conflict) && Revision.IsCommit(resolved.Merge.Hex),
         _ => false,
     }) ? null : RunProblem.InvalidData;
 

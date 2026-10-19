@@ -407,7 +407,7 @@ internal sealed partial class RunStore
             }
             if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Join or MaterializationPlan.Refresh } or
                 RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or RunEvent.BlockResolved or
-                RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured))
+                RunEvent.ConflictResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured))
             {
                 return Refuse(RunProblem.InvalidData);
             }

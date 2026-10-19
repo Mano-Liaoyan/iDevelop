@@ -273,6 +273,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(GateRequested), "gateRequested")]
 [JsonDerivedType(typeof(GateSentBack), "gateSentBack")]
 [JsonDerivedType(typeof(Requested), "requested")]
+[JsonDerivedType(typeof(ConflictResolved), "conflictResolved")]
 internal abstract record RunEvent
 {
     private RunEvent() { }
@@ -290,6 +291,12 @@ internal abstract record RunEvent
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
 
     internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
+
+    /// <summary>
+    /// The person resolved <paramref name="Conflict"/> in its worktree and marked it resolved: <paramref name="Merge"/> is the
+    /// commit of their files on the conflict's two parents, which serves as a Merge node's merge does (#148).
+    /// </summary>
+    internal sealed record ConflictResolved(MergeConflict Conflict, CommitId Merge) : RunEvent;
 
     internal sealed record Approved(RunId Run, ApprovedRevision Revision, RunBase Base) : RunEvent
     {

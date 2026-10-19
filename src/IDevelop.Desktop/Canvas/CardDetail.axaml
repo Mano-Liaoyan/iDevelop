@@ -248,6 +248,23 @@
           </StackPanel>
         </Button>
       </Grid>
+      <!-- A conflict between the task's predecessors that no Merge node takes: the person fixes it in its worktree. -->
+      <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" IsVisible="{Binding ShowsConflictActions}">
+        <Button Classes="cardAction" Command="{Binding OpenConflictCommand}"
+                AutomationProperties.AutomationId="CardOpenConflict" AutomationProperties.Name="Open worktree">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconFolder}" />
+            <TextBlock Text="Open worktree" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="cardAction" Command="{Binding MarkResolvedCommand}"
+                AutomationProperties.AutomationId="CardMarkResolved" AutomationProperties.Name="Mark resolved">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconCheckmark}" />
+            <TextBlock Text="Mark resolved" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </WrapPanel>
       <!-- Why Run would start nothing, as the line under the inspector's Run says it, such as "Runs after "A". Run "A" first." -->
       <Grid ColumnDefinitions="16,*" ColumnSpacing="8" IsVisible="{Binding Detail.HasRunNote, FallbackValue=False}">
         <TextBlock Grid.Column="1" Classes="cardMeta" Text="{Binding Detail.RunNote, FallbackValue={x:Null}}" TextWrapping="Wrap"

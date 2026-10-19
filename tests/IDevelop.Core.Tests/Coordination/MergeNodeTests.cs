@@ -90,6 +90,68 @@ public sealed class MergeNodeTests
     }
 
     [Fact]
+    public async Task A_merge_nodes_retry_continues_from_the_files_its_failed_attempt_left()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true), Merger(M)], (B, D), (C, D)));
+        // The first attempt starts on the merge and leaves its notes, with the markers still in settings.txt.
+        var halfway = FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-M"))
+            .Write("notes.txt", "B first, then C\n")
+            .Print(FakeAgents.ReplyLines(ClientId.Codex, "Half done.\n"));
+        f.Answer(B, Writes(B, "settings.txt", "B\n")).Answer(C, Writes(C, "settings.txt", "C\n")).Answer(D, Reports(D))
+            .Answer("M", halfway, Resolves("settings.txt", "B\nC\n"));
+        await f.Open();
+        await f.Resume();
+        await f.Until(view => view.Tasks[M].State == TaskState.Failed);
+        Assert.Contains("<<<<<<<", File.ReadAllText(Path.Combine(f.Checkout(M), "settings.txt")));
+
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, M, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal(2, f.Launches("M"));
+        // The retry found the notes the failed attempt left, and its merge holds them with the resolved file.
+        Assert.Equal("B first, then C\n", File.ReadAllText(Path.Combine(f.Checkout(M), "notes.txt")));
+        Assert.Equal("B first, then C\n", File.ReadAllText(Path.Combine(f.Checkout(D), "notes.txt")));
+        Assert.Equal("B\nC\n", File.ReadAllText(Path.Combine(f.Checkout(D), "settings.txt")));
+    }
+
+    [Fact]
+    public async Task The_person_resolves_a_conflict_between_predecessors_in_its_worktree_and_marks_it_resolved()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true)], (B, D), (C, D)));
+        f.Answer(B, Writes(B, "settings.txt", "B\n")).Answer(C, Writes(C, "settings.txt", "C\n")).Answer(D, Reports(D));
+        await f.Open();
+        await f.Resume();
+        var stuck = await f.Until(view => view.Tasks[D].State == TaskState.Blocked);
+        var conflict = WorkflowRunCoordinator.PersonsConflict(stuck.Tasks[D])!;
+        Assert.NotNull(conflict);
+
+        // Nothing of the person's is there to commit before the worktree is open.
+        Assert.IsType<ConflictReply.Unopened>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        var opened = Assert.IsType<ConflictReply.Opened>(await f.Coordinator.OpenConflict(f.Address, conflict).WaitAsync(Bound));
+        var file = Path.Combine(opened.Folder, "settings.txt");
+        Assert.Contains("<<<<<<<", File.ReadAllText(file));
+        // A repeat finds the same worktree.
+        Assert.Equal(opened.Folder, Assert.IsType<ConflictReply.Opened>(await f.Coordinator.OpenConflict(f.Address, conflict).WaitAsync(Bound)).Folder);
+
+        // While the markers remain, Mark resolved commits nothing and says which files hold them.
+        var refused = Assert.IsType<ConflictReply.MarkersRemain>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        Assert.Equal(["settings.txt"], refused.Paths.ToArray());
+        Assert.Null(RunReducer.Resolution(f.Read(), conflict.Ours, conflict.Theirs));
+        Assert.Equal(0, f.Launches(D));
+
+        File.WriteAllText(file, "B\nC\n");
+        var resolved = Assert.IsType<ConflictReply.Resolved>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+
+        // D started from the person's merge, as it does from a Merge node's.
+        Assert.Equal(1, f.Launches(D));
+        Assert.Equal("B\nC\n", File.ReadAllText(Path.Combine(f.Checkout(D), "settings.txt")));
+        var git = f.Preparation.Git;
+        Assert.Equal($"{conflict.Ours.Hex} {conflict.Theirs.Hex}", git.Git("show", "-s", "--format=%P", resolved.Merge.Hex).Trim());
+        Assert.Equal(resolved.Merge, RunReducer.Resolution(f.Read(), conflict.Ours, conflict.Theirs));
+        Assert.All(f.Read().Blocks.Values, state => Assert.True(state.Resolved));
+    }
+
+    [Fact]
     public async Task Without_a_merge_node_the_conflict_waits_for_the_person()
     {
         await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true)], (B, D), (C, D)));
@@ -264,6 +326,54 @@ public sealed class MergeNodeTests
         git.Git("merge", "-q", "-s", "ours", "--no-edit", produced.Hex);
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(git.Folder, "a.txt")));
+    }
+
+    [Fact]
+    public async Task The_person_resolves_the_final_merges_conflict_in_its_worktree_and_marks_it_resolved()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]), branch: Branch);
+        f.Answer(A, Writes(A, "a.txt", "Run\n"));
+        await f.Open();
+        await f.Resume();
+        var waiting = await f.Until(view => view.Merge is BranchMergeWait.Conflict);
+        var conflict = WorkflowRunCoordinator.PersonsConflict(waiting)!;
+        Assert.NotNull(conflict);
+        Assert.Equal(new MergeTarget.Branch(Branch), conflict.Target);
+
+        var opened = Assert.IsType<ConflictReply.Opened>(await f.Coordinator.OpenConflict(f.Address, conflict).WaitAsync(Bound));
+        var file = Path.Combine(opened.Folder, "a.txt");
+        Assert.Contains("<<<<<<<", File.ReadAllText(file));
+        var refused = Assert.IsType<ConflictReply.MarkersRemain>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        Assert.Equal(["a.txt"], refused.Paths.ToArray());
+        var git = f.Preparation.Git;
+        Assert.Equal(Main.Hex, git.Git("rev-parse", "main").Trim());
+
+        File.WriteAllText(file, "A and Run\n");
+        var resolved = Assert.IsType<ConflictReply.Resolved>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+
+        // main moved to the person's merge of main and the run's work, and the folder that has it checked out followed.
+        var produced = Assert.IsType<CodeOutput.Produced>(f.Result(A).Code).Code.Commit;
+        Assert.Equal(resolved.Merge.Hex, git.Git("rev-parse", "main").Trim());
+        Assert.Equal($"{Main.Hex} {produced.Hex}", git.Git("show", "-s", "--format=%P", "main").Trim());
+        Assert.Equal("A and Run\n", File.ReadAllText(Path.Combine(git.Folder, "a.txt")));
+    }
+
+    [Fact]
+    public async Task Mark_resolved_is_refused_for_a_conflict_a_merge_node_takes()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true), Merger(M)], (B, D), (C, D)));
+        var careless = FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-M"))
+            .Print(FakeAgents.ReplyLines(ClientId.Codex, "Done.\n"));
+        f.Answer(B, Writes(B, "settings.txt", "B\n")).Answer(C, Writes(C, "settings.txt", "C\n")).Answer(D, Reports(D)).Answer("M", careless);
+        await f.Open();
+        await f.Resume();
+        var failed = await f.Until(view => view.Tasks[M].State == TaskState.Failed);
+        Assert.Null(WorkflowRunCoordinator.PersonsConflict(failed.Tasks[D]));
+        var conflict = failed.Tasks[D].Block!.Conflict!.Merge!;
+        var refused = Assert.IsType<ConflictReply.Refused>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        Assert.Equal(RunProblem.StaleInput, refused.Reason.Problem);
+        Assert.IsType<ConflictReply.Refused>(await f.Coordinator.OpenConflict(f.Address, conflict).WaitAsync(Bound));
     }
 
     [Fact]

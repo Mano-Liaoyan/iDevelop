@@ -139,6 +139,8 @@ internal static partial class RunReducer
                     return Reject(RunProblem.InvalidData);
                 }
                 return (record with { Blocks = record.Blocks.SetItem(resolved.Block, state with { Resolved = true }) }, null);
+            case RunEvent.ConflictResolved resolved:
+                return ConflictResolutionProblem(record, resolved.Conflict) is { } resolutionProblem ? Reject(resolutionProblem) : (record, null);
             default:
                 return Reject(RunProblem.UnsupportedEvent);
         }

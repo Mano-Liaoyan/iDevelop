@@ -12,6 +12,17 @@ The same day they chose these options in issue [#148](https://github.com/Mano-Li
 - **No Merge node:** "Ask me". The run waits, and the card asks the person to resolve the conflict, or to add a Merge node and run it.
 - **Several Merge nodes:** "The connected one". A conflict goes to the Merge node that the conflicting branches connect into. The end-of-run merge uses the Merge node that has no successors.
 
+They answered the questions on pull request [#156](https://github.com/Mano-Liaoyan/iDevelop/pull/156) the same day:
+
+- **A Merge node between nodes:** "Agent only on conflict".
+- **"Ask me" for a conflict:** "Let me resolve it myself", with a way to open the conflicting worktree, fix the files, and mark it resolved.
+- **Adding a Merge node and running it:** "Joins the waiting run".
+- **A Merge node's failed attempt:** "Same worktree". Its Retry continues from the files the failed attempt left, as every other Retry does.
+- **Ties between Merge nodes:** "First in task order".
+- **The final merge's details:** "Accept all".
+- **Planners proposing Merge nodes:** "Yes".
+- **The Merge node's color:** "Keep pink".
+
 ## How it works
 
 In Plan → Implement → Review → Approval, plus Plan → Docs → Review, with a Merge node given Claude Code, on `main`:
@@ -21,8 +32,8 @@ In Plan → Implement → Review → Approval, plus Plan → Docs → Review, wi
 - **A Merge node between nodes merges them.** In Implement → Merge and Docs → Merge, then Merge → Review, the Merge node's own step merges Implement's and Docs' code and hands it on with their reports and artifacts, as an approval that needs no person does. Its agent runs only when that merge conflicts. A Merge node with no dependency predecessor never starts on its own.
 - **The finished run merges into its branch.** Once every node the run can start is done, the Approval node included, the run merges its work into the branch HEAD named at its approval. The work is the code of the nodes' current results that no other result's code holds. When `main` has not moved, it fast-forwards. When it moved, a clean merge is a merge commit, and a conflict goes to the Merge node with no successors. The folder that has `main` checked out follows the merge, and the run then completes. A run approved on a detached HEAD has no branch, and nothing merges.
 - **Uncommitted changes make the final merge wait.** While the folder that has `main` checked out has a change to a tracked file outside `.idp`, nothing moves, and the run's bar asks the person to commit or stash. The run looks again after its retry delay.
-- **Without a Merge node, the person decides.** A conflict between predecessors blocks the successor with the conflicting paths, and its card asks the person to add a Merge node and run it. A conflict with the branch makes the run wait, and the run's bar asks the person to merge the run's work into `main` themselves or to add a Merge node and run it. The Run of a Merge node that the waiting run lacks adds it to the run, with the connections into it from the run's nodes, as the person's amendment, and the conflict goes to it. Once `main` holds the run's work, however it got there, the run completes.
-- **A merge that is not finished waits for the person.** An attempt whose agent failed, or left a conflicting file with Git's markers, commits nothing. The Merge node fails, and its Retry starts again at the commit with the markers.
+- **Without a Merge node, the person resolves the conflict.** A conflict between predecessors blocks the successor with the conflicting paths, and a conflict with the branch makes the run wait. The successor's card and inspector, or for the final merge the run's bar, offer Open worktree and Mark resolved. Open worktree adds the conflict's worktree at `.worktrees/<run>/conflict-<commit>`, detached at the commit with Git's markers, and opens it in the system's file manager. Mark resolved commits the person's files there on the conflict's two parents, and the run goes on exactly as after a Merge node's merge: Review starts from it, or the final merge uses it. Mark resolved is refused, with the files named, while a conflicting file still holds the markers, and before the worktree is open. The other way is to add a Merge node and run it: the Run of a Merge node that the waiting run lacks adds it to the run, with the connections into it from the run's nodes, as the person's amendment, and the conflict goes to it. Once `main` holds the run's work, however it got there, the run completes.
+- **A merge that is not finished waits for the person.** An attempt whose agent failed, or left a conflicting file with Git's markers, commits nothing. The Merge node fails, and its Retry continues in the same worktree from the files the failed attempt left.
 - **Choosing among Merge nodes.** A conflict between a Merge node's own predecessors goes to that node. Any other conflict between predecessors goes to the Merge node that every conflicting branch connects into, and the final merge to the Merge node with no successors, the first in task order when several fit. A workflow with one Merge node gives it every conflict. With several and none that fits, the conflict waits for the person.
 
 ## Considered options

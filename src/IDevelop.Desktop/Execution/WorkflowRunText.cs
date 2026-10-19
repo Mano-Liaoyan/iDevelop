@@ -201,7 +201,8 @@ internal static class WorkflowRunText
         TaskState.Pending when !task.HeldBy.IsEmpty => Waits(task.HeldBy, title, tasks),
         TaskState.Blocked when Conflict(task) is { } conflict => task.MergedBy is { } merge
             ? $"The work it starts from conflicts in {Files(conflict.Paths)}. \"{title(merge)}\" merges it, and it starts once the merge is committed."
-            : $"The work it starts from conflicts in {Files(conflict.Paths)}, and no Merge node takes the conflict. Add a Merge node and run it to merge\u00A0them.",
+            : $"The work it starts from conflicts in {Files(conflict.Paths)}, and no Merge node takes the conflict. Open the conflict's worktree, " +
+              "fix the files, and mark it resolved, or add a Merge node and run\u00A0it.",
         TaskState.Failed when task.Merge is { } merging && task.End is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } =>
             $"Its agent left conflict markers in {Files(merging.Paths)}, so the merge was not committed. Retry it.",
         TaskState.Failed when task.Merge is { } failedMerge => $"It did not finish the merge of {Files(failedMerge.Paths)}. Retry it.",
@@ -234,6 +235,29 @@ internal static class WorkflowRunText
     };
 
     /// <summary>
+    /// Where the conflict's worktree is and what the person does there. <paramref name="shown"/> says whether the system's file
+    /// manager opened it.
+    /// </summary>
+    public static string ConflictOpened(string folder, IReadOnlyList<string> paths, bool shown) => shown
+        ? $"The conflict's worktree is open at {folder}. Fix {Files(paths)} there, then choose Mark resolved."
+        : $"The conflict's worktree is at {folder}, and iDevelop could not open it. Open it yourself, fix {Files(paths)}, then choose Mark resolved.";
+
+    /// <summary>What the person's step on a conflict came to, as the notice says it, or null when it needs no word.</summary>
+    internal static string? Conflict(ConflictReply reply) => reply switch
+    {
+        ConflictReply.Resolved => "Your merge is committed, and the run goes on from it.",
+        ConflictReply.Unopened => "Open the conflict's worktree first, and fix the files there.",
+        ConflictReply.MarkersRemain markers => markers.Paths.Length == 1
+            ? $"{markers.Paths[0]} still has conflict markers. Fix it, then mark the conflict resolved."
+            : $"{Files(markers.Paths)} still have conflict markers. Fix them, then mark the conflict resolved.",
+        ConflictReply.Failed failed => $"Git could not do this: {failed.Detail}",
+        ConflictReply.Refused { Reason.Problem: RunProblem.StaleInput } => "The conflict no longer waits for you.",
+        ConflictReply.Refused refused => Problem(refused.Reason),
+        ConflictReply.Unavailable unavailable => unavailable.Message,
+        _ => null,
+    };
+
+    /// <summary>
     /// Why the run's finished work has not merged into the branch it started from yet, as its bar says it: what the person
     /// can do, or which Merge node merges it.
     /// </summary>
@@ -246,7 +270,8 @@ internal static class WorkflowRunText
                 $"The run's work waits to merge into {branch}. Commit or stash your changes to {Files(uncommitted.Paths)}, and it merges. iDevelop never touches them.",
             BranchMergeWait.Conflict { Node: { } node } conflict => $"\"{title(node)}\" merges the run's work into {branch}, which conflicts in {Files(conflict.Paths)}.",
             BranchMergeWait.Conflict conflict =>
-                $"The run's work conflicts with {branch} in {Files(conflict.Paths)}. Merge it into {branch} yourself, or add a Merge node and run\u00A0it.",
+                $"The run's work conflicts with {branch} in {Files(conflict.Paths)}. Open the conflict's worktree, fix the files, and mark it resolved, " +
+                "or add a Merge node and run\u00A0it.",
             BranchMergeWait.Problem problem => $"The run's work could not merge into {branch} yet: {problem.Detail}",
             _ => throw new UnreachableException(),
         };

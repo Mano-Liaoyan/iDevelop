@@ -90,6 +90,7 @@ public sealed partial class WorkflowCanvasViewModel
 
         ShowActivity();
         OnPropertyChanged(nameof(ShowsRunWorkflow));
+        NotifyConflictCommands();
     }
 
     /// <summary>Stops the canvas's run follow its coordinator, as the project does when it closes.</summary>

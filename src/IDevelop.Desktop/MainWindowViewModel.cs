@@ -35,6 +35,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _refreshingAgents;
     private bool _restoring;
 
+    /// <summary>Opens a folder in the system's file manager, and returns whether it opened. The window sets it.</summary>
+    internal Func<string, Task<bool>> OpenFolder { get; set; } = _ => Task.FromResult(false);
+
     /// <param name="copy">Puts text on the clipboard.</param>
     /// <param name="personalBlueprints">The personal blueprint library's folder, or null for none.</param>
     /// <param name="sessionFile">The file that remembers the open projects between runs, or null to remember nothing.</param>
@@ -439,6 +442,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private WorkflowCanvasViewModel NewCanvas(ProjectViewModel project, WorkflowDocument document)
     {
         var canvas = new WorkflowCanvasViewModel(project, document, _clients, notice => Status = notice, _copy, _personalBlueprints);
+        canvas.OpenFolder = folder => OpenFolder(folder);
         canvas.RunRouteChanged += (_, _) => FollowRunRoute(canvas);
         document.Changed += (_, _) =>
         {

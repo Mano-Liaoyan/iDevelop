@@ -55,7 +55,7 @@ internal sealed partial class WorkflowRunCoordinator
             });
     }
 
-    internal const string MergedReason = "A Merge node's agent resolved the conflict, and its merge is committed.";
+    internal const string MergedReason = "The conflict is resolved, and its merge is committed.";
 
     /// <summary>
     /// Starts <paramref name="node"/>'s attempt that resolves <paramref name="conflict"/>, while the node is free and a client
@@ -105,7 +105,7 @@ internal sealed partial class WorkflowRunCoordinator
                     break;
                 case BranchMerge.Conflict conflict:
                     var node = MergeRouting.Node(record.Revision.Snapshot, conflict.Merge, []);
-                    _branchMerge = new BranchMergeWait.Conflict(branch, conflict.Merge.Paths, node);
+                    _branchMerge = new BranchMergeWait.Conflict(branch, conflict.Merge.Paths, node) { Merge = conflict.Merge };
                     if (Read() is { } current) StartMerge(current, conflict.Merge, node);
                     break;
                 case BranchMerge.Problem problem:

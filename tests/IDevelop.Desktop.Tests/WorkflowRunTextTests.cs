@@ -221,7 +221,8 @@ public sealed class WorkflowRunTextTests
 
         var asks = Conflicting(null);
         Assert.Equal((NodeState.Failed, "Conflict"), WorkflowRunText.Of(asks, Title));
-        Assert.Equal("The work it starts from conflicts in settings.txt, and no Merge node takes the conflict. Add a Merge node and run it to merge\u00A0them.",
+        Assert.Equal("The work it starts from conflicts in settings.txt, and no Merge node takes the conflict. " +
+            "Open the conflict's worktree, fix the files, and mark it resolved, or add a Merge node and run\u00A0it.",
             WorkflowRunText.Detail(asks, Title));
         Assert.IsType<Attention.Problem>(WorkflowRunText.Needs(asks, Title));
     }
@@ -245,9 +246,27 @@ public sealed class WorkflowRunTextTests
     {
         Assert.Equal("The run's work waits to merge into main. Commit or stash your changes to root.txt, and it merges. iDevelop never touches them.",
             WorkflowRunText.Merging(new BranchMergeWait.Uncommitted("refs/heads/main", "/project", ["root.txt"]), Title));
-        Assert.Equal("The run's work conflicts with main in a.txt and b.txt. Merge it into main yourself, or add a Merge node and run\u00A0it.",
+        Assert.Equal("The run's work conflicts with main in a.txt and b.txt. Open the conflict's worktree, fix the files, and mark it resolved, " +
+            "or add a Merge node and run\u00A0it.",
             WorkflowRunText.Merging(new BranchMergeWait.Conflict("refs/heads/main", ["a.txt", "b.txt"], null), Title));
         Assert.Equal("\"A\" merges the run's work into main, which conflicts in a.txt.",
             WorkflowRunText.Merging(new BranchMergeWait.Conflict("refs/heads/main", ["a.txt"], TestTasks.Design), Title));
+    }
+
+    [Fact]
+    public void The_persons_steps_on_a_conflict_say_what_came_of_them()
+    {
+        Assert.Equal("The conflict's worktree is open at /w. Fix a.txt there, then choose Mark resolved.",
+            WorkflowRunText.ConflictOpened("/w", ["a.txt"], shown: true));
+        Assert.Equal("The conflict's worktree is at /w, and iDevelop could not open it. Open it yourself, fix a.txt and b.txt, then choose Mark resolved.",
+            WorkflowRunText.ConflictOpened("/w", ["a.txt", "b.txt"], shown: false));
+        // Mark resolved is refused, with the reason, while the markers remain.
+        Assert.Equal("a.txt still has conflict markers. Fix it, then mark the conflict resolved.",
+            WorkflowRunText.Conflict(new ConflictReply.MarkersRemain(["a.txt"])));
+        Assert.Equal("a.txt and b.txt still have conflict markers. Fix them, then mark the conflict resolved.",
+            WorkflowRunText.Conflict(new ConflictReply.MarkersRemain(["a.txt", "b.txt"])));
+        Assert.Equal("Open the conflict's worktree first, and fix the files there.", WorkflowRunText.Conflict(new ConflictReply.Unopened()));
+        Assert.Equal("Your merge is committed, and the run goes on from it.", WorkflowRunText.Conflict(new ConflictReply.Resolved(Commit)));
+        Assert.Equal("The conflict no longer waits for you.", WorkflowRunText.Conflict(new ConflictReply.Refused(new(RunProblem.StaleInput))));
     }
 }

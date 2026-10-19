@@ -49,12 +49,37 @@ internal static partial class RunReducer
         return commit;
     }
 
-    /// <summary>The merge that resolved merging <paramref name="theirs"/> into <paramref name="ours"/>, the newest one, or null.</summary>
+    /// <summary>
+    /// The merge that resolved merging <paramref name="theirs"/> into <paramref name="ours"/>, the newest one, or null: a
+    /// Merge node's agent made it, or the person did and marked it resolved.
+    /// </summary>
     internal static CommitId? Resolution(RunRecord record, CommitId ours, CommitId theirs) => record.Receipts.Values
-        .Where(entry => entry.Event is RunEvent.AttemptClosed).OrderByDescending(entry => entry.Sequence)
-        .Select(entry => ((RunEvent.AttemptClosed)entry.Event).Attempt)
-        .Where(attempt => MergeOf(record, attempt) is { } conflict && conflict.Merges(ours, theirs))
-        .Select(attempt => MergeResult(record, attempt)).FirstOrDefault(commit => commit is not null);
+        .Where(entry => entry.Event is RunEvent.AttemptClosed or RunEvent.ConflictResolved).OrderByDescending(entry => entry.Sequence)
+        .Select(entry => entry.Event switch
+        {
+            RunEvent.ConflictResolved resolved => resolved.Conflict.Merges(ours, theirs) ? resolved.Merge : null,
+            RunEvent.AttemptClosed { Attempt: var attempt } => MergeOf(record, attempt) is { } conflict && conflict.Merges(ours, theirs)
+                ? MergeResult(record, attempt) : null,
+            _ => null,
+        }).FirstOrDefault(commit => commit is not null);
+
+    /// <summary>
+    /// Why the person cannot mark <paramref name="conflict"/> resolved, or null when they can: it must wait for them, as a
+    /// block on the task whose predecessors conflict or as the run's final merge, and have no merge yet.
+    /// </summary>
+    internal static RunProblem? ConflictResolutionProblem(RunRecord record, MergeConflict conflict)
+    {
+        if (record.Phase != RunPhase.Approved) return RunProblem.RunStopped;
+        var waits = conflict.Target switch
+        {
+            MergeTarget.Join join => record.Blocks.Values.Any(state => !state.Resolved && state.Block.Task == join.Task &&
+                state.Block.Conflict?.Merge is { } blocking && blocking.Equals(conflict)),
+            MergeTarget.Branch branch => branch.Name == record.Base.Branch,
+            _ => false,
+        };
+        if (!waits) return RunProblem.StaleInput;
+        return Resolution(record, conflict.Ours, conflict.Theirs) is null ? null : RunProblem.StartConflict;
+    }
 
     /// <summary>Whether <paramref name="task"/>'s attempt <paramref name="attempt"/> resolves a merge conflict, which a Merge node's every attempt does.</summary>
     internal static bool Merges(RunRecord record, AttemptId attempt) => MergeOf(record, attempt) is not null;

@@ -42,6 +42,15 @@ internal static class RunLayout
     public static string CaptureIndexPin(string run, string task, LaunchKey launch) =>
         $"{PinPrefix(run)}{task}/{launch.Attempt.Value:D}/{launch.Turn}/capture-index";
 
+    /// <summary>
+    /// The worktree where the person resolves a merge conflict that no Merge node takes, detached at the commit with the
+    /// conflict markers, <paramref name="conflicted"/> (#148).
+    /// </summary>
+    public static string ConflictCheckout(string run, CommitId conflicted) => $".worktrees/{run}/conflict-{conflicted.Hex[..12]}";
+
+    /// <summary>The pin that keeps the merge the person committed for the conflict at <paramref name="conflicted"/>.</summary>
+    public static string ConflictPin(string run, CommitId conflicted) => $"{PinPrefix(run)}conflict/{conflicted.Hex}";
+
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 
     public static string Outbox(AttemptId attempt) => $".idp/outbox/{attempt.Value:D}";

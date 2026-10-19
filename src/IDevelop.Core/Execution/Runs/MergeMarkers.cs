@@ -11,18 +11,20 @@ internal static class MergeMarkers
     /// Whether a conflicting file in <paramref name="checkout"/> still holds a conflict: a line that opens Git's markers and
     /// one that closes them. A file the agent deleted holds none.
     /// </summary>
-    public static bool Remain(string checkout, IEnumerable<string> paths)
+    public static bool Remain(string checkout, IEnumerable<string> paths) => !Remaining(checkout, paths).IsEmpty;
+
+    /// <summary>The conflicting files in <paramref name="checkout"/> that still hold a conflict, in the order given.</summary>
+    public static ImmutableArray<string> Remaining(string checkout, IEnumerable<string> paths) =>
+        [.. paths.Where(path => Holds(RunStorage.SafePath(checkout, path)))];
+
+    private static bool Holds(string file)
     {
-        foreach (var path in paths)
+        if (!File.Exists(file)) return false;
+        var opened = false;
+        foreach (var line in File.ReadLines(file))
         {
-            var file = RunStorage.SafePath(checkout, path);
-            if (!File.Exists(file)) continue;
-            var opened = false;
-            foreach (var line in File.ReadLines(file))
-            {
-                if (line.StartsWith("<<<<<<< ", StringComparison.Ordinal) || line == "<<<<<<<") opened = true;
-                else if (opened && (line.StartsWith(">>>>>>> ", StringComparison.Ordinal) || line == ">>>>>>>")) return true;
-            }
+            if (line.StartsWith("<<<<<<< ", StringComparison.Ordinal) || line == "<<<<<<<") opened = true;
+            else if (opened && (line.StartsWith(">>>>>>> ", StringComparison.Ordinal) || line == ">>>>>>>")) return true;
         }
         return false;
     }
