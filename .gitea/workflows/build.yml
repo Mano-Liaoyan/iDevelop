@@ -24,9 +24,14 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
-      - run: dotnet restore --locked-mode
-      - run: node scripts/check-licenses.mjs
-      - run: node scripts/planweave-tokens.mjs --check
-      - run: node scripts/fluent-icons.mjs --check
-      - run: dotnet build -c Release --no-restore
-      - run: dotnet test -c Release --no-build
+      # The job container runs as root, which ignores the file permissions some tests rely on to make a write fail,
+      # so the rest runs as an unprivileged user, as on GitHub's runners.
+      - run: |
+          useradd --create-home builder
+          chown -R builder:builder .
+      - run: runuser -u builder -- dotnet restore --locked-mode
+      - run: runuser -u builder -- node scripts/check-licenses.mjs
+      - run: runuser -u builder -- node scripts/planweave-tokens.mjs --check
+      - run: runuser -u builder -- node scripts/fluent-icons.mjs --check
+      - run: runuser -u builder -- dotnet build -c Release --no-restore
+      - run: runuser -u builder -- dotnet test -c Release --no-build
