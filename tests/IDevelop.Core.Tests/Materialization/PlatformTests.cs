@@ -115,7 +115,7 @@ public sealed class PlatformTests
     }
 
     [Fact]
-    public async Task Preparation_initializes_the_recorded_submodule_and_salvage_preserves_dirty_module_files()
+    public async Task Preparation_initializes_the_recorded_submodule()
     {
         using var module = new GitFixture();
         module.Write("module.txt", "module\n");
@@ -128,12 +128,6 @@ public sealed class PlatformTests
         });
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
         Assert.Equal("fb88360ef5a51929c241ce46428ee8571a45722c\n", f.Git.Run(Path.Combine(ready.Checkout, "m"), "rev-parse", "HEAD").Text);
-        f.Git.Write("m/module.txt", "dirty module\n", ready.Checkout);
-        f.Git.Write("m/new.txt", "module unfinished\n", ready.Checkout);
-        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
-        Assert.Equal("dirty module\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/module.txt")));
-        Assert.Equal("module unfinished\n", File.ReadAllText(Path.Combine(ready.Checkout, "m/new.txt")));
-        Assert.Equal("160000 commit fb88360ef5a51929c241ce46428ee8571a45722c\tm\n", f.Git.Git("ls-tree", retained.Commit.Hex, "m"));
     }
 
     private static byte[] Blob(GitFixture git, string commit, string path)

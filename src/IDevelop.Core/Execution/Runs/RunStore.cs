@@ -413,17 +413,6 @@ internal sealed partial class RunStore
             return new Mutation.Append(e);
         });
 
-    /// <summary>Records the person-approved rebased result of a rebase plan whose branch, retention ref, and checkout moves were observed.</summary>
-    public RunDecision AcceptRebase(CoordinatorPermit permit, OperationId operation, OperationId rebase) =>
-        Transact(permit, operation, Fingerprint("acceptRebase", new { rebase }), (record, _) =>
-        {
-            if (record is null) return Missing();
-            if (record.Plans.GetValueOrDefault(rebase) is not MaterializationPlan.Rebase plan) return Refuse(RunProblem.InvalidData);
-            if (record.Results.FirstOrDefault(result => result.Id == plan.Result) is { } existing)
-                return new Mutation.Existing(new RunEvent.ResultAccepted(existing, record.Inputs[existing.Inputs]));
-            return new Mutation.Append(new RunEvent.ResultAccepted(RunReducer.RebaseResult(record, rebase, plan), plan.Inputs));
-        });
-
     public RunDecision Claim(RunLease lease, OperationId operation, LaunchKey key, InputRecord inputs, Digest prompt)
     {
         var workflow = lease.Permit.Workflow;

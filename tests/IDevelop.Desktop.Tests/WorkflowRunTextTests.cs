@@ -92,14 +92,6 @@ public sealed class WorkflowRunTextTests
     }
 
     [Fact]
-    public void Every_update_shows()
-    {
-        string[] paths = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt", "f.txt"];
-
-        Assert.Equal(string.Join("\n", paths), RecoveryText.CandidatePaths(new RebaseCandidate.Clean(new(new string('1', 40)), new(new string('2', 40)), [.. paths])));
-    }
-
-    [Fact]
     public void Several_busy_tasks_show_by_what_they_do_and_the_pill_counts_them()
     {
         var titles = new Dictionary<TaskId, string>();

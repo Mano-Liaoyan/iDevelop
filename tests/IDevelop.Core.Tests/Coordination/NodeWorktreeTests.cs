@@ -110,7 +110,6 @@ public sealed class NodeWorktreeTests
         Assert.Equal(2, f.Launches(D));
         Assert.False(File.Exists(Path.Combine(f.Checkout(D), "stray.txt")));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(f.Checkout(D), "a.txt")));
-        Assert.Empty(f.Read().Salvages);
         Assert.Single(f.Read().Preparations.Values.Where(prepared => prepared.Location.Owner.Task == D).Select(prepared => prepared.Location.Owner).Distinct());
     }
 }

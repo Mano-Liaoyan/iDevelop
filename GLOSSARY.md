@@ -94,7 +94,7 @@ The person's choice to go on with an interrupted fix: a Continue in the fix's ow
 _Avoid_: Resume, which never chooses a fix
 
 **Retry fix**:
-The person's choice to redo an interrupted fix round: a Retry in a fresh client session.
+The person's choice to redo an interrupted fix round: a Retry in a fresh client session, in the subject's worktree with its files as they are.
 _Avoid_: Retry alone, which names a new attempt of any task
 
 ### Approval and gates

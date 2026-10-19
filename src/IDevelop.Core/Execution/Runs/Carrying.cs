@@ -48,7 +48,7 @@ internal sealed record CarryBuild(ImmutableArray<IncludedResult> Carried, Immuta
 /// Carrying earlier results into a run that a node's Run started (#90). A run needs a result of each dependency predecessor
 /// of the tasks it may start that it cannot start itself. When the workflow's history has a current result of such a
 /// task, the run carries it, with every result that one took that the run has none of: its code replayed onto the run's
-/// base as Review updated inputs replays a stale result (ADR 0009), its report, and its artifacts. A code that conflicts
+/// base (ADR 0009), its report, and its artifacts. A code that conflicts
 /// with the base is not carried, and the task must run again. Run Workflow carries nothing.
 /// </summary>
 internal static class Carrying

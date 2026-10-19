@@ -396,6 +396,8 @@ internal abstract record RunEvent
     }
 }
 
+internal sealed record RecoveryBaseline(AttemptId Previous, OperationId Confirmation, string Session, OperationId Preservation);
+
 internal sealed record RunEntry(int Schema, long Sequence, OperationId Operation, Digest Command, DateTimeOffset At, RunEvent Event);
 
 internal enum RunProblem

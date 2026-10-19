@@ -665,7 +665,7 @@ internal sealed partial class GitRepository
         AtomicFile.Replace(path, [.. contents, .. Encoding.UTF8.GetBytes(separator + string.Join('\n', missing) + "\n")]);
     }
 
-    /// <summary>Call only after verifying retained salvage, quiescence, ownership, and an unchanged inventory.</summary>
+    /// <summary>Call only after verifying quiescence, ownership, and an unchanged inventory.</summary>
     public GitResult ResetCheckout(string checkout, CommitId commit) => Git(checkout, GitOperation.Worktree, ["reset", "--hard", "--no-recurse-submodules", commit.Hex]);
 
     /// <summary>The caller holds ownership and proves quiescence; matching content alone does not exclude concurrent writers.</summary>

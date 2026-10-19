@@ -14,9 +14,9 @@ using static IDevelop.Desktop.Tests.WorkflowRunFixture;
 namespace IDevelop.Desktop.Tests;
 
 /// <summary>
-/// A workflow run's review in the window (E3g.2): a consumer that an accepted fix made stale, rebased from its Updated
-/// inputs section, a fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix, and an
-/// Approval that reads the review it hands on as its verdict and findings (#101).
+/// A workflow run's review in the window (E3g.2): a consumer that an accepted fix made stale, which needs attention, a
+/// fix round that closing iDevelop interrupted, which waits for Continue fix or Retry fix, and an Approval that reads the
+/// review it hands on as its verdict and findings (#101).
 /// </summary>
 [Collection(ProcessCollection.Name)]
 public sealed class WorkflowRunReviewTests
@@ -41,7 +41,7 @@ public sealed class WorkflowRunReviewTests
     }
 
     [AvaloniaFact]
-    public void A_consumer_an_accepted_fix_made_stale_is_rebased_from_its_panel_without_another_run()
+    public void A_consumer_an_accepted_fix_made_stale_needs_attention_with_no_rebase_controls()
     {
         using var f = Reviewed(TaskAt(D, "D", 405, 300, WorkflowRunFixture.Codex, "Build D."), Dependency(A, D));
         f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed)))
@@ -57,35 +57,11 @@ public sealed class WorkflowRunReviewTests
         Assert.Equal("D", shell.Window.ViewModel.Canvas!.SelectedNode?.Title);
         Assert.Null(shell.Window.ViewModel.Conversation);
         Assert.Equal("A task before it handed on a newer result after this one finished.", shell.Text("RunTaskDetail"));
-
-        var second = f.Window();
-        second.WaitUntil(() => second.WorkflowRun is not null, "the second window shows the run");
-        second.Click(second.Header(second.Node("D")));
-        Assert.False(second.InView<Button>("ReviewUpdatedInputs").IsEffectivelyEnabled);
-
-        // Another step holds the repository's lock for a moment, so the first preview is refused as busy and tried again.
-        var held = new FileStream(Path.Combine(f.Project, ".git", "idevelop", "mutation.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMilliseconds(1500)).ContinueWith(_ => held.Dispose());
-        shell.Click(shell.InView<Button>("ReviewUpdatedInputs"));
-        shell.WaitUntil(() => shell.Has<Button>("ApproveRebase") && shell.Find<Button>("ApproveRebase").IsEffectivelyVisible, "the rebase is previewed",
-            () => $"Notice: {(shell.Has<TextBlock>("RebaseNotice") ? shell.Text("RebaseNotice") : null)}");
-        Assert.Equal("\"A\"", shell.Find<TextBox>("RebaseUpdated").Text);
-        Assert.Equal("d.txt", shell.Find<TextBox>("RebaseChanges").Text);
-        Assert.Equal("D ready.", shell.Find<TextBox>("RebaseReport").Text);
-        Assert.Equal("Its change replays cleanly. Its checkout gets these files from the newer inputs:", shell.Text("RebaseCandidate"));
-        Assert.Equal("calc.txt", shell.Find<TextBox>("RebaseCandidatePaths").Text);
-        Assert.False(shell.Find<TextBlock>("RebaseUnavailable").IsEffectivelyVisible);
+        Assert.False(shell.Has<Button>("ReviewUpdatedInputs"));
+        Assert.False(shell.Has<Button>("ApproveRebase"));
         Assert.Equal("a - b\n", File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")));
-        InspectorLayoutTests.AssertLaidOut(shell);
-
-        shell.Click(shell.InView<Button>("ApproveRebase"));
-
-        shell.WaitForStatus("Completed");
-        Assert.Equal("Succeeded", shell.CardText("D", "CardStatus"));
-        Assert.Equal(("a + b\n", "D\n"), (File.ReadAllText(Path.Combine(f.Checkout(D), "calc.txt")), File.ReadAllText(Path.Combine(f.Checkout(D), "d.txt"))));
         Assert.Equal((2, 2, 1, 1), (f.Launches("A"), f.Launches("Review"), f.Launches("B"), f.Launches("D")));
-        Assert.Single(f.Record().Results, result => result.Origin is ResultOrigin.Rebased);
-        Assert.False(shell.Has<Button>("ReviewUpdatedInputs") && shell.Find<Button>("ReviewUpdatedInputs").IsEffectivelyVisible);
+        InspectorLayoutTests.AssertLaidOut(shell);
     }
 
     [AvaloniaFact]
@@ -239,23 +215,6 @@ public sealed class WorkflowRunReviewTests
             new WorkSpec.Agent(AgentAccess.ReadOnly, Proposes: false, PromptTemplate.Parse("{{#title}}# {{title}}\n\n{{/title}}Read the project.\n")), [],
             new(WorkflowRunFixture.Codex, ConversationMode.Autonomous)), new CanvasPoint(x, y))
         { Title = title, Settings = new NodeSettings(WorkflowRunFixture.Codex, ConversationMode.Autonomous) };
-
-    [AvaloniaFact]
-    public void A_stale_report_says_it_cannot_be_rebased_and_offers_no_rebase()
-    {
-        using var f = Reviewed(Reader(D, "D", 405, 300), Dependency(A, D));
-        f.Answer("A", f.Writes("calc.txt", "a - b\n", "A ready."), f.Writes("calc.txt", "a + b\n", Answers(Fixed))).Answer("D", f.Says("D read it."));
-        var shell = f.Window();
-        shell.StartRun();
-        shell.WaitForCard("D", "Inputs changed");
-        shell.WaitForStatus("Needs attention");
-
-        shell.Click(shell.InCard<Button>("D", "CardAttention"));
-
-        Assert.Equal(RecoveryText.NoRebase, shell.InView<TextBlock>("RebaseUnavailable").Text);
-        Assert.False(shell.Find<Button>("ReviewUpdatedInputs").IsEffectivelyVisible);
-        Assert.Equal(1, f.Launches("D"));
-    }
 
     [AvaloniaFact]
     public void A_fix_round_whose_turn_end_a_crash_lost_is_closed_as_stopped_and_then_continues_in_its_session()

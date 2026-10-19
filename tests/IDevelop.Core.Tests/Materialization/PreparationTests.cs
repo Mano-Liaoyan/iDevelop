@@ -41,37 +41,8 @@ public sealed class PreparationTests
         Assert.False(File.Exists(f.Git.PathOf("outside/kept.bin")));
     }
 
-    [Theory]
-    [InlineData("--sparse-index")]
-    [InlineData("--no-sparse-index")]
-    [InlineData("legacy")]
-    public async Task An_out_of_cone_edit_in_a_sparse_clone_survives_salvage_and_retry(string layout)
-    {
-        using var f = CheckoutFixture(layout);
-        var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Git.Write("outside/kept.bin", "writer edit\n", writer.Checkout);
-        f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        await f.Close(writer, outcome: TerminalAttemptOutcome.Failed);
-        var salvageOperation = f.Op();
-        var retained = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
-        Assert.Equal("writer edit\n", f.Git.Git("show", retained.Commit.Hex + ":outside/kept.bin"));
-        Assert.Equal("edited\n", f.Git.Git("show", retained.Commit.Hex + ":a/inside.txt"));
-        Assert.Equal(retained, await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), salvageOperation, writer.Execution.Launch.Attempt));
-        var resetOperation = f.Op();
-        var confirmation = f.Op();
-        var reset = Assert.IsType<RetryReset.Reset>(f.Materializer().ResetForRetry(f.Lease(T), resetOperation, retained.Receipt.Plan, confirmation));
-        Assert.Equal(writer.Execution.Location.AttemptBase, reset.Target);
-        Assert.Equal(reset, f.Materializer().ResetForRetry(f.Lease(T), resetOperation, retained.Receipt.Plan, confirmation));
-        Assert.Equal(retained.Commit.Hex + "\n", f.Git.Git("for-each-ref", "--contains", retained.Commit.Hex, "--format=%(objectname)", retained.Receipt.Ref));
-        Assert.Equal(new byte[] { 111, 117, 116, 115, 105, 100, 101, 0, 98, 121, 116, 101, 115, 10 },
-            File.ReadAllBytes(Path.Combine(writer.Checkout, "outside/kept.bin")));
-        Assert.Equal("inside\n", File.ReadAllText(Path.Combine(writer.Checkout, "a/inside.txt")));
-    }
-
-    [Theory]
-    [InlineData("publish")]
-    [InlineData("salvage")]
-    public async Task Sparse_state_the_writer_creates_blocks_publication_and_salvage_and_keeps_files(string mode)
+    [Fact]
+    public async Task Sparse_state_the_writer_creates_blocks_publication_and_keeps_files()
     {
         using var f = CheckoutFixture();
         var writer = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
@@ -79,28 +50,17 @@ public sealed class PreparationTests
         Assert.Equal("S outside/kept.bin\n", f.Git.Run(writer.Checkout, "ls-files", "-v", "outside/kept.bin").Text);
         Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
-        await f.Close(writer, outcome: mode == "publish" ? TerminalAttemptOutcome.Succeeded : TerminalAttemptOutcome.Failed, assertMatched: false);
+        await f.Close(writer, outcome: TerminalAttemptOutcome.Succeeded, assertMatched: false);
         var index = GitFixture.Read(f.Git.Open().IndexPath(writer.Checkout));
         var bytes = File.ReadAllBytes(index);
         var operation = f.Op();
-        MaterializationBlock block;
-        if (mode == "publish")
-        {
-            var blocked = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
-            block = blocked.Block;
-            Assert.Equal(blocked, f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
-        }
-        else
-        {
-            var blocked = Assert.IsType<Salvage.Blocked>(await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
-            block = blocked.Block;
-            Assert.Equal(blocked, await f.Materializer().Salvage(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
-        }
+        var blocked = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+        var block = blocked.Block;
+        Assert.Equal(blocked, f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         Assert.Equal("DirtyWorktree", block.Problem.ToString());
         Assert.Equal("The index hides changes to outside/kept.bin with assume-unchanged or skip-worktree.", block.Detail);
         Assert.Equal(writer.Execution.Location.AttemptBase.Hex, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!))?.Hex);
         Assert.Empty(f.Read().Results);
-        Assert.Empty(f.Read().Salvages);
         Assert.Equal(bytes, File.ReadAllBytes(index));
         Assert.Equal("edited\n", File.ReadAllText(Path.Combine(writer.Checkout, "a/inside.txt")));
         Assert.False(File.Exists(Path.Combine(writer.Checkout, "outside/kept.bin")));

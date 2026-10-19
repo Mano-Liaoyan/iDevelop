@@ -413,7 +413,7 @@ public sealed class RunReviewTests
     }
 
     [Fact]
-    public async Task Retry_fix_salvages_the_interrupted_work_and_a_duplicate_choice_reserves_one_attempt_in_a_fresh_session()
+    public async Task Retry_fix_continues_with_the_subject_s_files_and_a_duplicate_choice_reserves_one_attempt_in_a_fresh_session()
     {
         await using var f = new RunConversationFixture(Reviewed());
         Routed(f).Answer(A,
@@ -443,10 +443,10 @@ public sealed class RunReviewTests
         var prompt = f.Prompt(A, 3);
         Assert.StartsWith("You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.", prompt);
         Assert.Contains("+a - b", prompt);
-        var salvage = Assert.Single(record.Salvages.Values);
-        Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{salvage.Commit.Hex}:keep.txt"));
+        // The retry works in the subject's worktree with the files the interrupted fix left there.
+        Assert.Empty(record.Salvages);
         var fixedCommit = Assert.IsType<CodeOutput.Produced>(record.CurrentResults[A].Code).Code.Commit.Hex;
-        Assert.NotEqual(0, f.Preparation.Git.Run(f.Preparation.Git.Folder, "cat-file", "-e", $"{fixedCommit}:keep.txt").ExitCode);
+        Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{fixedCommit}:keep.txt"));
         Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
     }
 
@@ -496,9 +496,8 @@ public sealed class RunReviewTests
         Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<FixReply.Refused>(await f.Coordinator.ContinueFix(f.Address, R,
             default).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry));
-        // A refused choice preserves and salvages nothing.
+        // A refused choice preserves nothing.
         Assert.Empty(f.Read().Preservations);
-        Assert.Empty(f.Read().Salvages);
     }
 
     [Fact]

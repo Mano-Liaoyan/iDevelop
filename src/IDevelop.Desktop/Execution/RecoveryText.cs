@@ -4,7 +4,7 @@ using IDevelop.Execution;
 namespace IDevelop.Desktop.Execution;
 
 /// <summary>
-/// What the Recovery and Updated inputs sections say: the evidence of a block or an unresolved turn, a rebase's preview,
+/// What the Recovery section says: the evidence of a block or an unresolved turn,
 /// and why a recovery command recorded nothing. Lists are never cut short: every path and artifact shows, one per line, in
 /// a box that scrolls.
 /// </summary>
@@ -80,38 +80,13 @@ internal static class RecoveryText
             : "Resume tries again.");
     }
 
-    /// <summary>What the clean candidate changes, or why there is none. The paths are in <see cref="CandidatePaths"/>.</summary>
-    public static string Candidate(RebaseCandidate candidate) => candidate switch
-    {
-        RebaseCandidate.Clean { Updates.IsEmpty: true } => "Its change replays cleanly, and its checkout keeps its files.",
-        RebaseCandidate.Clean => "Its change replays cleanly. Its checkout gets these files from the newer inputs:",
-        RebaseCandidate.Conflicted { Paths.IsEmpty: true } conflicted => $"Its change does not replay cleanly. {conflicted.Detail}",
-        RebaseCandidate.Conflicted conflicted => $"Its change conflicts in these files. {conflicted.Detail}",
-        RebaseCandidate.Unavailable unavailable => unavailable.Detail,
-        _ => throw new UnreachableException(),
-    };
-
-    /// <summary>The files the clean candidate updates, or the conflicting ones, one per line, or null.</summary>
-    public static string? CandidatePaths(RebaseCandidate candidate) => candidate switch
-    {
-        RebaseCandidate.Clean { Updates.IsEmpty: false } clean => Lines(clean.Updates),
-        RebaseCandidate.Conflicted { Paths.IsEmpty: false } conflicted => Lines(conflicted.Paths),
-        _ => null,
-    };
-
-    /// <summary>A stale result without code of its own cannot be rebased; only running the task again would bring it up to date.</summary>
-    public const string NoRebase = "Its result is a report, with no code of its own, so it cannot be rebased onto the newer inputs. Running the task " +
-        "again with Retry would bring it up to date, and the app does not offer Retry yet. Stop Workflow ends the run, and finished work stays.";
-
-    /// <summary>One sentence for a refusal of a recovery or rebase command.</summary>
+    /// <summary>One sentence for a refusal of a recovery command.</summary>
     public static string Problem(RunRejection rejection) => rejection.Problem switch
     {
         RunProblem.UnresolvedOwnership => "A turn of this checkout is still unresolved. Close it as stopped first.",
         RunProblem.EvidenceMismatch => "The checkout or the inputs changed since the preview. Check them again.",
         RunProblem.ConfirmationRequired => "Say why you close it.",
         RunProblem.InvalidClaim => "This turn is no longer unresolved.",
-        RunProblem.StartConflict => "A later attempt changed this task's checkout, so it cannot be rebased.",
-        RunProblem.UnsupportedResult => "This result has no code of its own, so it cannot be rebased.",
         RunProblem.ReplacementConflict => "Another choice already replaced this fix round.",
         RunProblem.SessionUnavailable => "The fix's session cannot go on. Retry the fix instead.",
         _ => WorkflowRunText.Problem(rejection),
