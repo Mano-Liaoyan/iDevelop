@@ -163,6 +163,8 @@ internal static partial class RunReducer
 
     internal static CommitId? AttemptBase(RunRecord record, RunAttempt attempt, InputRecord inputs)
     {
+        // Each attempt of a Merge node starts at the conflict it resolves, its markers included.
+        if (MergeOf(record, attempt.Cause) is { } conflict) return conflict.Conflicted;
         if (attempt.Cause is AttemptCause.Initial || record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Review)
         {
             return inputs.CodeBase;
@@ -189,6 +191,11 @@ internal static partial class RunReducer
                 if (ReservationProblem(record, preparation.Task, preparation.Cause) is { } reservation)
                 {
                     return reservation;
+                }
+                // A Merge node's attempt takes no results: only the conflict it resolves.
+                if (MergeOf(record, preparation.Cause) is not null)
+                {
+                    return preparation.Bindings.IsEmpty && preparation.Sources.IsEmpty && preparation.Review is null ? null : RunProblem.InputConflict;
                 }
                 var input = new InputRecord(preparation.Inputs, preparation.Task, preparation.Revision, preparation.Bindings,
                     new CodeSelection.Root(record.Base.Commit), "", [], preparation.Review);
@@ -343,7 +350,8 @@ internal static partial class RunReducer
             CodeOutput? code = accepted.Inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(accepted.Inputs.Id) : null;
             // An approval and a review forward artifacts: exactly their inputs' dependency artifacts, stored under their own result.
             var reviews = task.Blueprint.Work is WorkSpec.Review && result.Origin is ResultOrigin.Executed;
-            var artifacts = result.Origin is ResultOrigin.Human || reviews ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id) : ([], null);
+            var artifacts = result.Origin is ResultOrigin.Human or ResultOrigin.Merged || reviews
+                ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id) : ([], null);
             if (!Same(result.Code, code) || reviews && artifacts.Collision is not null || !Same(result.Artifacts, artifacts.Artifacts) ||
                 task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)
             {

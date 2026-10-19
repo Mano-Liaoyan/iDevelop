@@ -29,9 +29,10 @@ internal sealed class CoordinatorFixture : IAsyncDisposable
     private readonly Dictionary<string, FakeRule[]> _turns = [];
 
     /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
-    public CoordinatorFixture(Workflow workflow, CommitId? runBase = null, TaskId? node = null)
+    /// <param name="branch">The branch the run started from, which its finished work merges into, or null for a detached HEAD.</param>
+    public CoordinatorFixture(Workflow workflow, CommitId? runBase = null, TaskId? node = null, string? branch = null)
     {
-        Preparation = new(workflow, runBase ?? PlanCommit, node: node);
+        Preparation = new(workflow, runBase ?? PlanCommit, node: node, branch: branch);
         Evidence = _temp.Create("evidence");
         Fakes = new(_temp.Create("bin")) { LaunchFolder = _temp.Create("launches") };
     }

@@ -111,7 +111,7 @@ public sealed partial class ProjectRuns
 
     private async Task<TurnStart> StartTurnCore(CoordinatorPermit permit, TurnIntent intent, Func<bool>? halted, CancellationToken stop)
     {
-        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix) })
+        if (intent is TurnIntent.First { Cause: not (AttemptCause.Initial or AttemptCause.Retry or AttemptCause.Continue or AttemptCause.ReviewFix or AttemptCause.Merge) })
             return new TurnStart.Refused(new(RunProblem.UnsupportedWork));
         var store = TurnStore;
         var materializer = TurnMaterializer(store, scheduled: true, halted);

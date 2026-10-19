@@ -23,6 +23,16 @@ public sealed class ApprovalTests
         catch (TimeoutException) { throw new TimeoutException("The run did not complete: " + Describe(coordinator.View)); }
     }
 
+    /// <summary>
+    /// The run once every task finished: completed, or waiting to merge into main while the person's folder has the
+    /// uncommitted changes <see cref="Uncommitted"/> leaves (#148).
+    /// </summary>
+    internal static async Task<RunView> Finished(WorkflowRunCoordinator coordinator)
+    {
+        try { return await coordinator.Until(view => view.Status == RunStatus.Completed || view.Merge is BranchMergeWait.Uncommitted).WaitAsync(Bound); }
+        catch (TimeoutException) { throw new TimeoutException("The run did not finish: " + Describe(coordinator.View)); }
+    }
+
     [Fact]
     public async Task Confirming_a_clean_preview_approves_one_run_at_HEAD_and_starts_it()
     {
@@ -38,7 +48,7 @@ public sealed class ApprovalTests
         var run = Assert.Single(f.ApprovedRuns());
         Assert.Equal(run, started.Coordinator.Address.Run);
         var record = f.Read(run);
-        Assert.Equal(new RunBase(Head), record.Base);
+        Assert.Equal(new RunBase(Head) { Branch = "refs/heads/main" }, record.Base);
         Assert.Equal(preview.Revision.Id, record.Revision.Id);
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }
@@ -67,10 +77,12 @@ public sealed class ApprovalTests
         Assert.True(preview.Confirmable);
 
         var started = await Start(f, preview, Command(2));
-        await Completed(started.Coordinator);
+        // The finished run's work waits to merge into main while the person's folder has uncommitted changes (#148).
+        var waiting = await started.Coordinator.Until(view => view.Merge is BranchMergeWait.Uncommitted).WaitAsync(Bound);
+        Assert.Equal<string>(["plan.txt", "staged.txt"], Assert.IsType<BranchMergeWait.Uncommitted>(waiting.Merge).Paths);
 
         var run = Assert.Single(f.ApprovedRuns());
-        Assert.Equal(new RunBase(Head), f.Read(run).Base);
+        Assert.Equal(new RunBase(Head) { Branch = "refs/heads/main" }, f.Read(run).Base);
         Assert.Equal(f.GitText("show", "HEAD:plan.txt"), f.ResultFile(run, A, "plan.txt"));
         Assert.Null(f.ResultFile(run, A, "staged.txt"));
         Assert.Null(f.ResultFile(run, B, "notes.txt"));

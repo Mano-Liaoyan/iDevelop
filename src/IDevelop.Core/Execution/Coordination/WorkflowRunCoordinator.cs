@@ -306,8 +306,13 @@ internal sealed partial class WorkflowRunCoordinator
         return null;
     }
 
-    private RunView Project(RunRecord record) => WithBackground(RunProjection.Of(Address, record, Log,
-        _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions });
+    private RunView Project(RunRecord record)
+    {
+        var view = WithBackground(RunProjection.Of(Address, record, Log,
+            _live.ToDictionary(pair => pair.Key, pair => pair.Value.Stage), _holds, Controlled, _resumed) with { Problem = _problem, PinsReleased = _pinsReleased, Decision = _decisions });
+        // The final merge's wait shows while the run is still approved; a settled run merged or stopped.
+        return record.Phase == RunPhase.Approved && _branchMerge is { } wait ? view with { Merge = wait, Status = MergeStatus(view.Status, wait) } : view;
+    }
 
     private AttemptRecord? Log(RunAttempt attempt) => Log(Address.Run, attempt);
 

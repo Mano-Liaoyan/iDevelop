@@ -87,6 +87,9 @@ internal abstract record TurnDisposition
     internal sealed record Resting(AttemptStatus Status, ImmutableArray<string> Queued) : TurnDisposition;
     internal sealed record Ended(AttemptEnd End) : TurnDisposition;
     internal sealed record Blocked(OperationId Block) : TurnDisposition;
+
+    /// <summary>A Merge node's attempt closed as succeeded. <paramref name="Commit"/> is its merge, or null when markers remained.</summary>
+    internal sealed record Merged(CommitId? Commit) : TurnDisposition;
 }
 
 internal abstract record Release
@@ -169,6 +172,8 @@ internal static class TurnReceipts
             record.TurnClosures.ContainsKey(last) &&
             (resting.Status is AttemptStatus.WaitingForInput or AttemptStatus.InReview || resting.Status == AttemptStatus.Running && !resting.Queued.IsEmpty))
             receipt = new TurnDisposition.Resting(resting.Status, [.. resting.Queued.Select(message => message.Text)]);
+        else if (record.Closures.GetValueOrDefault(attempt) is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded } && RunReducer.Merges(record, attempt))
+            receipt = new TurnDisposition.Merged(RunReducer.MergeResult(record, attempt));
         else if (record.Closures.TryGetValue(attempt, out var end) && end is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded })
             receipt = new TurnDisposition.Ended(end);
         else if (record.Blocks.FirstOrDefault(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt) is { Value: not null } block)

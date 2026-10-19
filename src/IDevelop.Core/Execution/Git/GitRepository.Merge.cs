@@ -9,7 +9,11 @@ internal abstract record TreeMerge
 {
     private TreeMerge() { }
     internal sealed record Clean(TreeId Tree) : TreeMerge;
-    internal sealed record Conflicted(ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, byte[] Stdout, string Stderr) : TreeMerge;
+    /// <summary>Git's conflicting merge. <see cref="Tree"/> is the tree it left, with conflict markers in each conflicting file.</summary>
+    internal sealed record Conflicted(ImmutableArray<StageEntry> Stages, ImmutableArray<MergeMessage> Messages, byte[] Stdout, string Stderr) : TreeMerge
+    {
+        public TreeId Tree { get; init; }
+    }
     internal sealed record Failed(string Detail) : TreeMerge;
 }
 
@@ -120,7 +124,7 @@ internal sealed partial class GitRepository
             {
                 0 when stages.IsEmpty => new TreeMerge.Clean(tree),
                 0 => new TreeMerge.Failed("Git returned conflict stages for a clean merge."),
-                1 => new TreeMerge.Conflicted(stages, messages, result.Stdout, result.Stderr),
+                1 => new TreeMerge.Conflicted(stages, messages, result.Stdout, result.Stderr) { Tree = tree },
                 _ => throw new InvalidOperationException(),
             };
         }

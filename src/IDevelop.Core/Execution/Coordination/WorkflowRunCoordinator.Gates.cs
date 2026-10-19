@@ -80,20 +80,26 @@ internal sealed partial class WorkflowRunCoordinator
         new GateReply.Recorded(record.Receipts[record.Gates[request].Decision!.Operation], repeat);
 
     /// <summary>
-    /// Records a request for every ready Approval node, off the loop. A request takes no client slot, so it never waits for
-    /// one, and the node shows as settling until its request is recorded.
+    /// Records a request for every ready Approval node and every ready Merge node's own step, off the loop. A request takes
+    /// no client slot, so it never waits for one, and the node shows as settling until its request is recorded. A Merge
+    /// node's request hands on at once: its predecessors' code merged, with a conflict going to a Merge node's agent first.
     /// </summary>
     private void RequestGates(RunRecord record, RunView view)
     {
         foreach (var ready in view.Tasks.Values)
         {
             var task = ready.Task;
-            if (ready.State != TaskState.Ready || record.Revision.Snapshot.Tasks[task].Blueprint.Work is not WorkSpec.Person)
+            var work = record.Revision.Snapshot.Tasks[task].Blueprint.Work;
+            if (ready.State != TaskState.Ready || work is not (WorkSpec.Person or WorkSpec.Merge) || work is WorkSpec.Merge && ready.Attempt is not null)
                 continue;
             _live[task] = new(LiveStage.Settling);
             // A blocked request shows through its recorded block. A refused one holds the node as a refused start does, so
             // not once the run is stopping. One whose inputs moved holds nothing, so the next decision reads them again.
-            Background(() => Scheduled().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).AsTask(), prepared =>
+            Background(async () =>
+            {
+                var prepared = await Scheduled().RequestGate(_permit!, RunOperations.Gate(Address.Run, task), task).ConfigureAwait(false);
+                return prepared is GatePreparation.Requested requested && work is WorkSpec.Merge ? HandOn(requested.Request) : prepared;
+            }, prepared =>
             {
                 _live.Remove(task);
                 if (prepared is GatePreparation.Rejected rejected)
@@ -101,4 +107,31 @@ internal sealed partial class WorkflowRunCoordinator
             }, error => Faulted(task, error));
         }
     }
+
+    /// <summary>Hands on each Merge node's request that a crash or a refusal left open, off the loop.</summary>
+    private void HandOnMerges(RunRecord record, RunView view)
+    {
+        foreach (var (task, state) in view.Tasks)
+        {
+            if (_live.ContainsKey(task) || _holds.ContainsKey(task) || record.Revision.Snapshot.Tasks[task].Blueprint.Work is not WorkSpec.Merge ||
+                RunReducer.LiveGate(record, task) is not { Decision: null } open || state.State != TaskState.Settling)
+                continue;
+            _live[task] = new(LiveStage.Settling);
+            Offload(() => HandOn(open.Request), handed =>
+            {
+                _live.Remove(task);
+                if (handed is GatePreparation.Rejected rejected)
+                    HoldStart(task, new TaskHold.Refused(rejected.Reason, null, Transient(rejected.Reason.Problem)));
+            }, error => Faulted(task, error));
+        }
+    }
+
+    /// <summary>Records a Merge node's result for its request: the merged code, reports, and artifacts the request composed.</summary>
+    private GatePreparation HandOn(GateRequest request) =>
+        _store.MergeGate(_permit!, OperationIds.Derive(RunOperations.Gate(Address.Run, request.Task), $"merged/{request.Id.Value:D}"), request.Id) switch
+        {
+            RunDecision.Rejected { Reason.Problem: RunProblem.StaleInput } => new GatePreparation.Moved(new(RunProblem.StaleInput)),
+            RunDecision.Rejected rejected => new GatePreparation.Rejected(rejected.Reason),
+            _ => new GatePreparation.Requested(request),
+        };
 }

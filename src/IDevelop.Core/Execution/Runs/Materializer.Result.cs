@@ -18,6 +18,12 @@ internal abstract record Acceptance
 {
     private Acceptance() { }
     internal sealed record Accepted(ResultRecord Result) : Acceptance;
+
+    /// <summary>
+    /// A Merge node's attempt has no result of its own. <paramref name="Commit"/> is the merge it made, or null when its
+    /// agent left conflict markers, and then the conflict stays open.
+    /// </summary>
+    internal sealed record Merged(CommitId? Commit) : Acceptance;
     internal sealed record Blocked(MaterializationBlock Block) : Acceptance;
     internal sealed record Rejected(RunRejection Reason) : Acceptance;
 }
@@ -39,6 +45,10 @@ internal sealed partial class Materializer
         {
             var record = Read(permit.Workflow, permit.Run);
             if (!record.Attempts.TryGetValue(attempt, out var owner)) return new Acceptance.Rejected(new(RunProblem.UnknownAttempt));
+            // A Merge node's attempt resolves a conflict: the merge its capture made is all it leaves.
+            if (RunReducer.Merges(record, attempt))
+                return record.Closures.GetValueOrDefault(attempt) is AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded }
+                    ? new Acceptance.Merged(RunReducer.MergeResult(record, attempt)) : new Acceptance.Rejected(new(RunProblem.OutcomeMismatch));
             if (record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
             {
                 switch (CommitResult(lease, OperationIds.Derive(operation, "commit"), attempt))

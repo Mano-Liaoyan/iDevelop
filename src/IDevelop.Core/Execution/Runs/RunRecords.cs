@@ -26,7 +26,15 @@ internal readonly record struct LaunchKey(AttemptId Attempt, int Turn);
 internal sealed record ApprovedRevision(RevisionId Id, Workflow Snapshot);
 
 /// <summary>The commit a run starts from, the current branch's HEAD at its approval.</summary>
-internal sealed record RunBase(CommitId Commit);
+internal sealed record RunBase(CommitId Commit)
+{
+    /// <summary>
+    /// The branch HEAD named at the approval, such as <c>refs/heads/main</c>, which the run's finished work merges into.
+    /// Null when HEAD was detached, and then nothing merges.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Branch { get; init; }
+}
 
 internal sealed record LogCheckpoint(long ByteLength, Digest Content);
 
@@ -51,9 +59,13 @@ internal abstract record AttemptSource
 [JsonDerivedType(typeof(Retry), "retry")]
 [JsonDerivedType(typeof(Continue), "continue")]
 [JsonDerivedType(typeof(ReviewFix), "reviewFix")]
+[JsonDerivedType(typeof(Merge), "merge")]
 internal abstract record AttemptCause
 {
     private AttemptCause() { }
+
+    /// <summary>A Merge node's attempt that resolves <paramref name="Conflict"/>.</summary>
+    internal sealed record Merge(MergeConflict Conflict) : AttemptCause;
 
     internal sealed record Initial : AttemptCause;
 
@@ -81,6 +93,13 @@ internal abstract record InputBinding
 internal sealed record InputRecord(InputId Id, TaskId Task, RevisionId Revision,
     ImmutableArray<InputBinding> Bindings, CodeSelection Code, string Text, ImmutableArray<DeliveredFile> Files, ReviewInput? Review)
 {
+    /// <summary>
+    /// The conflict a Merge node's attempt resolves, which is all its inputs are: it takes no results from the tasks before
+    /// it. Null for every other attempt.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public MergeConflict? Conflict { get; init; }
+
     [JsonIgnore]
     public CommitId CodeBase => Code switch
     {
@@ -185,9 +204,16 @@ internal sealed record ReportInclusion(TaskId Task, AttemptId Source, int Turn);
 [JsonDerivedType(typeof(Included), "included")]
 [JsonDerivedType(typeof(Human), "human")]
 [JsonDerivedType(typeof(Carried), "carried")]
+[JsonDerivedType(typeof(Merged), "merged")]
 internal abstract record ResultOrigin
 {
     private ResultOrigin() { }
+
+    /// <summary>
+    /// A Merge node's step: it handed on the merge of its predecessors' code, as its request <paramref name="Request"/>
+    /// composed it, with their reports and artifacts. No client ran for the step itself.
+    /// </summary>
+    internal sealed record Merged(GateId Request) : ResultOrigin;
 
     internal sealed record Executed(AttemptId Attempt) : ResultOrigin;
 

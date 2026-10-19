@@ -290,6 +290,8 @@ internal sealed partial class Materializer
     private static string Prompt(TaskDefinition definition, InputRecord input, AttemptId attempt, string? basePrompt,
         PlanningContext? planning = null, ImmutableArray<ArtifactRecord> kept = default)
     {
+        // A Merge node's agent reads the conflict it resolves, and nothing else hands it input.
+        if (input.Conflict is { } conflict) return MergeWork.Prompt(new NodeContext(definition, "") { Conflict = conflict.Description });
         if (basePrompt is null && definition.Blueprint.Work is not WorkSpec.Agent)
             throw new Refusal(new(RunProblem.InvalidData));
         var template = (definition.Blueprint.Work as WorkSpec.Agent)?.Template;

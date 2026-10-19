@@ -7,7 +7,7 @@ namespace IDevelop.Nodes;
 /// A Merge node's agent, which runs only to resolve a merge conflict of a run. Each conflict starts its own session in a
 /// folder that holds the conflicting merge, and iDevelop commits the merge once the agent ends its turn.
 /// </summary>
-public sealed class MergeWork : INodeWork
+public sealed class MergeWork : IConverses
 {
     public static readonly MergeWork Instance = new();
 
@@ -22,6 +22,9 @@ public sealed class MergeWork : INodeWork
         { Status: AttemptStatus.Succeeded } => new NodeStep.Finish(latest.Result),
         _ => new NodeStep.Fail(latest.Detail ?? $"The attempt ended {latest.Status}."),
     };
+
+    /// <summary>A message to the Merge node's agent in a run is the next turn of its session.</summary>
+    public MessageUse Receive(string message) => new MessageUse.Turn(message);
 
     /// <summary>The rendered template, with the conflict the agent resolves.</summary>
     internal static string Prompt(NodeContext context)

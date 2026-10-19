@@ -18,15 +18,16 @@ internal sealed class PreparationFixture : IDisposable
     private readonly Dictionary<TaskId, RunLease> _leases = [];
     public readonly CommitId A;
     /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
+    /// <param name="branch">The branch the run started from, which its finished work merges into, or null for a detached HEAD.</param>
     public PreparationFixture(Workflow workflow, CommitId? runBase = null, RunId? run = null, Func<GitFixture, CommitId>? configureBase = null,
-        string? folder = null, TaskId? node = null)
+        string? folder = null, TaskId? node = null, string? branch = null)
     {
         Git = new(folder: folder);
         A = Git.Diamond();
         RunId = run ?? Run;
         Store = RunStore.Open(Git.Folder, new Clock(), () => Id(++_id));
-        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A),
-            node: node));
+        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow),
+            new(configureBase?.Invoke(Git) ?? runBase ?? A) { Branch = branch }, node: node));
     }
 
     public Materializer Materializer(IJoinComposer? joins = null, Action<string>? probe = null, string? project = null, TimeProvider? clock = null,

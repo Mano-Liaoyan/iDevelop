@@ -25,9 +25,9 @@ internal static partial class RunReducer
     internal static GateState? LiveGate(RunRecord record, TaskId task) =>
         LatestGate(record, task) is { Decision: null or GateDecision.SentBack } gate && !Superseded(record, gate) ? gate : null;
 
-    /// <summary>A join that an Approval node's request composes from its current inputs' code.</summary>
+    /// <summary>A join that an Approval node's or a Merge node's request composes from its current inputs' code.</summary>
     private static bool GateJoin(RunRecord record, MaterializationPlan.Join join) =>
-        record.Revision.Snapshot.Tasks.TryGetValue(join.Task, out var task) && task.Blueprint.Work is WorkSpec.Person &&
+        record.Revision.Snapshot.Tasks.TryGetValue(join.Task, out var task) && task.Blueprint.Work is WorkSpec.Person or WorkSpec.Merge &&
         RunStore.Inputs(record, join.Task, record.Revision.Id, join.Inputs) is { Rejection: null, Inputs: { } capture } &&
         Same(InputMaterial.Sources(record, capture.Bindings), join.Sources);
 
@@ -38,7 +38,7 @@ internal static partial class RunReducer
         if (record.Phase != RunPhase.Approved) return RunProblem.RunStopped;
         if (request.Revision != record.Revision.Id) return RunProblem.RevisionConflict;
         if (!record.Revision.Snapshot.Tasks.TryGetValue(request.Task, out var definition)) return RunProblem.IdentityMismatch;
-        if (definition.Blueprint.Work is not WorkSpec.Person) return RunProblem.UnsupportedWork;
+        if (definition.Blueprint.Work is not (WorkSpec.Person or WorkSpec.Merge)) return RunProblem.UnsupportedWork;
         if (!RunScope.InFlow(record).Contains(request.Task)) return RunProblem.NotRequested;
         if (record.Gates.ContainsKey(request.Id) || record.Inputs.ContainsKey(inputs.Id) ||
             record.Gates.Values.Any(gate => gate.Request.Result == request.Result) || record.Results.Any(result => result.Id == request.Result))
@@ -65,13 +65,17 @@ internal static partial class RunReducer
         return GateForwarding.Artifacts(record, inputs, request.Result).Collision is null ? null : RunProblem.InputConflict;
     }
 
-    /// <summary>An approval's result: the current request's own id and inputs, and exactly what those inputs forward.</summary>
-    private static RunProblem? HumanResultProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task, ResultOrigin.Human human)
+    /// <summary>
+    /// An approval's result, or a Merge node's step: the current request's own id and inputs, and exactly what those inputs
+    /// forward. A person approves an Approval node's request, and a Merge node's step hands on its request at once.
+    /// </summary>
+    private static RunProblem? GateResultProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task, GateId request)
     {
         var result = accepted.Result;
-        if (task.Blueprint.Work is not WorkSpec.Person) return RunProblem.UnsupportedResult;
+        if (task.Blueprint.Work is not (WorkSpec.Person or WorkSpec.Merge) ||
+            result.Origin is ResultOrigin.Human != task.Blueprint.Work is WorkSpec.Person) return RunProblem.UnsupportedResult;
         if (record.Phase != RunPhase.Approved) return RunProblem.RunStopped;
-        if (!record.Gates.TryGetValue(human.Request, out var gate)) return RunProblem.UnknownInput;
+        if (!record.Gates.TryGetValue(request, out var gate)) return RunProblem.UnknownInput;
         if (gate.Request.Task != result.Task || gate.Request.Revision != result.Revision || gate.Request.Inputs != result.Inputs ||
             gate.Request.Result != result.Id)
             return RunProblem.InputConflict;

@@ -58,10 +58,10 @@ public sealed class ApprovalCrashTests
         Assert.All(starts, start => Assert.Equal(run, start.Coordinator.Address.Run));
         if (intended is not null) Assert.Equal(intended.Run, run);
         Assert.Equal(point is "approval.approved.after" or "approval.opened.after" ? 2 : 1, starts.Count(start => start.Existing));
-        await Completed(starts[0].Coordinator);
+        await Finished(starts[0].Coordinator);
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
         var record = f.Read(run);
-        Assert.Equal(new RunBase(Head), record.Base);
+        Assert.Equal(new RunBase(Head) { Branch = "refs/heads/main" }, record.Base);
         Assert.Null(f.ResultFile(run, A, "notes.txt"));
         Assert.Equal(index, f.Index());
         Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", "HEAD"));
@@ -89,7 +89,7 @@ public sealed class ApprovalCrashTests
         var started = await Start(f, f.Preflight(), First);
 
         Assert.True(started.Existing);
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
         Assert.Equal(approved.Hex + "\n", f.GitText("rev-parse", RunLayout.ApprovedBase(f.Read(run).RunKey!)));
         Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
@@ -112,8 +112,8 @@ public sealed class ApprovalCrashTests
         var started = await Start(f, f.Preflight(), First);
 
         Assert.True(started.Existing);
-        await Completed(started.Coordinator);
-        Assert.Equal(new RunBase(Head), f.Read(run).Base);
+        await Finished(started.Coordinator);
+        Assert.Equal(new RunBase(Head) { Branch = "refs/heads/main" }, f.Read(run).Base);
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class ApprovalCrashTests
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         await f.Open();
         var started = await Start(f, f.Preflight(), First);
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         var run = started.Coordinator.Address.Run;
         f.GitText("update-ref", $"refs/idp/approvals/{run}", Head.Hex);
 
@@ -138,7 +138,7 @@ public sealed class ApprovalCrashTests
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         await f.Open();
         var started = await Start(f, f.Preflight(), First);
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         var run = started.Coordinator.Address.Run;
         f.GitText("update-ref", "-d", RunLayout.ApprovedBase(f.Read(run).RunKey!));
         f.GitText("update-ref", $"refs/idp/approvals/{run}", Head.Hex);
@@ -190,7 +190,7 @@ public sealed class ApprovalCrashTests
         var started = await Start(f, f.Preflight(), AfterRestart);
 
         Assert.NotEqual(stopped, started.Coordinator.Address.Run);
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
         Assert.Equal(RunPhase.Stopped, f.Read(stopped).Phase);
     }
@@ -215,7 +215,7 @@ public sealed class ApprovalCrashTests
 
         var started = await Start(f, f.Preflight(), AfterRestart);
 
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         var run = Assert.Single(f.ApprovedRuns());
         Assert.NotEqual(stale.Run, run);
         Assert.Equal(run, Intent(f)!.Run);
@@ -238,7 +238,7 @@ public sealed class ApprovalCrashTests
         var started = await Start(f, f.Preflight(), AfterRestart);
 
         Assert.False(started.Existing);
-        await Completed(started.Coordinator);
+        await Finished(started.Coordinator);
         Assert.Equal([intended.Run], f.ApprovedRuns());
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }

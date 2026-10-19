@@ -277,6 +277,34 @@ internal sealed partial class GitRepository
         return result.ExitCode == 0 ? new GitRead<byte[]>.Read(result.Stdout) : Failure<byte[]>(result);
     }
 
+    /// <summary>
+    /// The paths of <paramref name="checkout"/> whose tracked files differ from its HEAD, staged or not. Untracked files are
+    /// no part of them.
+    /// </summary>
+    public GitRead<ImmutableArray<string>> TrackedChanges(string checkout)
+    {
+        var result = Git(checkout, GitOperation.Worktree, ["status", "--porcelain=v1", "-z", "--untracked-files=no", "--ignore-submodules=dirty"]);
+        if (result.ExitCode != 0) return Failure<ImmutableArray<string>>(result);
+        var fields = result.Text.Split('\0');
+        var paths = ImmutableArray.CreateBuilder<string>();
+        for (var index = 0; index < fields.Length; index++)
+        {
+            var entry = fields[index];
+            if (entry.Length < 4) continue;
+            paths.Add(entry[3..]);
+            // A rename or a copy names its source in the next field.
+            if (entry[0] is 'R' or 'C') index++;
+        }
+        return new GitRead<ImmutableArray<string>>.Read([.. paths.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
+    }
+
+    /// <summary>
+    /// Moves the branch <paramref name="checkout"/> has checked out to <paramref name="commit"/>, a descendant of its HEAD,
+    /// and its files with it. Git refuses when that would overwrite a change of the person's.
+    /// </summary>
+    public GitResult FastForward(string checkout, CommitId commit) =>
+        Git(checkout, GitOperation.Worktree, ["merge", "--ff-only", "--no-edit", "--no-stat", commit.Hex]);
+
     public GitRead<ImmutableArray<string>> IgnoredFiles(string checkout) =>
         ReadPaths(Git(checkout, GitOperation.Worktree, ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"]));
 

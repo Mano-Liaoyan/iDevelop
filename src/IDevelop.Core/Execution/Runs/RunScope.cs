@@ -20,13 +20,14 @@ internal static class RunScope
     /// </summary>
     public static ImmutableHashSet<TaskId> InFlow(Workflow workflow, IReadOnlySet<TaskId>? requested)
     {
-        if (requested is null) return [.. workflow.Tasks.Keys];
+        // A Merge node with no dependency predecessor starts on no run's own: it resolves only the conflicts that go to it.
+        if (requested is null) return [.. workflow.Tasks.Keys.Where(task => !RunReducer.OnCall(workflow, task))];
         var successors = workflow.Connections.Where(connection => connection.Value.Blocks()).ToLookup(connection => connection.Key.From, connection => connection.Key.To);
         var flow = ImmutableHashSet.CreateBuilder<TaskId>();
         var queue = new Queue<TaskId>(requested.Where(workflow.Tasks.ContainsKey));
         while (queue.TryDequeue(out var task))
         {
-            if (!flow.Add(task)) continue;
+            if (RunReducer.OnCall(workflow, task) || !flow.Add(task)) continue;
             foreach (var next in successors[task]) queue.Enqueue(next);
         }
         return flow.ToImmutable();
@@ -62,9 +63,10 @@ internal static class RunScope
     /// The tasks a run of <paramref name="record"/> can no longer start, judged from the journal alone: a task is idle while
     /// it has no attempt, no request for approval, and no result in the run.
     /// </summary>
+    /// <remarks>A Merge node's attempts resolve conflicts that go to it, so they never count as its own start.</remarks>
     public static ImmutableHashSet<TaskId> Dormant(RunRecord record) => Dormant(record.Revision.Snapshot, InFlow(record), task =>
-        !record.Attempts.Values.Any(attempt => attempt.Task == task) && !record.Gates.Values.Any(gate => gate.Request.Task == task) &&
-        !record.Results.Any(result => result.Task == task));
+        !record.Attempts.Values.Any(attempt => attempt.Task == task && !RunReducer.Merges(record, attempt.Id)) &&
+        !record.Gates.Values.Any(gate => gate.Request.Task == task) && !record.Results.Any(result => result.Task == task));
 
     /// <summary>
     /// The first dependency predecessor of <paramref name="task"/> without a current result that hands on, in task order,

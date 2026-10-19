@@ -138,6 +138,51 @@ internal sealed record TaskView(TaskId Task, TaskState State)
 
     /// <summary>The task's current result comes from an earlier run, which this run carried instead of running the task (#90).</summary>
     public bool Carried { get; init; }
+
+    /// <summary>
+    /// On a Merge node: the conflict its newest attempt resolves, while that attempt goes on or after it ended without
+    /// resolving it.
+    /// </summary>
+    public MergeConflict? Merge { get; init; }
+
+    /// <summary>
+    /// On a task blocked by a conflict between its predecessors: the Merge node the conflict goes to, or null when no Merge
+    /// node takes it and the person resolves it.
+    /// </summary>
+    public TaskId? MergedBy { get; init; }
+}
+
+/// <summary>Why the run's final merge into the branch it started from waits, as this window last found it.</summary>
+internal abstract record BranchMergeWait
+{
+    private BranchMergeWait() { }
+
+    /// <summary>The branch the run's work merges into, such as <c>refs/heads/main</c>.</summary>
+    public abstract string Branch { get; }
+
+    /// <summary>
+    /// The folder that has the branch checked out has uncommitted changes in <paramref name="Paths"/>. The merge waits for the
+    /// person to commit or stash them, and never touches them.
+    /// </summary>
+    internal sealed record Uncommitted(string Branch, string Folder, ImmutableArray<string> Paths) : BranchMergeWait
+    {
+        public override string Branch { get; } = Branch;
+    }
+
+    /// <summary>
+    /// The run's work conflicts with the branch in <paramref name="Paths"/>. <paramref name="Node"/> is the Merge node that
+    /// resolves it, or null when none takes it, and then the person merges it or adds a Merge node and runs it.
+    /// </summary>
+    internal sealed record Conflict(string Branch, ImmutableArray<string> Paths, TaskId? Node) : BranchMergeWait
+    {
+        public override string Branch { get; } = Branch;
+    }
+
+    /// <summary>Git could not merge, for <paramref name="Detail"/>. The merge tries again.</summary>
+    internal sealed record Problem(string Branch, string Detail) : BranchMergeWait
+    {
+        public override string Branch { get; } = Branch;
+    }
 }
 
 /// <summary>What one window knows of a run: the journal and attempt logs, plus the work this window has in flight.</summary>
@@ -153,6 +198,9 @@ internal sealed record RunView(RunAddress Address, RunPhase Phase, RunStatus Sta
 
     /// <summary>Counts this window's decisions, so a reader can wait for one after its own signal.</summary>
     public long Decision { get; init; }
+
+    /// <summary>Why the run's finished work has not merged into the branch it started from yet, or null.</summary>
+    public BranchMergeWait? Merge { get; init; }
 
     /// <summary>
     /// The workflow as the run's current revision approved it, which its tasks run as, whatever the document holds now.
