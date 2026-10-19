@@ -101,7 +101,7 @@ public sealed class WorkflowRunViewModel : ObservableObject, IDisposable
     /// <summary>A task of the run waits for the person: a reply, a question, or an approval.</summary>
     public bool IsWaitingForPerson => IsActive && (View.Tasks.Values.Any(task => task.State == TaskState.Waiting &&
         (task.Gate is { Status: GateStatus.Waiting } || task.Status == AttemptStatus.WaitingForInput)) ||
-        View.Merge is BranchMergeWait.Uncommitted or BranchMergeWait.Conflict { Node: null });
+        View.Merge is BranchMergeWait.Uncommitted or BranchMergeWait.Busy or BranchMergeWait.Conflict { Node: null });
 
     /// <summary>
     /// The run waits on a merge conflict that no Merge node takes, so a Merge node the person adds to the workflow runs in it

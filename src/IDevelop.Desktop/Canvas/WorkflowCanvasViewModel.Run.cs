@@ -218,6 +218,7 @@ public sealed partial class WorkflowCanvasViewModel
         {
             RunCommand.Unavailable unavailable => unavailable.Message,
             RunCommand.Refused refused => WorkflowRunText.Problem(refused.Reason),
+            RunCommand.Untaken untaken => WorkflowRunText.Untaken(untaken.Node, untaken.Branches, TitleOf),
             _ => null,
         });
     }

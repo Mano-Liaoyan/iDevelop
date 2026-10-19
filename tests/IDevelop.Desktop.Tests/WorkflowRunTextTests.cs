@@ -269,4 +269,35 @@ public sealed class WorkflowRunTextTests
         Assert.Equal("Your merge is committed, and the run goes on from it.", WorkflowRunText.Conflict(new ConflictReply.Resolved(Commit)));
         Assert.Equal("The conflict no longer waits for you.", WorkflowRunText.Conflict(new ConflictReply.Refused(new(RunProblem.StaleInput))));
     }
+
+    [Fact]
+    public void Conflicting_files_without_markers_are_named_wherever_the_person_resolves_the_conflict()
+    {
+        var conflict = Conflict(new MergeTarget.Join(Task)) with { Paths = ["logo.bin", "settings.txt"], Unmarked = ["logo.bin"] };
+        Assert.Equal("settings.txt still has conflict markers. Fix it, then mark the conflict resolved. Check logo.bin too: its conflict leaves no markers.",
+            WorkflowRunText.Conflict(new ConflictReply.MarkersRemain(["settings.txt"]), conflict));
+        Assert.Equal("The conflict's worktree is open at /w. Fix logo.bin and settings.txt there, then choose Mark resolved. " +
+            "Check logo.bin too: its conflict leaves no markers.", WorkflowRunText.ConflictOpened("/w", conflict.Paths, shown: true, conflict));
+        Assert.EndsWith("Check logo.bin too: its conflict leaves no markers.",
+            WorkflowRunText.Merging(new BranchMergeWait.Conflict("refs/heads/main", conflict.Paths, null) { Merge = conflict }, Title));
+
+        var evidence = new ConflictEvidence([], 1, conflict.Paths, [], [], new("a", new(new string('0', 64)), 0), new("b", new(new string('0', 64)), 0),
+            "2.47.0", [], Commit) { Merge = conflict };
+        var blocked = new TaskView(Task, TaskState.Blocked)
+        {
+            Block = new(new(Guid.NewGuid()), Task, null, MaterializationProblem.FanInConflict, null, [], "Merge step 1 of 1 conflicts.", evidence)
+            { Scope = new BlockScope.Operation() },
+        };
+        Assert.EndsWith("Check logo.bin too: its conflict leaves no markers.", WorkflowRunText.Detail(blocked, Title));
+    }
+
+    [Fact]
+    public void The_final_merge_waits_for_a_rebase_and_a_merge_node_that_takes_no_conflict_says_so()
+    {
+        Assert.Equal("The run's work waits to merge into main. main is being rebased in /project; the run's work merges once it finishes. " +
+            "iDevelop never touches it meanwhile.", WorkflowRunText.Merging(new BranchMergeWait.Busy("refs/heads/main", "/project", "rebased"), Title));
+        Assert.Equal("\"A\" joined the run, but it does not take the conflict: \"A\" and \"B\", whose work conflicts, don't all connect into it. " +
+            "A Merge node takes the conflict once each of them connects into it.",
+            WorkflowRunText.Untaken(TestTasks.Design, [TestTasks.Design, TestTasks.Build], Title));
+    }
 }

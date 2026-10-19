@@ -96,6 +96,7 @@ internal static partial class RunValidation
 
     private static bool MergeConflict(MergeConflict conflict) => Revision.IsCommit(conflict.Ours.Hex) && Revision.IsCommit(conflict.Theirs.Hex) &&
         Revision.IsCommit(conflict.Conflicted.Hex) && !conflict.Paths.IsDefault && conflict.Paths.All(Path) && conflict.Description is not null &&
+        (conflict.Unmarked.IsDefault || conflict.Unmarked.All(Path)) &&
         conflict.Target switch
         {
             MergeTarget.Join join => join.Task.Value != Guid.Empty,

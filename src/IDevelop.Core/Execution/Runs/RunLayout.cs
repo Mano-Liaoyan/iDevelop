@@ -51,6 +51,9 @@ internal static class RunLayout
     /// <summary>The pin that keeps the merge the person committed for the conflict at <paramref name="conflicted"/>.</summary>
     public static string ConflictPin(string run, CommitId conflicted) => $"{PinPrefix(run)}conflict/{conflicted.Hex}";
 
+    /// <summary>The pin that keeps the commit with the conflict markers at <paramref name="conflicted"/>, which a conflict's worktree starts at.</summary>
+    public static string ConflictedPin(string run, CommitId conflicted) => $"{PinPrefix(run)}conflicted/{conflicted.Hex}";
+
     public static string ApprovedBase(string run) => $"refs/idp/{run}/base";
 
     public static string Outbox(AttemptId attempt) => $".idp/outbox/{attempt.Value:D}";

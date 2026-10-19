@@ -60,11 +60,11 @@ public sealed partial class WorkflowCanvasViewModel
                     shown = false;
                 }
 
-                Notice(WorkflowRunText.ConflictOpened(opened.Folder, conflict.Paths, shown));
+                Notice(WorkflowRunText.ConflictOpened(opened.Folder, conflict.Paths, shown, conflict));
             }
             else
             {
-                Notice(WorkflowRunText.Conflict(reply));
+                Notice(WorkflowRunText.Conflict(reply, conflict));
             }
         }
         finally
@@ -86,7 +86,7 @@ public sealed partial class WorkflowCanvasViewModel
             var confirmation = new OperationId(Guid.NewGuid());
             var reply = await WorkflowRunViewModel.Retrying(() => run.Coordinator.MarkResolved(run.Address, conflict, confirmation),
                 outcome => outcome is ConflictReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
-            Notice(WorkflowRunText.Conflict(reply));
+            Notice(WorkflowRunText.Conflict(reply, conflict));
         }
         finally
         {

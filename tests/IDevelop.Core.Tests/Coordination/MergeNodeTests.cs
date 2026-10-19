@@ -123,6 +123,9 @@ public sealed class MergeNodeTests
         var stuck = await f.Until(view => view.Tasks[D].State == TaskState.Blocked);
         var conflict = WorkflowRunCoordinator.PersonsConflict(stuck.Tasks[D])!;
         Assert.NotNull(conflict);
+        // A pin keeps the commit with the markers until the run's pins go.
+        Assert.Equal(conflict.Conflicted.Hex,
+            f.Preparation.Git.Git("rev-parse", RunLayout.ConflictedPin(f.Read().RunKey!, conflict.Conflicted)).Trim());
 
         // Nothing of the person's is there to commit before the worktree is open.
         Assert.IsType<ConflictReply.Unopened>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
@@ -357,6 +360,119 @@ public sealed class MergeNodeTests
         Assert.Equal(resolved.Merge.Hex, git.Git("rev-parse", "main").Trim());
         Assert.Equal($"{Main.Hex} {produced.Hex}", git.Git("show", "-s", "--format=%P", "main").Trim());
         Assert.Equal("A and Run\n", File.ReadAllText(Path.Combine(git.Folder, "a.txt")));
+    }
+
+    [Fact]
+    public async Task A_conflict_without_markers_is_named_for_the_agent_and_the_person_and_blocks_nothing()
+    {
+        // logo.bin is binary on both sides, so its conflict leaves no markers; settings.txt has them.
+        await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true)], (B, D), (C, D)));
+        f.Answer(B, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-b")).Write("logo.bin", "B\0B").Write("settings.txt", "B\n")
+                .Print(FakeAgents.ReplyLines(ClientId.Codex, "B ready.\n")))
+            .Answer(C, FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-c")).Write("logo.bin", "C\0C").Write("settings.txt", "C\n")
+                .Print(FakeAgents.ReplyLines(ClientId.Codex, "C ready.\n")))
+            .Answer(D, Reports(D));
+        await f.Open();
+        await f.Resume();
+        var stuck = await f.Until(view => view.Tasks[D].State == TaskState.Blocked);
+        var conflict = WorkflowRunCoordinator.PersonsConflict(stuck.Tasks[D])!;
+        Assert.Equal(["logo.bin", "settings.txt"], conflict.Paths.ToArray());
+        Assert.Equal(["logo.bin"], conflict.Unmarked.ToArray());
+        Assert.Contains("Check each one yourself:\n\n- `logo.bin`", conflict.Description);
+
+        // Only the markers block Mark resolved.
+        var opened = Assert.IsType<ConflictReply.Opened>(await f.Coordinator.OpenConflict(f.Address, conflict).WaitAsync(Bound));
+        File.WriteAllText(Path.Combine(opened.Folder, "settings.txt"), "B\nC\n");
+        Assert.IsType<ConflictReply.Resolved>(await f.Coordinator.MarkResolved(f.Address, conflict, f.Preparation.Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+    }
+
+    [Fact]
+    public async Task A_merge_nodes_agent_reads_which_conflicting_files_hold_no_markers()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(B), Agent(C), Agent(D, readOnly: true), Merger(M)], (B, D), (C, D)));
+        f.Answer(B, Writes(B, "logo.bin", "B\0B")).Answer(C, Writes(C, "logo.bin", "C\0C")).Answer(D, Reports(D))
+            .Answer("M", Resolves("logo.bin", "BC"));
+        await f.Open();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Contains("Check each one yourself:\n\n- `logo.bin`", f.Prompt("M"));
+    }
+
+    [Fact]
+    public async Task A_merge_node_that_joins_the_run_but_does_not_take_the_conflict_says_so()
+    {
+        var other = new TaskId(Guid.Parse("00000000-0000-0000-0000-0000000000e7"));
+        // Two Merge nodes that no conflicting branch connects into: the conflict waits for the person.
+        var workflow = Graph([Agent(B), Agent(C), Agent(D, readOnly: true), Merger(N, "N"), Merger(other, "O")], (B, D), (C, D));
+        await using var f = new CoordinatorFixture(workflow);
+        f.Answer(B, Writes(B, "settings.txt", "B\n")).Answer(C, Writes(C, "settings.txt", "C\n")).Answer(D, Reports(D));
+        await f.Open();
+        await f.Resume();
+        var stuck = await f.Until(view => view.Tasks[D].State == TaskState.Blocked);
+        Assert.True(WorkflowRunCoordinator.WaitsForMergeNode(stuck));
+
+        var document = Runs.RunFixtures.Edit(workflow, TestNodes.Place(Merger(M), new(0, 0)));
+        var untaken = Assert.IsType<RunCommand.Untaken>(await f.Coordinator.AddMerge(f.Address, document, M, f.Preparation.Op()).WaitAsync(Bound));
+        Assert.Equal(M, untaken.Node);
+        Assert.Equal([B, C], untaken.Branches.ToArray());
+        var still = await f.Until(view => view.Snapshot?.Tasks.ContainsKey(M) == true);
+        Assert.Null(still.Tasks[D].MergedBy);
+        Assert.Equal(0, f.Launches("M"));
+    }
+
+    [Fact]
+    public async Task The_final_merge_moves_no_folder_whose_head_changed_before_its_fast_forward()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]), runBase: Main, branch: Branch);
+        f.Answer(A, Writes(A, "b.txt", "B\n"));
+        var git = f.Preparation.Git;
+        await f.Open();
+        var switched = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point == "branch.checked-out" && Interlocked.Exchange(ref switched, 1) == 0) git.Git("checkout", "-q", "-b", "other");
+        };
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        // The folder switched to other just before the fast-forward, so it stays as it is, and main moved without it.
+        Assert.Equal(1, switched);
+        Assert.Equal("refs/heads/other", git.Git("symbolic-ref", "HEAD").Trim());
+        Assert.Equal(Main.Hex, git.Git("rev-parse", "other").Trim());
+        Assert.False(File.Exists(Path.Combine(git.Folder, "b.txt")));
+        var produced = Assert.IsType<CodeOutput.Produced>(f.Result(A).Code).Code.Commit;
+        Assert.Equal(produced.Hex, git.Git("rev-parse", "main").Trim());
+    }
+
+    [Fact]
+    public async Task The_final_merge_waits_while_the_branch_is_being_rebased_and_never_touches_it()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A)]), runBase: Main, branch: Branch);
+        f.Answer(A, Writes(A, "b.txt", "B\n"));
+        var git = f.Preparation.Git;
+        // A rebase of main stops at its exec step, with HEAD detached.
+        git.Git("config", "user.name", "E2");
+        git.Git("config", "user.email", "e2@example.test");
+        Assert.NotEqual(0, git.Run(git.Folder, "rebase", "--force-rebase", "--exec", "false", "HEAD~1").ExitCode);
+        var headName = Path.Combine(git.Git("rev-parse", "--absolute-git-dir").Trim(), "rebase-merge", "head-name");
+        Assert.True(File.Exists(headName));
+        var rebased = git.Git("rev-parse", "HEAD").Trim();
+        await f.Open();
+        await f.Resume();
+
+        var waiting = await f.Until(view => view.Merge is BranchMergeWait.Busy);
+        var busy = Assert.IsType<BranchMergeWait.Busy>(waiting.Merge);
+        Assert.Equal("rebased", busy.Operation);
+        Assert.Equal(RunStatus.Waiting, waiting.Status);
+        Assert.Equal(Main.Hex, git.Git("rev-parse", "refs/heads/main").Trim());
+        Assert.Equal(rebased, git.Git("rev-parse", "HEAD").Trim());
+        Assert.True(File.Exists(headName));
+
+        git.Git("rebase", "--abort");
+        await f.UntilStatus(RunStatus.Completed);
+        var produced = Assert.IsType<CodeOutput.Produced>(f.Result(A).Code).Code.Commit;
+        Assert.Equal(produced.Hex, git.Git("rev-parse", "main").Trim());
     }
 
     [Fact]

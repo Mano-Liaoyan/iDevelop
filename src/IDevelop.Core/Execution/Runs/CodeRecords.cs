@@ -127,8 +127,17 @@ internal abstract record MergeTarget
 internal sealed record MergeConflict(MergeTarget Target, CommitId Ours, CommitId Theirs, CommitId Conflicted, ImmutableArray<string> Paths,
     string Description)
 {
+    /// <summary>
+    /// The conflicting files that hold no conflict markers in <see cref="Conflicted"/>, such as a binary file, a file one side
+    /// deleted, or a renamed one. Nothing checks them for markers, so the person and the agent are told to check them.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public ImmutableArray<string> Unmarked { get; init; }
+
     public bool Equals(MergeConflict? other) => other is not null && Target == other.Target && Ours == other.Ours && Theirs == other.Theirs &&
-        Conflicted == other.Conflicted && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) && Description == other.Description;
+        Conflicted == other.Conflicted && Paths.SequenceEqual(other.Paths, StringComparer.Ordinal) && Description == other.Description &&
+        Unmarked.IsDefaultOrEmpty == other.Unmarked.IsDefaultOrEmpty &&
+        (Unmarked.IsDefaultOrEmpty || Unmarked.SequenceEqual(other.Unmarked, StringComparer.Ordinal));
 
     public override int GetHashCode() => HashCode.Combine(Target, Ours, Theirs, Conflicted);
 

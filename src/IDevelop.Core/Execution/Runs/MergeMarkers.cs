@@ -15,13 +15,21 @@ internal static class MergeMarkers
 
     /// <summary>The conflicting files in <paramref name="checkout"/> that still hold a conflict, in the order given.</summary>
     public static ImmutableArray<string> Remaining(string checkout, IEnumerable<string> paths) =>
-        [.. paths.Where(path => Holds(RunStorage.SafePath(checkout, path)))];
+        [.. paths.Where(path => File.Exists(RunStorage.SafePath(checkout, path)) && Holds(File.ReadLines(RunStorage.SafePath(checkout, path))))];
 
-    private static bool Holds(string file)
+    /// <summary>
+    /// The conflicting files that hold no conflict markers in <paramref name="conflicted"/>, Git's merge with its markers:
+    /// a binary file, a file one side deleted, or a renamed one.
+    /// </summary>
+    public static ImmutableArray<string> Unmarked(GitRepository repository, CommitId conflicted, IEnumerable<string> paths) =>
+        [.. paths.Where(path => repository.FileAt(conflicted, path) is not { } bytes || !Holds(Lines(bytes)))];
+
+    private static IEnumerable<string> Lines(byte[] bytes) => Encoding.UTF8.GetString(bytes).Split('\n').Select(line => line.TrimEnd('\r'));
+
+    private static bool Holds(IEnumerable<string> lines)
     {
-        if (!File.Exists(file)) return false;
         var opened = false;
-        foreach (var line in File.ReadLines(file))
+        foreach (var line in lines)
         {
             if (line.StartsWith("<<<<<<< ", StringComparison.Ordinal) || line == "<<<<<<<") opened = true;
             else if (opened && (line.StartsWith(">>>>>>> ", StringComparison.Ordinal) || line == ">>>>>>>")) return true;
@@ -34,7 +42,7 @@ internal static class MergeMarkers
     /// into the work merged before it.
     /// </summary>
     public static string DescribeJoin(RunRecord record, TaskId task, ImmutableArray<CodeSource> sources, ImmutableArray<CommitId> parents,
-        int step, ImmutableArray<string> paths)
+        int step, ImmutableArray<string> paths, ImmutableArray<string> unmarked = default)
     {
         var workflow = record.Revision.Snapshot;
         string Titles(IEnumerable<CommitId> commits) => Join([.. sources.Where(source => commits.Contains(source.Commit))
@@ -43,25 +51,29 @@ internal static class MergeMarkers
         var text = new StringBuilder("## The conflict\n\n")
             .Append($"{target} starts from the merge of the work of {Titles(parents)}. ")
             .Append($"Merging the work of {Titles([parents[step]])} into the work of {Titles(parents.Take(step))} conflicts in these files:\n\n");
-        return Files(text, paths);
+        return Files(text, paths, unmarked);
     }
 
     /// <summary>The conflict in the run's final merge: merging the run's work into <paramref name="branch"/>, which changed since the run started.</summary>
-    public static string DescribeBranch(string branch, ImmutableArray<string> paths)
+    public static string DescribeBranch(string branch, ImmutableArray<string> paths, ImmutableArray<string> unmarked = default)
     {
         var name = BranchName(branch);
         var text = new StringBuilder("## The conflict\n\n")
             .Append($"The run's finished work merges into {name}, the branch it started from. {name} changed since the run started, ")
             .Append($"and merging the run's work into it conflicts in these files:\n\n");
-        return Files(text, paths);
+        return Files(text, paths, unmarked);
     }
 
     /// <summary>A branch's short name, such as <c>main</c> for <c>refs/heads/main</c>.</summary>
     public static string BranchName(string branch) => branch.StartsWith("refs/heads/", StringComparison.Ordinal) ? branch["refs/heads/".Length..] : branch;
 
-    private static string Files(StringBuilder text, ImmutableArray<string> paths)
+    private static string Files(StringBuilder text, ImmutableArray<string> paths, ImmutableArray<string> unmarked)
     {
         foreach (var path in paths) text.Append($"- `{path}`\n");
+        if (unmarked.IsDefaultOrEmpty) return text.ToString();
+        text.Append("\nThese files conflict without conflict markers, as a binary file, a file one side deleted, or a renamed file does. ")
+            .Append("Check each one yourself:\n\n");
+        foreach (var path in unmarked) text.Append($"- `{path}`\n");
         return text.ToString();
     }
 

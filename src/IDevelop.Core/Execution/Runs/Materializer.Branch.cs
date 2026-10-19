@@ -13,6 +13,12 @@ internal abstract record BranchMerge
     /// <summary>The folder that has the branch checked out has uncommitted changes, so the merge waits and touches nothing.</summary>
     internal sealed record Uncommitted(string Folder, ImmutableArray<string> Paths) : BranchMerge;
 
+    /// <summary>
+    /// A rebase or a bisect holds the branch in <paramref name="Folder"/>, as <paramref name="Operation"/> says, "rebased" or
+    /// "bisected". The merge waits until it finishes and touches nothing.
+    /// </summary>
+    internal sealed record Busy(string Folder, string Operation) : BranchMerge;
+
     /// <summary>Merging the run's work into the branch conflicts. A Merge node's agent resolves it, or the person does.</summary>
     internal sealed record Conflict(MergeConflict Merge) : BranchMerge;
 
@@ -71,20 +77,30 @@ internal sealed partial class Materializer
                         {
                             Message = $"Conflicting merge into {MergeMarkers.BranchName(branch)}\n\nIDP-Run: {record.Id.Value:D}\n",
                         }));
+                        if (record.RunKey is { } run) Pin(repository, RunLayout.ConflictedPin(run, conflicted), conflicted);
+                        var unmarked = MergeMarkers.Unmarked(repository, conflicted, paths);
                         return new BranchMerge.Conflict(new(new MergeTarget.Branch(branch), merged, head, conflicted, paths,
-                            MergeMarkers.DescribeBranch(branch, paths)));
+                            MergeMarkers.DescribeBranch(branch, paths, unmarked)) { Unmarked = unmarked.IsEmpty ? default : unmarked });
                     case TreeMerge.Failed failed:
                         return new BranchMerge.Problem(failed.Detail);
                 }
             }
             if (merged == tip) return new BranchMerge.Merged(tip);
+            // A rebase or a bisect holds the branch with its worktree's HEAD detached, so no worktree shows it checked out.
+            // The branch waits until it finishes, and nothing touches it.
+            var worktrees = Value(repository.Worktrees());
+            if (repository.BranchInProgress(branch, worktrees) is { } busy) return new BranchMerge.Busy(busy.Folder, busy.Operation);
             // The branch moves with the files of the folder that has it checked out, and only while that folder has no change
             // of the person's. The run's own data is no change of theirs, and Git refuses to overwrite it anyway.
-            if (Value(repository.Worktrees()).FirstOrDefault(worktree => worktree.Branch == branch) is { } checkedOut)
+            if (worktrees.FirstOrDefault(worktree => worktree.Branch == branch) is { } checkedOut)
             {
                 ImmutableArray<string> changed = [.. Value(repository.TrackedChanges(checkedOut.Path))
                     .Where(path => path != ".idp" && !path.StartsWith(".idp/", StringComparison.Ordinal))];
                 if (!changed.IsEmpty) return new BranchMerge.Uncommitted(checkedOut.Path, changed);
+                _probe?.Invoke("branch.checked-out");
+                // The folder still has the branch checked out at the tip the merge started from; otherwise nothing moves now.
+                if (Value(repository.SymbolicHead(checkedOut.Path)) != branch || Value(repository.ResolveCheckoutHead(checkedOut.Path)) != tip)
+                    return new BranchMerge.Problem($"{checkedOut.Path} changed while the run's work merged into {MergeMarkers.BranchName(branch)}.");
                 var moved = Mutate("branch-fast-forward", () => repository.FastForward(checkedOut.Path, merged));
                 if (moved.ExitCode != 0) return new BranchMerge.Problem(moved.Stderr.Trim());
             }

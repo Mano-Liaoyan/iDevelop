@@ -77,8 +77,18 @@ internal sealed class MergeJoins(string projectFolder, RunStore store,
                     var conflicted = Value(Mutate("join-conflicted-" + step, () => repository.CreateCommit(new(conflict.Tree, [accumulator, parents[step]],
                         $"Conflicting merge of dependency results\n\nIDP-Run: {request.Permit.Run.Value:D}\nIDP-Task: {request.Task.Value:D}\n",
                         "iDevelop <idevelop@localhost>", "iDevelop <idevelop@localhost>", timestamp))));
+                    // The pin keeps that commit until the run's pins go, so it survives a garbage collection before anyone opens it.
+                    if (record.RunKey is { } runKey)
+                    {
+                        var pin = RunLayout.ConflictedPin(runKey, conflicted);
+                        var current = Value(repository.ReadRef(pin));
+                        if (current != conflicted && Mutate("join-conflicted-pin-" + step, () => repository.MoveRef(new(pin, current, conflicted))) is RefMove.Failed pinFailed)
+                            return Block(request, MaterializationProblem.GitFailed, pinFailed.Detail, new BlockScope.Refs([pin]));
+                    }
+                    var unmarked = MergeMarkers.Unmarked(repository, conflicted, paths);
                     var merge = new MergeConflict(new MergeTarget.Join(request.Task), accumulator, parents[step], conflicted, paths,
-                        MergeMarkers.DescribeJoin(record, request.Task, request.Sources, parents, step, paths));
+                        MergeMarkers.DescribeJoin(record, request.Task, request.Sources, parents, step, paths, unmarked))
+                    { Unmarked = unmarked.IsEmpty ? default : unmarked };
                     return new JoinOutcome.Blocked(new(request.Operation, request.Task, null, MaterializationProblem.FanInConflict,
                         request.Inputs, [stdout, stderr], detail, new(request.Sources, step, paths, conflict.Stages, conflict.Messages,
                             stdout, stderr, repository.Version, GitRepository.MergeSettings, record.Base.Commit) { Merge = merge })

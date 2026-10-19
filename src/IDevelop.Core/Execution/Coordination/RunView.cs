@@ -29,6 +29,13 @@ internal abstract record RunCommand
     internal sealed record Unavailable(string Message) : RunCommand;
 
     internal sealed record Refused(RunRejection Reason) : RunCommand;
+
+    /// <summary>
+    /// The Merge node <paramref name="Node"/> joined the run, but the conflict that waits for the person does not go to it:
+    /// <paramref name="Branches"/>, the tasks whose work conflicts, do not all connect into it, and the workflow has several
+    /// Merge nodes.
+    /// </summary>
+    internal sealed record Untaken(TaskId Node, ImmutableArray<TaskId> Branches) : RunCommand;
 }
 
 internal enum RunStatus { Paused, Running, Waiting, NeedsAttention, Stopping, Stopped, Completed, Failed, Abandoned, Elsewhere }
@@ -179,6 +186,15 @@ internal abstract record BranchMergeWait
 
         /// <summary>The conflict itself, which the person resolves in its worktree and marks resolved when no Merge node takes it.</summary>
         public MergeConflict? Merge { get; init; }
+    }
+
+    /// <summary>
+    /// A rebase or a bisect holds the branch in <paramref name="Folder"/>, as <paramref name="Operation"/> says, "rebased" or
+    /// "bisected". The merge waits until it finishes and never touches the branch meanwhile.
+    /// </summary>
+    internal sealed record Busy(string Branch, string Folder, string Operation) : BranchMergeWait
+    {
+        public override string Branch { get; } = Branch;
     }
 
     /// <summary>Git could not merge, for <paramref name="Detail"/>. The merge tries again.</summary>

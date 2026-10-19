@@ -103,6 +103,9 @@ internal sealed partial class WorkflowRunCoordinator
                 case BranchMerge.Uncommitted uncommitted:
                     _branchMerge = new BranchMergeWait.Uncommitted(branch, uncommitted.Folder, uncommitted.Paths);
                     break;
+                case BranchMerge.Busy busy:
+                    _branchMerge = new BranchMergeWait.Busy(branch, busy.Folder, busy.Operation);
+                    break;
                 case BranchMerge.Conflict conflict:
                     var node = MergeRouting.Node(record.Revision.Snapshot, conflict.Merge, []);
                     _branchMerge = new BranchMergeWait.Conflict(branch, conflict.Merge.Paths, node) { Merge = conflict.Merge };
@@ -164,8 +167,14 @@ internal sealed partial class WorkflowRunCoordinator
             ];
             if (snapshot.Apply(new WorkflowEdit.Batch(edits)) is not EditResult.Applied applied)
                 return new RunCommand.Refused(new(RunProblem.InvalidData, Task: node));
-            return _store.Amend(_permit!, operation, record.Revision.Id, Revision.Capture(applied.Workflow), new AmendmentOrigin.Person(), confirmation)
-                is RunDecision.Rejected rejected ? new RunCommand.Refused(rejected.Reason) : Accepted;
+            // Whether the node takes a conflict between predecessors that waits for the person; routing stays as it is.
+            var waiting = Project(record).Tasks.Values.Where(task => PersonsConflict(task) is not null).Select(task => task.Block!.Conflict!).ToArray();
+            var untaken = _branchMerge is not BranchMergeWait.Conflict { Node: null } && waiting.Length != 0 &&
+                waiting.All(evidence => MergeRouting.Node(applied.Workflow, evidence.Merge!, MergeRouting.Branches(evidence)) != node)
+                ? MergeRouting.Branches(waiting[0]) : (ImmutableArray<TaskId>?)null;
+            if (_store.Amend(_permit!, operation, record.Revision.Id, Revision.Capture(applied.Workflow), new AmendmentOrigin.Person(), confirmation)
+                is RunDecision.Rejected rejected) return new RunCommand.Refused(rejected.Reason);
+            return untaken is { } branches ? new RunCommand.Untaken(node, branches) : Accepted;
         }, wait);
 
     /// <summary>
@@ -182,7 +191,7 @@ internal sealed partial class WorkflowRunCoordinator
     /// <summary>The run's status while its final merge waits: for the person, or for a Merge node's agent.</summary>
     private static RunStatus MergeStatus(RunStatus status, BranchMergeWait? wait) => (status, wait) switch
     {
-        (RunStatus.Running, BranchMergeWait.Uncommitted or BranchMergeWait.Conflict { Node: null }) => RunStatus.Waiting,
+        (RunStatus.Running, BranchMergeWait.Uncommitted or BranchMergeWait.Busy or BranchMergeWait.Conflict { Node: null }) => RunStatus.Waiting,
         (RunStatus.Running, BranchMergeWait.Problem) => RunStatus.NeedsAttention,
         _ => status,
     };

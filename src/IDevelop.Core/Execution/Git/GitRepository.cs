@@ -223,6 +223,39 @@ internal sealed partial class GitRepository
             [.. headers.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => new CommitId(line[7..]))]));
     }
 
+    /// <summary>The bytes of <paramref name="path"/> in <paramref name="commit"/>, or null when the commit has no such file.</summary>
+    public byte[]? FileAt(CommitId commit, string path)
+    {
+        var result = Git(ProjectFolder, GitOperation.Metadata, ["cat-file", "blob", $"{commit.Hex}:{path}"]);
+        return result.ExitCode == 0 ? result.Stdout : null;
+    }
+
+    /// <summary>
+    /// The operation that holds <paramref name="branch"/> in some worktree while its HEAD is detached, as a rebase or a bisect
+    /// does, with that worktree's folder: <c>"rebased"</c> or <c>"bisected"</c>. Null when none holds it.
+    /// </summary>
+    public (string Operation, string Folder)? BranchInProgress(string branch, IEnumerable<GitWorktree> worktrees)
+    {
+        var shortName = branch.StartsWith("refs/heads/", StringComparison.Ordinal) ? branch["refs/heads/".Length..] : branch;
+        foreach (var worktree in worktrees)
+        {
+            var directory = Git(worktree.Path, GitOperation.Metadata, ["rev-parse", "--absolute-git-dir"]);
+            if (directory.ExitCode != 0) continue;
+            var gitDirectory = directory.Text.Trim();
+            string? Read(string name)
+            {
+                var file = Path.Combine(gitDirectory, name);
+                try { return File.Exists(file) ? File.ReadAllText(file).Trim() : null; }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+            }
+            if (Read(Path.Combine("rebase-merge", "head-name")) == branch || Read(Path.Combine("rebase-apply", "head-name")) == branch)
+                return ("rebased", worktree.Path);
+            if (Read("BISECT_START") is { } bisected && (bisected == shortName || bisected == branch))
+                return ("bisected", worktree.Path);
+        }
+        return null;
+    }
+
     public GitRead<string> ObjectType(string objectId) => ReadText(Git(ProjectFolder, GitOperation.Metadata, ["cat-file", "-t", objectId]), trim: true);
 
     public GitAncestry IsAncestor(CommitId ancestor, CommitId descendant)
