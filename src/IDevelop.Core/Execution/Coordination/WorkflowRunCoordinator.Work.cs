@@ -56,9 +56,51 @@ internal sealed partial class WorkflowRunCoordinator
         var free = _runs.ClientRoots - Slotted.Length;
         free -= Continue(record, view, free);
         ResolveConflicts(record, view);
+        Rerun(record, view);
         free = _runs.ClientRoots - Slotted.Length;
         free -= StartReady(record, view, free);
         AdvanceReviews(record, view, free);
+    }
+
+    internal const string InputsChangedReason = "Its inputs changed before it started.";
+
+    /// <summary>
+    /// Closes each unstarted attempt whose inputs changed as not started, and reserves a Retry of it with the new inputs
+    /// under a confirmation every window derives the same way (#125). The reserved attempt then starts as any ready task does.
+    /// </summary>
+    private void Rerun(RunRecord record, RunView view)
+    {
+        foreach (var next in view.Tasks.Values)
+        {
+            if (!next.Reruns || next.Attempt is not { } previous || record.Closures.ContainsKey(previous) ||
+                _live.ContainsKey(next.Task) || _holds.ContainsKey(next.Task)) continue;
+            var task = next.Task;
+            var confirmation = RunOperations.Rerun(Address.Run, previous);
+            _live[task] = new(LiveStage.Settling);
+            Background(async () =>
+            {
+                if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RetryReply.Refused(new(RunProblem.TaskBusy));
+                using (taken.Lease)
+                {
+                    if (_store.Recover(taken.Lease, RunOperations.NotStarted(confirmation, previous), previous, RecoveryOutcome.NotStarted,
+                        confirmation, InputsChangedReason) is RunDecision.Rejected rejected)
+                        return new RetryReply.Refused(rejected.Reason);
+                }
+                return await Reserve(task, new AttemptCause.Retry(previous, confirmation)).ConfigureAwait(false);
+            }, reply =>
+            {
+                _live.Remove(task);
+                switch (reply)
+                {
+                    case RetryReply.Blocked blocked:
+                        HoldStart(task, new TaskHold.Blocked(blocked.Block));
+                        break;
+                    case RetryReply.Refused refused:
+                        HoldStart(task, new TaskHold.Refused(refused.Reason, null, Transient(refused.Reason.Problem)));
+                        break;
+                }
+            }, error => Faulted(task, error));
+        }
     }
 
     /// <summary>Starts each ready task, in task order, up to <paramref name="free"/> of them, and returns how many started.</summary>
@@ -71,19 +113,27 @@ internal sealed partial class WorkflowRunCoordinator
             // A reserved fix of a review round resumes from its review, which knows its prompt. A Merge node's own step
             // hands on as a request does, and only its attempts that resolve a conflict start here.
             if (next.State != TaskState.Ready || _live.ContainsKey(next.Task) || FixesReview(record, next)) continue;
+            // A result that went out of date runs again as a Retry of the attempt that published it (#125). An unstarted
+            // attempt whose inputs changed closes first.
+            AttemptCause? rerun = null;
+            if (next is { Reruns: true, Attempt: { } previous })
+            {
+                if (!record.Closures.ContainsKey(previous)) continue;
+                rerun = new AttemptCause.Retry(previous, RunOperations.Rerun(Address.Run, previous));
+            }
             if (record.Revision.Snapshot.Tasks[next.Task].Blueprint.Work is WorkSpec.Merge && (next.Attempt is not { } merge || !RunReducer.Merges(record, merge)))
                 continue;
-            Start(record, next);
+            Start(record, next, rerun);
             started++;
         }
         return started;
     }
 
-    private void Start(RunRecord record, TaskView next)
+    private void Start(RunRecord record, TaskView next, AttemptCause? rerun = null)
     {
         var task = next.Task;
         // A reserved attempt resumes with its own cause and operation; a task without one starts its initial attempt.
-        var cause = next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial();
+        var cause = rerun ?? (next.Attempt is { } reserved ? record.Attempts[reserved].Cause : new AttemptCause.Initial());
         var operation = RunOperations.First(Address.Run, task, cause);
         var revision = record.Revision.Id;
         _live[task] = new(LiveStage.Starting);
@@ -134,7 +184,10 @@ internal sealed partial class WorkflowRunCoordinator
             case TurnStart.Refused refused:
                 _live.Remove(task);
                 if (refused.Reason.Problem != RunProblem.RunStopped)
+                    // A start whose producer's Git step is unfinished starts once it finishes, and one whose inputs changed
+                    // before its claim prepares again with the new ones, once the hold clears (#125).
                     HoldStart(task, new TaskHold.Refused(refused.Reason, refused.Client, Transient(refused.Reason.Problem) ||
+                        refused.Reason.Problem is RunProblem.StaleInput or RunProblem.UnresolvedOwnership ||
                         refused.Reason.Problem == RunProblem.RevisionConflict && dispatched is { } before && Record()?.Revision.Id != before));
                 break;
         }

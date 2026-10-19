@@ -40,7 +40,7 @@ internal sealed partial class Materializer
     }
 
     private void EnsureCheckout(CoordinatorPermit permit, OperationId operation, OperationId plan, GitRepository repository,
-        ExecutionLocation location, RunRecord record, bool keepFiles = false)
+        ExecutionLocation location, RunRecord record, bool keepFiles = false, bool retry = false)
     {
         var workflow = permit.Workflow;
         var run = permit.Run;
@@ -99,6 +99,28 @@ internal sealed partial class Materializer
         {
             var result = Mutate("lock-worktree", () => repository.LockWorktree(owner.RelativePath, reason));
             if (result.ExitCode != 0) throw Fault(MaterializationProblem.UncertainOwnership, result.Stderr, new BlockScope.Ownership());
+        }
+        // An editing task's Retry whose inputs' work changed starts at the merge of that work into its earlier change. Its
+        // branch moves there from where it was, and the files its worktree holds stay (#125).
+        if (retry && owner.Branch is { } own && RunReducer.Earlier(record, owner.Task) is { } earlier && earlier != location.AttemptBase)
+        {
+            var intended = OperationIds.Derive(operation, "retry-merge-intent");
+            var tip = Value(repository.ReadRef(own));
+            if (tip == earlier)
+            {
+                if (!record.GitIntents.ContainsKey(intended))
+                    Journal("retry-merge-intent", () => _store.Record(permit, intended,
+                        new RunEvent.GitIntended(plan, new GitMutation.MoveRef(new(own, earlier, location.AttemptBase)))));
+                var result = Mutate("retry-merge", () => repository.KeepReset(checkout, location.AttemptBase));
+                if (result.ExitCode != 0) throw Fault(MaterializationProblem.DirtyWorktree, result.Stderr.Trim(), BlockScope.Checkout.Whole);
+                tip = location.AttemptBase;
+            }
+            if (tip != location.AttemptBase)
+                throw Fault(MaterializationProblem.UncertainOwnership, "The task's branch is not where its earlier change is.", new BlockScope.Checkout([], Branch: true));
+            var moved = Read(workflow, run);
+            if (moved.GitIntents.ContainsKey(intended) && !moved.GitObservations.ContainsKey(intended))
+                Journal("retry-merge-observed", () => _store.Record(permit, OperationIds.Derive(operation, "retry-merge-observed"),
+                    new RunEvent.GitObserved(intended, new(false, location.AttemptBase.Hex))));
         }
         // A read-only worktree commits nothing, so each attempt starts exactly at the merge of its predecessors, without
         // what an earlier attempt left in it. Ignored files, such as delivered inputs, stay. A Merge node's Retry keeps the

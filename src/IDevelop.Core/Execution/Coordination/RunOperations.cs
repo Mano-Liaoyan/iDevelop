@@ -64,6 +64,12 @@ internal static class RunOperations
 
     public static OperationId Cancel(OperationId stop, AttemptId attempt) => OperationIds.Derive(stop, "cancel/" + attempt.Value.ToString("D"));
 
+    /// <summary>
+    /// The confirmation of the Retry that runs <paramref name="previous"/>'s task again by itself, once its result went out of
+    /// date or its unstarted attempt's inputs changed (#125). Every window derives the same one.
+    /// </summary>
+    public static OperationId Rerun(RunId run, AttemptId previous) => OperationIds.Derive(Root(run), "rerun/" + previous.Value.ToString("D"));
+
     public static OperationId NotStarted(OperationId stop, AttemptId attempt) => OperationIds.Derive(stop, "not-started/" + attempt.Value.ToString("D"));
 
     public static OperationId Stopped(OperationId stop) => OperationIds.Derive(stop, "settle/stopped");

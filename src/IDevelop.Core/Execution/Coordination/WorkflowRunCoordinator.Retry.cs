@@ -19,7 +19,10 @@ internal abstract record RetryReply
     internal sealed record Unavailable(string Message) : RetryReply;
 }
 
-/// <summary>Retry (E3h.1): a new attempt of a run's task that ended without a result, in a fresh client session.</summary>
+/// <summary>
+/// Retry (E3h.1, E3h.3): a new attempt of a run's task that ended, in a fresh client session. A task whose result went out
+/// of date, or whose unstarted attempt's inputs changed, runs again by itself the same way.
+/// </summary>
 internal sealed partial class WorkflowRunCoordinator
 {
     /// <summary>
@@ -37,14 +40,14 @@ internal sealed partial class WorkflowRunCoordinator
         }, wait);
 
     /// <summary>
-    /// Whether a run's task offers Retry: an agent's task whose newest attempt ended without a result, or a Merge node whose
-    /// attempt ended without resolving the conflict that went to it.
+    /// Whether a run's task offers Retry: an agent's task that is done (#125), or whose newest attempt ended without a result
+    /// and fixed no review round, or a Merge node whose attempt ended without resolving the conflict that went to it.
     /// </summary>
     internal static bool OffersRetry(Workflow snapshot, TaskView? view) =>
-        view is { State: TaskState.Failed, Attempt: not null } && snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
+        view is { State: TaskState.Failed or TaskState.Done, Attempt: not null } && snapshot.Tasks.GetValueOrDefault(view.Task)?.Blueprint.Work switch
         {
-            WorkSpec.Agent => view.Result is null,
-            WorkSpec.Merge => view.Merge is not null,
+            WorkSpec.Agent => view.State == TaskState.Done || !view.Fixes,
+            WorkSpec.Merge => view is { State: TaskState.Failed, Merge: not null },
             _ => false,
         };
 

@@ -41,7 +41,7 @@ The next turn of the same attempt, started by a reply or by text queued during a
 _Avoid_: Continue, which starts a new attempt
 
 **Retry**:
-A new attempt of a task with a fresh client session, started only by a person. A step the coordinator tries again after a busy refusal is not a Retry.
+A new attempt of a task with a fresh client session. A person starts it for a task that is done or whose newest attempt ended without a result, and the run starts it by itself for a task whose result went out of date, once every task before it is done, and for an unstarted attempt whose inputs changed. An editing task's Retry continues in its worktree with its earlier change, and the new work of the tasks before it merges in before its agent starts ([ADR 0034](docs/adr/0034-a-retry-merges-new-inputs-into-its-earlier-change-and-an-out-of-date-task-runs-again.md)). A step the coordinator tries again after a busy refusal is not a Retry.
 _Avoid_: Resume, rerun
 
 **Close as stopped**:
@@ -84,7 +84,7 @@ An earlier result that a node run takes for a task it does not run, recorded in 
 _Avoid_: imported result, reused result, which names a standalone report a run reuses
 
 **Stale result**:
-A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one needs attention, while an Approval node takes a new gate request instead.
+A task's current result that was built, directly or through other results, from a result that has since been superseded. It does not hand on. An agent task with one runs again by itself as a Retry once every task before it is done, and an Approval node takes a new gate request instead.
 _Avoid_: outdated. A Stale answer is a different thing: an answer to a gate request that is no longer open.
 
 ### Reviews

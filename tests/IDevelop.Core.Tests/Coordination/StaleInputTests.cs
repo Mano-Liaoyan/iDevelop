@@ -5,21 +5,22 @@ using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
 
 namespace IDevelop.Core.Tests.Coordination;
 
-/// <summary>A consumer that finished against a replaced input: its result is stale, and it needs attention.</summary>
+/// <summary>A consumer that finished against a replaced input: its result goes out of date, and it runs again by itself (#125).</summary>
 public sealed class StaleInputTests
 {
-    private static Workflow Chain() => Graph([Agent(A), Agent(B)], (A, B));
-
     /// <summary>
     /// A writes <c>a.txt="old\n"</c> and B starts from it. While B runs, the person retries A, whose retry runs beside B and
-    /// publishes <c>a.txt="new\n"</c>. B finishes against the input it claimed, so B's result is stale.
+    /// publishes <c>a.txt="new\n"</c>. B finishes against the input it claimed, so B's result is stale, and B runs again by
+    /// itself as a Retry, in its worktree with its earlier change and A's new work merged in.
     /// </summary>
-    private static async Task<ResultRecord> Stale(CoordinatorFixture f)
+    [Fact]
+    public async Task A_stale_consumer_runs_again_by_itself_and_the_run_completes()
     {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
         var gate = Path.Combine(f.Evidence, "gate");
         f.Answer(A, Writes(A, "a.txt", "old\n"), Writes(A, "a.txt", "new\n")).Answer(B, FakeRule.On()
             .Print(FakeAgents.SessionLine(ClientId.Codex, "session-B")).Write("b.txt", "B\n").WaitForFile(gate)
-            .Print(FakeAgents.ReplyLines(ClientId.Codex, "B ready.\n")));
+            .Print(FakeAgents.ReplyLines(ClientId.Codex, "B ready.\n")), Writes(B, "again.txt", "B again\n"));
         await f.Open();
         await f.Resume();
         await f.Until(view => view.Tasks[B].State == TaskState.Running);
@@ -28,29 +29,16 @@ public sealed class StaleInputTests
             Assert.IsType<Preparation.Ready>(await f.Preparation.Materializer().Prepare(lease, RunOperations.First(f.Preparation.RunId, A, cause), cause));
         f.Coordinator.Refresh();
         File.WriteAllText(gate, "open");
-        var stale = await f.Until(view => view.Tasks[B].State == TaskState.Stale && view.Tasks[A].State == TaskState.Done);
-        Assert.Equal("Needs attention", stale.Label);
-        Assert.Equal([2, 1], new[] { f.Launches(A), f.Launches(B) });
-        var result = f.Result(B);
-        Assert.Contains(result.Id, f.Read().StaleResults);
-        return result;
-    }
 
-    [Fact]
-    public async Task A_stale_consumer_needs_attention_and_the_run_does_not_complete()
-    {
-        await using var f = new CoordinatorFixture(Chain());
-        var stale = await Stale(f);
-
-        Assert.Equal("old\n", f.ResultFile(B, "a.txt"));
-        Assert.Equal(RunProblem.IncompleteResults, Assert.IsType<RunDecision.Rejected>(
-            f.Preparation.Store.Settle(f.Coordinator.Permit!, f.Preparation.Op(), RunOutcome.Completed)).Reason.Problem);
-        var view = await f.Decided();
-        Assert.Equal((RunStatus.NeedsAttention, TaskState.Stale), (view.Status, view.Tasks[B].State));
-        Assert.Equal(RunPhase.Approved, f.Read().Phase);
-        // Nothing replaces the stale result by itself: B runs once, and its result stays current.
-        Assert.Equal(stale.Id, f.Result(B).Id);
-        Assert.Equal([2, 1], new[] { f.Launches(A), f.Launches(B) });
-        Assert.Single(f.Read().Attempts.Values, attempt => attempt.Task == B);
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal([2, 2], new[] { f.Launches(A), f.Launches(B) });
+        var record = f.Read();
+        var stale = record.Results.First(result => result.Task == B);
+        Assert.Contains(stale.Id, record.StaleResults);
+        var first = Assert.IsType<ResultOrigin.Executed>(stale.Origin).Attempt;
+        var rerun = Assert.IsType<ResultOrigin.Executed>(f.Result(B).Origin).Attempt;
+        Assert.Equal(new AttemptCause.Retry(first, RunOperations.Rerun(f.Preparation.RunId, first)), record.Attempts[rerun].Cause);
+        Assert.Equal(record.Preparations[new(first, 1)].Location.Owner, record.Preparations[new(rerun, 1)].Location.Owner);
+        Assert.Equal(("new\n", "B\n", "B again\n"), (f.ResultFile(B, "a.txt"), f.ResultFile(B, "b.txt"), f.ResultFile(B, "again.txt")));
     }
 }

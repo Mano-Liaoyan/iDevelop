@@ -171,12 +171,36 @@ internal static partial class RunReducer
         {
             return inputs.CodeBase;
         }
-        var produced = record.Results.LastOrDefault(result => result.Task == attempt.Task && result.Code is CodeOutput.Produced);
-        return produced?.Code is CodeOutput.Produced output ? output.Code.Commit :
-            record.Preparations.Values.Where(prepared => record.Attempts[prepared.Launch.Attempt].Task == attempt.Task)
-                .OrderBy(prepared => record.Receipts.Values.Single(entry => entry.Event is RunEvent.Prepared e &&
-                    e.Execution.Launch == prepared.Launch).Sequence).FirstOrDefault()?.Location.AttemptBase;
+        // A Retry whose inputs' work changed starts at the merge of that work into its earlier change, or without an earlier
+        // change, at that work itself; its worktree's files go along (#125).
+        if (attempt.Cause is AttemptCause.Retry && Editable(record, attempt) && Moves(record, attempt, inputs)) return inputs.CodeBase;
+        return Earlier(record, attempt.Task);
     }
+
+    /// <summary>
+    /// Where a later attempt of an editing task starts while its inputs' work is unchanged: its newest result's code, or
+    /// without a result, where its first attempt started. Its worktree's branch is there.
+    /// </summary>
+    internal static CommitId? Earlier(RunRecord record, TaskId task) =>
+        record.Results.LastOrDefault(result => result.Task == task && result.Code is CodeOutput.Produced)?.Code is CodeOutput.Produced output
+            ? output.Code.Commit : First(record, task);
+
+    /// <summary>
+    /// Whether an editing task's Retry starts somewhere other than where its worktree's branch is: its inputs' code merges
+    /// with its current result's code, or it has no result and its inputs' code is not where its first attempt started.
+    /// </summary>
+    private static bool Moves(RunRecord record, RunAttempt attempt, InputRecord inputs)
+    {
+        if (inputs.Code is CodeSelection.Joined joined && joined.Join.Sources.Any(source => source.Task == attempt.Task)) return true;
+        if (record.Results.Any(result => result.Task == attempt.Task && result.Code is CodeOutput.Produced)) return false;
+        return First(record, attempt.Task) != inputs.CodeBase;
+    }
+
+    /// <summary>Where the task's first prepared attempt in this run started.</summary>
+    private static CommitId? First(RunRecord record, TaskId task) =>
+        record.Preparations.Values.Where(prepared => record.Attempts[prepared.Launch.Attempt].Task == task)
+            .OrderBy(prepared => record.Receipts.Values.Single(entry => entry.Event is RunEvent.Prepared e &&
+                e.Execution.Launch == prepared.Launch).Sequence).FirstOrDefault()?.Location.AttemptBase;
 
     internal static bool Editable(RunRecord record, RunAttempt attempt) =>
         record.Revisions[attempt.Revision].Snapshot.Tasks[attempt.Task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
@@ -205,11 +229,14 @@ internal static partial class RunReducer
                 {
                     return inputProblem.Problem;
                 }
-                if (!Same(preparation.Sources, InputMaterial.Sources(record, preparation.Bindings)) ||
+                if (!Same(preparation.Sources, InputMaterial.Sources(record, preparation.Task, preparation.Revision, preparation.Cause, preparation.Bindings)) ||
                     !Same(preparation.Review, InputMaterial.Review(record.Revisions[preparation.Revision].Snapshot, preparation.Task, preparation.Bindings)))
                 {
                     return RunProblem.InputConflict;
                 }
+                // A Retry is the person's deliberate choice, or a rerun of a result that went out of date, so it takes the
+                // inputs as they are now (#125).
+                if (preparation.Cause is AttemptCause.Retry) return null;
                 var prior = Previous(preparation.Cause) ?? (preparation.Cause is AttemptCause.ReviewFix ?
                     record.Receipts.Values.OrderByDescending(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Reserved>()
                         .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task)?.Attempt.Id : null);

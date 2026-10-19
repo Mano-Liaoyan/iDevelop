@@ -82,6 +82,27 @@ internal static class InputMaterial
         [.. bindings.OfType<InputBinding.Provided>().Where(binding => binding.Kind == ConnectionKind.Dependency)
             .Select(binding => Source(record, binding)).OfType<CodeSource>().OrderBy(source => source.Task.ToString(), StringComparer.Ordinal)];
 
+    /// <summary>
+    /// The code an attempt of <paramref name="task"/> with <paramref name="cause"/> starts from: its dependency inputs' code,
+    /// and for an editing task's Retry, once that code changed since its current result, the result's own code too. The
+    /// Retry then continues in its worktree with its earlier change, and the new work merges into it before its agent
+    /// starts (#125).
+    /// </summary>
+    internal static ImmutableArray<CodeSource> Sources(RunRecord record, TaskId task, RevisionId revision, AttemptCause cause,
+        ImmutableArray<InputBinding> bindings)
+    {
+        var sources = Sources(record, bindings);
+        if (cause is not AttemptCause.Retry ||
+            record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit } ||
+            record.CurrentResults.GetValueOrDefault(task) is not { Code: CodeOutput.Produced produced } result ||
+            !record.Inputs.TryGetValue(result.Inputs, out var built))
+            return sources;
+        var earlier = Sources(record, built.Bindings).Select(source => source.Commit).ToHashSet();
+        return sources.All(source => earlier.Contains(source.Commit)) ? sources
+            : [.. sources.Append(new(task, result.Id, [task], produced.Code.AttemptBase, produced.Code.Commit))
+                .OrderBy(source => source.Task.ToString(), StringComparer.Ordinal)];
+    }
+
     internal static ReviewInput? Review(Workflow workflow, TaskId task, ImmutableArray<InputBinding> bindings) =>
         workflow.SubjectOf(task) is { } subject && bindings.OfType<InputBinding.Provided>().FirstOrDefault(binding =>
             binding.Edge.From == subject && binding.Kind == ConnectionKind.Dependency) is { } provided
