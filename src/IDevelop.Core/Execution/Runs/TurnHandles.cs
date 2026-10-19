@@ -51,7 +51,7 @@ internal abstract record Reconciliation
 }
 
 internal sealed class SettledTurn(Func<Release> release, ExecutionAddress address, PreparedExecution preparation,
-    LogCheckpoint log, RunEvent.RootExitObserved exit, RunEvent.TurnClosed closure, RunEvent.CaptureDisposed capture,
+    LogCheckpoint log, RunEvent.RootExitObserved exit, RunEvent.TurnClosed closure, Settlement.Closed capture,
     AttemptRecord attempt, AttemptEvent.CleanedUp? cleanup, RunLease lease)
 {
     public ExecutionAddress Address { get; } = address;
@@ -59,7 +59,8 @@ internal sealed class SettledTurn(Func<Release> release, ExecutionAddress addres
     public LogCheckpoint Log { get; } = log;
     public RunEvent.RootExitObserved Exit { get; } = exit;
     public RunEvent.TurnClosed Closure { get; } = closure;
-    public RunEvent.CaptureDisposed Capture { get; } = capture;
+    /// <summary>The turn's capture, how it differs from the root observation, or why it could not be taken.</summary>
+    public Settlement.Closed Capture { get; } = capture;
     public AttemptRecord Attempt { get; } = attempt;
     public AttemptEvent.CleanedUp? Cleanup { get; } = cleanup;
     public RunLease Lease { get; } = lease;
@@ -86,7 +87,6 @@ internal abstract record TurnDisposition
     internal sealed record Resting(AttemptStatus Status, ImmutableArray<string> Queued) : TurnDisposition;
     internal sealed record Ended(AttemptEnd End) : TurnDisposition;
     internal sealed record Blocked(OperationId Block) : TurnDisposition;
-    internal sealed record Preserved(OperationId Plan) : TurnDisposition;
 }
 
 internal abstract record Release
@@ -154,16 +154,6 @@ internal abstract record ClaimCheck
 
 internal static class TurnReceipts
 {
-    /// <summary>A preservation of the launch's attempt recorded after the launch's claim, the newest first.</summary>
-    private static OperationId? Preservation(RunRecord record, LaunchKey launch)
-    {
-        var claimed = record.Receipts.Values.FirstOrDefault(entry => entry.Event is RunEvent.TurnClaimed claim && claim.Key == launch)?.Sequence;
-        return claimed is null ? null : record.Receipts.Values
-            .Where(entry => entry.Sequence > claimed && entry.Event is RunEvent.Preserved preserved &&
-                record.Plans.GetValueOrDefault(preserved.Plan) is MaterializationPlan.Preservation plan && plan.Attempt == launch.Attempt)
-            .OrderByDescending(entry => entry.Sequence).Select(entry => (OperationId?)((RunEvent.Preserved)entry.Event).Plan).FirstOrDefault();
-    }
-
     public static TurnDisposition? Receipt(RunStore store, ExecutionAddress address)
     {
         if (store.Read(address.Workflow, address.Run) is not RunRead.Loaded loaded)
@@ -181,8 +171,6 @@ internal static class TurnReceipts
             receipt = new TurnDisposition.Resting(resting.Status, [.. resting.Queued.Select(message => message.Text)]);
         else if (record.Closures.TryGetValue(attempt, out var end) && end is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded })
             receipt = new TurnDisposition.Ended(end);
-        else if (Preservation(record, address.Launch) is { } preserved)
-            receipt = new TurnDisposition.Preserved(preserved);
         else if (record.Blocks.FirstOrDefault(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == attempt) is { Value: not null } block)
             receipt = new TurnDisposition.Blocked(block.Key);
         return receipt;

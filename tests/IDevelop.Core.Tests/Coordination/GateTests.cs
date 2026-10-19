@@ -157,7 +157,7 @@ public sealed class GateTests
         // The request's join must be the one its plan recorded and published.
         var requested = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.GateRequested>().Single();
         var before = record with { Gates = record.Gates.Clear(), Inputs = record.Inputs.Remove(inputs.Id) };
-        RunRead Apply(RunEvent e) => RunReducer.Apply(RunFixtures.W, f.Preparation.RunId, before, new(3, record.Sequence + 1, Op(), RunFixtures.Prompt, RunFixtures.At, e));
+        RunRead Apply(RunEvent e) => RunReducer.Apply(RunFixtures.W, f.Preparation.RunId, before, new(RunJournal.Schema, record.Sequence + 1, Op(), RunFixtures.Prompt, RunFixtures.At, e));
         Assert.IsType<RunRead.Loaded>(Apply(requested));
         var forged = requested with { Inputs = inputs with { Code = new CodeSelection.Joined(join with { Commit = join.Sources[0].Commit }) } };
         Assert.Equal(RunProblem.InputConflict, Assert.IsType<RunRead.Rejected>(Apply(forged)).Reason.Problem);

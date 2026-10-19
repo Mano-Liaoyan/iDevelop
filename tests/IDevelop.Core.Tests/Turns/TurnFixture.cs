@@ -180,7 +180,7 @@ internal sealed class TurnFixture : IAsyncDisposable
         await using var control = new TurnFixture();
         await control.Open();
         var turn = await control.Settled(await control.Start());
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         control.Accept(turn);
         Assert.Equal("Succeeded", turn.Attempt.Status.ToString());
         Assert.Equal(0, Assert.IsType<RootExit.Exited>(turn.Exit.Exit).Code);

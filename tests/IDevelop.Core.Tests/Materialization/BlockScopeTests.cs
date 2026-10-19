@@ -35,19 +35,15 @@ public sealed class BlockScopeTests
     }
 
     [Fact]
-    public void A_block_journaled_before_scopes_replays_as_unrecorded_and_encodes_unchanged()
+    public void A_block_without_a_scope_is_invalid_data()
     {
         var operation = new OperationId(Guid.Parse("6f9619ff-8b86-4d01-b42d-00c04fc964ff"));
         var block = new MaterializationBlock(operation, T, null, MaterializationProblem.DirtyWorktree, null, [], "Checkout changed.")
             { Scope = BlockScope.Checkout.Whole };
-        var scoped = RunJournal.Encode(new RunEntry(3, 1, operation, Revision.Hash("legacy"), At, new RunEvent.Blocked(block)));
-        const string scope = ",\"scope\":{\"type\":\"checkout\",\"paths\":[],\"branch\":false,\"head\":false,\"indexLock\":false}";
+        var scoped = RunJournal.Encode(new RunEntry(RunJournal.Schema, 1, operation, Revision.Hash("block"), At, new RunEvent.Blocked(block)));
+        const string scope = ",\"scope\":{\"type\":\"checkout\",\"paths\":[],\"branch\":false,\"head\":false}";
         Assert.Contains(scope, scoped);
-        var legacy = scoped.Replace(scope, "");
-        var read = RunJournal.Decode(legacy);
-        Assert.Null(read.Rejection);
-        var entry = Assert.Single(read.Entries);
-        Assert.Same(BlockScope.Unrecorded.Value, Assert.IsType<RunEvent.Blocked>(entry.Event).Block.Scope);
-        Assert.Equal(legacy, RunJournal.Encode(entry));
+        Assert.Equal(RunJournal.Canonical(block), RunJournal.Canonical(Assert.IsType<RunEvent.Blocked>(Assert.Single(RunJournal.Decode(scoped).Entries).Event).Block));
+        Assert.Equal(new RunRejection(RunProblem.InvalidData, 1), RunJournal.Decode(scoped.Replace(scope, "")).Rejection);
     }
 }

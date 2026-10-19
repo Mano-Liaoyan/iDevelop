@@ -14,7 +14,7 @@ public sealed class JournalAccessTests
         File.WriteAllText(f.Journal(W, Run), "{\"schema\":1");
         var operation = f.Op();
         var revision = Revision.Capture(f.Workflow);
-        var codeBase = new RunBase(Base, BaseChoice.Head);
+        var codeBase = new RunBase(Base);
         Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, operation, revision, codeBase));
         var record = Assert.IsType<RunRead.Loaded>(f.Store.Read(W, Run)).Record;
         Assert.Equal(RunPhase.Approved, record.Phase);
@@ -27,7 +27,7 @@ public sealed class JournalAccessTests
     {
         using var f = new RunFixtures();
         File.WriteAllBytes(f.Journal(W, Run), []);
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base, BaseChoice.Head)));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base)));
         Assert.Equal(RunPhase.Approved, f.Read().Phase);
         File.WriteAllBytes(f.Journal(W, OtherRun), []);
         Assert.Equal(A1, Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(
@@ -40,7 +40,7 @@ public sealed class JournalAccessTests
         using var f = new RunFixtures();
         var otherWorkflow = new WorkflowId(Id(20));
         File.WriteAllText(f.Journal(otherWorkflow, OtherRun), "{\"schema\":1");
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base, BaseChoice.Head)));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base)));
         Assert.Equal(RunPhase.Approved, f.Read().Phase);
     }
 
@@ -51,7 +51,7 @@ public sealed class JournalAccessTests
         f.Approve(run: OtherRun);
         File.AppendAllText(f.Journal(W, OtherRun), "{\"schema\":1");
         Assert.Equal(RunProblem.RunBusy,
-            Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base, BaseChoice.Head))));
+            Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base))));
         Assert.Equal(RunPhase.Approved, Assert.IsType<RunRead.Rejected>(f.Store.Read(W, OtherRun)).Prefix!.Phase);
     }
 

@@ -30,7 +30,7 @@ public sealed class GateJournalTests
 
     private static string Json(RunEvent e) => RunJournal.Canonical(e);
 
-    private static RunEntry Entry(RunFixtures f, RunRecord record, RunEvent e) => new(record.Schema, record.Sequence + 1, f.Op(), Prompt, At, e);
+    private static RunEntry Entry(RunFixtures f, RunRecord record, RunEvent e) => new(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, e);
 
     private static RunProblem Refusal(RunFixtures f, RunRecord record, RunEvent e) =>
         Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record, Entry(f, record, e))).Reason.Problem;
@@ -267,7 +267,6 @@ public sealed class GateJournalTests
         Assert.Equal(RunProblem.RevisionConflict, Refusal(f, record, Requested(record, G, revision: new(new string('0', 64)))));
         Assert.Equal(RunProblem.StartConflict, Refusal(f, record, Requested(record, G, result: t.Id)));
         Assert.Equal(RunProblem.RunStopped, Refusal(f, record with { Phase = RunPhase.StopRequested }, Requested(record, G)));
-        Assert.Equal(RunProblem.UnsupportedSchema, Refusal(f, record with { Schema = 2 }, Requested(record, G)));
 
         var artifact = new ArtifactRecord("payload", RunStorage.ArtifactPath(t.Id, "payload"), Revision.Hash("C"), 1);
         var other = new ArtifactRecord("PAYLOAD", RunStorage.ArtifactPath(t.Id, "PAYLOAD"), Revision.Hash("X"), 1);
@@ -326,7 +325,6 @@ public sealed class GateJournalTests
         Assert.Equal(RunProblem.UnknownInput, Refusal(f, record, Accepted(valid with { Origin = new ResultOrigin.Human(new(Guid.NewGuid())) })));
         Assert.Equal(RunProblem.InvalidData, Refusal(f, record, Accepted(valid with { Origin = new ResultOrigin.Human(new(Guid.Empty)) })));
         Assert.Equal(RunProblem.RunStopped, Refusal(f, record with { Phase = RunPhase.StopRequested }, Accepted(valid)));
-        Assert.Equal(RunProblem.UnsupportedSchema, Refusal(f, record with { Schema = 2 }, Accepted(valid)));
         var onAgent = f.Reserve(U);
         Assert.Equal(RunProblem.UnsupportedResult, Refusal(f, f.Read(), new RunEvent.ResultAccepted(valid with
         {
@@ -369,7 +367,6 @@ public sealed class GateJournalTests
         Assert.Equal(RunProblem.InputConflict, Refusal(f, record, Sent(inputs: new(Guid.NewGuid()))));
         Assert.Equal(RunProblem.UnknownInput, Refusal(f, record, Sent(gate: new(Guid.NewGuid()))));
         Assert.Equal(RunProblem.RunStopped, Refusal(f, record with { Phase = RunPhase.StopRequested }, Sent()));
-        Assert.Equal(RunProblem.UnsupportedSchema, Refusal(f, record with { Schema = 2 }, Sent()));
 
         Assert.IsType<RunDecision.Created>(Answer(f, request, new GateAnswer.Approve()));
         Assert.Equal(RunProblem.StaleInput, Refusal(f, f.Read(), Sent()));

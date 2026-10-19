@@ -23,7 +23,7 @@ internal sealed partial class Materializer
     /// <summary>A review hands on its inputs' artifacts, so two different ones with one name block it before it runs.</summary>
     private static void VerifyForwarding(RunRecord record, TaskId task, RevisionId revision, ImmutableArray<InputBinding> bindings)
     {
-        if (record.Schema == 3 && record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review &&
+        if (record.Revisions[revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Review &&
             ArtifactForwarding.Collision(record, bindings) is { } name)
             throw Fault(MaterializationProblem.ArtifactCollision, $"Two inputs hand on different artifacts named {name}.", new BlockScope.Operation());
     }

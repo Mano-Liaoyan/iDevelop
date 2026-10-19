@@ -38,10 +38,10 @@ public sealed class CarriedJournalTests
 
     /// <summary>What <paramref name="run"/>, started from <paramref name="node"/>, carries under <paramref name="operation"/>.</summary>
     private static ImmutableArray<IncludedResult> Built(RunFixtures f, RunId run, TaskId node, OperationId operation) => Carrying.Build(
-        new RunRecord(run, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [node] }, History(f), operation).Carried;
+        new RunRecord(run, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [node] }, History(f), operation).Carried;
 
     private static RunDecision Approve(RunFixtures f, RunId run, OperationId operation, TaskId? node, ImmutableArray<IncludedResult> carried) =>
-        f.Store.Approve(W, run, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: node, carried: carried);
+        f.Store.Approve(W, run, operation, Revision.Capture(f.Workflow), new(Base), node: node, carried: carried);
 
     private static RunRejection Refused(RunDecision decision) => Assert.IsType<RunDecision.Rejected>(decision).Reason with { Sequence = 0 };
 
@@ -117,7 +117,7 @@ public sealed class CarriedJournalTests
     {
         using var f = new RunFixtures(Chain());
         First(f);
-        var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [C] };
+        var seed = new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [C] };
         var operation = f.Op();
         var carried = Carrying.Build(seed, History(f), operation).Carried;
         var withT = RunReducer.WithCarried(seed, carried[0]);
@@ -142,7 +142,7 @@ public sealed class CarriedJournalTests
         foreach (var task in new[] { x, y, w, z }) f.Complete(f.Reserve(task));
         Settle(f, Run);
 
-        var build = Carrying.Build(new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [x] },
+        var build = Carrying.Build(new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [x] },
             History(f), f.Op());
 
         Assert.Empty(build.Carried);
@@ -195,7 +195,7 @@ public sealed class CarriedJournalTests
         Assert.IsType<RunDecision.Created>(f.Store.Reserve(f.Lease(U, OtherRun), f.Op(), record.Revision.Id, new AttemptCause.Initial()));
         // A journal that requests the carried task anyway is refused on replay.
         record = f.Read(OtherRun);
-        var forged = new RunEntry(3, record.Sequence + 1, f.Op(), Revision.Hash("forged"), At, new RunEvent.Requested(T));
+        var forged = new RunEntry(RunJournal.Schema, record.Sequence + 1, f.Op(), Revision.Hash("forged"), At, new RunEvent.Requested(T));
         Assert.Equal(RunProblem.StartConflict, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, OtherRun, record, forged)).Reason.Problem);
     }
 

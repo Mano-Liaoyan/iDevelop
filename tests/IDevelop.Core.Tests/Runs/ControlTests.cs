@@ -40,7 +40,7 @@ public sealed class ControlTests
                 foreach (var owned in outcomes.OfType<ControlTake.Owned>()) owned.Permit.Dispose();
             }
         }
-        Assert.Equal((3, 1L), (f.Read().Schema, f.Read().Sequence));
+        Assert.Equal((RunJournal.Schema, 1L), (f.Read().Receipts.Values.Single().Schema, f.Read().Sequence));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public sealed class ControlTests
             var record = f.Read();
             Assert.Equal(before + 1, record.Sequence);
             var last = record.Receipts.Values.Single(entry => entry.Sequence == before + 1);
-            Assert.Equal(3, last.Schema);
+            Assert.Equal(RunJournal.Schema, last.Schema);
             Assert.Equal(new[] { new LaunchKey(A1, 1) }, Assert.IsType<RunEvent.OwnershipFenced>(last.Event).Claims);
             Assert.Contains("\"type\":\"ownershipFenced\"", RunJournal.Encode(last));
             Assert.Equal(new[] { new LaunchKey(A1, 1) }, record.UnresolvedClaims);
@@ -212,7 +212,7 @@ public sealed class ControlTests
         using var f = new RunFixtures();
         f.Approve();
         var damaged = f.Journal(W, OtherRun);
-        File.WriteAllText(damaged, """{"schema":4,"sequence":1,"event":{"type":"approved"}}""" + "\n");
+        File.WriteAllText(damaged, """{"schema":5,"sequence":1,"event":{"type":"approved"}}""" + "\n");
         Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 1),
             Assert.IsType<ControlTake.Rejected>(f.Store.TakeControl(W, Run)).Reason);
         File.Delete(damaged);
@@ -238,7 +238,7 @@ public sealed class ControlTests
         foreach (ImmutableArray<LaunchKey> claims in new ImmutableArray<LaunchKey>[]
             { [], [key, key], [new(new(Id(999)), 1)], [new(u.Attempt.Id, 1)] })
         {
-            var entry = new RunEntry(3, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.OwnershipFenced(claims));
+            var entry = new RunEntry(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.OwnershipFenced(claims));
             Assert.Equal(new RunRejection(RunProblem.InvalidClaim, record.Sequence + 1),
                 Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record, entry)).Reason);
         }
@@ -248,7 +248,7 @@ public sealed class ControlTests
         using (owned.Permit) Assert.Equal(new[] { key }, owned.Fenced);
         var fenced = f.Read();
         Assert.Equal(RunPhase.Abandoned, fenced.Phase);
-        var repeated = new RunEntry(3, fenced.Sequence + 1, f.Op(), Prompt, At, new RunEvent.OwnershipFenced([key]));
+        var repeated = new RunEntry(RunJournal.Schema, fenced.Sequence + 1, f.Op(), Prompt, At, new RunEvent.OwnershipFenced([key]));
         Assert.Equal(new RunRejection(RunProblem.InvalidClaim, fenced.Sequence + 1),
             Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, fenced, repeated)).Reason);
     }

@@ -174,7 +174,7 @@ public sealed class StopTests
     }
 
     [Theory]
-    [InlineData("journal.capture-1.after", "Stopped")]
+    [InlineData("journal.capture.after", "Stopped")]
     [InlineData("runner.request.after", "Stopped")]
     [InlineData("runner.claim.after", "Stopping")]
     public async Task Stop_after_a_reopen_reconciles_without_resume(string point, string status)
@@ -188,7 +188,7 @@ public sealed class StopTests
         if (status == "Stopped")
         {
             var stopped = await f.UntilStatus(RunStatus.Stopped);
-            if (point == "journal.capture-1.after") Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
+            if (point == "journal.capture.after") Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
             else Assert.IsType<AttemptEnd.Recovered>(stopped.Tasks[A].End);
         }
         else

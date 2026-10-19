@@ -77,11 +77,11 @@ internal sealed class RunHistory
     }
 
     /// <summary>
-    /// The history of <paramref name="workflow"/>'s tasks from <paramref name="records"/>. Only E3 runs that have settled
-    /// count, in the order they were approved: a workflow has one active run at a time, so its runs never overlap.
+    /// The history of <paramref name="workflow"/>'s tasks from <paramref name="records"/>. Only runs that have settled count,
+    /// in the order they were approved: a workflow has one active run at a time, so its runs never overlap.
     /// </summary>
     public static RunHistory Of(IEnumerable<RunRecord> records, Workflow workflow) => new([.. records
-        .Where(record => record.Workflow == workflow.Id && record.Schema == 3 && record.Phase is RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed)
+        .Where(record => record.Workflow == workflow.Id && record.Phase is RunPhase.Completed or RunPhase.Stopped or RunPhase.Failed)
         .OrderBy(Approval).ThenBy(record => record.Id.Value.ToString("D"), StringComparer.Ordinal)], workflow);
 
     /// <summary>The settled runs this history reads, oldest first.</summary>

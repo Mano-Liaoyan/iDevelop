@@ -253,9 +253,9 @@ public sealed class PlannerInclusionValidationTests
         ImmutableArray<ReportInclusion> include = [new(T, Source, 2)];
 
         var created = Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, operation, Revision.Capture(f.Workflow),
-            new(commit, BaseChoice.Head), include, confirmation));
+            new(commit), include, confirmation));
         var repeated = Assert.IsType<RunDecision.Existing>(f.NewStore().Approve(W, Run, operation, Revision.Capture(f.Workflow),
-            new(commit, BaseChoice.Head), include, confirmation));
+            new(commit), include, confirmation));
 
         Assert.Equal(RunJournal.Canonical(created.Event), RunJournal.Canonical(repeated.Event));
         var record = f.Read();
@@ -275,16 +275,16 @@ public sealed class PlannerInclusionValidationTests
         var commit = Repository(f.Project);
         WritePlanner(f.Project, commit, "waiting");
 
-        var refused = f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(commit, BaseChoice.Head), [new(T, Source, 2)], f.Op());
+        var refused = f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(commit), [new(T, Source, 2)], f.Op());
 
         Assert.Equal(new RunRejection(RunProblem.ReuseUnverifiable, Task: T), Assert.IsType<RunDecision.Rejected>(refused).Reason);
         Assert.False(File.Exists(f.Journal(W, Run)) && new FileInfo(f.Journal(W, Run)).Length > 0);
         Assert.Equal(RunProblem.ConfirmationRequired, Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow),
-            new(commit, BaseChoice.Head), [new(T, Source, 2)])));
+            new(commit), [new(T, Source, 2)])));
         Assert.Equal(RunProblem.InputConflict, Problem(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow),
-            new(commit, BaseChoice.Head), [new(T, Source, 2), new(T, Source, 2)], f.Op())));
+            new(commit), [new(T, Source, 2), new(T, Source, 2)], f.Op())));
         Assert.Equal(new RunRejection(RunProblem.ReuseUnverifiable, Task: U), Assert.IsType<RunDecision.Rejected>(f.Store.Approve(W, Run, f.Op(),
-            Revision.Capture(f.Workflow), new(commit, BaseChoice.Head), [new(U, Source, 2)], f.Op())).Reason);
+            Revision.Capture(f.Workflow), new(commit), [new(U, Source, 2)], f.Op())).Reason);
     }
 
     [Theory]
@@ -304,7 +304,7 @@ public sealed class PlannerInclusionValidationTests
         var commit = Repository(f.Project);
         WritePlanner(f.Project, commit);
         var approved = Assert.IsType<RunEvent.Approved>(Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(),
-            Revision.Capture(f.Workflow), new(commit, BaseChoice.Head), [new(T, Source, 2)], f.Op())).Event);
+            Revision.Capture(f.Workflow), new(commit), [new(T, Source, 2)], f.Op())).Event);
         var included = approved.Included!.Value[0];
         var origin = (ResultOrigin.Included)included.Result.Origin;
         var broken = change switch
@@ -324,7 +324,7 @@ public sealed class PlannerInclusionValidationTests
             "empty" => [],
             _ => [broken],
         };
-        var entry = new RunEntry(3, 1, new(Id(98)), Prompt, At, approved with { Included = all });
+        var entry = new RunEntry(RunJournal.Schema, 1, new(Id(98)), Prompt, At, approved with { Included = all });
         if (change == "edge")
         {
             // The planner gets an input in the approved revision; nothing else about the included result changes.
@@ -342,6 +342,6 @@ public sealed class PlannerInclusionValidationTests
             "empty" or "confirmation" => RunProblem.InvalidData,
             _ => RunProblem.ReuseUnverifiable,
         }, read.Reason.Problem);
-        Assert.IsType<RunRead.Loaded>(RunReducer.Replay(W, Run, [new RunEntry(3, 1, new(Id(98)), Prompt, At, approved)]));
+        Assert.IsType<RunRead.Loaded>(RunReducer.Replay(W, Run, [new RunEntry(RunJournal.Schema, 1, new(Id(98)), Prompt, At, approved)]));
     }
 }

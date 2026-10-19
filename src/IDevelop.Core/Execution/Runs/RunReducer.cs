@@ -25,7 +25,7 @@ internal static partial class RunReducer
     public static RunRead Apply(WorkflowId workflow, RunId run, RunRecord? record, RunEntry entry)
     {
         RunRead Reject(RunProblem problem, TaskId? task = null) => new RunRead.Rejected(new(problem, entry.Sequence, task), record);
-        if (entry.Schema is not (1 or 2 or 3) || record is not null && entry.Schema != record.Schema)
+        if (entry.Schema != RunJournal.Schema)
         {
             return Reject(RunProblem.UnsupportedSchema);
         }
@@ -52,7 +52,7 @@ internal static partial class RunReducer
                 return Reject(RunProblem.IdentityMismatch);
             }
 
-            record = new(run, workflow, approved.Base, approved.Revision) { Schema = entry.Schema };
+            record = new(run, workflow, approved.Base, approved.Revision);
             foreach (var included in approved.Included ?? [])
             {
                 if (IncludedProblem(record, included) is { } problem) return Reject(problem, included.Result.Task);
@@ -129,7 +129,7 @@ internal static partial class RunReducer
                 case RunEvent.Reserved reserved:
                     var attempt = reserved.Attempt;
                     if (ReservationTaskProblem(record, attempt.Task, attempt.Revision,
-                        recorded: record.Schema >= 2 && record.Plans.Values.OfType<MaterializationPlan.Preparation>()
+                        recorded: record.Plans.Values.OfType<MaterializationPlan.Preparation>()
                             .Any(plan => plan.Attempt == attempt.Id)) is { } taskProblem)
                     {
                         return Reject(taskProblem.Problem, taskProblem.Task);
@@ -156,7 +156,7 @@ internal static partial class RunReducer
                         return Reject(input.Problem, input.Task);
                     }
 
-                    if (record.Schema >= 2 && ReservedProblem(record, reserved) is { } materialInput)
+                    if (ReservedProblem(record, reserved) is { } materialInput)
                     {
                         return Reject(materialInput);
                     }
@@ -204,7 +204,7 @@ internal static partial class RunReducer
                         return Reject(turnInput.Problem, turnInput.Task);
                     }
 
-                    if (record.Schema == 3 && claim.Key.Turn == 1)
+                    if (claim.Key.Turn == 1)
                     {
                         var currentResults = record.CurrentResults;
                         var stale = record.StaleResults;
@@ -217,7 +217,7 @@ internal static partial class RunReducer
                         }
                     }
 
-                    if (record.Schema >= 2 && (!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
+                    if ((!record.Preparations.TryGetValue(claim.Key, out var prepared) ||
                         prepared.Inputs != claim.Inputs.Id || prepared.PromptHash != claim.Prompt))
                     {
                         return Reject(RunProblem.InvalidClaim);
@@ -240,51 +240,24 @@ internal static partial class RunReducer
                     break;
                 case RunEvent.TurnCaptured captured:
                     var observation = captured.Observation;
-                    var observations = record.Captures.GetValueOrDefault(observation.Capture, []);
-                    if (!record.RootExits.ContainsKey(observation.Launch) ||
-                        record.Fenced.Contains(observation.Launch) && !(observation.Ordinal == 2 && observation.Recovery && observations.Count == 1) ||
+                    if (!record.RootExits.ContainsKey(observation.Launch) || record.Fenced.Contains(observation.Launch) ||
                         record.TurnClosures.ContainsKey(observation.Launch) || record.Closures.ContainsKey(observation.Launch.Attempt) ||
-                        record.Dispositions.ContainsKey(observation.Capture) || observation.Ordinal != observations.Count + 1 ||
-                        observation.Ordinal is not (1 or 2) || CaptureForAnotherId(record, observation.Launch, observation.Capture))
+                        CaptureSettled(record, observation.Launch))
                         return Reject(RunProblem.InvalidClaim);
-                    if (observations.Any(prior => prior.Launch != observation.Launch || prior.Log != observation.Log))
-                        return Reject(RunProblem.EvidenceMismatch);
-                    record = record with { Captures = record.Captures.SetItem(observation.Capture, observations.Add(observation)) };
-                    break;
-                case RunEvent.CaptureDisposed disposed:
-                    var pair = record.Captures.GetValueOrDefault(disposed.Capture, []);
-                    if (!record.RootExits.ContainsKey(disposed.Launch) ||
-                        record.TurnClosures.ContainsKey(disposed.Launch) || record.Closures.ContainsKey(disposed.Launch.Attempt) ||
-                        record.Dispositions.ContainsKey(disposed.Capture) || CaptureForAnotherId(record, disposed.Launch, disposed.Capture) ||
-                        disposed.Disposition is CaptureDisposition.Failed && pair.Count > 1 ||
-                        disposed.Disposition is not CaptureDisposition.Failed && pair.Count is not (1 or 2))
-                        return Reject(RunProblem.InvalidClaim);
-                    if (pair.Any(prior => prior.Launch != disposed.Launch) ||
-                        disposed.Disposition is CaptureDisposition.Matched &&
-                        !CaptureComparison.Matches(pair[0], pair[^1], record.RootExits[disposed.Launch]))
-                        return Reject(RunProblem.EvidenceMismatch);
-                    record = record with
-                    {
-                        Captures = record.Captures.SetItem(disposed.Capture, pair),
-                        Dispositions = record.Dispositions.Add(disposed.Capture, disposed)
-                    };
+                    record = record with { Captures = record.Captures.Add(observation.Launch, observation) };
                     break;
                 case RunEvent.TurnClosed closed:
-                    if (record.Schema == 3 && record.Fenced.Contains(closed.Key) && closed.Capture is null || !record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
-                        record.Closures.ContainsKey(closed.Key.Attempt))
+                    if (!record.Claims.ContainsKey(closed.Key) || record.TurnClosures.ContainsKey(closed.Key) ||
+                        record.Closures.ContainsKey(closed.Key.Attempt) || record.Fenced.Contains(closed.Key) && !CaptureSettled(record, closed.Key))
                     {
                         return Reject(RunProblem.InvalidClaim);
                     }
 
-                    if (closed.Capture is { } capture && (!record.RootExits.ContainsKey(closed.Key) ||
-                        !record.Dispositions.TryGetValue(capture, out var disposition) || disposition.Launch != closed.Key ||
-                        record.Captures[capture].Any(observed => observed.Log != closed.Evidence)))
+                    // A turn whose client exited closes once its capture is recorded, taken or blocked.
+                    if (record.RootExits.ContainsKey(closed.Key) && (!CaptureSettled(record, closed.Key) ||
+                        record.Captures.TryGetValue(closed.Key, out var taken) && taken.Log != closed.Evidence))
                         return Reject(RunProblem.EvidenceMismatch);
-                    record = record with
-                    {
-                        TurnClosures = record.TurnClosures.Add(closed.Key, closed.Evidence),
-                        Settlements = closed.Capture is { } settlementCapture ? record.Settlements.Add(closed.Key, settlementCapture) : record.Settlements
-                    };
+                    record = record with { TurnClosures = record.TurnClosures.Add(closed.Key, closed.Evidence) };
                     break;
                 case RunEvent.AttemptClosed closed:
                     if (!record.Attempts.ContainsKey(closed.Attempt))
@@ -315,8 +288,7 @@ internal static partial class RunReducer
                         return Reject(RunProblem.IdentityMismatch);
                     }
 
-                    if (resultTask.Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } &&
-                        (record.Schema == 1 || resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human))
+                    if (resultTask.Blueprint.Work is WorkSpec.Person && result.Origin is not ResultOrigin.Human)
                     {
                         return Reject(RunProblem.UnsupportedResult);
                     }
@@ -382,14 +354,6 @@ internal static partial class RunReducer
                             }
 
                             break;
-                        case ResultOrigin.Rebased rebased:
-                            if (record.Schema != 3 || record.Plans.GetValueOrDefault(rebased.Plan) is not MaterializationPlan.Rebase rebase ||
-                                rebase.Task != result.Task || rebase.Source != rebased.Source || rebase.Result != result.Id)
-                            {
-                                return Reject(RunProblem.UnknownResult);
-                            }
-
-                            break;
                         case ResultOrigin.Human human:
                             if (HumanResultProblem(record, accepted, resultTask, human) is { } humanProblem)
                             {
@@ -400,7 +364,7 @@ internal static partial class RunReducer
                         default:
                             return Reject(RunProblem.UnsupportedResult);
                     }
-                    if (record.Schema >= 2 && ResultCodeProblem(record, accepted, resultTask) is { } codeProblem)
+                    if (ResultCodeProblem(record, accepted, resultTask) is { } codeProblem)
                     {
                         return Reject(codeProblem);
                     }
@@ -466,12 +430,6 @@ internal static partial class RunReducer
                     };
                     break;
                 case RunEvent.Settled settled:
-                    if (record.Plans.Any(pair => pair.Value is MaterializationPlan.Publication publication &&
-                        !record.Results.Any(result => result.Id == publication.Result) &&
-                        !record.Blocks.Values.Any(block => block.Block.Operation == pair.Key)))
-                    {
-                        return Reject(RunProblem.UnfinishedPublication);
-                    }
                     if (record.Attempts.Keys.Any(id => !record.Closures.ContainsKey(id)) || record.UnresolvedClaims.Length != 0)
                     {
                         return Reject(RunProblem.UnclosedAttempts);
@@ -751,9 +709,9 @@ internal static partial class RunValidation
             return RunProblem.InvalidData;
         }
 
-        if (SchemaProblem(entry) is { } schema)
+        if (entry.Schema != RunJournal.Schema)
         {
-            return schema;
+            return RunProblem.UnsupportedSchema;
         }
         return entry.Event switch
         {
@@ -773,9 +731,7 @@ internal static partial class RunValidation
                 observed.Exit is RootExit.NotStarted notStarted && string.IsNullOrWhiteSpace(notStarted.Detail)
                 ? RunProblem.InvalidData : null,
             RunEvent.TurnCaptured captured => !Capture(captured.Observation) ? RunProblem.InvalidData : null,
-            RunEvent.CaptureDisposed disposed => disposed.Capture.Value == Guid.Empty || !Key(disposed.Launch) ||
-                !Disposition(disposed.Disposition) ? RunProblem.InvalidData : null,
-            RunEvent.TurnClosed closed => closed.Capture?.Value == Guid.Empty || !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
+            RunEvent.TurnClosed closed => !Key(closed.Key) || !Checkpoint(closed.Evidence) ? RunProblem.InvalidData : null,
             RunEvent.AttemptClosed closed => closed.Attempt.Value == Guid.Empty ? RunProblem.InvalidData : End(closed.End),
             RunEvent.ResultAccepted accepted => !Result(accepted.Result) || !Input(accepted.Inputs) ? RunProblem.InvalidData : null,
             RunEvent.GateRequested { Request: var request } requested => request.Id.Value == Guid.Empty || request.Task.Value == Guid.Empty ||
@@ -808,7 +764,7 @@ internal static partial class RunValidation
         return Revision.Check(revision)?.Problem;
     }
 
-    private static bool Base(RunBase value) => Revision.IsCommit(value.Commit.Hex) && Enum.IsDefined(value.Choice);
+    private static bool Base(RunBase value) => Revision.IsCommit(value.Commit.Hex);
 
     internal static bool Checkpoint(LogCheckpoint checkpoint) => checkpoint.ByteLength > 0 && Revision.IsHash(checkpoint.Content.Sha256);
 
@@ -854,8 +810,6 @@ internal static partial class RunValidation
             result.Code is CodeOutput.Produced produced && Owned(produced.Code)) && (result.Origin switch
         {
             ResultOrigin.Executed executed => executed.Attempt.Value != Guid.Empty,
-            ResultOrigin.Rebased rebased => rebased.Source.Value != Guid.Empty && rebased.Plan.Value != Guid.Empty &&
-                rebased.Source == result.Supersedes,
             ResultOrigin.Human human => human.Request.Value != Guid.Empty,
             ResultOrigin.Carried carried => carried.Run.Value != Guid.Empty && carried.Result.Value != Guid.Empty,
             ResultOrigin.Reused reused => Checkpoint(reused.Evidence.SourceLog) && Revision.IsHash(reused.Evidence.Definition.Sha256) &&

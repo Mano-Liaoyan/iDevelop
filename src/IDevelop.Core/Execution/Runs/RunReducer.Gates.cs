@@ -35,7 +35,6 @@ internal static partial class RunReducer
     {
         var request = requested.Request;
         var inputs = requested.Inputs;
-        if (record.Schema != 3) return RunProblem.UnsupportedSchema;
         if (record.Phase != RunPhase.Approved) return RunProblem.RunStopped;
         if (request.Revision != record.Revision.Id) return RunProblem.RevisionConflict;
         if (!record.Revision.Snapshot.Tasks.TryGetValue(request.Task, out var definition)) return RunProblem.IdentityMismatch;
@@ -70,7 +69,6 @@ internal static partial class RunReducer
     private static RunProblem? HumanResultProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task, ResultOrigin.Human human)
     {
         var result = accepted.Result;
-        if (record.Schema != 3) return RunProblem.UnsupportedSchema;
         if (task.Blueprint.Work is not WorkSpec.Person) return RunProblem.UnsupportedResult;
         if (record.Phase != RunPhase.Approved) return RunProblem.RunStopped;
         if (!record.Gates.TryGetValue(human.Request, out var gate)) return RunProblem.UnknownInput;
@@ -83,7 +81,6 @@ internal static partial class RunReducer
 
     private static (RunRecord Record, RunProblem? Problem) SendBack(RunRecord record, RunEntry entry, RunEvent.GateSentBack sent)
     {
-        if (record.Schema != 3) return (record, RunProblem.UnsupportedSchema);
         if (record.Phase != RunPhase.Approved) return (record, RunProblem.RunStopped);
         if (!record.Gates.TryGetValue(sent.Request, out var gate)) return (record, RunProblem.UnknownInput);
         if (gate.Request.Inputs != sent.Inputs) return (record, RunProblem.InputConflict);

@@ -100,8 +100,8 @@ internal sealed class ApprovalIntents
     }
 
     /// <summary>
-    /// Every readable intent of schema 2, by run. An intent that cannot be read, or one of schema 1 that a snapshot choice
-    /// shaped, is left alone and blocks nothing.
+    /// Every readable intent of schema 2, by run. An intent that cannot be read, one of schema 1 that a snapshot choice
+    /// shaped, and one beside a run journal of an earlier format are left alone and block nothing.
     /// </summary>
     public ImmutableArray<ApprovalIntent> All()
     {
@@ -110,7 +110,7 @@ internal sealed class ApprovalIntents
         foreach (var run in Directory.EnumerateDirectories(_folder).Order(StringComparer.Ordinal))
         {
             var path = Path.Combine(run, FileName);
-            if (!File.Exists(path) || !Guid.TryParse(Path.GetFileName(run), out var id)) continue;
+            if (!File.Exists(path) || !Guid.TryParse(Path.GetFileName(run), out var id) || EarlierJournal(run)) continue;
             try
             {
                 if (JsonSerializer.Deserialize<ApprovalIntent>(File.ReadAllBytes(path), Options) is { Schema: 2 } intent && intent.Run.Value == id &&
@@ -121,6 +121,12 @@ internal sealed class ApprovalIntents
                 FormatException or ArgumentException or ProjectException or BlueprintException or OverflowException) { }
         }
         return intents.ToImmutable();
+    }
+
+    private static bool EarlierJournal(string run)
+    {
+        var journal = Path.Combine(run, "events.jsonl");
+        return File.Exists(journal) && RunJournal.Earlier(SharedFile.ReadAllBytes(journal));
     }
 
     public void Write(ApprovalIntent intent)

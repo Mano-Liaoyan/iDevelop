@@ -23,9 +23,7 @@ internal sealed partial class Materializer
         {
             var record = Read(permit.Workflow, permit.Run);
             var recoveredAbandonment = record.Phase == RunPhase.Abandoned &&
-                record.Attempts.Keys.All(record.Closures.ContainsKey) &&
-                record.Plans.Where(pair => pair.Value is MaterializationPlan.Salvage).All(pair => record.Salvages.ContainsKey(pair.Key)) &&
-                record.Blocks.Values.All(block => block.Resolved);
+                record.Attempts.Keys.All(record.Closures.ContainsKey) && record.Blocks.Values.All(block => block.Resolved);
             if (!record.Receipts.Values.Any(entry => entry.Event is RunEvent.Settled) && !recoveredAbandonment)
                 return new PinRelease.Rejected(new(RunProblem.NotSettled));
             // A run that settled before its first preparation never wrote its base ref, so its approval pin keeps the base
@@ -36,16 +34,8 @@ internal sealed partial class Materializer
             var repository = OpenRepository();
             VerifyRepository(record, repository);
             var pins = Value(repository.RefSnapshot(RunLayout.PinPrefix(record.RunKey)));
-            var retained = record.Plans.Where(pair => pair.Value is MaterializationPlan.Preservation && !record.Preservations.ContainsKey(pair.Key) ||
-                pair.Value is MaterializationPlan.Salvage && !record.Salvages.ContainsKey(pair.Key)).Select(pair => pair.Value switch
-                {
-                    MaterializationPlan.Preservation plan => (plan.Task, plan.Attempt),
-                    MaterializationPlan.Salvage plan => (plan.Task, plan.Attempt),
-                    _ => throw new InvalidOperationException(),
-                }).Distinct().Select(pair => $"{RunLayout.PinPrefix(record.RunKey)}{record.TaskKeys[pair.Task]}/{pair.Attempt.Value:D}/preserve/")
-                .ToArray();
             var count = 0;
-            foreach (var (name, tip) in pins.Where(pair => !retained.Any(prefix => pair.Key.StartsWith(prefix, StringComparison.Ordinal))))
+            foreach (var (name, tip) in pins)
             {
                 var deleted = Mutate("release-pin", () => repository.DeleteRef(name, tip));
                 if (deleted.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, deleted.Stderr, new BlockScope.Refs([name]));

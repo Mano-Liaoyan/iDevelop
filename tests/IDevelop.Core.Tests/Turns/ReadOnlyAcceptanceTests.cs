@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Core.Tests.Runs;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
@@ -36,7 +37,7 @@ public sealed class ReadOnlyAcceptanceTests
         };
         var turn = await f.Settled(await f.Start());
         Assert.Equal("Succeeded", turn.Attempt.Status.ToString());
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal(row == "files" ? "changed\n" : "root\n", File.ReadAllText(Path.Combine(f.Checkout, "root.txt")));
         var attempt = turn.Address.Launch.Attempt;
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(), attempt,

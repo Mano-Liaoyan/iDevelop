@@ -274,7 +274,7 @@ public sealed class RecoveryAndResultTests
     {
         using var f = new RunFixtures();
         f.Approve();
-        File.AppendAllText(f.Journal(W, Run), """{"schema":1,"sequence":3,"event":{"type":"stopRequested"}}""" + "\n");
+        File.AppendAllText(f.Journal(W, Run), """{"schema":4,"sequence":3,"event":{"type":"stopRequested"}}""" + "\n");
         Assert.Equal(new RunRejection(RunProblem.SequenceGap, 2),
             Assert.IsType<RecoveryRead.Rejected>(f.Store.InspectRecovery(W, Run)).Reason);
     }

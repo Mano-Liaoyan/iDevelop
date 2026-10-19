@@ -11,7 +11,7 @@ public sealed class RunReviewsTests
     private static readonly AttemptId Fix = A1;
 
     private static RunRecord Record(AttemptEnd? end = null, bool published = false) =>
-        new RunRecord(Run, W, new(Base, BaseChoice.Head), Revision.Capture(FixtureWorkflow()))
+        new RunRecord(Run, W, new(Base), Revision.Capture(FixtureWorkflow()))
         {
             Closures = end is null ? [] : new Dictionary<AttemptId, AttemptEnd> { [Fix] = end }.ToImmutableDictionary(),
             Results = published ? [new(new(Guid.NewGuid()), T, default, default, new ResultOrigin.Executed(Fix), "Fixed.\n", null)] : [],

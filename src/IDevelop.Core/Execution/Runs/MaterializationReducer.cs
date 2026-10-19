@@ -15,21 +15,12 @@ internal static partial class RunReducer
         if (record.Phase == RunPhase.StopRequested)
         {
             return e is not (RunEvent.Reserved or RunEvent.Prepared or RunEvent.TurnClaimed or RunEvent.Requested or
-                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Rebase });
+                RunEvent.Planned { Plan: MaterializationPlan.Preparation or MaterializationPlan.Refresh });
         }
         return e switch
         {
-            RunEvent.Planned { Plan: MaterializationPlan.Salvage or MaterializationPlan.Preservation or MaterializationPlan.Restoration } => true,
-            RunEvent.GitIntended intent when record.Plans.GetValueOrDefault(intent.Plan) is MaterializationPlan.Restoration => true,
-            RunEvent.GitIntended { Mutation: GitMutation.MoveRef move } intent =>
-                move.Change.Expected is null && (record.Plans.GetValueOrDefault(intent.Plan) switch
-                {
-                    MaterializationPlan.Salvage salvage => move.Change.Ref == salvage.Ref && move.Change.Target == salvage.Commit,
-                    MaterializationPlan.Preservation preservation => move.Change.Ref == preservation.Ref && move.Change.Target == preservation.Commit,
-                    _ => false,
-                }),
-            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined => true,
-            RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured or RunEvent.CaptureDisposed => record.Phase == RunPhase.Abandoned,
+            RunEvent.GitObserved or RunEvent.Blocked or RunEvent.BlockResolved => true,
+            RunEvent.AttemptClosed or RunEvent.TurnClosed or RunEvent.RootExitObserved or RunEvent.TurnCaptured => record.Phase == RunPhase.Abandoned,
             _ => false,
         };
     }
@@ -62,12 +53,6 @@ internal static partial class RunReducer
             case RunEvent.Planned { Plan: MaterializationPlan.Preparation preparation } when
                 record.Plans.Values.OfType<MaterializationPlan.Preparation>().Any(plan => plan.Attempt == preparation.Attempt || plan.Inputs == preparation.Inputs):
                 return Reject(RunProblem.InputConflict);
-            case RunEvent.Planned { Plan: MaterializationPlan.Rebase rebase }:
-                if (RebaseProblem(record, entry.Operation, rebase) is { } rebaseProblem)
-                {
-                    return Reject(rebaseProblem);
-                }
-                return (record with { Plans = record.Plans.Add(entry.Operation, rebase) }, null);
             case RunEvent.Planned planned:
                 if (PlanProblem(record, planned.Plan) is { } planProblem)
                 {
@@ -89,8 +74,6 @@ internal static partial class RunReducer
                 {
                     return Reject(RunProblem.InvalidData);
                 }
-                if (intended.Mutation is GitMutation.RestoreRef or GitMutation.RestoreFiles or GitMutation.RemoveIndexLock &&
-                    !RestorationMutation(record, intended)) return Reject(RunProblem.InvalidData);
                 return (record with { GitIntents = record.GitIntents.Add(entry.Operation, intended) }, null);
             case RunEvent.GitObserved observed:
                 if (observed.Mutation == entry.Operation || !record.GitIntents.ContainsKey(observed.Mutation) ||
@@ -142,46 +125,14 @@ internal static partial class RunReducer
                 {
                     return Reject(RunProblem.InvalidData);
                 }
-                return (record with { Blocks = record.Blocks.Add(entry.Operation, new(block, false)) }, null);
-            case RunEvent.SalvageRetained retained:
-                if (record.Plans.GetValueOrDefault(retained.Plan) is not MaterializationPlan.Salvage salvage ||
-                    retained.Ref != salvage.Ref || retained.Commit != salvage.Commit || record.Salvages.ContainsKey(retained.Plan) ||
-                    !ObservedMove(record, retained.Plan, retained.Ref, null, retained.Commit))
+                // A turn's capture that could not be taken blocks under its turn's capture operation, once, after its root exit.
+                if (block.Attempt is { } captured && record.Claims.Keys.Where(key => key.Attempt == captured && CaptureBlock(key) == block.Operation)
+                    .Select(key => (LaunchKey?)key).FirstOrDefault() is { } launch &&
+                    (!record.RootExits.ContainsKey(launch) || record.TurnClosures.ContainsKey(launch) || CaptureSettled(record, launch)))
                 {
-                    return Reject(RunProblem.InvalidData);
+                    return Reject(RunProblem.InvalidClaim);
                 }
-                return (record with { Salvages = record.Salvages.Add(retained.Plan, retained) }, null);
-            case RunEvent.RecoveryBaselined baselined:
-                var baseline = baselined.Baseline;
-                var preservationId = OperationIds.Derive(baseline.Preservation, "preserve-plan");
-                if (record.Schema != 3 || !record.Closures.TryGetValue(baseline.Previous, out var previousEnd) ||
-                    previousEnd is AttemptEnd.Recovered { Outcome: RecoveryOutcome.NotStarted } ||
-                    record.Baselines.ContainsKey((baseline.Previous, baseline.Confirmation)) || string.IsNullOrEmpty(baseline.Session) ||
-                    !record.Preservations.ContainsKey(preservationId) ||
-                    record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation recoveryPreservation ||
-                    !record.Preparations.TryGetValue(new(baseline.Previous, 1), out var previousPreparation) ||
-                    !record.Preparations.TryGetValue(new(recoveryPreservation.Attempt, 1), out var preservedPreparation) ||
-                    preservedPreparation.Location.Owner != previousPreparation.Location.Owner || recoveryPreservation.Preserved.IndexLock is not null ||
-                    ResolveReceiptBlocks(record, baselined.Resolved, recoveryPreservation.Task,
-                        (_, block) => OperationIds.Derive(block.Operation, "baseline") == entry.Operation || CheckedWithCheckout(block.Scope)) is not { } baselineBlocks)
-                    return Reject(RunProblem.InvalidData);
-                return (record with { Baselines = record.Baselines.Add((baseline.Previous, baseline.Confirmation), baselined), Blocks = baselineBlocks }, null);
-            case RunEvent.Restored restored:
-                if (record.Schema != 3 || record.Plans.GetValueOrDefault(restored.Plan) is not MaterializationPlan.Restoration restoration ||
-                    record.Restorations.ContainsKey(restored.Plan) || RestorationSuperseded(record, restored.Plan) ||
-                    ResolveReceiptBlocks(record, restored.Resolved, restoration.Task,
-                        (id, block) => RestoreResolves(record, restored.Plan, restoration, id, block)) is not { } restoredBlocks)
-                    return Reject(RunProblem.InvalidData);
-                return (record with { Restorations = record.Restorations.Add(restored.Plan, restored), Blocks = restoredBlocks }, null);
-            case RunEvent.Preserved preserved:
-                if (record.Plans.GetValueOrDefault(preserved.Plan) is not MaterializationPlan.Preservation preservation ||
-                    preserved.Ref != preservation.Ref || preserved.Commit != preservation.Commit || record.Preservations.ContainsKey(preserved.Plan) ||
-                    !ObservedMove(record, preserved.Plan, preserved.Ref, null, preserved.Commit))
-                    return Reject(RunProblem.InvalidData);
-                return (record with { Preservations = record.Preservations.Add(preserved.Plan, preserved) }, null);
-            case RunEvent.PreservationDiverged diverged:
-                if (record.PreservationDivergences.ContainsKey(diverged.Operation)) return Reject(RunProblem.InvalidData);
-                return (record with { PreservationDivergences = record.PreservationDivergences.Add(diverged.Operation, diverged) }, null);
+                return (record with { Blocks = record.Blocks.Add(entry.Operation, new(block, false)) }, null);
             case RunEvent.BlockResolved resolved:
                 if (!record.Blocks.TryGetValue(resolved.Block, out var state) || state.Resolved)
                 {
@@ -191,72 +142,6 @@ internal static partial class RunReducer
             default:
                 return Reject(RunProblem.UnsupportedEvent);
         }
-    }
-
-    // An earlier journal's restoration or recovery-baseline receipt came after a check of the whole checkout, its worktree ownership and
-    // the repository identity.
-    internal static bool CheckedWithCheckout(BlockScope scope) => scope is BlockScope.Checkout or BlockScope.Ownership or BlockScope.Repository;
-
-    // An earlier journal's restoration receipt resolves what its plan repaired or rechecked and its own faults. No recheck vouches for a
-    // pin, which only its writer rewrites.
-    internal static bool RestoreResolves(RunRecord record, OperationId planId, MaterializationPlan.Restoration plan, OperationId id,
-        MaterializationBlock block) =>
-        block.Task == plan.Task && (plan.Repairs.Contains(id) || plan.Rechecks.Contains(id) || OwnOrSuperseded(record, planId, block.Operation)) && block.Scope switch
-        {
-            BlockScope.Refs refs => refs.Names.All(name => !Pinned(record, name)),
-            BlockScope.Operation => OwnOrSuperseded(record, planId, block.Operation),
-            BlockScope.Unrecorded => plan.Repairs.Contains(id),
-            var scope => CheckedWithCheckout(scope),
-        };
-
-    // A superseded restore never reruns, so the restore that replaces it, directly or along a chain, answers for its faults.
-    private static bool OwnOrSuperseded(RunRecord record, OperationId planId, OperationId owner)
-    {
-        for (OperationId? plan = planId; plan is { } id; plan = (record.Plans.GetValueOrDefault(id) as MaterializationPlan.Restoration)?.Supersedes)
-            if (id == owner) return true;
-        return false;
-    }
-
-    internal static bool Pinned(RunRecord record, string name) => name.StartsWith(RunLayout.PinPrefix(record.RunKey!), StringComparison.Ordinal);
-
-    private static ImmutableDictionary<OperationId, MaterializationBlockState>? ResolveReceiptBlocks(RunRecord record,
-        ImmutableArray<OperationId> resolved, TaskId task, Func<OperationId, MaterializationBlock, bool> checkedBlock)
-    {
-        if (resolved.IsDefault) return null;
-        var blocks = record.Blocks;
-        foreach (var id in resolved)
-        {
-            if (!blocks.TryGetValue(id, out var block) || block.Resolved || block.Block.Task != task || !checkedBlock(id, block.Block)) return null;
-            blocks = blocks.SetItem(id, block with { Resolved = true });
-        }
-        return blocks;
-    }
-
-    internal static bool RestorationSuperseded(RunRecord record, OperationId plan) =>
-        record.Plans.Values.OfType<MaterializationPlan.Restoration>().Any(p => p.Supersedes == plan);
-
-    internal static IEnumerable<OperationId> UnfinishedRestorations(RunRecord record, WorktreeOwner owner) =>
-        record.Plans.Where(p => p.Value is MaterializationPlan.Restoration restoration &&
-            record.Preparations[new(restoration.Attempt, 1)].Location.Owner == owner &&
-            !record.Restorations.ContainsKey(p.Key) && !RestorationSuperseded(record, p.Key)).Select(p => p.Key);
-
-    private static long RestorationLastSequence(RunRecord record, OperationId plan) =>
-        record.Receipts.Values.Where(e => e.Operation == plan || e.Event is RunEvent.GitIntended intended && intended.Plan == plan ||
-            e.Event is RunEvent.GitObserved observed && record.GitIntents[observed.Mutation].Plan == plan ||
-            e.Event is RunEvent.Blocked blocked && blocked.Block.Operation == plan).Max(e => e.Sequence);
-
-    private static bool RestorationMutation(RunRecord record, RunEvent.GitIntended intended)
-    {
-        if (record.Plans.GetValueOrDefault(intended.Plan) is not MaterializationPlan.Restoration plan ||
-            RestorationSuperseded(record, intended.Plan)) return false;
-        var owner = record.Preparations[new(plan.Attempt, 1)].Location.Owner;
-        return intended.Mutation switch
-        {
-            GitMutation.RestoreRef m => plan.To.Branch is { } target && owner.Branch is { } restored && m.Change == new RefChange(restored, plan.From.Branch, target),
-            GitMutation.RestoreFiles m => m.Task == plan.Task && Same(m.Paths, plan.Paths),
-            GitMutation.RemoveIndexLock m => m.Task == plan.Task && Same(m.Lock, plan.From.IndexLock),
-            _ => false,
-        };
     }
 
     private static bool CanRefresh(RunRecord record, AttemptId attempt) =>
@@ -270,11 +155,11 @@ internal static partial class RunReducer
 
     private static bool KnownTask(RunRecord record, TaskId task) => record.Revisions.Values.Any(revision => revision.Snapshot.Tasks.ContainsKey(task));
 
-    /// <summary>An editing task's worktree is on the task's branch, and a read-only task's worktree may have no branch (ADR 0032).</summary>
+    /// <summary>An editing task's worktree is on the task's branch, and a read-only task's worktree has no branch (ADR 0032).</summary>
     private static bool MatchesOwner(RunRecord record, RunAttempt attempt, WorktreeOwner owner) =>
         record.RunKey is { } run && record.TaskKeys.TryGetValue(attempt.Task, out var key) && owner.Task == attempt.Task &&
         owner.RelativePath == RunLayout.TaskCheckout(run, key) &&
-        (owner.Branch == RunLayout.TaskBranch(run, key) || owner.Branch is null && !Editable(record, attempt));
+        owner.Branch == (Editable(record, attempt) ? RunLayout.TaskBranch(run, key) : null);
 
     internal static CommitId? AttemptBase(RunRecord record, RunAttempt attempt, InputRecord inputs)
     {
@@ -320,7 +205,7 @@ internal static partial class RunReducer
                     record.Receipts.Values.OrderByDescending(entry => entry.Sequence).Select(entry => entry.Event).OfType<RunEvent.Reserved>()
                         .FirstOrDefault(reserved => reserved.Attempt.Task == preparation.Task)?.Attempt.Id : null);
                 if (prior is { } previous && record.Plans.Values.OfType<MaterializationPlan.Preparation>().FirstOrDefault(p => p.Attempt == previous) is { } old &&
-                    !Same(RebasedSources(record, preparation.Task) ?? old.Sources, preparation.Sources))
+                    !Same(old.Sources, preparation.Sources))
                 {
                     return RunProblem.StaleInput;
                 }
@@ -365,90 +250,10 @@ internal static partial class RunReducer
                     join.Sources.Select(source => source.Commit).Distinct().Count() >= 2 &&
                     join.Recipe.Parents.SequenceEqual(join.Sources.Select(source => source.Commit).Distinct())
                     ? null : RunProblem.InputConflict;
-            case MaterializationPlan.Publication publication:
-                if (!record.Attempts.TryGetValue(publication.Attempt, out var publisher))
-                {
-                    return RunProblem.UnknownAttempt;
-                }
-                if (!Editable(record, publisher))
-                {
-                    return RunProblem.UnsupportedResult;
-                }
-                if (record.Closures.GetValueOrDefault(publisher.Id) is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded })
-                {
-                    return RunProblem.OutcomeMismatch;
-                }
-                if (!record.Preparations.ContainsKey(new(publisher.Id, 1)))
-                {
-                    return RunProblem.InvalidClaim;
-                }
-                if (record.Plans.Values.OfType<MaterializationPlan.Publication>().Any(p => p.Attempt == publisher.Id))
-                {
-                    return RunProblem.StartConflict;
-                }
-                if (record.Schema == 3)
-                {
-                    // The captures froze the turn's log. Publish checks the closure against it, which Mark done extends by one line.
-                    var launch = new LaunchKey(publisher.Id, record.TurnClosures.Keys.Where(key => key.Attempt == publisher.Id).Select(key => key.Turn).DefaultIfEmpty(0).Max());
-                    if (publication.Capture is not { } capture || record.Settlements.GetValueOrDefault(launch) != capture ||
-                        record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
-                        !record.RootExits.TryGetValue(launch, out var root) || !record.Captures.TryGetValue(capture, out var observations) ||
-                        !record.TurnClosures.TryGetValue(launch, out var turn) ||
-                        observations.Count is not (1 or 2) || observations.Any(o => o.Log != turn || o.Report != publication.Report))
-                        return RunProblem.OutcomeMismatch;
-                    var first = observations[0];
-                    if (publication.VerifiedTip != root.Tip || publication.IndexBefore != first.Index?.Content ||
-                        !Same(publication.Recipe, first.Recipe) || publication.Commit != first.Candidate || publication.Report != first.Report ||
-                        !Same(publication.Artifacts, first.Artifacts.Select(artifact => artifact with
-                        { StoredPath = RunStorage.ArtifactPath(publication.Result, artifact.Name) }).ToImmutableArray()
-                            .AddRange(CarriedArtifacts(record, publisher.Id, first.Artifacts, publication.Result))))
-                        return RunProblem.EvidenceMismatch;
-                }
-                else if (publication.Capture is not null) return RunProblem.InvalidData;
-                return publication.Recipe.Parents.Length == 1 && publication.Recipe.Parents[0] == publication.VerifiedTip ? null : RunProblem.InvalidData;
-            case MaterializationPlan.Salvage salvage:
-                return record.Attempts.TryGetValue(salvage.Attempt, out var salvaged) && salvaged.Task == salvage.Task &&
-                    salvage.Recipe.Parents.Length is >= 1 and <= 4 && salvage.Recipe.Parents[0] == salvage.ObservedTip &&
-                    (salvage.Preserved is { } preserved ? salvage.Recipe.Tree == preserved.Files :
-                        salvage.Recipe.Parents.Length == 1 || salvage.Recipe.Parents.Length == 2 && salvage.Recipe.Parents[1] == salvage.BranchTip)
-                    ? null : RunProblem.InvalidData;
-            case MaterializationPlan.Preservation preservation:
-                if (!record.Attempts.TryGetValue(preservation.Attempt, out var preservedAttempt) || preservedAttempt.Task != preservation.Task ||
-                    !record.Preparations.ContainsKey(new(preservation.Attempt, 1)) || preservation.Recipe.Tree != preservation.Preserved.Files ||
-                    record.RunKey is not { } preservedRun || !record.TaskKeys.TryGetValue(preservation.Task, out var preservedKey))
-                    return RunProblem.InvalidData;
-                var prefix = RunLayout.PreserveRef(preservedRun, preservedKey, new(Guid.Empty))[..^36];
-                return preservation.Ref.StartsWith(prefix, StringComparison.Ordinal) &&
-                    Guid.TryParseExact(preservation.Ref[prefix.Length..], "D", out var operation) && operation != Guid.Empty
-                    ? null : RunProblem.InvalidData;
-            case MaterializationPlan.Restoration restoration:
-                var preservationId = OperationIds.Derive(restoration.Preservation, "preserve-plan");
-                if (record.Schema != 3 || !record.Preservations.ContainsKey(preservationId) ||
-                    record.Plans.GetValueOrDefault(preservationId) is not MaterializationPlan.Preservation retainedPreservation ||
-                    retainedPreservation.Task != restoration.Task || retainedPreservation.Attempt != restoration.Attempt ||
-                    !Same(restoration.From, retainedPreservation.Preserved)) return RunProblem.InvalidData;
-                var unfinished = UnfinishedRestorations(record, record.Preparations[new(restoration.Attempt, 1)].Location.Owner).ToArray();
-                if (unfinished.Length == 0) return restoration.Supersedes is null ? null : RunProblem.InvalidData;
-                if (unfinished.Length != 1 || restoration.Supersedes != unfinished[0]) return RunProblem.InvalidData;
-                var preservedSequence = record.Receipts.Values.Single(e => e.Event is RunEvent.Preserved p && p.Plan == preservationId).Sequence;
-                return preservedSequence > RestorationLastSequence(record, unfinished[0]) ? null : RunProblem.InvalidData;
-            case MaterializationPlan.RetryReset reset:
-                return record.Salvages.ContainsKey(reset.SalvagePlan) &&
-                    record.Plans.GetValueOrDefault(reset.SalvagePlan) is MaterializationPlan.Salvage retained &&
-                    retained.Task == reset.Task && retained.Attempt == reset.Salvaged && reset.From == retained.BranchTip &&
-                    reset.Remove.All(file => retained.Untracked.Any(captured => Same(captured, file))) ? null : RunProblem.InvalidData;
             default:
                 return RunProblem.InvalidData;
         }
     }
-
-    /// <summary>
-    /// The code sources a task's current rebased result was approved against, or null when its current result is no rebase.
-    /// A rebase replaces the sources its task's next attempt continues from, without an attempt of its own.
-    /// </summary>
-    private static ImmutableArray<CodeSource>? RebasedSources(RunRecord record, TaskId task) =>
-        record.CurrentResults.GetValueOrDefault(task) is { Origin: ResultOrigin.Rebased } rebased
-            ? InputMaterial.Sources(record, record.Inputs[rebased.Inputs].Bindings) : null;
 
     private static RunProblem? ReservedProblem(RunRecord record, RunEvent.Reserved reserved)
     {
@@ -470,14 +275,18 @@ internal static partial class RunReducer
     }
 
     /// <summary>
+    /// The capture a closed turn <paramref name="launch"/> took, when it matched its turn's root observation. Null otherwise.
+    /// </summary>
+    internal static CaptureObservation? MatchedCapture(RunRecord record, LaunchKey launch) =>
+        record.TurnClosures.ContainsKey(launch) && record.RootExits.ContainsKey(launch) &&
+        record.Captures.TryGetValue(launch, out var capture) && Divergence(record, capture) is null ? capture : null;
+
+    /// <summary>
     /// The capture an editing attempt's <paramref name="launch"/> ended with, when it matched its turn and holds the commit
     /// the turn ended with. Null otherwise.
     /// </summary>
     internal static CaptureObservation? ResultCapture(RunRecord record, LaunchKey launch) =>
-        record.Settlements.TryGetValue(launch, out var capture) &&
-        record.Dispositions.GetValueOrDefault(capture)?.Disposition is CaptureDisposition.Matched &&
-        record.Captures.TryGetValue(capture, out var observations) && observations is [{ Candidate: not null } frozen, ..] &&
-        record.RootExits.ContainsKey(launch) ? frozen : null;
+        MatchedCapture(record, launch) is { Candidate: not null } capture ? capture : null;
 
     /// <summary>The plan an attempt's Git steps record under: the plan that prepared it.</summary>
     internal static OperationId? AttemptPlan(RunRecord record, AttemptId attempt) =>
@@ -509,73 +318,6 @@ internal static partial class RunReducer
         };
     }
 
-    // A journal written before #141 published an editing result through a publication plan, which this reads.
-    private static ResultRecord PublishedResult(RunRecord record, MaterializationPlan.Publication plan)
-    {
-        var attempt = record.Attempts[plan.Attempt];
-        var inputs = record.Claims.Values.Where(claim => claim.Key.Attempt == attempt.Id).OrderBy(claim => claim.Key.Turn).Last().Inputs;
-        return new(plan.Result, attempt.Task, attempt.Revision, inputs.Id, new ResultOrigin.Executed(attempt.Id), plan.Report, plan.Supersedes)
-        {
-            Code = new CodeOutput.Produced(new(attempt.Task, attempt.Id, record.Preparations[new(attempt.Id, 1)].Location.AttemptBase,
-                plan.Commit, plan.Recipe.Tree, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id))),
-            Artifacts = plan.Artifacts,
-        };
-    }
-
-    /// <summary>
-    /// A rebase replaces the task's current, stale writer result with a candidate on the current inputs. It needs a closed
-    /// task, fresh inputs that match what they build, a candidate based on their code, and no other unfinished rebase.
-    /// </summary>
-    private static RunProblem? RebaseProblem(RunRecord record, OperationId operation, MaterializationPlan.Rebase plan)
-    {
-        if (record.Schema != 3 || record.RunKey is not { } run || !record.TaskKeys.TryGetValue(plan.Task, out var key) ||
-            plan.Ref != RunLayout.RebaseRef(run, key, plan.Result) || record.Results.Any(result => result.Id == plan.Result) ||
-            plan.Recipe.Parents.Length != 1 || plan.Recipe.Parents[0] != plan.Inputs.CodeBase)
-            return RunProblem.InvalidData;
-        if (record.CurrentResults.GetValueOrDefault(plan.Task) is not { } source || source.Id != plan.Source ||
-            !record.StaleResults.Contains(source.Id))
-            return RunProblem.UnknownResult;
-        // Only a writer's result carries code of its own.
-        if (source.Code is not CodeOutput.Produced { Code: var code } || code.Commit != plan.From)
-            return RunProblem.UnsupportedResult;
-        if (record.Attempts.Values.Any(attempt => attempt.Task == plan.Task && !record.Closures.ContainsKey(attempt.Id)))
-            return RunProblem.UnclosedAttempts;
-        if (record.Plans.Values.OfType<MaterializationPlan.Rebase>().Any(other => other.Task == plan.Task &&
-            !record.Results.Any(result => result.Id == other.Result)))
-            return RunProblem.ReplacementConflict;
-        var inputs = plan.Inputs;
-        if (inputs.Revision != source.Revision)
-            return RunProblem.InputConflict;
-        if (InputProblem(record, inputs, fresh: true) is { } stale) return stale.Problem;
-        var sources = InputMaterial.Sources(record, inputs.Bindings);
-        var join = (inputs.Code as CodeSelection.Joined)?.Join;
-        if ((join is null) != (plan.JoinRecipe is null) || join is not null && (join.Operation != operation || join.Ref != plan.Ref ||
-            plan.JoinRecipe!.Tree != join.Tree || !plan.JoinRecipe.Parents.SequenceEqual(sources.Select(item => item.Commit).Distinct())))
-            return RunProblem.InputConflict;
-        try
-        {
-            var expected = InputMaterial.Build(record, inputs.Id, plan.Task, inputs.Revision, inputs.Bindings, sources,
-                InputMaterial.Review(record.Revisions[inputs.Revision].Snapshot, plan.Task, inputs.Bindings), join);
-            return SameInput(expected, inputs) ? null : RunProblem.InputConflict;
-        }
-        catch (ArgumentException)
-        {
-            return RunProblem.InputConflict;
-        }
-    }
-
-    /// <summary>The rebased result a rebase plan records: the source's report and artifacts, carried forward, and its candidate as the code.</summary>
-    internal static ResultRecord RebaseResult(RunRecord record, OperationId planId, MaterializationPlan.Rebase plan)
-    {
-        var source = record.Results.Single(result => result.Id == plan.Source);
-        var code = ((CodeOutput.Produced)source.Code!).Code;
-        return new(plan.Result, plan.Task, source.Revision, plan.Inputs.Id, new ResultOrigin.Rebased(plan.Source, planId), source.Report, plan.Source)
-        {
-            Code = new CodeOutput.Produced(new(plan.Task, code.Attempt, plan.Inputs.CodeBase, plan.Commit, plan.Recipe.Tree, plan.Ref)),
-            Artifacts = [.. source.Artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(plan.Result, artifact.Name) })],
-        };
-    }
-
     private static bool ObservedMove(RunRecord record, OperationId plan, string reference, CommitId? expected, CommitId target) =>
         record.GitIntents.Any(pair => pair.Value.Plan == plan && pair.Value.Mutation is GitMutation.MoveRef move &&
             move.Change == new RefChange(reference, expected, target) && record.GitObservations.ContainsKey(pair.Key) &&
@@ -584,28 +326,10 @@ internal static partial class RunReducer
     private static RunProblem? ResultCodeProblem(RunRecord record, RunEvent.ResultAccepted accepted, TaskDefinition task)
     {
         var result = accepted.Result;
-        if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit } && result.Origin is ResultOrigin.Rebased rebased)
-        {
-            var plan = (MaterializationPlan.Rebase)record.Plans[rebased.Plan];
-            return Same(result, RebaseResult(record, rebased.Plan, plan)) && SameInput(accepted.Inputs, plan.Inputs) &&
-                ObservedMove(record, rebased.Plan, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[plan.Task]), plan.From, plan.Commit) &&
-                ObservedMove(record, rebased.Plan, plan.Ref, null, plan.Commit) &&
-                record.GitIntents.Any(pair => pair.Value.Plan == rebased.Plan && pair.Value.Mutation is GitMutation.ResetCheckout reset &&
-                    reset.Task == plan.Task && reset.Target == plan.Commit && record.GitObservations.ContainsKey(pair.Key))
-                ? null : RunProblem.InputConflict;
-        }
         if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
         {
             if (result.Origin is not ResultOrigin.Executed executed) return RunProblem.UnsupportedResult;
             var attempt = record.Attempts[executed.Attempt];
-            if (record.Plans.FirstOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == executed.Attempt) is
-                { Value: MaterializationPlan.Publication publication } pair)
-            {
-                return Same(result, PublishedResult(record, publication)) &&
-                    ObservedMove(record, pair.Key, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[attempt.Task]), publication.VerifiedTip, publication.Commit) &&
-                    ObservedMove(record, pair.Key, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id), null, publication.Commit)
-                    ? null : RunProblem.InputConflict;
-            }
             // The commit the attempt's last turn ended with is its code, once it is the task branch's tip.
             var final = record.Claims.Keys.Where(key => key.Attempt == attempt.Id).OrderBy(key => key.Turn).LastOrDefault();
             if (final.Attempt != attempt.Id || ResultCapture(record, final) is not { } capture || AttemptPlan(record, attempt.Id) is not { } plan)
@@ -617,8 +341,8 @@ internal static partial class RunReducer
         else
         {
             CodeOutput? code = accepted.Inputs.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(accepted.Inputs.Id) : null;
-            // An approval and a schema-3 review forward artifacts: exactly their inputs' dependency artifacts, stored under their own result.
-            var reviews = record.Schema == 3 && task.Blueprint.Work is WorkSpec.Review && result.Origin is ResultOrigin.Executed;
+            // An approval and a review forward artifacts: exactly their inputs' dependency artifacts, stored under their own result.
+            var reviews = task.Blueprint.Work is WorkSpec.Review && result.Origin is ResultOrigin.Executed;
             var artifacts = result.Origin is ResultOrigin.Human || reviews ? GateForwarding.Artifacts(record, accepted.Inputs, result.Id) : ([], null);
             if (!Same(result.Code, code) || reviews && artifacts.Collision is not null || !Same(result.Artifacts, artifacts.Artifacts) ||
                 task.Blueprint.Work is WorkSpec.Review && accepted.Inputs.Review is null)

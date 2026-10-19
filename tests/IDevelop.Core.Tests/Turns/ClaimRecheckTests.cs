@@ -197,20 +197,6 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
-    public void A_guarded_claim_journal_replays_unchanged()
-    {
-        var workflow = Connect(FixtureWorkflow(Task(T), Task(U)), T, U);
-        using var f = new RunFixtures(workflow);
-        var bytes = File.ReadAllBytes(Fixture.Path("e3a5b-guarded-claim/events.jsonl"));
-        File.WriteAllBytes(f.Journal(W, Run), bytes);
-        var record = f.Read();
-        Assert.Equal(15L, record.Sequence);
-        Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(RunJournal.Decode(bytes).Entries.Select(RunJournal.Encode))));
-        var consumer = Assert.Single(record.Attempts.Values, attempt => attempt.Task == U);
-        Assert.True(record.Claims.ContainsKey(new(consumer.Id, 1)));
-    }
-
-    [Fact]
     public async Task Reserved_inputs_superseded_before_first_claim()
     {
         await using var f = new TurnFixture(readOnly: true, configure: workflow =>

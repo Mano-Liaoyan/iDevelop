@@ -112,7 +112,7 @@ public sealed class WorkflowRunTests
 
         var run = shell.WorkflowRun!;
         var record = Assert.IsType<RunRead.Loaded>(RunStore.Open(f.Project).Read(run.Workflow, run.Address.Run)).Record;
-        Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim()), BaseChoice.Head), record.Base);
+        Assert.Equal(new RunBase(new CommitId(f.Run("rev-parse", "HEAD").Trim())), record.Base);
         Assert.Equal("changed\n", File.ReadAllText(Path.Combine(f.Project, "base.txt")));
         Assert.Equal(" M base.txt\n", f.Run("status", "--porcelain", "--untracked-files=no"));
     }

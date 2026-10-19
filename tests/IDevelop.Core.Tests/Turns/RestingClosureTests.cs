@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -40,11 +41,39 @@ public sealed class RestingClosureTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
         Assert.IsType<RootObservation.Observed>(p.Materializer().ObserveRootExit(p.Lease(task), p.Op(), execution.Launch, new RootExit.Exited(0)));
-        Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await p.Materializer().Settle(p.Lease(task), p.Op(),
-            execution.Launch, Checkpoint(folder))).Disposition);
+        SettlementAssertions.Matched(Assert.IsType<Settlement.Closed>(await p.Materializer().Settle(p.Lease(task), p.Op(),
+            execution.Launch, Checkpoint(folder))));
         Assert.Equal("InReview", AttemptEvidence.Read(folder).Record!.Status.ToString());
         p.Release(task);
         return attempt.Id;
+    }
+
+    [Fact]
+    public async Task A_capture_that_failed_on_an_earlier_turn_holds_nothing_once_a_later_turn_captures()
+    {
+        await using var f = new TurnFixture(ConversationMode.Chat);
+        await f.Open();
+        var injected = 0;
+        f.Runs.Probe = point =>
+        {
+            if (point == "git.capture.before" && Interlocked.Increment(ref injected) == 1) throw new IOException("Injected capture failure.");
+        };
+        var first = await Waiting(f);
+        Assert.Equal("Injected capture failure.", SettlementAssertions.Failed(first.Capture).Detail);
+        var attempt = first.Address.Launch.Attempt;
+        Assert.False(Assert.Single(f.Preparation.Read().Blocks).Value.Resolved);
+        FakeAgents.Install(f.Fakes, f.Client, FakeAgents.Resuming(f.Client, "session-1").Print(FakeAgents.SessionLine(f.Client, "session-1"))
+            .Write("result.txt", "again\n").Print(FakeAgents.ReplyLines(f.Client, "Done again.")));
+        var next = await f.Settled(await f.Start(new TurnIntent.Next(f.Preparation.Op(), new(attempt, 2), "Once more")));
+        SettlementAssertions.Matched(next.Capture);
+        Assert.IsType<TurnDisposition.Resting>(Assert.IsType<Release.Released>(next.Release()).Receipt);
+        Assert.All(f.Preparation.Read().Blocks.Values, block => Assert.True(block.Resolved));
+
+        var closed = Assert.IsType<RestingClose.Closed>(await Close(f, f.Preparation.Op(), attempt, new RestingEnd.MarkDone())).Attempt;
+        var result = Assert.IsType<Acceptance.Accepted>(f.Preparation.Materializer().Accept(closed.Lease, f.Preparation.Op(), attempt)).Result;
+        Assert.Equal("again\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Empty(RunProjection.Blocks(f.Preparation.Read(), T, attempt, result));
+        Assert.Equal(2, injected);
     }
 
     private static Task<RestingClose> Close(TurnFixture f, OperationId operation, AttemptId attempt, RestingEnd end) =>

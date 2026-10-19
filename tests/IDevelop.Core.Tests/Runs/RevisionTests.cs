@@ -27,8 +27,8 @@ public sealed class RevisionTests
     [Fact]
     public void Decoding_V1_with_m2_rejects_the_revision_at_sequence_one()
     {
-        var entry = new RunEntry(1, 1, new(Id(900)), Prompt, At,
-            new RunEvent.Approved(Run, new(new(V1), FixtureWorkflow(Task(model: "m2"))), new(Base, BaseChoice.Head)));
+        var entry = new RunEntry(RunJournal.Schema, 1, new(Id(900)), Prompt, At,
+            new RunEvent.Approved(Run, new(new(V1), FixtureWorkflow(Task(model: "m2"))), new(Base)));
         var decoded = RunJournal.Decode(RunJournal.Encode(entry));
         Assert.Equal(new RunRejection(RunProblem.RevisionMismatch, 1), decoded.Rejection);
     }

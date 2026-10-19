@@ -96,7 +96,6 @@ public sealed class ClaimFreshnessTests
         var independent = f.Reserve(D);
         f.Claim(independent);
         Assert.Equal(1, f.Read().Claims.Keys.Count(key => key.Attempt == independent.Attempt.Id));
-        Assert.Equal(3, f.Read().Schema);
     }
 
     [Fact]
@@ -118,7 +117,6 @@ public sealed class ClaimFreshnessTests
         Assert.IsType<RunDecision.Granted>(f.Store.Claim(f.Lease(U), f.Op(), new(consumer.Attempt.Id, 2), consumer.Inputs, Revision.Hash("Continue.")));
         Assert.Equal(2, f.Read().Claims.Keys.Count(key => key.Attempt == consumer.Attempt.Id));
         Assert.Equal(first.Id, Assert.IsType<InputBinding.Provided>(Assert.Single(f.Read().Inputs[consumer.Inputs.Id].Bindings)).Result);
-        Assert.Equal(3, f.Read().Schema);
     }
 
     private static async System.Threading.Tasks.Task<ResultRecord> Accept(PreparationFixture f, Preparation.Ready ready, string report, ResultId? supersedes = null)

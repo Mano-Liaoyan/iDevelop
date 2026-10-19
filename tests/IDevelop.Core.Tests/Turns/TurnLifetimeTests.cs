@@ -72,7 +72,7 @@ public sealed class TurnLifetimeTests
             Assert.False(process.HasExited);
         }
 
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         var result = f.Accept(turn);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt);
@@ -111,7 +111,7 @@ public sealed class TurnLifetimeTests
         Assert.Equal(CleanupResult.Completed, turn.Cleanup!.Result);
         AssertGone(writer);
         Assert.Equal("par", f.Preparation.Git.Git("show",
-            Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
+            f.Preparation.Read().Captures[turn.Address.Launch].Candidate!.Value.Hex + ":result.txt"));
         f.Accept(turn);
         Assert.Single(f.Preparation.Read().Results);
         var ready = Assert.IsType<Preparation.Ready>(await f.Preparation.Prepare(U));

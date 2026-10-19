@@ -23,7 +23,7 @@ public sealed class TurnLifecycleTests
         var turn = await f.Settled(await f.Start());
         Assert.EndsWith(".worktrees/93f23689/90d5b0a2", File.ReadAllText(Path.Combine(f.Evidence, "cwd.txt")).Replace('\\', '/'));
         Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal("Succeeded", turn.Attempt.Status.ToString());
         Assert.Equal(1, f.Launches);
         if (client == ClientId.Codex)
@@ -66,7 +66,7 @@ public sealed class TurnLifecycleTests
         Assert.Equal((f.Checkout, f.Checkout), (next.Attempt.WorkingFolder, next.Attempt.SessionFolder));
         Assert.Equal(f.Checkout, Assert.IsType<AttemptEvent.Requested>(f.Log(first.Address.Launch).Events[0]).WorkingFolder);
         Assert.Equal(f.Checkout, Assert.Single(f.Log(first.Address.Launch).Events.OfType<AttemptEvent.TurnRequested>()).WorkingFolder);
-        Assert.IsType<CaptureDisposition.Matched>(next.Capture.Disposition);
+        SettlementAssertions.Matched(next.Capture);
         Assert.Equal(Path.GetFullPath(Path.Combine(f.Preparation.Git.Folder, ".worktrees", "93f23689", "90d5b0a2")),
             File.ReadAllText(Path.Combine(f.Evidence, "reply-cwd.txt")));
         Assert.Equal(client == ClientId.Antigravity
@@ -111,7 +111,7 @@ public sealed class TurnLifecycleTests
         if (problem == "TaskBusy")
         {
             var turn = await f.Settled(await f.Start(intent));
-            Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+            SettlementAssertions.Matched(turn.Capture);
             Assert.Equal(1, f.Launches);
             Assert.Single(f.Preparation.Read().Claims);
         }
@@ -146,7 +146,7 @@ public sealed class TurnLifecycleTests
         Assert.Single(f.Preparation.Read().RootExits);
         var independent = await f.Start(new TurnIntent.First(f.Preparation.Op(), C, new AttemptCause.Initial()));
         var settled = await f.Settled(independent);
-        Assert.IsType<CaptureDisposition.Matched>(settled.Capture.Disposition);
+        SettlementAssertions.Matched(settled.Capture);
         Assert.Equal("Succeeded", settled.Attempt.Status.ToString());
         Assert.Single(AttemptEvidence.Read(f.Preparation.Store.AttemptFolder(W, f.Preparation.RunId, C, independent.Address.Launch.Attempt))
             .Events.OfType<AttemptEvent.CleanedUp>());
@@ -154,7 +154,7 @@ public sealed class TurnLifecycleTests
         Assert.IsType<LeaseTake.Busy>(f.Preparation.Permit.TakeTask(T));
         barrier.Dispose();
         var turn = await f.Settled(writer);
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Single(f.Log(writer.Address.Launch).Events.OfType<AttemptEvent.CleanedUp>());
         Assert.Equal(2, f.Preparation.Read().TurnClosures.Count);
     }
@@ -171,9 +171,9 @@ public sealed class TurnLifecycleTests
         Assert.IsType<SendResult.Queued>(await running.CancelAsync().WaitAsync(Bound));
         var turn = await f.Settled(running);
         Assert.Equal("Cancelled", turn.Attempt.Status.ToString());
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal("partial\n", f.Preparation.Git.Git("show",
-            Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
+            f.Preparation.Read().Captures[turn.Address.Launch].Candidate!.Value.Hex + ":result.txt"));
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
             turn.Address.Launch.Attempt, TerminalAttemptOutcome.Cancelled, turn.Log));
         Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(f.Preparation.Materializer()

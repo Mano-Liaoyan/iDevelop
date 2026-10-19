@@ -1,20 +1,19 @@
+using System.Collections.Immutable;
+
 namespace IDevelop.Execution;
+
+/// <summary>How a turn's capture differs from what its client's exit left: the refs that moved, and why.</summary>
+internal sealed record CaptureDivergence(ImmutableArray<string> Refs, string Detail);
 
 internal static partial class RunReducer
 {
     internal static RunProblem? AppendProblem(RunRecord record, RunEvent e)
     {
-        if (record.Schema != 3) return null;
-        if (e is RunEvent.GitIntended intended && record.Plans.GetValueOrDefault(intended.Plan) is MaterializationPlan.Restoration &&
-            RestorationSuperseded(record, intended.Plan) || e is RunEvent.GitObserved observed &&
-            record.GitIntents.TryGetValue(observed.Mutation, out var oldIntent) &&
-            record.Plans.GetValueOrDefault(oldIntent.Plan) is MaterializationPlan.Restoration && RestorationSuperseded(record, oldIntent.Plan))
-            return RunProblem.ReplacementConflict;
-        if (e is RunEvent.TurnClosed { Capture: null } turn && record.RootExits.ContainsKey(turn.Key))
+        if (e is RunEvent.TurnClosed turn && record.RootExits.ContainsKey(turn.Key) && !CaptureSettled(record, turn.Key))
             return RunProblem.SettlementPending;
         if (e is RunEvent.AttemptClosed attempt && record.Claims.Keys.Any(launch =>
             launch.Attempt == attempt.Attempt && record.Settling(launch)) &&
-            (attempt.End is not AttemptEnd.Recovered || HasUndisposedSettlement(record, attempt.Attempt)))
+            (attempt.End is not AttemptEnd.Recovered || HasUnsettledCapture(record, attempt.Attempt)))
             return RunProblem.SettlementPending;
         // A first claim waits while a producer it depends on still has an unresolved claim.
         if (e is RunEvent.TurnClaimed { Key.Turn: 1 } claim && ProducerHold(record, claim.Inputs))
@@ -22,60 +21,58 @@ internal static partial class RunReducer
         return null;
     }
 
-    internal static bool HasUndisposedSettlement(RunRecord record, AttemptId attempt) =>
-        record.Claims.Keys.Any(launch => launch.Attempt == attempt && record.Settling(launch) &&
-            !record.Dispositions.Values.Any(disposed => disposed.Launch == launch));
+    internal static bool HasUnsettledCapture(RunRecord record, AttemptId attempt) =>
+        record.Claims.Keys.Any(launch => launch.Attempt == attempt && record.Settling(launch) && !CaptureSettled(record, launch));
 
-    internal static bool CaptureForAnotherId(RunRecord record, LaunchKey launch, CaptureId capture) =>
-        record.Captures.Any(pair => pair.Key != capture && pair.Value.Any(observation => observation.Launch == launch)) ||
-        record.Dispositions.Any(pair => pair.Key != capture && pair.Value.Launch == launch);
-}
+    /// <summary>
+    /// The operation a turn's capture records its block under when it could not be taken. A turn has one capture, so the
+    /// id follows from the turn.
+    /// </summary>
+    internal static OperationId CaptureBlock(LaunchKey launch) =>
+        OperationIds.Derive(new OperationId(launch.Attempt.Value), "capture-blocked/" + launch.Turn);
 
-internal static class CaptureComparison
-{
-    internal static bool Index(CaptureObservation first, CaptureObservation second) =>
-        first.Index?.Content == second.Index?.Content && first.Index?.ByteLength == second.Index?.ByteLength &&
-        first.IndexTree == second.IndexTree;
+    /// <summary>The block that says why the turn's capture could not be taken, or null.</summary>
+    internal static MaterializationBlock? CaptureFailure(RunRecord record, LaunchKey launch)
+    {
+        var operation = CaptureBlock(launch);
+        return record.Blocks.Values.Select(state => state.Block).FirstOrDefault(block => block.Operation == operation);
+    }
 
-    internal static bool Artifacts(CaptureObservation first, CaptureObservation second) =>
-        first.Artifacts.OrderBy(file => file.Name, StringComparer.Ordinal).Select(file => (file.Name, file.Content, file.ByteLength))
-            .SequenceEqual(second.Artifacts.OrderBy(file => file.Name, StringComparer.Ordinal)
-                .Select(file => (file.Name, file.Content, file.ByteLength)));
+    /// <summary>Whether the turn's capture is recorded: taken, or blocked with why it could not be.</summary>
+    internal static bool CaptureSettled(RunRecord record, LaunchKey launch) =>
+        record.Captures.ContainsKey(launch) || CaptureFailure(record, launch) is not null;
 
-    internal static bool Content(CaptureObservation first, CaptureObservation second) =>
-        RunReducer.Same(first.Recipe, second.Recipe) && first.Candidate == second.Candidate && Index(first, second) &&
-        first.Report == second.Report && Artifacts(first, second);
-
-    internal static bool Matches(CaptureObservation first, CaptureObservation second, RunEvent.RootExitObserved root) =>
-        first.Tip == root.Tip && second.Tip == root.Tip && first.Head == root.Head && second.Head == root.Head &&
-        first.UnexplainedRefs.IsEmpty && second.UnexplainedRefs.IsEmpty && Content(first, second);
+    /// <summary>
+    /// How the capture differs from its turn's root observation, or null when the worktree is still on the commit and HEAD
+    /// the client's exit left and the run's refs are as the journal explains them.
+    /// </summary>
+    internal static CaptureDivergence? Divergence(RunRecord record, CaptureObservation capture)
+    {
+        var root = record.RootExits[capture.Launch];
+        ImmutableArray<string> refs = [];
+        if (capture.Tip != root.Tip)
+            refs = refs.Add(record.Preparations[capture.Launch].Location.Owner.Branch ?? "HEAD");
+        if (capture.Head != root.Head && !refs.Contains("HEAD")) refs = refs.Add("HEAD");
+        if (!refs.IsEmpty) return new([.. refs.Order(StringComparer.Ordinal)], "The branch tip or HEAD differs from the root observation.");
+        return capture.UnexplainedRefs.IsEmpty ? null
+            : new([.. capture.UnexplainedRefs.Order(StringComparer.Ordinal)], "The capture contains unexplained shared refs.");
+    }
 }
 
 internal static partial class RunValidation
 {
     private static bool Capture(CaptureObservation observation) => observation.Capture.Value != Guid.Empty &&
-        (!observation.Recovery || observation.Ordinal == 2) && Key(observation.Launch) && Checkpoint(observation.Log) && observation.Completed >= observation.Started &&
+        Key(observation.Launch) && Checkpoint(observation.Log) && observation.Completed >= observation.Started &&
         Recipe(observation.Recipe) && (observation.Candidate is null || Revision.IsCommit(observation.Candidate.Value.Hex)) &&
         (observation.Tip is null || Revision.IsCommit(observation.Tip.Value.Hex)) &&
         (observation.Head is null || !string.IsNullOrWhiteSpace(observation.Head)) &&
         (observation.Index is null || Evidence(observation.Index) &&
-            observation.Index.RelativePath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "index")) &&
+            observation.Index.RelativePath == RunStorage.CapturePath(observation.Capture, "index")) &&
         (observation.IndexTree is null || Revision.IsCommit(observation.IndexTree.Value.Hex)) &&
         !observation.Artifacts.IsDefault && observation.Artifacts.All(file => Artifact(file) &&
-            file.StoredPath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "artifacts/" + file.Name)) &&
+            file.StoredPath == RunStorage.CapturePath(observation.Capture, "artifacts/" + file.Name)) &&
         observation.Artifacts.Select(file => file.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == observation.Artifacts.Length &&
         Evidence(observation.SharedRefs) &&
-        observation.SharedRefs.RelativePath == RunStorage.CapturePath(observation.Capture, observation.Ordinal, "refs.json") &&
+        observation.SharedRefs.RelativePath == RunStorage.CapturePath(observation.Capture, "refs.json") &&
         !observation.UnexplainedRefs.IsDefault && observation.UnexplainedRefs.All(Reference);
-
-    private static bool Disposition(CaptureDisposition disposition) => disposition switch
-    {
-        CaptureDisposition.Matched => true,
-        CaptureDisposition.Diverged diverged => Enum.IsDefined(diverged.Problem) && diverged.Detail is not null &&
-            !diverged.Paths.IsDefault && diverged.Paths.All(Path) && !diverged.Refs.IsDefault &&
-            diverged.Refs.All(reference => reference == "HEAD" || Reference(reference)),
-        CaptureDisposition.Failed failed => Enum.IsDefined(failed.Problem) && failed.Detail is not null &&
-            !failed.Evidence.IsDefault && failed.Evidence.All(Evidence),
-        _ => false,
-    };
 }

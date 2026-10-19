@@ -334,7 +334,7 @@ public sealed class CoordinatorProcessTests
         Assert.Equal(RunProblem.InvalidClaim, Problem(f.Store.Claim(f.Lease(T), f.Op(), new(A1, 2),
             reserved.Inputs, Revision.Hash("Continue."))));
         Assert.Equal(bytes, File.ReadAllBytes(f.Journal(W, Run)));
-        var entry = new RunEntry(3, f.Read().Sequence + 1, f.Op(), Prompt, At, new RunEvent.TurnClosed(new(A1, 1), checkpoint));
+        var entry = new RunEntry(RunJournal.Schema, f.Read().Sequence + 1, f.Op(), Prompt, At, new RunEvent.TurnClosed(new(A1, 1), checkpoint));
         Assert.Equal(RunProblem.InvalidClaim, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, f.Read(), entry)).Reason.Problem);
         Assert.IsType<RunDecision.Recorded>(f.Store.Recover(f.Lease(T), f.Op(), A1,
             RecoveryOutcome.Stopped, f.Op(), "Stopped."));
@@ -407,25 +407,8 @@ public sealed class CoordinatorProcessTests
         }
     }
 
-    [Theory]
-    [InlineData("e1-run/events.jsonl", 1)]
-    [InlineData("e2-run/events.jsonl", 2)]
-    [InlineData("e2-run/events.jsonl", 3)]
-    public void An_ownership_fence_cannot_enter_a_schema_one_or_two_journal(string fixture, int schema)
-    {
-        using var f = new RunFixtures();
-        var bytes = File.ReadAllBytes(Fixture.Path(fixture));
-        File.WriteAllBytes(f.Journal(W, Run), bytes);
-        var record = f.Read();
-        var key = record.Claims.Keys.FirstOrDefault(new LaunchKey(A1, 1));
-        var fence = new RunEntry(schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.OwnershipFenced([key]));
-        File.WriteAllBytes(f.Journal(W, Run), [.. bytes, .. Encoding.UTF8.GetBytes(RunJournal.Encode(fence))]);
-        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, record.Sequence + 1),
-            Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run)).Reason);
-    }
-
     [Fact]
-    public void A_schema_three_journal_with_fences_and_stale_claims_replays_byte_for_byte_and_rejects_older_entries()
+    public void A_journal_with_fences_and_stale_claims_replays_byte_for_byte_and_rejects_an_entry_of_an_earlier_schema()
     {
         var workflow = Connect(FixtureWorkflow(Task(T), Task(U), Task(C)), T, U);
         using var f = new RunFixtures(workflow);
@@ -449,19 +432,17 @@ public sealed class CoordinatorProcessTests
         var decoded = RunJournal.Decode(bytes);
         Assert.Null(decoded.Rejection);
         Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
-        Assert.All(decoded.Entries, entry => Assert.Equal(3, entry.Schema));
+        Assert.All(decoded.Entries, entry => Assert.Equal(RunJournal.Schema, entry.Schema));
         var replayed = Assert.IsType<RunRead.Loaded>(RunReducer.Replay(W, Run, decoded.Entries)).Record;
         Assert.Equal((live.Sequence, live.Claims.Count, live.Results.Count, live.Closures.Count),
             (replayed.Sequence, replayed.Claims.Count, replayed.Results.Count, replayed.Closures.Count));
         Assert.Equal(live.Fenced.OrderBy(key => key.Attempt.Value), replayed.Fenced.OrderBy(key => key.Attempt.Value));
         Assert.Equal(new[] { new LaunchKey(consumer.Attempt.Id, 1) }, replayed.UnresolvedClaims);
         Assert.Contains(first.Id, replayed.StaleResults);
-        if (Environment.GetEnvironmentVariable("E3A1_SCHEMA3_OUT") is { Length: > 0 } output) File.WriteAllBytes(output, bytes);
 
-        var older = new RunEntry(2, live.Sequence + 1, f.Op(), Prompt, At, new RunEvent.StopRequested());
+        var older = new RunEntry(3, live.Sequence + 1, f.Op(), Prompt, At, new RunEvent.StopRequested());
         File.WriteAllBytes(f.Journal(W, Run), [.. bytes, .. Encoding.UTF8.GetBytes(RunJournal.Encode(older))]);
         Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, live.Sequence + 1),
             Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run)).Reason);
     }
-
 }

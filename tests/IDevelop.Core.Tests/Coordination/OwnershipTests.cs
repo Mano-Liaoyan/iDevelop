@@ -146,7 +146,7 @@ public sealed class OwnershipTests
         await f.Open();
         FileStream? held = null;
         var journal = Path.Combine(f.Preparation.Git.Folder, ".idp", "runs", "write.lock");
-        f.Runs.Probe = point => { if (point == "journal.capture-1.before" && held is null) held = new(journal, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); };
+        f.Runs.Probe = point => { if (point == "journal.capture.before" && held is null) held = new(journal, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); };
         try
         {
             await f.Resume();
@@ -158,9 +158,7 @@ public sealed class OwnershipTests
         }
         finally { held?.Dispose(); }
         await f.UntilStatus(RunStatus.Completed);
-        var disposition = Assert.Single(f.Read().Dispositions).Value.Disposition;
-        Assert.IsType<CaptureDisposition.Matched>(disposition);
-        Assert.Single(Assert.Single(f.Read().Captures).Value);
+        Assert.Null(RunReducer.Divergence(f.Read(), Assert.Single(f.Read().Captures).Value));
         Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
         Assert.Equal(1, f.Launches(A));
     }
@@ -174,12 +172,12 @@ public sealed class OwnershipTests
         var faulted = 0;
         f.Runs.Probe = point =>
         {
-            if (point == "journal.capture-disposition.before" && Interlocked.Increment(ref faulted) == 1) throw new InvalidOperationException("Injected defect.");
+            if (point == "journal.close-turn.before" && Interlocked.Increment(ref faulted) == 1) throw new InvalidOperationException("Injected defect.");
         };
         await f.Resume();
         await f.UntilStatus(RunStatus.Completed);
         Assert.True(faulted >= 2);
-        Assert.IsType<CaptureDisposition.Matched>(Assert.Single(f.Read().Dispositions).Value.Disposition);
+        Assert.Null(RunReducer.Divergence(f.Read(), Assert.Single(f.Read().Captures).Value));
         Assert.Equal("done\n", f.ResultFile(A, "result.txt"));
         Assert.Equal(1, f.Launches(A));
     }
