@@ -8,7 +8,7 @@ The same day they answered the follow-up questions:
 
 - **Retry:** "Same worktree". A Retry of an editing node continues in the failed attempt's worktree with its files as they are.
 - **Read-only nodes such as Review:** "Merged predecessors". Each works in a worktree at the merge of its predecessors, so Review sees Implement's edits, and it commits nothing.
-- **A conflict between predecessors:** "Merge agent". A built-in Merge node resolves it, and the successor starts once the merge is committed. Issue [#148](https://github.com/Mano-Liaoyan/iDevelop/issues/148) builds the Merge node. Until it does, the conflict blocks the successor with the conflicting paths.
+- **A conflict between predecessors:** "Merge agent". A built-in Merge node resolves it, and the successor starts once the merge is committed. Issue [#148](https://github.com/Mano-Liaoyan/iDevelop/issues/148) builds the Merge node ([ADR 0033](0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
 
 ## How it works
 
@@ -17,7 +17,7 @@ In Plan → Implement → Review → Approval, plus Plan → Docs → Review:
 - **A worktree per node.** Each agent node of a run gets its worktree at `.worktrees/<run>/<node>` when its first attempt starts. Implement and Docs are editing nodes, so each also gets its branch, `idp/<run>/task/<node>`. Plan and Review are read-only, so their worktrees are detached and have no branch.
 - **One commit at the end of a turn.** When Implement's client exits, iDevelop captures its worktree once, as one commit on the branch's tip. The commit of the attempt's last turn becomes the branch's tip and Implement's result. A read-only node's capture records its files and commits nothing.
 - **The merge of predecessors.** Review starts once Implement and Docs have results. When they hand on different commits, `git merge-tree` merges them into one commit, and Review's worktree starts there, so it sees both nodes' edits. With one predecessor commit, the worktree starts at that commit.
-- **A conflict blocks.** If Implement's and Docs' commits conflict, Review is blocked with the conflicting paths until #148's Merge node resolves them.
+- **A conflict goes to the Merge node.** If Implement's and Docs' commits conflict, a Merge node's agent resolves them, and Review starts once the merge is committed. Without a Merge node to take the conflict, Review is blocked with the conflicting paths ([ADR 0033](0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
 - **A Retry stays.** A Retry of Implement continues in Implement's worktree. A read-only node's later attempt resets its detached worktree to the merge it starts from, without the files an earlier attempt left, since a read-only node commits nothing.
 
 ## The repository lock stays

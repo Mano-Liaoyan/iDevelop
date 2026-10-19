@@ -56,8 +56,12 @@ The Git worktree a node's agent works in during a run, at `.worktrees/<run>/<nod
 _Avoid_: checkout, workspace
 
 **Merge of predecessors**:
-The commit a node's worktree starts from when its dependency predecessors hand on different commits, merged with `git merge-tree`. A conflict blocks the node with the conflicting paths. The code calls it a join.
+The commit a node's worktree starts from when its dependency predecessors hand on different commits, merged with `git merge-tree`. A conflict goes to a Merge node's agent, and the node starts once the merge is committed. Without a Merge node to take it, the conflict blocks the node with the conflicting paths ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)). The code calls it a join.
 _Avoid_: fan-in
+
+**Final merge**:
+The merge of a finished run's work into the branch HEAD named at its approval, before the run completes. It waits while the folder that has the branch checked out has uncommitted changes, and a conflict goes to the Merge node with no successors ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
+_Avoid_: end-of-run merge, which names the same thing in the issues
 
 ### Results
 
@@ -135,6 +139,10 @@ _Avoid_: edit, which changes only the document
 
 **Node**:
 An abstraction of an agent: the model and effort it chooses, its system prompt, its instructions and skills, its conversation with a person, the input it reads from earlier agents or a person, and the output it leaves for later agents and the person. The owner set this on 2026-10-18 ([ADR 0031](docs/adr/0031-a-node-is-an-abstraction-of-an-agent.md)).
+
+**Merge node**:
+A built-in node whose agent resolves a run's merge conflicts: between its own predecessors, between the predecessors of a node whose conflicting branches connect into it, or in the final merge. Between nodes, its own step merges its predecessors' code and hands it on with their reports and artifacts, as an approval that needs no person does. Its agent runs only on a conflict, each one in a worktree at Git's merge with its markers, and iDevelop commits the agent's files on both parents ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
+_Avoid_: merge agent, which the issues use for its agent alone
 
 **Skill choice**:
 The skills a node's agent may use, by its client's own names, kept in the task's agent settings. No choice means every skill the client loads. A choice holds exactly its skills: an allow-list for Claude Code and Pi, and for Codex every other listed skill turned off. Antigravity CLI takes none. A chosen skill that is no longer installed is skipped, and a skill list that can't be read leaves the choice unchecked rather than stopping the task.
