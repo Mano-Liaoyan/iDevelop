@@ -148,7 +148,8 @@ public sealed partial class TaskNodeViewModel
             { Status: GateStatus.Waiting } => "Answer its request below, or stop the run.",
             { Status: GateStatus.Approved } => "You approved its request.",
             { Status: GateStatus.SentBack, AskedAgain: true } => "You asked again, so it opens a new request on the same inputs.",
-            { Status: GateStatus.SentBack } => "You sent its request back. Ask again below, or it asks again once its inputs change.",
+            { Status: GateStatus.SentBack, CanAskAgain: true } => "You sent its request back. Ask again below, or it asks again once its inputs change.",
+            { Status: GateStatus.SentBack } => "You sent its request back. It asks again once its inputs change.",
             _ => "It asks for your approval once the tasks before it hand on.",
         }),
         (false, true) when NotStarted =>

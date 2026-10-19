@@ -1,4 +1,5 @@
 using IDevelop.Execution;
+using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Coordination.CoordinatorFixture;
 
@@ -102,5 +103,71 @@ public sealed class SendBackTests
         Assert.Null(Assert.IsType<AttemptCause.Retry>(f.Read().Attempts[reply.Attempt].Cause).Note);
         await Waiting(f, 2);
         Assert.DoesNotContain(Materializer.RetryNote(""), f.Prompt(A, 2));
+    }
+
+    [Fact]
+    public async Task A_second_send_back_asked_again_opens_a_third_request_on_the_same_joined_inputs()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B), Gate()], (A, G), (B, G)));
+        f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Writes(B, "b.txt", "B\n"));
+        await f.Open();
+        await f.Resume();
+        var requests = new List<TaskView> { (await Waiting(f, 1)).Tasks[G] };
+        for (var sequence = 2; sequence <= 3; sequence++)
+        {
+            var shown = requests[^1];
+            Assert.IsType<GateReply.Recorded>(await f.Coordinator.SendBack(f.Address, Response(shown), $"No {sequence}.", Op()).WaitAsync(Bound));
+            Assert.True((await f.Until(view => view.Tasks[G].State == TaskState.SentBack)).Tasks[G].Gate!.CanAskAgain);
+            Assert.IsType<GateReply.Recorded>(await f.Coordinator.AskAgain(f.Address, shown.Gate!.Request.Id, Op()).WaitAsync(Bound));
+            requests.Add((await Waiting(f, sequence)).Tasks[G]);
+        }
+
+        var record = f.Read();
+        Assert.Equal(3, requests.Select(each => each.Gate!.Request.Id).Distinct().Count());
+        Assert.All(requests, each => Assert.True(RunReducer.Same(record.Inputs[requests[0].Gate!.Request.Inputs].Bindings,
+            record.Inputs[each.Gate!.Request.Inputs].Bindings)));
+        Assert.All(requests, each => Assert.IsType<CodeSelection.Joined>(record.Inputs[each.Gate!.Request.Inputs].Code));
+        Assert.IsType<GateReply.Recorded>(await f.Coordinator.Approve(f.Address, Response(requests[^1]), Op()).WaitAsync(Bound));
+        await f.UntilStatus(RunStatus.Completed);
+        Assert.Equal([1, 1], new[] { f.Launches(A), f.Launches(B) });
+    }
+
+    [Fact]
+    public async Task A_stopped_run_refuses_Ask_again()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Gate()], (A, G)));
+        f.Answer(A, Writes(A, "a.txt", "A\n"));
+        await f.Open();
+        await f.Resume();
+        var gate = (await Waiting(f, 1)).Tasks[G];
+        Assert.IsType<GateReply.Recorded>(await f.Coordinator.SendBack(f.Address, Response(gate), "No.", Op()).WaitAsync(Bound));
+        Assert.IsType<RunCommand.Accepted>(await f.Coordinator.Stop(f.Address, Op()).WaitAsync(Bound));
+        var stopped = await f.UntilStatus(RunStatus.Stopped);
+
+        Assert.False(stopped.Tasks[G].Gate!.CanAskAgain);
+        Assert.Equal(RunProblem.RunStopped,
+            Assert.IsType<GateReply.Refused>(await f.Coordinator.AskAgain(f.Address, gate.Gate!.Request.Id, Op()).WaitAsync(Bound)).Reason.Problem);
+        Assert.Single(f.Read().Gates);
+    }
+
+    [Fact]
+    public async Task A_send_back_whose_inputs_went_out_of_date_offers_no_Ask_again()
+    {
+        await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B), Gate()], (A, B), (B, G)));
+        f.Answer(A, Writes(A, "a.txt", "A1\n"), Writes(A, "a.txt", "A2\n"))
+            .Answer(B, Writes(B, "b.txt", "B1\n"), FakeRule.On().Print(FakeAgents.SessionLine(ClientId.Codex, "session-B2")).Exit(1));
+        await f.Open();
+        await f.Resume();
+        var gate = (await Waiting(f, 1)).Tasks[G];
+        Assert.IsType<GateReply.Recorded>(await f.Coordinator.SendBack(f.Address, Response(gate), "No.", Op()).WaitAsync(Bound));
+        Assert.True((await f.Until(view => view.Tasks[G].State == TaskState.SentBack)).Tasks[G].Gate!.CanAskAgain);
+
+        // A's Retry puts B's result out of date, and B's rerun fails, so the sent-back request's inputs are superseded.
+        Assert.IsType<RetryReply.Reserved>(await f.Coordinator.Retry(f.Address, A, Op()).WaitAsync(Bound));
+        var superseded = await f.Until(view => view.Tasks[B].State == TaskState.Failed && f.Launches(B) == 2);
+
+        Assert.False(superseded.Tasks[G].Gate?.CanAskAgain ?? false);
+        Assert.IsType<GateReply.Stale>(await f.Coordinator.AskAgain(f.Address, gate.Gate!.Request.Id, Op()).WaitAsync(Bound));
+        Assert.Single(f.Read().Gates);
     }
 }

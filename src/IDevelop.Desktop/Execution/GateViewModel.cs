@@ -28,6 +28,7 @@ public sealed class GateViewModel : ObservableObject, IDisposable
     private string? _notice;
     private bool _busy;
     private bool _confirmingAskAgain;
+    private bool _asked;
     private bool _disposed;
 
     internal GateViewModel(WorkflowRunViewModel run, GateView gate)
@@ -95,7 +96,7 @@ public sealed class GateViewModel : ObservableObject, IDisposable
     /// The person sent the request back and has not asked again, and this window controls the run, so Ask again can open a new
     /// request on the same inputs.
     /// </summary>
-    public bool ShowsAskAgain => _gate is { Status: GateStatus.SentBack, AskedAgain: false } && _run.IsControlled;
+    public bool ShowsAskAgain => _gate.CanAskAgain && !_asked && _run.IsControlled;
 
     /// <summary>Ask again, until the person is asked to confirm it.</summary>
     public bool ShowsAskAgainButton => ShowsAskAgain && !_confirmingAskAgain;
@@ -213,6 +214,8 @@ public sealed class GateViewModel : ObservableObject, IDisposable
 
         if (reply is GateReply.Recorded)
         {
+            // The run's next view shows the request asked again; until then, nothing offers it twice.
+            _asked = true;
             _confirmingAskAgain = false;
         }
 

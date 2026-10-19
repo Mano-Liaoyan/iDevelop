@@ -1,4 +1,4 @@
-# A gate request is answered once, and only new inputs reopen it
+# A gate request is answered once, and new inputs or Ask again give the node a new one
 
 An Approval node's gate request takes one answer: Send back is final for it, and superseded inputs, or the person's Ask again ([ADR 0035](0035-ask-again-after-a-send-back-and-a-retry-note-to-the-agent.md)), give the node a new request. A repeat of the recorded answer returns the original entry, and any other answer to a request that is no longer open returns `Stale`. This settles what [design v5](https://github.com/Mano-Liaoyan/iDevelop/issues/54#issuecomment-6065458422) left open about superseded and obsolete responses.
 

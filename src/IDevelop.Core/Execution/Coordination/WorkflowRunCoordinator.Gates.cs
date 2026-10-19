@@ -33,8 +33,9 @@ internal sealed partial class WorkflowRunCoordinator
         {
             reply = _store.AskGateAgain(_permit!, command, request) switch
             {
-                RunDecision.Rejected { Reason: { Problem: RunProblem.StaleInput, Task: { } task } } =>
-                    new GateReply.Stale(Read() is { } record && RunReducer.LiveGate(record, task) is { Decision: null } open ? open.Request : null),
+                RunDecision.Rejected { Reason.Problem: RunProblem.StaleInput } => new GateReply.Stale(Read() is { } record &&
+                    record.Gates.TryGetValue(request, out var asked) && RunReducer.LiveGate(record, asked.Request.Task) is { Decision: null } open
+                        ? open.Request : null),
                 RunDecision.Rejected rejected => new GateReply.Refused(rejected.Reason),
                 RunDecision.Existing existing => new GateReply.Recorded(Asked(existing.Record, request), Repeat: true),
                 RunDecision.Created created => new GateReply.Recorded(Asked(created.Record, request), Repeat: false),
@@ -56,7 +57,7 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// The note a Retry of <paramref name="task"/> starts with: the reasons of the sent-back Approval nodes it feeds through its
-    /// dependency connections, each still on current inputs and not asked again, in the order the run lists them. Null
+    /// dependency connections, each still on current inputs and not asked again, in the workflow's task order. Null
     /// when it feeds none (#126).
     /// </summary>
     internal static string? SentBackNote(Workflow snapshot, RunView view, TaskId task)
@@ -66,7 +67,8 @@ internal sealed partial class WorkflowRunCoordinator
         while (next.TryDequeue(out var from))
             foreach (var (edge, kind) in snapshot.Connections)
                 if (edge.From == from && kind == ConnectionKind.Dependency && fed.Add(edge.To)) next.Enqueue(edge.To);
-        var reasons = view.Tasks.Values.Where(each => fed.Contains(each.Task) && each is { State: TaskState.SentBack, Gate.Reason: { } })
+        var reasons = snapshot.Tasks.Keys.Where(fed.Contains).Select(view.Tasks.GetValueOrDefault)
+            .OfType<TaskView>().Where(each => each is { State: TaskState.SentBack, Gate.Reason: { } })
             .Select(each => each.Gate!.Reason!).Distinct().ToArray();
         return reasons.Length == 0 ? null : string.Join("\n\n", reasons);
     }
