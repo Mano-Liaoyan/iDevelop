@@ -53,15 +53,15 @@ public sealed class RootExitTests
             Assert.Equal(before, RefOwnership.Accepts(f.Read(), repository, writer.Execution.Location.Owner.Branch!, tip));
             var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
             await f.Close(sibling, assertMatched: before);
-            var publication = f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt);
+            var publication = f.Materializer().Accept(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt);
             if (before)
             {
-                Assert.Equal(U, Assert.IsType<Publication.Accepted>(publication).Result.Task);
+                Assert.Equal(U, Assert.IsType<Acceptance.Accepted>(publication).Result.Task);
                 Assert.Equal(U, Assert.Single(f.Read().Results).Task);
             }
             else
             {
-                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(publication).Block.Problem);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Acceptance.Blocked>(publication).Block.Problem);
                 Assert.Equal(0, f.Read().Results.Count(result => result.Task == U));
             }
             Assert.Equal("B\n", f.Git.Run(writer.Checkout, "show", tip!.Value.Hex + ":b.txt").Text);

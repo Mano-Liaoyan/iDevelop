@@ -35,7 +35,7 @@ public sealed class TurnRunnerTests
         Assert.True(Array.FindIndex(lines, line => line.Contains("\"type\":\"cleanedUp\"", StringComparison.Ordinal)) <
             Array.FindIndex(lines, line => line.Contains("\"type\":\"exited\"", StringComparison.Ordinal)));
         Assert.Equal(1, f.Launches);
-        var result = f.Publish(turn);
+        var result = f.Accept(turn);
         Assert.Single(f.Preparation.Read().Results);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
@@ -350,7 +350,7 @@ public sealed class TurnRunnerTests
         Assert.IsType<CaptureDisposition.Matched>(settled.Capture.Disposition);
         Assert.Single(Assert.Single(f.Preparation.Read().Captures).Value);
         Assert.Equal(1, f.Launches);
-        var result = f.Publish(settled);
+        var result = f.Accept(settled);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
     }
 
@@ -378,7 +378,7 @@ public sealed class TurnRunnerTests
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
                 turn.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
             Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
-            var result = Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Result;
+            var result = Assert.IsType<Acceptance.Accepted>(f.Preparation.Materializer().Accept(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Result;
             Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
             Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
         }
@@ -395,7 +395,7 @@ public sealed class TurnRunnerTests
             Assert.IsType<CaptureDisposition.Diverged>(turn.Capture.Disposition);
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
                 turn.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
-            Assert.IsType<Publication.Blocked>(f.Preparation.Materializer().Publish(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt));
+            Assert.IsType<Acceptance.Blocked>(f.Preparation.Materializer().Accept(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt));
             var block = Assert.Single(f.Preparation.Read().Blocks, pair => !pair.Value.Resolved);
             Assert.Equal(block.Key, Assert.IsType<TurnDisposition.Blocked>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Block);
         }

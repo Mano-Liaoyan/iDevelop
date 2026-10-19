@@ -8,78 +8,6 @@ namespace IDevelop.Core.Tests.Materialization;
 public sealed class BlockScopeTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Publish_reruns_past_its_own_repository_fault_but_not_another_operations(bool own)
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await DoneWriter(f);
-        var attempt = ready.Execution.Launch.Attempt;
-        var publication = f.Op();
-        var block = f.Op();
-        Assert.Equal("Recorded", f.Store.Record(f.Permit, block, new RunEvent.Blocked(
-            new(own ? publication : f.Op(), T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [],
-                "The run belongs to a different repository common directory.") { Scope = new BlockScope.Repository() })).GetType().Name);
-        var outcome = f.Materializer().Publish(f.Lease(T), publication, attempt);
-        if (own)
-        {
-            Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(outcome).Result.Report);
-            Assert.True(f.Read().Blocks[block].Resolved);
-        }
-        else
-        {
-            Assert.Equal("The run belongs to a different repository common directory.", Assert.IsType<Publication.Blocked>(outcome).Block.Detail);
-            Assert.False(f.Read().Blocks[block].Resolved);
-            Assert.Empty(f.Read().Results);
-        }
-    }
-
-    [UnixFact]
-    public async Task Publish_retries_past_its_own_ancestry_failure()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await DoneWriter(f);
-        var attempt = ready.Execution.Launch.Attempt;
-        var tip = f.Read().RootExits[ready.Execution.Launch].Tip;
-        var operation = f.Op();
-        var failed = Assert.IsType<Publication.Blocked>(f.FailingGit($"merge-base --is-ancestor {ready.Execution.Location.AttemptBase.Hex} {tip.Hex}")
-            .Publish(f.Lease(T), operation, attempt));
-        Assert.Equal("GitFailed: fatal: injected failure\n", failed.Block.Problem + ": " + failed.Block.Detail);
-        Assert.Equal(new BlockScope.Operation(), failed.Block.Scope);
-        var fault = Assert.Single(f.Read().Blocks).Key;
-        Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, attempt)).Result.Report);
-        Assert.True(f.Read().Blocks[fault].Resolved);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Publish_reruns_past_its_own_evidence_block_but_not_past_checkout_drift(bool own)
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await DoneWriter(f);
-        var attempt = ready.Execution.Launch.Attempt;
-        var publication = f.Op();
-        var block = f.Op();
-        Assert.Equal("Recorded", f.Store.Record(f.Permit, block, new RunEvent.Blocked(
-            new(publication, T, attempt, MaterializationProblem.UncertainOwnership, ready.Execution.Inputs, [], "The frozen publication recipe produced a different commit.")
-            { Scope = own ? new BlockScope.Operation() : BlockScope.Checkout.Whole })).GetType().Name);
-        var outcome = f.Materializer().Publish(f.Lease(T), publication, attempt);
-        if (own)
-        {
-            Assert.Equal("done\n", Assert.IsType<Publication.Accepted>(outcome).Result.Report);
-            Assert.True(f.Read().Blocks[block].Resolved);
-            Assert.Single(f.Read().Results);
-        }
-        else
-        {
-            Assert.Equal("The frozen publication recipe produced a different commit.", Assert.IsType<Publication.Blocked>(outcome).Block.Detail);
-            Assert.False(f.Read().Blocks[block].Resolved);
-            Assert.Empty(f.Read().Results);
-        }
-    }
-
-    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_ready_preparation_resolves_only_its_own_earlier_blocks(bool turn)
@@ -121,13 +49,5 @@ public sealed class BlockScopeTests
         var entry = Assert.Single(read.Entries);
         Assert.Same(BlockScope.Unrecorded.Value, Assert.IsType<RunEvent.Blocked>(entry.Event).Block.Scope);
         Assert.Equal(legacy, RunJournal.Encode(entry));
-    }
-
-    private static async Task<Preparation.Ready> DoneWriter(PreparationFixture f)
-    {
-        var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
-        f.Git.Write("result.txt", "done\n", ready.Checkout);
-        await f.Close(ready, "done\n");
-        return ready;
     }
 }

@@ -42,7 +42,7 @@ public sealed class RebaseTests
             File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
         }
         await f.Close(ready);
-        return Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(task), f.Op(), ready.Execution.Launch.Attempt)).Result;
+        return Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(task), f.Op(), ready.Execution.Launch.Attempt)).Result;
     }
 
     internal static Task<ResultRecord> Write(PreparationFixture f, TaskId task, params (string Path, string? Text)[] edits) =>
@@ -113,7 +113,6 @@ public sealed class RebaseTests
         Assert.Equal(clean.Commit, Tip(f, Branch(f, U)));
         Assert.Equal(["new\n", "B\n"], new[] { Text(f, U, "a.txt"), Text(f, U, "b.txt") });
         Assert.Equal("", f.Git.Git("-C", Checkout(f, U), "status", "--porcelain"));
-        Assert.Equal(CodeOf(stale), Tip(f, Assert.IsType<CodeOutput.Produced>(stale.Code).Code.ResultRef));
         Assert.Equal(clean.Commit, Tip(f, code.ResultRef));
         var artifact = Assert.Single(rebased.Artifacts);
         Assert.Equal(RunStorage.ArtifactPath(rebased.Id, "payload"), artifact.StoredPath);

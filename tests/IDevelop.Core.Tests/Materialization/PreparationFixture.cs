@@ -80,7 +80,7 @@ internal sealed class PreparationFixture : IDisposable
         return new(task, blueprint) { Execution = Task().Execution, Title = task == T ? "B" : task == C ? "C" : "U" };
     }
 
-    public async Task<ResultRecord> Publish(TaskId task, CommitId commit, string report = "B ready.\n", bool artifact = false, string artifactName = "payload")
+    public async Task<ResultRecord> Accept(TaskId task, CommitId commit, string report = "B ready.\n", bool artifact = false, string artifactName = "payload")
     {
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(task));
         Assert.Equal(0, Git.Run(ready.Checkout, "merge", "--ff-only", "--no-edit", commit.Hex).ExitCode);
@@ -92,7 +92,7 @@ internal sealed class PreparationFixture : IDisposable
                 "{\"schema\":1,\"artifacts\":[{\"name\":\"" + artifactName + "\",\"path\":\"payload.bin\"}]}");
         }
         await Close(ready, report);
-        return Assert.IsType<Publication.Accepted>(Materializer().Publish(Lease(task), Op(), ready.Execution.Launch.Attempt)).Result;
+        return Assert.IsType<Acceptance.Accepted>(Materializer().Accept(Lease(task), Op(), ready.Execution.Launch.Attempt)).Result;
     }
 
     public async Task Close(Preparation.Ready ready, string report = "B ready.\n",
@@ -139,6 +139,29 @@ internal sealed class PreparationFixture : IDisposable
     {
         ReleaseControl();
         Git.Dispose();
+    }
+
+    /// <summary>A crash a probe throws at a step, which a test catches.</summary>
+    internal sealed class Crash : Exception;
+
+    /// <summary>Prepares T, commits b.txt on its branch, changes a.txt, adds new.txt, optionally declares an artifact, and closes its turn.</summary>
+    internal async Task<Preparation.Ready> ChangedWriter(bool artifact = false, bool assertMatched = true)
+    {
+        var ready = Assert.IsType<Preparation.Ready>(await Prepare(T));
+        Git.Write("b.txt", "B\n", ready.Checkout);
+        Assert.Equal(0, Git.Run(ready.Checkout, "add", "b.txt").ExitCode);
+        Assert.Equal(0, Git.Run(ready.Checkout, "-c", "commit.gpgSign=false", "commit", "-q", "-m", "b").ExitCode);
+        Assert.Equal("2f1d113f78fb3fe0c4c6d9ad1d7dc2788acecf67\n", Git.Run(ready.Checkout, "rev-parse", "HEAD").Text);
+        Git.Write("a.txt", "A captured\n", ready.Checkout);
+        Git.Write("new.txt", "new\n", ready.Checkout);
+        if (artifact)
+        {
+            var outbox = Path.Combine(ready.Checkout, ready.Execution.OutboxPath);
+            File.WriteAllText(Path.Combine(outbox, "manifest.json"), "{\"schema\":1,\"artifacts\":[{\"name\":\"payload\",\"path\":\"payload.bin\"}]}");
+            File.WriteAllBytes(Path.Combine(outbox, "payload.bin"), [67, 0, 127]);
+        }
+        await Close(ready, assertMatched: assertMatched);
+        return ready;
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using IDevelop.Execution;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.JoinTests;
-using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
+using Crash = IDevelop.Core.Tests.Materialization.PreparationFixture.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
@@ -17,7 +17,7 @@ public sealed class JoinRecoveryTests
         var third = Assert.IsType<Preparation.Ready>(await Open(f).Prepare(f.Lease(D), f.Op(), new AttemptCause.Initial()));
         OwnCommit(f, third, conflict ? "b.txt" : "e.txt", conflict ? "different\n" : "E\n", "e");
         await f.Close(third);
-        Assert.IsType<Publication.Accepted>(Open(f).Publish(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(Open(f).Accept(f.Lease(third.Execution.Location.Owner.Task), f.Op(), third.Execution.Launch.Attempt));
     }
 
     [Theory]

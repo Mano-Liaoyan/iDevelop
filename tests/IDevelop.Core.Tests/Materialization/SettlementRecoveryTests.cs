@@ -18,7 +18,7 @@ public sealed class SettlementRecoveryTests
         var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
         Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
         Assert.False(Assert.Single(f.Read().Captures[closed.Capture]).Recovery);
-        CloseAndPublish(f, ready, f.Read().Captures[closed.Capture][0].Log);
+        CloseAndAccept(f, ready, f.Read().Captures[closed.Capture][0].Log);
         var sequence = f.Read().Sequence;
         SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), ready.Execution.Launch));
         Assert.Equal(sequence, f.Read().Sequence);
@@ -71,7 +71,7 @@ public sealed class SettlementRecoveryTests
         Assert.Single(f.Read().TurnClosures);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, f.Read().TurnClosures[ready.Execution.Launch]));
-        Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+        Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
             f.Lease(T), f.Op(), ready.Execution.Launch.Attempt)).Block.Detail);
         Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
         Assert.Equal("keep\n", File.ReadAllText(Path.Combine(ready.Checkout, "keep.txt")));
@@ -82,7 +82,7 @@ public sealed class SettlementRecoveryTests
         var (valid, checkpoint) = await Ready(control);
         var matched = Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
         Assert.Single(control.Read().Captures[matched.Capture]);
-        CloseAndPublish(control, valid, checkpoint);
+        CloseAndAccept(control, valid, checkpoint);
     }
 
     [Theory]
@@ -110,12 +110,12 @@ public sealed class SettlementRecoveryTests
         Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
         Assert.Empty(f.Read().UnresolvedClaims);
         Assert.Equal("Closed", Assert.Single(Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, f.RunId)).Attempts).State.ToString());
-        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(T), f.Op(), launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(f.Materializer().Accept(f.Lease(T), f.Op(), launch.Attempt)).Reason.Problem.ToString());
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, log) = await Ready(control);
         Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, log));
         Assert.Single(control.Read().TurnClosures);
-        CloseAndPublish(control, valid, log);
+        CloseAndAccept(control, valid, log);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class SettlementRecoveryTests
         Assert.Equal("Missing turn-end log evidence.", Assert.IsType<CaptureDisposition.Failed>(closed.Disposition).Detail);
         Assert.Single(f.Read().TurnClosures);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, log));
-        Assert.Equal("Missing turn-end log evidence.", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+        Assert.Equal("Missing turn-end log evidence.", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
             f.Lease(T), f.Op(), ready.Execution.Launch.Attempt)).Block.Detail);
         Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
         sequence = f.Read().Sequence;
@@ -147,7 +147,7 @@ public sealed class SettlementRecoveryTests
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, checkpoint) = await Ready(control);
         Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-        CloseAndPublish(control, valid, checkpoint);
+        CloseAndAccept(control, valid, checkpoint);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public sealed class SettlementRecoveryTests
         var (valid, log) = await Ready(control);
         Assert.Single(control.Read().RootExits);
         Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, log));
-        CloseAndPublish(control, valid, log);
+        CloseAndAccept(control, valid, log);
     }
 
     [Theory]
@@ -246,7 +246,7 @@ public sealed class SettlementRecoveryTests
         Assert.Equal("Stopped", Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[launch.Attempt]).Outcome.ToString());
         Assert.Empty(f.Read().TurnClosures);
         Assert.Empty(f.Read().UnresolvedClaims);
-        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(T), f.Op(), launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(f.Materializer().Accept(f.Lease(T), f.Op(), launch.Attempt)).Reason.Problem.ToString());
         Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
         using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, checkpoint) = await Ready(control);
@@ -255,7 +255,7 @@ public sealed class SettlementRecoveryTests
         Assert.Equal("SettlementPending", ProblemName(control.Store.Recover(control.Lease(T), control.Op(), valid.Execution.Launch.Attempt)));
         Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await control.Materializer().RecoverSettlement(
             control.Lease(T), control.Op(), valid.Execution.Launch)).Disposition);
-        CloseAndPublish(control, valid, checkpoint);
+        CloseAndAccept(control, valid, checkpoint);
     }
 
     [Theory]
@@ -339,7 +339,7 @@ public sealed class SettlementRecoveryTests
         Assert.Equal(closed.Capture, Assert.IsType<RunEvent.TurnClosed>(repeated.Event).Capture);
         Assert.Equal("EvidenceMismatch", ProblemName(f.Store.CloseTurn(f.Permit, f.Op(), launch, log)));
         Assert.Equal(sequence, f.Read().Sequence);
-        CloseAndPublish(f, ready, log);
+        CloseAndAccept(f, ready, log);
     }
 
     [Fact]
@@ -422,7 +422,7 @@ public sealed class SettlementRecoveryTests
         var sequence = f.Read().Sequence;
         SettlementAssertions.Equal(closed, await f.Materializer().Settle(f.Lease(T), operation, ready.Execution.Launch, log));
         Assert.Equal(sequence, f.Read().Sequence);
-        CloseAndPublish(f, ready, log);
+        CloseAndAccept(f, ready, log);
     }
 
     [Fact]
@@ -480,7 +480,7 @@ public sealed class SettlementRecoveryTests
         using var published = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var (valid, checkpoint) = await Ready(published);
         Assert.IsType<Settlement.Closed>(await published.Materializer().Settle(published.Lease(T), published.Op(), valid.Execution.Launch, checkpoint));
-        CloseAndPublish(published, valid, checkpoint);
+        CloseAndAccept(published, valid, checkpoint);
     }
 
     public static IEnumerable<object[]> CrashPoints()
@@ -526,7 +526,7 @@ public sealed class SettlementRecoveryTests
                 using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
                 var (valid, checkpoint) = await Ready(control);
                 Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-                CloseAndPublish(control, valid, checkpoint);
+                CloseAndAccept(control, valid, checkpoint);
                 return;
             }
             log = f.ObserveAndLog(ready);
@@ -571,13 +571,13 @@ public sealed class SettlementRecoveryTests
         SettlementAssertions.Equal(closed, await f.Materializer().RecoverSettlement(f.Lease(T), f.Op(), launch));
         if (missing)
         {
-            Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+            Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
                 f.Lease(T), f.Op(), launch.Attempt)).Block.Detail);
             Assert.Equal((0, 1), (f.Read().Results.Count, f.Read().Claims.Count));
             using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
             var (valid, checkpoint) = await Ready(control);
             Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-            CloseAndPublish(control, valid, checkpoint);
+            CloseAndAccept(control, valid, checkpoint);
         }
         else
         {
@@ -617,13 +617,13 @@ public sealed class SettlementRecoveryTests
             using var control = new PreparationFixture(FixtureWorkflow(Writer(T)));
             var (valid, checkpoint) = await Ready(control);
             Assert.IsType<Settlement.Closed>(await control.Materializer().Settle(control.Lease(T), control.Op(), valid.Execution.Launch, checkpoint));
-            CloseAndPublish(control, valid, checkpoint);
+            CloseAndAccept(control, valid, checkpoint);
         }
         else
         {
             var log = f.ObserveAndLog(ready);
             Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
-            CloseAndPublish(f, ready, log);
+            CloseAndAccept(f, ready, log);
         }
         Assert.Single(f.Read().Claims);
         Assert.Equal("done\n", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));
@@ -671,7 +671,7 @@ public sealed class SettlementRecoveryTests
         File.WriteAllText(path, File.ReadLines(path).First() + "\n");
     }
 
-    private static void CloseAndPublish(PreparationFixture f, Preparation.Ready ready, LogCheckpoint log)
+    private static void CloseAndAccept(PreparationFixture f, Preparation.Ready ready, LogCheckpoint log)
     {
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, log));
@@ -681,7 +681,7 @@ public sealed class SettlementRecoveryTests
 
     private static void AssertPublished(PreparationFixture f, Preparation.Ready ready)
     {
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt)).Result;
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
     }
 

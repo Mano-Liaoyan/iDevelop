@@ -281,21 +281,21 @@ public sealed class CaptureTests
             var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), f.Op(), ready.Execution.Launch, log));
             Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
                 TerminalAttemptOutcome.Succeeded, log));
-            var publication = f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt);
+            var publication = f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt);
             if (detach)
             {
                 var diverged = Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition);
                 Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
                 Assert.Equal(new[] { "HEAD" }, diverged.Refs);
                 Assert.Empty(diverged.Paths);
-                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(publication).Block.Problem);
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Acceptance.Blocked>(publication).Block.Problem);
                 Assert.Empty(f.Read().Results);
             }
             else
             {
                 Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
                 Assert.Equal("writer\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(
-                    Assert.IsType<Publication.Accepted>(publication).Result.Code).Code.Commit.Hex + ":result.txt"));
+                    Assert.IsType<Acceptance.Accepted>(publication).Result.Code).Code.Commit.Hex + ":result.txt"));
             }
         }
     }
@@ -337,7 +337,7 @@ public sealed class CaptureTests
         {
             Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, operation, ready.Execution.Launch.Attempt,
                 TerminalAttemptOutcome.Succeeded, log));
-            var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+            var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
             Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
             Assert.Equal((1, 1), (f.Read().Results.Count, f.Read().Claims.Count));
             Assert.Single(f.Read().Captures[closed.Capture]);
@@ -536,7 +536,7 @@ public sealed class CaptureTests
                     else if (sibling == "prepare")
                         Assert.IsType<Preparation.Ready>(f.Prepare(U).AsTask().GetAwaiter().GetResult());
                     else
-                        Assert.Equal(U, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(),
+                        Assert.Equal(U, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(),
                             other!.Execution.Launch.Attempt)).Result.Task);
                 }).Settle(f.Lease(T), f.Op(), writer.Execution.Launch, log));
                 Assert.Equal(1, fired);
@@ -545,15 +545,18 @@ public sealed class CaptureTests
                     TerminalAttemptOutcome.Succeeded, log));
                 if (foreign)
                 {
-                    // A foreign move after the capture's only snapshot is caught when the turn publishes.
-                    if (point == "refs.snapshot.after") Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
-                    else
+                    // A foreign move after the capture's only snapshot leaves the writer's own branch and capture alone.
+                    if (point == "refs.snapshot.after")
                     {
-                        var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
-                        Assert.Equal("UncertainOwnership", diverged.Problem.ToString());
-                        Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
+                        Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
+                        Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(
+                            f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Result.Task);
+                        continue;
                     }
-                    Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                    var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
+                    Assert.Equal("UncertainOwnership", diverged.Problem.ToString());
+                    Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
+                    Assert.Equal("UncertainOwnership", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
                         f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem.ToString());
                     Assert.Empty(f.Read().Results);
                 }
@@ -561,7 +564,7 @@ public sealed class CaptureTests
                 {
                     Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
                     Assert.Equal(0, f.Read().Captures[settled.Capture].Sum(observation => observation.UnexplainedRefs.Length));
-                    var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+                    var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
                     Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
                     Assert.Equal(1, f.Read().Results.Count(result => result.Task == T));
                 }
@@ -594,7 +597,7 @@ public sealed class CaptureTests
         Assert.Empty(f.Read().UnresolvedClaims);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, log));
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
     }
 
@@ -625,7 +628,7 @@ public sealed class CaptureTests
         Assert.Equal(full, f.Read().TurnClosures[ready.Execution.Launch]);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), ready.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, full));
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         await VerifyUnreadableLogAfterMatch();
     }
@@ -694,7 +697,7 @@ public sealed class CaptureTests
                 var diverged = Assert.IsType<CaptureDisposition.Diverged>(settled.Disposition);
                 Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
                 Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
-                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
                     f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem);
                 Assert.Empty(f.Read().Results);
             }
@@ -702,7 +705,7 @@ public sealed class CaptureTests
             {
                 Assert.Empty(observations[0].UnexplainedRefs);
                 Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
-                Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+                Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(),
                     writer.Execution.Launch.Attempt)).Result.Task);
                 Assert.Single(f.Read().Results);
             }
@@ -724,7 +727,7 @@ public sealed class CaptureTests
             var settled = Assert.IsType<Settlement.Closed>(await f.Materializer(probe: point =>
             {
                 if (point != "git.capture-1.before") return;
-                Assert.Equal(U, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(),
+                Assert.Equal(U, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(),
                     sibling.Execution.Launch.Attempt)).Result.Task);
                 if (rewind)
                     Assert.Equal(0, f.Git.Run(f.Git.Folder, "update-ref", "refs/heads/idp/93f23689/task/c67f2fc3",
@@ -738,7 +741,7 @@ public sealed class CaptureTests
                 Assert.Equal(MaterializationProblem.UncertainOwnership, diverged.Problem);
                 Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, diverged.Refs);
                 Assert.Equal(new[] { "refs/heads/idp/93f23689/task/c67f2fc3" }, Assert.Single(f.Read().Captures[settled.Capture]).UnexplainedRefs);
-                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+                Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
                     f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem);
                 Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
             }
@@ -746,7 +749,7 @@ public sealed class CaptureTests
             {
                 Assert.IsType<CaptureDisposition.Matched>(settled.Disposition);
                 Assert.Empty(Assert.Single(f.Read().Captures[settled.Capture]).UnexplainedRefs);
-                Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+                Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(),
                     writer.Execution.Launch.Attempt)).Result.Task);
                 Assert.Equal(1, f.Read().Results.Count(result => result.Task == T));
             }
@@ -799,7 +802,7 @@ public sealed class CaptureTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task Exhausted_shared_ref_snapshots_reject_settlement_and_publication_and_same_operations_retry()
+    public async System.Threading.Tasks.Task Exhausted_shared_ref_snapshots_reject_settlement_and_the_same_operation_retries()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
@@ -833,13 +836,7 @@ public sealed class CaptureTests
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), writer.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, log));
         operation = f.Op();
-        snapshots = 0;
-        var publication = Assert.IsType<Publication.Rejected>(churn.Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
-        Assert.Equal("JournalBusy", publication.Reason.Problem.ToString());
-        Assert.Equal(4, snapshots);
-        Assert.Equal(0, f.Read().Blocks.Count(pair => !pair.Value.Resolved && pair.Value.Block.Attempt == writer.Execution.Launch.Attempt));
-        Assert.Empty(f.Read().Results);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation, writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), operation, writer.Execution.Launch.Attempt));
         Assert.Equal(T, accepted.Result.Task);
         Assert.Equal(T, Assert.Single(f.Read().Results).Task);
         Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));

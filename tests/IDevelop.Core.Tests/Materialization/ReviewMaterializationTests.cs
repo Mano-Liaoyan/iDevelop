@@ -5,7 +5,7 @@ using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
-using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
+using Crash = IDevelop.Core.Tests.Materialization.PreparationFixture.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
@@ -19,14 +19,14 @@ public sealed class ReviewMaterializationTests
 
     private static async Task<(Preparation.Ready Review, Preparation.Ready Fix, ResultRecord FirstResult, ResultRecord FixedResult)> FixedWriter(PreparationFixture f)
     {
-        var result = await f.Publish(T, f.A);
+        var result = await f.Accept(T, f.A);
         var review = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: "Review the changes."));
         await CloseReviewTurn(f, review);
         var fix = Assert.IsType<Preparation.Ready>(await f.Prepare(T,
             cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Repair the finding."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         await f.Close(fix, "Repaired.\n");
-        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
+        var repaired = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
         return (review, fix, result, repaired);
     }
 
@@ -140,7 +140,7 @@ public sealed class ReviewMaterializationTests
             git.Write(".gitignore", "cache.txt\n");
             return git.Commit("ignore cache");
         });
-        await f.Publish(T, GitFixture.Read(f.Git.Open().ResolveCommit("HEAD"))!.Value);
+        await f.Accept(T, GitFixture.Read(f.Git.Open().ResolveCommit("HEAD"))!.Value);
         var review = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: "Review."));
         await CloseReviewTurn(f, review);
         f.Git.Write("cache.txt", "reviewer\n", review.Checkout);
@@ -149,7 +149,7 @@ public sealed class ReviewMaterializationTests
         f.Git.Write("cache.txt", "subject\n", fix.Checkout);
         Assert.Equal(0, f.Git.Run(fix.Checkout, "add", "-f", "cache.txt").ExitCode);
         await f.Close(fix, "Repaired.\n");
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
         var blocked = Assert.IsType<Preparation.Blocked>(await f.Materializer().PrepareTurn(f.Lease(review.Execution.Location.Owner.Task), f.Op(),
             new(review.Execution.Launch.Attempt, 2), "Review the fix."));
         Assert.Equal("DirtyWorktree", blocked.Block.Problem.ToString());
@@ -163,7 +163,7 @@ public sealed class ReviewMaterializationTests
     {
         var workflow = Connect(Connect(Connect(FixtureWorkflow(Writer(T), Reviewer(), Task(C), Writer(D)), T, U), T, C), T, D);
         using var f = new PreparationFixture(workflow);
-        var first = await f.Publish(T, f.A);
+        var first = await f.Accept(T, f.A);
         var consumer = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         await f.Close(consumer, "Consumed.\n");
         var consumed = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
@@ -178,7 +178,7 @@ public sealed class ReviewMaterializationTests
             cause: new AttemptCause.ReviewFix(new(U, reviewer.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         await f.Close(fix, "Repaired.\n");
-        var repaired = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
+        var repaired = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt)).Result;
         Assert.Equal(first.Id, repaired.Supersedes);
         Assert.Contains(consumed.Id, f.Read().StaleResults);
         Assert.Equal(first.Id, Assert.Single(f.Read().Claims[running.Execution.Launch].Inputs.Bindings.OfType<InputBinding.Provided>()).Result);
@@ -217,8 +217,8 @@ public sealed class ReviewMaterializationTests
 
     private static async Task<Preparation.Ready> FixedFanIn(PreparationFixture f)
     {
-        await f.Publish(T, f.A);
-        await f.Publish(D, f.A, "Independent.\n");
+        await f.Accept(T, f.A);
+        await f.Accept(D, f.A, "Independent.\n");
         var forwarded = Assert.IsType<Preparation.Ready>(await f.Prepare(C));
         await f.Close(forwarded, "Forwarded.\n");
         Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(), forwarded.Execution.Launch.Attempt,
@@ -229,7 +229,7 @@ public sealed class ReviewMaterializationTests
             cause: new AttemptCause.ReviewFix(new(U, review.Execution.Launch.Attempt, 1, 0)), prompt: "Fix."));
         f.Git.Write("a.txt", "Fixed\n", fix.Checkout);
         await f.Close(fix, "Repaired.\n");
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(fix.Execution.Location.Owner.Task), f.Op(), fix.Execution.Launch.Attempt));
         return review;
     }
 

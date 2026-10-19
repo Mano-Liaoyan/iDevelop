@@ -37,7 +37,7 @@ public sealed class CapturePinTests
         f.Git.Write("foreign.txt", "foreign\n", writer.Checkout);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "add", "foreign.txt").ExitCode);
         Assert.Equal(0, f.Git.Run(writer.Checkout, "commit", "-qm", "foreign").ExitCode);
-        Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+        Assert.Equal(MaterializationProblem.UncertainOwnership, Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
             f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "reflog", "expire", "--expire=now", "--all").ExitCode);
         Assert.Equal(0, f.Git.Run(f.Git.Folder, "gc", "-q", "--prune=now").ExitCode);
@@ -49,11 +49,11 @@ public sealed class CapturePinTests
         var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         f.Git.Write("sibling.txt", "sibling\n", sibling.Checkout);
         await f.Close(sibling);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("sibling\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":sibling.txt"));
         Assert.Single(f.Read().Results);
         var retained = GitFixture.Read(f.Git.Open().RefSnapshot($"refs/idp/{record.RunKey}/result/", $"refs/idp/{record.RunKey}/salvage/"));
-        Assert.Equal(2, retained.Count);
+        Assert.Single(retained);
         Assert.Equal(RunPhase.Failed, Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Failed)).Record.Phase);
         var sequence = f.Read().Sequence;
         var operation = f.Op();
@@ -110,7 +110,7 @@ public sealed class CapturePinTests
         var capture = settled.Settlements[sibling.Execution.Launch];
         Assert.IsType<CaptureDisposition.Matched>(settled.Dispositions[capture].Disposition);
         Assert.Single(settled.Captures[capture]);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("sibling\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":sibling.txt"));
         Assert.Single(f.Read().Results);
     }
@@ -210,9 +210,9 @@ public sealed class CapturePinTests
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(blocked, "Rechecked.")));
         var salvage = f.Op();
-        await Assert.ThrowsAsync<PublicationTests.Crash>(async () => await f.Materializer(probe: point =>
+        await Assert.ThrowsAsync<PreparationFixture.Crash>(async () => await f.Materializer(probe: point =>
         {
-            if (point == "journal.salvage-plan.after") throw new PublicationTests.Crash();
+            if (point == "journal.salvage-plan.after") throw new PreparationFixture.Crash();
         }).Salvage(f.Lease(T), salvage, writer.Execution.Launch.Attempt));
         Assert.Equal(RunProblem.NotSettled, Assert.IsType<PinRelease.Rejected>(f.Materializer().ReleasePins(f.Permit, f.Op())).Reason.Problem);
         Assert.Equal(5, GitFixture.Read(f.Git.Open().RefSnapshot(prefix)).Count);

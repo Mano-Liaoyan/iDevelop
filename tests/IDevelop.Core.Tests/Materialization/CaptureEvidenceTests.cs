@@ -19,7 +19,7 @@ public sealed class CaptureEvidenceTests
         Assert.Equal(RunProblem.InvalidData, Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(),
             new RunEvent.TurnCaptured(invalid))).Reason.Problem);
         Assert.Single(f.Read().Captures[observation.Capture]);
-        Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+        Assert.Equal("B ready.\n", Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(),
             ready.Execution.Launch.Attempt)).Result.Report);
     }
 
@@ -35,7 +35,7 @@ public sealed class CaptureEvidenceTests
             new RunEvent.TurnCaptured(invalid))).Reason.Problem);
         Assert.NotNull(observation.IndexTree);
         Assert.Single(f.Read().Captures[observation.Capture]);
-        Assert.Equal("B ready.\n", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(),
+        Assert.Equal("B ready.\n", Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(),
             ready.Execution.Launch.Attempt)).Result.Report);
     }
 

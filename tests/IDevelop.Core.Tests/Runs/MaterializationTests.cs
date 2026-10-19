@@ -30,7 +30,7 @@ public sealed class MaterializationTests
         var workflow = Connect(Connect(Connect(Connect(FixtureWorkflow(Writer(T), Task(U), Task(C), Task(D)), T, U), T, C), U, D), C, D);
         using var f = new RunFixtures(workflow);
         f.Approve();
-        Publish(f, f.Reserve(), WriterCommit);
+        Accept(f, f.Reserve(), WriterCommit);
         f.Complete(f.Reserve(U));
         f.Complete(f.Reserve(C));
         var reserved = f.Reserve(D);
@@ -47,8 +47,8 @@ public sealed class MaterializationTests
     {
         using var f = new RunFixtures(Connect(Connect(FixtureWorkflow(Writer(T), Writer(U), Task(D)), T, D), U, D));
         f.Approve();
-        Publish(f, f.Reserve(), WriterCommit);
-        Publish(f, f.Reserve(U), OtherCommit);
+        Accept(f, f.Reserve(), WriterCommit);
+        Accept(f, f.Reserve(U), OtherCommit);
         var operation = f.Op();
         var planned = Assert.IsType<RunDecision.Recorded>(f.Store.Plan(f.Lease(D), operation, f.Read().Revision.Id, new AttemptCause.Initial()));
         var plan = Assert.IsType<MaterializationPlan.Preparation>(Assert.IsType<RunEvent.Planned>(planned.Event).Plan);
@@ -68,12 +68,13 @@ public sealed class MaterializationTests
     {
         using var f = new RunFixtures(Connect(FixtureWorkflow(Writer(T), Task(U)), T, U));
         f.Approve();
-        Publish(f, f.Reserve(), WriterCommit, "Ready.", [new("payload", "artifacts/payload", new("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), 3)]);
+        var result = Accept(f, f.Reserve(), WriterCommit, "Ready.", [Artifact("payload")]);
         var input = f.Reserve(U).Inputs;
-        Assert.Equal("""
+        var folder = $".idp/inputs/{input.Id.Value:D}/{result.Id.Value:D}";
+        Assert.Equal($"""
             ## Plan (dependency)
 
-            Result: 00000000-0000-0000-0000-000000000103
+            Result: {result.Id.Value:D}
             Code: 2222222222222222222222222222222222222222
             Owner: 00000000-0000-0000-0000-000000000002
 
@@ -83,10 +84,9 @@ public sealed class MaterializationTests
 
             Artifacts:
 
-            - payload: .idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/artifacts/payload (3 bytes, SHA-256 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+            - payload: {folder}/artifacts/payload (3 bytes, SHA-256 {Revision.Hash(Payload).Sha256})
             """.ReplaceLineEndings("\n"), input.Text);
-        Assert.Equal([".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md",
-            ".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/artifacts/payload"], input.Files.Select(file => file.RelativePath));
+        Assert.Equal([$"{folder}/report.md", $"{folder}/artifacts/payload"], input.Files.Select(file => file.RelativePath));
         Assert.Equal([6L, 3L], input.Files.Select(file => file.ByteLength));
         Assert.Equal("e20846d20bcd60f0f57708fb7e0afdc584cfac4711ea4bb636dfce053ad50136", input.Files[0].Content.Sha256);
     }
@@ -126,24 +126,7 @@ public sealed class MaterializationTests
     }
 
     [Fact]
-    public void Unfinished_publication_blocks_settlement_until_a_block_preserves_it()
-    {
-        using var f = new RunFixtures(FixtureWorkflow(Writer(T)));
-        f.Approve();
-        var reservation = f.Reserve();
-        Close(f, reservation);
-        var operation = f.Op();
-        var publication = Publication(reservation, new(Id(300)), WriterCommit);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
-        Assert.Equal(RunProblem.UnfinishedPublication, Problem(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped)));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Blocked(new(operation, T, A1,
-            MaterializationProblem.DirtyWorktree, reservation.Inputs.Id, [], "Checkout changed.") { Scope = BlockScope.Checkout.Whole })));
-        Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.Permit, f.Op(), RunOutcome.Stopped));
-        Assert.Equal(RunPhase.Stopped, f.Read().Phase);
-    }
-
-    [Fact]
-    public void Terminal_maintenance_retains_salvage_but_cannot_move_task_branches_or_publish()
+    public void Terminal_maintenance_retains_salvage_but_cannot_move_task_branches()
     {
         using var f = new RunFixtures(FixtureWorkflow(Writer(T)));
         f.Approve();
@@ -156,7 +139,6 @@ public sealed class MaterializationTests
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(salvage)));
         ObserveMove(f, operation, reference, null, WriterCommit);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.SalvageRetained(operation, reference, WriterCommit)));
-        Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(Publication(reservation, new(Id(300)), WriterCommit)))));
         Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Record(f.Permit, f.Op(), new RunEvent.GitIntended(operation,
             new GitMutation.MoveRef(new("refs/heads/idp/task", Base, WriterCommit))))));
         Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Plan(f.Lease(T), f.Op(), f.Read().Revision.Id, new AttemptCause.Initial())));
@@ -164,27 +146,31 @@ public sealed class MaterializationTests
     }
 
     [Fact]
-    public void Publication_requires_both_observed_ref_moves_and_one_plan_per_attempt()
+    public void An_editing_result_is_its_report_with_its_turn_commit_once_that_commit_is_its_branch_tip()
     {
         using var f = new RunFixtures(FixtureWorkflow(Writer(T)));
         f.Approve();
         var reservation = f.Reserve();
-        Close(f, reservation);
+        Close(f, reservation, "Checked.", WriterCommit, [Artifact("payload")]);
+        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.AcceptReport(f.Permit, f.Op(), A1, reservation.Inputs.Id, "Checked.")));
+        Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.AcceptReport(f.Permit, f.Op(), A1, reservation.Inputs.Id, "Other.")));
+        MoveBranch(f, reservation, WriterCommit);
         var operation = f.Op();
-        var publication = Publication(reservation, new(Id(300)), WriterCommit);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
-        Assert.IsType<RunDecision.Existing>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
-        Assert.Equal(RunProblem.StartConflict, Problem(f.Store.Record(f.Permit, f.Op(), new RunEvent.Planned(publication with
-        {
-            Result = new(Id(301)),
-        }))));
-        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.AcceptPublication(f.Permit, f.Op(), operation)));
-        ObserveMove(f, operation, f.Read().Preparations[new(A1, 1)].Location.Owner.Branch!, Base, WriterCommit);
-        Assert.Equal(RunProblem.InputConflict, Problem(f.Store.AcceptPublication(f.Permit, f.Op(), operation)));
-        ObserveMove(f, operation, $"refs/idp/{f.Read().RunKey}/result/{f.Read().TaskKeys[T]}/{A1.Value:D}", null, WriterCommit);
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
-        Assert.IsType<RunDecision.Existing>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
-        Assert.Equal("2222222222222222222222222222222222222222", Assert.IsType<CodeOutput.Produced>(f.Read().Results.Single().Code).Code.Commit.Hex);
+        var created = Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, operation, A1, reservation.Inputs.Id, "Checked."));
+        Assert.IsType<RunDecision.Existing>(f.Store.AcceptReport(f.Permit, operation, A1, reservation.Inputs.Id, "Checked."));
+        Assert.IsType<RunDecision.Existing>(f.Store.AcceptReport(f.Permit, f.Op(), A1, reservation.Inputs.Id, "Checked."));
+        var result = Assert.IsType<RunEvent.ResultAccepted>(created.Event).Result;
+        var record = f.Read();
+        var code = Assert.IsType<CodeOutput.Produced>(Assert.Single(record.Results).Code).Code;
+        Assert.Equal(WriterCommit, code.Commit);
+        Assert.Equal(Tree, code.Tree);
+        Assert.Equal(Base, code.AttemptBase);
+        Assert.Equal(record.Preparations[new(A1, 1)].Location.Owner.Branch, code.ResultRef);
+        Assert.Equal("Checked.", result.Report);
+        var artifact = Assert.Single(result.Artifacts);
+        Assert.Equal(RunStorage.ArtifactPath(result.Id, "payload"), artifact.StoredPath);
+        Assert.Equal(Payload, new RunStorage(f.Project, W, Run).ReadArtifact(result.Id, artifact));
+        Assert.DoesNotContain(record.Plans.Values, plan => plan is MaterializationPlan.Publication);
     }
 
     [Fact]
@@ -213,13 +199,13 @@ public sealed class MaterializationTests
         using var f = new RunFixtures(FixtureWorkflow(Writer(T)));
         f.Approve();
         var first = f.Reserve();
-        Publish(f, first, WriterCommit);
+        Accept(f, first, WriterCommit);
         var retry = f.Reserve(cause: new AttemptCause.Retry(first.Attempt.Id, f.Op()));
         f.Prepare(retry);
         var prepared = f.Read().Preparations[new(retry.Attempt.Id, 1)];
         Assert.Equal("1111111111111111111111111111111111111111", retry.Inputs.CodeBase.Hex);
         Assert.Equal("2222222222222222222222222222222222222222", prepared.Location.AttemptBase.Hex);
-        Assert.Equal(".idp/outbox/00000000-0000-0000-0000-000000000105", prepared.OutboxPath);
+        Assert.Equal($".idp/outbox/{retry.Attempt.Id.Value:D}", prepared.OutboxPath);
     }
 
     [Fact]
@@ -228,21 +214,12 @@ public sealed class MaterializationTests
         using var f = new RunFixtures(Connect(FixtureWorkflow(Writer(T), Task(U)), T, U));
         f.Approve();
         var writer = f.Reserve();
-        var old = Publish(f, writer, WriterCommit);
+        var old = Accept(f, writer, WriterCommit);
         var consumer = f.Reserve(U);
         f.Complete(consumer);
         var replacement = f.Reserve(cause: new AttemptCause.Retry(writer.Attempt.Id, f.Op()));
-        Close(f, replacement, "Updated.", OtherCommit);
-        var operation = f.Op();
-        var publication = Publication(replacement, f.NextResultId(), OtherCommit, "Updated.") with
-        {
-            Supersedes = old.Id, VerifiedTip = WriterCommit, Recipe = Recipe(WriterCommit),
-        };
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
+        Accept(f, replacement, OtherCommit, "Updated.", supersedes: old.Id, tip: WriterCommit);
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(replacement.Attempt.Id, 1)].Location.Owner.Branch!, WriterCommit, OtherCommit);
-        ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[T]}/{replacement.Attempt.Id.Value:D}", null, OtherCommit);
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
         Assert.Equal(RunProblem.StaleInput, Problem(f.Store.Plan(f.Lease(U), f.Op(), record.Revision.Id,
             new AttemptCause.Retry(consumer.Attempt.Id, f.Op()))));
         Assert.Equal("2222222222222222222222222222222222222222", consumer.Inputs.CodeBase.Hex);
@@ -253,10 +230,10 @@ public sealed class MaterializationTests
     {
         using var f = new RunFixtures(Connect(FixtureWorkflow(Writer(T), Task(U)), T, U, ConnectionKind.Context));
         f.Approve();
-        Publish(f, f.Reserve(), WriterCommit, "Ready.", [new("payload", "artifacts/payload", Prompt, 3)]);
+        var result = Accept(f, f.Reserve(), WriterCommit, "Ready.", [Artifact("payload")]);
         var reserved = f.Reserve(U);
         Assert.Equal(new CodeSelection.Root(Base), reserved.Inputs.Code);
-        Assert.Equal(".idp/inputs/00000000-0000-0000-0000-000000000104/00000000-0000-0000-0000-000000000103/report.md",
+        Assert.Equal($".idp/inputs/{reserved.Inputs.Id.Value:D}/{result.Id.Value:D}/report.md",
             Assert.Single(reserved.Inputs.Files).RelativePath);
         Assert.Contains("## Plan (context)", reserved.Inputs.Text);
         Assert.Contains("Code: 2222222222222222222222222222222222222222", reserved.Inputs.Text);
@@ -289,22 +266,18 @@ public sealed class MaterializationTests
     }
 
     [Fact]
-    public void Stop_requested_finishes_publication_and_refuses_new_preparation()
+    public void Stop_requested_accepts_an_editing_result_and_refuses_new_preparation()
     {
         using var f = new RunFixtures(FixtureWorkflow(Writer(T)));
         f.Approve();
         var reserved = f.Reserve();
         Close(f, reserved);
         Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
-        var operation = f.Op();
-        var plan = Publication(reserved, f.NextResultId(), WriterCommit);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(plan)));
+        MoveBranch(f, reserved, WriterCommit);
+        Accepted(f, reserved);
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(A1, 1)].Location.Owner.Branch!, Base, WriterCommit);
-        ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[T]}/{A1.Value:D}", null, WriterCommit);
-        Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation));
         Assert.Equal(RunProblem.RunStopped, Problem(f.Store.Plan(f.Lease(T), f.Op(), record.Revision.Id, new AttemptCause.Retry(A1, f.Op()))));
-        Assert.Equal(RunPhase.StopRequested, f.Read().Phase);
+        Assert.Equal(RunPhase.StopRequested, record.Phase);
     }
 
     [Fact]
@@ -315,9 +288,9 @@ public sealed class MaterializationTests
         var reviewer = new TaskDefinition(U, blueprint) { Title = "Review", Execution = Task().Execution };
         using var f = new RunFixtures(Connect(FixtureWorkflow(Writer(T), reviewer), T, U));
         f.Approve();
-        Publish(f, f.Reserve(), WriterCommit);
+        var subject = Accept(f, f.Reserve(), WriterCommit);
         var reservation = f.Reserve(U);
-        Assert.Equal(new ReviewInput(T, new(Id(103))), reservation.Inputs.Review);
+        Assert.Equal(new ReviewInput(T, subject.Id), reservation.Inputs.Review);
         f.Claim(reservation);
         f.WriteLog(reservation, subject: T, report: "Approved.");
         var folder = f.Store.AttemptFolder(W, Run, U, reservation.Attempt.Id);
@@ -326,7 +299,7 @@ public sealed class MaterializationTests
             TerminalAttemptOutcome.Succeeded, Checkpoint(folder)));
         var result = Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
             reservation.Attempt.Id, reservation.Inputs.Id, "Approved.")).Event).Result;
-        Assert.Equal(new CodeOutput.Forwarded(new(Id(104))), result.Code);
+        Assert.Equal(new CodeOutput.Forwarded(reservation.Inputs.Id), result.Code);
         Assert.Equal("Approved.", result.Report);
         Assert.Equal("", f.Read().Preparations[new(reservation.Attempt.Id, 1)].OutboxPath);
     }
@@ -361,19 +334,18 @@ public sealed class MaterializationTests
     private static CommitRecipe Recipe(CommitId parent) => new(Tree, [parent], "Fixture", "Test <test@example.invalid>",
         "Test <test@example.invalid>", At);
 
-    private static MaterializationPlan.Publication Publication(RunEvent.Reserved reservation, ResultId result, CommitId commit,
-        string report = "Checked.", ImmutableArray<ArtifactRecord> artifacts = default) =>
-        new(reservation.Attempt.Id, result, null, reservation.Inputs.CodeBase, null, Recipe(reservation.Inputs.CodeBase), commit, report,
-            artifacts.IsDefault ? [] : [.. artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(result, artifact.Name) })])
-        { Capture = new(reservation.Attempt.Id.Value) };
+    /// <summary>Artifacts whose bytes a capture holds: each is the bytes {67, 0, 127}.</summary>
+    private static readonly byte[] Payload = [67, 0, 127];
+
+    private static ArtifactRecord Artifact(string name) => new(name, "artifacts/" + name, Revision.Hash(Payload), Payload.Length);
 
     private static void Close(RunFixtures f, RunEvent.Reserved reservation, string report = "Checked.",
-        CommitId? candidate = null, ImmutableArray<ArtifactRecord> artifacts = default)
+        CommitId? candidate = null, ImmutableArray<ArtifactRecord> artifacts = default, CommitId? tip = null)
     {
         f.Claim(reservation);
         var prepared = f.Read().Preparations[new(reservation.Attempt.Id, 1)];
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.RootExitObserved(
-            prepared.Launch, new RootExit.Exited(0), At, prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, TipOwnership.Explained)));
+            prepared.Launch, new RootExit.Exited(0), At, tip ?? prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, TipOwnership.Explained)));
         var log = f.WriteLog(reservation, report: report);
         var capture = new CaptureId(reservation.Attempt.Id.Value);
         foreach (var ordinal in new[] { 1, 2 })
@@ -381,9 +353,11 @@ public sealed class MaterializationTests
             var at = ordinal == 1 ? At : At.AddMilliseconds(250);
             var frozenArtifacts = artifacts.IsDefault ? [] : artifacts.Select(artifact => artifact with
                 { StoredPath = RunStorage.CapturePath(capture, ordinal, "artifacts/" + artifact.Name) }).ToImmutableArray();
+            var storage = new RunStorage(f.Project, W, Run);
+            foreach (var artifact in frozenArtifacts) RunStorage.Publish(storage.Folder, artifact.StoredPath, Payload, artifact.Content, artifact.ByteLength);
             Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.TurnCaptured(new(capture, ordinal,
-                prepared.Launch, log, at, at, Recipe(prepared.Location.AttemptBase), candidate ?? WriterCommit,
-                prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, null, report, frozenArtifacts,
+                prepared.Launch, log, at, at, Recipe(tip ?? prepared.Location.AttemptBase), candidate ?? WriterCommit,
+                tip ?? prepared.Location.AttemptBase, prepared.Location.Owner.Branch!, null, report, frozenArtifacts,
                 new(RunStorage.CapturePath(capture, ordinal, "refs.json"), Prompt, 10), []))));
         }
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.CaptureDisposed(capture, prepared.Launch,
@@ -393,17 +367,26 @@ public sealed class MaterializationTests
             TerminalAttemptOutcome.Succeeded, log));
     }
 
-    private static ResultRecord Publish(RunFixtures f, RunEvent.Reserved reservation, CommitId commit, string report = "Checked.",
-        ImmutableArray<ArtifactRecord> artifacts = default)
+    /// <summary>Closes the attempt with <paramref name="commit"/> as its turn's commit, moves its branch there, and accepts its report.</summary>
+    private static ResultRecord Accept(RunFixtures f, RunEvent.Reserved reservation, CommitId commit, string report = "Checked.",
+        ImmutableArray<ArtifactRecord> artifacts = default, ResultId? supersedes = null, CommitId? tip = null)
     {
-        Close(f, reservation, report, commit, artifacts);
-        var operation = f.Op();
-        var publication = Publication(reservation, f.NextResultId(), commit, report, artifacts);
-        Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, operation, new RunEvent.Planned(publication)));
+        Close(f, reservation, report, commit, artifacts, tip);
+        MoveBranch(f, reservation, commit);
+        return Accepted(f, reservation, report, supersedes);
+    }
+
+    private static ResultRecord Accepted(RunFixtures f, RunEvent.Reserved reservation, string report = "Checked.", ResultId? supersedes = null) =>
+        Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptReport(f.Permit, f.Op(),
+            reservation.Attempt.Id, reservation.Inputs.Id, report, supersedes)).Event).Result;
+
+    /// <summary>Records the move of the attempt's branch from its root exit's tip to <paramref name="commit"/>, under its preparation plan.</summary>
+    private static void MoveBranch(RunFixtures f, RunEvent.Reserved reservation, CommitId commit)
+    {
         var record = f.Read();
-        ObserveMove(f, operation, record.Preparations[new(reservation.Attempt.Id, 1)].Location.Owner.Branch!, publication.VerifiedTip, commit);
-        ObserveMove(f, operation, $"refs/idp/{record.RunKey}/result/{record.TaskKeys[reservation.Attempt.Task]}/{reservation.Attempt.Id.Value:D}", null, commit);
-        return Assert.IsType<RunEvent.ResultAccepted>(Assert.IsType<RunDecision.Created>(f.Store.AcceptPublication(f.Permit, f.Op(), operation)).Event).Result;
+        var launch = new LaunchKey(reservation.Attempt.Id, 1);
+        var plan = record.Plans.Single(pair => pair.Value is MaterializationPlan.Preparation p && p.Attempt == reservation.Attempt.Id).Key;
+        ObserveMove(f, plan, record.Preparations[launch].Location.Owner.Branch!, record.RootExits[launch].Tip, commit);
     }
 
     private static void ObserveMove(RunFixtures f, OperationId plan, string reference, CommitId? expected, CommitId target)

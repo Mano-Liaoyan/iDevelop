@@ -469,7 +469,48 @@ internal static partial class RunReducer
         }
     }
 
-    internal static ResultRecord PublicationResult(RunRecord record, MaterializationPlan.Publication plan)
+    /// <summary>
+    /// The capture an editing attempt's <paramref name="launch"/> ended with, when it matched its turn and holds the commit
+    /// the turn ended with. Null otherwise.
+    /// </summary>
+    internal static CaptureObservation? ResultCapture(RunRecord record, LaunchKey launch) =>
+        record.Settlements.TryGetValue(launch, out var capture) &&
+        record.Dispositions.GetValueOrDefault(capture)?.Disposition is CaptureDisposition.Matched &&
+        record.Captures.TryGetValue(capture, out var observations) && observations is [{ Candidate: not null } frozen, ..] &&
+        record.RootExits.ContainsKey(launch) ? frozen : null;
+
+    /// <summary>The plan an attempt's Git steps record under: the plan that prepared it.</summary>
+    internal static OperationId? AttemptPlan(RunRecord record, AttemptId attempt) =>
+        record.Plans.Where(pair => pair.Value is MaterializationPlan.Preparation plan && plan.Attempt == attempt)
+            .Select(pair => (OperationId?)pair.Key).FirstOrDefault();
+
+    /// <summary>The move that makes the commit <paramref name="launch"/> ended with its editing task's branch tip (ADR 0032).</summary>
+    internal static RefChange ResultMove(RunRecord record, LaunchKey launch, CaptureObservation capture) =>
+        new(record.Preparations[launch].Location.Owner.Branch!, record.RootExits[launch].Tip, capture.Candidate!.Value);
+
+    /// <summary>The id an editing attempt's accepted result takes, derived from the acceptance, under which its artifacts are stored.</summary>
+    internal static ResultId EditedResultId(OperationId accept) => new(OperationIds.Derive(accept, "result").Value);
+
+    /// <summary>
+    /// An editing attempt's result: its report, the artifacts its outbox held at the end of its last turn, and the commit that
+    /// turn ended with as its code. A review fix keeps its prior result's artifacts that it does not declare again.
+    /// </summary>
+    internal static ResultRecord EditedResult(RunRecord record, LaunchKey launch, CaptureObservation capture, ResultId id, InputId inputs,
+        string report, ResultId? supersedes)
+    {
+        var attempt = record.Attempts[launch.Attempt];
+        var location = record.Preparations[new(attempt.Id, 1)].Location;
+        return new(id, attempt.Task, attempt.Revision, inputs, new ResultOrigin.Executed(attempt.Id), report, supersedes)
+        {
+            Code = new CodeOutput.Produced(new(attempt.Task, attempt.Id, location.AttemptBase, capture.Candidate!.Value, capture.Recipe.Tree,
+                location.Owner.Branch!)),
+            Artifacts = [.. capture.Artifacts.Select(artifact => artifact with { StoredPath = RunStorage.ArtifactPath(id, artifact.Name) }),
+                .. CarriedArtifacts(record, attempt.Id, capture.Artifacts, id)],
+        };
+    }
+
+    // A journal written before #141 published an editing result through a publication plan, which this reads.
+    private static ResultRecord PublishedResult(RunRecord record, MaterializationPlan.Publication plan)
     {
         var attempt = record.Attempts[plan.Attempt];
         var inputs = record.Claims.Values.Where(claim => claim.Key.Attempt == attempt.Id).OrderBy(claim => claim.Key.Turn).Last().Inputs;
@@ -555,19 +596,23 @@ internal static partial class RunReducer
         }
         if (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
         {
-            if (result.Origin is not ResultOrigin.Executed executed ||
-                record.Plans.FirstOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == executed.Attempt) is not
-                    { Value: MaterializationPlan.Publication publication } pair)
-            {
-                return RunProblem.UnsupportedResult;
-            }
+            if (result.Origin is not ResultOrigin.Executed executed) return RunProblem.UnsupportedResult;
             var attempt = record.Attempts[executed.Attempt];
-            if (!Same(result, PublicationResult(record, publication)) ||
-                !ObservedMove(record, pair.Key, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[attempt.Task]), publication.VerifiedTip, publication.Commit) ||
-                !ObservedMove(record, pair.Key, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id), null, publication.Commit))
+            if (record.Plans.FirstOrDefault(pair => pair.Value is MaterializationPlan.Publication p && p.Attempt == executed.Attempt) is
+                { Value: MaterializationPlan.Publication publication } pair)
             {
-                return RunProblem.InputConflict;
+                return Same(result, PublishedResult(record, publication)) &&
+                    ObservedMove(record, pair.Key, RunLayout.TaskBranch(record.RunKey!, record.TaskKeys[attempt.Task]), publication.VerifiedTip, publication.Commit) &&
+                    ObservedMove(record, pair.Key, RunLayout.ResultRef(record.RunKey!, record.TaskKeys[attempt.Task], attempt.Id), null, publication.Commit)
+                    ? null : RunProblem.InputConflict;
             }
+            // The commit the attempt's last turn ended with is its code, once it is the task branch's tip.
+            var final = record.Claims.Keys.Where(key => key.Attempt == attempt.Id).OrderBy(key => key.Turn).LastOrDefault();
+            if (final.Attempt != attempt.Id || ResultCapture(record, final) is not { } capture || AttemptPlan(record, attempt.Id) is not { } plan)
+                return RunProblem.UnsupportedResult;
+            var move = ResultMove(record, final, capture);
+            return Same(result, EditedResult(record, final, capture, result.Id, result.Inputs, result.Report, result.Supersedes)) &&
+                ObservedMove(record, plan, move.Ref, move.Expected, move.Target) ? null : RunProblem.InputConflict;
         }
         else
         {

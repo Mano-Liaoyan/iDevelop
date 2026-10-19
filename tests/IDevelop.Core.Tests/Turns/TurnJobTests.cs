@@ -86,7 +86,7 @@ public sealed class TurnJobTests
         var events = f.Log(turn.Address.Launch).Events;
         Assert.IsType<AttemptEvent.CleanedUp>(events[^2]);
         Assert.IsType<AttemptEvent.Exited>(events[^1]);
-        var published = f.Publish(turn);
+        var published = f.Accept(turn);
         Assert.Single(f.Preparation.Read().Results);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(published.Code).Code.Commit.Hex + ":result.txt"));
         var ready = Assert.IsType<Preparation.Ready>(await f.Preparation.Prepare(U));

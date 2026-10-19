@@ -11,7 +11,7 @@ public sealed class AuthorityScopeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async System.Threading.Tasks.Task Materialization_pins_authority_until_prepare_or_publish_returns(bool publish)
+    public async System.Threading.Tasks.Task Materialization_pins_authority_until_prepare_or_accept_returns(bool publish)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var lease = f.Lease(T);
@@ -26,13 +26,13 @@ public sealed class AuthorityScopeTests
         using var release = new SemaphoreSlim(0);
         var materializer = f.Materializer(probe: step =>
         {
-            if (step != (publish ? "journal.plan.before" : "journal.reserve.before")) return;
+            if (step != (publish ? "journal.result-branch-intent.before" : "journal.reserve.before")) return;
             entered.Release();
             Assert.True(release.Wait(TimeSpan.FromSeconds(30)));
         });
         var operation = f.Op();
         var work = System.Threading.Tasks.Task.Run(async () => publish
-            ? (object)materializer.Publish(lease, operation, ready!.Execution.Launch.Attempt)
+            ? (object)materializer.Accept(lease, operation, ready!.Execution.Launch.Attempt)
             : await materializer.Prepare(lease, operation, new AttemptCause.Initial()));
         await entered.WaitAsync().WaitAsync(TimeSpan.FromSeconds(30));
         object? result = null;
@@ -52,7 +52,7 @@ public sealed class AuthorityScopeTests
             release.Release();
             result = await work.WaitAsync(TimeSpan.FromSeconds(30));
         }
-        if (publish) Assert.Equal(T, Assert.IsType<Publication.Accepted>(result).Result.Task);
+        if (publish) Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(result).Result.Task);
         else Assert.Equal(A1, Assert.IsType<Preparation.Ready>(result).Execution.Launch.Attempt);
         Assert.False(permit.Held);
         Assert.False(lease.Held);

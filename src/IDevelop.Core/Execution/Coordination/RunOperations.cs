@@ -39,8 +39,6 @@ internal static class RunOperations
 
     public static OperationId CloseAttempt(OperationId turn) => OperationIds.Derive(turn, "coordinator/close-attempt");
 
-    public static OperationId Publish(OperationId turn) => OperationIds.Derive(turn, "coordinator/publish");
-
     public static OperationId Accept(OperationId turn) => OperationIds.Derive(turn, "coordinator/accept");
 
     /// <summary>The root of an Approval node's requests. Each request derives from it and the inputs it fixes.</summary>

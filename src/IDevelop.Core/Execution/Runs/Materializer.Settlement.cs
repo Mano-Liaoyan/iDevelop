@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text;
+using System.Text.Json;
 
 namespace IDevelop.Execution;
 
@@ -260,7 +261,7 @@ internal sealed partial class Materializer
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
             OperationIds.Derive(new OperationId(id.Value), "capture-" + ordinal), launch.Attempt,
             RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
-        var unexplained = UnexplainedPublicationRefs(record, repository, prepared, out _, out _, out var sharedRefs);
+        var unexplained = UnexplainedRefs(record, repository, prepared, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
         var refs = new EvidenceFile(RunStorage.CapturePath(id, ordinal, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
         RunStorage.Publish(storage.Folder, refs.RelativePath, refBytes, refs.Content, refs.ByteLength);
@@ -285,6 +286,56 @@ internal sealed partial class Materializer
         }
         return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
             logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
+    }
+
+    /// <summary>
+    /// The run's shared refs the journal does not explain at the capture. <paramref name="after"/> is the live snapshot of
+    /// those refs that the capture records as its evidence. A turn prepared since ADR 0032 keeps no shared-ref snapshot, so
+    /// each run ref is judged by the journal alone; an earlier journal's prepared snapshot still judges refs/stash.
+    /// </summary>
+    private ImmutableArray<string> UnexplainedRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
+        out SortedDictionary<string, CommitId> after)
+    {
+        var snapshot = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
+            .Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
+        var storage = new RunStorage(_project, record.Workflow, record.Id);
+        var bytes = snapshot is null ? Encoding.UTF8.GetBytes(RunJournal.Canonical(new SortedDictionary<string, CommitId>()))
+            : RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
+        var before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
+            throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.", new BlockScope.Operation());
+        // The budget runs on the materializer's clock, as the journal's retries do.
+        var started = _clock.GetTimestamp();
+        for (var cap = 4; ; cap = Math.Min(cap * 2, 64))
+        {
+            var basis = Read(record.Workflow, record.Id);
+            after = Value(repository.RefSnapshot(["refs/stash", $"refs/heads/idp/{basis.RunKey}/", $"refs/idp/{basis.RunKey}/"],
+                RunLayout.PinPrefix(basis.RunKey!)));
+            _probe?.Invoke("refs.snapshot.after");
+            record = Read(record.Workflow, record.Id);
+            if (RefOwnership.Basis(basis) == RefOwnership.Basis(record)) break;
+            if (_clock.GetElapsedTime(started) >= TimeSpan.FromSeconds(1)) throw new Refusal(new(RunProblem.JournalBusy));
+            Thread.Sleep(Random.Shared.Next(1, cap + 1));
+        }
+        var owned = record.GitIntents.Values.Select(intent => intent.Mutation switch
+        {
+            GitMutation.CreateWorktree create => create.Owner.Branch,
+            GitMutation.MoveRef move => move.Change.Ref,
+            GitMutation.RestoreRef restore => restore.Change.Ref,
+            _ => null,
+        }).OfType<string>();
+        var unexplained = ImmutableArray.CreateBuilder<string>();
+        foreach (var name in before.Keys.Union(after.Keys, StringComparer.Ordinal).Union(owned, StringComparer.Ordinal))
+        {
+            CommitId? previous = before.TryGetValue(name, out var old) ? old : null;
+            CommitId? current = after.TryGetValue(name, out var tip) ? tip : null;
+            if (name == "refs/stash")
+            {
+                if (snapshot is null || previous == current) continue;
+            }
+            else if (RefOwnership.Accepts(record, repository, name, current)) continue;
+            unexplained.Add(name);
+        }
+        return unexplained.ToImmutable();
     }
 
     /// <summary>The commit a worktree is on: its branch's tip, or a read-only worktree's detached HEAD.</summary>

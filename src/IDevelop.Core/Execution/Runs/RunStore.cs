@@ -395,7 +395,7 @@ internal sealed partial class RunStore
             {
                 return Missing();
             }
-            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Publication or MaterializationPlan.Join or MaterializationPlan.Salvage or
+            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Join or MaterializationPlan.Salvage or
                 MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration or MaterializationPlan.Rebase } or RunEvent.GitIntended or RunEvent.GitObserved or
                 RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
             {
@@ -411,37 +411,6 @@ internal sealed partial class RunStore
                 return new Mutation.Rejected(stale);
             }
             return new Mutation.Append(e);
-        });
-
-    public RunDecision AcceptPublication(CoordinatorPermit permit, OperationId operation, OperationId publication) =>
-        Transact(permit, operation, Fingerprint("acceptPublication", new { publication }), (record, _) =>
-        {
-            if (record is null)
-            {
-                return Missing();
-            }
-            if (record.Plans.GetValueOrDefault(publication) is not MaterializationPlan.Publication plan)
-            {
-                return Refuse(RunProblem.InvalidData);
-            }
-            if (record.Results.FirstOrDefault(result => result.Id == plan.Result) is { } existing)
-            {
-                return new Mutation.Existing(new RunEvent.ResultAccepted(existing, record.Inputs[existing.Inputs]));
-            }
-            var attempt = record.Attempts[plan.Attempt];
-            var closure = (AttemptEnd.Logged)record.Closures[attempt.Id];
-            var read = OwnedEvidence(record, attempt, closure.Evidence);
-            if (read.Rejection is { } rejection)
-            {
-                return new Mutation.Rejected(rejection);
-            }
-            if (!AttemptEvidence.Matches(read, TerminalAttemptOutcome.Succeeded) || read.Record!.Result != plan.Report ||
-                !record.Claims.ContainsKey(new(attempt.Id, read.Record.Turns.Count)))
-            {
-                return Refuse(RunProblem.OutcomeMismatch);
-            }
-            var result = RunReducer.PublicationResult(record, plan);
-            return new Mutation.Append(new RunEvent.ResultAccepted(result, record.Inputs[result.Inputs]));
         });
 
     /// <summary>Records the person-approved rebased result of a rebase plan whose branch, retention ref, and checkout moves were observed.</summary>
@@ -700,6 +669,8 @@ internal sealed partial class RunStore
         // A review hands on its inputs' artifacts under its own result, whose id derives from this acceptance. Their
         // bytes are stored before the journal lock, so the accepted result never names an artifact that is not there.
         if (ForwardedArtifacts(permit, operation, attempt, inputs) is { } refusal) return new RunDecision.Rejected(refusal);
+        // An editing attempt's result keeps its outbox artifacts, frozen at the end of its last turn, under its own id.
+        if (EditedArtifacts(permit, operation, attempt) is { } unstored) return new RunDecision.Rejected(unstored);
         return Transact(permit, operation, Fingerprint("acceptReport", new
         {
             attempt,
@@ -730,8 +701,10 @@ internal sealed partial class RunStore
                 return Refuse(RunProblem.UnknownInput);
             }
 
-            if (record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } &&
-                (record.Schema == 1 || record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Review))
+            var work = record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work;
+            // An editing result's code is the commit its last turn's capture made, which only a schema-3 journal records.
+            var edits = work is WorkSpec.Agent { Access: AgentAccess.Edit } && record.Schema == 3;
+            if (!edits && work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } && (record.Schema == 1 || work is not WorkSpec.Review))
             {
                 return Refuse(RunProblem.UnsupportedResult);
             }
@@ -759,6 +732,21 @@ internal sealed partial class RunStore
             }
 
             var final = new LaunchKey(attempt, read.Record.Turns.Count);
+            if (edits)
+            {
+                // The commit the last turn ended with is the result's code, once it is the task branch's tip. The closure
+                // may add exactly one Mark done line to the turn its capture froze.
+                if (RunReducer.ResultCapture(record, final) is not { } frozen || frozen.Report != report ||
+                    !record.TurnClosures.TryGetValue(final, out var turn) || frozen.Log != turn ||
+                    !AttemptEvidence.Extends(AttemptFolder(record.Workflow, record.Id, owner.Task, attempt), turn, closure.Evidence))
+                {
+                    return Refuse(RunProblem.OutcomeMismatch);
+                }
+
+                return new Mutation.Append(new RunEvent.ResultAccepted(RunReducer.EditedResult(record, final, frozen,
+                    RunReducer.EditedResultId(operation), inputs, report, supersedes), capture));
+            }
+
             if (record.Schema == 3 && (record.RootExits.ContainsKey(final) || read.Events.Any(e => e is AttemptEvent.Launched)) &&
                 !UnchangedCode(record, final, trees))
             {
@@ -804,6 +792,50 @@ internal sealed partial class RunStore
         try
         {
             ArtifactForwarding.Store(record, capture.Bindings, ArtifactForwarding.ReviewResult(operation), new RunStorage(_project, permit.Workflow, permit.Run));
+            return null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new(RunProblem.StorageUnavailable);
+        }
+    }
+
+    /// <summary>
+    /// Stores an editing attempt's result artifacts before the journal lock: the ones its last turn's capture froze from its
+    /// outbox, and the ones a review fix keeps from its prior result. Null when there is nothing to store or every copy is in place.
+    /// </summary>
+    private RunRejection? EditedArtifacts(CoordinatorPermit permit, OperationId operation, AttemptId attempt)
+    {
+        if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded { Record: var record } || !record.Attempts.TryGetValue(attempt, out var owner) ||
+            record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Agent { Access: AgentAccess.Edit } ||
+            record.Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == attempt))
+        {
+            return null;
+        }
+
+        var final = record.Claims.Keys.Where(key => key.Attempt == attempt).OrderBy(key => key.Turn).LastOrDefault();
+        if (final.Attempt != attempt || RunReducer.ResultCapture(record, final) is not { } frozen)
+        {
+            return null;
+        }
+
+        var id = RunReducer.EditedResultId(operation);
+        var storage = new RunStorage(_project, permit.Workflow, permit.Run);
+        var prior = RunReducer.PriorResult(record, attempt);
+        try
+        {
+            foreach (var artifact in frozen.Artifacts)
+            {
+                var bytes = RunStorage.Read(storage.Folder, artifact.StoredPath, artifact.Content, artifact.ByteLength);
+                RunStorage.Publish(storage.Folder, RunStorage.ArtifactPath(id, artifact.Name), bytes, artifact.Content, artifact.ByteLength);
+            }
+
+            foreach (var artifact in RunReducer.CarriedArtifacts(record, attempt, frozen.Artifacts, id))
+            {
+                var source = prior!.Artifacts.First(stored => stored.Name == artifact.Name);
+                RunStorage.Publish(storage.Folder, artifact.StoredPath, storage.ReadArtifact(prior.Id, source), artifact.Content, artifact.ByteLength);
+            }
+
             return null;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)

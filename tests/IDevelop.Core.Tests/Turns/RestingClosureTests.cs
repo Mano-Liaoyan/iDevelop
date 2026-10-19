@@ -77,7 +77,7 @@ public sealed class RestingClosureTests
             }
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(), attempt,
                 TerminalAttemptOutcome.Succeeded, Checkpoint(Folder(f, T, attempt))));
-            var refused = Assert.IsType<Publication.Rejected>(f.Preparation.Materializer().Publish(f.Preparation.Lease(T), f.Preparation.Op(), attempt));
+            var refused = Assert.IsType<Acceptance.Rejected>(f.Preparation.Materializer().Accept(f.Preparation.Lease(T), f.Preparation.Op(), attempt));
             Assert.Equal("OutcomeMismatch", refused.Reason.Problem.ToString());
             Assert.Empty(f.Preparation.Read().Results);
             return;
@@ -86,8 +86,8 @@ public sealed class RestingClosureTests
         Assert.Equal("Succeeded", Assert.IsType<AttemptEnd.Logged>(closed.End).Outcome.ToString());
         Assert.Equal("NotSettled", Assert.IsType<Release.Held>(closed.Release()).Reason.Problem.ToString());
         Assert.IsType<LeaseTake.Busy>(f.Preparation.Permit.TakeTask(T));
-        var published = f.Preparation.Materializer().Publish(closed.Lease, f.Preparation.Op(), attempt);
-        var result = Assert.IsType<Publication.Accepted>(published).Result;
+        var published = f.Preparation.Materializer().Accept(closed.Lease, f.Preparation.Op(), attempt);
+        var result = Assert.IsType<Acceptance.Accepted>(published).Result;
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(closed.Release()).Receipt).Result);
         Assert.Single(f.Preparation.Read().Results);
@@ -196,7 +196,7 @@ public sealed class RestingClosureTests
         var review = await InReview(f, U);
         var reused = f.Preparation.Op();
         var marked = Assert.IsType<RestingClose.Closed>(await Close(f, reused, waiting, new RestingEnd.MarkDone())).Attempt;
-        Assert.IsType<Publication.Accepted>(f.Preparation.Materializer().Publish(marked.Lease, f.Preparation.Op(), waiting));
+        Assert.IsType<Acceptance.Accepted>(f.Preparation.Materializer().Accept(marked.Lease, f.Preparation.Op(), waiting));
         Assert.IsType<Release.Released>(marked.Release());
         // Conclude without a failure ends as Succeeded too, but its closing event differs from Mark done's.
         Assert.Equal("OutcomeMismatch", Assert.IsType<RestingClose.Refused>(await Close(f, f.Preparation.Op(), waiting,

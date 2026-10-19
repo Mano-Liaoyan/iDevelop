@@ -77,13 +77,14 @@ public sealed class E2JournalTests
             current.Read().Inputs[ready.Execution.Inputs], ready.Execution.PromptHash));
         current.Git.Write("result.txt", "done\n", ready.Checkout);
         await current.Close(ready);
-        var accepted = Assert.IsType<Publication.Accepted>(current.Materializer().Publish(current.Lease(T), current.Op(), ready.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(current.Materializer().Accept(current.Lease(T), current.Op(), ready.Execution.Launch.Attempt));
         Assert.Equal("done\n", current.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Single(current.Read().RootExits);
         Assert.Single(Assert.Single(current.Read().Captures).Value);
         Assert.IsType<CaptureDisposition.Matched>(Assert.Single(current.Read().Dispositions).Value.Disposition);
         var capture = Assert.Single(current.Read().Settlements).Value;
-        Assert.Equal(capture, Assert.Single(current.Read().Plans.Values.OfType<MaterializationPlan.Publication>()).Capture);
+        Assert.Equal(Assert.Single(current.Read().Captures[capture]).Candidate, Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit);
+        Assert.Empty(current.Read().Plans.Values.OfType<MaterializationPlan.Publication>());
     }
 
     [Fact]

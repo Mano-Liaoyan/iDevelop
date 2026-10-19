@@ -56,7 +56,9 @@ public sealed class DispatchTests
         Assert.All(done.Tasks.Values, task => Assert.Equal(TaskState.Done, task.State));
         await f.Until(view => view.PinsReleased);
         Assert.Equal("", f.Refs(RunLayout.PinPrefix(f.Read().RunKey!)));
-        Assert.Equal(2, f.Refs($"refs/idp/{f.Read().RunKey}/result/").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        // Each editing node's result is its branch's tip, and no ref of its own keeps it.
+        Assert.Equal("", f.Refs($"refs/idp/{f.Read().RunKey}/result/"));
+        Assert.Equal(2, f.Refs($"refs/heads/idp/{f.Read().RunKey}/task/").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
     [Fact]
@@ -65,7 +67,7 @@ public sealed class DispatchTests
         await using var f = new CoordinatorFixture(Graph([Agent(A), Agent(B)], (A, B)));
         f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Writes(B, "b.txt", "B\n"));
         await f.Open();
-        using (var held = new TurnFixture.ProbeBarrier("coordinator.publish.before"))
+        using (var held = new TurnFixture.ProbeBarrier("coordinator.accept.before"))
         {
             f.Runs.Probe = held.Probe;
             await f.Resume();

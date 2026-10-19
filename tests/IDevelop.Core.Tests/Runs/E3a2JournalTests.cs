@@ -43,17 +43,17 @@ public sealed class E3a2JournalTests
         Assert.Equal(sequence, f.Read().Sequence);
         Assert.Equal(bytes, Encoding.UTF8.GetBytes(string.Concat(decoded.Entries.Select(RunJournal.Encode))));
         Assert.Equal(new[] { "Closed" }, Assert.IsType<RecoveryRead.Loaded>(f.Store.InspectRecovery(W, f.RunId)).Attempts.Select(a => a.State.ToString()));
-        var publication = f.Materializer().Publish(f.Lease(T), f.Op(), attempt);
+        var publication = f.Materializer().Accept(f.Lease(T), f.Op(), attempt);
         if (fixture == "e3a2-published")
         {
-            Assert.Equal("260451a9-9c11-8952-a74e-b445c5c73a72", Assert.IsType<Publication.Accepted>(publication).Result.Id.Value.ToString("D"));
+            Assert.Equal("260451a9-9c11-8952-a74e-b445c5c73a72", Assert.IsType<Acceptance.Accepted>(publication).Result.Id.Value.ToString("D"));
             Assert.Equal(1, f.Read().Results.Count(result => result.Task == T));
-            Assert.Equal("260451a9-9c11-8952-a74e-b445c5c73a72", Assert.IsType<Publication.Accepted>(f.Materializer().Publish(
+            Assert.Equal("260451a9-9c11-8952-a74e-b445c5c73a72", Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(
                 f.Lease(T), f.Op(), attempt)).Result.Id.Value.ToString("D"));
         }
         else
         {
-            Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(publication).Reason.Problem.ToString());
+            Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(publication).Reason.Problem.ToString());
             Assert.Equal(0, f.Read().Results.Count(result => result.Task == T));
             if (fixture == "e3a2-orphaned-turn")
             {
@@ -77,8 +77,8 @@ public sealed class E3a2JournalTests
             control.Lease(T), control.Op(), fresh.Execution.Launch, checkpoint)).Disposition);
         Assert.IsType<RunDecision.Recorded>(control.Store.CloseAttempt(control.Permit, control.Op(), fresh.Execution.Launch.Attempt,
             TerminalAttemptOutcome.Succeeded, checkpoint));
-        Assert.Equal("done\n", control.Git.Git("show", Assert.IsType<CodeOutput.Produced>(Assert.IsType<Publication.Accepted>(
-            control.Materializer().Publish(control.Lease(T), control.Op(), fresh.Execution.Launch.Attempt)).Result.Code).Code.Commit.Hex + ":result.txt"));
+        Assert.Equal("done\n", control.Git.Git("show", Assert.IsType<CodeOutput.Produced>(Assert.IsType<Acceptance.Accepted>(
+            control.Materializer().Accept(control.Lease(T), control.Op(), fresh.Execution.Launch.Attempt)).Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Equal(1, control.Read().Results.Count(result => result.Task == T));
     }
 }

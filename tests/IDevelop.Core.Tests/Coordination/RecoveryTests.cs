@@ -127,7 +127,7 @@ public sealed class RecoveryTests
         await f.Open();
         FileStream? held = null;
         var journal = Path.Combine(f.Preparation.Git.Folder, ".idp", "runs", "write.lock");
-        f.Runs.Probe = point => { if (point == "coordinator.publish.before" && held is null) held = new(journal, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); };
+        f.Runs.Probe = point => { if (point == "coordinator.accept.before" && held is null) held = new(journal, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); };
         try
         {
             await f.Resume();

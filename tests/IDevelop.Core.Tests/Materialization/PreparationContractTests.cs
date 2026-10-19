@@ -15,7 +15,7 @@ public sealed class PreparationContractTests
     public async Task Prompt_delivers_the_report_once_with_and_without_the_template_placeholder(string template, string? prompt)
     {
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U, template)), T, U));
-        await f.Publish(T, f.A, artifact: true, artifactName: "report.md");
+        await f.Accept(T, f.A, artifact: true, artifactName: "report.md");
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, prompt: prompt));
         Assert.StartsWith(prompt ?? "Inspect", ready.Execution.Prompt);
         Assert.Equal(1, ready.Execution.Prompt.Split("B ready.", StringSplitOptions.None).Length - 1);
@@ -33,7 +33,7 @@ public sealed class PreparationContractTests
     {
         var review = Task(U, work: new WorkSpec.Review(PromptTemplate.Parse("Review"), PromptTemplate.Parse("Fix")));
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), review), T, U));
-        var result = await f.Publish(T, f.A);
+        var result = await f.Accept(T, f.A);
         var operation = f.Op();
         Assert.Equal("InvalidData", Assert.IsType<Preparation.Rejected>(await f.Prepare(U, operation)).Reason.Problem.ToString());
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, operation, prompt: "Review the changes."));
@@ -86,13 +86,13 @@ public sealed class PreparationContractTests
     {
         var workflow = Connect(Connect(FixtureWorkflow(Writer(T), Writer(U), Writer(C)), T, U), C, U, ConnectionKind.Context);
         using var f = new PreparationFixture(workflow);
-        await f.Publish(T, f.A);
+        await f.Accept(T, f.A);
         var operation = f.Op();
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: step =>
         {
             if (step == "journal.prepared.before") throw new Crash();
         }).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
-        var context = await f.Publish(C, f.A, "C available.\n");
+        var context = await f.Accept(C, f.A, "C available.\n");
         var record = f.Read();
         var input = record.Inputs.Values.Single(input => input.Task == U);
         var attempt = record.Attempts.Values.Single(attempt => attempt.Task == U);

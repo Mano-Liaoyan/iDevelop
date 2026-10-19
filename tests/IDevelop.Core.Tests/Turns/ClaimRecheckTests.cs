@@ -35,7 +35,7 @@ public sealed class ClaimRecheckTests
     private static async Task<SettledTurn> Published(TurnFixture f)
     {
         var producer = await f.Settled(await f.Start());
-        f.Publish(producer);
+        f.Accept(producer);
         Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(producer.Release()).Receipt);
         return producer;
     }
@@ -99,7 +99,7 @@ public sealed class ClaimRecheckTests
     }
 
     [Fact]
-    public async Task A_code_owner_with_an_unfinished_publication_holds_back_the_consumer()
+    public async Task A_code_owner_with_an_unfinished_branch_move_holds_back_the_consumer()
     {
         await using var f = new TurnFixture(configure: Consumer);
         await f.Open();
@@ -112,11 +112,11 @@ public sealed class ClaimRecheckTests
             new AttemptCause.Retry(producer.Address.Launch.Attempt, f.Preparation.Op()))));
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
             retry.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, retry.Log));
-        // The retry's publication stops after it recorded the branch move it intends.
+        // The retry stops after it recorded the branch move it intends.
         Assert.Throws<InvalidOperationException>(() => f.Preparation.Materializer(probe: point =>
         {
-            if (point == "journal.branch-intent.after") throw new InvalidOperationException("Stopped.");
-        }).Publish(retry.Lease, f.Preparation.Op(), retry.Address.Launch.Attempt));
+            if (point == "journal.result-branch-intent.after") throw new InvalidOperationException("Stopped.");
+        }).Accept(retry.Lease, f.Preparation.Op(), retry.Address.Launch.Attempt));
         Assert.Single(f.Preparation.Read().Results);
         Assert.Equal("UnresolvedOwnership", Assert.IsType<TurnStart.Refused>(await Begin(f, Start(f, U))).Reason.Problem.ToString());
         Assert.Empty(f.Preparation.Read().Blocks);

@@ -17,7 +17,7 @@ public sealed class PreparationBoundaryTests
     public async Task Unavailable_artifacts_block_before_reservation_with_source_and_stored_path(string mode)
     {
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U)), T, U));
-        var result = await f.Publish(T, f.A, artifact: true);
+        var result = await f.Accept(T, f.A, artifact: true);
         var path = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, result.Artifacts[0].StoredPath);
         if (mode == "missing") File.Delete(path);
         else File.WriteAllBytes(path, mode == "digest" ? [68, 0, 127] : [67, 0]);
@@ -44,7 +44,7 @@ public sealed class PreparationBoundaryTests
         Assert.Equal(first, storage.WriteEvidence(operation, "failure.txt", Encoding.UTF8.GetBytes("conflict\n")));
         Assert.Throws<IOException>(() => storage.WriteEvidence(operation, "failure.txt", Encoding.UTF8.GetBytes("changed\n")));
         Assert.Equal("conflict\n", File.ReadAllText(Path.Combine(storage.Folder, first.RelativePath)));
-        await f.Publish(T, f.A);
+        await f.Accept(T, f.A);
         var steps = new List<string>();
         var prepare = f.Op();
         await Assert.ThrowsAsync<Crash>(async () => await f.Materializer(probe: name =>

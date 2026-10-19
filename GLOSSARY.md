@@ -49,7 +49,7 @@ A person's confirmed closure of an uncertain turn with no recorded root exit, as
 _Avoid_: Stop, Stop Workflow
 
 **Client slot**:
-A run's place for one task's starting or running client root. A run starts every ready task at once, up to a safety bound of 32 slots. Waiting, gates, settlement, publication, and cleanup take none.
+A run's place for one task's starting or running client root. A run starts every ready task at once, up to a safety bound of 32 slots. Waiting, gates, settlement, and cleanup take none.
 
 **Node worktree**:
 The Git worktree a node's agent works in during a run, at `.worktrees/<run>/<node>`. An editing node's worktree is on a branch of its own, and each turn ends with one commit there. A read-only node's worktree is detached at the merge of its predecessors and commits nothing. Every attempt of the node, a Retry's included, works in the same worktree ([ADR 0032](docs/adr/0032-each-editing-node-works-in-its-own-worktree-kept-simple.md)).
