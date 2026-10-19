@@ -97,6 +97,7 @@ public sealed partial class TaskNodeViewModel : ObservableObject
         InitializeStanding();
         InitializeExpansion();
         InitializeRetry();
+        InitializeRunCancel();
     }
 
     public TaskId Id => _task.Id;
@@ -682,6 +683,8 @@ public sealed partial class TaskNodeViewModel : ObservableObject
     partial void InitializeExpansion();
 
     partial void InitializeRetry();
+
+    partial void InitializeRunCancel();
 
     private void SetExecution(ExecutionSettings? settings)
     {

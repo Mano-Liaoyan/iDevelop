@@ -94,8 +94,7 @@ public sealed partial class TaskNodeViewModel
 
     /// <summary>
     /// The row of Run and Cancel. Cancel shows with Run, and while a proposal is open only during a turn that this window
-    /// runs. A task that the canvas's run owns is cancelled through its conversation or stopped with its run, so its row
-    /// keeps only the Run that adds it to the run.
+    /// runs. A task that the canvas's run owns has its own Cancel row, so this row keeps only the Run that adds it to the run.
     /// </summary>
     public bool ShowsCancel => ShowsRunControls || !IsRunOwned && State is NodeState.Running or NodeState.Stopping;
 

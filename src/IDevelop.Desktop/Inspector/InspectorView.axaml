@@ -449,6 +449,19 @@
                           </Button>
                         </WrapPanel>
                       </inspector:InspectorRow>
+                      <!-- Cancel of a run's task while its attempt runs or waits, which the run then shows as Cancelled with Retry. -->
+                      <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRunCancel}">
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                          <Button Classes="action" Command="{Binding CancelInRunCommand}"
+                                  AutomationProperties.AutomationId="CancelRunTask"
+                                  AutomationProperties.Name="Cancel">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <PathIcon Theme="{StaticResource Glyph}" Data="{StaticResource IconStop}" Width="14" Height="14" />
+                              <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </WrapPanel>
+                      </inspector:InspectorRow>
                       <!-- Retry of a run's task that ended without a result asks first, here, wherever the person chose it. -->
                       <inspector:InspectorRow Layout="Buttons" IsShown="{Binding ShowsRetryButton}">
                         <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
