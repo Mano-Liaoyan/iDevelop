@@ -60,7 +60,7 @@ The commit a node's worktree starts from when its dependency predecessors hand o
 _Avoid_: fan-in
 
 **Final merge**:
-The merge of a finished run's work into the branch HEAD named at its approval, before the run completes. It waits while the folder that has the branch checked out has uncommitted changes, and a conflict goes to the Merge node with no successors, or without one waits for the person to resolve it in the conflict's worktree and mark it resolved ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
+The merge of a finished run's work into the branch HEAD named at its approval, before the run completes. It waits while the folder that has the branch checked out has uncommitted changes, or while a rebase or a bisect holds the branch, and a conflict goes to the Merge node with no successors, or without one waits for the person to resolve it in the conflict's worktree and mark it resolved ([ADR 0033](docs/adr/0033-a-merge-node-resolves-a-runs-conflicts-and-a-finished-run-merges-into-its-branch.md)).
 _Avoid_: end-of-run merge, which names the same thing in the issues
 
 ### Results
