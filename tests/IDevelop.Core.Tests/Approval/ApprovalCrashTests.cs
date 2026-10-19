@@ -61,7 +61,7 @@ public sealed class ApprovalCrashTests
         await Completed(starts[0].Coordinator);
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
         var record = f.Read(run);
-        Assert.Equal(new RunBase(Head, BaseChoice.Head), record.Base);
+        Assert.Equal(new RunBase(Head), record.Base);
         Assert.Null(f.ResultFile(run, A, "notes.txt"));
         Assert.Equal(index, f.Index());
         Assert.Equal(Head.Hex + "\n", f.GitText("rev-parse", "HEAD"));
@@ -113,7 +113,7 @@ public sealed class ApprovalCrashTests
 
         Assert.True(started.Existing);
         await Completed(started.Coordinator);
-        Assert.Equal(new RunBase(Head, BaseChoice.Head), f.Read(run).Base);
+        Assert.Equal(new RunBase(Head), f.Read(run).Base);
     }
 
     [Fact]
@@ -221,7 +221,6 @@ public sealed class ApprovalCrashTests
         Assert.Equal(run, Intent(f)!.Run);
         Assert.False(Directory.Exists(Path.Combine(f.Project, ".idp", "runs", W.ToString(), stale.Run.ToString())));
         Assert.Equal("", f.GitText("for-each-ref", "refs/idp/approvals/"));
-        Assert.Equal(BaseChoice.Head, f.Read(run).Base.Choice);
         Assert.Equal(change == "commit" ? "notes\n" : null, f.ResultFile(run, A, "notes.txt"));
         Assert.Equal(change == "title" ? "X checks" : "X", f.Read(run).Revision.Snapshot.Tasks[X].Title);
         Assert.Equal(1, f.Launches(A));
@@ -233,7 +232,7 @@ public sealed class ApprovalCrashTests
         await using var f = ChainAnswers(new ApprovalFixture(Chain()));
         await Crash(f, "approval.intent.after");
         var intended = Intent(f)!;
-        File.WriteAllText(Path.Combine(f.Project, ".idp", "runs", W.ToString(), intended.Run.ToString(), "events.jsonl"), "{\"schema\":3,\"seq");
+        File.WriteAllText(Path.Combine(f.Project, ".idp", "runs", W.ToString(), intended.Run.ToString(), "events.jsonl"), "{\"schema\":4,\"seq");
         await f.Open();
 
         var started = await Start(f, f.Preflight(), AfterRestart);

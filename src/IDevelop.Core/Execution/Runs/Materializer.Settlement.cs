@@ -19,7 +19,11 @@ internal abstract record Settlement
 {
     private Settlement() { }
 
-    internal sealed record Closed(CaptureId Capture, CaptureDisposition Disposition) : Settlement;
+    /// <summary>
+    /// The turn closed with its capture and how it differs from the turn's root observation, null when it matched, or with
+    /// the block that says why its capture could not be taken.
+    /// </summary>
+    internal sealed record Closed(CaptureObservation? Capture, CaptureDivergence? Divergence, MaterializationBlock? Failure) : Settlement;
 
     internal sealed record Rejected(RunRejection Reason) : Settlement;
 }
@@ -143,84 +147,76 @@ internal sealed partial class Materializer
                 return new Settlement.Rejected(new(mismatch));
             if (!record.RootExits.ContainsKey(launch) || !recovery && record.Fenced.Contains(launch))
                 return new Settlement.Rejected(new(RunProblem.UnresolvedOwnership));
+            var observed = record.Captures.GetValueOrDefault(launch);
             if (record.TurnClosures.ContainsKey(launch))
             {
-                if (!record.Settlements.TryGetValue(launch, out var linked) || !recovery && linked != capture)
+                if (!RunReducer.CaptureSettled(record, launch) || !recovery && observed is not null && observed.Capture != capture)
                     return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
-                return new Settlement.Closed(linked, record.Dispositions[linked].Disposition);
+                return Closed(record, observed, RunReducer.CaptureFailure(record, launch));
             }
-            if (recovery)
-            {
-                capture = record.Captures.FirstOrDefault(pair => pair.Value.Any(observation => observation.Launch == launch)).Key;
-                if (capture.Value == Guid.Empty)
-                    capture = record.Dispositions.Values.FirstOrDefault(disposed => disposed.Launch == launch)?.Capture ??
-                        new CaptureId(OperationIds.Derive(operation, "capture").Value);
-            }
-            if (RunReducer.CaptureForAnotherId(record, launch, capture))
+            if (!recovery && observed is not null && observed.Capture != capture)
                 return new Settlement.Rejected(new(RunProblem.OperationConflict));
-            var captureOperation = new OperationId(capture.Value);
-            var observations = record.Captures.GetValueOrDefault(capture, []);
+            var captureOperation = new OperationId((observed?.Capture ?? capture).Value);
             if (recovery)
-                log = observations.Count != 0 ? observations[0].Log :
-                    AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id,
-                        record.Attempts[launch.Attempt].Task, launch.Attempt)).Checkpoint;
-            if (observations.Any(observation => observation.Launch != launch || observation.Log != log))
+                log = observed?.Log ?? AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id,
+                    record.Attempts[launch.Attempt].Task, launch.Attempt)).Checkpoint;
+            if (observed is not null && observed.Log != log)
                 return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
-            var missingLog = recovery && observations.Count == 0 &&
+            var missingLog = recovery && observed is null &&
                 (log is null || _store.TurnEvidenceProblem(record, launch, log) is not null);
-            if (!record.Dispositions.TryGetValue(capture, out var disposed))
+            var failure = RunReducer.CaptureFailure(record, launch);
+            // A turn takes one capture. Recovery takes none: a turn whose capture was not recorded closes with a block.
+            if (observed is null && failure is null)
             {
-                CaptureDisposition? disposition = null;
-                if (recovery && observations.Count == 0)
+                (MaterializationProblem Problem, string Detail, ImmutableArray<EvidenceFile> Evidence)? fault = null;
+                if (recovery)
                 {
-                    disposition = new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable,
-                        missingLog ? "Missing turn-end log evidence." : "Missing turn-end capture evidence.", []);
+                    fault = (MaterializationProblem.InputUnavailable, missingLog ? "Missing turn-end log evidence." : "Missing turn-end capture evidence.", []);
                 }
                 else
                 {
-                    if (observations.Count == 0 && _store.TurnEvidenceProblem(record, launch, log!) is { } rejection)
+                    if (_store.TurnEvidenceProblem(record, launch, log!) is { } rejection)
                         return new Settlement.Rejected(rejection);
-                    // A turn ends with one capture. A journal written before ADR 0032 may already hold the first of two.
-                    if (observations.Count == 0)
+                    cancellation.ThrowIfCancellationRequested();
+                    ImmutableArray<EvidenceFile> evidence = [];
+                    try
                     {
-                        cancellation.ThrowIfCancellationRequested();
-                        ImmutableArray<EvidenceFile> evidence = [];
-                        try
-                        {
-                            var storage = new RunStorage(_project, permit.Workflow, permit.Run);
-                            var folder = RunStorage.SafePath(storage.Folder, $"captures/{capture.Value:D}/1");
-                            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
-                            var repository = OpenRepository();
-                            record = Read(permit.Workflow, permit.Run);
-                            var observation = Mutate("capture-1", () => ObserveCapture(repository, record, capture, launch, log!, ref evidence));
-                            record = DecisionRecord(Journal("capture-1", () => _store.Record(permit,
-                                OperationIds.Derive(operation, "capture-1"), new RunEvent.TurnCaptured(observation))));
-                            observations = record.Captures.GetValueOrDefault(capture, []);
-                        }
-                        catch (MaterializationFailure failed)
-                        {
-                            disposition = new CaptureDisposition.Failed(failed.Problem, failed.Message, evidence);
-                        }
-                        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                        {
-                            disposition = new CaptureDisposition.Failed(MaterializationProblem.InputUnavailable, error.Message, evidence);
-                        }
+                        var storage = new RunStorage(_project, permit.Workflow, permit.Run);
+                        var folder = RunStorage.SafePath(storage.Folder, $"captures/{capture.Value:D}");
+                        if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+                        var repository = OpenRepository();
+                        record = Read(permit.Workflow, permit.Run);
+                        var observation = Mutate("capture", () => ObserveCapture(repository, record, capture, launch, log!, ref evidence));
+                        record = DecisionRecord(Journal("capture", () => _store.Record(permit,
+                            OperationIds.Derive(operation, "capture-1"), new RunEvent.TurnCaptured(observation))));
+                        observed = record.Captures[launch];
                     }
-                    disposition ??= DisposeCapture(record, observations[^1]);
+                    catch (MaterializationFailure failed) { fault = (failed.Problem, failed.Message, evidence); }
+                    catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                    { fault = (MaterializationProblem.InputUnavailable, error.Message, evidence); }
                 }
-                disposed = new(capture, launch, disposition);
-                var decision = Journal("capture-disposition", () => _store.Record(permit,
-                    OperationIds.Derive(captureOperation, "capture-disposition"), disposed));
-                disposed = (RunEvent.CaptureDisposed)DecisionEvent(decision);
+                if (fault is { } found)
+                {
+                    failure = new MaterializationBlock(RunReducer.CaptureBlock(launch), record.Attempts[launch.Attempt].Task, launch.Attempt,
+                        found.Problem, record.Preparations[launch].Inputs, found.Evidence, found.Detail) { Scope = new BlockScope.Operation() };
+                    Journal("capture-blocked", () => _store.Record(permit, OperationIds.Derive(captureOperation, "capture-blocked"),
+                        new RunEvent.Blocked(failure)));
+                }
             }
-            if (disposed.Launch != launch) return new Settlement.Rejected(new(RunProblem.EvidenceMismatch));
             if (log is null || missingLog)
                 return new Settlement.Rejected(new(RunProblem.RecoveryEvidenceInsufficient));
-            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(captureOperation, "close-turn"), launch, log, capture));
-            return new Settlement.Closed(capture, disposed.Disposition);
+            Journal("close-turn", () => _store.CloseTurn(permit, OperationIds.Derive(captureOperation, "close-turn"), launch, log, settles: true));
+            return Closed(record, observed, failure);
         }
         catch (Refusal refused) { return new Settlement.Rejected(refused.Reason); }
     }
+
+    private static Settlement.Closed Closed(RunRecord record, CaptureObservation? capture, MaterializationBlock? failure) =>
+        new(capture, capture is null ? null : RunReducer.Divergence(record, capture), failure);
+
+    /// <summary>How the closed turn <paramref name="launch"/> settled, as the journal records it.</summary>
+    internal static Settlement.Closed Settled(RunRecord record, LaunchKey launch) =>
+        Closed(record, record.Captures.GetValueOrDefault(launch), RunReducer.CaptureFailure(record, launch));
 
     /// <summary>
     /// Captures the worktree once its turn's client exited. An editing task's capture is the one commit its turn ends with,
@@ -229,7 +225,6 @@ internal sealed partial class Materializer
     private CaptureObservation ObserveCapture(GitRepository repository, RunRecord record, CaptureId id, LaunchKey launch,
         LogCheckpoint log, ref ImmutableArray<EvidenceFile> evidence)
     {
-        const int ordinal = 1;
         var started = _clock.GetUtcNow();
         var prepared = record.Preparations[launch];
         try { VerifyOwnedCheckout(repository, prepared.Location, record); }
@@ -248,7 +243,7 @@ internal sealed partial class Materializer
         var indexBytes = Value(repository.IndexBytes(checkout));
         if (indexBytes is { } bytes)
         {
-            var relative = RunStorage.CapturePath(id, ordinal, "index");
+            var relative = RunStorage.CapturePath(id, "index");
             index = new(relative, Revision.Hash(bytes), bytes.LongLength);
             RunStorage.Publish(storage.Folder, relative, bytes, index.Content, index.ByteLength);
         }
@@ -259,11 +254,11 @@ internal sealed partial class Materializer
         var logged = AttemptEvidence.Read(_store.AttemptFolder(record.Workflow, record.Id, task, launch.Attempt), log);
         if (logged.Rejection is { } rejection) throw Fault(MaterializationProblem.InputUnavailable, rejection.Problem.ToString(), new BlockScope.Operation());
         var artifacts = prepared.OutboxPath.Length == 0 ? [] : FreezeOutbox(record.Workflow, record.Id,
-            OperationIds.Derive(new OperationId(id.Value), "capture-" + ordinal), launch.Attempt,
-            RunStorage.CapturePath(id, ordinal, "artifacts"), checkout, ref evidence);
+            OperationIds.Derive(new OperationId(id.Value), "capture-1"), launch.Attempt,
+            RunStorage.CapturePath(id, "artifacts"), checkout, ref evidence);
         var unexplained = UnexplainedRefs(record, repository, prepared, out var sharedRefs);
         var refBytes = Encoding.UTF8.GetBytes(RunJournal.Canonical(sharedRefs));
-        var refs = new EvidenceFile(RunStorage.CapturePath(id, ordinal, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
+        var refs = new EvidenceFile(RunStorage.CapturePath(id, "refs.json"), Revision.Hash(refBytes), refBytes.LongLength);
         RunStorage.Publish(storage.Folder, refs.RelativePath, refBytes, refs.Content, refs.ByteLength);
         evidence = evidence.Add(refs);
         var root = record.RootExits[launch];
@@ -279,30 +274,22 @@ internal sealed partial class Materializer
             if (indexTree is { } staged)
             {
                 var indexCommit = Value(repository.CreateCommit(recipe with { Tree = staged, Parents = [], Message = "Index of " + recipe.Message }));
-                Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, ordinal), indexCommit);
+                Pin(repository, RunLayout.CaptureIndexPin(record.RunKey!, record.TaskKeys[task], launch, 1), indexCommit);
             }
             candidate = Value(repository.CreateCommit(recipe));
-            Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, ordinal), candidate.Value);
+            Pin(repository, RunLayout.CapturePin(record.RunKey!, record.TaskKeys[task], launch, 1), candidate.Value);
         }
-        return new(id, ordinal, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
+        return new(id, launch, log, started, _clock.GetUtcNow(), recipe, candidate, tip, head, index,
             logged.Record!.Result, artifacts, refs, unexplained) { IndexTree = indexTree };
     }
 
     /// <summary>
     /// The run's shared refs the journal does not explain at the capture. <paramref name="after"/> is the live snapshot of
-    /// those refs that the capture records as its evidence. A turn prepared since ADR 0032 keeps no shared-ref snapshot, so
-    /// each run ref is judged by the journal alone; an earlier journal's prepared snapshot still judges refs/stash.
+    /// those refs that the capture records as its evidence. Each run ref is judged by the journal alone.
     /// </summary>
     private ImmutableArray<string> UnexplainedRefs(RunRecord record, GitRepository repository, PreparedExecution prepared,
         out SortedDictionary<string, CommitId> after)
     {
-        var snapshot = record.Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>()
-            .Single(e => e.Execution.Launch == prepared.Launch).SharedRefs;
-        var storage = new RunStorage(_project, record.Workflow, record.Id);
-        var bytes = snapshot is null ? Encoding.UTF8.GetBytes(RunJournal.Canonical(new SortedDictionary<string, CommitId>()))
-            : RunStorage.Read(storage.Folder, snapshot.RelativePath, snapshot.Content, snapshot.ByteLength);
-        var before = JsonSerializer.Deserialize<SortedDictionary<string, CommitId>>(bytes, RunJournal.Options) ??
-            throw Fault(MaterializationProblem.InputUnavailable, "The prepared shared-ref snapshot is absent.", new BlockScope.Operation());
         // The budget runs on the materializer's clock, as the journal's retries do.
         var started = _clock.GetTimestamp();
         for (var cap = 4; ; cap = Math.Min(cap * 2, 64))
@@ -320,19 +307,13 @@ internal sealed partial class Materializer
         {
             GitMutation.CreateWorktree create => create.Owner.Branch,
             GitMutation.MoveRef move => move.Change.Ref,
-            GitMutation.RestoreRef restore => restore.Change.Ref,
             _ => null,
         }).OfType<string>();
         var unexplained = ImmutableArray.CreateBuilder<string>();
-        foreach (var name in before.Keys.Union(after.Keys, StringComparer.Ordinal).Union(owned, StringComparer.Ordinal))
+        foreach (var name in after.Keys.Union(owned, StringComparer.Ordinal))
         {
-            CommitId? previous = before.TryGetValue(name, out var old) ? old : null;
             CommitId? current = after.TryGetValue(name, out var tip) ? tip : null;
-            if (name == "refs/stash")
-            {
-                if (snapshot is null || previous == current) continue;
-            }
-            else if (RefOwnership.Accepts(record, repository, name, current)) continue;
+            if (name == "refs/stash" || RefOwnership.Accepts(record, repository, name, current)) continue;
             unexplained.Add(name);
         }
         return unexplained.ToImmutable();
@@ -342,20 +323,4 @@ internal sealed partial class Materializer
     private static CommitId? CheckoutTip(GitRepository repository, ExecutionLocation location) => location.Owner.Branch is { } branch
         ? Value(repository.ReadRef(branch))
         : Value(repository.ResolveCheckoutHead(Checkout(repository, location.Owner)));
-
-    /// <summary>A capture matches its turn when the worktree is still on the commit and HEAD the client's exit left.</summary>
-    private static CaptureDisposition DisposeCapture(RunRecord record, CaptureObservation capture)
-    {
-        var root = record.RootExits[capture.Launch];
-        ImmutableArray<string> refs = [];
-        if (capture.Tip != root.Tip)
-            refs = refs.Add(record.Preparations[capture.Launch].Location.Owner.Branch ?? "HEAD");
-        if (capture.Head != root.Head && !refs.Contains("HEAD")) refs = refs.Add("HEAD");
-        if (!refs.IsEmpty) return new CaptureDisposition.Diverged(MaterializationProblem.UncertainOwnership, [],
-            [.. refs.Order(StringComparer.Ordinal)], "The branch tip or HEAD differs from the root observation.");
-        refs = [.. capture.UnexplainedRefs.Order(StringComparer.Ordinal)];
-        if (!refs.IsEmpty) return new CaptureDisposition.Diverged(MaterializationProblem.UncertainOwnership, [], refs,
-            "The capture contains unexplained shared refs.");
-        return new CaptureDisposition.Matched();
-    }
 }

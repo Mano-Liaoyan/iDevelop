@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -14,9 +15,9 @@ public sealed class TurnCrashTests
     [InlineData("runner.running", 1, "Uncertain")]
     [InlineData("journal.root-exit.before", 1, "Uncertain")]
     [InlineData("runner.cleanup.inside", 1, "Settling")]
-    [InlineData("journal.capture-1.before", 1, "Reserved")]
-    [InlineData("journal.capture-1.after", 1, "Reserved")]
-    [InlineData("journal.capture-disposition.before", 1, "Reserved")]
+    [InlineData("journal.capture.before", 1, "Reserved")]
+    [InlineData("journal.capture.after", 1, "Reserved")]
+    [InlineData("journal.close-turn.before", 1, "Reserved")]
     [InlineData("journal.close-turn.after", 1, "Reserved")]
     public async Task Reconcile_never_launches(string point, int launches, string recovery)
     {
@@ -51,7 +52,7 @@ public sealed class TurnCrashTests
             Assert.Equal("IncompleteEvidence", turn.Reason.ToString());
             Assert.Equal("RecoveryEvidenceInsufficient", turn.Rejection!.Problem.ToString());
             Assert.Null(turn.Root);
-            var failure = Assert.IsType<CaptureDisposition.Failed>(Assert.Single(f.Preparation.Read().Dispositions).Value.Disposition);
+            var failure = RunReducer.CaptureFailure(f.Preparation.Read(), launch)!;
             Assert.Equal("InputUnavailable", failure.Problem.ToString());
             Assert.Equal("Missing turn-end log evidence.", failure.Detail);
             Assert.Empty(failure.Evidence);
@@ -65,18 +66,17 @@ public sealed class TurnCrashTests
             Assert.Equal(0, Assert.IsType<RootExit.Exited>(turn.Exit.Exit).Code);
             Assert.Single(f.Preparation.Read().RootExits);
             Assert.Single(f.Preparation.Read().TurnClosures);
-            if (point == "journal.capture-1.before")
+            if (point == "journal.capture.before")
             {
-                var failure = Assert.IsType<CaptureDisposition.Failed>(turn.Capture.Disposition);
+                var failure = SettlementAssertions.Failed(turn.Capture);
                 Assert.Equal("InputUnavailable", failure.Problem.ToString());
                 Assert.Equal("Missing turn-end capture evidence.", failure.Detail);
                 Assert.Empty(failure.Evidence);
-                Assert.Empty(f.Preparation.Read().Captures[turn.Capture.Capture]);
+                Assert.Empty(f.Preparation.Read().Captures);
             }
             else
             {
-                Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-                Assert.False(Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Recovery);
+                SettlementAssertions.Matched(turn.Capture);
             }
         }
         Assert.Equal(launches, f.Launches);
@@ -85,9 +85,9 @@ public sealed class TurnCrashTests
             Assert.Equal(recovery == "Uncertain" ? "Uncertain" : "IncompleteEvidence", Assert.IsType<TurnSettlement.Unresolved>(second).Turn.Reason.ToString());
         else
         {
-            var disposition = Assert.IsType<TurnSettlement.Settled>(second).Turn.Capture.Disposition;
-            if (point == "journal.capture-1.before") Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<CaptureDisposition.Failed>(disposition).Detail);
-            else Assert.IsType<CaptureDisposition.Matched>(disposition);
+            var settled = Assert.IsType<TurnSettlement.Settled>(second).Turn.Capture;
+            if (point == "journal.capture.before") Assert.Equal("Missing turn-end capture evidence.", SettlementAssertions.Failed(settled).Detail);
+            else SettlementAssertions.Matched(settled);
         }
         var duplicate = Assert.IsType<TurnStart.Existing>(await fresh.StartTurn(f.Preparation.Permit, intent).WaitAsync(Bound));
         Assert.Equal(launch, duplicate.Launch);
@@ -95,14 +95,14 @@ public sealed class TurnCrashTests
         Assert.Equal(launches, f.Launches);
         Assert.Single(f.Preparation.Read().Claims);
         Assert.Empty(f.Preparation.Read().Results);
-        if (point is "journal.capture-1.after" or "journal.capture-disposition.before" or "journal.close-turn.after")
+        if (point is "journal.capture.after" or "journal.close-turn.before" or "journal.close-turn.after")
         {
             var result = f.Accept(Assert.IsType<TurnSettlement.Settled>(second).Turn);
             Assert.Single(f.Preparation.Read().Results);
             Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
             AssertRecovery(f, launch, "Closed");
         }
-        else if (point == "journal.capture-1.before")
+        else if (point == "journal.capture.before")
         {
             var turn = Assert.IsType<TurnSettlement.Settled>(second).Turn;
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
@@ -114,7 +114,7 @@ public sealed class TurnCrashTests
         File.WriteAllText(Path.Combine(f.Evidence, "gate"), "release");
         processes.Dispose();
         Assert.Equal(launches, f.Launches);
-        if (point is "runner.claim.after" or "runner.launch.after" or "runner.running" or "journal.root-exit.before" or "runner.cleanup.inside" or "journal.capture-1.before")
+        if (point is "runner.claim.after" or "runner.launch.after" or "runner.running" or "journal.root-exit.before" or "runner.cleanup.inside" or "journal.capture.before")
             await SuccessfulControl();
     }
 
@@ -134,7 +134,7 @@ public sealed class TurnCrashTests
         await using var fresh = f.OpenRuns(await f.Fakes.DiscoverAsync());
         var running = Assert.IsType<TurnStart.Started>(await fresh.StartTurn(f.Preparation.Permit, intent).WaitAsync(Bound)).Turn;
         var turn = await f.Settled(running);
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal(launch, turn.Address.Launch);
         Assert.Equal(1, f.Launches);
         Assert.Single(f.Preparation.Read().Claims);

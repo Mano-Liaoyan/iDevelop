@@ -167,7 +167,7 @@ public sealed class ProjectRunOwnershipTests : IDisposable
 
     [Theory]
     [InlineData("")]
-    [InlineData("{\"schema\":3")]
+    [InlineData("{\"schema\":4")]
     public async AsyncTask A_journal_without_a_complete_entry_does_not_block_a_standalone_start(string contents)
     {
         var task = Task(T, model: "gpt-6-sol");

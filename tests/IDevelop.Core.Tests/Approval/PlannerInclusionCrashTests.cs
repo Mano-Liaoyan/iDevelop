@@ -75,7 +75,6 @@ public sealed class PlannerInclusionCrashTests
         Assert.Equal([1, 1], new[] { f.Launches("N1"), f.Launches("N2") });
         Assert.Equal(2, f.TotalLaunches - f.Launches("N1") - f.Launches("N2"));
         Assert.Equal((waiting.Id, AttemptStatus.Succeeded, 2), (f.Runs.Latest[X].Id, f.Runs.Latest[X].Status, f.Runs.Latest[X].Turns.Count));
-        Assert.Equal(BaseChoice.Head, record.Base.Choice);
     }
 
     [Fact]

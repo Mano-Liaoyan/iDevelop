@@ -34,7 +34,6 @@ public sealed class RetryTests
         var record = f.Read();
         Assert.Equal(record.Preparations[new(previous, 1)].Location.Owner, record.Preparations[new(reply.Attempt, 1)].Location.Owner);
         Assert.Equal("half\n", f.ResultFile(A, "half.txt"));
-        Assert.Empty(record.Salvages);
         Assert.DoesNotContain(record.GitIntents.Values, intent => intent.Mutation is GitMutation.ResetCheckout);
     }
 

@@ -25,14 +25,8 @@ internal readonly record struct LaunchKey(AttemptId Attempt, int Turn);
 
 internal sealed record ApprovedRevision(RevisionId Id, Workflow Snapshot);
 
-/// <summary>
-/// What a run's base is, as its journal records it. A run approves the current branch's HEAD; <see cref="Snapshot"/> reads
-/// the snapshot base of an earlier journal, which the app reads until the journal keeps only the worktree events (#145).
-/// </summary>
-internal enum BaseChoice { Head, Snapshot }
-
 /// <summary>The commit a run starts from, the current branch's HEAD at its approval.</summary>
-internal sealed record RunBase(CommitId Commit, BaseChoice Choice);
+internal sealed record RunBase(CommitId Commit);
 
 internal sealed record LogCheckpoint(long ByteLength, Digest Content);
 
@@ -93,7 +87,6 @@ internal sealed record InputRecord(InputId Id, TaskId Task, RevisionId Revision,
         CodeSelection.Root root => root.Commit,
         CodeSelection.Single single => single.Source.Commit,
         CodeSelection.Joined joined => joined.Join.Commit,
-        CodeSelection.Legacy legacy => legacy.Base,
         _ => throw new InvalidOperationException("Unknown code selection."),
     };
 }
@@ -146,34 +139,15 @@ internal abstract record RootExit
 internal readonly record struct CaptureId(Guid Value);
 
 /// <summary>
-/// What a turn left in its worktree when it ended: the commit an editing task's turn ends with, its report, and its
-/// artifacts. A turn takes one capture. Journals written before ADR 0032 hold two per turn, and they still read.
+/// What a turn left in its worktree when it ended, captured once: the commit an editing task's turn ends with, its report,
+/// and its artifacts (ADR 0032). A capture that could not be taken records a block under <see cref="RunReducer.CaptureBlock"/>.
 /// </summary>
-internal sealed record CaptureObservation(CaptureId Capture, int Ordinal, LaunchKey Launch, LogCheckpoint Log,
+internal sealed record CaptureObservation(CaptureId Capture, LaunchKey Launch, LogCheckpoint Log,
     DateTimeOffset Started, DateTimeOffset Completed, CommitRecipe Recipe, CommitId? Candidate, CommitId? Tip, string? Head,
     EvidenceFile? Index, string? Report, ImmutableArray<ArtifactRecord> Artifacts, EvidenceFile SharedRefs, ImmutableArray<string> UnexplainedRefs)
 {
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool Recovery { get; init; }
-
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public TreeId? IndexTree { get; init; }
-}
-
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[JsonDerivedType(typeof(Matched), "matched")]
-[JsonDerivedType(typeof(Diverged), "diverged")]
-[JsonDerivedType(typeof(Failed), "failed")]
-internal abstract record CaptureDisposition
-{
-    private CaptureDisposition() { }
-
-    internal sealed record Matched : CaptureDisposition;
-
-    internal sealed record Diverged(MaterializationProblem Problem, ImmutableArray<string> Paths, ImmutableArray<string> Refs,
-        string Detail) : CaptureDisposition;
-
-    internal sealed record Failed(MaterializationProblem Problem, string Detail, ImmutableArray<EvidenceFile> Evidence) : CaptureDisposition;
 }
 
 internal enum TipOwnership { Explained, Unexplained }
@@ -209,7 +183,6 @@ internal sealed record ReportInclusion(TaskId Task, AttemptId Source, int Turn);
 [JsonDerivedType(typeof(Executed), "executed")]
 [JsonDerivedType(typeof(Reused), "reused")]
 [JsonDerivedType(typeof(Included), "included")]
-[JsonDerivedType(typeof(Rebased), "rebased")]
 [JsonDerivedType(typeof(Human), "human")]
 [JsonDerivedType(typeof(Carried), "carried")]
 internal abstract record ResultOrigin
@@ -223,19 +196,13 @@ internal abstract record ResultOrigin
     /// <summary>A standalone planner's report, included at approval. No code, ownership, or session comes with it.</summary>
     internal sealed record Included(AttemptSource.Standalone Source, InclusionEvidence Evidence) : ResultOrigin;
 
-    /// <summary>
-    /// A person approved replaying <paramref name="Source"/>'s recorded change onto its updated inputs, as the rebase
-    /// plan <paramref name="Plan"/> recorded. No client ran; the source's provenance stays with the source.
-    /// </summary>
-    internal sealed record Rebased(ResultId Source, OperationId Plan) : ResultOrigin;
-
     /// <summary>A person approved this Approval node's request. No client ran.</summary>
     internal sealed record Human(GateId Request) : ResultOrigin;
 
     /// <summary>
     /// The current result <paramref name="Result"/> of the earlier run <paramref name="Run"/>, which a run that a node's Run
-    /// started takes as the result of a task it does not run (#90). Its code is replayed onto this run's base, and its report
-    /// and artifacts are copied. No client ran in this run.
+    /// started takes as the result of a task it does not run (#90). Its report and artifacts are copied; it brings no code.
+    /// No client ran in this run.
     /// </summary>
     internal sealed record Carried(RunId Run, ResultId Result) : ResultOrigin;
 }
@@ -273,16 +240,10 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(GitObserved), "gitObserved")]
 [JsonDerivedType(typeof(Prepared), "prepared")]
 [JsonDerivedType(typeof(Blocked), "blocked")]
-[JsonDerivedType(typeof(SalvageRetained), "salvageRetained")]
-[JsonDerivedType(typeof(Preserved), "preserved")]
-[JsonDerivedType(typeof(Restored), "restored")]
-[JsonDerivedType(typeof(RecoveryBaselined), "recoveryBaselined")]
-[JsonDerivedType(typeof(PreservationDiverged), "preservationDiverged")]
 [JsonDerivedType(typeof(BlockResolved), "blockResolved")]
 [JsonDerivedType(typeof(OwnershipFenced), "ownershipFenced")]
 [JsonDerivedType(typeof(RootExitObserved), "rootExitObserved")]
 [JsonDerivedType(typeof(TurnCaptured), "turnCaptured")]
-[JsonDerivedType(typeof(CaptureDisposed), "captureDisposed")]
 [JsonDerivedType(typeof(GateRequested), "gateRequested")]
 [JsonDerivedType(typeof(GateSentBack), "gateSentBack")]
 [JsonDerivedType(typeof(Requested), "requested")]
@@ -298,31 +259,9 @@ internal abstract record RunEvent
 
     internal sealed record GitObserved(OperationId Mutation, GitObservation Observation) : RunEvent;
 
-    /// <param name="SharedRefs">The shared-ref snapshot an earlier journal took when it prepared the turn. A new turn takes none.</param>
-    internal sealed record Prepared(PreparedExecution Execution, EvidenceFile? SharedRefs) : RunEvent;
+    internal sealed record Prepared(PreparedExecution Execution) : RunEvent;
 
     internal sealed record Blocked(MaterializationBlock Block) : RunEvent;
-
-    internal sealed record SalvageRetained(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
-
-    internal sealed record Restored(OperationId Plan, ImmutableArray<OperationId> Resolved) : RunEvent
-    {
-        public bool Equals(Restored? other) => other is not null && Plan == other.Plan && Resolved.SequenceEqual(other.Resolved);
-
-        public override int GetHashCode() => HashCode.Combine(Plan, Resolved.Length);
-    }
-
-    internal sealed record RecoveryBaselined(RecoveryBaseline Baseline, ImmutableArray<OperationId> Resolved) : RunEvent
-    {
-        public bool Equals(RecoveryBaselined? other) => other is not null && Baseline == other.Baseline && Resolved.SequenceEqual(other.Resolved);
-
-        public override int GetHashCode() => HashCode.Combine(Baseline, Resolved.Length);
-    }
-
-    internal sealed record Preserved(OperationId Plan, string Ref, CommitId Commit) : RunEvent;
-
-    internal sealed record PreservationDiverged(OperationId Operation, PreservationObservation First, PreservationObservation Second,
-        BlockScope.Checkout Scope) : RunEvent;
 
     internal sealed record BlockResolved(OperationId Block, string Reason) : RunEvent;
 
@@ -333,7 +272,7 @@ internal abstract record RunEvent
         public ImmutableArray<IncludedResult>? Included { get; init; }
 
         /// <summary>
-        /// The node whose Run started the run. Null for Run Workflow, which runs every root, and in older journals. A run
+        /// The node whose Run started the run. Null for Run Workflow, which runs every root. A run
         /// started from a node starts only that node and the tasks after it, each once its predecessors have results.
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -349,7 +288,7 @@ internal abstract record RunEvent
 
     internal sealed record Amended(RevisionId Previous, ApprovedRevision Revision, AmendmentOrigin Origin, OperationId Confirmation) : RunEvent
     {
-        /// <summary>For a planner's amendment, the items the person chose and the agent new tasks took. Null in older journals.</summary>
+        /// <summary>For a planner's amendment, the items the person chose and the agent new tasks took. Null for a person's.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public AmendmentChoice? Choice { get; init; }
     }
@@ -363,13 +302,7 @@ internal abstract record RunEvent
 
     internal sealed record TurnCaptured(CaptureObservation Observation) : RunEvent;
 
-    internal sealed record CaptureDisposed(CaptureId Capture, LaunchKey Launch, CaptureDisposition Disposition) : RunEvent;
-
-    internal sealed record TurnClosed(LaunchKey Key, LogCheckpoint Evidence) : RunEvent
-    {
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public CaptureId? Capture { get; init; }
-    }
+    internal sealed record TurnClosed(LaunchKey Key, LogCheckpoint Evidence) : RunEvent;
 
     internal sealed record AttemptClosed(AttemptId Attempt, AttemptEnd End) : RunEvent;
 
@@ -401,8 +334,6 @@ internal abstract record RunEvent
     }
 }
 
-internal sealed record RecoveryBaseline(AttemptId Previous, OperationId Confirmation, string Session, OperationId Preservation);
-
 internal sealed record RunEntry(int Schema, long Sequence, OperationId Operation, Digest Command, DateTimeOffset At, RunEvent Event);
 
 internal enum RunProblem
@@ -417,10 +348,16 @@ internal enum RunProblem
 
     ConfirmationRequired, TaskBusy, UnresolvedOwnership, RunStopped, RunBusy, UnclosedAttempts,
 
-    IncompleteResults, UnfinishedPublication, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending, SessionUnavailable,
+    IncompleteResults, UnsupportedWork, TaskUnconfigured, UnsupportedResult, ReuseUnverifiable, JournalBusy, StorageUnavailable, NotSettled, SettlementPending, SessionUnavailable,
 
     /// <summary>The task is not part of a run that a node's Run started: nobody ran it, and no task before it is part of it.</summary>
     NotRequested,
+
+    /// <summary>
+    /// The run's journal is of an earlier format (#138). It stays on disk; the app reads nothing from it, writes nothing to it,
+    /// and lets it block no workflow.
+    /// </summary>
+    EarlierFormat,
 }
 
 internal sealed record RunRejection(RunProblem Problem, long Sequence = 0, TaskId? Task = null);
@@ -474,8 +411,6 @@ internal sealed record AttemptRecovery(AttemptId Attempt, RecoveryState State, I
 /// <summary>The immutable run history, with current results and staleness derived from it.</summary>
 internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, ApprovedRevision Revision)
 {
-    public int Schema { get; internal init; } = 2;
-
     public string? RunKey { get; internal init; }
 
     public string? Repository { get; internal init; }
@@ -484,7 +419,7 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
 
     /// <summary>
     /// The nodes the person ran, for a run that a node's Run started, or null for a run of every root, as Run Workflow
-    /// starts and older journals record (#90). <see cref="RunScope"/> derives which tasks may start from it.
+    /// starts (#90). <see cref="RunScope"/> derives which tasks may start from it.
     /// </summary>
     public ImmutableSortedSet<TaskId>? Requested { get; internal init; }
 
@@ -497,17 +432,6 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<LaunchKey, PreparedExecution> Preparations { get; internal init; } = ImmutableDictionary<LaunchKey, PreparedExecution>.Empty;
 
     public ImmutableDictionary<OperationId, MaterializationBlockState> Blocks { get; internal init; } = ImmutableDictionary<OperationId, MaterializationBlockState>.Empty;
-
-    public ImmutableDictionary<(AttemptId Previous, OperationId Confirmation), RunEvent.RecoveryBaselined> Baselines { get; internal init; } =
-        ImmutableDictionary<(AttemptId, OperationId), RunEvent.RecoveryBaselined>.Empty;
-
-    public ImmutableDictionary<OperationId, RunEvent.Restored> Restorations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Restored>.Empty;
-
-    public ImmutableDictionary<OperationId, RunEvent.Preserved> Preservations { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.Preserved>.Empty;
-
-    public ImmutableDictionary<OperationId, RunEvent.PreservationDiverged> PreservationDivergences { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.PreservationDiverged>.Empty;
-
-    public ImmutableDictionary<OperationId, RunEvent.SalvageRetained> Salvages { get; internal init; } = ImmutableDictionary<OperationId, RunEvent.SalvageRetained>.Empty;
 
     public RunPhase Phase { get; internal init; } = RunPhase.Approved;
 
@@ -532,13 +456,9 @@ internal sealed record RunRecord(RunId Id, WorkflowId Workflow, RunBase Base, Ap
     public ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved> RootExits { get; internal init; } =
         ImmutableDictionary<LaunchKey, RunEvent.RootExitObserved>.Empty;
 
-    public ImmutableDictionary<CaptureId, ImmutableList<CaptureObservation>> Captures { get; internal init; } =
-        ImmutableDictionary<CaptureId, ImmutableList<CaptureObservation>>.Empty;
-
-    public ImmutableDictionary<CaptureId, RunEvent.CaptureDisposed> Dispositions { get; internal init; } =
-        ImmutableDictionary<CaptureId, RunEvent.CaptureDisposed>.Empty;
-
-    public ImmutableDictionary<LaunchKey, CaptureId> Settlements { get; internal init; } = ImmutableDictionary<LaunchKey, CaptureId>.Empty;
+    /// <summary>The one capture each turn took when its client exited, by turn.</summary>
+    public ImmutableDictionary<LaunchKey, CaptureObservation> Captures { get; internal init; } =
+        ImmutableDictionary<LaunchKey, CaptureObservation>.Empty;
 
     public ImmutableHashSet<LaunchKey> Fenced { get; internal init; } = ImmutableHashSet<LaunchKey>.Empty;
 

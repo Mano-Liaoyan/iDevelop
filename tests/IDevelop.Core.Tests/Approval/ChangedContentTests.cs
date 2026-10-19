@@ -84,7 +84,7 @@ public sealed class ChangedContentTests
         f.Git.Write("notes.txt", "notes again\n");
 
         var started = await Start(f, preview, Command(5));
-        Assert.Equal(new RunBase(Head, BaseChoice.Head), f.Read(started.Coordinator.Address.Run).Base);
+        Assert.Equal(new RunBase(Head), f.Read(started.Coordinator.Address.Run).Base);
     }
 
     [Fact]

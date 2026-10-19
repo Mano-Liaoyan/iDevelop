@@ -25,7 +25,7 @@ internal sealed class PreparationFixture : IDisposable
         A = Git.Diamond();
         RunId = run ?? Run;
         Store = RunStore.Open(Git.Folder, new Clock(), () => Id(++_id));
-        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A, BaseChoice.Head),
+        Assert.IsType<RunDecision.Created>(Store.Approve(W, RunId, Op(), Revision.Capture(workflow), new(configureBase?.Invoke(Git) ?? runBase ?? A),
             node: node));
     }
 
@@ -102,7 +102,7 @@ internal sealed class PreparationFixture : IDisposable
         var task = ready.Execution.Location.Owner.Task;
         var operation = Op();
         var closed = Assert.IsType<Settlement.Closed>(await Materializer().Settle(Lease(task), operation, ready.Execution.Launch, checkpoint));
-        if (assertMatched) Assert.IsType<CaptureDisposition.Matched>(closed.Disposition);
+        if (assertMatched) SettlementAssertions.Matched(closed);
         Assert.IsType<RunDecision.Recorded>(Store.CloseAttempt(Permit, operation, ready.Execution.Launch.Attempt, outcome, checkpoint));
     }
 

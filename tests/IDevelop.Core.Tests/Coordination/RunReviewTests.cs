@@ -444,7 +444,6 @@ public sealed class RunReviewTests
         Assert.StartsWith("You retry this fix round in a fresh session. This is the ticket you worked on, and your change so far.", prompt);
         Assert.Contains("+a - b", prompt);
         // The retry works in the subject's worktree with the files the interrupted fix left there.
-        Assert.Empty(record.Salvages);
         var fixedCommit = Assert.IsType<CodeOutput.Produced>(record.CurrentResults[A].Code).Code.Commit.Hex;
         Assert.Equal("keep\n", f.Preparation.Git.Git("show", $"{fixedCommit}:keep.txt"));
         Assert.Equal("a + b\n", File.ReadAllText(Path.Combine(f.Checkout(B), "calc.txt")));
@@ -467,7 +466,6 @@ public sealed class RunReviewTests
         Assert.Equal(RunProblem.SessionUnavailable, Assert.IsType<FixReply.Refused>(
             await f.Coordinator.ContinueFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue));
-        Assert.Empty(f.Read().Preservations);
         Assert.IsType<FixReply.Reserved>(await f.Coordinator.RetryFix(f.Address, R, new OperationId(Guid.NewGuid())).WaitAsync(Bound));
         await f.UntilStatus(RunStatus.Completed);
         Assert.Equal(3, f.Launches(A));
@@ -496,8 +494,6 @@ public sealed class RunReviewTests
         Assert.Equal(RunProblem.ConfirmationRequired, Assert.IsType<FixReply.Refused>(await f.Coordinator.ContinueFix(f.Address, R,
             default).WaitAsync(Bound)).Reason.Problem);
         Assert.Equal(0, Count(f, cause => cause is AttemptCause.Continue or AttemptCause.Retry));
-        // A refused choice preserves nothing.
-        Assert.Empty(f.Read().Preservations);
     }
 
     [Fact]

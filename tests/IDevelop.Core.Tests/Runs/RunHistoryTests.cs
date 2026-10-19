@@ -60,11 +60,11 @@ public sealed class RunHistoryTests
         using var f = new RunFixtures(Chain());
         var first = RunAll(f, Run);
         // The second run starts from U, whose attempt fails. T's carried result counts as the same result as before.
-        var seed = new RunRecord(OtherRun, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
+        var seed = new RunRecord(OtherRun, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [U] };
         var operation = f.Op();
         var carried = Carrying.Build(seed, History(f), operation);
         Assert.Equal([T], carried.Carried.Select(item => item.Result.Task));
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, OtherRun, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, OtherRun, operation, Revision.Capture(f.Workflow), new(Base), node: U,
             carried: carried.Carried));
         var failed = f.Reserve(U, run: OtherRun);
         f.Claim(failed, OtherRun);
@@ -193,8 +193,8 @@ public sealed class RunHistoryTests
         Assert.Equal([U], History(f).WaitsFor(C));
         // A run of U carries T's result for C, and C, though it was stopped before it started, waits for nothing more.
         var operation = f.Op();
-        var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [U] };
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: U,
+        var seed = new RunRecord(Third, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [U] };
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base), node: U,
             carried: Carrying.Build(seed, History(f), operation).Carried));
         f.Complete(f.Reserve(U, run: Third), run: Third);
         Assert.IsType<RunDecision.Recorded>(f.Store.Settle(f.PermitFor(Third), f.Op(), RunOutcome.Stopped));
@@ -219,8 +219,8 @@ public sealed class RunHistoryTests
         Assert.Equal([U], History(f).WaitsFor(C));
 
         var operation = f.Op();
-        var seed = new RunRecord(Third, W, new(Base, BaseChoice.Head), Revision.Capture(f.Workflow)) { Schema = 3, Requested = [D] };
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: D,
+        var seed = new RunRecord(Third, W, new(Base), Revision.Capture(f.Workflow)) { Requested = [D] };
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Third, operation, Revision.Capture(f.Workflow), new(Base), node: D,
             carried: Carrying.Build(seed, History(f), operation).Carried));
         Settle(f, Third);
 

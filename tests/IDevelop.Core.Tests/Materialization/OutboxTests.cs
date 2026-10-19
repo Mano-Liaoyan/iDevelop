@@ -217,8 +217,7 @@ public sealed class OutboxTests
 
     private static void CheckRejected(PreparationFixture f, Preparation.Ready ready)
     {
-        Assert.Equal(MaterializationProblem.InputUnavailable, Assert.IsType<CaptureDisposition.Failed>(
-            f.Read().Dispositions[f.Read().Settlements[ready.Execution.Launch]].Disposition).Problem);
+        Assert.Equal(MaterializationProblem.InputUnavailable, RunReducer.CaptureFailure(f.Read(), ready.Execution.Launch)!.Problem);
         var block = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("InputUnavailable", block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", block.Detail);

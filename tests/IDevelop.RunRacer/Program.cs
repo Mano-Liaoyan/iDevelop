@@ -256,7 +256,7 @@ internal static class Program
                 if (claim is not RunDecision.Granted) { Console.WriteLine(Describe(claim)); return 4; }
                 var checkout = Path.Combine(project, prepared.Location.Owner.RelativePath);
                 File.WriteAllText(Path.Combine(checkout, "result.txt"), "done\n");
-                var crashPoint = args.Length > 7 ? args[7] : "journal.capture-1.after";
+                var crashPoint = args.Length > 7 ? args[7] : "journal.capture.after";
                 var crashing = Materializer.Open(project, store, null, TimeProvider.System, null, point =>
                 {
                     if (point != crashPoint) return;

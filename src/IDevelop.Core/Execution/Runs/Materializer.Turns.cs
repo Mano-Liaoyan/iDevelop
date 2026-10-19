@@ -98,21 +98,13 @@ internal sealed partial class Materializer
                 var retained = RunLayout.ResalvageRef(record.RunKey!, record.TaskKeys[task], key.Attempt, planId);
                 RequirePublication(_refs.Publish(permit, operation, planId, "refresh-retain", repository,
                     new(retained, null, old.Location.AttemptBase)), new BlockScope.Refs([retained]));
-                // A reviewer's worktree written before ADR 0032 is on a branch, which moves with it. A detached one has none.
-                if (old.Location.Owner.Branch is { } branch)
-                    RequirePublication(_refs.Publish(permit, operation, planId, "refresh-branch", repository,
-                        new(branch, old.Location.AttemptBase, input.CodeBase)), new BlockScope.Checkout([], Branch: true));
                 var reset = new GitMutation.ResetCheckout(task, input.CodeBase);
                 if (!PublicationObserved(record, planId, reset))
                 {
                     var intended = OperationIds.Derive(operation, "refresh-reset-intent");
                     Journal("refresh-reset-intent", () => _store.Record(permit, intended, new RunEvent.GitIntended(planId, reset)));
                     VerifyIgnoredObstructions(repository, checkout, Value(repository.TreeFiles(input.CodeBase)));
-                    var result = Mutate("refresh-reset", () =>
-                    {
-                        if (old.Location.Owner.Branch is { } reset) VerifyResetHead(repository, checkout, reset, input.CodeBase);
-                        return repository.ResetCheckout(checkout, input.CodeBase);
-                    });
+                    var result = Mutate("refresh-reset", () => repository.ResetCheckout(checkout, input.CodeBase));
                     if (result.ExitCode != 0) throw Fault(MaterializationProblem.GitFailed, result.Stderr, BlockScope.Checkout.Whole);
                     Journal("refresh-reset-observed", () => _store.Record(permit, OperationIds.Derive(operation, "refresh-reset-observed"),
                         new RunEvent.GitObserved(intended, new(false, input.CodeBase.Hex))));
@@ -122,7 +114,7 @@ internal sealed partial class Materializer
                 var refreshedPrompt = Prompt(record.Revisions[attempt.Revision].Snapshot.Tasks[task], input, attempt.Id, prompt);
                 execution = execution with { Inputs = input.Id, Location = location, Prompt = refreshedPrompt, PromptHash = Revision.Hash(refreshedPrompt) };
             }
-            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, null)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, execution.Location.Owner));
         }
@@ -131,12 +123,6 @@ internal sealed partial class Materializer
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, failed.Problem, inputs, [], failed.Message) { Scope = failed.Scope }); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { return Block(permit, operation, "turn", new(operation, task, key.Attempt, MaterializationProblem.InputUnavailable, inputs, [], error.Message) { Scope = new BlockScope.Operation() }); }
-    }
-
-    private static void VerifyResetHead(GitRepository repository, string checkout, string branch, CommitId target)
-    {
-        if (Value(repository.SymbolicHead(checkout)) != branch || Value(repository.ReadRef(branch)) != target)
-            throw Fault(MaterializationProblem.UncertainOwnership, "The reset HEAD or task branch differs from its recorded target.", new BlockScope.Checkout([], Branch: true, Head: true));
     }
 
     private static void VerifyIgnoredObstructions(GitRepository repository, string checkout, ImmutableArray<string> targetPaths)

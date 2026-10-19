@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -27,7 +28,7 @@ public sealed class TurnRunnerTests
         Assert.EndsWith(".worktrees/93f23689/90d5b0a2", File.ReadAllText(Path.Combine(f.Evidence, "cwd.txt")).Replace('\\', '/'));
         Assert.Equal("done\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
         Assert.False(File.Exists(Path.Combine(f.Preparation.Git.Folder, "result.txt")));
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal("Succeeded", turn.Attempt.Status.ToString());
         var lines = File.ReadAllLines(Path.Combine(f.Folder(turn.Address.Launch), "events.jsonl"));
         Assert.Contains("\"lifetime\":\"workflow\"", Assert.Single(lines, line => line.Contains("\"type\":\"launched\"", StringComparison.Ordinal)));
@@ -286,7 +287,7 @@ public sealed class TurnRunnerTests
         else
         {
             var turn = await f.Settled(duplicate!.Running!);
-            Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+            SettlementAssertions.Matched(turn.Capture);
             Assert.Equal(1, f.Launches);
         }
         Assert.Single(f.Preparation.Read().Claims);
@@ -320,7 +321,7 @@ public sealed class TurnRunnerTests
         finally { held?.Dispose(); }
         f.Runs.Probe = null;
         var turn = await f.Settled(await f.Start(intent));
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Equal(1, f.Launches);
         Assert.Single(f.Preparation.Read().Claims);
         Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Requested>());
@@ -332,7 +333,7 @@ public sealed class TurnRunnerTests
         await using var f = new TurnFixture();
         await f.Open();
         FileStream? held = null;
-        f.Runs.Probe = point => { if (point == "journal.capture-1.before") held = f.LockJournal(); };
+        f.Runs.Probe = point => { if (point == "journal.capture.before") held = f.LockJournal(); };
         var running = await f.Start();
         try
         {
@@ -347,8 +348,8 @@ public sealed class TurnRunnerTests
         finally { held?.Dispose(); }
         f.Runs.Probe = null;
         var settled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit, f.Preparation.Op(), running.Address.Launch).WaitAsync(Bound)).Settlement).Turn;
-        Assert.IsType<CaptureDisposition.Matched>(settled.Capture.Disposition);
-        Assert.Single(Assert.Single(f.Preparation.Read().Captures).Value);
+        SettlementAssertions.Matched(settled.Capture);
+        Assert.Single(f.Preparation.Read().Captures);
         Assert.Equal(1, f.Launches);
         var result = f.Accept(settled);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
@@ -365,7 +366,7 @@ public sealed class TurnRunnerTests
         await f.Open(rule);
         if (receipt == "Blocked") f.Runs.Probe = point =>
         {
-            if (point != "git.capture-1.before") return;
+            if (point != "git.capture.before") return;
             File.WriteAllText(Path.Combine(f.Checkout, "late.txt"), "late\n");
             Assert.Equal(0, f.Preparation.Git.Run(f.Checkout, "add", "--", "late.txt").ExitCode);
             Assert.Equal(0, f.Preparation.Git.Run(f.Checkout, "-c", "commit.gpgSign=false", "commit", "-qm", "late").ExitCode);
@@ -392,7 +393,7 @@ public sealed class TurnRunnerTests
         }
         else
         {
-            Assert.IsType<CaptureDisposition.Diverged>(turn.Capture.Disposition);
+            SettlementAssertions.Diverged(turn.Capture);
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
                 turn.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
             Assert.IsType<Acceptance.Blocked>(f.Preparation.Materializer().Accept(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt));
@@ -476,7 +477,7 @@ public sealed class TurnRunnerTests
         children.Dispose();
         var turn = await f.Settled(running);
         Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Exited>());
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
     }
 
     [Fact]
@@ -523,7 +524,7 @@ public sealed class TurnRunnerTests
             var turn = await f.Settled(running);
             Assert.Equal(1, retryCount);
             Assert.Equal("adfe40b30c176fb407933286f51d15ea9b54cdc3", turn.Exit.Tip.Hex);
-            Assert.IsType<CaptureDisposition.Diverged>(turn.Capture.Disposition);
+            SettlementAssertions.Diverged(turn.Capture);
             Assert.Single(f.Preparation.Read().RootExits);
             Assert.Equal(1, f.Launches);
         }

@@ -79,7 +79,7 @@ public sealed class TurnJobTests
         if (failure == "termination") Assert.Equal("Win32 error 5", Assert.Single(cleanup.Steps).Failure);
         if (failure == "signal") Assert.All(cleanup.Steps, step => Assert.Equal("Operation not permitted", step.Failure));
         if (result == "Completed") Assert.Null(Assert.Single(cleanup.Steps).Failure);
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         if (failure is "assignment" or "launcher") Assert.Equal(detail, Assert.IsType<Containment.None>(launched.Containment).Reason);
         else if (OperatingSystem.IsWindows()) Assert.IsType<Containment.Job>(launched.Containment);
         else Assert.Equal(new Containment.Group(launched.ProcessId), launched.Containment);

@@ -24,8 +24,7 @@ public sealed class PreparationContractTests
             ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/report.md")));
         Assert.Equal("B ready.\n", File.ReadAllText(Path.Combine(ready.Checkout,
             ".idp/inputs/00000000-0000-0000-0000-000000000103/4afb8e68-c5ea-8261-a205-38609bc0c482/report.md")));
-        var prepared = f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>().Single(e => e.Execution == ready.Execution);
-        Assert.Null(prepared.SharedRefs);
+        Assert.Single(f.Read().Receipts.Values.Select(entry => entry.Event).OfType<RunEvent.Prepared>(), e => e.Execution == ready.Execution);
     }
 
     [Fact]
@@ -64,7 +63,7 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public async Task Layout_intents_are_limited_to_base_retention_and_prepared_evidence_must_be_in_run_storage()
+    public async Task Layout_intents_are_limited_to_base_retention()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T));
@@ -72,15 +71,13 @@ public sealed class PreparationContractTests
         var layout = record.Receipts.Single(pair => pair.Value.Event is RunEvent.LayoutAllocated { Key: LayoutKey.Run }).Key;
         Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.GitIntended(layout,
             new GitMutation.MoveRef(new("refs/idp/foreign/base", null, f.A))))).Reason.Problem.ToString());
-        Assert.Equal("InvalidData", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(ready.Execution,
-            new("results/foreign/refs.json", Revision.Hash("{}"), 2)))).Reason.Problem.ToString());
-        var prepared = new RunEvent.Prepared(ready.Execution, new("evidence/00000000-0000-0000-0000-000000000001/refs.json", Revision.Hash("{}"), 2));
-        var entry = new RunEntry(2, 1, f.Op(), Revision.Hash("fixture"), At, prepared);
-        var encoded = RunJournal.Encode(entry);
-        Assert.Contains("\"sharedRefs\":{\"relativePath\":\"evidence/00000000-0000-0000-0000-000000000001/refs.json\"", encoded);
+        var prepared = new RunEvent.Prepared(ready.Execution);
+        var encoded = RunJournal.Encode(new RunEntry(RunJournal.Schema, 1, f.Op(), Revision.Hash("fixture"), At, prepared));
+        Assert.DoesNotContain("sharedRefs", encoded);
         Assert.Equal(prepared, Assert.IsType<RunEvent.Prepared>(Assert.Single(RunJournal.Decode(encoded).Entries).Event));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(ready.Checkout, "a.txt")));
     }
+
     [Fact]
     public async Task Prepared_append_rechecks_frozen_inputs_under_the_journal_lock()
     {
@@ -98,7 +95,7 @@ public sealed class PreparationContractTests
         var attempt = record.Attempts.Values.Single(attempt => attempt.Task == U);
         var owner = record.GitIntents.Values.Select(intent => intent.Mutation).OfType<GitMutation.CreateWorktree>().Single(create => create.Owner.Task == U).Owner;
         var prepared = new PreparedExecution(new(attempt.Id, 1), input.Id, new(owner, new("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea")), "Inspect", Revision.Hash("Inspect"), RunLayout.Outbox(attempt.Id));
-        var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(prepared, SharedRefs)));
+        var rejected = Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(prepared)));
         Assert.Equal("InputConflict", rejected.Reason.Problem.ToString());
         Assert.Equal("C available.\n", context.Report);
         Assert.Equal(0, f.Read().Preparations.Values.Count(execution => f.Read().Attempts[execution.Launch.Attempt].Task == U));

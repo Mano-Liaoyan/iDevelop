@@ -635,7 +635,7 @@ public sealed class TurnStateTests
         Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
         f.Runs.RequestStream = null;
         var turn = await f.Settled(await f.Start(intent));
-        Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
+        SettlementAssertions.Matched(turn.Capture);
         Assert.Single(f.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Requested>());
         Assert.Equal(1, f.Launches);
         Assert.Single(f.Preparation.Read().Claims);

@@ -207,7 +207,7 @@ public sealed class ReviewMaterializationTests
             .PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         var refreshed = f.Read().Inputs.Values.Single(input => input.Task == U && input.Id != old.Id);
         var candidate = review.Execution with { Launch = key, Inputs = refreshed.Id, Location = review.Execution.Location with { AttemptBase = refreshed.CodeBase } };
-        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(candidate, SharedRefs))).Reason.Problem.ToString());
+        Assert.Equal("InputConflict", Assert.IsType<RunDecision.Rejected>(f.Store.Record(f.Permit, f.Op(), new RunEvent.Prepared(candidate))).Reason.Problem.ToString());
         var ready = Assert.IsType<Preparation.Ready>(await f.Materializer().PrepareTurn(f.Lease(f.Read().Attempts[key.Attempt].Task), operation, key, "Review again."));
         Assert.Equal(repaired.Id, f.Read().Inputs[ready.Execution.Inputs].Review!.SubjectResult);
         Assert.Equal(first.Id, f.Read().Inputs[old.Id].Review!.SubjectResult);

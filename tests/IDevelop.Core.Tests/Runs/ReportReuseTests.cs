@@ -104,9 +104,9 @@ public sealed class ReportReuseTests
         WriteStandalone(f.Project, commit);
         var revision = Revision.Capture(f.Workflow);
 
-        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.Approve(W, Run, f.Op(), revision, new(commit, BaseChoice.Head),
+        Assert.Equal(RunProblem.ReuseUnverifiable, Problem(f.Store.Approve(W, Run, f.Op(), revision, new(commit),
             [new(T, new(Id(90)), 2)], f.Op())));
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), revision, new(commit, BaseChoice.Head), [new(T, new(Id(90)), 1)], f.Op()));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(W, Run, f.Op(), revision, new(commit), [new(T, new(Id(90)), 1)], f.Op()));
 
         var result = Assert.Single(f.Read().Results);
         Assert.Equal(("Checked.", new AttemptSource.Standalone(T, new(Id(90)))), (result.Report, Assert.IsType<ResultOrigin.Reused>(result.Origin).Source));

@@ -43,11 +43,11 @@ public sealed class NodeRunJournalTests
     {
         using var f = new RunFixtures(Join());
 
-        var refused = Refused(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: C));
+        var refused = Refused(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base), node: C));
 
         Assert.Equal((RunProblem.MissingDependencyResult, (TaskId?)T), (refused.Problem, refused.Task));
         Assert.Equal(new RunRejection(RunProblem.IdentityMismatch, Task: G) with { Sequence = 1 },
-            Refused(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base, BaseChoice.Head), node: G)));
+            Refused(f.Store.Approve(W, Run, f.Op(), Revision.Capture(f.Workflow), new(Base), node: G)));
         Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run));
     }
 
@@ -83,7 +83,7 @@ public sealed class NodeRunJournalTests
         f.Approve(node: T);
         var record = f.Read();
         RunProblem Refusal(RunRecord record, RunEvent e) => Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record,
-            new RunEntry(record.Schema, record.Sequence + 1, f.Op(), Prompt, At, e))).Reason.Problem;
+            new RunEntry(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, e))).Reason.Problem;
 
         Assert.Equal(RunProblem.StartConflict, Refusal(record, new RunEvent.Requested(C)));
         Assert.Equal(RunProblem.MissingDependencyResult, Refusal(record, new RunEvent.Requested(D)));
@@ -106,7 +106,7 @@ public sealed class NodeRunJournalTests
         Assert.IsType<RunDecision.Existing>(f.Store.Request(f.Permit, f.Op(), U));
         Assert.Equal(0, Requests(f));
         Assert.Equal(RunProblem.StartConflict, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record,
-            new RunEntry(record.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.Requested(U)))).Reason.Problem);
+            new RunEntry(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.Requested(U)))).Reason.Problem);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class NodeRunJournalTests
         Assert.Equal(0, Requests(f));
         var record = f.Read();
         Assert.Equal(RunProblem.RunStopped, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record,
-            new RunEntry(record.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.Requested(U)))).Reason.Problem);
+            new RunEntry(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, new RunEvent.Requested(U)))).Reason.Problem);
     }
 
     [Fact]

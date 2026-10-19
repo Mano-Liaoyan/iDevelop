@@ -165,9 +165,9 @@ public sealed partial class ProjectRuns
             Continuation? continues = null;
             if (intent is TurnIntent.First { Cause: AttemptCause.Continue continued })
             {
-                // A Continue resumes the earlier attempt's session, which its recovery baseline recorded when it has one.
+                // A Continue resumes the earlier attempt's session.
                 var earlier = AttemptEvidence.Read(store.AttemptFolder(permit.Workflow, permit.Run, task, continued.Previous)).Record;
-                session = record.Baselines.GetValueOrDefault((continued.Previous, continued.Confirmation))?.Baseline.Session ?? earlier?.SessionId;
+                session = earlier?.SessionId;
                 if (session is null || earlier?.Requested.Client != definition.Execution?.Client)
                     return new TurnStart.Refused(new(RunProblem.SessionUnavailable));
                 continues = new(continued.Previous, session) { Folder = earlier?.SessionFolder };
@@ -747,7 +747,7 @@ public sealed partial class ProjectRuns
                 return Unresolved(UnresolvedReason.IncompleteEvidence, evidence.Rejection);
             var closure = record.Receipts.Values.Select(receipt => receipt.Event).OfType<RunEvent.TurnClosed>().Single(value => value.Key == Address.Launch);
             return new TurnSettlement.Settled(new(Release, Address, record.Preparations[Address.Launch], checkpoint,
-                record.RootExits[Address.Launch], closure, record.Dispositions[record.Settlements[Address.Launch]],
+                record.RootExits[Address.Launch], closure, Execution.Materializer.Settled(record, Address.Launch),
                 evidence.Record, evidence.Events.OfType<AttemptEvent.CleanedUp>().LastOrDefault(), Lease));
         }
 

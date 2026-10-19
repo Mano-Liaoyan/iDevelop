@@ -54,15 +54,14 @@ public sealed class NodeWorktreeTests
         // Implement's result is its report, with the one commit its turn ended with on its branch as its code.
         Assert.Equal("A ready.\n", record.CurrentResults[A].Report);
         var produced = Assert.IsType<CodeOutput.Produced>(record.CurrentResults[A].Code).Code.Commit;
-        Assert.DoesNotContain(record.Plans.Values, plan => plan is MaterializationPlan.Publication);
         Assert.Equal("", git.Git("for-each-ref", $"refs/idp/{record.RunKey}/result/").Trim());
         // Review read Implement's change, from the commit Implement started at to the one it ended with.
         Assert.Contains("+a + b", f.Prompt(R, 1));
         Assert.Equal(produced.Hex, git.Git("rev-parse", implement.Branch!).Trim());
         Assert.Equal("1", git.Git("rev-list", "--count", $"{PlanCommit.Hex}..{implement.Branch}").Trim());
         Assert.Equal("a + b\n", git.Git("show", produced.Hex + ":calc.txt"));
-        var implementCapture = record.Captures[record.Settlements.Single(pair => record.Attempts[pair.Key.Attempt].Task == A).Value];
-        Assert.Equal(produced, Assert.Single(implementCapture).Candidate);
+        var implementCapture = record.Captures.Single(pair => record.Attempts[pair.Key.Attempt].Task == A).Value;
+        Assert.Equal(produced, implementCapture.Candidate);
 
         // Review worked detached at Implement's commit, saw its edit, and committed nothing.
         var review = Path.Combine(git.Folder, Owner(R).RelativePath);
@@ -71,8 +70,8 @@ public sealed class NodeWorktreeTests
         Assert.NotEqual(0, git.Run(review, "symbolic-ref", "-q", "HEAD").ExitCode);
         foreach (var task in new[] { X, R })
         {
-            var capture = record.Captures[record.Settlements.Single(pair => record.Attempts[pair.Key.Attempt].Task == task).Value];
-            Assert.Null(Assert.Single(capture).Candidate);
+            var capture = record.Captures.Single(pair => record.Attempts[pair.Key.Attempt].Task == task).Value;
+            Assert.Null(capture.Candidate);
         }
         Assert.Equal(PlanCommit.Hex, git.Run(Path.Combine(git.Folder, Owner(X).RelativePath), "rev-parse", "HEAD").Text.Trim());
     }
@@ -111,5 +110,38 @@ public sealed class NodeWorktreeTests
         Assert.False(File.Exists(Path.Combine(f.Checkout(D), "stray.txt")));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(f.Checkout(D), "a.txt")));
         Assert.Single(f.Read().Preparations.Values.Where(prepared => prepared.Location.Owner.Task == D).Select(prepared => prepared.Location.Owner).Distinct());
+    }
+
+    [Fact]
+    public async Task A_runs_journal_holds_only_the_git_events_of_worktrees_turn_commits_and_merges_of_predecessors()
+    {
+        await using var f = new CoordinatorFixture(Diamond());
+        f.Answer(A, Writes(A, "a.txt", "A\n")).Answer(B, Writes(B, "b.txt", "B\n")).Answer(C, Writes(C, "c.txt", "C\n"))
+            .Answer(D, Writes(D, "d.txt", "D\n")).Answer(X, Reports(X));
+        await f.Open();
+        await f.Resume();
+        await f.UntilStatus(RunStatus.Completed);
+
+        var events = new HashSet<string>();
+        var details = new HashSet<string>();
+        var journal = Path.Combine(f.Preparation.Git.Folder, ".idp", "runs", f.Read().Workflow.ToString(), f.Preparation.RunId.ToString(), "events.jsonl");
+        foreach (var line in File.ReadAllLines(journal))
+        {
+            using var entry = System.Text.Json.JsonDocument.Parse(line);
+            Assert.Equal(RunJournal.Schema, entry.RootElement.GetProperty("schema").GetInt32());
+            var e = entry.RootElement.GetProperty("event");
+            var type = e.GetProperty("type").GetString()!;
+            events.Add(type);
+            if (type == "planned") details.Add("plan:" + e.GetProperty("plan").GetProperty("type").GetString());
+            if (type == "gitIntended") details.Add("git:" + e.GetProperty("mutation").GetProperty("type").GetString());
+        }
+        Assert.Subset(new HashSet<string> { "approved", "layoutAllocated", "planned", "gitIntended", "gitObserved", "reserved", "prepared",
+            "turnClaimed", "rootExitObserved", "turnCaptured", "turnClosed", "attemptClosed", "resultAccepted", "settled" }, events);
+        Assert.Subset(new HashSet<string> { "plan:preparation", "plan:join", "git:createWorktree", "git:moveRef" }, details);
+        // Each node got its worktree, each turn took one capture, and D's worktree started at the merge of B and C.
+        Assert.Contains("git:createWorktree", details);
+        Assert.Contains("plan:join", details);
+        var record = f.Read();
+        Assert.Equal(record.TurnClosures.Keys.ToHashSet(), record.Captures.Keys.ToHashSet());
     }
 }

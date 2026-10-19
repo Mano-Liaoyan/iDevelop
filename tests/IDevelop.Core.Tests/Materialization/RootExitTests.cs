@@ -32,7 +32,7 @@ public sealed class RootExitTests
         Assert.Equal(observed, Assert.IsType<RootObservation.Observed>(f.Materializer().ObserveRootExit(f.Lease(T), operation,
             ready.Execution.Launch, new RootExit.Exited(int.MinValue))).Observation);
         Assert.Equal(sequence, f.Read().Sequence);
-        Assert.Equal(3, f.Read().Receipts.Values.Single(entry => entry.Event is RunEvent.RootExitObserved).Schema);
+        Assert.Equal(RunJournal.Schema, f.Read().Receipts.Values.Single(entry => entry.Event is RunEvent.RootExitObserved).Schema);
     }
 
     [Fact]
@@ -106,21 +106,6 @@ public sealed class RootExitTests
     }
 
     [Fact]
-    public void Schema_two_replays_to_27_and_refuses_a_root_observation()
-    {
-        using var f = new RunFixtures();
-        var bytes = File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl"));
-        File.WriteAllBytes(f.Journal(W, Run), bytes);
-        Assert.Equal((2, 27L, 1), (f.Read().Schema, f.Read().Sequence, f.Read().Results.Count));
-        var observation = new RunEvent.RootExitObserved(new(new(Id(104)), 1), new RootExit.Exited(0), At, Base,
-            "refs/heads/idp/task", TipOwnership.Explained);
-        File.AppendAllText(f.Journal(W, Run), RunJournal.Encode(new(2, 28, f.Op(), Prompt, At, observation)));
-        Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 28), Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run)).Reason);
-        File.WriteAllBytes(f.Journal(W, Run), bytes);
-        Assert.Equal(27L, f.Read().Sequence);
-    }
-
-    [Fact]
     public async System.Threading.Tasks.Task Reducer_refuses_unclaimed_repeated_and_closed_turn_observations()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
@@ -189,17 +174,17 @@ public sealed class RootExitTests
         };
         var record = f.Read();
         Assert.Equal(RunProblem.InvalidData, Assert.IsType<RunRead.Rejected>(RunReducer.Apply(W, Run, record,
-            new(3, record.Sequence + 1, f.Op(), Prompt, At, invalid))).Reason.Problem);
+            new(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, invalid))).Reason.Problem);
         var accepted = Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), observation));
         Assert.Equal(new RootExit.Exited(int.MaxValue), Assert.IsType<RunEvent.RootExitObserved>(accepted.Event).Exit);
-        var entry = new RunEntry(3, 1, f.Op(), Prompt, At,
+        var entry = new RunEntry(RunJournal.Schema, 1, f.Op(), Prompt, At,
             observation with { Exit = new RootExit.NotStarted("Root creation failed."), Head = null });
         var decoded = RunJournal.Decode(RunJournal.Encode(entry));
         Assert.Null(decoded.Rejection);
         var decodedEvent = Assert.IsType<RunEvent.RootExitObserved>(Assert.Single(decoded.Entries).Event);
         Assert.Equal(new RootExit.NotStarted("Root creation failed."), decodedEvent.Exit);
         Assert.Null(decodedEvent.Head);
-        foreach (var schema in new[] { 1, 2 })
+        foreach (var schema in new[] { 3, 5 })
             Assert.Equal(new RunRejection(RunProblem.UnsupportedSchema, 1), RunJournal.Decode(RunJournal.Encode(entry with { Schema = schema })).Rejection);
     }
 
@@ -218,13 +203,13 @@ public sealed class RootExitTests
         f.Claim(reservation);
         var record = f.Read() with { Phase = (RunPhase)phase };
         var observation = new RunEvent.RootExitObserved(new(A1, 1), new RootExit.Exited(0), At, Base, null, TipOwnership.Explained);
-        var applied = RunReducer.Apply(W, Run, record, new(3, record.Sequence + 1, f.Op(), Prompt, At, observation));
+        var applied = RunReducer.Apply(W, Run, record, new(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, observation));
         if (permitted)
             Assert.Equal(observation, Assert.IsType<RunRead.Loaded>(applied).Record.RootExits[new(A1, 1)]);
         else
             Assert.Equal(RunProblem.RunStopped, Assert.IsType<RunRead.Rejected>(applied).Reason.Problem);
         var control = RunReducer.Apply(W, Run, record with { Phase = RunPhase.Approved },
-            new(3, record.Sequence + 1, f.Op(), Prompt, At, observation));
+            new(RunJournal.Schema, record.Sequence + 1, f.Op(), Prompt, At, observation));
         Assert.Equal(observation, Assert.IsType<RunRead.Loaded>(control).Record.RootExits[new(A1, 1)]);
     }
 
@@ -432,8 +417,8 @@ public sealed class RootExitTests
             if (round != 19) continue;
             var log = f.ObserveAndLog(ready);
             var settled = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(lease, f.Op(), launch, log));
-            Assert.Equal("Matched", settled.Disposition.GetType().Name);
-            Assert.Single(f.Read().Captures[settled.Capture]);
+            SettlementAssertions.Matched(settled);
+            Assert.Single(f.Read().Captures);
         }
     }
 

@@ -130,7 +130,7 @@ internal sealed class RunFixtures : IDisposable
 
     /// <param name="node">The node whose Run starts the run, or null for a run of every root, as Run Workflow approves.</param>
     public void Approve(CommitId? codeBase = null, RunId? run = null, TaskId? node = null) => Assert.IsType<RunDecision.Created>(
-        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base, BaseChoice.Head), node: node));
+        Store.Approve(W, run ?? Run, Op(), Revision.Capture(Workflow), new(codeBase ?? Base), node: node));
 
     public RunEvent.Reserved Reserve(TaskId? task = null, AttemptCause? cause = null, RunId? run = null) =>
         Assert.IsType<RunEvent.Reserved>(Assert.IsType<RunDecision.Created>(Store.Reserve(Lease(task ?? T, run ?? Run), Op(),
@@ -157,16 +157,14 @@ internal sealed class RunFixtures : IDisposable
         if (!record.Preparations.ContainsKey(launch))
         {
             var key = record.TaskKeys[task];
+            // An editing task's worktree is on its branch, and a read-only task's worktree is detached (ADR 0032).
+            var edits = record.Revisions[reservation.Attempt.Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit };
             Assert.IsType<RunDecision.Recorded>(Store.Record(PermitFor(id), Op(), new RunEvent.Prepared(new(launch, reservation.Inputs.Id,
-                new(new(task, $".worktrees/{record.RunKey}/{key}", $"refs/heads/idp/{record.RunKey}/task/{key}"),
+                new(new(task, $".worktrees/{record.RunKey}/{key}", edits ? $"refs/heads/idp/{record.RunKey}/task/{key}" : null),
                     RunReducer.AttemptBase(record, reservation.Attempt, reservation.Inputs)!.Value), prompt, Revision.Hash(prompt),
-                record.Revisions[reservation.Attempt.Revision].Snapshot.Tasks[task].Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit }
-                    ? $".idp/outbox/{reservation.Attempt.Id.Value:D}" : ""), SharedRefs)));
+                edits ? $".idp/outbox/{reservation.Attempt.Id.Value:D}" : ""))));
         }
     }
-
-    public static EvidenceFile SharedRefs => new("evidence/00000000-0000-0000-0000-000000000001/refs.json",
-        Revision.Hash("{}"), 2);
 
     public void Claim(RunEvent.Reserved reservation, RunId? run = null, RunLease? lease = null)
     {

@@ -8,15 +8,14 @@ namespace IDevelop.Core.Tests.Runs;
 
 public sealed class TaskOwnershipTests
 {
-    [Theory]
-    [InlineData("e1-run/events.jsonl", 2, 1)]
-    [InlineData("e2-run/events.jsonl", 7, 2)]
-    public void An_unclosed_attempt_in_any_schema_owns_its_task_without_taking_the_write_lock(string fixture, int lines, int schema)
+    [Fact]
+    public void An_unclosed_attempt_owns_its_task_without_taking_the_write_lock()
     {
         using var f = new RunFixtures();
-        var bytes = Encoding.UTF8.GetBytes(string.Join("\n", File.ReadLines(Fixture.Path(fixture)).Take(lines)) + "\n");
-        File.WriteAllBytes(f.Journal(W, Run), bytes);
-        Assert.Equal(schema, f.Read().Schema);
+        f.Approve();
+        f.Reserve();
+        f.ReleaseControl();
+        var bytes = File.ReadAllBytes(f.Journal(W, Run));
         using var write = new FileStream(Path.Combine(f.Project, ".idp", "runs", "write.lock"),
             FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         using var owned = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, T));
@@ -35,7 +34,7 @@ public sealed class TaskOwnershipTests
         var otherWorkflow = new WorkflowId(Id(20));
         var other = Edit(Workflow.Empty(otherWorkflow), new WorkflowEdit.Rename("Delivery"));
         other = Edit(other, TestNodes.Place(Task(U), new(0, 0)));
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(otherWorkflow, OtherRun, f.Op(), Revision.Capture(other), new(Base, BaseChoice.Head)));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(otherWorkflow, OtherRun, f.Op(), Revision.Capture(other), new(Base)));
         using (var permit = Assert.IsType<ControlTake.Owned>(f.Store.TakeControl(otherWorkflow, OtherRun)).Permit)
         using (var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(U)).Lease)
         {
@@ -43,7 +42,7 @@ public sealed class TaskOwnershipTests
             Assert.IsType<RunDecision.Recorded>(f.Store.Plan(lease, plan, Revision.Capture(other).Id, new AttemptCause.Initial()));
             Assert.IsType<RunDecision.Created>(f.Store.Reserve(lease, f.Op(), plan));
         }
-        File.AppendAllText(f.Journal(otherWorkflow, OtherRun), "{\"schema\":3");
+        File.AppendAllText(f.Journal(otherWorkflow, OtherRun), "{\"schema\":4");
         var bytes = File.ReadAllBytes(f.Journal(otherWorkflow, OtherRun));
         using var owned = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, U));
         using var approved = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, T));
@@ -85,7 +84,7 @@ public sealed class TaskOwnershipTests
         var otherWorkflow = new WorkflowId(Id(20));
         var other = Edit(Workflow.Empty(otherWorkflow), TestNodes.Place(Task(T), new(0, 0)));
         other = Edit(other, new WorkflowEdit.Rename("Second"));
-        Assert.IsType<RunDecision.Created>(f.Store.Approve(otherWorkflow, OtherRun, f.Op(), Revision.Capture(other), new(Base, BaseChoice.Head)));
+        Assert.IsType<RunDecision.Created>(f.Store.Approve(otherWorkflow, OtherRun, f.Op(), Revision.Capture(other), new(Base)));
         f.Approve();
         using var held = Assert.IsType<StandaloneLease>(StandaloneLease.TryTake(f.Project, T));
 

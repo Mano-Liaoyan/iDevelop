@@ -90,11 +90,11 @@ internal sealed partial class Materializer
             if (record.Closures.GetValueOrDefault(attempt) is not AttemptEnd.Logged { Outcome: TerminalAttemptOutcome.Succeeded })
                 return new ResultCommit.Rejected(new(RunProblem.OutcomeMismatch));
             var launch = record.Claims.Keys.Where(key => key.Attempt == attempt).OrderBy(key => key.Turn).LastOrDefault();
-            if (launch.Attempt != attempt || !record.Settlements.TryGetValue(launch, out var captureId) ||
-                !record.Dispositions.TryGetValue(captureId, out var disposed) || RunReducer.AttemptPlan(record, attempt) is not { } plan)
+            if (launch.Attempt != attempt || !record.TurnClosures.ContainsKey(launch) || !RunReducer.CaptureSettled(record, launch) ||
+                RunReducer.AttemptPlan(record, attempt) is not { } plan)
                 return new ResultCommit.Rejected(new(RunProblem.OutcomeMismatch));
             inputs = record.Preparations[launch].Inputs;
-            VerifyDisposition(record, captureId, disposed.Disposition, ref evidence);
+            VerifyCapture(record, launch, ref evidence);
             var frozen = RunReducer.ResultCapture(record, launch) ?? throw new Refusal(new(RunProblem.OutcomeMismatch));
             var change = RunReducer.ResultMove(record, launch, frozen);
             if (record.Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == attempt))
@@ -124,24 +124,22 @@ internal sealed partial class Materializer
         { return CommitBlock(permit, operation, step, new(operation, task, attempt, MaterializationProblem.InputUnavailable, inputs, evidence, error.Message) { Scope = new BlockScope.Operation() }); }
     }
 
-    /// <summary>A capture that diverged from its turn, or failed, blocks the attempt's result with what it found.</summary>
-    private static void VerifyDisposition(RunRecord record, CaptureId capture, CaptureDisposition disposition, ref ImmutableArray<EvidenceFile> evidence)
+    /// <summary>A capture that could not be taken, or that diverged from its turn, blocks the attempt's result with what it found.</summary>
+    private static void VerifyCapture(RunRecord record, LaunchKey launch, ref ImmutableArray<EvidenceFile> evidence)
     {
-        switch (disposition)
+        if (RunReducer.CaptureFailure(record, launch) is { } failed)
         {
-            case CaptureDisposition.Diverged diverged:
-                if (diverged.Problem == MaterializationProblem.UncertainOwnership)
-                    evidence = [.. record.Captures[capture].Select(observation => observation.SharedRefs)];
-                var launch = record.Captures[capture][0].Launch;
-                var branch = record.Preparations[launch].Location.Owner.Branch;
-                BlockScope scope = diverged.Refs.All(name => name == branch || name == "HEAD")
-                    ? new BlockScope.Checkout(diverged.Paths, branch is not null && diverged.Refs.Contains(branch), diverged.Refs.Contains("HEAD"))
-                    : new BlockScope.Refs(diverged.Refs);
-                throw Fault(diverged.Problem, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Paths.Concat(diverged.Refs)), scope);
-            case CaptureDisposition.Failed failed:
-                evidence = failed.Evidence;
-                throw Fault(failed.Problem, failed.Detail, new BlockScope.Operation());
+            evidence = failed.Evidence;
+            throw Fault(failed.Problem, failed.Detail, new BlockScope.Operation());
         }
+        var capture = record.Captures[launch];
+        if (RunReducer.Divergence(record, capture) is not { } diverged) return;
+        evidence = [capture.SharedRefs];
+        var branch = record.Preparations[launch].Location.Owner.Branch;
+        BlockScope scope = diverged.Refs.All(name => name == branch || name == "HEAD")
+            ? new BlockScope.Checkout([], branch is not null && diverged.Refs.Contains(branch), diverged.Refs.Contains("HEAD"))
+            : new BlockScope.Refs(diverged.Refs);
+        throw Fault(MaterializationProblem.UncertainOwnership, diverged.Detail + " Paths or refs: " + string.Join(", ", diverged.Refs), scope);
     }
 
     private static void RequirePublication(RefPublication outcome, BlockScope scope)

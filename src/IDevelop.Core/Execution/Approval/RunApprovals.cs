@@ -103,7 +103,7 @@ internal sealed class RunApprovals
     {
         if (found is null) return [];
         var history = RunHistory.Of(_store.Records(revision.Snapshot.Id), revision.Snapshot);
-        var build = Carrying.Build(Seed(PreviewRun, revision, new(found.Head, BaseChoice.Head), node), history, PreviewConfirmation);
+        var build = Carrying.Build(Seed(PreviewRun, revision, new(found.Head), node), history, PreviewConfirmation);
         var rows = ImmutableArray.CreateBuilder<PreflightCarried>();
         foreach (var task in build.Carried.Select(item => item.Result.Task).Concat(build.Refused.Keys).Distinct().Order())
         {
@@ -115,7 +115,7 @@ internal sealed class RunApprovals
 
     /// <summary>A run of <paramref name="node"/> on <paramref name="codeBase"/> as its approval begins, before it carries anything.</summary>
     private static RunRecord Seed(RunId run, ApprovedRevision revision, RunBase codeBase, TaskId node) =>
-        new(run, revision.Snapshot.Id, codeBase, revision) { Schema = 3, Requested = [node] };
+        new(run, revision.Snapshot.Id, codeBase, revision) { Requested = [node] };
 
     /// <summary>Why the task could not start as configured, as a single start would say, or null.</summary>
     private StartProblem? Gap(TaskDefinition task) => Gap(task, _project, _clients, _skills);
@@ -302,7 +302,7 @@ internal sealed class RunApprovals
             intents.Write(chosen);
             _probe?.Invoke("approval.intent.after");
             if (Finish(live, chosen.Inclusions) is { } unfinished) return unfinished;
-            var codeBase = new RunBase(chosen.Head, BaseChoice.Head);
+            var codeBase = new RunBase(chosen.Head);
             // Keep the base before the journal names it, so garbage collection cannot remove it before its first preparation.
             if (!ApprovalPin.Hold(repository, chosen.Run, codeBase.Commit))
                 return new RunApproval.Refused(ApprovalProblem.GitFailed, $"Git could not keep the run base under {ApprovalPin.Name(chosen.Run)}.");
@@ -381,7 +381,7 @@ internal sealed class RunApprovals
     private RunRecord? Approved(WorkflowId workflow, RunId run) => _store.Read(workflow, run) switch
     {
         RunRead.Loaded loaded => loaded.Record,
-        RunRead.Rejected { Reason.Problem: RunProblem.NotApproved } => null,
+        RunRead.Rejected { Reason.Problem: RunProblem.NotApproved or RunProblem.EarlierFormat } => null,
         RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: null } => null,
         var other => throw new IOException($"Run {run}: {((RunRead.Rejected)other).Reason.Problem}."),
     };

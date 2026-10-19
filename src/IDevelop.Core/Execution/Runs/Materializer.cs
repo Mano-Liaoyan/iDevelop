@@ -152,7 +152,7 @@ internal sealed partial class Materializer
             step = "prepared";
             // A sibling result may supersede an input while Git and file delivery run.
             if (RunReducer.InputProblem(Read(workflow, run), input, true) is { } stale) return new Preparation.Rejected(stale);
-            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution, null)));
+            Journal("prepared", () => _store.Record(permit, OperationIds.Derive(operation, "prepared"), new RunEvent.Prepared(execution)));
             ResolveMaintenanceBlocks(permit, operation, "Prepared.");
             return new Preparation.Ready(execution, Checkout(repository, owner));
         }

@@ -22,7 +22,7 @@ public sealed class ResultTests
         var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), operation, attempt)).Result;
 
         var record = f.Read();
-        var capture = Assert.Single(record.Captures[record.Settlements[ready.Execution.Launch]]);
+        var capture = record.Captures[ready.Execution.Launch];
         var code = Assert.IsType<CodeOutput.Produced>(result.Code).Code;
         Assert.Equal(capture.Candidate, code.Commit);
         Assert.Equal(ready.Execution.Location.AttemptBase, code.AttemptBase);
@@ -39,7 +39,6 @@ public sealed class ResultTests
         Assert.Equal(RunStorage.ArtifactPath(result.Id, "payload"), artifact.StoredPath);
         Assert.Equal([67, 0, 127], new RunStorage(f.Git.Folder, W, f.RunId).ReadArtifact(result.Id, artifact));
 
-        Assert.DoesNotContain(record.Plans.Values, plan => plan is MaterializationPlan.Publication);
         Assert.Equal("", f.Git.Git("for-each-ref", $"refs/idp/{record.RunKey}/result/").Trim());
         Assert.Equal(result.Id, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), operation, attempt)).Result.Id);
         Assert.Equal(result.Id, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), attempt)).Result.Id);
@@ -59,7 +58,7 @@ public sealed class ResultTests
         var late = f.Git.Git("rev-parse", ready.Execution.Location.Owner.Branch!).Trim();
         var operation = f.Op();
         var closed = Assert.IsType<Settlement.Closed>(await f.Materializer().Settle(f.Lease(T), operation, ready.Execution.Launch, checkpoint));
-        Assert.IsType<CaptureDisposition.Diverged>(closed.Disposition);
+        SettlementAssertions.Diverged(closed);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, operation, ready.Execution.Launch.Attempt, TerminalAttemptOutcome.Succeeded, checkpoint));
 
         var blocked = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(T), f.Op(), ready.Execution.Launch.Attempt));
@@ -99,7 +98,7 @@ public sealed class ResultTests
         var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), attempt)).Result;
 
         var commit = Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit;
-        Assert.Equal(f.Read().Captures[f.Read().Settlements[ready.Execution.Launch]][0].Candidate, commit);
+        Assert.Equal(f.Read().Captures[ready.Execution.Launch].Candidate, commit);
         Assert.Equal(commit.Hex, f.Git.Git("rev-parse", ready.Execution.Location.Owner.Branch!).Trim());
         Assert.NotEqual(0, f.Git.Run(f.Git.Folder, "cat-file", "-e", commit.Hex + ":person.txt").ExitCode);
         Assert.Equal("mine\n", File.ReadAllText(Path.Combine(ready.Checkout, "person.txt")));
@@ -139,7 +138,7 @@ public sealed class ResultTests
         {
             if (step == "journal.result-branch-observed.after") throw new Crash();
         }).Accept(f.Lease(T), operation, attempt));
-        var candidate = f.Read().Captures[f.Read().Settlements[ready.Execution.Launch]][0].Candidate!.Value;
+        var candidate = f.Read().Captures[ready.Execution.Launch].Candidate!.Value;
         Assert.Equal(candidate.Hex, f.Git.Git("rev-parse", ready.Execution.Location.Owner.Branch!).Trim());
         Assert.Empty(f.Read().Results);
 

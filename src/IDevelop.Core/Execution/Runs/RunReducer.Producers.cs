@@ -21,30 +21,20 @@ internal static partial class RunReducer
         _ => ImmutableArray<TaskId>.Empty,
     }).Where(task => task != inputs.Task).Distinct().OrderBy(task => task.ToString(), StringComparer.Ordinal)];
 
-    /// <summary>
-    /// The attempt whose result is the task's current one. A drift block on its checkout names this attempt. A rebased
-    /// result keeps the checkout of the attempt that published the code it replays.
-    /// </summary>
-    internal static AttemptId? PublishingAttempt(RunRecord record, TaskId task) => record.CurrentResults.GetValueOrDefault(task) switch
-    {
-        { Origin: ResultOrigin.Executed executed } => executed.Attempt,
-        { Origin: ResultOrigin.Rebased, Code: CodeOutput.Produced produced } => produced.Code.Attempt,
-        _ => null,
-    };
+    /// <summary>The attempt whose result is the task's current one. A drift block on its checkout names this attempt.</summary>
+    internal static AttemptId? PublishingAttempt(RunRecord record, TaskId task) =>
+        record.CurrentResults.GetValueOrDefault(task) is { Origin: ResultOrigin.Executed executed } ? executed.Attempt : null;
 
     internal static bool ProducerUnsettled(RunRecord record, ImmutableArray<TaskId> producers) =>
         record.UnresolvedClaims.Any(key => producers.Contains(record.Attempts[key.Attempt].Task));
 
-    /// <summary>The step whose blocks a resting closure's baseline check recorded in earlier journals.</summary>
-    internal const string ClosureCheck = "close-recheck";
-
     /// <summary>
-    /// Publish's view of drift: a dirty or unowned checkout, except an operation's own operation- or repository-scoped
-    /// fault, which that operation reruns. A failed closure check that an earlier journal holds is no drift either.
+    /// A drift block: a dirty or unowned checkout, except an operation's own operation- or repository-scoped fault, which
+    /// that operation reruns.
     /// </summary>
-    internal static bool IsDrift(RunRecord record, OperationId id, MaterializationBlock block, OperationId? operation = null) =>
+    internal static bool IsDrift(MaterializationBlock block, OperationId? operation = null) =>
         block.Problem is MaterializationProblem.DirtyWorktree or MaterializationProblem.UncertainOwnership &&
-        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation) && !ClosureFault(record, id, block);
+        (block.Scope is not (BlockScope.Operation or BlockScope.Repository) || block.Operation != operation);
 
     /// <summary>
     /// The ids a step of <paramref name="operation"/> records its blocks under, in the order it takes them: the first, then
@@ -57,26 +47,13 @@ internal static partial class RunReducer
     }
 
     /// <summary>
-    /// An operation-scoped fault that a resting closure's baseline check recorded under its own operation in an earlier
-    /// journal. The check took its block ids in order, each once, so they are the ids the journal holds in an unbroken run
-    /// from the first, however many times the check failed (#85).
+    /// The oldest unresolved drift block, as <paramref name="operation"/> sees it, on an attempt that <paramref name="attempt"/>
+    /// selects. A turn's capture that could not be taken blocks only that attempt's result, not its next turn.
     /// </summary>
-    internal static bool ClosureFault(RunRecord record, OperationId id, MaterializationBlock block)
-    {
-        if (block.Scope is not BlockScope.Operation) return false;
-        foreach (var taken in BlockIds(block.Operation, ClosureCheck))
-        {
-            if (taken == id) return true;
-            if (!record.Receipts.ContainsKey(taken)) return false;
-        }
-        return false;
-    }
-
-    /// <summary>The oldest unresolved drift block, as <paramref name="operation"/> sees it, on an attempt that <paramref name="attempt"/> selects.</summary>
     internal static KeyValuePair<OperationId, MaterializationBlockState>? AttemptDrift(RunRecord record, Func<AttemptId, bool> attempt,
         OperationId? operation = null) =>
         record.Blocks.Where(pair => !pair.Value.Resolved && pair.Value.Block.Attempt is { } owner && attempt(owner) &&
-                IsDrift(record, pair.Key, pair.Value.Block, operation))
+                IsDrift(pair.Value.Block, operation) && !record.Claims.Keys.Any(key => key.Attempt == owner && CaptureBlock(key) == pair.Value.Block.Operation))
             .OrderBy(pair => record.Receipts[pair.Key].Sequence)
             .Select(pair => (KeyValuePair<OperationId, MaterializationBlockState>?)pair).FirstOrDefault();
 

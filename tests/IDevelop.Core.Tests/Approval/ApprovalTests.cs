@@ -38,7 +38,7 @@ public sealed class ApprovalTests
         var run = Assert.Single(f.ApprovedRuns());
         Assert.Equal(run, started.Coordinator.Address.Run);
         var record = f.Read(run);
-        Assert.Equal(new RunBase(Head, BaseChoice.Head), record.Base);
+        Assert.Equal(new RunBase(Head), record.Base);
         Assert.Equal(preview.Revision.Id, record.Revision.Id);
         Assert.Equal([1, 1, 1], new[] { f.Launches(A), f.Launches(B), f.Launches(X) });
     }
@@ -70,7 +70,7 @@ public sealed class ApprovalTests
         await Completed(started.Coordinator);
 
         var run = Assert.Single(f.ApprovedRuns());
-        Assert.Equal(new RunBase(Head, BaseChoice.Head), f.Read(run).Base);
+        Assert.Equal(new RunBase(Head), f.Read(run).Base);
         Assert.Equal(f.GitText("show", "HEAD:plan.txt"), f.ResultFile(run, A, "plan.txt"));
         Assert.Null(f.ResultFile(run, A, "staged.txt"));
         Assert.Null(f.ResultFile(run, B, "notes.txt"));

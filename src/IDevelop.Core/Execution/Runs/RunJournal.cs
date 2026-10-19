@@ -16,12 +16,42 @@ internal static class RunJournal
 {
     internal static readonly JsonSerializerOptions Options = CreateOptions();
 
-    private static readonly HashSet<string> RunEvents = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
-        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured", "captureDisposed",
-        "gateRequested", "gateSentBack", "requested"];
+    /// <summary>
+    /// The journal format a run writes and reads. Its Git events are the worktrees, the end-of-turn commits, and the merges
+    /// of predecessors that ADR 0032 describes. A journal of an earlier format stays on disk, and the app reads nothing from it.
+    /// </summary>
+    public const int Schema = 4;
 
-    private static readonly HashSet<string> MaterializationEvents = ["layoutAllocated", "planned", "gitIntended", "gitObserved",
-        "prepared", "blocked", "salvageRetained", "blockResolved", "preserved", "preservationDiverged", "restored", "recoveryBaselined"];
+    private static readonly HashSet<string> Events = ["approved", "amended", "reserved", "turnClaimed", "turnClosed", "attemptClosed",
+        "resultAccepted", "stopRequested", "settled", "abandoned", "ownershipFenced", "rootExitObserved", "turnCaptured",
+        "gateRequested", "gateSentBack", "requested", "layoutAllocated", "planned", "gitIntended", "gitObserved", "prepared", "blocked",
+        "blockResolved"];
+
+    /// <summary>
+    /// Whether <paramref name="jsonl"/> is a journal of an earlier format: its first line names a schema before
+    /// <see cref="Schema"/>. The app leaves such a journal on disk, reads nothing from it, and never lets it block a workflow.
+    /// </summary>
+    public static bool Earlier(ReadOnlySpan<byte> jsonl)
+    {
+        var length = jsonl.IndexOf((byte)'\n');
+        try
+        {
+            var reader = new Utf8JsonReader(length < 0 ? jsonl : jsonl[..length]);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return false;
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                var name = reader.ValueTextEquals("schema"u8);
+                if (!reader.Read()) return false;
+                if (name) return reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var schema) && schema is >= 1 and < Schema;
+                if (!reader.TrySkip()) return false;
+            }
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     public static string Encode(RunEntry entry) => JsonSerializer.Serialize(entry, Options) + "\n";
 
@@ -46,7 +76,7 @@ internal static class RunJournal
                 var line = utf8.GetString(jsonl.Slice(offset, length));
                 using var document = JsonDocument.Parse(line, new JsonDocumentOptions { AllowDuplicateProperties = false });
                 var root = document.RootElement;
-                if (root.GetProperty("schema").GetInt32() is not (1 or 2 or 3))
+                if (root.GetProperty("schema").GetInt32() != Schema)
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedSchema, sequence));
                 }
@@ -55,7 +85,7 @@ internal static class RunJournal
                     return new(entries.ToImmutable(), new(RunProblem.SequenceGap, sequence));
                 }
                 var eventType = root.GetProperty("event").GetProperty("type").GetString() ?? "";
-                if (!RunEvents.Contains(eventType) && (root.GetProperty("schema").GetInt32() == 1 || !MaterializationEvents.Contains(eventType)))
+                if (!Events.Contains(eventType))
                 {
                     return new(entries.ToImmutable(), new(RunProblem.UnsupportedEvent, sequence));
                 }
@@ -136,7 +166,7 @@ internal static class RunJournal
             new IdConverter<OperationId>(id => id.Value, value => new(value)),
             new IdConverter<CaptureId>(id => id.Value, value => new(value)),
             new IdConverter<GateId>(id => id.Value, value => new(value)),
-            new InputConverter(), new WorkflowConverter(), new TaskConverter(), new BlueprintConverter(),
+            new WorkflowConverter(), new TaskConverter(), new BlueprintConverter(),
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false),
         },
     };
@@ -151,50 +181,8 @@ internal static class RunJournal
                 info.Properties.Single(property => property.Name == "artifacts").ShouldSerialize =
                     (_, value) => value is System.Collections.Immutable.ImmutableArray<ArtifactRecord> { IsDefaultOrEmpty: false };
             }
-            if (info.Type == typeof(MaterializationBlock))
-            {
-                var scope = info.Properties.Single(property => property.Name == "scope");
-                scope.IsRequired = false;
-                scope.ShouldSerialize = (_, value) => value is not BlockScope.Unrecorded;
-            }
         });
         return resolver;
-    }
-
-    internal sealed class InputConverter : JsonConverter<InputRecord>
-    {
-        private sealed record LegacyInput(InputId Id, TaskId Task, RevisionId Revision, ImmutableArray<InputBinding> Bindings,
-            CommitId CodeBase, string Text);
-
-        private sealed record MaterialInput(InputId Id, TaskId Task, RevisionId Revision, ImmutableArray<InputBinding> Bindings,
-            CodeSelection Code, string Text, ImmutableArray<DeliveredFile> Files, ReviewInput? Review);
-
-        public override InputRecord Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            using var json = JsonDocument.ParseValue(ref reader);
-            if (json.RootElement.TryGetProperty("codeBase", out _))
-            {
-                var legacy = json.RootElement.Deserialize<LegacyInput>(options)!;
-                return new(legacy.Id, legacy.Task, legacy.Revision, legacy.Bindings, new CodeSelection.Legacy(legacy.CodeBase),
-                    legacy.Text, [], null);
-            }
-            var input = json.RootElement.Deserialize<MaterialInput>(options)!;
-            return new(input.Id, input.Task, input.Revision, input.Bindings, input.Code, input.Text, input.Files, input.Review);
-        }
-
-        public override void Write(Utf8JsonWriter writer, InputRecord value, JsonSerializerOptions options)
-        {
-            if (value.Code is CodeSelection.Legacy legacy)
-            {
-                JsonSerializer.Serialize(writer, new LegacyInput(value.Id, value.Task, value.Revision, value.Bindings, legacy.Base,
-                    value.Text), options);
-            }
-            else
-            {
-                JsonSerializer.Serialize(writer, new MaterialInput(value.Id, value.Task, value.Revision, value.Bindings, value.Code,
-                    value.Text, value.Files, value.Review), options);
-            }
-        }
     }
 
     internal sealed class IdConverter<T>(Func<T, Guid> value, Func<Guid, T> create) : JsonConverter<T>

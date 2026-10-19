@@ -239,7 +239,7 @@ public sealed class PreparationTests
         var sub = Directory.CreateDirectory(Path.Combine(refused.Git.Folder, "sub")).FullName;
         var store = RunStore.Open(sub);
         Assert.IsType<RunDecision.Created>(store.Approve(W, refused.RunId, refused.Op(), refused.Read().Revision,
-            new(refused.A, BaseChoice.Head)));
+            new(refused.A)));
         using var permit = Assert.IsType<ControlTake.Owned>(store.TakeControl(W, refused.RunId)).Permit;
         using var lease = Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease;
         var materializer = Execution.Materializer.Open(sub, store, null, new Clock(), refused.Git.Environment);

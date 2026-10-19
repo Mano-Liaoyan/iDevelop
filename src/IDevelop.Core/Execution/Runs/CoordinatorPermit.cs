@@ -30,7 +30,6 @@ internal sealed class CoordinatorPermit : IDisposable
     {
         var read = store.Read(workflow, run);
         if (read is RunRead.Rejected rejected) return new ControlTake.Rejected(rejected.Reason);
-        if (((RunRead.Loaded)read).Record.Schema != 3) return new ControlTake.Rejected(new(RunProblem.UnsupportedSchema));
         try
         {
             var path = Path.Combine(DataFolder.Runs(store.Project), workflow.ToString(), run.ToString(), "control.lock");

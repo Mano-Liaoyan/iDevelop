@@ -106,7 +106,7 @@ public sealed class LeaseTests
             f.Materializer().Accept(wrong, operation, ready.Execution.Launch.Attempt)).Reason.Problem);
         Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Preparation.Rejected>(await f.Materializer()
             .PrepareTurn(wrong, f.Op(), new(ready.Execution.Launch.Attempt, 2), "Continue.")).Reason.Problem);
-        Assert.Equal(16, f.Read().Sequence);
+        Assert.Equal(15, f.Read().Sequence);
         Assert.Empty(f.Read().Results);
         Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), operation,
             ready.Execution.Launch.Attempt)).Result.Task);
@@ -224,30 +224,8 @@ public sealed class LeaseTests
         Assert.Equal(new LaunchKey(A1, 1), Assert.Single(f.Read().Claims).Key);
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    public void Legacy_recovery_accepts_a_standalone_lease_and_preserves_the_schema(int schema)
-    {
-        using var f = new RunFixtures();
-        var path = Fixture.Path($"e{schema}-run/events.jsonl");
-        if (schema == 1) File.WriteAllText(f.Journal(W, Run), string.Join("\n", File.ReadLines(path).Take(7)) + "\n");
-        else File.WriteAllBytes(f.Journal(W, Run), File.ReadAllBytes(path));
-        var attempt = new AttemptId(Id(schema == 1 ? 105 : 104));
-        var operation = new OperationId(Id(2003));
-        var confirmation = new OperationId(Id(2004));
-        using var wrong = StandaloneLease.TryTake(f.Project, T)!;
-        Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(new LegacyRun(W, Run), wrong, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped.")));
-        Assert.Equal(schema == 1 ? 7 : 27, f.Read().Sequence);
-        using var lease = StandaloneLease.TryTake(f.Project, U)!;
-        var recovered = Assert.IsType<RunDecision.Recorded>(f.Store.Recover(new LegacyRun(W, Run), lease, operation, attempt, RecoveryOutcome.Stopped, confirmation, "Stopped."));
-        Assert.Equal(schema, recovered.Record.Schema);
-        Assert.Equal(schema == 1 ? 8 : 28, recovered.Record.Sequence);
-        Assert.Equal(RecoveryOutcome.Stopped, Assert.IsType<AttemptEnd.Recovered>(recovered.Record.Closures[attempt]).Outcome);
-    }
-
     [Fact]
-    public void A_legacy_claim_refuses_both_new_commands_and_identical_receipts()
+    public void A_journal_of_an_earlier_format_refuses_commands_and_stays_as_it_is()
     {
         using var f = new RunFixtures();
         f.Approve();
@@ -255,19 +233,15 @@ public sealed class LeaseTests
         f.Prepare(reserved);
         var lease = f.Lease(T);
         var current = File.ReadAllText(f.Journal(W, Run));
-        File.WriteAllText(f.Journal(W, Run), current.Replace("\"schema\":3", "\"schema\":2", StringComparison.Ordinal));
+        var earlier = current.Replace("\"schema\":4", "\"schema\":3", StringComparison.Ordinal);
+        File.WriteAllText(f.Journal(W, Run), earlier);
         var operation = f.Op();
         var key = new LaunchKey(A1, 1);
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt)));
-        Assert.Equal(6, f.Read().Sequence);
-        Assert.Empty(f.Read().Claims);
+        Assert.Equal(RunProblem.EarlierFormat, Problem(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt)));
+        Assert.Equal(RunProblem.EarlierFormat, Assert.IsType<RunRead.Rejected>(f.Store.Read(W, Run)).Reason.Problem);
+        Assert.Equal(earlier, File.ReadAllText(f.Journal(W, Run)));
         File.WriteAllText(f.Journal(W, Run), current);
         Assert.IsType<RunDecision.Granted>(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt));
-        var claimed = File.ReadAllText(f.Journal(W, Run));
-        File.WriteAllText(f.Journal(W, Run), claimed.Replace("\"schema\":3", "\"schema\":2", StringComparison.Ordinal));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Claim(lease, operation, key, reserved.Inputs, Prompt)));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Claim(lease, f.Op(), key, reserved.Inputs, Prompt)));
-        Assert.Equal((2, 7L), (f.Read().Schema, f.Read().Sequence));
         Assert.Equal(new LaunchKey(A1, 1), Assert.Single(f.Read().Claims).Key);
     }
 
@@ -312,7 +286,7 @@ public sealed class LeaseTests
     }
 
     [Fact]
-    public void Schema_three_recovery_requires_its_own_live_permit()
+    public void Recovery_requires_its_own_live_permit()
     {
         using var f = new RunFixtures();
         f.Approve();
@@ -321,12 +295,6 @@ public sealed class LeaseTests
         f.Release(T);
         var operation = f.Op();
         var confirmation = f.Op();
-        using (var standalone = StandaloneLease.TryTake(f.Project, T))
-        {
-            Assert.NotNull(standalone);
-            Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Recover(new LegacyRun(W, Run), standalone,
-                operation, A1, RecoveryOutcome.Stopped, confirmation, "Stopped.")));
-        }
         using var other = new RunFixtures();
         other.Approve();
         Assert.Equal(RunProblem.IdentityMismatch, Problem(f.Store.Recover(other.Lease(T), operation, A1,

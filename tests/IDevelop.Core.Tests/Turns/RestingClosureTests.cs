@@ -1,3 +1,4 @@
+using IDevelop.Core.Tests.Materialization;
 using IDevelop.Execution;
 using IDevelop.TestSupport;
 using IDevelop.Workflows;
@@ -40,8 +41,8 @@ public sealed class RestingClosureTests
             log.Append(new AttemptEvent.Exited(At, 0, ""));
         }
         Assert.IsType<RootObservation.Observed>(p.Materializer().ObserveRootExit(p.Lease(task), p.Op(), execution.Launch, new RootExit.Exited(0)));
-        Assert.IsType<CaptureDisposition.Matched>(Assert.IsType<Settlement.Closed>(await p.Materializer().Settle(p.Lease(task), p.Op(),
-            execution.Launch, Checkpoint(folder))).Disposition);
+        SettlementAssertions.Matched(Assert.IsType<Settlement.Closed>(await p.Materializer().Settle(p.Lease(task), p.Op(),
+            execution.Launch, Checkpoint(folder))));
         Assert.Equal("InReview", AttemptEvidence.Read(folder).Record!.Status.ToString());
         p.Release(task);
         return attempt.Id;

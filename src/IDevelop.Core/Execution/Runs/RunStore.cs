@@ -61,7 +61,7 @@ internal sealed partial class RunStore
                     !Guid.TryParse(Path.GetFileName(runFolder), out var run))
                     return new TaskRunOwnership.Unreadable($"{relative}: invalid run identity.");
                 var read = ReadJournal(new(workflow), new(run), journal);
-                if (read is RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: null }) continue;
+                if (read is RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail or RunProblem.EarlierFormat, Prefix: null }) continue;
                 var record = read switch
                 {
                     RunRead.Loaded loaded => loaded.Record,
@@ -187,7 +187,8 @@ internal sealed partial class RunStore
 
     /// <summary>
     /// The workflow's runs, read for their history (#90): every journal with a readable approval, an incomplete last line
-    /// left aside. Throws <see cref="IOException"/> for a run it cannot read, so no result counts past it.
+    /// and a journal of an earlier format left aside. Throws <see cref="IOException"/> for a run it cannot read, so no result
+    /// counts past it.
     /// </summary>
     public ImmutableArray<RunRecord> Records(WorkflowId workflow)
     {
@@ -206,6 +207,8 @@ internal sealed partial class RunStore
                     break;
                 case RunRead.Rejected { Reason.Problem: RunProblem.IncompleteTail, Prefix: var prefix }:
                     if (prefix is not null) records.Add(prefix);
+                    break;
+                case RunRead.Rejected { Reason.Problem: RunProblem.EarlierFormat }:
                     break;
                 case RunRead.Rejected rejected:
                     throw new IOException($"Run {id:D}: {rejected.Reason.Problem}.");
@@ -395,9 +398,9 @@ internal sealed partial class RunStore
             {
                 return Missing();
             }
-            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Join or MaterializationPlan.Salvage or
-                MaterializationPlan.RetryReset or MaterializationPlan.Refresh or MaterializationPlan.Preservation or MaterializationPlan.Restoration or MaterializationPlan.Rebase } or RunEvent.GitIntended or RunEvent.GitObserved or
-                RunEvent.Prepared or RunEvent.Blocked or RunEvent.SalvageRetained or RunEvent.Preserved or RunEvent.PreservationDiverged or RunEvent.Restored or RunEvent.RecoveryBaselined or RunEvent.BlockResolved or RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured or RunEvent.CaptureDisposed))
+            if (e is not (RunEvent.LayoutAllocated or RunEvent.Planned { Plan: MaterializationPlan.Join or MaterializationPlan.Refresh } or
+                RunEvent.GitIntended or RunEvent.GitObserved or RunEvent.Prepared or RunEvent.Blocked or RunEvent.BlockResolved or
+                RunEvent.RootExitObserved or RunEvent.OwnershipFenced or RunEvent.TurnCaptured))
             {
                 return Refuse(RunProblem.InvalidData);
             }
@@ -454,11 +457,14 @@ internal sealed partial class RunStore
         }, validate: record => AttemptLeaseProblem(record, lease, key.Attempt));
     }
 
-    public RunDecision CloseTurn(CoordinatorPermit permit, OperationId operation, LaunchKey key, LogCheckpoint evidence, CaptureId? capture = null) =>
+    /// <param name="settles">
+    /// Whether the turn's settlement closes it, once its capture is recorded. A turn whose client exited, or one whose launch
+    /// is fenced, closes only so.
+    /// </param>
+    public RunDecision CloseTurn(CoordinatorPermit permit, OperationId operation, LaunchKey key, LogCheckpoint evidence, bool settles = false) =>
         Transact(permit, operation, Fingerprint("closeTurn", new
         {
             key,
-            capture,
             evidence
         }), (record, _) =>
         {
@@ -469,16 +475,18 @@ internal sealed partial class RunStore
 
             if (record.TurnClosures.TryGetValue(key, out var existing))
             {
-                return RunReducer.Same(existing, evidence) && (record.Settlements.TryGetValue(key, out var settled) ? settled : (CaptureId?)null) == capture
-                            ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing) { Capture = capture }) : Refuse(RunProblem.EvidenceMismatch);
+                return RunReducer.Same(existing, evidence)
+                    ? new Mutation.Existing(new RunEvent.TurnClosed(key, existing)) : Refuse(RunProblem.EvidenceMismatch);
             }
 
-            if (record.Fenced.Contains(key) && capture is null) return Refuse(RunProblem.UnresolvedOwnership);
+            if (record.Fenced.Contains(key) && !settles) return Refuse(RunProblem.UnresolvedOwnership);
 
             if (TurnEvidenceProblem(record, key, evidence) is { } rejection)
                 return new Mutation.Rejected(rejection);
 
-            return new Mutation.Append(new RunEvent.TurnClosed(key, evidence) { Capture = capture });
+            if (record.RootExits.ContainsKey(key) && !settles) return Refuse(RunProblem.SettlementPending);
+
+            return new Mutation.Append(new RunEvent.TurnClosed(key, evidence));
         });
 
     internal RunRejection? TurnEvidenceProblem(RunRecord record, LaunchKey key, LogCheckpoint evidence)
@@ -559,11 +567,6 @@ internal sealed partial class RunStore
         RecoverCore(lease.Permit.Workflow, lease.Permit.Run, operation, attempt, outcome, confirmation, reason,
             record => AttemptLeaseProblem(record, lease, attempt));
 
-    public RunDecision Recover(LegacyRun run, StandaloneLease lease, OperationId operation, AttemptId attempt,
-        RecoveryOutcome? outcome = null, OperationId? confirmation = null, string? reason = null) =>
-        RecoverCore(run.Workflow, run.Run, operation, attempt, outcome, confirmation, reason,
-            record => LegacyProblem(record) ?? StandaloneProblem(record, lease, attempt));
-
     private RunDecision RecoverCore(WorkflowId workflow, RunId run, OperationId operation, AttemptId attempt,
         RecoveryOutcome? outcome, OperationId? confirmation, string? reason, Func<RunRecord, RunProblem?> validate)
     {
@@ -601,7 +604,7 @@ internal sealed partial class RunStore
                     return new Mutation.Existing(new RunEvent.AttemptClosed(attempt, existing));
                 }
 
-                var settling = record.Schema == 3 && record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
+                var settling = record.Claims.Keys.Any(key => key.Attempt == attempt && record.Settling(key));
                 if (settling && (outcome is null || !TurnsCannotClose(record, owner)))
                     return Refuse(RunProblem.SettlementPending);
 
@@ -633,9 +636,8 @@ internal sealed partial class RunStore
 
     private bool TurnsCannotClose(RunRecord record, RunAttempt owner) =>
         record.Claims.Keys.Where(launch => launch.Attempt == owner.Id && record.Settling(launch)).All(launch =>
-            record.Dispositions.Values.FirstOrDefault(disposed => disposed.Launch == launch) is { } disposed &&
-            (disposed.Disposition is CaptureDisposition.Failed ||
-                record.Captures.GetValueOrDefault(disposed.Capture, []) is [var first, ..] && LogMovedPast(record, owner, first.Log)));
+            RunReducer.CaptureFailure(record, launch) is not null ||
+            record.Captures.TryGetValue(launch, out var capture) && LogMovedPast(record, owner, capture.Log));
 
     private bool LogMovedPast(RunRecord record, RunAttempt owner, LogCheckpoint frozen)
     {
@@ -691,9 +693,9 @@ internal sealed partial class RunStore
             }
 
             var work = record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work;
-            // An editing result's code is the commit its last turn's capture made, which only a schema-3 journal records.
-            var edits = work is WorkSpec.Agent { Access: AgentAccess.Edit } && record.Schema == 3;
-            if (!edits && work is not WorkSpec.Agent { Access: AgentAccess.ReadOnly } && (record.Schema == 1 || work is not WorkSpec.Review))
+            // An editing result's code is the commit its last turn's capture made.
+            var edits = work is WorkSpec.Agent { Access: AgentAccess.Edit };
+            if (!edits && work is not (WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review))
             {
                 return Refuse(RunProblem.UnsupportedResult);
             }
@@ -736,13 +738,13 @@ internal sealed partial class RunStore
                     RunReducer.EditedResultId(operation), inputs, report, supersedes), capture));
             }
 
-            if (record.Schema == 3 && (record.RootExits.ContainsKey(final) || read.Events.Any(e => e is AttemptEvent.Launched)) &&
+            if ((record.RootExits.ContainsKey(final) || read.Events.Any(e => e is AttemptEvent.Launched)) &&
                 !UnchangedCode(record, final, trees))
             {
                 return Refuse(RunProblem.OutcomeMismatch);
             }
 
-            var reviews = record.Schema == 3 && record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is WorkSpec.Review;
+            var reviews = record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is WorkSpec.Review;
             var id = reviews ? ArtifactForwarding.ReviewResult(operation) : new ResultId(_ids());
             var (artifacts, collision) = reviews ? ArtifactForwarding.Artifacts(record, capture.Bindings, id) : ([], null);
             if (collision is not null)
@@ -753,19 +755,19 @@ internal sealed partial class RunStore
             return new Mutation.Append(new RunEvent.ResultAccepted(new(id, owner.Task, owner.Revision, inputs,
                             new ResultOrigin.Executed(attempt), report, supersedes)
             {
-                Code = record.Schema >= 2 && capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
+                Code = capture.Code is CodeSelection.Single or CodeSelection.Joined ? new CodeOutput.Forwarded(inputs) : null,
                 Artifacts = artifacts,
             }, capture));
         });
     }
 
     /// <summary>
-    /// Stores the artifacts a schema-3 review's result forwards, before the journal lock. Null when there is nothing to
+    /// Stores the artifacts a review's result forwards, before the journal lock. Null when there is nothing to
     /// store or every copy is in place.
     /// </summary>
     private RunRejection? ForwardedArtifacts(CoordinatorPermit permit, OperationId operation, AttemptId attempt, InputId inputs)
     {
-        if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded { Record: var record } || record.Schema != 3 ||
+        if (Read(permit.Workflow, permit.Run) is not RunRead.Loaded { Record: var record } ||
             !record.Attempts.TryGetValue(attempt, out var owner) ||
             record.Revisions[owner.Revision].Snapshot.Tasks[owner.Task].Blueprint.Work is not WorkSpec.Review ||
             !record.Inputs.TryGetValue(inputs, out var capture) || record.Results.Any(result => result.Origin is ResultOrigin.Executed executed && executed.Attempt == attempt))
@@ -846,26 +848,19 @@ internal sealed partial class RunStore
 
     /// <summary>
     /// A read-only or review result whose client ran needs the final launch's matched capture, with its tip, files and index
-    /// all at that launch's attempt base. A refresh moves the base, and the index catches a change staged without touching
+    /// at that launch's attempt base. A refresh moves the base, and the index catches a change staged without touching
     /// the files. Only a journal whose launches never ran a client or observed a root, as hand-built store tests write, keeps
     /// the log check alone. A base whose tree was not read before the transaction refuses.
     /// </summary>
     private static bool UnchangedCode(RunRecord record, LaunchKey launch, ImmutableDictionary<CommitId, TreeId> trees)
     {
-        if (!record.Preparations.TryGetValue(launch, out var prepared) || !record.Settlements.TryGetValue(launch, out var capture) ||
-            record.Dispositions.GetValueOrDefault(capture)?.Disposition is not CaptureDisposition.Matched ||
-            !record.Captures.TryGetValue(capture, out var observations) || observations.IsEmpty)
+        if (!record.Preparations.TryGetValue(launch, out var prepared) || RunReducer.MatchedCapture(record, launch) is not { } capture)
         {
             return false;
         }
 
         var commit = prepared.Location.AttemptBase;
-        if (!trees.TryGetValue(commit, out var tree))
-        {
-            return false;
-        }
-
-        return observations.All(observation => observation.Tip == commit && observation.Recipe.Tree == tree && observation.IndexTree == tree);
+        return trees.TryGetValue(commit, out var tree) && capture.Tip == commit && capture.Recipe.Tree == tree && capture.IndexTree == tree;
     }
 
     public RunDecision ReuseReport(CoordinatorPermit permit, OperationId operation, TaskId task, AttemptSource.Standalone source,
@@ -910,8 +905,7 @@ internal sealed partial class RunStore
                 return new Mutation.Rejected(rejection);
             }
 
-            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [],
-                record.Schema == 1 ? new CodeSelection.Legacy(record.Base.Commit) : new CodeSelection.Root(record.Base.Commit), "", [], null);
+            var inputs = new InputRecord(new(_ids()), task, record.Revision.Id, [], new CodeSelection.Root(record.Base.Commit), "", [], null);
             return new Mutation.Append(new RunEvent.ResultAccepted(new(new(_ids()), task, record.Revision.Id, inputs.Id,
                 new ResultOrigin.Reused(source, reuse.Evidence!), reuse.Report!, null), inputs));
         });
@@ -1130,9 +1124,7 @@ internal sealed partial class RunStore
         var binding = new RunBinding(record.Workflow, record.Id, attempt.Revision, attempt.InitialInputs);
         if (request.Attempt != attempt.Id || request.Task != attempt.Task || request.RunBinding != binding ||
             request.Settings != task.Execution || request.Conversation != task.Conversation || request.TaskTitle != task.Title ||
-            request.ReadOnly != (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review) ||
-            record.Schema == 1 && attempt.Cause is AttemptCause.Initial && task.Blueprint.Work is WorkSpec.Agent { Proposes: false } &&
-                request.Prompt != ReportReuse.Prompt(task, record.Inputs[attempt.InitialInputs].Text))
+            request.ReadOnly != (task.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.ReadOnly } or WorkSpec.Review))
         {
             return read with
             {
@@ -1146,7 +1138,7 @@ internal sealed partial class RunStore
                     AttemptEvent.TurnRequested turn => turn.Prompt,
                     _ => "",
                 }).ToArray();
-        if (record.Schema >= 2 && prompts.Where((prompt, index) =>
+        if (prompts.Where((prompt, index) =>
             !record.Preparations.TryGetValue(new(attempt.Id, index + 1), out var prepared) || prepared.Prompt != prompt).Any())
         {
             return read with { Rejection = new(RunProblem.EvidenceMismatch) };
@@ -1165,7 +1157,6 @@ internal sealed partial class RunStore
 
     private RunProblem? PermitProblem(RunRecord record, CoordinatorPermit permit)
     {
-        if (record.Schema != 3) return RunProblem.UnsupportedSchema;
         if (!permit.Held) return RunProblem.TaskBusy;
         if (!SameProject(permit.Project) || permit.Workflow != record.Workflow || permit.Run != record.Id)
             return RunProblem.IdentityMismatch;
@@ -1189,34 +1180,10 @@ internal sealed partial class RunStore
         return owner.Task != lease.Task ? RunProblem.IdentityMismatch : null;
     }
 
-    private static RunProblem? LegacyProblem(RunRecord record) => record.Schema is 1 or 2 ? null : RunProblem.UnsupportedSchema;
-
-    private RunProblem? StandaloneProblem(RunRecord record, StandaloneLease lease, AttemptId attempt)
-    {
-        if (!lease.Held) return RunProblem.TaskBusy;
-        if (!SameProject(lease.Project)) return RunProblem.IdentityMismatch;
-        if (!record.Attempts.TryGetValue(attempt, out var owner)) return RunProblem.UnknownAttempt;
-        return owner.Task != lease.Task ? RunProblem.IdentityMismatch : null;
-    }
-
     private RunDecision Transact(CoordinatorPermit permit, OperationId operation, Digest fingerprint,
         Func<RunRecord?, ImmutableArray<RunRecord>, Mutation> decide, Func<RunRecord, RunProblem?>? validate = null) =>
         Transact(permit.Workflow, permit.Run, operation, fingerprint, decide,
             validate: record => PermitProblem(record, permit) ?? validate?.Invoke(record));
-
-    public RunDecision Stop(LegacyRun run, OperationId operation) =>
-        Transact(run.Workflow, run.Run, operation, Fingerprint("stop", new { }),
-            (record, _) => record is null ? Missing() : record.Phase == RunPhase.StopRequested
-                ? new Mutation.Existing(new RunEvent.StopRequested()) : new Mutation.Append(new RunEvent.StopRequested()),
-            validate: LegacyProblem);
-
-    public RunDecision Settle(LegacyRun run, OperationId operation, RunOutcome outcome) =>
-        Transact(run.Workflow, run.Run, operation, Fingerprint("settle", new { outcome }),
-            (_, _) => new Mutation.Append(new RunEvent.Settled(outcome)), validate: LegacyProblem);
-
-    public RunDecision Abandon(LegacyRun run, OperationId operation, OperationId confirmation, string reason) =>
-        Transact(run.Workflow, run.Run, operation, Fingerprint("abandon", new { confirmation, reason }),
-            (_, _) => new Mutation.Append(new RunEvent.Abandoned(confirmation, reason)), validate: LegacyProblem);
 
     private RunDecision Transact(WorkflowId workflow, RunId run, OperationId operation, Digest fingerprint,
         Func<RunRecord?, ImmutableArray<RunRecord>, Mutation> decide, Func<RunRecord, RunProblem?>? validate = null)
@@ -1253,6 +1220,13 @@ internal sealed partial class RunStore
                 var read = ReadJournal(workflow, new(foundRun));
                 if (read is RunRead.Rejected rejected)
                 {
+                    // A journal of an earlier format blocks nothing, and nothing writes to it.
+                    if (rejected.Reason.Problem == RunProblem.EarlierFormat)
+                    {
+                        if (foundRun == run.Value) return new RunDecision.Rejected(rejected.Reason);
+                        continue;
+                    }
+
                     if (rejected.Reason.Problem == RunProblem.IncompleteTail && (foundRun != run.Value || rejected.Prefix is null))
                     {
                         if (rejected.Prefix is { } prefix)
@@ -1288,7 +1262,7 @@ internal sealed partial class RunStore
             }
 
             var append = (Mutation.Append)mutation;
-            var entry = new RunEntry(record?.Schema ?? 3, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
+            var entry = new RunEntry(RunJournal.Schema, (record?.Sequence ?? 0) + 1, operation, fingerprint, _clock.GetUtcNow(), append.Event);
             if (record is not null && RunReducer.AppendProblem(record, append.Event) is { } appendProblem)
                 return new RunDecision.Rejected(new(appendProblem));
             var reduced = RunReducer.Apply(workflow, run, record, entry);
@@ -1343,7 +1317,14 @@ internal sealed partial class RunStore
             return new RunRead.Rejected(new(RunProblem.NotApproved));
         }
 
-        var journal = RunJournal.Decode(SharedFile.ReadAllBytes(path));
+        var bytes = SharedFile.ReadAllBytes(path);
+        // A journal of an earlier format stays on disk, and nothing is read from it (#138).
+        if (RunJournal.Earlier(bytes))
+        {
+            return new RunRead.Rejected(new(RunProblem.EarlierFormat));
+        }
+
+        var journal = RunJournal.Decode(bytes);
         var read = RunReducer.Replay(workflow, run, journal.Entries);
         if (journal.Entries.Length != 0 && read is RunRead.Rejected)
         {

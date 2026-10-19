@@ -73,8 +73,6 @@ internal sealed partial class Materializer
             GitMutation.CreateWorktree create => create.Owner == owner,
             GitMutation.MoveRef move => move.Change.Ref == owner.Branch,
             GitMutation.ResetCheckout reset => reset.Task == owner.Task,
-            GitMutation.AlignIndex align => align.Task == owner.Task,
-            GitMutation.RemovePaths remove => remove.Task == owner.Task,
             _ => false,
         });
 

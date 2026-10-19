@@ -54,7 +54,7 @@ public sealed class AuthorityTests
             "Refresh" => f.Store.Refresh(held, operation, new(A1, 2)),
             "Claim" => f.Store.Claim(held, operation, new(A1, 1), reservation.Inputs, Prompt),
             "Recover" => f.Store.Recover(held, operation, A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."),
-            "Record" => f.Store.Record(authority, operation, new RunEvent.Prepared(f.Read().Preparations[new(A1, 1)], SharedRefs)),
+            "Record" => f.Store.Record(authority, operation, new RunEvent.Prepared(f.Read().Preparations[new(A1, 1)])),
             "CloseTurn" => f.Store.CloseTurn(authority, operation, new(A1, 1), checkpoint),
             "CloseAttempt" => f.Store.CloseAttempt(authority, operation, A1, TerminalAttemptOutcome.Succeeded, checkpoint),
             "AcceptReport" => f.Store.AcceptReport(authority, operation, A1, reservation.Inputs.Id, "Checked."),
@@ -110,18 +110,10 @@ public sealed class AuthorityTests
     }
 
     [Fact]
-    public void Legacy_stop_preserves_schema_two_and_cannot_mutate_schema_three()
+    public void Stop_needs_the_run_permit()
     {
-        using var legacy = new RunFixtures();
-        File.WriteAllBytes(legacy.Journal(W, Run), File.ReadAllBytes(Fixture.Path("e2-run/events.jsonl")));
-        var stopped = Assert.IsType<RunDecision.Recorded>(legacy.Store.Stop(new LegacyRun(W, Run), new OperationId(Id(2003))));
-        Assert.Equal(28, stopped.Record.Sequence);
-        Assert.Equal(2, stopped.Record.Receipts.Values.Single(entry => entry.Sequence == 28).Schema);
         using var f = new RunFixtures();
         f.Approve();
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Stop(new LegacyRun(W, Run), f.Op())));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Settle(new LegacyRun(W, Run), f.Op(), RunOutcome.Stopped)));
-        Assert.Equal(RunProblem.UnsupportedSchema, Problem(f.Store.Abandon(new LegacyRun(W, Run), f.Op(), f.Op(), "Abandoned.")));
         Assert.Equal(1, f.Read().Sequence);
         Assert.Equal(2, Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op())).Record.Sequence);
     }
