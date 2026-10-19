@@ -22,7 +22,7 @@ public sealed class NodeWorktreeTests
     private const string Approve = """{"status": "verdict", "verdict": "approve", "findings": []}""";
 
     [Fact]
-    public async Task Plan_implement_review_and_approval_give_only_the_editing_node_a_branch_and_one_commit()
+    public async Task Plan_implement_review_and_approval_give_only_the_editing_node_a_branch_and_accept_its_report_with_its_one_commit()
     {
         await using var f = new RunConversationFixture(Graph([
             RunConversationFixture.Agent(X, ConversationMode.Autonomous, readOnly: true),
@@ -35,6 +35,10 @@ public sealed class NodeWorktreeTests
         await f.Resume();
         var waiting = await f.Until(view => view.Tasks[G].Gate is { Status: GateStatus.Waiting });
         var gate = waiting.Tasks[G].Gate!;
+        // The approval reads the verdict that Review hands on.
+        var handed = Assert.Single(f.Coordinator.GateInputs(gate.Request.Id)!.Value);
+        Assert.Equal(Verdict(Approve), handed.Report);
+        Assert.True(handed.Review!.Verdict.Approves);
         Assert.IsType<GateReply.Recorded>(await f.Coordinator.Approve(f.Address, new(gate.Request.Id, gate.Request.Inputs), new(Guid.NewGuid())).WaitAsync(Bound));
         await f.UntilStatus(RunStatus.Completed);
 
@@ -47,8 +51,13 @@ public sealed class NodeWorktreeTests
         Assert.Null(Owner(R).Branch);
         Assert.Equal(implement.Branch, git.Git("for-each-ref", "--format=%(refname)", $"refs/heads/idp/{record.RunKey}/task/").Trim());
 
-        // Implement's turn ended with one commit on its branch, and that commit is its result.
+        // Implement's result is its report, with the one commit its turn ended with on its branch as its code.
+        Assert.Equal("A ready.\n", record.CurrentResults[A].Report);
         var produced = Assert.IsType<CodeOutput.Produced>(record.CurrentResults[A].Code).Code.Commit;
+        Assert.DoesNotContain(record.Plans.Values, plan => plan is MaterializationPlan.Publication);
+        Assert.Equal("", git.Git("for-each-ref", $"refs/idp/{record.RunKey}/result/").Trim());
+        // Review read Implement's change, from the commit Implement started at to the one it ended with.
+        Assert.Contains("+a + b", f.Prompt(R, 1));
         Assert.Equal(produced.Hex, git.Git("rev-parse", implement.Branch!).Trim());
         Assert.Equal("1", git.Git("rev-list", "--count", $"{PlanCommit.Hex}..{implement.Branch}").Trim());
         Assert.Equal("a + b\n", git.Git("show", produced.Hex + ":calc.txt"));

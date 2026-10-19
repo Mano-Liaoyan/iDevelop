@@ -29,12 +29,12 @@ public sealed class PreparationTests
         f.Git.Write("a/inside.txt", "edited\n", writer.Checkout);
         await f.Close(writer);
         var publicationOperation = f.Op();
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation,
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation,
             writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
         Assert.Equal("edited\n", f.Git.Git("show", commit + ":a/inside.txt"));
-        Assert.Equal(accepted, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation, writer.Execution.Launch.Attempt));
+        Assert.Equal(accepted.Result.Id, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), publicationOperation, writer.Execution.Launch.Attempt)).Result.Id);
         Assert.Equal("", f.Git.Run(writer.Checkout, "status", "--porcelain").Text);
         Assert.Equal(patterns, File.ReadAllBytes(f.Git.PathOf(".git/info/sparse-checkout")));
         Assert.Equal("S outside/kept.bin\n", f.Git.Git("ls-files", "-v", "outside/kept.bin"));
@@ -86,9 +86,9 @@ public sealed class PreparationTests
         MaterializationBlock block;
         if (mode == "publish")
         {
-            var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+            var blocked = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
             block = blocked.Block;
-            Assert.Equal(blocked, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+            Assert.Equal(blocked, f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         }
         else
         {
@@ -119,11 +119,11 @@ public sealed class PreparationTests
             "ls-files", "-v", "outside/kept.bin").Text);
         await f.Close(writer);
         var operation = f.Op();
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
         var commit = Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex;
         Assert.Equal("writer edit\n", f.Git.Git("show", commit + ":outside/kept.bin"));
         Assert.Equal("writer edit\n", File.ReadAllText(Path.Combine(writer.Checkout, "outside/kept.bin")));
-        Assert.Equal(accepted, f.Materializer().Publish(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt));
+        Assert.Equal(accepted.Result.Id, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(writer.Execution.Location.Owner.Task), operation, writer.Execution.Launch.Attempt)).Result.Id);
     }
 
     private static void NextSecond(int afterMs)
@@ -224,7 +224,7 @@ public sealed class PreparationTests
     public async Task Linear_input_uses_accepted_commit_and_delivers_exact_reports_artifacts_and_prompt()
     {
         using var f = new PreparationFixture(Linear(), new("81ddb7c330112c7f16700ed002803a04b0bce693"));
-        await f.Publish(T, f.A, artifact: true);
+        await f.Accept(T, f.A, artifact: true);
         f.Git.Git("update-ref", f.Read().Preparations[new(A1, 1)].Location.Owner.Branch!, "7c64b20d5be53b5c1a291863ef191aa28f6f4d51");
         var operation = f.Op();
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U, operation));
@@ -255,12 +255,12 @@ public sealed class PreparationTests
     public async Task Missing_dependency_rejects_with_its_task_and_missing_context_is_recorded_without_blocking()
     {
         using var missing = new PreparationFixture(Connect(Linear(), C, U));
-        await missing.Publish(T, missing.A);
+        await missing.Accept(T, missing.A);
         var rejection = Assert.IsType<Preparation.Rejected>(await missing.Prepare(U));
         Assert.Equal("MissingDependencyResult", rejection.Reason.Problem.ToString());
         Assert.Equal(C, rejection.Reason.Task);
         using var f = new PreparationFixture(Linear(context: true));
-        await f.Publish(T, f.A);
+        await f.Accept(T, f.A);
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
         var input = f.Read().Inputs[ready.Execution.Inputs];
         Assert.Equal(new ConnectionKey(C, U), Assert.Single(input.Bindings.OfType<InputBinding.MissingContext>()).Edge);
@@ -320,7 +320,7 @@ public sealed class PreparationTests
         {
             var fixture = new PreparationFixture(linear ? Linear() : FixtureWorkflow(Writer(T)),
                 linear ? new("81ddb7c330112c7f16700ed002803a04b0bce693") : null);
-            if (linear) await fixture.Publish(T, fixture.A);
+            if (linear) await fixture.Accept(T, fixture.A);
             return fixture;
         }
         var task = linear ? U : T;

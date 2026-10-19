@@ -14,7 +14,6 @@ public sealed class AuthorityTests
     [InlineData("Claim")]
     [InlineData("Recover")]
     [InlineData("Record")]
-    [InlineData("AcceptPublication")]
     [InlineData("CloseTurn")]
     [InlineData("CloseAttempt")]
     [InlineData("AcceptReport")]
@@ -56,7 +55,6 @@ public sealed class AuthorityTests
             "Claim" => f.Store.Claim(held, operation, new(A1, 1), reservation.Inputs, Prompt),
             "Recover" => f.Store.Recover(held, operation, A1, RecoveryOutcome.Stopped, f.Op(), "Stopped."),
             "Record" => f.Store.Record(authority, operation, new RunEvent.Prepared(f.Read().Preparations[new(A1, 1)], SharedRefs)),
-            "AcceptPublication" => f.Store.AcceptPublication(authority, operation, operation),
             "CloseTurn" => f.Store.CloseTurn(authority, operation, new(A1, 1), checkpoint),
             "CloseAttempt" => f.Store.CloseAttempt(authority, operation, A1, TerminalAttemptOutcome.Succeeded, checkpoint),
             "AcceptReport" => f.Store.AcceptReport(authority, operation, A1, reservation.Inputs.Id, "Checked."),

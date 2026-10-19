@@ -338,7 +338,6 @@ internal static class WorkflowRunText
         MaterializationProblem.UncertainOwnership => "A branch moved that no task of the run moved.",
         MaterializationProblem.FanInConflict => "The results it joins conflict.",
         MaterializationProblem.GitVersionUnsupported => "Joining results needs a newer Git.",
-        MaterializationProblem.LiveWriter => "Another writer still holds the task's checkout.",
         MaterializationProblem.InputUnavailable => "An input it needs is unavailable.",
         _ => $"{problem}.",
     };

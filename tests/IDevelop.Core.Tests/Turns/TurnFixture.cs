@@ -168,11 +168,11 @@ internal sealed class TurnFixture : IAsyncDisposable
         Runs = OpenRuns(await Fakes.DiscoverAsync());
     }
 
-    public ResultRecord Publish(SettledTurn turn)
+    public ResultRecord Accept(SettledTurn turn)
     {
         Assert.IsType<RunDecision.Recorded>(Preparation.Store.CloseAttempt(Preparation.Permit, Preparation.Op(),
             turn.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
-        return Assert.IsType<Publication.Accepted>(Preparation.Materializer().Publish(turn.Lease, Preparation.Op(), turn.Address.Launch.Attempt)).Result;
+        return Assert.IsType<Acceptance.Accepted>(Preparation.Materializer().Accept(turn.Lease, Preparation.Op(), turn.Address.Launch.Attempt)).Result;
     }
 
     public static async Task SuccessfulControl()
@@ -181,7 +181,7 @@ internal sealed class TurnFixture : IAsyncDisposable
         await control.Open();
         var turn = await control.Settled(await control.Start());
         Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-        control.Publish(turn);
+        control.Accept(turn);
         Assert.Equal("Succeeded", turn.Attempt.Status.ToString());
         Assert.Equal(0, Assert.IsType<RootExit.Exited>(turn.Exit.Exit).Code);
         Assert.Single(control.Log(turn.Address.Launch).Events.OfType<AttemptEvent.Launched>());

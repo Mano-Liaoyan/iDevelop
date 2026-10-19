@@ -14,7 +14,7 @@ public sealed class OutboxTests
     public async Task Full_report_and_binary_artifact_reach_the_successor_without_a_result_block()
     {
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U)), T, U));
-        var result = await f.Publish(T, f.A, artifact: true);
+        var result = await f.Accept(T, f.A, artifact: true);
         Assert.Equal("B ready.\n", result.Report);
         var artifact = Assert.Single(result.Artifacts);
         Assert.Equal("results/4afb8e68-c5ea-8261-a205-38609bc0c482/artifacts/payload", artifact.StoredPath);
@@ -152,24 +152,23 @@ public sealed class OutboxTests
     public async Task Missing_manifest_ignores_markdown_urls_and_empty_outboxes_publish_no_artifacts()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var result = await f.Publish(T, f.A, "See [payload](https://example.invalid/file).\n");
+        var result = await f.Accept(T, f.A, "See [payload](https://example.invalid/file).\n");
         Assert.Equal("See [payload](https://example.invalid/file).\n", result.Report);
         Assert.Empty(result.Artifacts);
         Assert.Equal("d4d26ecdf72779dbc9c5c983025fb51546c8f9ea", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex);
     }
 
     [Fact]
-    public async Task Different_existing_artifact_bytes_block_without_overwriting_them()
+    public async Task Different_existing_artifact_bytes_refuse_the_result_without_overwriting_them()
     {
         using var f = new PreparationFixture(Connect(FixtureWorkflow(Writer(T), Writer(U)), T, U));
-        var ready = await PublicationTests.ChangedWriter(f, artifact: true);
+        var ready = await f.ChangedWriter(artifact: true);
         var operation = new OperationId(Id(2000));
         var path = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, [1, 2, 3]);
-        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload", blocked.Block.Detail);
+        var refused = Assert.IsType<Acceptance.Rejected>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal(RunProblem.StorageUnavailable, refused.Reason.Problem);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
         Assert.Empty(f.Read().Results);
     }
@@ -178,47 +177,49 @@ public sealed class OutboxTests
     public async Task Resume_keeps_the_frozen_artifact_even_when_the_ignored_outbox_changes()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await PublicationTests.ChangedWriter(f, artifact: true);
+        var ready = await f.ChangedWriter(artifact: true);
         var operation = new OperationId(Id(2000));
-        Assert.Throws<PublicationTests.Crash>(() => f.Materializer(probe: step =>
+        Assert.Throws<PreparationFixture.Crash>(() => f.Materializer(probe: step =>
         {
-            if (step == "journal.plan.after") throw new PublicationTests.Crash();
-        }).Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
+            if (step == "journal.result-branch-observed.after") throw new PreparationFixture.Crash();
+        }).Accept(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
         File.WriteAllBytes(Path.Combine(ready.Checkout, ready.Execution.OutboxPath, "payload.bin"), [1, 2, 3]);
         File.WriteAllText(Path.Combine(ready.Checkout, ready.Execution.OutboxPath, "manifest.json"), "{broken");
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
         Assert.Equal("f7d21fe0-9370-801e-a122-38820dfbc203", result.Id.Value.ToString("D"));
         Assert.Equal(new byte[] { 67, 0, 127 }, new RunStorage(f.Git.Folder, W, f.RunId).ReadArtifact(result.Id, result.Artifacts.Single()));
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex);
     }
 
     [Fact]
-    public async Task Stored_bytes_changed_after_the_plan_block_acceptance_and_resume_after_they_are_restored()
+    public async Task Stored_bytes_changed_after_the_commit_refuse_acceptance_and_resume_after_they_are_restored()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var ready = await PublicationTests.ChangedWriter(f, artifact: true);
+        var ready = await f.ChangedWriter(artifact: true);
         var operation = new OperationId(Id(2000));
         var path = Path.Combine(new RunStorage(f.Git.Folder, W, f.RunId).Folder, "results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload");
-        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer(probe: step =>
+        var refused = Assert.IsType<Acceptance.Rejected>(f.Materializer(probe: step =>
         {
-            if (step == "journal.plan.after") File.WriteAllBytes(path, [1, 2, 3]);
-        }).Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
-        Assert.Equal("InputUnavailable", blocked.Block.Problem.ToString());
-        Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", blocked.Block.Detail);
-        Assert.Contains("results/f7d21fe0-9370-801e-a122-38820dfbc203/artifacts/payload", blocked.Block.Detail);
+            if (step == "journal.result-branch-observed.after")
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, [1, 2, 3]);
+            }
+        }).Accept(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt));
+        Assert.Equal(RunProblem.StorageUnavailable, refused.Reason.Problem);
         Assert.Empty(f.Read().Results);
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(path));
         File.WriteAllBytes(path, [67, 0, 127]);
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), operation, ready.Execution.Launch.Attempt)).Result;
         Assert.Equal("81cae59086bf9597301026b65f1bb57380b74686", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex);
-        Assert.True(Assert.Single(f.Read().Blocks).Value.Resolved);
+        Assert.Empty(f.Read().Blocks);
     }
 
     private static void CheckRejected(PreparationFixture f, Preparation.Ready ready)
     {
         Assert.Equal(MaterializationProblem.InputUnavailable, Assert.IsType<CaptureDisposition.Failed>(
             f.Read().Dispositions[f.Read().Settlements[ready.Execution.Launch]].Disposition).Problem);
-        var block = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
+        var block = Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Block;
         Assert.Equal("InputUnavailable", block.Problem.ToString());
         Assert.Contains("Attempt 00000000-0000-0000-0000-000000000102", block.Detail);
         Assert.Contains(".idp/outbox/00000000-0000-0000-0000-000000000102/manifest.json", block.Detail);

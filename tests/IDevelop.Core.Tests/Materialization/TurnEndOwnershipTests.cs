@@ -9,44 +9,10 @@ namespace IDevelop.Core.Tests.Materialization;
 
 public sealed class TurnEndOwnershipTests
 {
-    [Fact]
-    public async Task Closing_a_turn_without_root_observation_ends_its_ancestry_permission()
-    {
-        using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
-        var writer = await PrepareAndClaim(f, T);
-        var sibling = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
-        f.Git.Write("u.txt", "U\n", sibling.Checkout);
-        await f.Close(sibling);
-        var attempt = f.Read().Attempts[writer.Execution.Launch.Attempt];
-        var folder = f.Store.AttemptFolder(W, f.RunId, T, attempt.Id);
-        using (var log = AttemptLog.Create(Path.GetDirectoryName(Path.GetDirectoryName(folder))!, new AttemptEvent.Requested(
-            At, attempt.Id, T, "B", Task().Execution!, writer.Execution.Prompt, "codex", [])
-        { RunBinding = new(W, f.RunId, attempt.Revision, writer.Execution.Inputs), Conversation = ConversationMode.Autonomous }))
-        {
-            log.Append(new AttemptEvent.Agent(At, new AgentEvent.SessionStarted("fixture")));
-            log.Append(new AttemptEvent.Agent(At, new AgentEvent.Succeeded("Done.\n")));
-            log.Append(new AttemptEvent.Exited(At, 0, ""));
-        }
-        Assert.IsType<RunDecision.Recorded>(f.Store.CloseTurn(f.Permit, f.Op(), writer.Execution.Launch, Checkpoint(folder)));
-        var foreign = CommitFile(f, writer, "foreign.txt", "foreign\n");
-        var operation = f.Op();
-        var blocked = Assert.IsType<Publication.Blocked>(f.Materializer().Publish(f.Lease(U), operation, sibling.Execution.Launch.Attempt));
-        Assert.Equal("UncertainOwnership", blocked.Block.Problem.ToString());
-        Assert.Empty(f.Read().Results);
-        Assert.Equal(0, f.Read().RootExits.Count(root => root.Key == writer.Execution.Launch));
-        Assert.Equal("Explained", f.Read().RootExits[sibling.Execution.Launch].Ownership.ToString());
-        Assert.Equal("foreign\n", f.Git.Git("show", foreign.Hex + ":foreign.txt"));
-        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", "adfe40b30c176fb407933286f51d15ea9b54cdc3").ExitCode);
-        Recheck(f, sibling.Execution.Launch.Attempt);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), operation, sibling.Execution.Launch.Attempt));
-        Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
-        Assert.Single(f.Read().Results);
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_foreign_commit_before_capture_or_after_closure_blocks_writer_and_closed_sibling(bool beforeCapture)
+    public async Task A_foreign_commit_before_capture_or_after_closure_blocks_the_writer_but_not_its_sibling(bool beforeCapture)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = await PrepareAndClaim(f, U);
@@ -66,19 +32,16 @@ public sealed class TurnEndOwnershipTests
         var foreign = beforeCapture ? GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!))!.Value
             : CommitFile(f, writer, "foreign.txt", "foreign\n");
 
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+        Assert.Equal("UncertainOwnership", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
             f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem.ToString());
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
-            f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.Empty(f.Read().Results);
         Assert.Single(f.Read().Captures[settled.Capture]);
         Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[settled.Capture][0].Candidate!.Value.Hex + ":result.txt"));
         Assert.Equal(foreign, GitFixture.Read(f.Git.Open().ReadRef(writer.Execution.Location.Owner.Branch!)));
         Assert.Equal("foreign\n", f.Git.Git("show", foreign.Hex + ":foreign.txt"));
 
-        Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
-        Recheck(f, sibling.Execution.Launch.Attempt);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
+        // The sibling's result is its own branch's commit, whatever the writer's branch holds.
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
         Assert.Single(f.Read().Results);
     }
@@ -94,7 +57,7 @@ public sealed class TurnEndOwnershipTests
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writer.Execution.Location.AttemptBase.Hex).ExitCode);
         var foreign = CommitFile(f, writer, "foreign.txt", "foreign\n");
 
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
+        Assert.Equal("UncertainOwnership", Assert.IsType<Acceptance.Blocked>(f.Materializer().Accept(
             f.Lease(T), f.Op(), writer.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.IsType<GitAncestry.No>(f.Git.Open().IsAncestor(writerTip, foreign));
         Assert.IsType<GitAncestry.Yes>(f.Git.Open().IsAncestor(writer.Execution.Location.AttemptBase, foreign));
@@ -105,13 +68,13 @@ public sealed class TurnEndOwnershipTests
 
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
         Recheck(f, writer.Execution.Launch.Attempt);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("writer\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Single(f.Read().Results);
     }
 
     [Fact]
-    public async Task Salvage_does_not_adopt_an_unpublished_rewind_or_authorize_sibling_publication_and_retry()
+    public async Task Salvage_does_not_adopt_an_unpublished_rewind_or_authorize_a_retry()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T), Writer(U)));
         var sibling = await PrepareAndClaim(f, U);
@@ -129,11 +92,8 @@ public sealed class TurnEndOwnershipTests
         Assert.False(RefOwnership.Accepts(f.Read(), repository, branch, basis));
         Assert.True(RefOwnership.Accepts(f.Read(), repository, branch, writerTip));
         Assert.Equal("A\n", f.Git.Git("show", retained.Commit.Hex + ":a.txt"));
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer().Publish(
-            f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt)).Block.Problem.ToString());
         Assert.Equal("UncertainOwnership", Assert.IsType<RetryReset.Blocked>(f.Materializer().ResetForRetry(
             f.Lease(T), f.Op(), retained.Receipt.Plan, f.Op())).Block.Problem.ToString());
-        Assert.Equal(0, f.Read().Results.Count(result => result.Task == U));
         Assert.Equal(0, f.Read().GitIntents.Values.Count(intent => intent.Mutation is GitMutation.ResetCheckout));
         Assert.Equal(basis, GitFixture.Read(repository.ReadRef(branch)));
         Assert.Equal("A\n", File.ReadAllText(Path.Combine(writer.Checkout, "a.txt")));
@@ -141,8 +101,7 @@ public sealed class TurnEndOwnershipTests
         Assert.Equal("writer\n", f.Git.Git("show", f.Read().Captures[f.Read().Settlements[writer.Execution.Launch]][0].Candidate!.Value.Hex + ":result.txt"));
 
         Assert.Equal(0, f.Git.Run(writer.Checkout, "reset", "--hard", writerTip.Hex).ExitCode);
-        Recheck(f, sibling.Execution.Launch.Attempt);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(), sibling.Execution.Launch.Attempt));
         Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
         Assert.Equal(1, f.Read().Results.Count(result => result.Task == U));
         var control = Assert.IsType<Salvage.Retained>(await f.Materializer().Salvage(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
@@ -159,7 +118,7 @@ public sealed class TurnEndOwnershipTests
         CommitFile(f, writer, "result.txt", "writer\n");
         await f.Close(writer);
         Assert.Equal("Explained", f.Read().RootExits[writer.Execution.Launch].Ownership.ToString());
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), f.Op(), writer.Execution.Launch.Attempt));
         Assert.Equal("writer\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.Single(f.Read().Results);
         var dependent = Assert.IsType<Preparation.Ready>(await f.Prepare(U));
@@ -198,7 +157,7 @@ public sealed class TurnEndOwnershipTests
             Assert.Equal(RunJournal.Canonical(observation), RunJournal.Canonical(Assert.Single(f.Read().Captures[closed.Capture])));
             Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(owned.Permit, f.Op(), writer.Execution.Launch.Attempt,
                 TerminalAttemptOutcome.Succeeded, observation.Log));
-            var published = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(lease, f.Op(), writer.Execution.Launch.Attempt));
+            var published = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(lease, f.Op(), writer.Execution.Launch.Attempt));
             Assert.Equal("done\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(published.Result.Code).Code.Commit.Hex + ":result.txt"));
             Assert.Equal((1, 1), (f.Read().Results.Count, f.Read().Claims.Count));
         }
@@ -206,7 +165,7 @@ public sealed class TurnEndOwnershipTests
         var control = await PrepareAndClaim(f, U);
         f.Git.Write("u.txt", "U\n", control.Checkout);
         await f.Close(control);
-        var accepted = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(U), f.Op(), control.Execution.Launch.Attempt));
+        var accepted = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(U), f.Op(), control.Execution.Launch.Attempt));
         Assert.Equal("U\n", f.Git.Git("show", Assert.IsType<CodeOutput.Produced>(accepted.Result.Code).Code.Commit.Hex + ":u.txt"));
         Assert.Equal(2, f.Read().Results.Count);
     }
@@ -215,9 +174,6 @@ public sealed class TurnEndOwnershipTests
     {
         var record = f.Read();
         var block = Assert.Single(record.Blocks, pair => pair.Value.Block.Attempt == attempt && !pair.Value.Resolved).Key;
-        Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(f.Materializer()
-            .Publish(f.Lease(record.Attempts[attempt].Task), f.Op(), attempt)).Block.Problem.ToString());
-        Assert.Equal(record.Sequence, f.Read().Sequence);
         Assert.IsType<RunDecision.Recorded>(f.Store.Record(f.Permit, f.Op(), new RunEvent.BlockResolved(block, "Rechecked by the person.")));
     }
 

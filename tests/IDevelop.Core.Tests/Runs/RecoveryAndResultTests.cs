@@ -131,7 +131,7 @@ public sealed class RecoveryAndResultTests
     }
 
     [Fact]
-    public void Writer_reports_are_unavailable_in_E1()
+    public void A_writer_report_without_the_commit_its_turn_ended_with_is_refused()
     {
         var work = new WorkSpec.Agent(AgentAccess.Edit, false, PromptTemplate.Parse("{{brief}}"));
         using var f = new RunFixtures(FixtureWorkflow(Task(work: work)));
@@ -140,7 +140,7 @@ public sealed class RecoveryAndResultTests
         f.Claim(reservation);
         var evidence = f.WriteLog(reservation);
         Assert.IsType<RunDecision.Recorded>(f.Store.CloseAttempt(f.Permit, f.Op(), A1, TerminalAttemptOutcome.Succeeded, evidence));
-        Assert.Equal(RunProblem.UnsupportedResult, Problem(f.Store.AcceptReport(f.Permit, f.Op(), A1, reservation.Inputs.Id, "Checked.")));
+        Assert.Equal(RunProblem.OutcomeMismatch, Problem(f.Store.AcceptReport(f.Permit, f.Op(), A1, reservation.Inputs.Id, "Checked.")));
         Assert.Equal(8, f.Read().Sequence);
     }
 

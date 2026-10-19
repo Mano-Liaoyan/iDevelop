@@ -30,7 +30,7 @@ public sealed class TurnLifetimeTests
             File.WriteAllText(ping, "ping");
             await System.Threading.Tasks.Task.Delay(300);
             Assert.False(File.Exists(pong));
-            f.Publish(turn);
+            f.Accept(turn);
             Assert.Single(f.Preparation.Read().Results);
         }
 
@@ -73,7 +73,7 @@ public sealed class TurnLifetimeTests
         }
 
         Assert.IsType<CaptureDisposition.Matched>(turn.Capture.Disposition);
-        var result = f.Publish(turn);
+        var result = f.Accept(turn);
         Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
         Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt);
 
@@ -112,7 +112,7 @@ public sealed class TurnLifetimeTests
         AssertGone(writer);
         Assert.Equal("par", f.Preparation.Git.Git("show",
             Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
-        f.Publish(turn);
+        f.Accept(turn);
         Assert.Single(f.Preparation.Read().Results);
         var ready = Assert.IsType<Preparation.Ready>(await f.Preparation.Prepare(U));
         Assert.Equal("par", File.ReadAllText(Path.Combine(ready.Checkout, "result.txt")));

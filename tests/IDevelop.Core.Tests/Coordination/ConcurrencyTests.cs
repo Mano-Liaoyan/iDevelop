@@ -267,13 +267,13 @@ public sealed class ConcurrencyTests
         int publications = 0, locks = 0, accepted = 0, held = 0;
         f.Runs.Probe = point =>
         {
-            if (point == "coordinator.publish.before" && Interlocked.Increment(ref publications) is 2 or 3)
+            if (point == "coordinator.accept.before" && Interlocked.Increment(ref publications) is 2 or 3)
             {
                 publishing.Signal();
                 Assert.True(publishing.Wait(Bound), "The second branch's publication never came.");
             }
-            else if (point == "publish.lock.before" && Interlocked.Increment(ref locks) is 2 or 3) locking.Signal();
-            else if (point == "journal.accepted.before" && Interlocked.Increment(ref accepted) == 2)
+            else if (point == "commit.lock.before" && Interlocked.Increment(ref locks) is 2 or 3) locking.Signal();
+            else if (point == "journal.result-branch-intent.before" && Interlocked.Increment(ref accepted) == 2)
             {
                 Assert.True(locking.Wait(Bound), "The second branch's publication never asked for the repository.");
                 held = 1;
@@ -351,7 +351,7 @@ public sealed class ConcurrencyTests
             f.Runs.Probe = point =>
             {
                 // The loop takes the lock back after Mark done's first step, and the publication starts only once it has.
-                if (point == "publish.lock.before")
+                if (point == "commit.lock.before")
                 {
                     Volatile.Write(ref publishing, 1);
                     loop.WaitHeld();

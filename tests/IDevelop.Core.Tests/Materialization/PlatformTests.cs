@@ -26,7 +26,7 @@ public sealed class PlatformTests
         f.Git.Write("crlf.txt", "one\ntwo\n", ready.Checkout);
         File.WriteAllBytes(Path.Combine(ready.Checkout, "data.bin"), [13, 10, 0, 13]);
         await f.Close(ready);
-        var result = Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Result;
+        var result = Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt)).Result;
         var commit = Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex;
         Assert.Equal(new byte[] { 111, 110, 101, 10, 116, 119, 111, 10 }, Blob(f.Git, commit, "lf.txt"));
         Assert.Equal(new byte[] { 111, 110, 101, 10, 116, 119, 111, 10 }, Blob(f.Git, commit, "crlf.txt"));
@@ -107,7 +107,7 @@ public sealed class PlatformTests
         if (action == "prepare")
             Assert.Equal("UncertainOwnership", Assert.IsType<Preparation.Blocked>(await materializer.Prepare(lease, operation, new AttemptCause.Initial())).Block.Problem.ToString());
         else
-            Assert.Equal("UncertainOwnership", Assert.IsType<Publication.Blocked>(materializer.Publish(lease, f.Op(), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
+            Assert.Equal("UncertainOwnership", Assert.IsType<Acceptance.Blocked>(materializer.Accept(lease, f.Op(), ready.Execution.Launch.Attempt)).Block.Problem.ToString());
         var after = f.Git.Run(moved, "worktree", "list", "--porcelain");
         Assert.Equal(0, after.ExitCode);
         Assert.Equal(before.Stdout, after.Stdout);

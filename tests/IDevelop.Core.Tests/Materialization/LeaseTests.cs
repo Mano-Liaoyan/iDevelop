@@ -102,13 +102,13 @@ public sealed class LeaseTests
         await f.Close(ready);
         var wrong = f.Lease(U);
         var operation = f.Op();
-        Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Publication.Rejected>(
-            f.Materializer().Publish(wrong, operation, ready.Execution.Launch.Attempt)).Reason.Problem);
+        Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Acceptance.Rejected>(
+            f.Materializer().Accept(wrong, operation, ready.Execution.Launch.Attempt)).Reason.Problem);
         Assert.Equal(RunProblem.IdentityMismatch, Assert.IsType<Preparation.Rejected>(await f.Materializer()
             .PrepareTurn(wrong, f.Op(), new(ready.Execution.Launch.Attempt, 2), "Continue.")).Reason.Problem);
         Assert.Equal(16, f.Read().Sequence);
         Assert.Empty(f.Read().Results);
-        Assert.Equal(T, Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(T), operation,
+        Assert.Equal(T, Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(T), operation,
             ready.Execution.Launch.Attempt)).Result.Task);
         Assert.Equal(T, Assert.Single(f.Read().Results).Task);
     }

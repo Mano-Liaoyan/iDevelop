@@ -201,7 +201,7 @@ internal sealed partial class WorkflowRunCoordinator
 
     /// <summary>
     /// A resting turn releases as it rests. Any other closes its attempt with the folded outcome at the frozen checkpoint;
-    /// a success then publishes a writer's capture or accepts a read-only report. Each step converges on a repeat.
+    /// a success then accepts the attempt's report as its result. Each step converges on a repeat.
     /// </summary>
     private Release Disposition(SettledTurn turn)
     {
@@ -223,34 +223,26 @@ internal sealed partial class WorkflowRunCoordinator
             _runs.Probe?.Invoke("coordinator.close-attempt.before");
             if (_store.CloseAttempt(_permit!, RunOperations.CloseAttempt(operation), launch.Attempt, ended, turn.Log) is RunDecision.Rejected rejected)
                 return new Release.Held(rejected.Reason);
-            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, turn.Address.Task, launch.Attempt, operation, Scheduled()) is { } refusal)
+            if (ended == TerminalAttemptOutcome.Succeeded && Finish(turn.Lease, launch.Attempt, operation, Scheduled()) is { } refusal)
                 return new Release.Held(refusal);
         }
         _runs.Probe?.Invoke("coordinator.release.before");
         return turn.Release();
     }
 
-    /// <summary>Publishes a successfully closed writer's frozen capture, or accepts a read-only attempt's report.</summary>
-    private RunRejection? Finish(RunLease lease, TaskId task, AttemptId attempt, OperationId operation, Materializer materializer)
+    /// <summary>
+    /// Accepts a successfully closed agent attempt's report as its result, through <see cref="Materializer.Accept"/>. A
+    /// blocked editing result shows as its block.
+    /// </summary>
+    private RunRejection? Finish(RunLease lease, AttemptId attempt, OperationId operation, Materializer materializer)
     {
-        if (Record() is not { } record) return new(RunProblem.StorageUnavailable);
-        var definition = record.Revisions[record.Attempts[attempt].Revision].Snapshot.Tasks[task];
-        if (definition.Blueprint.Work is WorkSpec.Agent { Access: AgentAccess.Edit })
-        {
-            _runs.Probe?.Invoke("coordinator.publish.before");
-            return materializer.Publish(lease, RunOperations.Publish(operation), attempt) is Publication.Rejected rejected ? rejected.Reason : null;
-        }
-        if (record.Closures.GetValueOrDefault(attempt) is not AttemptEnd.Logged closure) return new(RunProblem.OutcomeMismatch);
-        var evidence = AttemptEvidence.Read(_store.AttemptFolder(Address.Workflow, Address.Run, task, attempt), closure.Evidence);
-        if (evidence.Record is not { Result: { } report } logged) return evidence.Rejection ?? new(RunProblem.OutcomeMismatch);
-        if (!record.Claims.TryGetValue(new(attempt, logged.Turns.Count), out var claim)) return new(RunProblem.InvalidClaim);
-        return _store.AcceptReport(_permit!, RunOperations.Accept(operation), attempt, claim.Inputs.Id, report,
-            record.CurrentResults.GetValueOrDefault(task)?.Id) is RunDecision.Rejected refused ? refused.Reason : null;
+        _runs.Probe?.Invoke("coordinator.accept.before");
+        return materializer.Accept(lease, RunOperations.Accept(operation), attempt) is Acceptance.Rejected rejected ? rejected.Reason : null;
     }
 
     /// <summary>
     /// Settles what an earlier window or an earlier step left: every unclosed claim through <see cref="ProjectRuns.Reconcile"/>,
-    /// which never launches, every successful closure without a result through its publication, and every approved rebase
+    /// which never launches, every successful closure without a result through its acceptance, and every approved rebase
     /// without its result.
     /// </summary>
     private void Reconcile(RunRecord record, RunView view)
@@ -303,7 +295,7 @@ internal sealed partial class WorkflowRunCoordinator
         Offload(() =>
         {
             if (_permit!.TakeTask(task) is not LeaseTake.Taken taken) return new RunRejection(RunProblem.TaskBusy);
-            using (taken.Lease) return Finish(taken.Lease, task, attempt, operation, Scheduled());
+            using (taken.Lease) return Finish(taken.Lease, attempt, operation, Scheduled());
         }, refusal =>
         {
             _live.Remove(task);

@@ -29,8 +29,8 @@ public sealed class TurnStateTests
             Assert.Equal("NotSettled", Assert.IsType<Release.Held>(turn.Release()).Reason.Problem.ToString());
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(permit, f.Preparation.Op(),
                 turn.Address.Launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
-            var result = Assert.IsType<Publication.Accepted>(f.Preparation.Materializer()
-                .Publish(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Result;
+            var result = Assert.IsType<Acceptance.Accepted>(f.Preparation.Materializer()
+                .Accept(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Result;
             Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
             Assert.IsType<LeaseTake.Taken>(permit.TakeTask(T)).Lease.Dispose();
             Assert.Equal(1, f.Launches);
@@ -453,7 +453,7 @@ public sealed class TurnStateTests
         await using var f = new TurnFixture();
         await f.Open();
         var turn = await f.Settled(await f.Start());
-        var result = f.Publish(turn);
+        var result = f.Accept(turn);
         var permit = f.Preparation.Permit;
         Task<Reconciliation>? during = null;
         f.Runs.Probe = point =>
@@ -711,7 +711,7 @@ public sealed class TurnStateTests
         await using var f = new TurnFixture();
         await f.Open();
         var turn = await f.Settled(await f.Start());
-        var result = f.Publish(turn);
+        var result = f.Accept(turn);
         Assert.Equal(result.Id, Assert.IsType<TurnDisposition.Published>(Assert.IsType<Release.Released>(turn.Release()).Receipt).Result);
         var reconciled = Assert.IsType<TurnSettlement.Settled>(Assert.IsType<Reconciliation.Found>(await f.Runs.Reconcile(f.Preparation.Permit,
             f.Preparation.Op(), turn.Address.Launch).WaitAsync(Bound)).Settlement).Turn;

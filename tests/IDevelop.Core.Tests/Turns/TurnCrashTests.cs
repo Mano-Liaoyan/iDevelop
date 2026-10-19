@@ -97,7 +97,7 @@ public sealed class TurnCrashTests
         Assert.Empty(f.Preparation.Read().Results);
         if (point is "journal.capture-1.after" or "journal.capture-disposition.before" or "journal.close-turn.after")
         {
-            var result = f.Publish(Assert.IsType<TurnSettlement.Settled>(second).Turn);
+            var result = f.Accept(Assert.IsType<TurnSettlement.Settled>(second).Turn);
             Assert.Single(f.Preparation.Read().Results);
             Assert.Equal("done\n", f.Preparation.Git.Git("show", Assert.IsType<CodeOutput.Produced>(result.Code).Code.Commit.Hex + ":result.txt"));
             AssertRecovery(f, launch, "Closed");
@@ -107,8 +107,8 @@ public sealed class TurnCrashTests
             var turn = Assert.IsType<TurnSettlement.Settled>(second).Turn;
             Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
                 launch.Attempt, TerminalAttemptOutcome.Succeeded, turn.Log));
-            Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Publication.Blocked>(f.Preparation.Materializer()
-                .Publish(turn.Lease, f.Preparation.Op(), launch.Attempt)).Block.Detail);
+            Assert.Equal("Missing turn-end capture evidence.", Assert.IsType<Acceptance.Blocked>(f.Preparation.Materializer()
+                .Accept(turn.Lease, f.Preparation.Op(), launch.Attempt)).Block.Detail);
             Assert.Empty(f.Preparation.Read().Results);
         }
         File.WriteAllText(Path.Combine(f.Evidence, "gate"), "release");

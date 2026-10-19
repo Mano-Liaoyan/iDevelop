@@ -176,8 +176,8 @@ public sealed class TurnLifecycleTests
             Assert.Single(f.Preparation.Read().Captures[turn.Capture.Capture]).Candidate!.Value.Hex + ":result.txt"));
         Assert.IsType<RunDecision.Recorded>(f.Preparation.Store.CloseAttempt(f.Preparation.Permit, f.Preparation.Op(),
             turn.Address.Launch.Attempt, TerminalAttemptOutcome.Cancelled, turn.Log));
-        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Preparation.Materializer()
-            .Publish(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Reason.Problem.ToString());
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(f.Preparation.Materializer()
+            .Accept(turn.Lease, f.Preparation.Op(), turn.Address.Launch.Attempt)).Reason.Problem.ToString());
         Assert.Empty(f.Preparation.Read().Results);
         Assert.Equal("partial\n", File.ReadAllText(Path.Combine(f.Checkout, "result.txt")));
         Assert.Equal(1, f.Launches);

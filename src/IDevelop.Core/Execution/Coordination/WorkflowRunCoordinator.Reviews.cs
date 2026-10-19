@@ -132,7 +132,7 @@ internal sealed partial class WorkflowRunCoordinator
             switch (closing)
             {
                 case RestingClose.Closed closed:
-                    if (failure is null && Finish(closed.Attempt.Lease, task, review.Attempt, operation, Scheduled()) is { } refusal)
+                    if (failure is null && Finish(closed.Attempt.Lease, review.Attempt, operation, Scheduled()) is { } refusal)
                     {
                         // The closure is recorded. Its report's acceptance is finished later, under a lease of its own.
                         closed.Attempt.Lease.Dispose();

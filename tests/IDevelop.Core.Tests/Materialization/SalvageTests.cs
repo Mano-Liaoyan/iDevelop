@@ -4,7 +4,7 @@ using IDevelop.Projects;
 using IDevelop.TestSupport;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
-using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
+using Crash = IDevelop.Core.Tests.Materialization.PreparationFixture.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
@@ -559,7 +559,7 @@ public sealed class SalvageTests
     public async Task Retry_uses_latest_accepted_produced_code_and_keeps_target_tracked_and_ignored_paths()
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var result = await f.Publish(T, f.A);
+        var result = await f.Accept(T, f.A);
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Retry(A1, f.Op())));
         File.AppendAllText(Path.Combine(f.Git.Open().CommonDirectory, "info/exclude"), "/cache.txt\n");
         Assert.Equal(0, f.Git.Run(ready.Checkout, "rm", "a.txt").ExitCode);
@@ -648,7 +648,7 @@ public sealed class SalvageTests
     public async Task Salvage_is_preservation_maintenance_in_every_run_phase(string phase)
     {
         using var f = new PreparationFixture(FixtureWorkflow(Writer(T)));
-        var result = await f.Publish(T, f.A);
+        var result = await f.Accept(T, f.A);
         var owner = f.Read().Preparations[new(A1, 1)].Location.Owner;
         var checkout = Path.Combine(f.Git.Folder, owner.RelativePath);
         if (phase == "StopRequested") Assert.IsType<RunDecision.Recorded>(f.Store.Stop(f.Permit, f.Op()));
@@ -684,7 +684,7 @@ public sealed class SalvageTests
         Assert.False(f.Read().Closures.ContainsKey(ready.Execution.Launch.Attempt));
         Assert.Empty(f.Read().Results);
         Assert.Equal("unfinished\n", f.Git.Git("show", Commit + ":new.txt"));
-        Assert.Equal("OutcomeMismatch", Assert.IsType<Publication.Rejected>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
+        Assert.Equal("OutcomeMismatch", Assert.IsType<Acceptance.Rejected>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), f.Op(),
             ready.Execution.Launch.Attempt))
             .Reason.Problem.ToString());
     }

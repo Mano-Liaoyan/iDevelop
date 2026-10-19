@@ -26,8 +26,8 @@ public sealed class JoinBoundaryTests
         var c = new CommitId(f.Git.Git("rev-parse", "HEAD").Trim());
         Assert.Equal("7025720b8121cfd45a182b2ead881a0c0461beb0", c.Hex);
         f.Git.Git("checkout", "-q", "main");
-        await f.Publish(T, b);
-        await f.Publish(C, c);
+        await f.Accept(T, b);
+        await f.Accept(C, c);
     }
 
     [Fact]
@@ -94,9 +94,9 @@ public sealed class JoinBoundaryTests
             using var f = new PreparationFixture(Diamond());
             await Sources(f);
             var operation = f.Op();
-            await Assert.ThrowsAsync<PublicationTests.Crash>(async () => await f.Materializer(new Composer(f, "valid", step =>
+            await Assert.ThrowsAsync<PreparationFixture.Crash>(async () => await f.Materializer(new Composer(f, "valid", step =>
             {
-                if (step == point) throw new PublicationTests.Crash();
+                if (step == point) throw new PreparationFixture.Crash();
             })).Prepare(f.Lease(U), operation, new AttemptCause.Initial()));
             var ready = Assert.IsType<Preparation.Ready>(await f.Materializer(new Composer(f, "valid"))
                 .Prepare(f.Lease(U), operation, new AttemptCause.Initial()));

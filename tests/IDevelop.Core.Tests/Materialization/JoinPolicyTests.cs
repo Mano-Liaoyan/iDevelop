@@ -6,7 +6,7 @@ using IDevelop.TestSupport;
 using IDevelop.Workflows;
 using static IDevelop.Core.Tests.Runs.RunFixtures;
 using static IDevelop.Core.Tests.Materialization.PreparationFixture;
-using Crash = IDevelop.Core.Tests.Materialization.PublicationTests.Crash;
+using Crash = IDevelop.Core.Tests.Materialization.PreparationFixture.Crash;
 
 namespace IDevelop.Core.Tests.Materialization;
 
@@ -39,7 +39,7 @@ public sealed class JoinPolicyTests
         var ready = Assert.IsType<Preparation.Ready>(await f.Prepare(task));
         Commit(f, ready.Checkout, edits);
         await f.Close(ready);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(ready.Execution.Location.Owner.Task), f.Op(), ready.Execution.Launch.Attempt));
     }
 
     private static CommitId Settings(GitFixture git)
@@ -209,7 +209,7 @@ public sealed class JoinPolicyTests
         Commit(f, b.Checkout, ("x.txt", null), ("y.txt", "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n"));
         Assert.Equal(0, f.Git.Run(b.Checkout, "config", "merge.renames", "false").ExitCode);
         await f.Close(b);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(b.Execution.Location.Owner.Task), f.Op(), b.Execution.Launch.Attempt));
         await Write(f, C, ("x.txt", Renamed));
         var ready = Assert.IsType<Preparation.Ready>(await Prepare(f, f.Op()));
         Assert.Equal(Renamed, File.ReadAllText(Path.Combine(ready.Checkout, "y.txt")));
@@ -230,7 +230,7 @@ public sealed class JoinPolicyTests
         var again = Assert.IsType<Preparation.Ready>(await f.Prepare(T, cause: new AttemptCause.Continue(((ResultOrigin.Executed)old.Origin).Attempt, f.Op())));
         Commit(f, again.Checkout, ("b.txt", "B again\n"));
         await f.Close(again);
-        Assert.IsType<Publication.Accepted>(f.Materializer().Publish(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
+        Assert.IsType<Acceptance.Accepted>(f.Materializer().Accept(f.Lease(again.Execution.Location.Owner.Task), f.Op(), again.Execution.Launch.Attempt));
         var fresh = f.Op();
         var current = Assert.IsType<Preparation.Ready>(await Prepare(f, fresh));
         var retry = await Prepare(f, stale);
