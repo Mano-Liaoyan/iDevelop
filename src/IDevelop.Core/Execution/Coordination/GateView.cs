@@ -8,6 +8,12 @@ internal enum GateStatus { Waiting, Approved, SentBack, Closed }
 /// <param name="Reason">Why the person sent it back, once they did.</param>
 internal sealed record GateView(GateRequest Request, GateStatus Status, string? Reason)
 {
+    /// <summary>The person asked again after sending it back, so the node takes a new request on the same inputs (#126).</summary>
+    public bool AskedAgain { get; init; }
+
+    /// <summary>The person sent it back, did not ask again, and its inputs are current, so Ask again can open a new request.</summary>
+    public bool CanAskAgain { get; init; }
+
     public string Label => Status switch
     {
         GateStatus.Waiting => "Waiting for approval",
@@ -53,7 +59,10 @@ internal static class GateProjection
     public static TaskView? Of(RunRecord record, TaskId task, ResultRecord? result, TaskHold? hold)
     {
         var latest = RunReducer.LatestGate(record, task);
-        var gate = latest is null ? null : View(record, latest);
+        var gate = latest is null ? null : View(record, latest) with
+        {
+            CanAskAgain = record.Phase == RunPhase.Approved && RunReducer.LiveGate(record, task) is { Decision: GateDecision.SentBack },
+        };
         if (result is not null && !record.StaleResults.Contains(result.Id)) return new(task, TaskState.Done) { Result = result.Id, Gate = gate };
         switch (hold)
         {
@@ -72,7 +81,7 @@ internal static class GateProjection
     public static GateView View(RunRecord record, GateState state) => state.Decision switch
     {
         GateDecision.Approved => new(state.Request, GateStatus.Approved, null),
-        GateDecision.SentBack sent => new(state.Request, GateStatus.SentBack, sent.Reason),
+        GateDecision.SentBack sent => new(state.Request, GateStatus.SentBack, sent.Reason) { AskedAgain = state.AskedAgain },
         _ => new(state.Request, record.Phase == RunPhase.Approved ? GateStatus.Waiting : GateStatus.Closed, null),
     };
 }

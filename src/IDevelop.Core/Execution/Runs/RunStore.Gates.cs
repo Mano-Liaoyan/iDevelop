@@ -73,4 +73,22 @@ internal sealed partial class RunStore
                 }, input),
             });
         });
+
+    /// <summary>
+    /// Asks again after the person sent <paramref name="gate"/> back: the request stays sent back, and the node takes a new
+    /// request on the same inputs. A repeat returns the recorded entry. A request that was not sent back, was asked again
+    /// already, was replaced, or whose inputs were superseded is refused as <see cref="RunProblem.StaleInput"/>.
+    /// </summary>
+    public RunDecision AskGateAgain(CoordinatorPermit permit, OperationId operation, GateId gate) =>
+        Transact(permit, operation, Fingerprint("askGateAgain", new { gate }), (record, _) =>
+        {
+            if (record is null) return Missing();
+            if (!record.Gates.TryGetValue(gate, out var state)) return Refuse(RunProblem.UnknownInput);
+            if (state.AskedAgain && record.Receipts.Values.FirstOrDefault(entry => entry.Event is RunEvent.GateAskedAgain asked && asked.Request == gate) is { } earlier)
+                return new Mutation.Existing(earlier.Event);
+            // The reducer refuses a request that is not the node's newest sent-back one on current inputs, and a stopping run.
+            return state.Decision is GateDecision.SentBack && !RunReducer.Superseded(record, state)
+                ? new Mutation.Append(new RunEvent.GateAskedAgain(gate))
+                : new Mutation.Rejected(new(RunProblem.StaleInput, Task: state.Request.Task));
+        });
 }

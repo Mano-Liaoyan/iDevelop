@@ -6,15 +6,20 @@ using IDevelop.Workflows;
 namespace IDevelop.Desktop.Execution;
 
 /// <summary>
-/// An Approval node's request in the run, as the inspector shows it: what it hands on, Approve, and Send back with a reason.
-/// Each answer names the request and inputs the person saw, so an answer to a request that changed meanwhile records
-/// nothing. A busy journal or lock is tried again with the same operation, which records one answer at most.
+/// An Approval node's request in the run, as the inspector shows it: what it hands on, Approve, and Send back with a reason,
+/// and once sent back, Ask again after a confirmation. Each answer names the request and inputs the person saw, so an answer
+/// to a request that changed meanwhile records nothing. A busy journal or lock is tried again with the same operation, which
+/// records one answer at most.
 /// </summary>
 public sealed class GateViewModel : ObservableObject, IDisposable
 {
     private readonly WorkflowRunViewModel _run;
     private readonly RelayCommand _approve;
     private readonly RelayCommand _sendBack;
+    private readonly RelayCommand _askAgain;
+    private readonly RelayCommand _confirmAskAgain;
+    private readonly RelayCommand _keepAskAgain;
+    private readonly OperationId _asking = new(Guid.NewGuid());
     private readonly OperationId _approval = new(Guid.NewGuid());
     private readonly Dictionary<string, OperationId> _sendBacks = [];
     private GateView _gate;
@@ -22,6 +27,8 @@ public sealed class GateViewModel : ObservableObject, IDisposable
     private string _reason = "";
     private string? _notice;
     private bool _busy;
+    private bool _confirmingAskAgain;
+    private bool _asked;
     private bool _disposed;
 
     internal GateViewModel(WorkflowRunViewModel run, GateView gate)
@@ -30,6 +37,9 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         _gate = gate;
         _approve = new RelayCommand(() => _ = AnswerAsync(sendBack: null), () => CanAnswer);
         _sendBack = new RelayCommand(() => _ = AnswerAsync(Reason.Trim()), () => CanAnswer && !string.IsNullOrWhiteSpace(Reason));
+        _askAgain = new RelayCommand(() => SetConfirmingAskAgain(true), () => ShowsAskAgainButton);
+        _confirmAskAgain = new RelayCommand(() => _ = AskAgainAsync(), () => ConfirmingAskAgain && !_busy);
+        _keepAskAgain = new RelayCommand(() => SetConfirmingAskAgain(false), () => ConfirmingAskAgain);
         run.PropertyChanged += OnRunChanged;
         _ = LoadInputsAsync();
     }
@@ -82,6 +92,31 @@ public sealed class GateViewModel : ObservableObject, IDisposable
 
     public bool CanAnswer => IsWaiting && _run.IsControlled && !_busy;
 
+    /// <summary>
+    /// The person sent the request back and has not asked again, and this window controls the run, so Ask again can open a new
+    /// request on the same inputs.
+    /// </summary>
+    public bool ShowsAskAgain => _gate.CanAskAgain && !_asked && _run.IsControlled;
+
+    /// <summary>Ask again, until the person is asked to confirm it.</summary>
+    public bool ShowsAskAgainButton => ShowsAskAgain && !_confirmingAskAgain;
+
+    /// <summary>The inspector asks whether to ask again.</summary>
+    public bool ConfirmingAskAgain => ShowsAskAgain && _confirmingAskAgain;
+
+    /// <summary>What Ask again does, which the person confirms.</summary>
+    public string AskAgainConfirmation =>
+        "Ask again opens a new request on the same inputs. The sent-back request and its reason stay in the run's history.";
+
+    /// <summary>Asks for the confirmation of Ask again.</summary>
+    public ICommand AskAgainCommand => _askAgain;
+
+    /// <summary>Opens a new request on the same inputs, as confirmed.</summary>
+    public ICommand ConfirmAskAgainCommand => _confirmAskAgain;
+
+    /// <summary>Closes the confirmation, and nothing moves.</summary>
+    public ICommand KeepAskAgainCommand => _keepAskAgain;
+
     /// <summary>Records the person's approval, which hands the inputs on as the node's result and releases its dependents.</summary>
     public ICommand ApproveCommand => _approve;
 
@@ -101,6 +136,11 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         }
 
         _gate = gate;
+        if (!ShowsAskAgain)
+        {
+            _confirmingAskAgain = false;
+        }
+
         foreach (var property in new[] { nameof(StatusLabel), nameof(SentBackReason), nameof(IsWaiting), nameof(CanAnswer) })
         {
             OnPropertyChanged(property);
@@ -124,10 +164,71 @@ public sealed class GateViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void SetConfirmingAskAgain(bool confirming)
+    {
+        _confirmingAskAgain = confirming;
+        Refresh();
+    }
+
     private void Refresh()
     {
+        foreach (var property in new[] { nameof(ShowsAskAgain), nameof(ShowsAskAgainButton), nameof(ConfirmingAskAgain) })
+        {
+            OnPropertyChanged(property);
+        }
+
         _approve.NotifyCanExecuteChanged();
         _sendBack.NotifyCanExecuteChanged();
+        _askAgain.NotifyCanExecuteChanged();
+        _confirmAskAgain.NotifyCanExecuteChanged();
+        _keepAskAgain.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Records Ask again for the request the person saw. One operation per request, so a repeat, or a try after a busy
+    /// refusal, records it once; the run's next decision opens the new request.
+    /// </summary>
+    private async Task AskAgainAsync()
+    {
+        var coordinator = _run.Coordinator;
+        var address = _run.Address;
+        var request = _gate.Request.Id;
+        _busy = true;
+        Notice = null;
+        Refresh();
+        GateReply reply;
+        try
+        {
+            reply = await WorkflowRunViewModel.Retrying(() => coordinator.AskAgain(address, request, _asking),
+                outcome => outcome is GateReply.Refused refused && WorkflowRunText.Transient(refused.Reason));
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (reply is GateReply.Recorded)
+        {
+            // The run's next view shows the request asked again; until then, nothing offers it twice.
+            _asked = true;
+            _confirmingAskAgain = false;
+        }
+
+        Notice = reply switch
+        {
+            GateReply.Recorded => null,
+            GateReply.Stale => "This request changed since you saw it, so asking again recorded nothing.",
+            GateReply.Unavailable unavailable => unavailable.Message,
+            GateReply.Refused refused => WorkflowRunText.Problem(refused.Reason),
+            _ => null,
+        };
+        OnPropertyChanged(nameof(CanAnswer));
+        Refresh();
     }
 
     private async Task LoadInputsAsync()

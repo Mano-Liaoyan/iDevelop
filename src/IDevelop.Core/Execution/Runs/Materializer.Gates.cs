@@ -23,8 +23,8 @@ internal sealed partial class Materializer
     /// Records an Approval node's request on its current inputs, composed as for an attempt: the dependency results' reports
     /// and artifacts, and their code, joined under the node's named join ref when two or more commits come in. The artifacts
     /// the approval would forward are stored under its result first. The request's operation, and with it every id, derives
-    /// from <paramref name="root"/> and the bindings, so a repeat after a crash converges on one request, and inputs that
-    /// changed get a new one.
+    /// from <paramref name="root"/>, the bindings, and the times the person asked again, so a repeat after a crash converges
+    /// on one request, and inputs that changed, or an Ask again, get a new one.
     /// </summary>
     public async ValueTask<GatePreparation> RequestGate(CoordinatorPermit permit, OperationId root, TaskId task, CancellationToken cancellation = default)
     {
@@ -44,6 +44,9 @@ internal sealed partial class Materializer
             var bindings = capture.Inputs!.Bindings;
             read = (revision, bindings);
             operation = OperationIds.Derive(root, Revision.Hash(RunJournal.Canonical(new { revision, bindings })).Sha256);
+            // Each Ask again after a send back takes a new request on the same inputs, so its ids count the times asked.
+            if (record.Gates.Values.Count(state => state.Request.Task == task && state.AskedAgain) is > 0 and var asked)
+                operation = OperationIds.Derive(operation, $"asked/{asked}");
             var id = new InputId(OperationIds.Derive(operation, "inputs").Value);
             var gate = new GateId(OperationIds.Derive(operation, "gate").Value);
             var result = new ResultId(OperationIds.Derive(operation, "result").Value);

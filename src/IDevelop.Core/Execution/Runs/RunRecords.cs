@@ -69,7 +69,12 @@ internal abstract record AttemptCause
 
     internal sealed record Initial : AttemptCause;
 
-    internal sealed record Retry(AttemptId Previous, OperationId Confirmation) : AttemptCause;
+    internal sealed record Retry(AttemptId Previous, OperationId Confirmation) : AttemptCause
+    {
+        /// <summary>The person's note to the agent, which its first prompt ends with. Null when they wrote none (#126).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Note { get; init; }
+    }
 
     internal sealed record Continue(AttemptId Previous, OperationId Confirmation) : AttemptCause;
 
@@ -272,6 +277,7 @@ internal enum RunOutcome { Completed, Stopped, Failed }
 [JsonDerivedType(typeof(TurnCaptured), "turnCaptured")]
 [JsonDerivedType(typeof(GateRequested), "gateRequested")]
 [JsonDerivedType(typeof(GateSentBack), "gateSentBack")]
+[JsonDerivedType(typeof(GateAskedAgain), "gateAskedAgain")]
 [JsonDerivedType(typeof(Requested), "requested")]
 [JsonDerivedType(typeof(ConflictResolved), "conflictResolved")]
 internal abstract record RunEvent
@@ -354,6 +360,12 @@ internal abstract record RunEvent
 
     /// <summary>The person sent the request back with a reason. Its dependents stay held.</summary>
     internal sealed record GateSentBack(GateId Request, InputId Inputs, string Reason) : RunEvent;
+
+    /// <summary>
+    /// The person asked again after sending the request back. The request stays sent back, and the node takes a new request
+    /// on the same inputs (#126).
+    /// </summary>
+    internal sealed record GateAskedAgain(GateId Request) : RunEvent;
 
     /// <summary>
     /// The person ran another node of a run that a node's Run started, which adds that node to the run. Its dependency
